@@ -1,5 +1,7 @@
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { OFFICE_SOURCE } from './office'
+// B-W2b-185: the request to pay each open invoice.
+import { PAY_INVOICE_SOURCE } from '../../../../modules/payments/online/task-source'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -25,6 +27,8 @@ export interface TaskSource {
 export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   // B-W2b-167: what an office person asks a partner for by hand (a document, an answer, measurements, progress).
   OFFICE_SOURCE,
+  // B-W2b-185: a PAY_INVOICE request per issued invoice while something is open on it (closed by the payment itself).
+  PAY_INVOICE_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

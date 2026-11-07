@@ -1976,6 +1976,8 @@
     "portal_upload": "Send files on the records the role shows",
     "portal_approve": "Approve, accept or sign on the records the role shows",
     "portal_home_view": "See your Home: what waits for you, your notifications and your organisation's counts",
-    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
+    "portal_payments_view": "See what your organisation has to pay: open invoices and deposits, due dates and the statement of account",
+    "portal_payments_pay": "Pay an open invoice or deposit online, by card or SEPA Direct Debit"
   }
 }

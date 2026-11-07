@@ -13,6 +13,9 @@ import { sesNotificationProcessor } from '../email-out/notifications'
 import { emailInProcessor } from '../email-in/receive'
 import { sdiInboundProcessor } from '../../modules/invoicing/sdi/inbound'
 import { processSecrets } from '../secrets/service'
+// B-W2b-185: the payment provider's webhooks.
+import { stripeVerifier } from '../../adapters/stripe/webhook'
+import { FAKE_PROVIDER_VERIFIER, onlinePaymentProcessor } from '../../modules/payments/online/webhook'
 
 /**
  * What the inbound ledger knows of each provider (plan A1 §4): how its webhooks are verified (LIVE and SANDBOX
@@ -68,6 +71,10 @@ export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
   SES: { verifier: snsVerifier, processor: emailInProcessor(sesNotificationProcessor) },
   SDI: { verifier: SDI_PROVIDER_VERIFIER, processor: sdiInboundProcessor() },
   SENDCLOUD: { verifier: sendcloudVerifier, processor: sendcloudTrackingProcessor() },
+  // B-W2b-185: payment intents (Stripe's event shape, which the fake posts too). PAYMENT_FAKE exists only in FAKE mode (its
+  // deliveries use the fake verifier); a STRIPE account's are checked with Stripe-Signature.
+  PAYMENT_FAKE: { verifier: FAKE_PROVIDER_VERIFIER, processor: onlinePaymentProcessor() },
+  STRIPE: { verifier: stripeVerifier, processor: onlinePaymentProcessor() },
 })
 
 /** What the inbound route and its job need. */

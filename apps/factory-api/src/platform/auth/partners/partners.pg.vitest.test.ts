@@ -234,7 +234,7 @@ describe('preview as the partner (read-only, every preview audited)', { timeout:
     expect(opened.status, JSON.stringify(opened.body)).toBe(200)
     expect(opened.body).toMatchObject({ party: { id: world.partyId, name: 'Brand Alpha' }, company: { code: 'C1' } })
     const me = await owner.get('/portal/me')
-    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.colleagues.view', 'portal.home.view', 'portal.search', 'threads.read'] })
+    expect(me.body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.colleagues.view', 'portal.home.view', 'portal.payments.view', 'portal.search', 'threads.read'] })
     expect((await owner.get('/portal/colleagues')).body).toMatchObject({ canManage: false })
     const write = await owner.post('/portal/colleagues', { email: 'x@brand-alpha.example', displayName: 'X', roleKey: 'customer-viewer' })
     expect(write.status).toBe(403)

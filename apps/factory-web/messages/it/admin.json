@@ -1976,6 +1976,8 @@
     "portal_upload": "Inviare file sui documenti che il ruolo mostra",
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
     "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
-    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
+    "portal_payments_view": "Vedere cosa deve pagare la propria organizzazione: fatture e acconti aperti, scadenze ed estratto conto",
+    "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA"
   }
 }

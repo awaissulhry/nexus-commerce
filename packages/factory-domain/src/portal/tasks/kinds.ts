@@ -3,6 +3,8 @@ import { PORTAL_APPROVE, PORTAL_COMMENT, PORTAL_UPLOAD } from '../../auth/partne
 import type { Permission } from '../../core/permissions'
 import type { PartnerEmailTopic } from '../notifications/topics'
 import { PORTAL_HOME_VIEW } from './permissions'
+// B-W2b-185: paying is the customer's Finance and Admin (portal.payments.pay).
+import { PORTAL_PAYMENTS_PAY } from '../../payments/online/permissions'
 
 /**
  * The kinds of request we make of a partner (B-W2b-167, COL-043; portal-frame.prisma PartnerTaskKind; design portal.frame
@@ -71,7 +73,7 @@ export const KIND_RULES: Readonly<Record<PartnerTaskKind, KindRule>> = Object.fr
   SEND_MEASUREMENTS: rule({ it: 'Invia le misure', en: 'Send measurements' }, { it: 'Invia le misure per {label}', en: 'Send the measurements for {label}' }, [PORTAL_UPLOAD], 'orders', { it: 'misure da inviare', en: 'measurements to send' }, 'ORDERS'),
   UPLOAD_DOCUMENT: rule({ it: 'Carica', en: 'Upload' }, { it: 'Carica il documento richiesto per {label}', en: 'Upload the document we asked for on {label}' }, [PORTAL_UPLOAD], 'documents', { it: 'richiesti', en: 'requested' }, 'DOCUMENTS'),
   ANSWER_MESSAGE: rule({ it: 'Rispondi', en: 'Answer' }, { it: 'Rispondi al nostro messaggio su {label}', en: 'Answer our message on {label}' }, [PORTAL_COMMENT], 'home', { it: 'da rispondere', en: 'to answer' }, 'MESSAGES'),
-  PAY_INVOICE: rule({ it: 'Paga', en: 'Pay' }, { it: 'Paga la fattura {label}', en: 'Pay invoice {label}' }, [], 'documents', { it: 'da pagare', en: 'to pay' }, 'INVOICES', 'price'),
+  PAY_INVOICE: rule({ it: 'Paga', en: 'Pay' }, { it: 'Paga la fattura {label}', en: 'Pay invoice {label}' }, [PORTAL_PAYMENTS_PAY], 'documents', { it: 'da pagare', en: 'to pay' }, 'INVOICES', 'price'),
   CONFIRM_KIT: rule({ it: 'Conferma il kit', en: 'Confirm the kit' }, { it: 'Conferma il kit ricevuto per {label}', en: 'Confirm the kit you received for {label}' }, [PORTAL_APPROVE], 'orders', { it: 'kit da confermare', en: 'kits to confirm' }, 'ORDERS'),
   REPORT_PROGRESS: rule({ it: "Comunica l'avanzamento", en: 'Report progress' }, { it: "Comunica l'avanzamento di {label}", en: 'Report the progress of {label}' }, [PORTAL_COMMENT], 'orders', { it: 'avanzamenti da comunicare', en: 'progress to report' }, 'ORDERS'),
   ANSWER_QUESTIONNAIRE: rule({ it: 'Compila', en: 'Fill in' }, { it: 'Compila il questionario {label}', en: 'Fill in questionnaire {label}' }, [PORTAL_COMMENT], 'documents', { it: 'questionari da compilare', en: 'questionnaires to fill in' }, 'DOCUMENTS'),

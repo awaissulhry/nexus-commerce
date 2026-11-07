@@ -35,6 +35,13 @@ import { manifest } from './manifest'
 import { openItems } from './open-items'
 import { allocatePayment, getPayment, listPayments, recordPayment, reverseAllocation, voidPayment } from './payments'
 import { cancelRefund, changeRefund, getRefund, listRefunds, openRefunds, payRefund, recordRefund, voidRefund } from './refunds'
+// B-W2b-185: paying online (card and SEPA through the payment provider; ./online).
+import { fakeConfirmContract, linkIntentContract, linkPayPageContract, linkStartContract, officeIntentsContract, portalIntentContract, portalOpenItemsContract, portalStartContract, portalStatementContract, portalStatementPdfContract, sendPayLinkContract } from './online/contract'
+import { fakeConfirm } from './online/fake-provider'
+import { inlineDisposition } from '../receivables/pdf'
+import { linkIntent, linkPayPage, linkStart } from './online/link'
+import { officeIntents, sendPayLink } from './online/office'
+import { portalIntent, portalOpenItems, portalStart, portalStatement, portalStatementPdf } from './online/portal'
 
 /**
  * Payments received (B-W1-28; FIN-121, FIN-066; Q12; A2 SCR-082): bank transfers typed by the office, what they pay
@@ -91,4 +98,36 @@ export default defineRoutes('payments', manifest, async (app) => {
   )
 
   app.post('/payments/:paymentId/void', { schema: voidContract }, async (request) => voidPayment(request, request.params.paymentId, request.body, idempotencyKeyFrom(request)))
+
+  // ---- B-W2b-185: paying online (./online; FIN-118, FIN-123) ----------------------------------------------------------
+  // The office: the page to pay an invoice, sent by link; the online payments of a record.
+  app.post('/payments/invoices/:invoiceId/link', { schema: sendPayLinkContract }, async (request, reply) =>
+    reply.code(201).send(await sendPayLink(processEmail(), request, request.params.invoiceId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.get('/payments/intents', { schema: officeIntentsContract }, async (request) => officeIntents(request, request.query))
+
+  // The link (PAYMENT, DEPOSIT_INFO): what you pay, the bank transfer, card and SEPA.
+  app.get('/payments/link/pay', { schema: linkPayPageContract }, async (request) => linkPayPage(request))
+
+  app.post('/payments/link/pay/intents', { schema: linkStartContract }, async (request, reply) => reply.code(201).send(await linkStart(request, request.body.method)))
+
+  app.get('/payments/link/pay/intents/:intentId', { schema: linkIntentContract }, async (request) => linkIntent(request, request.params.intentId))
+
+  // The customer portal (Finance and Admin): open items, the statement, pay.
+  app.get('/portal/payments/open-items', { schema: portalOpenItemsContract }, async (request) => portalOpenItems(request, officeAuthOf(app).clock.now()))
+
+  app.get('/portal/payments/statement', { schema: portalStatementContract }, async (request) => portalStatement(request, request.query))
+
+  app.get('/portal/payments/statement/pdf', { schema: portalStatementPdfContract }, async (request, reply) => {
+    const { pdf, fileName } = await portalStatementPdf(request, request.query, officeAuthOf(app).clock.now())
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+
+  app.post('/portal/payments/intents', { schema: portalStartContract }, async (request, reply) => reply.code(201).send(await portalStart(request, request.body)))
+
+  app.get('/portal/payments/intents/:intentId', { schema: portalIntentContract }, async (request) => portalIntent(request, request.params.intentId))
+
+  // The FAKE provider's own fields (local and test only: 404 elsewhere).
+  app.post('/payment-fake/confirm', { schema: fakeConfirmContract }, async (request) => fakeConfirm(request, request.body))
 })

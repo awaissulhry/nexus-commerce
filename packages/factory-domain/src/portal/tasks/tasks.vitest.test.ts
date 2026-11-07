@@ -37,7 +37,10 @@ describe('the one task list (B-W2b-167, COL-043)', () => {
     // Accepting a quote shows its amount: the price grain too.
     expect(isTaskFor(approver, task('ACCEPT_QUOTE'))).toBe(false)
     expect(isTaskFor(buyer, task('ACCEPT_QUOTE'))).toBe(true)
-    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'money.price'])), task('PAY_INVOICE'))).toBe(true)
+    // B-W2b-185: paying is Finance's and Admin's (portal.payments.pay), with the price grain.
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'money.price'])), task('PAY_INVOICE'))).toBe(false)
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.payments.pay'])), task('PAY_INVOICE'))).toBe(false)
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.payments.pay', 'money.price'])), task('PAY_INVOICE'))).toBe(true)
     expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.upload'])), task('UPLOAD_DOCUMENT'))).toBe(true)
     expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.comment'])), task('ANSWER_MESSAGE'))).toBe(true)
     // Another company's portal, another party: never.
