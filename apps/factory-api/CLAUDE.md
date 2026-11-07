@@ -238,7 +238,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 
 ## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
 - A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
-  DOCUMENT_VIEW, DEPOSIT_INFO), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
+  DOCUMENT_VIEW, DEPOSIT_INFO; since B-W2b-163 also SHIPMENT_TRACK, MEASUREMENTS, CLAIM, PAYMENT, SUPPLIER_ONBOARD,
+  JOB_ACCEPT, APPROVAL, RECORD_INVITE, SECURE_FILE), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
   bits, `links/token`); only its SHA-256 is stored. The web link is `<web>/l#token=…` (fragment: in no server log); the
   web sends the token in the `x-factory-link` header.
 - `authenticator.ts` (chained before the office cookie): the link is read in the token's PARTY scope
@@ -260,7 +261,15 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   must be in the partner role's hiddenColumns (check-ownership). The OneOffLink guard trigger keeps a link fixed but for
   its uses, revocation and note.
 - PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
-  routes), `guards.pg.vitest.test.ts`.
+  routes), `guards.pg.vitest.test.ts`, `depth.pg.vitest.test.ts` (B-W2b-163).
+- B-W2b-163 (links in depth; COL-051, MES-274): `POST /links/files` (a DOCUMENT_VIEW or SECURE_FILE link of a set of files,
+  LinkFile; record = the first file; optional password sent apart, hashed; mailed to the contact on file or the URL once),
+  link session `GET /link/files`, `POST /link/password` (5 tries, 15-minute hold; right → an unlock key, header
+  x-factory-link-unlock), `POST /link/files/:fileId/download` (DOWNLOADED; a use on SECURE_FILE), `GET …/preview`
+  (DOCUMENT_VIEW), `POST /link/files/received` (SECURE_FILE, once), `GET|PUT /link/draft` (MEASUREMENTS, CLAIM,
+  SUPPLIER_ONBOARD; sealed; cron `links.purgeDrafts`), public `POST /link/renew` ("Ask for a new link" for every purpose: one
+  answer, the abuse guard, a module renewer via `registerLinkRenewer` or the file-set renewal). Pay figures never go by link:
+  `pay.ts assertNoPayByLink` in every link maker (POST /links, file sets, renewals, the payroll Send).
 
 ## Portal sign-in (`src/platform/auth/portal/`, B-W2b-159; PLT-050, PLT-066; Owner answer C3: e-mail codes only)
 - Public `POST /portal/signin/start` {tenant, company?, email} answers `sent` at once for any address; the work runs

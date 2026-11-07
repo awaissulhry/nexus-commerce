@@ -25,4 +25,20 @@ export const events = [
     }),
     live: { permission: LINKS_VIEW, fields: ['linkId', 'purpose', 'action', 'recordType', 'recordId'] },
   }),
+  // B-W2b-163: "Ask for a new link" (links/renew) made a new link for a dead one, sent to the address on file: the
+  // record's link list shows it at once. A module that renews its own links (shipping, purchasing) emits its own event.
+  defineEvent({
+    type: 'link.renewed',
+    context: 'links',
+    description: 'A new link replaced a dead one at its holder\'s request; it went to the address the old one was sent to.',
+    payload: z.strictObject({
+      linkId: z.uuid(),
+      /** The dead link it replaces. */
+      renewalOfId: z.uuid(),
+      purpose: z.enum(LINK_PURPOSES),
+      recordType: z.string(),
+      recordId: z.uuid(),
+    }),
+    live: { permission: LINKS_VIEW, fields: ['linkId', 'renewalOfId', 'purpose', 'recordType', 'recordId'] },
+  }),
 ] as const
