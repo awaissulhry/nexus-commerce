@@ -330,7 +330,9 @@
     "notExported": "Solo un file esportato si apre o si invia.",
     "notRead": "Il mese è ancora in lettura.",
     "nothingChanged": "Nulla è cambiato dalla v{version}.",
-    "replaced": "Una versione più recente ha sostituito questo file."
+    "replaced": "Una versione più recente ha sostituito questo file.",
+    "payByLink": "Questo file contiene importi: le cifre delle paghe non viaggiano mai via link. Consegnalo di persona o in ufficio.",
+    "noPayrollLink": "I file paghe non viaggiano via link."
   },
   "keys": {
     "continue": "Continua",
@@ -530,7 +532,8 @@
     "NOT_LATEST": "Una correzione sostituisce l'ultimo file del mese.",
     "NOT_OUR_CODE": "Questo non è uno dei nostri codici.",
     "REPLACED": "Una versione più recente ha sostituito questo file: invia quella.",
-    "SUPPRESSED": "Questo indirizzo non accetta la nostra posta: chiedine un altro."
+    "SUPPRESSED": "Questo indirizzo non accetta la nostra posta: chiedine un altro.",
+    "PAY_FIGURES": "Le cifre delle paghe non viaggiano mai via link: si può inviare solo un file di ore."
   },
   "send": {
     "carriesPay": "Questo file contiene importi: per crearlo serve il permesso paghe.",

@@ -330,7 +330,9 @@
     "notExported": "Only an exported file is opened or sent.",
     "notRead": "The month is still being read.",
     "nothingChanged": "Nothing changed since v{version}.",
-    "replaced": "A newer version replaced this file."
+    "replaced": "A newer version replaced this file.",
+    "payByLink": "This file carries amounts: pay figures never go by link. Hand it over in person or in the office.",
+    "noPayrollLink": "Payroll files do not go by link."
   },
   "keys": {
     "continue": "Continue",
@@ -530,7 +532,8 @@
     "NOT_LATEST": "A correction replaces the month's latest file.",
     "NOT_OUR_CODE": "This is not one of our codes.",
     "REPLACED": "A newer version replaced this file: send that one.",
-    "SUPPRESSED": "This address does not take our mail: ask for another."
+    "SUPPRESSED": "This address does not take our mail: ask for another.",
+    "PAY_FIGURES": "Pay figures never go by link: only a file of hours may be sent."
   },
   "send": {
     "carriesPay": "This file carries amounts: making it asks the pay grain.",

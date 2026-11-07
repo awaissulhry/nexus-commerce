@@ -1,6 +1,7 @@
 import { PEOPLE_CHECKS } from '@nexus/factory-domain/people/payroll/checks'
 import { CODE_MEANINGS, codeOrder, isFixedCode } from '@nexus/factory-domain/people/payroll/codes'
 import { COLUMN_KEYS, definitionProblems, DELIMITERS, LAYOUT_LIMITS, PAYROLL_TO_CONFIRM, printsProviderCode } from '@nexus/factory-domain/people/payroll/layouts'
+import { PAY_BY_LINK_REFUSAL, PAYROLL_EXPORT, payByLinkProblem } from '@nexus/factory-domain/links/pay'
 import { PAYROLL_LINK_TERMS, PAYROLL_REFUSALS } from '@nexus/factory-domain/people/payroll/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
@@ -468,11 +469,16 @@ export function rowCorrectHeld(row: Pick<ExportRow, 'status' | 'correctedById'>,
   return row.correctedById ? { key: 'held.replaced' } : null
 }
 
-/** A row's or record's Send: held with why. */
-export function sendRowHeld(row: Pick<ExportRow, 'status' | 'correctedById'>, can: PayrollCan): Words | null {
+/**
+ * A row's or record's Send: held with why. A record says whether the file carries amounts: pay figures never go by link
+ * (B-W2b-163's rule, factory-domain links/pay; a file of hours only goes while PAYROLL_HOURS_ONLY_BY_LINK).
+ */
+export function sendRowHeld(row: Pick<ExportRow, 'status' | 'correctedById'> & { readonly carriesPay?: boolean }, can: PayrollCan): Words | null {
   if (!can.manage) return { key: 'held.noManage' }
   if (row.status !== 'EXPORTED') return { key: 'held.notExported' }
-  return row.correctedById ? { key: 'held.replaced' } : null
+  if (row.correctedById) return { key: 'held.replaced' }
+  if (row.carriesPay !== undefined && payByLinkProblem({ recordType: PAYROLL_EXPORT, payrollCarriesPay: row.carriesPay })) return { key: row.carriesPay ? 'held.payByLink' : 'held.noPayrollLink' }
+  return null
 }
 
 export const csvRow = (row: ExportRow, words: { readonly status: string; readonly format: string; readonly month: string }, when: (at: string | null) => string): string[] => [
@@ -542,6 +548,7 @@ export function refusedChecks(error: unknown): string[] {
 /** The words of a failed call: a refusal by its code, the gate, else the kind of failure. */
 export function payrollProblem(error: unknown): Words {
   if (isGateClosed(error)) return { key: 'problem.gate' }
+  if (isApiError(error) && error.issues.some((issue) => issuePath(issue) === `refusal/${PAY_BY_LINK_REFUSAL}`)) return { key: 'refusal.PAY_FIGURES' }
   const refusal = refusalCodeOf(error)
   if (refusal) return { key: `refusal.${refusal}`, ...(refusal === 'CHECKS_OPEN' ? { params: { count: Math.max(1, refusedChecks(error).length) } } : {}) }
   if (!isApiError(error)) return { key: 'problem.unavailable' }
