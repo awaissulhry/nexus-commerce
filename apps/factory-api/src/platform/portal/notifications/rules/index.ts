@@ -1,3 +1,4 @@
+import { CHANGE_REQUEST_RULES } from './change-requests'
 import { RECORD_RULES } from './records'
 import { TASK_RULES } from './tasks'
 import type { PartnerRule } from './types'
@@ -11,4 +12,6 @@ export const PARTNER_RULES: readonly PartnerRule[] = Object.freeze([
   // invoices, claims, our messages).
   ...TASK_RULES,
   ...RECORD_RULES,
+  // B-W2b-183: the office's answer to a change or cancel request from the portal.
+  ...CHANGE_REQUEST_RULES,
 ])

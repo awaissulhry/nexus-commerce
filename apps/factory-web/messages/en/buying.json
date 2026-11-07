@@ -1190,6 +1190,7 @@
       "openLines_other": "{count} lines open",
       "pickOrder": "Receive against {number}",
       "nothingOpen": "This order has no line still to receive.",
+      "noticeHeld": "This ship notice no longer fills the receipt (received, cancelled, or not yours to receive): the order's open lines are shown instead.",
       "delivery": "The delivery",
       "ddtNumber": "Supplier DDT number",
       "ddtHint": "From the supplier’s delivery note.",

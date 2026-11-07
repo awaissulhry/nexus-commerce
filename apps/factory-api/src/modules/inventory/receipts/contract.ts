@@ -237,6 +237,8 @@ export const recordReceiptContract = defineContract({
     note: text(1000).nullish(),
     lines: z.array(lineInput).min(1).max(RECEIPT_LIMITS.lines),
     periodLockOverride: periodLockOverride.optional(),
+    /** B-W2b-182: the supplier's SENT ship notice of this order it was prefilled from: RECEIVED once the receipt posts. */
+    shipNoticeId: id().optional(),
   }),
   response: {
     201: output({

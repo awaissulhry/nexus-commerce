@@ -20,6 +20,11 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.shipment.shipped': { topic: 'SHIPPED', category: 'FOLLOWING', en: '{label} has shipped', it: '{label} è stata spedita' },
   'portal.invoice.issued': { topic: 'INVOICES', category: 'FOLLOWING', en: 'Invoice {label} was issued', it: 'È stata emessa la fattura {label}' },
   'portal.claim.sent': { topic: 'CLAIMS', category: 'FOLLOWING', en: 'New claim {label}', it: 'Nuovo reclamo {label}' },
+  // B-W2b-183: the office's answer to a change or cancel request from the portal (the words are on the order's page).
+  'portal.order.change_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {label} was accepted', it: 'La tua richiesta di modifica su {label} è stata accettata' },
+  'portal.order.change_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {label} was not accepted', it: 'La tua richiesta di modifica su {label} non è stata accettata' },
+  'portal.order.cancel_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {label} was accepted', it: 'La tua richiesta di annullamento su {label} è stata accettata' },
+  'portal.order.cancel_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {label} was not accepted', it: 'La tua richiesta di annullamento su {label} non è stata accettata' },
 } as const satisfies Record<string, { readonly topic: PartnerEmailTopic | null; readonly category: 'ASSIGNMENT' | 'FOLLOWING' | 'SYSTEM'; readonly en: string; readonly it: string }>
 
 export type PartnerMessageKey = keyof typeof PARTNER_MESSAGE_TEMPLATES

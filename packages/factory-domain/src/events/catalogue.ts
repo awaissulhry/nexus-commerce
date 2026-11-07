@@ -109,6 +109,12 @@ import { events as paymentIntents } from '../payment-intents/events'
 import { events as subcontractJobs } from '../subcontract-jobs/events'
 // B-W2b-190: portal order requests (sent, accepted, refused, withdrawn).
 import { events as portalOrdering } from '../portal-ordering/events'
+// B-W2b-183: change and cancel requests from the portal (asked, withdrawn, answered).
+import { events as salesChangeRequests } from '../sales-change-requests/events'
+// B-W2b-182: ship notices (sent, changed, cancelled, received, reopened).
+import { events as shipNotices } from '../ship-notices/events'
+// B-W2b-189: a supplier's documents and profile in the portal (uploads checked, profile changes decided).
+import { events as supplierPortal } from '../supplier-portal/events'
 // B-W2b-192: returns and complaints from outside (a return request sent, a claim link made, an answer published, an 8D shared).
 import { events as portalReturns } from '../portal-returns/events'
 import type { EventDefinition } from './define'
@@ -287,6 +293,12 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...subcontractJobs,
   // B-W2b-190
   ...portalOrdering,
+  // B-W2b-183
+  ...salesChangeRequests,
+  // B-W2b-182
+  ...shipNotices,
+  // B-W2b-189
+  ...supplierPortal,
   // B-W2b-192
   ...portalReturns] as const satisfies readonly EventDefinition[]
 

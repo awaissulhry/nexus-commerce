@@ -39,6 +39,12 @@ import { PORTAL_PURCHASE_ORDERS_DEFINITIONS, PORTAL_PURCHASE_ORDERS_PERMISSIONS 
 import { PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS, PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS } from '../../sales/portal-documents/permissions'
 // B-W2b-190: portal ordering (catalogue, order requests, delivery addresses; partner roles only).
 import { PORTAL_ORDERING_DEFINITIONS, PORTAL_ORDERING_PERMISSIONS } from '../../sales/portal-ordering/permissions'
+// B-W2b-183: change and cancel requests from the portal (partner roles only).
+import { PORTAL_ORDER_CHANGES_DEFINITIONS, PORTAL_ORDER_CHANGES_PERMISSIONS } from '../../sales/change-requests/permissions'
+// B-W2b-182: ship notices in the portal (portal.shipNotices.view; partner roles only).
+import { PORTAL_SHIP_NOTICES_DEFINITIONS, PORTAL_SHIP_NOTICES_PERMISSIONS } from '../../purchasing/ship-notices/permissions'
+// B-W2b-189: supplier documents and profile in the portal (partner) and their check (office).
+import { PORTAL_SUPPLIER_PROFILE_DEFINITIONS, PORTAL_SUPPLIER_PROFILE_PERMISSIONS, SUPPLIER_REVIEW_DEFINITIONS, SUPPLIER_REVIEW_PERMISSIONS } from '../../purchasing/portal-profile/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -709,6 +715,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS,
   // B-W2b-190: portal ordering (partner roles only).
   PORTAL_ORDERING_DEFINITIONS,
+  // B-W2b-183: change and cancel requests from the portal (partner roles only).
+  PORTAL_ORDER_CHANGES_DEFINITIONS,
   MONEY_PERMISSIONS,
   // B-W2b-168: portal search (partner roles only; its area `portal` is declared above, so the area order stays).
   PORTAL_SEARCH_DEFINITIONS,
@@ -716,6 +724,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_PAYMENTS_DEFINITIONS,
   // B-W2b-176: subcontractor jobs in the portal (partner roles only; area `portal`, declared above).
   PORTAL_JOBS_DEFINITIONS,
+  // B-W2b-182: ship notices in the portal (partner roles only; area `portal`, declared above).
+  PORTAL_SHIP_NOTICES_DEFINITIONS,
+  // B-W2b-189: supplier documents and profile in the portal (partner roles only), and the office's check.
+  PORTAL_SUPPLIER_PROFILE_DEFINITIONS,
+  SUPPLIER_REVIEW_DEFINITIONS,
   // B-W2b-192: returns and complaints from outside (partner roles only; area `portal`, declared above).
   PORTAL_RETURNS_DEFINITIONS,
 ])
@@ -925,6 +938,8 @@ for (const name of PARTNER_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PORTAL_SALES_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-174: supplier orders in the portal (partner roles only).
 for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-182: ship notices in the portal (partner roles only).
+for (const name of PORTAL_SHIP_NOTICES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-177: required documents.
 for (const name of REQUIRED_DOCUMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-185: paying in the customer portal, flagged partner.
@@ -933,6 +948,11 @@ for (const name of PORTAL_PAYMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name
 for (const name of PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-190: portal ordering (partner roles only).
 for (const name of PORTAL_ORDERING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-183: change and cancel requests from the portal (partner roles only).
+for (const name of PORTAL_ORDER_CHANGES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-189: supplier documents and profile in the portal, flagged partner; the office's check.
+for (const name of PORTAL_SUPPLIER_PROFILE_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+for (const name of SUPPLIER_REVIEW_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-192: returns and complaints from outside (partner roles only).
 for (const name of PORTAL_RETURNS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {

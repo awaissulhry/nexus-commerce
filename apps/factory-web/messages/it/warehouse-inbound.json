@@ -1,0 +1,80 @@
+{
+  "title": "Arrivi previsti",
+  "subtitle": "Cosa arriva nei prossimi {days} giorni, per giorno e sede",
+  "asOf": "Aggiornato alle {time}",
+  "loading": "Lettura delle consegne…",
+  "menu": {
+    "label": "Altre azioni",
+    "hide": "Nascondi gli arrivi previsti",
+    "show": "Mostra gli arrivi previsti"
+  },
+  "receive": "Ricevi",
+  "receiveCard": "Ricevi {label}",
+  "noteAdd": "Nota per la banchina",
+  "noteEdit": "Modifica la nota per la banchina",
+  "noteCard": "Nota per la banchina su {label}",
+  "held": {
+    "noReceive": "Ricevere merce richiede il permesso di ricevere in questa sede (inventory.receive)."
+  },
+  "forbidden": {
+    "title": "Non puoi vedere gli arrivi previsti",
+    "body": "Serve il permesso di vedere le giacenze della sede (inventory.stock.view): chiedilo all'amministratore."
+  },
+  "failed": "Non è stato possibile leggere le consegne",
+  "retry": "Riprova",
+  "boardLabel": "Arrivi previsti {site}",
+  "siteLabel": "Consegne a {site}",
+  "siteEmpty": "Qui non è previsto nulla nei prossimi {days} giorni.",
+  "empty": {
+    "title": "Nessun arrivo previsto nei prossimi {days} giorni",
+    "body": "Gli avvisi di spedizione dei fornitori e le righe degli ordini confermati compaiono qui nel giorno previsto."
+  },
+  "incomplete": "Le consegne sono più di quelle mostrate: scegli una sola sede nella barra in alto.",
+  "note": {
+    "title": "Nota per la banchina su {number}",
+    "subtitle": "{supplier} · {order}",
+    "label": "Nota",
+    "hint": "Nota nostra per la banchina: il fornitore non la vede mai.",
+    "cancel": "Annulla",
+    "save": "Salva nota",
+    "saving": "Salvataggio…"
+  },
+  "lane": {
+    "today": "Oggi · {day}",
+    "late_one": "{count} in ritardo, non ancora ricevuta",
+    "late_other": "{count} in ritardo, non ancora ricevute"
+  },
+  "card": {
+    "lines": "Righe",
+    "linesMore_one": "{lines} e {count} altra",
+    "linesMore_other": "{lines} e altre {count}",
+    "linesCount_one": "{count} riga",
+    "linesCount_other": "{count} righe",
+    "tracking": "Consegna",
+    "hides": "Distinta",
+    "hidesCount_one": "{count} pelle",
+    "hidesCount_other": "{count} pelli",
+    "supplierNote": "Nota del fornitore",
+    "noNotice": "Ordine confermato, ancora senza avviso",
+    "dockNote": "Nota per la banchina"
+  },
+  "mark": {
+    "late": "In ritardo",
+    "confirmed": "Ordine confermato"
+  },
+  "verdict": {
+    "OK": "Distinta come ordinato",
+    "CHECK": "Distinta da verificare",
+    "NOT_AS_ORDERED": "Non come ordinato"
+  },
+  "state": {
+    "DRAFT": "Bozza",
+    "ANNOUNCED": "Annunciato",
+    "IN_TRANSIT": "In viaggio",
+    "RECEIVED": "Ricevuto",
+    "RECEIVED_WITH_DIFFERENCES": "Ricevuto con differenze",
+    "CANCELLED": "Annullato"
+  },
+  "readOnly": "I giorni vengono dagli avvisi di spedizione dei fornitori e dagli ordini confermati: qui le schede non si spostano.",
+  "laneEmpty": "Nessuna consegna"
+}

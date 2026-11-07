@@ -138,7 +138,7 @@ const amendFields = {
   lines: z.array(amendLine).min(1).max(MAX_QUOTE_LINES),
 }
 
-const diffView = output({
+export const diffView = output({
   lines: z.array(
     output({
       change: z.enum(LINE_CHANGES),

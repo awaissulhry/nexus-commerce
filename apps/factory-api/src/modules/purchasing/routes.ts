@@ -144,6 +144,39 @@ import { portalConfirmContract, portalCopyContract, portalDeclineContract, porta
 import { portalOrderCopy } from './portal-orders/copy'
 import { listPortalOrders, portalOrder, portalRevisions } from './portal-orders/read'
 import { appClock } from '../../platform/portal/tasks/clock'
+// B-W2b-182: the supplier's ship notices in the portal (./ship-notices).
+import {
+  cancelNoticeContract,
+  createNoticeContract,
+  listNoticesContract,
+  noticeTemplateContract,
+  packingListContract,
+  packingSheetContract,
+  portalNoticeContract,
+  sendNoticeContract,
+  shippableContract,
+  updateNoticeContract,
+} from './ship-notices/contract'
+import { cancelNotice, createNotice, listNotices, packingTemplate, portalNotice, readPackingSheet, sendNotice, setPackingList, shippableLines, updateNotice } from './ship-notices/portal'
+// B-W2b-189: supplier documents and profile in the portal, and the office's check (./portal-profile).
+import {
+  acceptDocumentContract,
+  announceDocumentContract,
+  approveSupplierChangeContract,
+  completeDocumentContract,
+  listSupplierChangesContract,
+  listSupplierDocumentsContract,
+  refuseDocumentContract,
+  refuseSupplierChangeContract,
+  requestProfileChangeContract,
+  supplierDocumentsContract,
+  supplierProfileContract,
+  withdrawProfileChangeContract,
+} from './portal-profile/contract'
+import { approveSupplierChange, listSupplierChanges, refuseSupplierChange } from './portal-profile/decide'
+import { announceDocument, completeDocument, supplierDocuments } from './portal-profile/documents'
+import { requestProfileChange, supplierProfile, withdrawProfileChange } from './portal-profile/profile'
+import { acceptDocument, listSupplierDocuments, refuseDocument } from './portal-profile/review'
 
 /**
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
@@ -415,4 +448,56 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/portal/purchase-orders/:purchaseOrderId/confirm', { schema: portalConfirmContract }, async (request) => confirmInPortal(app, request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/portal/purchase-orders/:purchaseOrderId/decline', { schema: portalDeclineContract }, async (request) => declineInPortal(app, request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-182 (SCM-106, SCM-107): the supplier's ship notices (./ship-notices): the list, the lines it may ship, the packing
+  // list's template, one notice with its checks, a new one from a confirmed order, its terms and lines, the packing list by
+  // hand or from the tannery's sheet (a verdict per row first), the send (numbered as the system) and the cancel.
+  app.get('/portal/ship-notices', { schema: listNoticesContract }, async (request) => listNotices(request, request.query, appClock(app).now()))
+
+  app.get('/portal/ship-notices/shippable', { schema: shippableContract }, async (request) => shippableLines(request, request.query))
+
+  app.get('/portal/ship-notices/template', { schema: noticeTemplateContract }, async (request, reply) => {
+    const file = await packingTemplate(request, request.query)
+    return reply.type(file.contentType).header('content-disposition', `attachment; filename="${file.name}"`).header('cache-control', 'no-store').send(file.body)
+  })
+
+  app.get('/portal/ship-notices/:shipNoticeId', { schema: portalNoticeContract }, async (request) => portalNotice(request, request.params.shipNoticeId, appClock(app).now()))
+
+  app.post('/portal/ship-notices', { schema: createNoticeContract }, async (request, reply) => reply.code(201).send(await createNotice(app, request, request.body, idempotencyKeyFrom(request), appClock(app).now())))
+
+  app.patch('/portal/ship-notices/:shipNoticeId', { schema: updateNoticeContract }, async (request) => updateNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.put('/portal/ship-notices/:shipNoticeId/packing-list', { schema: packingListContract }, async (request) => setPackingList(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/packing-list/sheet', { schema: packingSheetContract }, async (request) => readPackingSheet(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/send', { schema: sendNoticeContract }, async (request) => sendNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/cancel', { schema: cancelNoticeContract }, async (request) => cancelNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+  // B-W2b-189 (SCM-096, SCM-097): the supplier's documents and profile in the portal (./portal-profile): what we ask for and
+  // its documents, the upload (unshared until our check), its addresses and contacts with the changes it sends for our check;
+  // and the office's check of both (accept or refuse a document; approve or refuse a change, Home › Approvals).
+  app.get('/portal/supplier-documents', { schema: supplierDocumentsContract }, async (request) => supplierDocuments(request, appClock(app).now()))
+
+  app.post('/portal/supplier-documents', { schema: announceDocumentContract }, async (request, reply) => reply.code(201).send(await announceDocument(app, request, request.body, appClock(app).now(), idempotencyKeyFrom(request))))
+
+  app.post('/portal/supplier-documents/:fileId/complete', { schema: completeDocumentContract }, async (request) => completeDocument(app, request, request.params.fileId, appClock(app).now(), idempotencyKeyFrom(request)))
+
+  app.get('/portal/supplier-profile', { schema: supplierProfileContract }, async (request) => supplierProfile(request, appClock(app).now()))
+
+  app.post('/portal/supplier-profile/changes', { schema: requestProfileChangeContract }, async (request, reply) => reply.code(201).send(await requestProfileChange(app, request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/portal/supplier-profile/changes/:requestId/withdraw', { schema: withdrawProfileChangeContract }, async (request) => withdrawProfileChange(app, request, request.params.requestId, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/supplier-documents', { schema: listSupplierDocumentsContract }, async (request) => listSupplierDocuments(request, request.query, appClock(app).now()))
+
+  app.post('/purchasing/supplier-documents/:fileId/accept', { schema: acceptDocumentContract }, async (request) => acceptDocument(request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/supplier-documents/:fileId/refuse', { schema: refuseDocumentContract }, async (request) => refuseDocument(request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/supplier-changes', { schema: listSupplierChangesContract }, async (request) => listSupplierChanges(request, request.query, appClock(app).now()))
+
+  app.post('/purchasing/supplier-changes/:requestId/approve', { schema: approveSupplierChangeContract }, async (request) => approveSupplierChange(request, request.params.requestId, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/supplier-changes/:requestId/refuse', { schema: refuseSupplierChangeContract }, async (request) => refuseSupplierChange(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
 })

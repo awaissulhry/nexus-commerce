@@ -20,6 +20,7 @@ import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '..
 import { QUALITY_NCR_APPROVE, QUALITY_NCR_VIEW } from '../quality/ncr/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
+import { SUPPLIER_CHANGES_DECIDE, SUPPLIER_DOCUMENTS_REVIEW } from '../purchasing/portal-profile/permissions'
 import { Dec } from '../tax/decimal'
 import { TASKS_MANAGE } from '../tasks/permissions'
 import { HOME_VIEW } from './permissions'
@@ -75,6 +76,14 @@ export const ATTENTION_KINDS = [
   // B-W2b-190 (SAL-074 "portal orders arrive as requests"): order requests customers sent from the portal, waiting for the
   // office to make the order or a quote from them, or to refuse them; in the Approvals tile, decided on the request's record.
   'PORTAL_ORDER_REQUEST',
+  // B-W2b-183 (design home.approvals "every request that needs my yes", portal.customer.orders conn "the change request
+  // lands" in the office): a customer's change or cancel request from the portal, waiting for the office's answer.
+  'ORDER_CHANGE_REQUEST',
+  // B-W2b-189 (design home.approvals; portal.supplier.profile "a change goes to the buyer in Home › Approvals",
+  // portal.supplier.documents "a buyer or quality person accepts it"): a supplier's change of its addresses and contacts
+  // waiting for the buyer's yes, and a document a supplier sent waiting for our check.
+  'SUPPLIER_CHANGE',
+  'SUPPLIER_DOCUMENT',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -310,6 +319,38 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [ORDERS_MANAGE],
     decide: 'OPEN',
     live: ['portal_order_request.sent', 'portal_order_request.accepted', 'portal_order_request.refused', 'portal_order_request.withdrawn'],
+  }),
+  // B-W2b-183: a customer's change or cancel request from the portal (modules/insights/sources/portal-change-requests.ts),
+  // answered on the order (accept: the amendment or the cancel; refuse with words) by whoever manages the customer's orders.
+  ORDER_CHANGE_REQUEST: rule({
+    kind: 'ORDER_CHANGE_REQUEST',
+    category: 'APPROVAL',
+    label: "Customers' change and cancel requests waiting for your answer",
+    view: ORDERS_VIEW,
+    act: [ORDERS_MANAGE],
+    decide: 'OPEN',
+    live: ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered'],
+  }),
+  // B-W2b-189: a supplier's change of its addresses and contacts sent in the portal (modules/insights/sources/
+  // supplier-changes.ts); decided on the supplier's record (it applies only on this yes).
+  SUPPLIER_CHANGE: rule({
+    kind: 'SUPPLIER_CHANGE',
+    category: 'APPROVAL',
+    label: "Suppliers' changes of addresses and contacts to check",
+    view: SUPPLIER_CHANGES_DECIDE,
+    act: [SUPPLIER_CHANGES_DECIDE],
+    decide: 'OPEN',
+    live: ['supplier_profile.change_requested', 'supplier_profile.change_withdrawn', 'supplier_profile.change_decided'],
+  }),
+  // B-W2b-189: a document a supplier sent in the portal, unshared until accepted; accepted or refused on the supplier's record.
+  SUPPLIER_DOCUMENT: rule({
+    kind: 'SUPPLIER_DOCUMENT',
+    category: 'APPROVAL',
+    label: 'Documents suppliers sent to check',
+    view: SUPPLIER_DOCUMENTS_REVIEW,
+    act: [SUPPLIER_DOCUMENTS_REVIEW],
+    decide: 'OPEN',
+    live: ['supplier_document.uploaded', 'supplier_document.accepted', 'supplier_document.refused', 'file.available'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',

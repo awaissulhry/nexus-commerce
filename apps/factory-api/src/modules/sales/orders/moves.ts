@@ -157,45 +157,58 @@ export async function cancelOrder(
   if (body.confirmNumber !== undefined && body.confirmNumber.trim() !== order.number) {
     throw new ValidationError(`Type the order number ${order.number} to cancel it.`, [{ path: 'body/confirmNumber', message: `Type ${order.number} to confirm.` }])
   }
-  const { result } = await command(caller, { name: 'orders.cancel', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
-    const { tx, now } = tools
-    const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
-    await lockOrderLines(tx, context.tenantId, lineIds)
-    const locked = await lockOrder(tx, order.id, body.version)
-    if (lineIds.length > 0) await tx.$queryRaw`SELECT w.id FROM "WorkOrder" w WHERE w.id IN (SELECT c."workOrderId" FROM "WorkOrderSize" c WHERE c."salesOrderLineId" = ANY(${lineIds}::uuid[])) ORDER BY w.id FOR SHARE`
-    const facts = await readOrderFacts(tx, order)
-    const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
-    const reason = reasonOf(body.reason)
-    assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...moveFactsOf(facts), reason, cancelBlocks: cancelBlocksOf(impact) })
-    await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelReason: reason!, closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
-    const requests = await tx.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true }, orderBy: { id: 'asc' } })
-    for (const request of requests.filter((row) => row.status === 'OPEN')) {
-      const { count } = await tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: `Order ${order.number} cancelled: ${reason}`, updatedAt: now, version: { increment: 1 } } })
-      if (count === 1) tools.audit({ action: 'orders.cancelDeposit', recordType: 'DepositRequest', recordId: request.id, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'CANCELLED', orderId: order.id }, reason: reason! })
-    }
-    const steps = await cancelScheduleInCommand(tools, order, reason!)
-    const paid = requests.filter((row) => row.status === 'PAID').map((row) => row.id)
-    const view = impactView(impact)
-    tools.audit({
-      recordType: 'SalesOrder',
-      recordId: order.id,
-      companyId: order.companyId,
-      before: { status: locked.status },
-      after: {
-        status: 'CANCELLED',
-        cancelReason: reason,
-        closedAt: toUtcIso(now),
-        paidDepositRequestIds: paid,
-        cancelledMilestoneIds: steps,
-        touches: impact.touches.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.id) })),
-        leavesBehind: impact.leavesBehind.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.number ?? ref.id) })),
-      },
-      reason: reason!,
-    })
-    statusChanged(tools, order, locked.status, 'CANCELLED', 'person')
-    return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view }
-  })
+  const { result } = await command(caller, { name: 'orders.cancel', idempotencyKey, input: { orderId, ...body } }, (tools) => cancelOrderInCommand(tools, context.tenantId, order, body))
   return { order: await recordAfter(caller, order.id), paidDepositRequestIds: result.paidDepositRequestIds, impact: result.impact }
+}
+
+/**
+ * The cancel's work inside a command that is already open (the locks, the impact check under them, the move, the deposit
+ * requests and payment steps): cancelOrder's own command, and B-W2b-183's accepted whole-order cancel request
+ * (modules/sales/change-requests) in the same command that answers the request. The caller checked orders.manage over
+ * `order` (and the typed number, when one was sent).
+ */
+export async function cancelOrderInCommand(
+  tools: CommandTools,
+  tenantId: string,
+  order: OrderRow,
+  body: { readonly version?: number | undefined; readonly reason: string },
+): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
+  const { tx, now } = tools
+  const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
+  await lockOrderLines(tx, tenantId, lineIds)
+  const locked = await lockOrder(tx, order.id, body.version)
+  if (lineIds.length > 0) await tx.$queryRaw`SELECT w.id FROM "WorkOrder" w WHERE w.id IN (SELECT c."workOrderId" FROM "WorkOrderSize" c WHERE c."salesOrderLineId" = ANY(${lineIds}::uuid[])) ORDER BY w.id FOR SHARE`
+  const facts = await readOrderFacts(tx, order)
+  const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
+  const reason = reasonOf(body.reason)
+  assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...moveFactsOf(facts), reason, cancelBlocks: cancelBlocksOf(impact) })
+  await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelReason: reason!, closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+  const requests = await tx.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true }, orderBy: { id: 'asc' } })
+  for (const request of requests.filter((row) => row.status === 'OPEN')) {
+    const { count } = await tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: `Order ${order.number} cancelled: ${reason}`, updatedAt: now, version: { increment: 1 } } })
+    if (count === 1) tools.audit({ action: 'orders.cancelDeposit', recordType: 'DepositRequest', recordId: request.id, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'CANCELLED', orderId: order.id }, reason: reason! })
+  }
+  const steps = await cancelScheduleInCommand(tools, order, reason!)
+  const paid = requests.filter((row) => row.status === 'PAID').map((row) => row.id)
+  const view = impactView(impact)
+  tools.audit({
+    recordType: 'SalesOrder',
+    recordId: order.id,
+    companyId: order.companyId,
+    before: { status: locked.status },
+    after: {
+      status: 'CANCELLED',
+      cancelReason: reason,
+      closedAt: toUtcIso(now),
+      paidDepositRequestIds: paid,
+      cancelledMilestoneIds: steps,
+      touches: impact.touches.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.id) })),
+      leavesBehind: impact.leavesBehind.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.number ?? ref.id) })),
+    },
+    reason: reason!,
+  })
+  statusChanged(tools, order, locked.status, 'CANCELLED', 'person')
+  return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view }
 }
 
 // ---- close -----------------------------------------------------------------------------------------------------------------

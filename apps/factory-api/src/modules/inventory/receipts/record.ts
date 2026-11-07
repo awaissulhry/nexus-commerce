@@ -41,6 +41,8 @@ import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves
 import { gradeIdsByCode } from '../hides/facts'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lotNumber, receiptNumber } from './numbers'
+// B-W2b-182: a receipt prefilled from a ship notice names it; posted, the notice is RECEIVED in the same command.
+import { markNoticeReceived, noticeForReceipt } from '../receiving/from-ship-notice'
 import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
 
@@ -107,6 +109,8 @@ export interface ReceiptBody {
   readonly lines: readonly LineBody[]
   /** B-W2a-F8: the reason goods received inside a SOFT-locked month are posted anyway. */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** B-W2b-182 (SCM-106): the supplier's SENT ship notice of this order the receipt was prefilled from (office only). */
+  readonly shipNoticeId?: string | undefined
 }
 
 const blank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -212,6 +216,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     throw new DomainError('conflict', `Purchase order ${order.number} changed since it was read (version ${order.version}, not ${options.expectedVersion}): read it again.`, [{ path: 'body/version', message: 'Read the order again.' }])
   }
 
+  // B-W2b-182: the ship notice it was prefilled from, SENT and of this order (it becomes RECEIVED once this receipt posts).
+  const notice = body.shipNoticeId ? await noticeForReceipt(tools, body.shipNoticeId, order) : null
+
   // 2. When, and where the goods go.
   const receivedAt = body.receivedAt ? parseInstant(body.receivedAt)! : now
   if (receivedAt.getTime() > now.getTime() + CLOCK_SLACK_MS) throw new ValidationError('The goods cannot arrive in the future.', [{ path: 'body/receivedAt', message: 'Now or earlier.' }])
@@ -279,6 +286,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       number,
       supplierId: order.partyId,
       purchaseOrderId: order.id,
+      ...(notice ? { shipNoticeId: notice.id } : {}),
       supplierDdtNumber: blank(body.supplierDdtNumber),
       supplierDdtDate: body.supplierDdtDate ? new Date(`${body.supplierDdtDate}T00:00:00.000Z`) : null,
       receivedAt,
@@ -451,6 +459,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   // 7. Posted: the ledger now holds exactly its lines (the deferred check at commit); the order moves on (the floor's in
   // the system command after this one: its role may not change the order).
   await tx.goodsReceipt.update({ where: { id: receiptId }, data: { status: 'POSTED', postedAt: now, postedById: by.createdById }, select: { id: true } })
+  if (notice) await markNoticeReceived(tools, notice.id, receiptId)
   const after = await readOrderLines(tx, order.id)
   const to = orderStatusAfter(
     { status: order.status, confirmed: order.confirmed },
