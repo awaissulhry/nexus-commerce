@@ -286,7 +286,9 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     expect(transit.items.map((row: Json) => [row.number, row.order.customerRef, row.status])).toEqual([['SEED-SH-0001', 'SEED-PO-78', 'IN_TRANSIT']])
     expect(transit.items[0].trackingNumbers).toHaveLength(2)
     expect((await ok(browsers.other, '/portal/sales-orders/in-transit')).items).toEqual([])
-    const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => count.key.startsWith('orders.')).map((count: Json) => [count.key, count.value]))
+    // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
+    const own = ['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'orders.in_transit']
+    const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => own.includes(count.key)).map((count: Json) => [count.key, count.value]))
     expect(counts(await ok(browsers.buyer, '/portal/home'))).toEqual({ 'orders.open': 3, 'orders.in_production': 0, 'orders.shipping_this_week': expect.any(Number), 'orders.in_transit': 1 })
     expect(counts(await ok(browsers.designer, '/portal/home'))).toEqual({ 'orders.open': null, 'orders.in_production': null, 'orders.shipping_this_week': null, 'orders.in_transit': null })
     expect(counts(await ok(browsers.other, '/portal/home'))).toEqual({ 'orders.open': 0, 'orders.in_production': 0, 'orders.shipping_this_week': 0, 'orders.in_transit': 0 })
