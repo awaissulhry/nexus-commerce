@@ -250,6 +250,8 @@ export interface LineBody {
 }
 export interface ReceiptBody {
   purchaseOrderId: string
+  /** B-W2b-182: the ship notice the receipt was filled from. */
+  shipNoticeId?: string
   supplierDdtNumber?: string
   supplierDdtDate?: string
   receivedAt?: string

@@ -9,6 +9,9 @@ import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sa
 import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissions'
 // B-W2b-190: portal ordering.
 import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
+import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sales/change-requests/permissions'
+// B-W2b-192: returns and complaints from outside.
+import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
 // B-W2b-184: approval requests to partners (the office's asks, the partner's page).
 import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approvals-out/permissions'
 
@@ -653,6 +656,16 @@ const REQUIRED_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> =
   admin: ['documents.required.manage'],
   buyer: ['documents.required.manage'],
 })
+/**
+ * B-W2b-189 (SCM-096, SCM-097; design portal.supplier.documents "a buyer or quality person accepts it", portal.supplier.profile
+ * "changes go to the buyer"): who checks what suppliers send in the portal — their documents (administrator, buyer, quality
+ * inspector) and their changes of addresses and contacts (administrator, buyer).
+ */
+const SUPPLIER_REVIEW_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  buyer: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  quality_inspector: ['purchasing.supplierDocuments.review'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -750,6 +763,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
   // B-W2b-177
   ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
+  // B-W2b-189
+  ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : []),
   // B-W2b-184
   ...(audience === 'office' ? (PARTNERS_APPROVALS_ADDS[key] ?? []) : [])]
 /**
@@ -1382,6 +1397,17 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   CUSTOMER_DOCUMENT_READERS,
   // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
   PORTAL_ORDERING_ADDS,
+  // B-W2b-183: the customer roles that ask for a change or a cancel of an order (the Buyer; the Admin follows).
+  Object.fromEntries(ORDER_CHANGE_ASKER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_ASK]])),
+  // B-W2b-182: the supplier's Orders role sees and announces its deliveries (never a price, C2); announcing takes portal.upload.
+  { 'supplier-orders': ['portal.shipNotices.view' as Permission] },
+  // B-W2b-189: every supplier and workshop role sees what we ask for, its documents and its profile; each Admin follows and
+  // alone sends changes of the addresses and contacts (SCM-096, SCM-097).
+  Object.fromEntries(['supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs'].map((key) => [key, ['portal.supplierDocuments.view' as Permission, 'portal.supplierProfile.view' as Permission]])),
+  { 'supplier-admin': ['portal.supplierProfile.change' as Permission], 'subcontractor-admin': ['portal.supplierProfile.change' as Permission] },
+  // B-W2b-192: the Returns & claims page to the customer Buyer, Finance, Quality and Viewer; asking to the Buyer and Quality;
+  // the complaints' investigation (answer letter, 8D) to Quality.
+  PORTAL_RETURNS_ADDS,
   // B-W2b-184: what we ask the organisation to approve, to every main role that works with us but the invoices-only ones (answering takes portal.approve).
   PORTAL_APPROVALS_READERS,
 ]

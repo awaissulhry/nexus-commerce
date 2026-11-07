@@ -10,6 +10,7 @@ import { changeParty, newParty, partyMachine, reasonProblems, type PartyField, t
 import { checkTaxIdentity, compactTaxNumber, identityAt, type TaxIdentityFields } from '@nexus/factory-domain/parties/tax'
 import { viesStanding } from '@nexus/factory-domain/parties/vies'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
+import { assertRequiredDocuments } from '../../platform/files/required/check'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -297,7 +298,10 @@ export async function moveParty(caller: CommandCaller, partyId: string, move: Pa
       const { tx, record } = tools
       const from = record!.from as PartyStatus
       if (!(spec.from as readonly PartyStatus[]).includes(from)) throw new InvalidStateError(MOVE_REFUSAL[move])
-      tools.audit({ recordType: 'Party', recordId: partyId, companyId: seen.companyId, before: { status: from }, after: { status: spec.to }, ...(reason ? { reason } : {}) })
+      // B-W2b-189 (COL-048, B-W2b-177's seam): the documents the company's rules need before a party is active — a BLOCK rule
+      // not met refuses the move in words; the WARN ones not met are kept in the audit row.
+      const documents = spec.to === 'ACTIVE' ? await assertRequiredDocuments(tools, { recordType: 'Party', recordId: partyId, toStatus: 'ACTIVE' }) : null
+      tools.audit({ recordType: 'Party', recordId: partyId, companyId: seen.companyId, before: { status: from }, after: { status: spec.to, ...(documents && documents.sentences.length > 0 ? { documentWarnings: documents.sentences } : {}) }, ...(reason ? { reason } : {}) })
       tools.emit({ type: 'party.status_changed', subject: partyId, companyId: seen.companyId, payload: { partyId, code: seen.code, from, status: spec.to } })
       const view = await viewInTx(tx, partyId, tools.now)
       // The block's own audit row is written after this work: the answer names it from here.

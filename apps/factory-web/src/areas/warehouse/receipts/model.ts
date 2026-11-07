@@ -114,6 +114,8 @@ export interface ReceiveLineDraft {
 
 export interface ReceiveDraft {
   orderId: string
+  /** B-W2b-182: the supplier's ship notice the form was filled from (Post names it: the notice becomes received). */
+  shipNoticeId?: string | null
   lines: ReceiveLineDraft[]
   ddtNumber: string
   ddtDate: string
@@ -287,6 +289,7 @@ export function receiptBody(draft: ReceiveDraft, timeZone: string): ReceiptBody 
     ...(draft.ddtDate ? { supplierDdtDate: draft.ddtDate } : {}),
     ...(receivedAt ? { receivedAt } : {}),
     ...(text(draft.note) ? { note: text(draft.note) } : {}),
+    ...(draft.shipNoticeId ? { shipNoticeId: draft.shipNoticeId } : {}),
     lines,
   }
 }

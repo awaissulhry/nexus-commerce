@@ -10,6 +10,12 @@ import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home
 import { PAYMENT_COUNTS } from '../../../../modules/payments/online/home'
 // B-W2b-178: a customer's new documents (since the last visit, until opened).
 import { CUSTOMER_DOCUMENT_COUNTS } from '../../../../modules/sales/portal-documents/home'
+// B-W2b-182: a supplier's deliveries (to announce, on their way).
+import { SHIP_NOTICE_COUNTS } from '../../../../modules/purchasing/ship-notices/home'
+// B-W2b-189: what we ask a supplier for, and its documents expiring.
+import { SUPPLIER_DOCUMENT_COUNTS } from '../../../../modules/purchasing/portal-profile/home'
+// B-W2b-192: a customer's returns and complaints (open, waiting for you, open complaints).
+import { RETURN_COUNTS } from '../../../../modules/sales/portal-returns/home'
 // B-W2b-184: approvals to give and revised orders to re-confirm.
 import { APPROVAL_COUNTS } from '../../../approvals-out/home'
 
@@ -40,6 +46,12 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   SUBCONTRACT_JOB_COUNTS,
   // B-W2b-178: a customer's new documents.
   CUSTOMER_DOCUMENT_COUNTS,
+  // B-W2b-182: the supplier's deliveries to announce and on their way.
+  SHIP_NOTICE_COUNTS,
+  // B-W2b-189: documents we ask a supplier or workshop for, and those expiring (null without the documents page).
+  SUPPLIER_DOCUMENT_COUNTS,
+  // B-W2b-192: a customer's returns and complaints.
+  RETURN_COUNTS,
   // B-W2b-184: approvals to give and revised orders to re-confirm.
   APPROVAL_COUNTS,
 ])

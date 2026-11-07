@@ -161,4 +161,31 @@ export const manifest = defineManifest({
   'GET /portal/purchase-orders/:purchaseOrderId/copy': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
   'POST /portal/purchase-orders/:purchaseOrderId/confirm': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
   'POST /portal/purchase-orders/:purchaseOrderId/decline': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
+  // B-W2b-182 (SCM-106, SCM-107): the supplier's ship notices, the session's party, no grain. Announcing, the packing list,
+  // sending and cancelling also need the person's capability portal.upload (checked in the handler; an office preview never).
+  'GET /portal/ship-notices': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/shippable': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/template': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/:shipNoticeId': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'PATCH /portal/ship-notices/:shipNoticeId': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'PUT /portal/ship-notices/:shipNoticeId/packing-list': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/packing-list/sheet': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/send': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/cancel': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  // B-W2b-189 (SCM-096, SCM-097): the supplier's documents and profile, the session's party (row-level security), no grain.
+  // Sending a document also needs the person's capability portal.upload (checked in the handler; an office preview never).
+  'GET /portal/supplier-documents': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'POST /portal/supplier-documents': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'POST /portal/supplier-documents/:fileId/complete': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'GET /portal/supplier-profile': { audiences: ['partner'], permission: 'portal.supplierProfile.view', scope: 'party' },
+  'POST /portal/supplier-profile/changes': { audiences: ['partner'], permission: 'portal.supplierProfile.change', scope: 'party' },
+  'POST /portal/supplier-profile/changes/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.supplierProfile.change', scope: 'party' },
+  // B-W2b-189: the office's check (can() over each upload's or request's company and supplier in the handler).
+  'GET /purchasing/supplier-documents': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'POST /purchasing/supplier-documents/:fileId/accept': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'POST /purchasing/supplier-documents/:fileId/refuse': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'GET /purchasing/supplier-changes': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
+  'POST /purchasing/supplier-changes/:requestId/approve': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
+  'POST /purchasing/supplier-changes/:requestId/refuse': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
 })

@@ -11,6 +11,8 @@ import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/r
 import { mayAt, officeContextOf, postedBy } from '../ledger/access'
 import { lockStock, postMoves, type PostedMove } from '../ledger/post-moves'
 import { blockersOf, receiptDetail } from './read'
+// B-W2b-182: a reversed receipt's ship notice waits for the goods again.
+import { reopenNoticeAfterReversal } from '../receiving/from-ship-notice'
 import { readOrderLines, readReceiptMoves, RECEIPT_COLUMNS } from './store'
 
 /**
@@ -63,6 +65,7 @@ export async function reverseReceipt(caller: CommandCaller, receiptId: string, b
         { key, issuePath: (index) => `moves/${index}`, periodLockOverride: body.periodLockOverride },
       )
       await tx.goodsReceipt.update({ where: { id: receipt.id }, data: { status: 'REVERSED', reversedAt: now, reversedById: by.createdById, reversalReason: reason }, select: { id: true } })
+      await reopenNoticeAfterReversal(tools, receipt.id)
 
       // Its lots are rejected: nothing of them is in stock, and they are never used.
       const lines = await tx.goodsReceiptLine.findMany({ where: { receiptId: receipt.id }, select: { id: true } })

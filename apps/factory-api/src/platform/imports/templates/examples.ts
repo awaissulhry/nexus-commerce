@@ -47,6 +47,11 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   ],
   // B-W2b-190
   'sales.portalOrderLines': ORDER_TEMPLATE_EXAMPLES,
+  // B-W2b-182: a tannery's packing list on a sent ship notice (made-up numbers).
+  'purchasing.packingList': [
+    { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },
+    { notice: 'ASN-2026-0001', hideNumber: '2231-002', area: '19.85', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.25', dyeBatch: '2231' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */
