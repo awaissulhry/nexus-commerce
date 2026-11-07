@@ -1,12 +1,13 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/collab.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's notifications, followers, mentions and tasks (B-W2a-20) write them through command(), the fan-out in the worker in the tenant's system context; the API keeps each person to their own notifications and checks the record's view permission on every task and follow. The floor and portal/link sessions read and write nothing here in W2a (no floor inbox, no portal). NotificationDelivery and MessageMention are append-only (`@append-only`; the …_platform_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). A notification is kept (its deliveries name it), a task is cancelled, never deleted; a follower row is removed when its person unfollows. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/collab.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's notifications, followers, mentions and tasks (B-W2a-20) write them through command(), the fan-out in the worker in the tenant's system context; the API keeps each person to their own notifications and checks the record's view permission on every task and follow. The floor and link sessions read and write nothing here (no floor inbox). W2b (B-W2b-156): a portal session reads its own party's notifications (Notification.partyId is set exactly when the person is a partner user; the API keeps each person to their own and marks them read, done or snoozed in the tenant's system scope), never who in the office caused one (actorId hidden); deliveries, followers, mentions and tasks stay the office's. NotificationDelivery and MessageMention are append-only (`@append-only`; the …_platform_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). A notification is kept (its deliveries name it), a task is cancelled, never deleted; a follower row is removed when its person unfollows. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Notification": {
-      "about": "The fan-out writes one row per person per event; the office reads a person's own and marks them read, done or snoozed.",
+      "about": "The fan-out writes one row per person per event; the office reads a person's own and marks them read, done or snoozed. W2b: a partner user's rows carry the person's party, and a portal session reads its party's (the API, its person's own), never the office person who caused one.",
       "kind": "tenant",
-      "keyColumns": { "tenant": "tenantId" },
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["actorId"] }
       }
     },
     "NotificationDelivery": {

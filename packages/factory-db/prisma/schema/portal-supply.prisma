@@ -1,0 +1,379 @@
+// The supplier portal (W2b schema wave 22/22, B-W2b-158; plan W2b-3; features SCM-023, SCM-086, SCM-106, SCM-107, SCM-110,
+// SCM-154 to SCM-157; design 02 portal-links: portal.supplier.asn, portal.supplier.orders, portal.supplier.jobs, links.job,
+// links.onboard): what suppliers and workshops send us, beside what W1 and W2a built (a supplier's confirmation and
+// proposal of a purchase order, supply.prisma; subcontract orders and what came back, subcontract.prisma).
+//
+//   ShipNotice (+ lines, + hides)   a supplier announces a delivery of one purchase order before it leaves: its lines with
+//                                   lot and dye batch, and for leather the tannery's packing list hide by hide (number,
+//                                   area, grade, thickness, dye batch). Numbered from the company's ASN series when it is
+//                                   sent; it prefills a goods receipt (inventory.prisma GoodsReceipt.shipNoticeId) and
+//                                   posts nothing by itself: what the dock counts and measures is the receipt's.
+//   SubcontractProgressReport       a workshop reports finished pieces of an operation (per bundle or size): append-only.
+//   SubcontractReturnNotice         a workshop announces what comes back (finished and scrapped by bundle or size, unused
+//                                   material, parcels, its DDT): it prefills the receive back (SubcontractReceipt) and
+//                                   puts nothing in stock by itself.
+//   SupplierQuestionnaire           the due-diligence questionnaire of a company, in versions (questions as data; the
+//                                   Forced Labour Regulation (EU) 2024/3015), and each supplier's signed answer to one.
+//
+// Who sees what (ownership/portal-supply.json): a portal or link session (factory_partner_runtime) reads its OWN party's
+// rows and inserts its own ship notices (and changes them until received), progress reports, return notices and
+// questionnaire answers; never a price, cost or internal column (Owner answer C2), never which office user wrote a row.
+// The floor of the delivery site reads the ship notices that come to it (the inbound board at the dock, SCM-110). The office
+// reads and writes everything, also for a supplier or workshop without e-mail (Owner answer C3), numbers and sends a ship
+// notice, marks it received, receives or cancels a return notice, reviews an answer. The …_portal_supply_w2b_guards
+// triggers hold the states for every login. No money column anywhere.
+//
+// Every child row carries its parent's site and party in its reference, so it can never belong to another site or party
+// than its parent. Uniqueness made only of references (one line per purchase order line of a notice) is the API's: a
+// unique key of ids alone cannot be copied by the generated isolation tests.
+
+/// A ship notice (ASN; SCM-106, SCM-107; design portal.supplier.asn): a supplier announces a delivery of one purchase
+/// order before it leaves. DRAFT while the supplier fills it (deleted when discarded; it has no number) → SENT (numbered
+/// from the company's ASN series by the office or the API in the tenant's system context: the partner role has no
+/// numbering grant) → RECEIVED once a posted goods receipt names it (back to SENT if none does any more); a SENT notice
+/// may be CANCELLED (with its reason) while nothing received it. The supplier changes its terms, lines and hides until it
+/// is received (design "editable until received"); company, site, party and order never change.
+model ShipNotice {
+  id              String           @id @db.Uuid
+  tenantId        String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buying company: its ASN series numbers the notice.
+  companyId       String           @db.Uuid
+  /// The purchase order's delivery site (the floor role's policy key: the dock reads what comes to it).
+  siteId          String           @db.Uuid
+  /// The supplier: the purchase order's party (the partner role's policy key).
+  partyId         String           @db.Uuid
+  /// The purchase order it delivers against: SENT, CONFIRMED or PARTLY_RECEIVED when the notice is made.
+  purchaseOrderId String           @db.Uuid
+  /// From the company's ASN series, given when it is sent (null while DRAFT); unique in the company.
+  number          String?
+  status          ShipNoticeStatus @default(DRAFT)
+  /// The supplier's own reference for the delivery (its shipment or order number), as printed.
+  supplierRef     String?
+  /// The supplier's transport document (DDT, DPR 472/1996) the goods travel with, and its date (only with a number): the
+  /// goods receipt takes them as its supplier DDT.
+  ddtNumber       String?
+  ddtDate         DateTime?        @db.Date
+  /// The day the goods leave the supplier: set before it is sent.
+  shipDate        DateTime?        @db.Date
+  /// The day the goods are expected at the site (the inbound board's day): not before the ship date.
+  expectedDate    DateTime?        @db.Date
+  /// The carrier and its tracking number, as the supplier types them.
+  carrier         String?
+  trackingNumber  String?
+  /// How many parcels or pallets: 1 or more.
+  parcels         Int?
+  /// The supplier's note for our dock.
+  note            String?
+  /// The office's own dock note (the inbound board's card): the partner role can neither read nor write it.
+  /// @internal
+  internalNote    String?
+  /// Set exactly from SENT on (a cancelled notice keeps it).
+  sentAt          DateTime?        @db.Timestamptz(3)
+  /// Set exactly while RECEIVED: when the goods receipt that names it was posted.
+  receivedAt      DateTime?        @db.Timestamptz(3)
+  /// Set exactly while CANCELLED, with the reason.
+  cancelledAt     DateTime?        @db.Timestamptz(3)
+  cancelReason    String?
+  version         Int              @default(1)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who made it; null when the supplier made it in the portal (the command's audit row names the person).
+  createdById     String?          @db.Uuid
+
+  site          Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder    @relation(fields: [tenantId, partyId, siteId, purchaseOrderId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         ShipNoticeLine[]
+  // inventory.prisma: the goods receipts prefilled from it.
+  goodsReceipts GoodsReceipt[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the lines' and the goods receipts' references: a notice of their own site and supplier.
+  @@unique([tenantId, siteId, partyId, id])
+  // A purchase order's ship notices; the inbound board's days.
+  @@index([tenantId, purchaseOrderId])
+  @@index([tenantId, siteId, status, expectedDate])
+}
+
+/// DRAFT → SENT → RECEIVED (→ SENT when no posted receipt names it any more); SENT → CANCELLED. A DRAFT is deleted, never
+/// cancelled; CANCELLED is final.
+enum ShipNoticeStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  CANCELLED
+}
+
+/// One purchase order line of a ship notice: how much comes, in the line's unit, with the supplier's lot and dye batch;
+/// for leather its hides are the packing list below. Added, changed and removed while the notice is DRAFT or SENT. Its
+/// received quantity is the office's, written from the posted receipt (the supplier sees "received with differences").
+model ShipNoticeLine {
+  id                  String   @id @db.Uuid
+  tenantId            String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The notice's site and supplier.
+  siteId              String   @db.Uuid
+  partyId             String   @db.Uuid
+  shipNoticeId        String   @db.Uuid
+  /// Its place on the notice: 10, 20, 30 …
+  seq                 Int
+  /// A line of the notice's purchase order, not cancelled or closed short.
+  purchaseOrderLineId String   @db.Uuid
+  /// Above 0, in `uom`: the purchase order line's own unit.
+  quantity            Decimal  @db.Decimal(18, 4)
+  uom                 Uom
+  /// The supplier's lot or batch number, and the tannery's dye batch (one shade), as printed.
+  supplierLot         String?
+  dyeBatch            String?
+  note                String?
+  /// What the posted receipt took of it, in `uom` (0 or more): written by the office, never by the supplier.
+  receivedQuantity    Decimal? @db.Decimal(18, 4)
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?  @db.Uuid
+
+  shipNotice        ShipNotice        @relation(fields: [tenantId, siteId, partyId, shipNoticeId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  hides             ShipNoticeHide[]
+
+  @@unique([tenantId, shipNoticeId, seq])
+  // The target of the hides' reference: a line of their own notice, site and supplier.
+  @@unique([tenantId, siteId, partyId, shipNoticeId, id])
+  // The notices of a purchase order line ("deliveries to announce").
+  @@index([tenantId, purchaseOrderLineId])
+}
+
+/// One hide of the tannery's packing list (SCM-107; design portal.supplier.asn "Hide 2231-017"): the tannery's number on
+/// the hide, its area as the tannery measured it, its grade, thickness and dye batch. What we measure at receipt is the
+/// receipt's hide (inventory.prisma Hide: its area and the tannery's number as supplierCode); B-W2b-182 checks the list
+/// against the purchase order (area tolerance, grade, one dye batch) before the notice is sent. Changed with its line.
+model ShipNoticeHide {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The line's site, supplier and notice.
+  siteId           String   @db.Uuid
+  partyId          String   @db.Uuid
+  shipNoticeId     String   @db.Uuid
+  shipNoticeLineId String   @db.Uuid
+  /// Its place on the packing list: 1, 2, 3 …
+  seq              Int
+  /// The tannery's number on the hide (its tag), unique in the notice.
+  hideNumber       String
+  /// The area as the tannery measured it, above 0, in an area unit (M2, DM2, FT2).
+  area             Decimal  @db.Decimal(18, 4)
+  areaUom          Uom
+  /// The tannery's selection or grade ("A", "TR1"), as printed.
+  grade            String?
+  /// In millimetres, above 0.
+  thicknessMm      Decimal? @db.Decimal(6, 2)
+  dyeBatch         String?
+  note             String?
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  line ShipNoticeLine @relation(fields: [tenantId, siteId, partyId, shipNoticeId, shipNoticeLineId], references: [tenantId, siteId, partyId, shipNoticeId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, shipNoticeLineId, seq])
+  @@unique([tenantId, shipNoticeId, hideNumber])
+}
+
+/// A workshop's report of finished pieces (SCM-156; design portal.supplier.jobs "Report finished pieces", "Reports so
+/// far"): of one operation of its subcontract order, for one bundle or size cell of the work order (or the whole
+/// operation), how many more it finished, when, by whom (the name the workshop gives), and the day it will finish by.
+/// The work order sees it at once. Written once, never changed or removed: a mistake is told in a later report's note
+/// and the office's thread. The total against the operation's pieces is the API's (the partner role cannot read the
+/// operation's fee row).
+/// @append-only
+model SubcontractProgressReport {
+  id                     String    @id @db.Uuid
+  tenantId               String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site, work order and workshop (the partner role's policy key).
+  siteId                 String    @db.Uuid
+  workOrderId            String    @db.Uuid
+  partyId                String    @db.Uuid
+  subcontractOrderId     String    @db.Uuid
+  /// An operation of the order.
+  subcontractOperationId String    @db.Uuid
+  /// The bundle (of the work order) and the size cell (production.prisma WorkOrderSize) it reports; both null: the
+  /// operation as a whole.
+  bundleId               String?   @db.Uuid
+  workOrderSizeId        String?   @db.Uuid
+  /// The pieces finished since the last report: above 0.
+  finishedQuantity       Int
+  /// "Will finish by": the day the workshop expects to finish the operation, when it gives one.
+  finishBy               DateTime? @db.Date
+  /// When it was reported.
+  reportedAt             DateTime  @db.Timestamptz(3)
+  /// Who reported it, as shown on the job (a person of the workshop: its name; or the office for a workshop without e-mail).
+  reportedByName         String
+  note                   String?
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  /// The office user who wrote it for the workshop; null when the workshop reported it (the audit row names the person).
+  createdById            String?   @db.Uuid
+
+  subcontractOrder SubcontractOrder     @relation(fields: [tenantId, siteId, workOrderId, partyId, subcontractOrderId], references: [tenantId, siteId, workOrderId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation        SubcontractOperation @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId, subcontractOperationId], references: [tenantId, siteId, workOrderId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and workOrderId.
+  bundle           Bundle?              @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize    WorkOrderSize?       @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, subcontractOrderId, reportedAt])
+  @@index([tenantId, subcontractOperationId])
+}
+
+/// A workshop's announcement of goods coming back (SCM-157; design portal.supplier.jobs "Send back"): finished and
+/// scrapped pieces by bundle or size, the unused material, parcels, the day, who collects, and its transport document
+/// (DPR 472/1996; the photo or PDF of it is a file of the notice). ANNOUNCED → RECEIVED when the receive back is written
+/// from it (the office names the SubcontractReceipt), or CANCELLED by the office with its reason. It prefills the receive
+/// back and puts nothing in stock by itself. What the workshop announced never changes.
+model SubcontractReturnNotice {
+  id                 String                        @id @db.Uuid
+  tenantId           String                        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site, work order and workshop (the partner role's policy key).
+  siteId             String                        @db.Uuid
+  workOrderId        String                        @db.Uuid
+  partyId            String                        @db.Uuid
+  subcontractOrderId String                        @db.Uuid
+  /// Its place among the order's return notices: 1, 2, 3 … (partial send-backs).
+  seq                Int
+  status             SubcontractReturnNoticeStatus @default(ANNOUNCED)
+  /// What comes back, by bundle or size cell (or the operation as a whole), at least one piece in all; a reason code of
+  /// the REWORK list for scrapped pieces (no spaces):
+  /// [{ "subcontractOperationId": "…", "bundleId": "…" | null, "workOrderSizeId": "…" | null, "finished": 10,
+  ///    "scrapped": 1, "reasonCode": "STAIN" }]
+  quantities         Json
+  /// The unused material of the kit that comes back, each a kit line of the order with its quantity in the line's unit
+  /// as a decimal string: [{ "kitLineId": "…", "quantity": "1.5000" }].
+  materialBack       Json                          @default("[]")
+  /// How many parcels: 1 or more.
+  parcels            Int
+  /// The day the goods are expected at our site.
+  expectedDate       DateTime                      @db.Date
+  /// We collect them (true) or the workshop delivers.
+  weCollect          Boolean                       @default(false)
+  /// The workshop's DDT, as printed, and its date (only with a number).
+  workshopDdtNumber  String?
+  workshopDdtDate    DateTime?                     @db.Date
+  /// Who announced it (a person of the workshop: its name; or the office for a workshop without e-mail).
+  announcedByName    String
+  note               String?
+  /// Set exactly while RECEIVED: the receive back written from it (a receipt of the same order) and when.
+  receiptId          String?                       @db.Uuid
+  receivedAt         DateTime?                     @db.Timestamptz(3)
+  /// Set exactly while CANCELLED, with the reason.
+  cancelledAt        DateTime?                     @db.Timestamptz(3)
+  cancelReason       String?
+  version            Int                           @default(1)
+  createdAt          DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                      @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who wrote it for the workshop; null when the workshop announced it.
+  createdById        String?                       @db.Uuid
+
+  subcontractOrder SubcontractOrder    @relation(fields: [tenantId, siteId, workOrderId, partyId, subcontractOrderId], references: [tenantId, siteId, workOrderId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId, workOrderId
+  // and subcontractOrderId.
+  receipt          SubcontractReceipt? @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId, receiptId], references: [tenantId, siteId, workOrderId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, subcontractOrderId, seq])
+}
+
+/// ANNOUNCED → RECEIVED | CANCELLED; both final.
+enum SubcontractReturnNoticeStatus {
+  ANNOUNCED
+  RECEIVED
+  CANCELLED
+}
+
+/// One version of a company's supplier questionnaire (SCM-023; design links.onboard; B-W2b-172): the due-diligence
+/// questions as data (a starter set for the Forced Labour Regulation (EU) 2024/3015: company, contacts, sites and
+/// sub-suppliers, certifications with expiry, labour and social questions, the signed statement). Changed while it is
+/// not published; once published it is fixed (a change is a new version) and never removed. Office only: a
+/// SUPPLIER_ONBOARD link session reads its questions in the tenant's system context.
+model SupplierQuestionnaire {
+  id            String    @id @db.Uuid
+  tenantId      String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String    @db.Uuid
+  /// Its version: 1, 2, 3 … in the company.
+  revision      Int
+  /// Its name, for the office ("Supplier due diligence").
+  title         String
+  /// The questions, in order, each with a key unique in the version (`^[a-z][a-z0-9_.-]*$`) and its words per language:
+  /// [{ "key": "labour.forced-labour", "section": "labour", "kind": "YES_NO", "required": true,
+  ///    "text": { "it": "…", "en": "…" } }]. The kinds and sections are the API's.
+  questions     Json
+  /// When it was published and by whom: set once; from then on it is fixed.
+  publishedAt   DateTime? @db.Timestamptz(3)
+  publishedById String?   @db.Uuid
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?   @db.Uuid
+
+  company   Company                         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  responses SupplierQuestionnaireResponse[]
+
+  @@unique([tenantId, companyId, revision])
+  // The target of the answers' reference: a version of the answer's own company.
+  @@unique([tenantId, companyId, id])
+}
+
+/// A supplier's signed answer to one published questionnaire version (SCM-023; design links.onboard "Review and send",
+/// purchasing.suppliers "Documents & qualification"): the answers, its sites and sub-tier sites, who signed and when,
+/// through which SUPPLIER_ONBOARD link (none: the portal or the office). The draft before it is LinkDraft's
+/// (links-depth.prisma), kept with us; this row is written once, when it is sent, and what the supplier said never changes:
+/// asked again, it answers again (a new row). The buyer reviews it once: ACCEPTED, or QUESTIONS back on the thread. Its
+/// PDF and certificates are files of the row. Personal data: the signer's name and role (purpose: the questionnaire's
+/// statement), the contacts inside the answers (purpose: the supplier relationship).
+model SupplierQuestionnaireResponse {
+  id              String                         @id @db.Uuid
+  tenantId        String                         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The questionnaire's company.
+  companyId       String                         @db.Uuid
+  /// The supplier (the partner role's policy key).
+  partyId         String                         @db.Uuid
+  /// The published version it answers.
+  questionnaireId String                         @db.Uuid
+  /// The SUPPLIER_ONBOARD link it came through (a link of the same party, not revoked when it was sent); null: the
+  /// portal or the office.
+  linkId          String?                        @db.Uuid
+  /// The answers by question key: { "labour.forced-labour": { "value": "NO", "explain": "…" }, … }.
+  answers         Json
+  /// The supplier's own sites, and its sub-tier sites (who does each step for leather: beamhouse, tanning, retanning,
+  /// finishing), each with its name and two-letter country: [{ "name": "…", "country": "IT", "steps": ["TANNING"] }].
+  sites           Json                           @default("[]")
+  subTierSites    Json                           @default("[]")
+  /// The signed statement ("true to the best of my knowledge"): the signer's name and role.
+  signedName      String
+  signedRole      String?
+  /// When it was sent.
+  submittedAt     DateTime                       @db.Timestamptz(3)
+  /// The buyer's review: set once, with when and who (the partner role reads the decision and its time, not who).
+  decision        SupplierQuestionnaireDecision?
+  reviewedAt      DateTime?                      @db.Timestamptz(3)
+  reviewedById    String?                        @db.Uuid
+  /// The buyer's note for the office; the questions back go on the supplier's thread.
+  /// @internal
+  reviewNote      String?
+  version         Int                            @default(1)
+  createdAt       DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                        @db.Uuid
+
+  questionnaire SupplierQuestionnaire @relation(fields: [tenantId, companyId, questionnaireId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party         Party                 @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  link          OneOffLink?           @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A supplier's answers, newest first; the answers to a version.
+  @@index([tenantId, partyId, submittedAt])
+  @@index([tenantId, questionnaireId])
+}
+
+/// The buyer's review of an answer.
+enum SupplierQuestionnaireDecision {
+  /// The answers are complete and acceptable (supplier qualification, W2b-5, builds on them).
+  ACCEPTED
+  /// Questions back to the supplier on its thread: it answers again (a new answer).
+  QUESTIONS
+}

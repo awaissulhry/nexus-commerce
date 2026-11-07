@@ -72,7 +72,7 @@ describe('the services list', () => {
   })
 
   it('B-W2b-24: the virus scanner and error tracking are listed when an account exists, never as "Not connected" (GATE-SPEND)', () => {
-    expect([...AWAITING_SPEND].sort()).toEqual(['CLAMAV', 'ERROR_TRACKING'])
+    expect([...AWAITING_SPEND].sort()).toEqual(['CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE'])
     expect(serviceRows([], CHOICES, null, '', words).some((row) => row.kind === 'missing' && AWAITING_SPEND.has(row.provider))).toBe(false)
     const rows = serviceRows([...ACCOUNTS, SCANNER], CHOICES, null, '', words)
     expect(rows.filter((row) => row.kind === 'account').map((row) => (row.kind === 'account' ? row.account.code : ''))).toEqual(['mail', 'files', 'sdi-demo', 'sendcloud-demo', 'vies', 'virus-scan'])

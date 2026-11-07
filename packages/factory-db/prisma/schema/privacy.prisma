@@ -63,6 +63,8 @@ model PrivacyNotice {
   peopleLegalGates PeopleLegalGate[]
   // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it as the worker notice.
   piecePaySwitches PiecePaySwitch[]
+  // W2b parties.prisma (wave 21/22): the measurement revisions sent by link after it was shown.
+  measurementProfiles MeasurementProfile[] @relation("MeasurementProfileNotice")
 
   @@unique([tenantId, companyId, kind, versionNo])
   @@unique([tenantId, companyId, kind, label])
