@@ -1823,6 +1823,7 @@
     "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
     "inventory_receipts_documents_request": "Chiedere al fornitore i documenti mancanti di un ricevimento",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
+    "portal_search": "Cercare i propri ordini, documenti e lavorazioni con i propri riferimenti e i nostri",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
     "planning_schedule_publish": "Pubblicare il programma al reparto",
     "planning_leather_manage": "Cambiare la perdita di taglio di un modello dai suoi tagli",
@@ -1975,6 +1976,7 @@
     "portal_upload": "Inviare file sui documenti che il ruolo mostra",
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
     "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
+    "portal_salesOrders_view": "Vedere gli ordini della propria organizzazione: stato e date, data promessa e perché è cambiata, cosa resta da spedire, spedizioni e tracciamento, avanzamento della produzione se condiviso",
     "portal_purchaseOrders_view": "Vedere i nostri ordini di acquisto: righe, date, versioni e cosa è cambiato, una copia senza prezzi; rispondere se si può approvare",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }

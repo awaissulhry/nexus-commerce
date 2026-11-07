@@ -10,11 +10,13 @@ import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
-import type { CompanyPrivacy, LimitEntry } from './api'
+import { createConsultant, getPayrollSettings, getReviewRule, savePayrollSettings, saveReviewRule, type CompanyPrivacy, type LimitEntry, type PayrollSettings } from './api'
 import { designScreen as settingsScreen } from './fixtures'
 import { designScreen as historyScreen } from './history/fixtures'
 import { HISTORY_ACTIONS, historyWords } from './history/view/HistoryView'
-import { ABSENCE_CATEGORIES, basisCanCoverLeads, blankCode, codeHeld, exampleOf, gateReasonHeld, isChecked, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, noteWords, privacyDirty, privacyHeld, privacyWidens, ROUNDING_CHOICES, roundingChanges, roundingHeld, RULE_KINDS, settingsCan, settingsProblem } from './model'
+import { ABSENCE_CATEGORIES, basisCanCoverLeads, blankCode, codeFromName, codeHeld, consultantHeld, exampleOf, gateReasonHeld, isChecked, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, noteWords, payrollBodyOf, payrollChanges, payrollDraftOf, payrollHeld, privacyDirty, privacyHeld, privacyWidens, reviewChanges, reviewHeld, ROUNDING_CHOICES, roundingChanges, roundingHeld, RULE_KINDS, settingsCan, settingsProblem } from './model'
+import { CONSULTANT_PROBLEMS, PRINTER_PROBLEMS } from './api'
+import type { ApiClient } from '../../../lib/api/client'
 
 /**
  * People › People settings (SCR-265; B-W2b-65): who may do what, the worked example in words beside the domain's, what a
@@ -136,6 +138,78 @@ describe('settings: privacy', () => {
   })
 })
 
+describe('settings: payroll and statements, the standard review (B-W2b-89)', () => {
+  const PAYROLL: PayrollSettings = {
+    companyId: 'c1',
+    version: 4,
+    company: { code: 'DEMO', legalName: 'Made-up S.r.l.' },
+    payrollCode: '000123',
+    consultant: { partyId: 'p1', code: 'STUDIO', name: 'Made-up studio', email: 'studio@example.com', problem: null },
+    statementPrinter: null,
+    choices: { consultants: [], printers: [] },
+    canManage: true,
+  }
+
+  it('reads each card from its own right; a new consultant asks parties.manage', () => {
+    expect(settingsCan(template('admin'))).toMatchObject({ payroll: true, managePayroll: true, review: false, addParty: false })
+    expect(settingsCan(template('production_manager'))).toMatchObject({ payroll: false, review: true, manageReview: true })
+    expect(settingsCan(template('floor_supervisor'))).toMatchObject({ review: true, manageReview: false })
+    expect(settingsCan(['people.payroll.view'])).toMatchObject({ payroll: true, managePayroll: false, addParty: false })
+  })
+
+  it('counts what changed, holds a code too long, and sends a blank code as none', () => {
+    const draft = payrollDraftOf(PAYROLL)
+    expect(payrollChanges(PAYROLL, draft)).toBe(0)
+    expect(payrollChanges(PAYROLL, { ...draft, payrollCode: ' 000123 ' })).toBe(0)
+    expect(payrollChanges(PAYROLL, { ...draft, consultantPartyId: null, statementPrinterId: 'pr1' })).toBe(2)
+    expect(payrollHeld({ ...draft, payrollCode: 'X'.repeat(21) })).toBe('payroll.problem.payrollCode')
+    expect(payrollHeld({ ...draft, payrollCode: 'X'.repeat(20) })).toBeNull()
+    expect(payrollBodyOf(PAYROLL, { ...draft, payrollCode: '   ' })).toEqual({ companyId: 'c1', version: 4, consultantPartyId: 'p1', payrollCode: null, statementPrinterId: null })
+  })
+
+  it('a new consultant: a party code from the name, an address or none', () => {
+    expect(codeFromName('Studio Rossi & Figli s.r.l.')).toBe('STUDIO-ROSSI-FIGLI-S-R-L')
+    expect(codeFromName('Àlbero Paghe')).toBe('ALBERO-PAGHE')
+    expect(consultantHeld({ name: '', code: 'X', email: '' })).toBe('payroll.problem.name')
+    expect(consultantHeld({ name: 'Studio', code: '-X', email: '' })).toBe('payroll.problem.code')
+    expect(consultantHeld({ name: 'Studio', code: 'STUDIO', email: 'paghe@' })).toBe('payroll.problem.email')
+    expect(consultantHeld({ name: 'Studio', code: 'STUDIO', email: '' })).toBeNull()
+  })
+
+  it('holds the review limits out of range, as the domain does', () => {
+    const rule = { companyId: 'c1', version: 2, tolerancePercent: 10, minBundles: 5, windowDays: 60, canManage: true }
+    expect(reviewChanges(rule, { tolerancePercent: 10, minBundles: 5 })).toBe(0)
+    expect(reviewChanges(rule, { tolerancePercent: 12, minBundles: 8 })).toBe(2)
+    expect(reviewHeld({ tolerancePercent: 0, minBundles: 5 })).toBe('review.problem.tolerancePercent')
+    expect(reviewHeld({ tolerancePercent: 10, minBundles: 1001 })).toBe('review.problem.minBundles')
+    expect(reviewHeld({ tolerancePercent: 100, minBundles: 1000 })).toBeNull()
+  })
+
+  it('reads a refusal of the payroll card in its own words', () => {
+    expect(settingsProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/NOT_CONSULTANT' }, { path: 'body/consultantPartyId' }]))).toEqual({ ns: 'settings', words: { key: 'refusal.NOT_CONSULTANT' } })
+    expect(settingsProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/PRINTER_NOT_USABLE' }, { path: 'body/statementPrinterId' }]))).toEqual({ ns: 'settings', words: { key: 'refusal.PRINTER_NOT_USABLE' } })
+    expect(settingsProblem(new ApiError('invalid', 400, 'validation', 'x', null, [{ path: 'body/payrollCode' }]))).toEqual({ ns: 'settings', words: { key: 'field.payrollCode' } })
+  })
+
+  it('calls the payroll, review and party routes with the version read and a key', async () => {
+    const calls: { method: string; path: string; body?: unknown; key?: string }[] = []
+    const answer = (path: string) => (path.startsWith('/parties') ? { party: { id: 'p9' } } : path.includes('review') ? { companyId: 'c1', version: 3, tolerancePercent: 12, minBundles: 8, windowDays: 60, canManage: true } : PAYROLL)
+    const api = {
+      get: async (path: string) => (calls.push({ method: 'GET', path }), answer(path)),
+      post: async (path: string, options: { body?: unknown; idempotencyKey?: string }) => (calls.push({ method: 'POST', path, body: options.body, key: options.idempotencyKey }), answer(path)),
+      request: async (method: string, path: string, options: { body?: unknown; idempotencyKey?: string }) => (calls.push({ method, path, body: options.body, key: options.idempotencyKey }), answer(path)),
+    } as unknown as ApiClient
+    await getPayrollSettings(api, 'c1')
+    await savePayrollSettings(api, { companyId: 'c1', version: 4, consultantPartyId: 'p1', payrollCode: '000777', statementPrinterId: null })
+    await getReviewRule(api, 'c1')
+    await saveReviewRule(api, { companyId: 'c1', version: 2, tolerancePercent: 12, minBundles: 8 })
+    await createConsultant(api, { companyId: 'c1', code: 'STUDIO', name: 'Made-up studio', email: 'studio@example.com' })
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /people/payroll/settings', 'PUT /people/payroll/settings', 'GET /people/efficiency/review/rule', 'PUT /people/efficiency/review/rule', 'POST /parties'])
+    expect(calls[4]!.body).toEqual({ companyId: 'c1', code: 'STUDIO', kind: 'ORGANISATION', legalName: 'Made-up studio', roles: ['CONSULTANT'], contacts: [{ name: 'Made-up studio', email: 'studio@example.com' }] })
+    expect(calls.filter((call) => call.method !== 'GET').every((call) => typeof call.key === 'string' && call.key.length > 0)).toBe(true)
+  })
+})
+
 describe('settings: the audit window', () => {
   it('says each action of these settings; another is "Changed"', () => {
     expect(historyWords('people.switchOnPurpose')).toBe('history.action.switchOnPurpose')
@@ -143,7 +217,7 @@ describe('settings: the audit window', () => {
   })
 })
 
-const LEFT_KEY = /(?:^|[>\s"])(?:band|section|card|rounding|example|code|category|limits|privacy|basis|gate|note|stepUp|done|held|field|leave|history|keys|common|problem)\.[a-zA-Z_]+/
+const LEFT_KEY = /(?:^|[>\s"])(?:band|section|card|rounding|example|code|category|limits|privacy|basis|gate|note|stepUp|done|held|field|leave|history|keys|common|problem|payroll|review|refusal)\.[a-zA-Z_]+/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
@@ -175,6 +249,9 @@ describe('every design case draws in both languages with no key left on screen',
         has(`limits.value.${kind}`)
       }
       for (const action of HISTORY_ACTIONS) has(`history.action.${action}`)
+      for (const problem of CONSULTANT_PROBLEMS) has(`payroll.consultantProblem.${problem}`)
+      for (const problem of PRINTER_PROBLEMS) has(`payroll.printerProblem.${problem}`)
+      for (const key of ['payroll.problem.payrollCode', 'payroll.problem.name', 'payroll.problem.code', 'payroll.problem.email', 'review.problem.tolerancePercent', 'review.problem.minBundles', 'refusal.NOT_CONSULTANT', 'refusal.PRINTER_NOT_USABLE', 'field.payrollCode', 'field.tolerancePercent', 'field.minBundles', 'done.payroll', 'done.review']) has(key)
     }
   })
 })

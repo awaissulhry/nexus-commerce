@@ -121,6 +121,14 @@ export const events = [
     payload: z.strictObject({ routingOperationId: z.uuid(), siteId: z.uuid(), decision: z.enum(REVIEW_DECISIONS) }),
     live: { permission: 'people.efficiency.view', fields: ['routingOperationId', 'siteId', 'decision'] },
   }),
+  // B-W2b-89: the standard review's limits of a company (no person, no figure).
+  defineEvent({
+    type: 'people_settings.review_changed',
+    context: 'people',
+    description: "A company's standard review limits changed: how far off its standard an operation is, over how many bundles, before it goes on the review.",
+    payload: z.strictObject({ companyId: z.uuid(), version: z.number().int().min(1) }),
+    live: { permission: 'people.efficiency.view', fields: ['companyId', 'version'] },
+  }),
   ...earningsEvents(),
   ...payrollEvents(),
   defineEvent({
@@ -603,6 +611,14 @@ function payrollEvents() {
       description: 'A payroll file layout was added, changed or archived.',
       payload: z.strictObject({ layoutId: z.uuid(), companyId: z.uuid(), change: z.enum(['CREATED', 'EDITED', 'ARCHIVED']) }),
       live: { permission: 'people.payroll.view', fields: ['layoutId', 'companyId', 'change'] },
+    }),
+    // B-W2b-89: People settings › Payroll and statements.
+    defineEvent({
+      type: 'people_settings.payroll_changed',
+      context: 'people',
+      description: "A company's payroll settings changed: its labour consultant, the payroll code their software knows it by, or the office printer of the worker statements.",
+      payload: z.strictObject({ companyId: z.uuid(), version: z.number().int().min(1), changed: z.array(z.enum(['CONSULTANT', 'PAYROLL_CODE', 'STATEMENT_PRINTER'])).min(1) }),
+      live: { permission: 'people.payroll.view', fields: ['companyId', 'version', 'changed'] },
     }),
   ]
 }

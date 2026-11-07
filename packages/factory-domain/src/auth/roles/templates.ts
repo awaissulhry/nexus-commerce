@@ -3,6 +3,8 @@ import { GRAINS, isGrain, type Grain } from '../grains/grains'
 import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
 // B-W2b-162: the partner role templates (audience partner).
 import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
+// B-W2b-175: customer orders in the portal.
+import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sales/portal-orders/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1348,6 +1350,10 @@ if (problems.length > 0) throw new Error(`Role templates are not valid: ${proble
 const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = [
   // B-W2b-167: every main role sees its Home (tasks, notifications, counts, the live channel); each Admin follows.
   Object.fromEntries(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs', 'guest-accountant'].map((key) => [key, ['portal.home.view' as Permission]])),
+  // B-W2b-168: every main partner role searches its portal (SAL-084); each Admin follows.
+  Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
+  // B-W2b-175: the customer roles that see the orders (status, progress when shared, shipments, tracking); not the Designer.
+  Object.fromEntries(SALES_ORDER_READER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_VIEW]])),
   // B-W2b-174: the supplier's Orders role sees our purchase orders (never a price, C2); answering also needs portal.approve.
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
 ]
