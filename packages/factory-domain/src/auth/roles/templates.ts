@@ -1348,6 +1348,8 @@ if (problems.length > 0) throw new Error(`Role templates are not valid: ${proble
 const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = [
   // B-W2b-167: every main role sees its Home (tasks, notifications, counts, the live channel); each Admin follows.
   Object.fromEntries(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs', 'guest-accountant'].map((key) => [key, ['portal.home.view' as Permission]])),
+  // B-W2b-168: every main partner role searches its portal (SAL-084); each Admin follows.
+  Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
