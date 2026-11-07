@@ -1992,6 +1992,11 @@
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
     "portal_salesOrders_ask": "Ask the factory to change or cancel your organisation's orders within the cut-off rules, and withdraw a request while it waits",
-    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
+    "portal_supplierDocuments_view": "See the documents we ask your organisation for, with why and by when, and your documents with our check and their expiry; send one when you may upload",
+    "portal_supplierProfile_view": "See your organisation's company data, addresses and contacts, and the changes waiting for our check",
+    "portal_supplierProfile_change": "Send changes of your organisation's addresses and contacts for our check; they apply once the buyer approves them",
+    "purchasing_supplierDocuments_review": "Accept a document a supplier sent in the portal (what it is, until when) or refuse it with the reason",
+    "purchasing_supplierChanges_decide": "Approve a supplier's change of its addresses and contacts sent in the portal, or refuse it with the reason"
   }
 }
