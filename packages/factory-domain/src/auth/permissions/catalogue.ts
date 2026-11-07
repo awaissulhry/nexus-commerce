@@ -188,6 +188,8 @@ import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe
 import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
 // B-W2b-135: health surveillance (safety.health.view | manage | plans | views: protected, every view recorded).
 import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safety/health/permissions'
+// B-W2b-139: training records (safety.training.record: sessions, attendance, records; safety.instruction.record: the instruction register).
+import { SAFETY_RECORDS_DEFINITIONS, SAFETY_RECORDS_PERMISSIONS } from '../../safety/records/permissions'
 // B-W2b-161: company branding (documents.branding.manage: logo, accent, sender name, portal label; step-up).
 import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -655,6 +657,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_CHEMICALS_DEFINITIONS,
   // B-W2b-135: health surveillance.
   SAFETY_HEALTH_DEFINITIONS,
+  // B-W2b-139: training records, attendance and the instruction register.
+  SAFETY_RECORDS_DEFINITIONS,
   // B-W2b-161: company branding.
   BRANDING_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -847,6 +851,8 @@ for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of SAFETY_PPE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-143: the chemical register and the safety data sheets.
 for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-139: training records, attendance and the instruction register.
+for (const name of SAFETY_RECORDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-161: company branding.
 for (const name of BRANDING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

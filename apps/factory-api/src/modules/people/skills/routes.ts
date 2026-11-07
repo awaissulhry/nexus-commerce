@@ -6,6 +6,7 @@ import { authorise, changeValidUntil, revokeAuthorisation } from './authorisatio
 import { createSkill, listSkills, setSkillStatus, updateSkill } from './catalogue'
 import { floorCheck, lineCheck, officeCheck } from './check'
 import {
+  authorisationRuleContract,
   authoriseContract,
   cellContract,
   createSkillContract,
@@ -15,6 +16,7 @@ import {
   listSkillsContract,
   matrixContract,
   officeCheckContract,
+  prerequisitesContract,
   removeLevelContract,
   revokeContract,
   setLevelContract,
@@ -26,6 +28,7 @@ import {
 import { removeLevel, setLevel, signOffTrainee } from './levels'
 import { manifest } from './manifest'
 import { cellDetail, employeeSkills, skillsMatrix } from './matrix'
+import { authorisationPrerequisites, setAuthorisationRule } from './training'
 
 /**
  * Skills and machine authorisations (B-W2b-39; MES-241, MES-244, MES-246, MES-024): the skills (./catalogue.ts), the
@@ -64,6 +67,11 @@ export default defineRoutes('people.skills', manifest, async (app) => {
     changeValidUntil(request, request.params.authorisationId, request.body, idempotencyKeyFrom(request)),
   )
   app.post('/people/skills/authorisations/:authorisationId/revoke', { schema: revokeContract }, async (request) => revokeAuthorisation(request, request.params.authorisationId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-139
+  app.get('/people/skills/authorisations/prerequisites', { schema: prerequisitesContract }, async (request) => authorisationPrerequisites(request, request.query))
+  app.put('/people/skills/machine-classes/:machineClassId/authorisation-rule', { schema: authorisationRuleContract }, async (request) =>
+    setAuthorisationRule(request, request.params.machineClassId, request.body, idempotencyKeyFrom(request)),
+  )
 
   app.get('/people/skills/check', { schema: officeCheckContract }, async (request) => officeCheck(request, request.query))
   app.get('/people/skills/line-check', { schema: lineCheckContract }, async (request) => lineCheck(request, request.query))

@@ -271,7 +271,8 @@
       "HOLD": "Quality hold",
       "INCOMING_INSPECTION": "Incoming inspection",
       "INCIDENT": "Incident",
-      "PAYROLL_EXPORT": "Payroll export"
+      "PAYROLL_EXPORT": "Payroll export",
+      "PORTAL_REQUEST": "Portal order request"
     },
     "record": {
       "Invoice": "Invoice",

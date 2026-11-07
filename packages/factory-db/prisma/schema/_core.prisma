@@ -113,6 +113,8 @@ model Company {
   // W2b links-depth.prisma (wave 19/22): its records shared with outside parties, the approvals it asked of them.
   recordShares        RecordShare[]
   approvalRequests    ApprovalRequest[]
+  // W2b portal-frame.prisma (wave 20/22): the requests it made of partners (their tasks).
+  partnerTasks        PartnerTask[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
   // W2b imports.prisma: the steps of its first load marked done.
@@ -139,6 +141,9 @@ model Company {
   quotes               Quote[]
   salesOrders          SalesOrder[]
   depositRequests      DepositRequest[]
+  // W2b portal-sales.prisma (wave 21/22): the order requests its customers sent from the portal, their payment intents.
+  portalOrderRequests  PortalOrderRequest[]
+  paymentIntents       PaymentIntent[]
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
   qualitySettings      QualitySettings[]
