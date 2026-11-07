@@ -201,7 +201,7 @@ if (env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test') {
 
 let database: FactoryDatabase
 try {
-  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, pool: { max: 8 } })
+  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, pool: { max: 8 }, clientCapacity: env.FACTORY_DATABASE_CLIENTS })
 } catch (error) {
   refuse(`the database refused the boot: ${(error as Error).message}`)
 }
