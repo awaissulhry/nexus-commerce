@@ -1973,6 +1973,8 @@
     "portal_colleagues_manage": "Amministratore del portale della propria organizzazione: invitare colleghi, cambiare ruoli, disattivare",
     "portal_comment": "Scrivere messaggi sui documenti che il ruolo mostra",
     "portal_upload": "Inviare file sui documenti che il ruolo mostra",
-    "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra"
+    "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
+    "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }

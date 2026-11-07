@@ -326,6 +326,26 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - Scheduler cron `partners.accessEnding` (07:20): people whose access ends within 7 days are mailed once per end
   (receipt key `partners-access-ending:<person>:<end>`). PG tests: `partners.pg.vitest.test.ts`.
 
+## Tasks and notifications for partners (`src/platform/portal/{tasks,notifications,home}/`, B-W2b-167; COL-043, PLT-148, COL-063)
+- ONE task list (PartnerTask) for every request to a partner. A source (one file in `portal/tasks/sources/`, one line in its
+  index.ts) opens its request IN the command that makes it (`openTaskInCommand`, sourceKey `<prefix>:<what>`, one per record,
+  kind and source) and the answering command closes it (`closeTasksInCommand`; a partner/link scope only answers: DONE). No
+  assignee: a task is for the party's people whose roles hold its kind's needs (factory-domain `portal/tasks/kinds.ts`,
+  `isTaskFor`: portal.home.view + portal.approve|upload|comment, the price grain for money). Office: `GET|POST
+  /partners/:partyId/tasks` (asks by hand: source `Ask`, partner may mark done), `POST /partner-tasks/:id/cancel|reopen`,
+  `PATCH /partner-tasks/:id` (due). Portal: `GET /portal/tasks` (due first, badges), `POST …/:id/done|undo` (Undo 10 min,
+  reopen in the office scope as the person), `GET /portal/tasks/handover/:userId` (admin). Cron `portalTasks.remind` (:25).
+- Partner notifications: worker handler `portalNotifications.fanOut` runs `portal/notifications/rules/*` (task opened/
+  reminded, PO sent, order confirmed, promise moved, shipped, invoice issued, claim sent, our partner message) for the party's
+  readers (`tasks/people.ts partyReaders`: portal ON, active, roles reaching the record's company); rows carry partyId;
+  INSTANT topics mailed at once (`portal.notification`), DAILY/WEEKLY by cron `portalNotifications.digest`
+  (`portal.digest`); deliveries EMAIL / EMAIL_DIGEST. Every mail: Manage e-mails + the signed unsubscribe link (key from
+  FACTORY_COOKIE_SECRET). `GET|PUT /portal/email-settings` (transactional ORDERS/SHIPPED/INVOICES locked INSTANT; advisory
+  lock per person), public `POST /portal/unsubscribe[/preview]`, `GET /portal/notifications[/counts]`, `POST …/read` (office
+  scope as the person), `GET /portal/live` (core/sse.ts partner audience: one stream per portal session,
+  factory-domain `portal/notifications/live.ts PARTNER_LIVE_EVENTS` decides). `GET /portal/home`: counts from
+  `portal/home/sources/`. PG tests: `portal/tasks/partner-frame.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or
