@@ -356,6 +356,24 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   factory-domain `portal/notifications/live.ts PARTNER_LIVE_EVENTS` decides). `GET /portal/home`: counts from
   `portal/home/sources/`. PG tests: `portal/tasks/partner-frame.pg.vitest.test.ts`.
 
+## Supplier orders in the portal (`src/modules/purchasing/portal-orders/`, B-W2b-174; SCM-094, SCM-086; Owner answers C2, P2)
+- Partner routes (in purchasing's routes.ts/manifest.ts; `portal.purchaseOrders.view`, scope party, no grain): `GET
+  /portal/purchase-orders?chip=&q=` (chips, To confirm / late counts), `GET …/:id` (lines in the supplier's terms, what
+  was confirmed, proposed and received, what changed in the held version, answers so far, substitute choices), `GET
+  …/:id/revisions`, `GET …/:id/copy` (the price-free PDF, painted on request, never stored), `POST …/:id/confirm`
+  (ALL_AS_ASKED or BY_LINE with SUBSTITUTE and CHANGE besides W1's four) and `POST …/:id/decline` (PRICE besides W1's
+  reasons). Answers also need the person's `portal.approve` (403 in words; never a preview) and run in the partner scope
+  with the order's version; lines as asked are confirmed at once, changes wait for the buyer (CHANGES_PROPOSED). The DB
+  has no PORTAL channel: a portal answer names the order's newest PO_CONFIRM link (confirmedVia LINK); audit `via: PORTAL`.
+- Only orders of the portal's company that we sent; a DRAFT of revision ≥ 2 shows the revision the supplier holds (its
+  revision row), never the draft. Item, colour, company, site, sender, receipts and substitute choices (the party's
+  approved sources) are read in the system scope for that order only.
+- CONFIRM_PO tasks (`portal-orders/tasks.ts`, source `PurchaseOrder`): opened in the send, done by the answer (portal or
+  link), withdrawn by cancel, change/counter or goods received while SENT, reopened by the buyer's refusal. Home counts
+  `purchase_orders.to_confirm|late`. W1's accept refuses a proposal with a substitute (counter-propose instead); the
+  revision start clears the substitute columns; the buyer's note says "in the portal" (event `source`). PG tests:
+  `portal-orders/portal-orders.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

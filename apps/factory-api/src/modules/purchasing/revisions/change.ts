@@ -9,6 +9,7 @@ import { lockOrderReceiving, receiptStopsCancel } from '../receiving'
 import { officeContextOf, officeOrder, type OrderRow } from '../store'
 import type { OrderDetail } from '../views'
 import { keptForAudit, pricesOf, readState, stateOf } from './state'
+import { closeConfirmTasks } from '../portal-orders/tasks'
 
 /**
  * Change: the next revision of a sent purchase order (B-W2a-52; SCM-058; design purchasing.orders record › Lines "Sent:
@@ -64,8 +65,23 @@ export async function startRevisionInCommand(
   })
   await tx.purchaseOrderLine.updateMany({
     where: { purchaseOrderId: current.id, cancelledAt: null, closedShortAt: null },
-    data: { confirmedQuantity: null, confirmedDate: null, proposedQuantity: null, proposedDate: null, proposedSplitQuantity: null, proposedSplitDate: null, proposalReason: null, version: { increment: 1 } },
+    // B-W2b-174: with the three columns of B-W2b-158 (the substitute and the buyer's yes), cleared with W1's proposal.
+    data: {
+      confirmedQuantity: null,
+      confirmedDate: null,
+      proposedQuantity: null,
+      proposedDate: null,
+      proposedSplitQuantity: null,
+      proposedSplitDate: null,
+      proposalReason: null,
+      proposedSubstituteItemId: null,
+      proposedSubstituteNote: null,
+      proposalNeedsBuyer: false,
+      version: { increment: 1 },
+    },
   })
+  // B-W2b-174: the supplier's request to confirm the revision it held is withdrawn (the next send asks again).
+  await closeConfirmTasks(tools, current.id, 'CANCELLED')
   return { revision, from, revokedLinkIds, kept }
 }
 

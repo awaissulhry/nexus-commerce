@@ -9,6 +9,7 @@ import { dayValue } from '../store'
 import { answerFacts, buyerNameOf, confirmLinkOf, linkView } from './read'
 import { recordProposal } from './proposal'
 import { confirmationFileOf } from './upload'
+import { closeConfirmTasks } from '../portal-orders/tasks'
 
 /**
  * The supplier's answer through its PO_CONFIRM link (B-W1-31; SCM-085, SCM-086; design links.po; PLAN §4.7 08-buy).
@@ -128,6 +129,8 @@ export async function confirmByLink(request: FastifyRequest, body: ConfirmBody) 
       if (plan.outcome === 'CONFIRMED') await writeConfirmation(tools, facts, plan, use, link.id)
       else if (plan.outcome === 'DECLINED') await writeDecline(tools, facts, plan.declineReason!, use, link.id, { answer: 'BY_LINE', summary: plan.summary, lines: lineDays(plan), note: plan.note })
       else await recordProposal(tools, { order: facts.order, plan, use, linkId: link.id })
+      // B-W2b-174: the supplier's CONFIRM_PO request is answered (a link session: done by nobody in particular).
+      await closeConfirmTasks(tools, facts.order.id, 'DONE')
       if (file) {
         // The supplier's own confirmation PDF went with this answer (the evidence of what it confirmed or proposed).
         tools.audit({ action: 'purchasing.supplierConfirmationFile', recordType: 'PurchaseOrder', recordId: facts.order.id, companyId: facts.order.companyId, siteId: facts.order.siteId, after: { fileId: file.id, originalName: file.originalName, outcome: plan.outcome, evidenceId: use.evidenceId } })
@@ -150,6 +153,7 @@ export async function declineByLink(request: FastifyRequest, body: DeclineBody) 
       const reasonText = declineText(body)
       const use = await useLink(tools, request, { action: 'decline', typedName: body.typedName })
       await writeDecline(tools, facts, reasonText, use, link.id, { answer: 'DECLINE', reasonCode: body.reason })
+      await closeConfirmTasks(tools, facts.order.id, 'DONE')
       return { outcome: 'DECLINED' as const }
     },
   )

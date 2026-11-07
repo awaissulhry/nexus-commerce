@@ -2,6 +2,7 @@ import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import type { CommandTools, CommandTx } from '../../core/command'
+import { closeConfirmTasks } from './portal-orders/tasks'
 
 /**
  * The purchase order's side of receiving goods (B-W1-30 → B-W1-32): the lock a goods receipt and the order's cancel
@@ -77,6 +78,8 @@ export async function readOrderForFloorReceipt(tools: Pick<CommandTools, 'tx' | 
 export async function setOrderReceiptProgress(tools: CommandTools, order: OrderForReceipt, to: PurchaseOrderStatus, receipt: { readonly id: string; readonly number: string; readonly reversed: boolean }): Promise<void> {
   if (to === order.status) return
   await tools.tx.purchaseOrder.update({ where: { id: order.id }, data: { status: to }, select: { id: true } })
+  // B-W2b-174: goods came while the order still waited for the supplier's answer: nothing is left to confirm.
+  if (order.status === 'SENT') await closeConfirmTasks(tools, order.id, 'CANCELLED')
   tools.audit({
     action: receipt.reversed ? 'purchasing.receiptReversed' : 'purchasing.received',
     recordType: 'PurchaseOrder',
