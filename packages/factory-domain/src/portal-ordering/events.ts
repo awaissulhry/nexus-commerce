@@ -12,6 +12,7 @@ import { defineEvent } from '../events/define'
  *   portal_order_request.accepted   the office made the order or a quote from it
  *   portal_order_request.refused    the office refused it in words
  *   portal_order_request.withdrawn  the customer withdrew it before the office decided
+ *   delivery_address.checked        the office approved or refused an address the customer added (B-W2b-F15)
  *
  * Reach the office's Home › Approvals and sales screens (orders.view over the request's company and customer): ids,
  * numbers and counts only; never a price or a name.
@@ -48,5 +49,15 @@ export const events = [
     description: 'The customer withdrew a portal order request before the office decided it.',
     payload: z.strictObject(ids),
     live,
+  }),
+  // B-W2b-F15: the office decided a delivery address a customer added in the portal (sales/portal-ordering address-check.ts:
+  // approved or refused by hand, or approved by accepting a request that names it). The customer's person who asked hears it
+  // (platform/portal/notifications rules/addresses.ts). Ids and the decision only: never the address, the reason or a name.
+  defineEvent({
+    type: 'delivery_address.checked',
+    context: 'portal-ordering',
+    description: 'The office approved or refused a delivery address a customer added in the portal (the customer who asked is told).',
+    payload: z.strictObject({ addressId: z.uuid(), partyId: z.uuid(), decision: z.enum(['APPROVED', 'REFUSED']) }),
+    live: { permission: 'orders.view', fields: ['addressId', 'partyId', 'decision'] },
   }),
 ]

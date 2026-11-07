@@ -430,6 +430,8 @@
       "ORDER_CHANGE_REQUEST.blocks": "The customer waits for your answer: accept it (the order is amended or cancelled) or refuse it with a reason.",
       "SUPPLIER_CHANGE.WAITING": "{supplier} sent changes of its profile for our check (addresses: {addresses}, contacts: {contacts}).",
       "SUPPLIER_CHANGE.blocks": "Nothing changes on our side until you approve it; the supplier sees it waiting for our check.",
+      "SUPPLIER_CHANGE.WAITING_WEBSITE": "{supplier} sent a change of its website for our check.",
+      "SUPPLIER_CHANGE.WAITING_WITH_WEBSITE": "{supplier} sent changes of its profile for our check (website, addresses: {addresses}, contacts: {contacts}).",
       "SUPPLIER_DOCUMENT.WAITING": "{supplier} sent {name} for our check.",
       "SUPPLIER_DOCUMENT.blocks": "It is not shared back and does not count for the required documents until someone accepts it.",
       "DELIVERY_ADDRESS.WAITING": "{customer} added a delivery address for our check: {address}.",

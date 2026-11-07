@@ -28,8 +28,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   `pg_locks` and `pg_stat_activity`; a holder idle for 3 min, or 15 min of waiting, ends the wait with a
   `MigrationLockError` that names it (pid, application_name, state, idle time, last query). The kit never ends anyone
   else's session. Every kit connection is named `factory-test <lock|root|admin> <client pid> <database>`, so a holder can
-  be traced to its process (Docker hides the client port). `check-migrations-replay` still takes the old session-level
-  lock on the same key; the two exclude each other. A Mac that sleeps freezes every holder and the server alike, and on
+  be traced to its process (Docker hides the client port). `check-migrations-replay` takes the same lock (B-W2b-F15:
+  `withMigrationLock`, `prisma migrate deploy` as an asynchronous child the lost lock kills; its connections named
+  `factory-test <lock|root|admin> <pid> replay_<hex>`); an older worktree's copy may still take the old session-level lock on
+  the same key, and the two exclude each other. A Mac that sleeps freezes every holder and the server alike, and on
   waking the server counts the sleep as idle time (11-07's 600 s "stuck" holder matched a 596 s sleep): a build caught
   by a sleep may lose the lock and fail with a clear message; run it again.
 - `@nexus/factory-db/test-database`: the test-database guard.

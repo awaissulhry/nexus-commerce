@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADDRESS_APPROVALS, ADDRESS_APPROVAL_WORDS, addressUseProblem, approvalView, checkProblem, defaultProblem, refuseReasonProblem, usableForOrders } from './address-approval'
+import { ADDRESS_APPROVALS, ADDRESS_APPROVAL_WORDS, ADDRESS_SHORT_MAX, addressInShort, addressUseProblem, approvalView, checkProblem, defaultProblem, refuseReasonProblem, usableForOrders } from './address-approval'
 
 describe('the check of a delivery address a customer added (B-W2b-F13b)', () => {
   it('an order uses the office’s own addresses and approved ones, never one waiting or refused', () => {
@@ -32,5 +32,15 @@ describe('the check of a delivery address a customer added (B-W2b-F13b)', () => 
     expect(approvalView({ approvalStatus: null, refuseReason: null })).toBeNull()
     expect(approvalView({ approvalStatus: 'WAITING', refuseReason: null })).toMatchObject({ status: 'WAITING', refuseReason: null })
     expect(approvalView({ approvalStatus: 'REFUSED', refuseReason: 'Outside our delivery area.' })).toMatchObject({ status: 'REFUSED', words: { en: 'Not accepted' }, refuseReason: 'Outside our delivery area.' })
+  })
+})
+
+describe('the address in short (B-W2b-F15: the customer is told of our check)', () => {
+  it('names the address, the street and the place; at most 120 characters', () => {
+    expect(addressInShort({ name: 'Seed warehouse two', line1: 'Via Esempio 12', postalCode: '40100', city: 'Bologna' })).toBe('Seed warehouse two, Via Esempio 12, 40100 Bologna')
+    expect(addressInShort({ name: null, line1: 'Via Esempio 12', postalCode: '', city: 'Bologna' })).toBe('Via Esempio 12, Bologna')
+    const long = addressInShort({ name: 'x'.repeat(200), line1: 'Via Esempio 12', postalCode: '40100', city: 'Bologna' })
+    expect(long).toHaveLength(ADDRESS_SHORT_MAX)
+    expect(long.endsWith('…')).toBe(true)
   })
 })

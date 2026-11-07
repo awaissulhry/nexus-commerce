@@ -25,6 +25,10 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.order.change_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your change request on {label} was not accepted', it: 'La tua richiesta di modifica su {label} non è stata accettata' },
   'portal.order.cancel_accepted': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {label} was accepted', it: 'La tua richiesta di annullamento su {label} è stata accettata' },
   'portal.order.cancel_refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your cancel request on {label} was not accepted', it: 'La tua richiesta di annullamento su {label} non è stata accettata' },
+  // B-W2b-F15: our check of a delivery address the person added ({label}: the address in short; {reason}: the office's
+  // reason of a refusal, which the customer also reads on its address list). Orders need it: a transactional topic.
+  'portal.address.approved': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was checked: your orders can use it', it: 'Il tuo indirizzo di consegna {label} è stato verificato: i tuoi ordini possono usarlo' },
+  'portal.address.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was not accepted{reason}', it: 'Il tuo indirizzo di consegna {label} non è stato accettato{reason}' },
 } as const satisfies Record<string, { readonly topic: PartnerEmailTopic | null; readonly category: 'ASSIGNMENT' | 'FOLLOWING' | 'SYSTEM'; readonly en: string; readonly it: string }>
 
 export type PartnerMessageKey = keyof typeof PARTNER_MESSAGE_TEMPLATES
@@ -65,9 +69,13 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
   const what = isPartnerTaskKind(kind) ? taskWords(kind, notice.recordLabel, locale) : notice.recordLabel
   const dueAt = typeof params.dueAt === 'string' && !Number.isNaN(Date.parse(params.dueAt)) ? new Date(params.dueAt) : null
   const due = dueAt ? (locale === 'it' ? ` (entro il ${shortDate(dueAt, locale)})` : ` (by ${shortDate(dueAt, locale)})`) : ''
+  // B-W2b-F15: a reason the office wrote, as it wrote it. Free text (the reason; an address typed by the customer as the
+  // label) goes in by a function, so a "$&" in it is never read as a replacement pattern.
+  const reason = typeof params.reason === 'string' && params.reason.trim() !== '' ? `: ${params.reason.trim()}` : ''
   return PARTNER_MESSAGE_TEMPLATES[notice.messageKey][locale]
     .replace('{company}', company)
     .replace('{what}', what)
-    .replace('{label}', notice.recordLabel)
+    .replace('{label}', () => notice.recordLabel)
     .replace('{due}', due)
+    .replace('{reason}', () => reason)
 }

@@ -119,7 +119,10 @@ export const orderAnswerContract = defineContract({
       status: z.enum(PURCHASE_ORDER_STATUSES),
       /** WAITING (sent, no answer yet), CONFIRMED, DECLINED, CHANGES_PROPOSED, NOT_SENT, or the order's later state. */
       answer: z.enum(['NOT_SENT', 'WAITING', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'CLOSED']),
-      words: z.string(),
+      /** B-W2b-F15: WAITING only — where the supplier answers: its link, the portal, or either; null otherwise. */
+      waitingOn: z.enum(['LINK', 'PORTAL', 'PORTAL_OR_LINK']).nullable(),
+      /** Where the answer stands, in Italian and English (B-W2b-F15; WAITING follows `waitingOn`). */
+      words: output({ it: z.string(), en: z.string() }),
       confirmation: output({ at: instant(), via: z.enum(['LINK', 'OFFICE', 'PORTAL']), linkId: id().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
       decline: output({ at: instant(), reason: z.string().nullable() }).nullable(),
       proposal: output({

@@ -430,6 +430,8 @@
       "ORDER_CHANGE_REQUEST.blocks": "Il cliente aspetta la tua risposta: accettala (l'ordine viene modificato o annullato) oppure rifiutala con un motivo.",
       "SUPPLIER_CHANGE.WAITING": "{supplier} ha inviato modifiche al suo profilo per la nostra verifica (indirizzi: {addresses}, contatti: {contacts}).",
       "SUPPLIER_CHANGE.blocks": "Da noi non cambia nulla finché non la approvi; il fornitore la vede in attesa della nostra verifica.",
+      "SUPPLIER_CHANGE.WAITING_WEBSITE": "{supplier} ha inviato una modifica del suo sito web per la nostra verifica.",
+      "SUPPLIER_CHANGE.WAITING_WITH_WEBSITE": "{supplier} ha inviato modifiche al suo profilo per la nostra verifica (sito web, indirizzi: {addresses}, contatti: {contacts}).",
       "SUPPLIER_DOCUMENT.WAITING": "{supplier} ha inviato {name} per la nostra verifica.",
       "SUPPLIER_DOCUMENT.blocks": "Non viene condiviso né conta per i documenti richiesti finché qualcuno non lo accetta.",
       "DELIVERY_ADDRESS.WAITING": "{customer} ha aggiunto un indirizzo di consegna da verificare: {address}.",
