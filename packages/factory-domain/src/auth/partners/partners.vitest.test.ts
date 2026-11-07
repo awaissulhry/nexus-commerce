@@ -58,7 +58,7 @@ describe('the partner role templates (SAL-060, SCM-092, PLT-021)', () => {
     expect(systemTemplateOf('customer-buyer')?.audience).toBe('partner')
     expect(templateOf('customer-buyer')).toBeUndefined()
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.partner === true)).toBe(false)
-    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.search'])
+    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.purchaseOrders.view', 'portal.search'])
     expect(ROLE_TEMPLATES.some((template) => template.permissions.some((name) => name.startsWith('portal.')))).toBe(false)
     for (const key of ['admin', 'sales', 'buyer', 'owner']) expect(templateOf(key)?.permissions).toEqual(expect.arrayContaining(['partners.view', 'partners.invite', 'partners.manage', 'partners.preview']))
     expect(templateOf('read_only')?.permissions).toContain('partners.view')

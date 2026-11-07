@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { answerSummary, countsOf, type LineChange } from '@nexus/factory-domain/purchasing/confirm/answer'
+import type { LineChange } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { portalAnswerSummary, portalCountsOf, portalLineOfStored } from '@nexus/factory-domain/purchasing/portal-orders/answer'
 import { proposedLineOf } from '@nexus/factory-domain/purchasing/confirm/proposal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -64,10 +65,15 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
   const evidence = links.length === 0 ? [] : await db.linkEvidence.findMany({ where: { linkId: { in: links.map((link) => link.id) } }, orderBy: [{ at: 'asc' }, { id: 'asc' }], select: { linkId: true, action: true, at: true, useNumber: true, typedName: true, ipHash: true, userAgent: true } })
   const state = answerStateOf(order)
   const proposal = await db.purchaseOrder.findUniqueOrThrow({ where: { id: order.id }, select: PROPOSAL_ORDER_COLUMNS })
+  // B-W2b-174 (SCM-086): with the substitute the supplier offers and whether the line waits for the buyer's yes.
+  const extras = new Map((await db.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, proposedSubstituteItemId: true, proposedSubstituteNote: true, proposalNeedsBuyer: true } })).map((row) => [row.id, row]))
   const proposed = new Map((await proposalLinesOf(db, order.id)).flatMap((line) => {
     const read = proposedLineOf(line)
-    return read ? [[line.id, read] as const] : []
+    const extra = extras.get(line.id)
+    return read ? [[line.id, extra ? portalLineOfStored(read, extra) : portalLineOfStored(read, { proposedSubstituteItemId: null, proposedSubstituteNote: null, proposalNeedsBuyer: false })] as const] : []
   }))
+  const substituteIds = [...new Set([...proposed.values()].flatMap((line) => (line.substitute?.itemId ? [line.substitute.itemId] : [])))]
+  const substituteItems = new Map((substituteIds.length === 0 ? [] : await db.item.findMany({ where: { id: { in: substituteIds } }, select: { id: true, code: true, name: true } })).map((item) => [item.id, item]))
   return {
     purchaseOrderId: order.id,
     number: order.number,
@@ -83,7 +89,7 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
           byName: proposal.proposedByName,
           supplierRef: proposal.proposalSupplierRef,
           note: proposal.proposalNote,
-          summary: answerSummary(countsOf([...proposed.values()])),
+          summary: portalAnswerSummary(portalCountsOf([...proposed.values()])),
           decision: proposal.proposalDecision,
           decidedAt: proposal.proposalDecidedAt ? toUtcIso(proposal.proposalDecidedAt) : null,
           decidedById: proposal.proposalDecidedById,
@@ -102,7 +108,11 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
         asked: { quantity: quantityText(line.quantity), uom: line.uom, needDate: asked.needDate },
         proposed: (() => {
           const read = proposed.get(line.id)
-          return read ? { kind: read.kind, quantity: read.quantity, date: read.date, deliveries: read.deliveries.map((part) => ({ ...part })), reason: read.reason, changes: [...read.changes] } : null
+          if (!read) return null
+          const substitute = read.substitute ? { itemId: read.substitute.itemId, code: read.substitute.itemId ? (substituteItems.get(read.substitute.itemId)?.code ?? null) : null, name: read.substitute.itemId ? (substituteItems.get(read.substitute.itemId)?.name ?? null) : null, note: read.substitute.note } : null
+          // W1's kind for the four link answers; a substitute or a change in words reads as its deliveries say (kind OTHER or AS_ASKED) with `substitute` / `needsBuyer`.
+          const kind = read.kind === 'SUBSTITUTE' || read.kind === 'CHANGE' ? (read.changes.length === 0 ? 'AS_ASKED' : 'OTHER') : read.kind
+          return { kind, portalKind: read.kind, quantity: read.quantity, date: read.date, deliveries: read.deliveries.map((part) => ({ ...part })), reason: read.reason, changes: [...read.changes], substitute, needsBuyer: read.needsBuyer }
         })(),
         confirmed: line.confirmedQuantity === null ? null : { quantity: quantityText(line.confirmedQuantity), date: confirmedDate },
         changes: changesOf({ quantity: new Decimal(line.quantity.toString()), needDate: asked.needDate }, line.confirmedQuantity === null ? null : new Decimal(line.confirmedQuantity.toString()), confirmedDate),

@@ -132,6 +132,12 @@ import { requireStepUp } from '../../platform/auth/office/account'
 import { getReminderSettings, putReminderSwitch } from './reminders/settings'
 import { reminderSettingsContract, reminderSwitchContract } from './reminders/settings-contract'
 import { processFiles } from '../../platform/files/service'
+// B-W2b-174: supplier orders in the portal (./portal-orders).
+import { declineInPortal, confirmInPortal } from './portal-orders/answer'
+import { portalConfirmContract, portalCopyContract, portalDeclineContract, portalOrderContract, portalOrdersContract, portalRevisionsContract } from './portal-orders/contract'
+import { portalOrderCopy } from './portal-orders/copy'
+import { listPortalOrders, portalOrder, portalRevisions } from './portal-orders/read'
+import { appClock } from '../../platform/portal/tasks/clock'
 
 /**
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
@@ -356,4 +362,21 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     }, request.log)
     return reply.code(202).send({ status: 'requested' as const, message: RENEW_ANSWER })
   })
+
+  // B-W2b-174 (SCM-094, SCM-086): the supplier's purchase orders in the portal, without any price (./portal-orders): the
+  // list with its chips, the record, every version and what changed, the copy without prices, the answer and the decline.
+  app.get('/portal/purchase-orders', { schema: portalOrdersContract }, async (request) => listPortalOrders(request, request.query, appClock(app).now()))
+
+  app.get('/portal/purchase-orders/:purchaseOrderId', { schema: portalOrderContract }, async (request) => portalOrder(request, request.params.purchaseOrderId))
+
+  app.get('/portal/purchase-orders/:purchaseOrderId/revisions', { schema: portalRevisionsContract }, async (request) => portalRevisions(request, request.params.purchaseOrderId, request.query.language))
+
+  app.get('/portal/purchase-orders/:purchaseOrderId/copy', { schema: portalCopyContract }, async (request, reply) => {
+    const { pdf, fileName } = await portalOrderCopy(request, request.params.purchaseOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+
+  app.post('/portal/purchase-orders/:purchaseOrderId/confirm', { schema: portalConfirmContract }, async (request) => confirmInPortal(app, request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/portal/purchase-orders/:purchaseOrderId/decline', { schema: portalDeclineContract }, async (request) => declineInPortal(app, request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 })
