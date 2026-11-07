@@ -135,6 +135,14 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-190: an order request a customer sent from the portal.
   'PORTAL_ORDER_REQUEST.SENT': 'Order request {number} from {customer} waits for your decision: {pieces} pieces on {lines} lines.',
   'PORTAL_ORDER_REQUEST.blocks': 'It is not an order until you make the order or a quote from it; the customer waits for the answer.',
+  // B-W2b-183: a customer's change or cancel request from the portal.
+  'ORDER_CHANGE_REQUEST.CHANGE_one': '{customer} asks to change {count} size of order {number}.',
+  'ORDER_CHANGE_REQUEST.CHANGE_other': '{customer} asks to change {count} sizes of order {number}.',
+  'ORDER_CHANGE_REQUEST.CHANGE_DELIVERY': '{customer} asks to change the delivery of order {number}.',
+  'ORDER_CHANGE_REQUEST.CANCEL': '{customer} asks to cancel order {number}.',
+  'ORDER_CHANGE_REQUEST.CANCEL_LINES_one': '{customer} asks to cancel {count} line of order {number}.',
+  'ORDER_CHANGE_REQUEST.CANCEL_LINES_other': '{customer} asks to cancel {count} lines of order {number}.',
+  'ORDER_CHANGE_REQUEST.blocks': 'The customer waits for your answer: accept it (the order is amended or cancelled) or refuse it with a reason.',
 
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
@@ -157,6 +165,7 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.MAIL_TO_SORT.email_triage': "You sort this company's received mail.",
   'why.NCR_DECISION.quality_ncr_approve': "You approve NCR decisions at this site, and someone else decided it.",
   'why.PORTAL_ORDER_REQUEST.orders_manage': "You take this customer's orders.",
+  'why.ORDER_CHANGE_REQUEST.orders_manage': "You manage this customer's orders.",
 })
 
 /** At most five values, then "and N more". */
@@ -322,4 +331,21 @@ export function ncrDecisionWords(facts: { readonly number: string; readonly code
 /** B-W2b-190: a portal order request waiting for the office. */
 export function portalOrderRequestWords(facts: { readonly number: string; readonly customer: string; readonly lines: number; readonly pieces: number }): RowWords {
   return { sentence: phrase('PORTAL_ORDER_REQUEST.SENT', { number: facts.number, customer: facts.customer, lines: String(facts.lines), pieces: String(facts.pieces) }), blocks: phrase('PORTAL_ORDER_REQUEST.blocks') }
+}
+
+/**
+ * B-W2b-183: a customer's change or cancel request (`sizes`: the sizes a change asks; `lines`: the lines a partial cancel
+ * names, 0 for the whole order).
+ */
+export function orderChangeRequestWords(facts: { readonly number: string; readonly customer: string; readonly kind: 'CHANGE' | 'CANCEL'; readonly sizes: number; readonly lines: number }): RowWords {
+  const base = { number: facts.number, customer: facts.customer }
+  const sentence =
+    facts.kind === 'CANCEL'
+      ? facts.lines === 0
+        ? phrase('ORDER_CHANGE_REQUEST.CANCEL', base)
+        : phrase('ORDER_CHANGE_REQUEST.CANCEL_LINES', { ...base, count: facts.lines })
+      : facts.sizes === 0
+        ? phrase('ORDER_CHANGE_REQUEST.CHANGE_DELIVERY', base)
+        : phrase('ORDER_CHANGE_REQUEST.CHANGE', { ...base, count: facts.sizes })
+  return { sentence, blocks: phrase('ORDER_CHANGE_REQUEST.blocks') }
 }

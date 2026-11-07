@@ -1991,6 +1991,7 @@
     "portal_orderRequests_manage": "Fare richieste d'ordine: scegliere articoli, riordinare un ordine passato ai prezzi di oggi o caricare un foglio, poi inviare la richiesta",
     "portal_addresses_view": "Vedere gli indirizzi di consegna della vostra organizzazione",
     "portal_addresses_manage": "Aggiungere o archiviare gli indirizzi di consegna della vostra organizzazione e scegliere quello predefinito",
+    "portal_salesOrders_ask": "Chiedere alla fabbrica di modificare o annullare gli ordini della propria organizzazione entro i limiti previsti, e ritirare una richiesta finché attende",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }

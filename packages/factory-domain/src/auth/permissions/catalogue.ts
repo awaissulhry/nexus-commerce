@@ -39,6 +39,8 @@ import { PORTAL_PURCHASE_ORDERS_DEFINITIONS, PORTAL_PURCHASE_ORDERS_PERMISSIONS 
 import { PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS, PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS } from '../../sales/portal-documents/permissions'
 // B-W2b-190: portal ordering (catalogue, order requests, delivery addresses; partner roles only).
 import { PORTAL_ORDERING_DEFINITIONS, PORTAL_ORDERING_PERMISSIONS } from '../../sales/portal-ordering/permissions'
+// B-W2b-183: change and cancel requests from the portal (partner roles only).
+import { PORTAL_ORDER_CHANGES_DEFINITIONS, PORTAL_ORDER_CHANGES_PERMISSIONS } from '../../sales/change-requests/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -707,6 +709,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS,
   // B-W2b-190: portal ordering (partner roles only).
   PORTAL_ORDERING_DEFINITIONS,
+  // B-W2b-183: change and cancel requests from the portal (partner roles only).
+  PORTAL_ORDER_CHANGES_DEFINITIONS,
   MONEY_PERMISSIONS,
   // B-W2b-168: portal search (partner roles only; its area `portal` is declared above, so the area order stays).
   PORTAL_SEARCH_DEFINITIONS,
@@ -929,6 +933,8 @@ for (const name of PORTAL_PAYMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name
 for (const name of PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-190: portal ordering (partner roles only).
 for (const name of PORTAL_ORDERING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-183: change and cancel requests from the portal (partner roles only).
+for (const name of PORTAL_ORDER_CHANGES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

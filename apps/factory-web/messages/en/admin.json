@@ -1991,6 +1991,7 @@
     "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
+    "portal_salesOrders_ask": "Ask the factory to change or cancel your organisation's orders within the cut-off rules, and withdraw a request while it waits",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }
