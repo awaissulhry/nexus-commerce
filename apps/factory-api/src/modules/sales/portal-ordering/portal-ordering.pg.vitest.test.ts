@@ -9,6 +9,12 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { callerFor } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+import { textOf } from '../../../adapters/ses/fake'
+import { partyView } from '@nexus/factory-domain/parties/contracts'
+import { systemContext } from '../../../platform/outbox/system'
+import { partnerFanOut } from '../../../platform/portal/notifications/fan-out'
+import { unsubscribeKeyOf } from '../../../platform/portal/notifications/mail'
+import { getParty } from '../../parties/parties'
 import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } from '../../../platform/auth/portal/testing/portal'
@@ -410,5 +416,71 @@ describe('delivery addresses (SAL-079) and our check of them (B-W2b-F13b, wave 2
     expect(preview.problems.map((problem: Json) => problem.path)).toContain('body/shipToAddressId')
     // REFUSED: the database keeps a refused address archived for good (its guard; the API's words came first above).
     await expect(admin('UPDATE "PartyAddress" SET status = \'ACTIVE\' WHERE id = $1', [made.address.id])).rejects.toThrow(/refused/)
+  })
+
+  it('B-W2b-F15: the office party record shows the check of each address (who asked, who decided, why), never to a partner', async () => {
+    // The office person of these tests gets a user row, so the record can name who decided.
+    await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", locale, status, audience) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING', [officeId, T, 'otto.office@seed-factory.example', 'Otto Office', 'en', 'ACTIVE', 'OFFICE'])
+    const waiting = await ok(browsers.admin, 'POST', '/portal/addresses', { ...body, name: 'Seed outlet', line1: 'Via Esempio 41' }, 201)
+    const reader = callerFor(h.database, { audience: 'office', tenantId: T, actorId: officeId, requestId: newId(), grants: [{ permissions: ['parties.view'], companies: 'all', sites: 'all', parties: 'all' }] })
+    // Read through the route's contract (unknown keys are stripped there): the check is part of what GET /parties/:id answers.
+    const record = partyView.parse(await getParty(reader, P1))
+    const byName = (name: string) => record.addresses.find((address) => address.name === name)!
+    expect(byName('Seed outlet')).toMatchObject({ id: waiting.address.id, isDefaultShipTo: false })
+    expect(byName('Seed outlet').approval).toEqual({ status: 'WAITING', requestedAt: expect.any(String), requestedBy: 'ada.admin', decidedAt: null, decidedBy: null, refuseReason: null })
+    expect(byName('Seed warehouse two').approval).toMatchObject({ status: 'APPROVED', requestedBy: 'ada.admin', decidedAt: expect.any(String), decidedBy: 'Otto Office', refuseReason: null })
+    expect(byName('Seed pop-up store').approval).toMatchObject({ status: 'APPROVED', requestedBy: 'ada.admin', decidedBy: 'Otto Office' })
+    expect(byName('Seed garage')).toMatchObject({ status: 'ARCHIVED', approval: { status: 'REFUSED', requestedBy: 'ada.admin', decidedBy: 'Otto Office', refuseReason: 'We do not deliver to private garages.' } })
+    // The office's own addresses (the seed's): none, never checked.
+    const ownIds = (await admin<{ id: string }>('SELECT id FROM "PartyAddress" WHERE "partyId" = $1 AND "approvalStatus" IS NULL', [P1])).map((row) => row.id)
+    expect(ownIds.length).toBeGreaterThan(0)
+    expect(record.addresses.filter((address) => ownIds.includes(address.id)).map((address) => address.approval)).toEqual(ownIds.map(() => null))
+    expect(record.addresses.filter((address) => !ownIds.includes(address.id)).every((address) => address.approval !== null)).toBe(true)
+    // Never to a partner: the office route refuses a portal session, and the portal's own list never names who decided.
+    const refused = await call(browsers.admin, 'GET', `/parties/${P1}`)
+    expect([401, 403, 404]).toContain(refused.status)
+    expect(JSON.stringify(refused.body)).not.toContain('Otto Office')
+    const portal = await ok(browsers.admin, 'GET', '/portal/addresses')
+    expect(JSON.stringify(portal)).not.toMatch(/Otto Office|decidedBy/)
+    expect(JSON.stringify(portal)).not.toContain(officeId)
+  })
+
+  it('B-W2b-F15: the person who asked hears the decision, in their language, with the reason of a refusal; nobody else, never for our own addresses', async () => {
+    const events = await admin<{ id: string; type: string; payload: Json; companyId: string | null; subject: string }>('SELECT id, type, payload, "companyId", subject FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 ORDER BY "occurredAt", id', [T, 'delivery_address.checked'])
+    // The three decisions of the tests above: approved by hand, approved by accepting a request, refused. Ids and the decision only.
+    expect(events.map((event) => event.payload.decision)).toEqual(['APPROVED', 'APPROVED', 'REFUSED'])
+    for (const event of events) expect(Object.keys(event.payload).sort()).toEqual(['addressId', 'decision', 'partyId'])
+    // The asker reads Italian (their own setting) for this run.
+    await admin('UPDATE "User" SET locale = $1 WHERE id = $2', ['it', userIds.admin])
+    const system = () => callerFor(h.database, systemContext(T, `test-${newId()}`))
+    const fanOut = (event: { id: string; type: string; payload: Json; companyId: string | null }) =>
+      partnerFanOut(system(), { eventId: event.id, type: event.type, tenantId: T, companyId: event.companyId, siteId: null, payload: event.payload } as never, { clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
+    const before = h.ses.mails.length
+    let made = 0
+    for (const event of events) made += await fanOut(event)
+    expect(made).toBe(3)
+    const rows = await admin<{ userId: string; messageKey: string; recordType: string; recordLabel: string; params: Json }>('SELECT "userId", "messageKey", "recordType", "recordLabel", params FROM "Notification" WHERE "eventType" = $1 ORDER BY "createdAt", id', ['delivery_address.checked'])
+    // Only the admin who added the addresses: not the buyer, the viewer, nor another customer's buyer.
+    expect(rows.map((row) => row.userId)).toEqual([userIds.admin, userIds.admin, userIds.admin])
+    expect(rows.map((row) => row.messageKey)).toEqual(['portal.address.approved', 'portal.address.approved', 'portal.address.refused'])
+    expect(rows.map((row) => row.recordLabel)).toEqual(['Seed warehouse two, Via Esempio 12, 40100 Bologna', 'Seed pop-up store, Via Esempio 30, 40100 Bologna', 'Seed garage, Via Esempio 99, 40100 Bologna'])
+    expect(rows.every((row) => row.recordType === 'PartyAddress')).toBe(true)
+    expect(rows[2]!.params).toEqual({ reason: 'We do not deliver to private garages.' })
+    expect(rows[0]!.params).toEqual({})
+    // Mailed at once (orders: transactional), in the asker's language, to the asker only.
+    const mails = h.ses.mails.slice(before).filter((mail) => mail.templateKey === 'portal.notification')
+    expect(mails.map((mail) => mail.to[0])).toEqual([people.admin, people.admin, people.admin])
+    expect(textOf(mails[2]!.raw)).toContain('Il tuo indirizzo di consegna Seed garage, Via Esempio 99, 40100 Bologna non è stato accettato: We do not deliver to private garages.')
+    expect(textOf(mails[0]!.raw)).toContain('è stato verificato: i tuoi ordini possono usarlo')
+    // The bell says it in both languages; a replayed event makes nothing more.
+    const bell = await ok(browsers.admin, 'GET', '/portal/notifications')
+    expect(bell.items.find((item: Json) => item.messageKey === 'portal.address.refused').sentence.en).toBe('Your delivery address Seed garage, Via Esempio 99, 40100 Bologna was not accepted: We do not deliver to private garages.')
+    expect((await ok(browsers.buyer, 'GET', '/portal/notifications')).items.filter((item: Json) => item.messageKey.startsWith('portal.address.'))).toEqual([])
+    expect(await fanOut(events[2]!)).toBe(0)
+    // Never for the office's own addresses: they are never checked (no event), and an event naming one tells nobody.
+    const ownId = (await one<{ id: string }>('SELECT id FROM "PartyAddress" WHERE "partyId" = $1 AND "approvalStatus" IS NULL ORDER BY "createdAt", id LIMIT 1', [P1])).id
+    await expect(approveAddress(office(), ownId, { version: 1 })).rejects.toThrow(/not found/i)
+    expect(await fanOut({ id: newId(), type: 'delivery_address.checked', payload: { addressId: ownId, partyId: P1, decision: 'APPROVED' }, companyId: null })).toBe(0)
+    await admin('UPDATE "User" SET locale = $1 WHERE id = $2', ['en', userIds.admin])
   })
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, currency, id, input, instant, output } from '../core/contracts'
+import { ADDRESS_APPROVALS } from './address-approval'
 import { ADDRESS_KINDS, MASTER_STATUSES } from './addresses'
 import { CONTACT_ROLES } from './contacts'
 import { NEW_PARTY_STATUSES, PARTY_CODE, PARTY_CODE_RULE, PARTY_KINDS, PARTY_ROLES, PARTY_STATUSES } from './rules'
@@ -247,6 +248,20 @@ export const addressView = output({
   isDefaultBillTo: z.boolean(),
   isDefaultShipTo: z.boolean(),
   status: z.enum(MASTER_STATUSES),
+  /**
+   * B-W2b-F15: our check of a delivery address a customer added in the portal (./address-approval), as the office reads it
+   * (the decider is named here, never in the portal); null: an address of the office's own, never checked.
+   */
+  approval: output({
+    status: z.enum(ADDRESS_APPROVALS),
+    requestedAt: instant().nullable(),
+    /** The customer's person who added it. */
+    requestedBy: z.string().nullable(),
+    decidedAt: instant().nullable(),
+    /** The office person who approved or refused it. */
+    decidedBy: z.string().nullable(),
+    refuseReason: z.string().nullable(),
+  }).nullable(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),

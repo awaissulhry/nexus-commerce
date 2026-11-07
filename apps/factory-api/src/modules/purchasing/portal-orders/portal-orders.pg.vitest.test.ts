@@ -176,6 +176,30 @@ describe('the supplier sees its purchase orders without any price (SCM-094, C2)'
     expect(list.items.map((task: Json) => [task.kind, task.record.id, task.canMarkDone])).toContainEqual(['CONFIRM_PO', order.id, false])
     // The viewer cannot approve: the request is not theirs.
     expect((await as(vito, 'GET', '/portal/tasks')).items.filter((task: Json) => task.record.id === order.id)).toEqual([])
+    // B-W2b-F15: the office's answer panel says where the supplier answers: its portal is on and the request is open there,
+    // and the mailed link is still open too.
+    expect(await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).toMatchObject({
+      answer: 'WAITING',
+      waitingOn: 'PORTAL_OR_LINK',
+      words: { en: 'Waiting for the supplier to answer in the portal or by its link.', it: 'In attesa che il fornitore risponda nel portale o dal suo link.' },
+    })
+    // The link no longer open (expired; set straight in the table with its guard set aside, then put back): in the portal only.
+    const linkTime = async (expiresAt: string | null) => {
+      await admin('BEGIN')
+      try {
+        await admin("SET LOCAL session_replication_role = 'replica'")
+        const rows = await admin<{ expiresAt: Date }>('SELECT "expiresAt" FROM "OneOffLink" WHERE "recordType" = $1 AND "recordId" = $2', ['PurchaseOrder', order.id])
+        await admin('UPDATE "OneOffLink" SET "expiresAt" = COALESCE($3::timestamptz, now() - interval \'1 minute\') WHERE "recordType" = $1 AND "recordId" = $2', ['PurchaseOrder', order.id, expiresAt])
+        await admin('COMMIT')
+        return rows[0]!.expiresAt.toISOString()
+      } catch (error) {
+        await admin('ROLLBACK')
+        throw error
+      }
+    }
+    const kept = await linkTime(null)
+    expect(await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).toMatchObject({ waitingOn: 'PORTAL', words: { en: 'Waiting for the supplier to answer in the portal.', it: 'In attesa che il fornitore risponda nel portale.' } })
+    await linkTime(kept)
   })
 
   it('lists the order under "To confirm" with the counts, and Home counts it', async () => {

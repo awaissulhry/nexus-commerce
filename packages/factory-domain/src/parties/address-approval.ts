@@ -61,6 +61,19 @@ export function refuseReasonProblem(reason: string): string | null {
   return null
 }
 
+/** The longest address in short (a notification's record label: Notification.recordLabel). */
+export const ADDRESS_SHORT_MAX = 120
+
+/**
+ * The address in short, as the customer's news names it (B-W2b-F15): its name, the street and the place, e.g. "Seed
+ * warehouse two, Via Esempio 12, 40100 Bologna"; at most ADDRESS_SHORT_MAX characters.
+ */
+export function addressInShort(fields: { readonly name: string | null; readonly line1: string; readonly postalCode: string; readonly city: string }): string {
+  const parts = [fields.name, fields.line1, [fields.postalCode, fields.city].filter((part) => part.trim() !== '').join(' ')].map((part) => (part ?? '').trim()).filter((part) => part !== '')
+  const text = parts.join(', ')
+  return text.length <= ADDRESS_SHORT_MAX ? text : `${text.slice(0, ADDRESS_SHORT_MAX - 1).trimEnd()}…`
+}
+
 /** The check as the portal shows it on an address, or null for an address of the office's own. */
 export function approvalView(row: { readonly approvalStatus: string | null; readonly refuseReason: string | null }): { status: AddressApproval; words: ApprovalWords; refuseReason: string | null } | null {
   if (!isApproval(row.approvalStatus)) return null

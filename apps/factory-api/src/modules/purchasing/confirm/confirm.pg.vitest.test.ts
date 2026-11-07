@@ -202,6 +202,8 @@ describe('the link page and "confirm all as asked" (SCM-085; no price on the lin
     expect(await count('SELECT count(*)::int AS n FROM "LinkEvidence" WHERE "linkId" = $1', [linkId])).toBe(0)
     // The office's own answer view of the waiting order.
     expect(await as('GET', `${orderUrl(order.id)}/answer`)).toMatchObject({ answer: 'WAITING', confirmation: null, decline: null, evidence: [], links: [{ id: linkId, state: 'LIVE' }] })
+    // B-W2b-F15: the supplier has no portal: the panel says it answers its link, in Italian and English.
+    expect(await as('GET', `${orderUrl(order.id)}/answer`)).toMatchObject({ waitingOn: 'LINK', words: { en: 'Waiting for the supplier to answer its link.', it: 'In attesa che il fornitore risponda dal suo link.' } })
   })
 
   it('confirm all as asked → CONFIRMED by LINK, every line confirmed as ordered, the evidence kept, the link used once', async () => {
@@ -251,7 +253,7 @@ describe('the link page and "confirm all as asked" (SCM-085; no price on the lin
     expect(answer).toMatchObject({
       status: 'CONFIRMED',
       answer: 'CONFIRMED',
-      words: 'Confirmed by the supplier.',
+      words: { en: 'Confirmed by the supplier.', it: 'Confermato dal fornitore.' },
       confirmation: { via: 'LINK', linkId, byName: 'Mario Rossi', supplierRef: 'OC-4711', note: 'Grazie, consegna come richiesto.' },
       decline: null,
       lines: [
@@ -382,7 +384,7 @@ describe('changes per line are a proposal: the buyer accepts or refuses it (SCM-
     )
     expect(await as('GET', `${orderUrl(order.id)}/answer`)).toMatchObject({
       answer: 'CHANGES_PROPOSED',
-      words: 'The supplier proposed changes: accept or refuse them.',
+      words: { en: 'The supplier proposed changes: accept or refuse them.', it: 'Il fornitore ha proposto modifiche: accettale o rifiutale.' },
       confirmation: null,
       proposal: { via: 'LINK', linkId, byName: 'Mario Rossi', supplierRef: 'OC-5000', summary: '2 later dates · 1 other quantity · 1 split', decision: null },
       lines: [
