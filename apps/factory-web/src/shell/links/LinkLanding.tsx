@@ -5,6 +5,7 @@ import { browserApi } from '../../lib/api/browser'
 import type { ApiClient } from '../../lib/api/client'
 import { isApiError } from '../../lib/api/errors'
 import { openLink, type OpenedLink } from '../../lib/api/links'
+import { brandingTokensOf, readLinkBranding } from '../../lib/api/branding'
 import { takeLinkTokenFromLocation } from '../../lib/links/token'
 import { DepositPay } from '../../links/deposit-pay/DepositPay'
 import { PoConfirm } from '../../links/po-confirm/PoConfirm'
@@ -12,7 +13,7 @@ import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
-import { LinkFrameView, type LinkFrameViewModel } from './view/LinkFrameView'
+import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
 
 const linkBody = (state: LinkState, link?: OpenedLink): LinkFrameViewModel['body'] => ({
   kind: 'link',
@@ -34,6 +35,8 @@ const linkBody = (state: LinkState, link?: OpenedLink): LinkFrameViewModel['body
 export function LinkLanding() {
   const [model, setModel] = useState<LinkFrameViewModel>({ sender: null, title: null, body: linkBody('loading') })
   const [task, setTask] = useState<{ task: LinkTask; api: ApiClient } | null>(null)
+  // B-W2b-161: the sender's branding (logo, colour) for the frame and every task page; null until read, or when it fails.
+  const [branding, setBranding] = useState<LinkSender | null>(null)
   // The token taken from the address on arrival. React runs an effect twice in development (StrictMode): the second run
   // finds the address already clean, so it opens the token the first run took instead of saying the link is missing.
   const arrived = useRef<string | null>(null)
@@ -52,6 +55,7 @@ export function LinkLanding() {
       }
       const mine = ++attempt
       setTask(null)
+      setBranding(null)
       setModel({ sender: null, title: null, body: linkBody('loading') })
       const api = browserApi({ linkToken: token })
       openLink(api)
@@ -62,6 +66,10 @@ export function LinkLanding() {
           const opens = state === 'valid' ? linkTaskOf(link) : null
           if (opens) setTask({ task: opens, api })
           setModel({ sender: null, title: null, body: linkBody(state, link) })
+          if (state === 'valid')
+            readLinkBranding(api)
+              .then((read) => mine === attempt && setBranding(brandingTokensOf(read, 'company')))
+              .catch(() => undefined)
         })
         .catch((error: unknown) => {
           if (mine === attempt) setModel({ sender: null, title: null, body: linkBody(isApiError(error) ? linkStateFromError(error) : 'error') })
@@ -76,6 +84,10 @@ export function LinkLanding() {
     }
   }, [])
 
+  return <LinkBrandingContext.Provider value={branding}>{page(task, model)}</LinkBrandingContext.Provider>
+}
+
+function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameViewModel) {
   switch (task?.task) {
     case 'quote-accept':
       return <QuoteAccept api={task.api} />
