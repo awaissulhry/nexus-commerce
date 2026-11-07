@@ -555,7 +555,8 @@
     "register": "Anagrafica del personale: nomi, mansione e squadra — mai paghe, presenze, salute o dati sul lavoro di una persona",
     "unread": "Regole della sede non lette: nessun dato individuale è mostrato",
     "workerHr": "I dati di una persona li vedono solo il lavoratore e le Risorse umane",
-    "workerHrLead": "I dati di una persona li vedono solo il lavoratore, le Risorse umane e il capo squadra"
+    "workerHrLead": "I dati di una persona li vedono solo il lavoratore, le Risorse umane e il capo squadra",
+    "recordSafety": "La sicurezza di una persona: scheda mansione, DPI, formazione; l'esito di idoneità solo a HR e al medico, ogni consultazione registrata; mai dati clinici"
   },
   "problem": {
     "conflict": "Qualcuno l'ha cambiato nel frattempo: rileggi e riprova.",
@@ -729,7 +730,8 @@
     "job": "Lavoro e squadra",
     "pay": "Paga e cottimi",
     "profile": "Profilo",
-    "skills": "Competenze e formazione"
+    "skills": "Competenze e formazione",
+    "safety": "Sicurezza"
   },
   "team": {
     "isLead": "Capo squadra",

@@ -365,6 +365,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/shifts/print',
   '/people/skills',
   '/people/skills/print',
+  // B-W2b-146: the training part of Skills & training; the certificate and the training due list (PDF, new tabs).
+  '/people/skills/certificate',
+  '/people/skills/due',
   // SCR-159 (B-W2b-63): the wizard and Exports; Past export; its summary and file tabs.
   '/people/payroll',
   '/people/payroll/[id]',
@@ -421,7 +424,7 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

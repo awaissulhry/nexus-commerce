@@ -15,8 +15,12 @@ import { cellKey, className, dialogPerson, levelChange, levelOf, skillsAddressOf
 import { useSkillDialogs } from './use-skill-dialogs'
 import type { CellState } from './view/CellPopover'
 import { SkillsView, type MatrixState, type SkillNotice, type SkillsActions } from './view/SkillsView'
+import { dueListPeople } from './training/api'
+import { lensesFor, trainingAddressOf, trainingAddressText, trainingCan, type TrainingAddress } from './training/model'
+import { useTraining, type PersonOption } from './training/use-training'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 
-const LIVE = ['employee_skill.changed', 'machine_authorisation.changed', 'skill.changed']
+const LIVE = ['employee_skill.changed', 'machine_authorisation.changed', 'skill.changed', 'training.recorded', 'training_requirement.changed', 'role_sheet.changed']
 const OWN_MS = 5000
 
 /**
@@ -38,6 +42,11 @@ export function SkillsPage() {
   const can = useMemo(() => skillsCan(session.permissions), [session.permissions])
   const address = useMemo(() => skillsAddressOf(params), [params])
   const siteId = scope.siteId
+  // B-W2b-146: the training part — its rights, its lens and terms in the address (`?view=courses|needs|instruction`).
+  const trainingRights = useMemo(() => trainingCan(session.permissions), [session.permissions])
+  const lenses = useMemo(() => lensesFor(trainingRights), [trainingRights])
+  const trainingAddress = useMemo(() => trainingAddressOf(params, trainingRights), [params, trainingRights])
+  const onMatrix = trainingAddress.lens === 'matrix'
 
   const [sight, setSight] = useState<SightState>({ status: 'loading' })
   const [matrix, setMatrix] = useState<MatrixState>({ status: 'loading' })
@@ -78,6 +87,21 @@ export function SkillsPage() {
     if (can.view && sight.status !== 'loading') void read()
   }, [can.view, sight.status, read])
 
+  // Without the matrix (a safety officer: safety.view, no people.skills.view) the dialogs name the people of the due list,
+  // the register the safety readers keep (art. 37).
+  const [duePeople, setDuePeople] = useState<PersonOption[]>([])
+  useEffect(() => {
+    if (can.view || !trainingRights.view) return
+    let alive = true
+    dueListPeople(api, { companyId: session.company?.id ?? null, siteId }).then(
+      (people) => alive && setDuePeople(people),
+      () => alive && setDuePeople([]),
+    )
+    return () => {
+      alive = false
+    }
+  }, [api, can.view, trainingRights.view, session.company?.id, siteId])
+
   const later = useCoalesced(() => setUpdates((count) => count + 1), 1000)
   const live = useLive(
     (change) => {
@@ -94,13 +118,27 @@ export function SkillsPage() {
   })
 
   const go = (change: Partial<SkillsAddress>) => router.replace(`${pathname}${skillsAddressText({ ...address, ...change }, params ? new URLSearchParams(params.toString()) : null)}`)
+  const goTraining = useCallback(
+    (change: Partial<TrainingAddress>) => router.replace(`${pathname}${trainingAddressText({ ...trainingAddress, ...change }, params ? new URLSearchParams(params.toString()) : null, lenses[0] ?? 'matrix')}`, { scroll: false }),
+    [router, pathname, trainingAddress, params, lenses],
+  )
+  const people = useMemo<PersonOption[]>(() => (value ? value.rows.map((row) => ({ employeeId: row.employeeId, name: row.name, companyId: row.companyId, siteId: row.siteId })) : duePeople), [value, duePeople])
+  const localToday = useMemo(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date()), [])
+  const trainingToday = value?.today ?? localToday
+  const training = useTraining(api, trainingRights, trainingAddress, { companyId: session.company?.id ?? null, siteId, today: trainingToday, people }, goTraining, (key, words) => {
+    ownUntil.current = Date.now() + OWN_MS
+    setNotice({ tone: key.startsWith('refusal.') || key.startsWith('problem.') ? 'danger' : key.endsWith('Some') || key === 'done.recordedNoCertificate' ? 'warning' : 'success', ns: 'training', key, ...(words ? { params: words } : {}) })
+    if (onMatrix && can.view) void read()
+  })
+  const requirementsValue = training.requirements.status === 'ready' ? training.requirements.value : null
+  const coursesValue = training.courses.status === 'ready' ? training.courses.value : null
 
   const openCell = useCallback(
     (ref: CellRef | null, title?: string) => {
       if (!ref) return setCell(null)
       const label = title ?? ''
       setCell({ cell: ref, title: label, detail: null, problem: null })
-      getCell(api, { employeeId: ref.employeeId, ...(ref.kind === 'skill' ? { skillId: ref.skillId } : { machineClassId: ref.classId }) })
+      getCell(api, { employeeId: ref.employeeId, ...(ref.kind === 'skill' ? { skillId: ref.skillId } : ref.kind === 'machine' ? { machineClassId: ref.classId } : {}) })
         .then((detail) => setCell((current) => (current && cellKey(current.cell) === cellKey(ref) ? { ...current, detail } : current)))
         .catch((error: unknown) => setCell((current) => (current && cellKey(current.cell) === cellKey(ref) ? { ...current, problem: skillsProblem(error) } : current)))
     },
@@ -152,7 +190,11 @@ export function SkillsPage() {
     },
     onShowUpdates: () => void read(),
     onDismissNotice: () => setNotice(null),
-    onCell: openCell,
+    onCell: (ref, title) => {
+      // A course cell holds its facts already (the matrix's DueCell): nothing more is read.
+      if (ref?.kind === 'course') return setCell({ cell: ref, title: title ?? '', detail: null, problem: null })
+      openCell(ref, title)
+    },
     onSetLevel: setRowLevel,
     onAuthoriseMany: (people) => dialogs.open.authorise(people, people.length > 0),
     onCatalogue: () => dialogs.open.catalogue(),
@@ -184,6 +226,21 @@ export function SkillsPage() {
       if (cellRow && current) dialogs.open.revoke(dialogPerson(cellRow), { classLabel: className(current.machineClass, locale), id: current.id, version: current.version })
     },
     dialog: dialogs.actions,
+    training: {
+      onLens: (lens) => goTraining({ lens, course: null, need: null, q: '' }),
+      onAddress: goTraining,
+      onRetry: () => (trainingAddress.lens === 'courses' ? training.retry.courses() : trainingAddress.lens === 'needs' ? training.retry.needs() : training.retry.instruction()),
+      onCourse: training.open.course,
+      onStandard: training.open.standard,
+      onArchiveMany: (rows) => void training.archiveMany(rows),
+      onNeed: training.open.need,
+      onClassCourses: training.actions.onClassCourses,
+      onInstruction: () => training.open.instruction(),
+      onEntry: training.open.entry,
+      onPaperMany: (rows) => void training.paperMany(rows),
+      onRecord: (chosen, courseId) => training.open.record(chosen.map((person) => ({ employeeId: person.employeeId, name: person.name, companyId: person.companyId, siteId: person.siteId })), courseId ?? null),
+      dialog: training.actions,
+    },
   }
 
   return (
@@ -202,6 +259,28 @@ export function SkillsPage() {
         cell,
         saving,
         dialogs: { dialog: dialogs.dialog, rows: value?.rows ?? [], classes: value?.machineClasses ?? [], skills: value?.skills ?? [], sites: value?.sites ?? [], today: value?.today ?? '', signer: session.user.displayName, stepUp: dialogs.stepUp },
+        training: trainingRights.view
+          ? {
+              can: trainingRights,
+              address: trainingAddress,
+              lenses,
+              courses: training.courses,
+              requirements: training.requirements,
+              instruction: training.instruction,
+              today: trainingToday,
+              dialogs: {
+                dialog: training.dialog,
+                can: trainingRights,
+                courses: training.activeCourses,
+                people,
+                machineClasses: requirementsValue?.machineClasses ?? [],
+                today: trainingToday,
+                canAddGroupWide: coursesValue?.canAddGroupWide ?? false,
+                riskHref: OFFICE_PAGES.has('/plant/risk') ? `${prefix}/plant/risk` : null,
+                prefix,
+              },
+            }
+          : null,
       }}
       actions={actions}
     />
