@@ -24,6 +24,8 @@ const labelsView = {
     carrierCode: z.string().nullable(),
     carrierName: z.string().nullable(),
     serviceCode: z.string().nullable(),
+    /** B-W2b-F14: when the carrier expects to deliver (said at the label's purchase, moved by its tracking); null: not said. */
+    expectedDeliveryAt: instant().nullable(),
   }),
   /** The site's label printer (shipping settings), or null: the labels print from the browser as PDFs. */
   labelPrinterId: id().nullable(),
@@ -38,6 +40,8 @@ const labelsView = {
       version: z.number().int(),
       grossWeightKg: z.string().nullable(),
       trackingNumber: z.string().nullable(),
+      /** B-W2b-F14: the carrier's tracking page (https only); null: none kept. */
+      trackingUrl: z.string().nullable(),
       labelledAt: instant().nullable(),
       /** The current label's files: the PDF (any browser prints it) and, with a label printer, the ZPL. */
       files: z.array(output({ fileId: id(), format: z.enum(['PDF', 'ZPL']), name: z.string() })),
@@ -122,9 +126,20 @@ export const trackingContract = defineContract({
         shippedAt: instant().nullable(),
         deliveredAt: instant().nullable(),
         returnedAt: instant().nullable(),
+        /** B-W2b-F14: when the carrier expects to deliver; null: not said. */
+        expectedDeliveryAt: instant().nullable(),
       }),
       parcels: z.array(
-        output({ parcelId: id(), seq: z.number().int(), trackingNumber: z.string().nullable(), labelledAt: instant().nullable(), status: z.enum(TRACKING_STATUSES).nullable(), lastEventAt: instant().nullable() }),
+        output({
+          parcelId: id(),
+          seq: z.number().int(),
+          trackingNumber: z.string().nullable(),
+          /** B-W2b-F14: the carrier's tracking page (https only); null: none kept. */
+          trackingUrl: z.string().nullable(),
+          labelledAt: instant().nullable(),
+          status: z.enum(TRACKING_STATUSES).nullable(),
+          lastEventAt: instant().nullable(),
+        }),
       ),
       events: z.array(
         output({

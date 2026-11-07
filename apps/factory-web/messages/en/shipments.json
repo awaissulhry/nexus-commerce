@@ -645,7 +645,10 @@
     "returnedAt": "Returned",
     "notYet": "Not yet",
     "notDelivered": "Not delivered yet",
-    "podLater": "The carrier's signature and photo come in a later release."
+    "podLater": "The carrier's signature and photo come in a later release.",
+    "expectedAt": "Expected delivery",
+    "trackOnCarrier": "Track on the carrier's site",
+    "trackOnCarrierOf": "Track parcel {seq} on the carrier's site"
   },
   "issue": {
     "title": "Issue DDT",

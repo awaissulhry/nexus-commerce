@@ -645,7 +645,10 @@
     "returnedAt": "Resa",
     "notYet": "Non ancora",
     "notDelivered": "Non ancora consegnata",
-    "podLater": "La firma e la foto del corriere arrivano in un rilascio successivo."
+    "podLater": "La firma e la foto del corriere arrivano in un rilascio successivo.",
+    "expectedAt": "Consegna prevista",
+    "trackOnCarrier": "Segui sul sito del corriere",
+    "trackOnCarrierOf": "Segui il collo {seq} sul sito del corriere"
   },
   "issue": {
     "title": "Emetti DDT",

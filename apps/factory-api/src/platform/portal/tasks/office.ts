@@ -13,13 +13,14 @@ import { appClock, commandOn } from './clock'
 import { recordLabelOf } from '../../threads/labels'
 import { resolveRecord } from '../../threads/records'
 import { closeOne, moveDueInCommand, openTaskInCommand, reopenInCommand, taskById, TASK_COLUMNS, type TaskRow } from './store'
-import { taskView } from './views'
+import { assigneeNames, taskView } from './views'
 
 /**
  * The office's side of the requests to partners (B-W2b-167, COL-043; design office home.tasks "tasks staff give the customer",
  * sales.customers and purchasing.suppliers › Portal access):
  *
- *   GET   /partners/:partyId/tasks                 the party's requests (partners.view over each request's company)
+ *   GET   /partners/:partyId/tasks                 the party's requests (partners.view over each request's company), with the
+ *                                                  colleague each was handed to (B-W2b-F14)
  *   POST  /partners/:partyId/tasks                 ask the party for a document, an answer, measurements or progress on a
  *                                                  record of theirs, by a date (partners.tasks.manage over the record)
  *   POST  /partner-tasks/:taskId/cancel|reopen     withdraw a request, or open it again (any source's)
@@ -40,14 +41,19 @@ export async function partyTasks(app: FastifyInstance, request: FastifyRequest, 
   const context = officeOf(request)
   const actor = actorOf(context)
   const now = appClock(app).now()
-  const { party, rows } = await request.withClient(async (client) => ({
-    party: await client.party.findUnique({ where: { id: partyId }, select: { id: true, companyId: true } }),
-    rows: await client.partnerTask.findMany({ where: { partyId, ...(status === 'ALL' ? {} : { status }) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: OFFICE_LIST_MAX + 1, select: TASK_COLUMNS }),
-  }))
+  const { party, rows, names } = await request.withClient(async (client) => {
+    const found = await client.partnerTask.findMany({ where: { partyId, ...(status === 'ALL' ? {} : { status }) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: OFFICE_LIST_MAX + 1, select: TASK_COLUMNS })
+    return {
+      party: await client.party.findUnique({ where: { id: partyId }, select: { id: true, companyId: true } }),
+      rows: found,
+      // B-W2b-F14: who of the partner has each request (the colleague it was handed to).
+      names: await assigneeNames(client, found),
+    }
+  })
   if (!party || !can(actor, PARTNERS_VIEW, { companyId: party.companyId, partyId })) throw new NotFoundError('Partner not found.')
   const visible = rows.slice(0, OFFICE_LIST_MAX).filter((row) => can(actor, PARTNERS_VIEW, { companyId: row.companyId, partyId }))
   if (status === 'OPEN') visible.sort(byDue)
-  return { asOf: toUtcIso(now), items: visible.map((row) => taskView(row, now)), complete: rows.length <= OFFICE_LIST_MAX }
+  return { asOf: toUtcIso(now), items: visible.map((row) => taskView(row, now, names)), complete: rows.length <= OFFICE_LIST_MAX }
 }
 
 export interface AskBody {
@@ -110,7 +116,8 @@ async function change(app: FastifyInstance, request: FastifyRequest, name: 'part
     if (!task) throw new NotFoundError('Request not found.')
     if (task.version !== version) throw new ConflictError(`This request changed since you read it (now version ${task.version}). Read it again.`)
     await work(tools, task)
-    return { task: taskView((await taskById(tools.tx, taskId))!, tools.now) }
+    const after = (await taskById(tools.tx, taskId))!
+    return { task: taskView(after, tools.now, await assigneeNames(tools.tx, [after])) }
   })
   return result
 }

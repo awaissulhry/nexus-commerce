@@ -35,6 +35,8 @@ export const TASK_COLUMNS = {
   closedAt: true,
   doneById: true,
   remindedAt: true,
+  // W2b-F14 (schema wave 23): the colleague it was handed to (partner-visible); null: anyone of the party.
+  assigneeId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -162,6 +164,23 @@ export async function moveDueInCommand(tools: CommandTools, task: TaskRow, dueAt
   const version = await moveTask(tools.tx, task, { dueAt }, tools.now)
   tools.audit({ action: 'partnerTasks.moveDue', recordType: 'PartnerTask', recordId: task.id, companyId: task.companyId, before: { dueAt: iso(task.dueAt) }, after: { dueAt: iso(dueAt) } })
   tools.emit({ type: 'partner_task.due_moved', subject: task.id, companyId: task.companyId, payload: { taskId: task.id, partyId: task.partyId, kind: task.kind, dueAt: iso(dueAt) } })
+  return version
+}
+
+/** Why a task's assignee moved: the person took it, gave it to a colleague, gave it back to everyone, or left (deactivated). */
+export type AssignWhy = 'TAKEN' | 'GIVEN' | 'RELEASED' | 'LEFT'
+
+/**
+ * Hands an OPEN task to a colleague (B-W2b-F14, PartnerTask.assigneeId): a partner person takes it or gives it to an active
+ * colleague of the party (the portal, in the office scope as the person: a partner session only marks a task done), or it
+ * goes back to everyone (null; a deactivated person's open tasks, in the deactivation's command). The database's guard
+ * holds the same: an ACTIVE partner user of the task's own party, only while OPEN.
+ */
+export async function assignInCommand(tools: CommandTools, task: TaskRow, assigneeId: string | null, why: AssignWhy): Promise<number> {
+  if (task.status !== 'OPEN') throw new InvalidStateError(task.status === 'DONE' ? 'This request is already done: only an open request is handed to a colleague.' : 'This request was withdrawn: only an open request is handed to a colleague.')
+  const version = await moveTask(tools.tx, task, { assigneeId }, tools.now)
+  tools.audit({ action: 'partnerTasks.assign', recordType: 'PartnerTask', recordId: task.id, companyId: task.companyId, before: { assigneeId: task.assigneeId }, after: { assigneeId, why } })
+  tools.emit({ type: 'partner_task.assigned', subject: task.id, companyId: task.companyId, payload: { taskId: task.id, partyId: task.partyId, kind: task.kind, assigned: assigneeId !== null, why } })
   return version
 }
 

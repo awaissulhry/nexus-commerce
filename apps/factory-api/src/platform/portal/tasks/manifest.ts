@@ -9,6 +9,8 @@ export const manifest = defineManifest({
   'GET /portal/tasks': { audiences: ['partner'], permission: 'portal.home.view', scope: 'party' },
   'POST /portal/tasks/:taskId/done': { audiences: ['partner'], permission: 'portal.home.view', scope: 'party' },
   'POST /portal/tasks/:taskId/undo': { audiences: ['partner'], permission: 'portal.home.view', scope: 'party' },
+  // B-W2b-F14: take, hand to a colleague, give back (the task must be for the person; the colleague's role must act on it).
+  'POST /portal/tasks/:taskId/assign': { audiences: ['partner'], permission: 'portal.home.view', scope: 'party' },
   'GET /portal/tasks/handover/:userId': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
   'GET /partners/:partyId/tasks': { audiences: ['office'], permission: 'partners.view', scope: 'record' },
   'POST /partners/:partyId/tasks': { audiences: ['office'], permission: 'partners.tasks.manage', scope: 'record' },

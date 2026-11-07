@@ -31,6 +31,8 @@ const task = output({
   closedAt: instant().nullable(),
   /** The rail area whose badge counts it. */
   area: z.enum(PORTAL_AREAS),
+  /** B-W2b-F14: the colleague of the party it was handed to (their name as the party reads it); null: anyone of the party. */
+  assignee: output({ id: id(), displayName: z.string().nullable() }).nullable(),
   version: z.number().int(),
   createdAt: instant(),
 })
@@ -42,13 +44,34 @@ const partnerTask = task.extend({
   canMarkDone: z.boolean(),
   /** Done by this person in the last minutes: Undo is still offered. */
   canUndo: z.boolean(),
+  /** B-W2b-F14: handed to this person. */
+  mine: z.boolean(),
+  /** B-W2b-F14: open, and not a preview: the person may take it, hand it to a colleague or give it back to everyone. */
+  canAssign: z.boolean(),
 })
 
 const badge = output({ area: z.enum(PORTAL_AREAS), count: z.number().int(), words: words, kinds: z.record(z.string(), z.number().int()) })
 
 export const portalTasksContract = defineContract({
-  querystring: input({ /** OPEN (default: what waits for you, due first) or DONE (done in the last 7 days). */ state: z.enum(['OPEN', 'DONE']).default('OPEN') }),
-  response: { 200: output({ asOf: instant(), state: z.enum(['OPEN', 'DONE']), items: z.array(partnerTask), badges: z.array(badge), counts: output({ open: z.number().int(), overdue: z.number().int(), dueSoon: z.number().int() }), live: output({ events: z.array(z.string()) }) }) },
+  querystring: input({
+    /** OPEN (default: what waits for you, due first) or DONE (done in the last 7 days). */
+    state: z.enum(['OPEN', 'DONE']).default('OPEN'),
+    /** B-W2b-F14: true shows only the requests handed to you ("Mine"); the badges and counts stay the whole list's. */
+    mine: z.enum(['true', 'false']).default('false'),
+  }),
+  response: {
+    200: output({
+      asOf: instant(),
+      state: z.enum(['OPEN', 'DONE']),
+      /** The "Mine" filter is on. */
+      mine: z.boolean(),
+      items: z.array(partnerTask),
+      badges: z.array(badge),
+      /** `mine` (B-W2b-F14): the open requests handed to you. */
+      counts: output({ open: z.number().int(), overdue: z.number().int(), dueSoon: z.number().int(), mine: z.number().int() }),
+      live: output({ events: z.array(z.string()) }),
+    }),
+  },
 })
 
 const taskParams = input({ taskId: id() })
@@ -56,6 +79,9 @@ const versionBody = input({ version: z.number().int().min(1) })
 
 export const portalDoneContract = defineContract({ params: taskParams, body: versionBody, response: { 200: output({ task: partnerTask }) } })
 export const portalUndoContract = defineContract({ params: taskParams, response: { 200: output({ task: partnerTask }) } })
+
+/** B-W2b-F14: take it (your own id), hand it to an active colleague who can act on it, or give it back to everyone (null). */
+export const portalAssignContract = defineContract({ params: taskParams, body: input({ version: z.number().int().min(1), assigneeId: id().nullable() }), response: { 200: output({ task: partnerTask }) } })
 
 export const handoverContract = defineContract({
   params: input({ userId: id() }),
@@ -65,6 +91,8 @@ export const handoverContract = defineContract({
       open: z.number().int(),
       /** Of those, the ones another active colleague can act on too: they stay with the organisation. */
       kept: z.number().int(),
+      /** B-W2b-F14: of those, the ones handed to the colleague: deactivating them gives these back to everyone. */
+      assigned: z.number().int(),
       /** The ones nobody else could act on: give someone the role (or the capability) they need. */
       alone: z.array(output({ id: id(), kind, words, record: output({ type: z.string(), id: id(), label: z.string() }), dueAt: instant().nullable() })),
       /** Who else could act on the colleague's open requests, and on how many. */
