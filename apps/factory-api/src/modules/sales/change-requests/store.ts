@@ -14,6 +14,8 @@ import {
   type Words,
 } from '@nexus/factory-domain/sales/change-requests/rules'
 import type { SalesLineKind } from '@nexus/factory-domain/sales/quotes/quotes'
+import { cancelFeeFor, cancelFeePctOf, type CancelFee, type FeeLine } from '@nexus/factory-domain/sales/change-requests/fee'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTx } from '../../../core/command'
 
 /**
@@ -37,21 +39,22 @@ export const asDay = (value: BusinessDate): Date => new Date(`${value}T00:00:00.
 
 // ---- the tenant's reads -----------------------------------------------------------------------------------------------------
 
-export const CUTOFF_COLUMNS = { id: true, companyId: true, cancelCutoffStatus: true, cancelCutoffDays: true, changeCutoffStatus: true, version: true } as const satisfies Prisma.SalesSettingsSelect
+export const CUTOFF_COLUMNS = { id: true, companyId: true, cancelCutoffStatus: true, cancelCutoffDays: true, changeCutoffStatus: true, cancelFeePct: true, version: true } as const satisfies Prisma.SalesSettingsSelect
 export type CutoffRow = Prisma.SalesSettingsGetPayload<{ select: typeof CUTOFF_COLUMNS }>
 
 /**
  * The cut-off rules in force for a company: its own sales settings when it has them, else the tenant's (B-W2b-157: "the
  * company row, else the tenant row"; the row's id is the company's, or the tenant's). No row: no rule.
  */
-export async function readCutoffs(db: Reader, tenantId: string, companyId: string | null): Promise<{ cutoffs: Cutoffs; source: 'COMPANY' | 'TENANT' | 'NONE'; company: CutoffRow | null; tenant: CutoffRow | null }> {
+export async function readCutoffs(db: Reader, tenantId: string, companyId: string | null): Promise<{ cutoffs: Cutoffs; cancelFeePct: string | null; source: 'COMPANY' | 'TENANT' | 'NONE'; company: CutoffRow | null; tenant: CutoffRow | null }> {
   const ids = companyId === null ? [tenantId] : [companyId, tenantId]
   const rows = await db.salesSettings.findMany({ where: { id: { in: ids } }, select: CUTOFF_COLUMNS })
   const company = companyId === null ? null : (rows.find((row) => row.id === companyId && row.companyId === companyId) ?? null)
   const tenant = rows.find((row) => row.id === tenantId && row.companyId === null) ?? null
-  if (company) return { cutoffs: cutoffsOf(company), source: 'COMPANY', company, tenant }
-  if (tenant) return { cutoffs: cutoffsOf(tenant), source: 'TENANT', company, tenant }
-  return { cutoffs: cutoffsOf(null), source: 'NONE', company, tenant }
+  // B-W2b-F14: the cancel fee comes with the same row (the company's, else the tenant's; none: free).
+  if (company) return { cutoffs: cutoffsOf(company), cancelFeePct: cancelFeePctOf(company.cancelFeePct), source: 'COMPANY', company, tenant }
+  if (tenant) return { cutoffs: cutoffsOf(tenant), cancelFeePct: cancelFeePctOf(tenant.cancelFeePct), source: 'TENANT', company, tenant }
+  return { cutoffs: cutoffsOf(null), cancelFeePct: null, source: 'NONE', company, tenant }
 }
 
 /**
@@ -212,10 +215,19 @@ export async function addressesOf(db: Reader, ids: readonly (string | null)[]): 
 
 // ---- the views ---------------------------------------------------------------------------------------------------------------
 
+/** B-W2b-F14: what a waiting cancel request's fee is read from (the order's lines and currency, the percent in force now). */
+export interface FeeFacts {
+  readonly pct: string | null
+  readonly currency: string
+  readonly lines: readonly FeeLine[]
+}
+
 export interface ViewFacts {
   readonly orderNumber: string
   readonly customerRef: string | null
   readonly lines: ReadonlyMap<string, { readonly seq: number; readonly styleId: string; readonly colourwayId: string }>
+  /** B-W2b-F14: the fee facts of the request's order (none: no fee shown). */
+  readonly fee?: FeeFacts | null
   readonly names: { readonly styles: ReadonlyMap<string, { readonly code: string; readonly name: string }>; readonly colourways: ReadonlyMap<string, { readonly code: string; readonly name: string }> }
   readonly addresses: ReadonlyMap<string, AddressRow>
   readonly reasons: ReadonlyMap<string, Words>
@@ -254,9 +266,24 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
     answer: row.answer,
     answeredAt: row.answeredAt ? toUtcIso(row.answeredAt) : null,
     withdrawnAt: row.withdrawnAt ? toUtcIso(row.withdrawnAt) : null,
+    // B-W2b-F14: a waiting cancel's fee as the settings say it now (not stored on the request: shown while it waits).
+    cancelFee: kind === 'CANCEL' && status === 'OPEN' && facts.fee ? feeView(cancelFeeFor(facts.fee.lines, cells.map((cell) => cell.orderLineId), facts.fee.pct, facts.fee.currency)) : null,
     version: row.version,
   }
 }
+
+/** A cancel fee as the answers carry it: the amounts are prices (dropped for a reader without the grain). */
+export const feeView = (fee: CancelFee) => ({
+  pct: fee.pct,
+  words: fee.words,
+  currency: fee.currency,
+  lines: fee.lines.map((line) => ({ lineId: line.lineId, seq: line.seq, fee: asMoney('price', line.fee) })),
+  totalFee: asMoney('price', fee.totalFee),
+})
+
+/** The fee facts of an order's lines (any reader that read their net values and closed-short quantities). */
+export const feeLinesOf = (lines: readonly { readonly id: string; readonly seq: number; readonly netAmount: number; readonly closedShortQuantity: number | null }[]): FeeLine[] =>
+  lines.map((line) => ({ id: line.id, seq: line.seq, netAmount: line.netAmount, closedShort: line.closedShortQuantity !== null }))
 
 /** The events after which a request's screens read again. */
 export const LIVE_EVENTS = ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered', 'sales_order.amended', 'sales_order.status_changed'] as const

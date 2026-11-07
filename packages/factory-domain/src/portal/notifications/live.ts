@@ -38,6 +38,8 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'partner_task.closed': tasks(['status']),
   'partner_task.reopened': tasks([]),
   'partner_task.due_moved': tasks([]),
+  // B-W2b-F14: taken, handed to a colleague or back to everyone (the "Mine" filter reads again).
+  'partner_task.assigned': tasks(['assigned']),
   'partner_notification.created': { permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['partyId', 'count'] },
   // B-W2b-176: a workshop's jobs (its answer, our answer to a proposed date, the kit, progress, send-backs): the cards update.
   ...Object.fromEntries(

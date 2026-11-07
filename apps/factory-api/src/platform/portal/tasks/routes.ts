@@ -1,10 +1,10 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from './clock'
-import { askContract, cancelContract, handoverContract, moveDueContract, officeTasksContract, portalDoneContract, portalTasksContract, portalUndoContract, reopenContract } from './contract'
+import { askContract, cancelContract, handoverContract, moveDueContract, officeTasksContract, portalAssignContract, portalDoneContract, portalTasksContract, portalUndoContract, reopenContract } from './contract'
 import { manifest } from './manifest'
 import { askPartner, cancelTask, moveDue, partyTasks, reopenTask } from './office'
-import { handover, markDone, myTasks, undoDone } from './portal'
+import { assignTask, handover, markDone, myTasks, undoDone } from './portal'
 
 /**
  * Tasks for partners (B-W2b-167; COL-043 "Tasks for customers and suppliers"; design portal.frame action-needed, office
@@ -13,11 +13,13 @@ import { handover, markDone, myTasks, undoDone } from './portal'
  * open and close requests in their own commands are ./sources.
  */
 export default defineRoutes('portal-tasks', manifest, async (app) => {
-  app.get('/portal/tasks', { schema: portalTasksContract }, async (request) => myTasks(request, request.query.state, appClock(app).now()))
+  app.get('/portal/tasks', { schema: portalTasksContract }, async (request) => myTasks(request, request.query.state, appClock(app).now(), request.query.mine === 'true'))
 
   app.post('/portal/tasks/:taskId/done', { schema: portalDoneContract }, async (request) => markDone(app, request, request.params.taskId, request.body.version, idempotencyKeyFrom(request), appClock(app).now()))
 
   app.post('/portal/tasks/:taskId/undo', { schema: portalUndoContract }, async (request) => undoDone(app, request, request.params.taskId, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/tasks/:taskId/assign', { schema: portalAssignContract }, async (request) => assignTask(app, request, request.params.taskId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
 
   app.get('/portal/tasks/handover/:userId', { schema: handoverContract }, async (request) => handover(app, request, request.params.userId, appClock(app).now()))
 

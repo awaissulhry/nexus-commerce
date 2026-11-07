@@ -14,6 +14,8 @@ import {
   type RequestKind,
   type RuleOrder,
 } from '@nexus/factory-domain/sales/change-requests/rules'
+import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTools } from '../../../core/command'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { partnerOrder, portalReader, type PortalReader } from '../portal-orders/access'
@@ -35,6 +37,7 @@ import {
   REQUEST_COLUMNS,
   requestView,
   ruleLinesOf,
+  feeLinesOf,
   type AddressRow,
   type CancelReason,
   type LineCatalogue,
@@ -58,6 +61,8 @@ import {
  *   list      GET  …/change-requests (portal.salesOrders.view): the order's requests, newest first, with the office's words
  *             (never who answered)
  *   withdraw  POST …/change-requests/:requestId/withdraw (portal.salesOrders.ask): OPEN → WITHDRAWN, at the version read
+ * B-W2b-F14: the cancel fee (SalesSettings.cancelFeePct) per line and for the whole order in the rules (before the click),
+ * and on a waiting cancel request; amounts are prices (dropped without the grain), nothing is charged.
  * The cut-off settings, the cuts, the reasons and the catalogue are read in the tenant's scope as the person, after the
  * partner read found the order (none of them is partner-readable). An office preview never writes (its grants hold no
  * write permission; refused here too).
@@ -69,6 +74,8 @@ interface AskFacts {
   readonly lines: PortalLine[]
   readonly rule: RuleOrder
   readonly cutoffs: Awaited<ReturnType<typeof readCutoffs>>['cutoffs']
+  /** B-W2b-F14: the cancel fee in force (percent text; null: free). */
+  readonly cancelFeePct: string | null
   readonly catalogue: Map<string, LineCatalogue>
   readonly reasons: CancelReason[]
   readonly addresses: AddressRow[]
@@ -82,7 +89,7 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
   const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, status: 'OPEN' }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
   const addresses = await request.withClient((client) => readShipTos(client, order.partyId))
   const tenant = await reader.inTenant(async (client) => ({
-    cutoffs: (await readCutoffs(client, reader.session.tenantId, order.companyId)).cutoffs,
+    settings: await readCutoffs(client, reader.session.tenantId, order.companyId),
     cuts: await readCuts(client, lines.map((line) => line.id)),
     catalogue: await readCatalogue(client, lines),
     reasons: await readCancelReasons(client),
@@ -93,7 +100,7 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
     lines: ruleLinesOf(lines, tenant.cuts),
     openRequestDay: open ? businessDate(open.createdAt) : null,
   }
-  return { order, lines, rule, cutoffs: tenant.cutoffs, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now) }
+  return { order, lines, rule, cutoffs: tenant.settings.cutoffs, cancelFeePct: tenant.settings.cancelFeePct, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now) }
 }
 
 export async function portalRules(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
@@ -101,6 +108,10 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
   const facts = await askFacts(request, reader, orderId, now)
   const rules = rulesOf(facts.rule, facts.cutoffs, facts.today)
   const verdicts = new Map(rules.lines.map((entry) => [entry.lineId, entry]))
+  // B-W2b-F14: the fee of cancelling each line, and the whole order (the lines not closed short), before the click.
+  const feeLines = feeLinesOf(facts.lines)
+  const fees = new Map(cancelFeeFor(feeLines, facts.lines.map((line) => line.id), facts.cancelFeePct, facts.order.currency).lines.map((line) => [line.lineId, line.fee]))
+  const whole = cancelFeeFor(feeLines, null, facts.cancelFeePct, facts.order.currency)
   return {
     asOf: toUtcIso(now),
     order: {
@@ -110,6 +121,7 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
       status: facts.order.status,
       requestedDate: dayOrNull(facts.order.requestedDate),
       promiseDate: dayOrNull(facts.order.promiseDate),
+      currency: facts.order.currency,
       version: facts.order.version,
     },
     change: rules.change,
@@ -123,8 +135,9 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
         .filter((size) => ordered.has(size) || (catalogue?.offered.has(size) ?? false))
         .map((size) => ({ size, quantity: ordered.get(size) ?? 0, offered: ordered.has(size) || (catalogue?.offered.has(size) ?? false) }))
       const verdict = verdicts.get(line.id)!
-      return { lineId: line.id, seq: line.seq, kind: line.kind, style: catalogue?.style ?? null, colourway: catalogue?.colourway ?? null, sizes, change: verdict.change, cancel: verdict.cancel }
+      return { lineId: line.id, seq: line.seq, kind: line.kind, style: catalogue?.style ?? null, colourway: catalogue?.colourway ?? null, sizes, change: verdict.change, cancel: verdict.cancel, cancelFee: asMoney('price', fees.get(line.id) ?? 0) }
     }),
+    cancelFee: { pct: whole.pct, words: whole.words, currency: whole.currency, wholeOrderFee: asMoney('price', whole.totalFee) },
     reasons: facts.reasons,
     addresses: facts.addresses.map((row) => ({ id: row.id, label: addressLabel(row) })),
     noWithdrawal: facts.order.noWithdrawal ? NO_WITHDRAWAL_WORDS : null,
@@ -250,6 +263,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   const tenant = await reader.inTenant(async (client) => ({
     catalogue: await readCatalogue(client, lines),
     reasons: await reasonWordsOf(client, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : []))),
+    // B-W2b-F14: the cancel fee in force (a waiting cancel shows it).
+    cancelFeePct: rows.some((row) => row.kind === 'CANCEL' && row.status === 'OPEN') ? (await readCutoffs(client, reader.session.tenantId, order.companyId)).cancelFeePct : null,
   }))
   const styles = new Map<string, { code: string; name: string }>()
   const colourways = new Map<string, { code: string; name: string }>()
@@ -260,7 +275,15 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   }
   return {
     cells,
-    facts: { orderNumber: order.number, customerRef: order.customerRef, lines: new Map(lines.map((line) => [line.id, line])), names: { styles, colourways }, addresses, reasons: tenant.reasons },
+    facts: {
+      orderNumber: order.number,
+      customerRef: order.customerRef,
+      lines: new Map(lines.map((line) => [line.id, line])),
+      names: { styles, colourways },
+      addresses,
+      reasons: tenant.reasons,
+      fee: { pct: tenant.cancelFeePct, currency: order.currency, lines: feeLinesOf(lines) },
+    },
   }
 }
 

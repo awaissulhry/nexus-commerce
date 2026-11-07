@@ -3,7 +3,9 @@ import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Is
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
+import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
 import { amendmentLinesOf, answerProblems, rulesOf, type AskedCell } from '@nexus/factory-domain/sales/change-requests/rules'
+import { markMoney } from '@nexus/factory-domain/money/marked'
 import { cancelImpact, closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
@@ -22,6 +24,8 @@ import { approveWaitingInCommand } from '../portal-ordering/address-check'
 import {
   addressesOf,
   dayOrNull,
+  feeLinesOf,
+  feeView,
   LIVE_EVENTS,
   lockRequest,
   OFFICE_REQUEST_COLUMNS,
@@ -57,6 +61,8 @@ import {
  *            `order_change_request.answered` (the customer is told by e-mail through the portal notifications)
  *   refuse   POST …/:requestId/refuse {version, answer}: REFUSED with the words the customer reads
  * Who answered is the office's: the customer's reads never carry it.
+ * B-W2b-F14: a cancel's fee (SalesSettings.cancelFeePct) on a waiting cancel's view and in the accept's answer (also on its
+ * audit rows); shown only — the request has no column for it and no money moves.
  */
 
 const LIST_MAX = 200
@@ -67,9 +73,9 @@ const blankToNull = (value: string | null | undefined): string | null => (typeof
 async function officeViews(db: Reader, context: ReturnType<typeof officeContextOf>, rows: readonly OfficeRequestRow[]) {
   if (rows.length === 0) return []
   const orderIds = [...new Set(rows.map((row) => row.orderId))]
-  const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, customerRef: true } })).map((row) => [row.id, row]))
+  const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, customerRef: true, currency: true } })).map((row) => [row.id, row]))
   const parties = new Map((await db.party.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true } })).map((row) => [row.id, row]))
-  const lines = await db.salesOrderLine.findMany({ where: { orderId: { in: orderIds } }, select: { id: true, orderId: true, seq: true, styleId: true, colourwayId: true } })
+  const lines = await db.salesOrderLine.findMany({ where: { orderId: { in: orderIds } }, select: { id: true, orderId: true, seq: true, styleId: true, colourwayId: true, netAmount: true, closedShortQuantity: true } })
   const catalogue = await readCatalogue(db, lines)
   const styles = new Map<string, { code: string; name: string }>()
   const colourways = new Map<string, { code: string; name: string }>()
@@ -85,6 +91,10 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
   const names = new Map((people.length > 0 ? await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } }) : []).map((row) => [row.id, row.displayName]))
   const amendmentIds = rows.flatMap((row) => (row.amendmentId ? [row.amendmentId] : []))
   const amendments = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row]))
+  // B-W2b-F14: the cancel fee in force per company, for the waiting cancels.
+  const feeCompanies = [...new Set(rows.filter((row) => row.kind === 'CANCEL' && row.status === 'OPEN').map((row) => row.companyId))]
+  const feePct = new Map<string, string | null>()
+  for (const companyId of feeCompanies) feePct.set(companyId, (await readCutoffs(db, context.tenantId, companyId)).cancelFeePct)
   return rows.map((row) => {
     const order = orders.get(row.orderId)
     const party = parties.get(row.partyId)
@@ -95,6 +105,7 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       names: { styles, colourways },
       addresses,
       reasons,
+      fee: feePct.has(row.companyId) ? { pct: feePct.get(row.companyId) ?? null, currency: order?.currency ?? 'EUR', lines: feeLinesOf(lines.filter((line) => line.orderId === row.orderId)) } : null,
     }
     return {
       ...requestView(row, cells.get(row.id) ?? [], facts),
@@ -274,6 +285,14 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     const reason = reasonOf(row, body.reason)
     let amendmentId: string | null = null
     let orderCancelled = false
+    // B-W2b-F14: a cancel's fee as it stands now (before its lines close), kept on the audit rows and shown in the answer:
+    // the request has no column for it, and no money moves.
+    let cancelFee: CancelFee | null = null
+    if (row.kind === 'CANCEL') {
+      const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, seq: true, netAmount: true, closedShortQuantity: true } })
+      cancelFee = cancelFeeFor(feeLinesOf(orderLines), cells.map((cell) => cell.orderLineId), (await readCutoffs(tx, context.tenantId, order.companyId)).cancelFeePct, order.currency)
+    }
+    const feeAudit = cancelFee ? { cancelFee: { pct: cancelFee.pct, currency: cancelFee.currency, lines: cancelFee.lines.map((line) => ({ lineId: line.lineId, seq: line.seq, fee: markMoney('price', line.fee) })), totalFee: markMoney('price', cancelFee.totalFee) } } : {}
     if (row.kind === 'CANCEL' && cells.length === 0) {
       await cancelOrderInCommand(tools, context.tenantId, order, { reason })
       orderCancelled = true
@@ -298,12 +317,12 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
       select: { id: true },
     })
-    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer) } })
-    tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled } })
+    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit } })
+    tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled, ...feeAudit } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled } })
-    return { orderCancelled }
+    return { orderCancelled, cancelFee }
   }, { ...COMMAND_SETTINGS, clock })
-  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled }
+  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null }
 }
 
 export async function refuseRequest(caller: CommandCaller, requestId: string, body: { readonly version: number; readonly answer: string }, idempotencyKey: string | undefined, clock: Clock) {
