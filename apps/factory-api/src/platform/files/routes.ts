@@ -26,6 +26,13 @@ import { previewContract } from './preview/contract'
 import { previewFile } from './preview/preview'
 import { listVersionsContract, requestVersionContract, restoreVersionContract } from './versions/contract'
 import { listVersions, requestNewVersion, restoreVersion } from './versions/versions'
+// B-W2b-177: required documents, a document's type and expiry, markup, the Versions pop-up's history.
+import { changeRule, createRule, listRules } from './required/admin'
+import { changeRuleContract, createRuleContract, listRulesContract, recordDocumentsContract, setDocumentContract } from './required/contract'
+import { recordDocuments, setDocument } from './required/record'
+import { createMarkupContract, fileHistoryContract, listMarkupsContract } from './markup/contract'
+import { fileHistory } from './markup/history'
+import { createMarkup, listMarkups } from './markup/markup'
 
 /**
  * Files on R2 (platform part; plan A1 §3.6, features COL-045, COL-050): announce an upload, confirm it, list a record's
@@ -112,6 +119,18 @@ export default defineRoutes('files', manifest, async (app) => {
   app.post('/files/uploads/:sessionId/sync', { schema: syncLargeUploadContract }, async (request) => syncLargeUpload(processFiles(), request, request.params.sessionId))
   app.post('/files/uploads/:sessionId/complete', { schema: completeLargeUploadContract }, async (request) => completeLargeUpload(processFiles(), request, request.params.sessionId, idempotencyKeyFrom(request)))
   app.delete('/files/uploads/:sessionId', { schema: abortLargeUploadContract }, async (request) => abortLargeUpload(processFiles(), request, request.params.sessionId, idempotencyKeyFrom(request)))
+
+  // B-W2b-177 (COL-048): the company's required-document rules (admin.documents › Required documents).
+  app.get('/files/required-rules', { schema: listRulesContract }, async (request) => listRules(request, request.query.companyId))
+  app.post('/files/required-rules', { schema: createRuleContract }, async (request, reply) => reply.code(201).send({ rule: await createRule(request, request.body, idempotencyKeyFrom(request)) }))
+  app.patch('/files/required-rules/:ruleId', { schema: changeRuleContract }, async (request) => ({ rule: await changeRule(request, request.params.ruleId, request.body, idempotencyKeyFrom(request)) }))
+  // B-W2b-177 (COL-048, COL-049): a record's documents and what each status move needs; what a file is and until when.
+  app.get('/files/documents', { schema: recordDocumentsContract }, async (request) => recordDocuments(request, request.query, processFiles().clock.now()))
+  app.put('/files/:fileId/document', { schema: setDocumentContract }, async (request) => setDocument(request, request.params.fileId, request.body, processFiles().clock.now(), idempotencyKeyFrom(request)))
+  // B-W2b-177 (COL-055, COL-046): marks on a picture (a new version) or a PDF page (an overlay); the Versions pop-up.
+  app.post('/files/:fileId/markups', { schema: createMarkupContract }, async (request, reply) => reply.code(201).send(await createMarkup(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request))))
+  app.get('/files/:fileId/markups', { schema: listMarkupsContract }, async (request) => ({ markups: await listMarkups(request, request.params.fileId) }))
+  app.get('/files/:fileId/history', { schema: fileHistoryContract }, async (request) => ({ versions: await fileHistory(request, request.params.fileId) }))
 
   // The local store's presigned requests: raw bytes of any type, up to the largest file, in this scope only.
   await app.register(async (instance) => {

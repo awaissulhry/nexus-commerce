@@ -17,7 +17,8 @@ import type { Allocation, NumberKind, NumberReset, Series, SeriesProof } from '.
  */
 
 // B-W2b-161: Branding, the W2b section of the page (branding/).
-export const DOCUMENT_VIEWS = ['numbers', 'documents', 'branding'] as const
+// B-W2b-177: Required documents (required/).
+export const DOCUMENT_VIEWS = ['numbers', 'documents', 'branding', 'required'] as const
 export type DocumentsView = (typeof DOCUMENT_VIEWS)[number]
 
 export interface CompanyOption {

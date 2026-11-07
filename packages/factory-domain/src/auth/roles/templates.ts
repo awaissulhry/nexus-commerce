@@ -5,6 +5,8 @@ import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../pe
 import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
 // B-W2b-175: customer orders in the portal.
 import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sales/portal-orders/permissions'
+// B-W2b-178: customer documents in the portal.
+import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissions'
 // B-W2b-190: portal ordering.
 import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
 
@@ -641,6 +643,14 @@ const PARTNER_TASKS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   sales: ['partners.tasks.manage'],
   buyer: ['partners.tasks.manage'],
 })
+/**
+ * B-W2b-177 (COL-048; design admin.documents › Required documents): the administrator keeps the rules of every record type;
+ * the buyer keeps those of what suppliers send (certificates, test reports, declarations before a PO is confirmed).
+ */
+const REQUIRED_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['documents.required.manage'],
+  buyer: ['documents.required.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -735,7 +745,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-162
   ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : []),
   // B-W2b-167
-  ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
+  // B-W2b-177
+  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1356,6 +1368,14 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
   // B-W2b-175: the customer roles that see the orders (status, progress when shared, shipments, tracking); not the Designer.
   Object.fromEntries(SALES_ORDER_READER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_VIEW]])),
+  // B-W2b-174: the supplier's Orders role sees our purchase orders (never a price, C2); answering also needs portal.approve.
+  { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
+  // B-W2b-185: the customer's Finance sees what is open and pays it online (FIN-118, FIN-123); the customer Admin follows.
+  { 'customer-finance': ['portal.payments.view' as Permission, 'portal.payments.pay' as Permission] },
+  // B-W2b-176: the workshop's Jobs role sees our jobs for it (never a fee or price, C2); its acts take the capabilities.
+  { 'subcontractor-jobs': ['portal.jobs.view' as Permission] },
+  // B-W2b-178: the customer documents by role (delivery papers and the rest; conformity; invoices); not the Designer.
+  CUSTOMER_DOCUMENT_READERS,
   // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
   PORTAL_ORDERING_ADDS,
 ]

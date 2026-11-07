@@ -27,6 +27,7 @@ import { deliverLinkMail, queueLinkMail } from './mail'
 import { detailInCommand, refreshTotal } from './orders'
 import { draftChangesOf } from './revisions/read'
 import { writeRevisionInCommand } from './revisions/state'
+import { openConfirmTask } from './portal-orders/tasks'
 import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 
@@ -328,9 +329,12 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
       const revisionRow = await writeRevisionInCommand(tools, { orderId: current.id, documentFileId: file.id, changeNote, sentById: context.actorId })
       const revoked = await revokeConfirmLinks(tools, current, context.actorId)
       const link = await insertConfirmLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
+      const sender = await senderOf(tx, context)
+      // B-W2b-174: the supplier's request to confirm this revision (its portal's task list, Home and reminders), due by confirm-by.
+      await openConfirmTask(tools, current, { dueAt: confirmBy, askedBy: { id: sender.userId, name: sender.name } })
       const mail = await queueLinkMail(tools, {
         orderId: current.id,
-        sender: await senderOf(tx, context),
+        sender,
         to: plan.to,
         cc: body.cc ?? [],
         subject: body.subject?.trim() ? body.subject.trim() : plan.mail.subject,

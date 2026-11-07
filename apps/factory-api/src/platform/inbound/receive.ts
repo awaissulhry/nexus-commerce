@@ -30,6 +30,9 @@ export const PROVIDER_SLUGS = Object.freeze({
   sdi: 'SDI',
   sendcloud: 'SENDCLOUD',
   vies: 'VIES',
+  // B-W2b-185: the payment provider's webhooks (the fake's and Stripe's).
+  'payment-fake': 'PAYMENT_FAKE',
+  stripe: 'STRIPE',
 } as const satisfies Record<string, IntegrationProvider>)
 export type ProviderSlug = keyof typeof PROVIDER_SLUGS
 

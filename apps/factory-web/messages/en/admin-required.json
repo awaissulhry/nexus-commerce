@@ -1,0 +1,80 @@
+{
+  "req": {
+    "intro": "Documents a record type must have before a status move, per company: a missing one blocks the move or only warns. Each record shows what it still needs in its Files panel, before anyone tries the move.",
+    "new": "New rule",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "table": {
+      "label": "Required documents"
+    },
+    "col": {
+      "recordType": "Record type",
+      "category": "Document",
+      "beforeStatus": "Required before",
+      "partyRole": "For",
+      "level": "Blocks the move",
+      "active": "On",
+      "changed": "Last changed"
+    },
+    "level": {
+      "BLOCK": "Blocks",
+      "WARN": "Only warns"
+    },
+    "on": "On",
+    "off": "Off",
+    "switch": {
+      "level": "{what} before {status} blocks the move",
+      "active": "Rule for {what} before {status} is on"
+    },
+    "showOff_one": "Show switched off ({count})",
+    "showOff_other": "Show switched off ({count})",
+    "feeds": "A rule is switched off, never deleted. The first status moves that ask these rules are the supplier documents and the ship notice; until then each record shows what it needs in its Files panel.",
+    "keys": {
+      "new": "New rule"
+    },
+    "bulk": {
+      "off_one": "Switch off {count}",
+      "off_other": "Switch off {count}",
+      "on_one": "Switch on {count}",
+      "on_other": "Switch on {count}",
+      "doneOff": "{count} of {of} switched off",
+      "doneOn": "{count} of {of} switched on"
+    },
+    "empty": {
+      "title": "No required documents yet",
+      "body": "Add a rule: for example a supplier certificate before a purchase order is confirmed.",
+      "bodyOff_one": "Only {count} switched-off rule: tick \"Show switched off\" to see it.",
+      "bodyOff_other": "Only {count} switched-off rules: tick \"Show switched off\" to see them."
+    },
+    "dialog": {
+      "title": "New required document",
+      "intro": "The record cannot move to the status (or is warned) while no valid document of this kind is on it or on its customer or supplier.",
+      "statusHint": "The status the record moves to.",
+      "roleHint": "Only records whose customer or supplier has this role, or every record.",
+      "blockHint": "The move is refused until the document is on file and valid.",
+      "warnHint": "The move goes on; the missing document is said.",
+      "sentence": "{what} on a {type} before {status} — {role}.",
+      "cancel": "Cancel",
+      "add": "Add rule"
+    },
+    "held": {
+      "noRight": "You need the right to change the required documents.",
+      "saving": "Saving…",
+      "reading": "Still reading the rules.",
+      "pickCompany": "Pick a company first: a rule belongs to one company.",
+      "status": "Pick a status of this record type.",
+      "duplicate": "An active rule already asks for this document before this status: change that rule.",
+      "allOn": "The ticked rules are already on.",
+      "allOff": "The ticked rules are already off."
+    },
+    "problem": {
+      "conflict": "Someone changed this rule meanwhile: the rules were read again."
+    },
+    "done": {
+      "created": "Rule added.",
+      "level": "Saved: what a missing document does.",
+      "on": "Rule switched on.",
+      "off": "Rule switched off."
+    }
+  }
+}

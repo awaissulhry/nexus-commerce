@@ -79,6 +79,10 @@ export const fileSchema = z.object({
   availableAt: z.string().nullable(),
   createdAt: z.string(),
   version: z.number().int(),
+  // B-W2b-177 (on B-W2b-160): the version in its series.
+  versionNo: z.number().int().optional(),
+  seriesId: z.string().nullable().optional(),
+  supersededAt: z.string().nullable().optional(),
 })
 export type ApiFile = z.infer<typeof fileSchema>
 

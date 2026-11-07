@@ -32,17 +32,23 @@ describe('the one task list (B-W2b-167, COL-043)', () => {
     const viewer = partner(grant([PORTAL_HOME_VIEW]))
     const approver = partner(grant([PORTAL_HOME_VIEW, 'portal.approve']))
     const buyer = partner(grant([PORTAL_HOME_VIEW, 'portal.approve', 'money.price']))
+    // B-W2b-174: a PO to confirm is also for the people who see the supplier's purchase orders.
+    const poApprover = partner(grant([PORTAL_HOME_VIEW, 'portal.approve', 'portal.purchaseOrders.view']))
     expect(isTaskFor(viewer, task('CONFIRM_PO'))).toBe(false)
-    expect(isTaskFor(approver, task('CONFIRM_PO'))).toBe(true)
+    expect(isTaskFor(approver, task('CONFIRM_PO'))).toBe(false)
+    expect(isTaskFor(poApprover, task('CONFIRM_PO'))).toBe(true)
     // Accepting a quote shows its amount: the price grain too.
     expect(isTaskFor(approver, task('ACCEPT_QUOTE'))).toBe(false)
     expect(isTaskFor(buyer, task('ACCEPT_QUOTE'))).toBe(true)
-    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'money.price'])), task('PAY_INVOICE'))).toBe(true)
+    // B-W2b-185: paying is Finance's and Admin's (portal.payments.pay), with the price grain.
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'money.price'])), task('PAY_INVOICE'))).toBe(false)
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.payments.pay'])), task('PAY_INVOICE'))).toBe(false)
+    expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.payments.pay', 'money.price'])), task('PAY_INVOICE'))).toBe(true)
     expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.upload'])), task('UPLOAD_DOCUMENT'))).toBe(true)
     expect(isTaskFor(partner(grant([PORTAL_HOME_VIEW, 'portal.comment'])), task('ANSWER_MESSAGE'))).toBe(true)
     // Another company's portal, another party: never.
-    expect(isTaskFor(approver, task('CONFIRM_PO', C2))).toBe(false)
-    expect(isTaskFor(approver, task('CONFIRM_PO', C1, P2))).toBe(false)
+    expect(isTaskFor(poApprover, task('CONFIRM_PO', C2))).toBe(false)
+    expect(isTaskFor(poApprover, task('CONFIRM_PO', C1, P2))).toBe(false)
     // No grant (before the first visit): nothing.
     expect(isTaskFor(partner(), task('ANSWER_MESSAGE'))).toBe(false)
   })

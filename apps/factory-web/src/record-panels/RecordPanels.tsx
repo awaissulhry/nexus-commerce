@@ -54,6 +54,8 @@ import { addTaskHeld, createBody, followersChangeFor, taskChangeFor, type Assign
 import { RecordPanelsView, type RecordPanelsActions } from './view/RecordPanelsView'
 import { usePrintMode } from '../shell/print/print-mode'
 import { RecordPrintView } from './print/view/RecordPrintView'
+// B-W2b-177: the files in depth.
+import { useFileDepth } from './files/use-file-depth'
 
 /**
  * The record panels as a record page mounts them: `<RecordPanels record={{ type, id, companyId, siteId }} title party />`.
@@ -149,6 +151,9 @@ function fileOf(file: ApiFile): PanelFile {
     quarantineReason: file.quarantineReason,
     availableAt: file.availableAt,
     createdAt: file.createdAt,
+    // B-W2b-177: the version in its series, and the row's version (what a file is is saved at it).
+    ...(file.versionNo !== undefined ? { versionNo: file.versionNo, seriesId: file.seriesId ?? null, supersededAt: file.supersededAt ?? null } : {}),
+    version: file.version,
   }
 }
 
@@ -423,6 +428,8 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
 
   // ---- tasks on the record (B-W2a-40) ------------------------------------------------------------------------------
   const prefix = companyPrefix(session.company?.code ?? '')
+  // B-W2b-177: the files in depth (their documents read with every files read; versions, what a file is, markup).
+  const depth = useFileDepth({ api, record: key, files: files.items, canUpload: can.upload, canRead: can.readFiles, prefix, reloadFiles: () => void loadFiles(), openPdf: (fileId) => void openPreview(fileId) })
   const addHeld = addTaskHeld(held, true)
   const loadAssignees = useCallback(async () => {
     setTaskDialog({ people: { status: 'loading' } })
@@ -609,6 +616,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     ...(seesTasks ? { tasks: panelTasks } : {}),
     followers: panelFollowers,
     ...(tab ? { tab } : {}),
+    ...(can.readFiles ? { depth: depth.model } : {}),
   }
 
   const actions: RecordPanelsActions = {
@@ -646,6 +654,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     onCreateTask: makeTask,
     onFollow: (wanted) => void follow(wanted),
     onAddFollower: (userId) => void addColleague(userId),
+    fileDepth: depth.actions,
   }
   // B-W2b-05 (PLT-171): the record's print view draws every panel at once, read-only.
   return printing ? <RecordPrintView model={model} actions={actions} /> : <RecordPanelsView model={model} actions={actions} />
