@@ -8,6 +8,7 @@ import { PARTNER_NO_PASSWORD } from '../office/password-reset'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endAllAssignments, liveAssignmentsOf } from '../roles/assignments'
 import { endSessions } from '../sessions/session-store'
+import { handBackInCommand } from '../../portal/tasks/people'
 import type { UserChangeBody } from './contract'
 import { adminFacts, userStatus } from './status'
 
@@ -108,9 +109,11 @@ export async function changeUser(auth: OfficeAuth, request: FastifyRequest, user
       input: body,
       record: { type: 'User', id: userId, expectedVersion: body.version, transition: { machine: userStatus, to, facts: adminFacts(userId, auth.clock.now()) } },
     },
-    async ({ tx, now, audit, record }) => {
+    async (tools) => {
+      const { tx, now, audit, record } = tools
       let sessionsEnded = 0
       let assignmentsEnded = 0
+      let tasksHandedBack = 0
       if (to === 'SUSPENDED' || to === 'DEACTIVATED') sessionsEnded = await endSessions(tx, { userId, now, reason: to })
       if (to === 'DEACTIVATED') {
         await tx.user.update({
@@ -130,12 +133,14 @@ export async function changeUser(auth: OfficeAuth, request: FastifyRequest, user
         await tx.invitation.updateMany({ where: { userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now } })
         await tx.passwordReset.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } })
         assignmentsEnded = await endAllAssignments(tx, userId, { now, endedById: context.actorId })
+        // B-W2b-F14: a partner person's open requests handed to them go back to everyone of the party.
+        tasksHandedBack = await handBackInCommand(tools, userId)
       }
       audit({
         recordType: 'User',
         recordId: userId,
         before: { status: record!.from },
-        after: { status: record!.to, sessionsEnded, ...(to === 'DEACTIVATED' ? { assignmentsEnded } : {}) },
+        after: { status: record!.to, sessionsEnded, ...(to === 'DEACTIVATED' ? { assignmentsEnded, tasksHandedBack } : {}) },
         ...(body.reason ? { reason: body.reason } : {}),
       })
       return { id: userId, status: to, version: record!.version, sessionsEnded }

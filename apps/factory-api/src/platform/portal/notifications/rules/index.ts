@@ -1,3 +1,4 @@
+import { ADDRESS_RULES } from './addresses'
 import { CHANGE_REQUEST_RULES } from './change-requests'
 import { RECORD_RULES } from './records'
 import { TASK_RULES } from './tasks'
@@ -14,4 +15,6 @@ export const PARTNER_RULES: readonly PartnerRule[] = Object.freeze([
   ...RECORD_RULES,
   // B-W2b-183: the office's answer to a change or cancel request from the portal.
   ...CHANGE_REQUEST_RULES,
+  // B-W2b-F15: our check of a delivery address the person added (approved, or refused with the reason).
+  ...ADDRESS_RULES,
 ])

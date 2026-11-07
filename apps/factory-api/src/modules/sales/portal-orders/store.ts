@@ -110,6 +110,8 @@ export const SHIPMENT_SELECT = {
   shippedAt: true,
   deliveredAt: true,
   returnedAt: true,
+  // B-W2b-F14: the carrier's expected delivery (partner-visible).
+  expectedDeliveryAt: true,
 } as const satisfies Prisma.ShipmentSelect
 export type PortalShipmentRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_SELECT }>
 
@@ -133,7 +135,7 @@ export const readShipmentLines = (db: Reader, shipmentIds: readonly string[]) =>
   shipmentIds.length === 0 ? Promise.resolve([]) : db.shipmentLine.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: SHIPMENT_LINE_SELECT, orderBy: [{ id: 'asc' }] })
 
 export const readParcels = (db: Reader, shipmentIds: readonly string[]) =>
-  shipmentIds.length === 0 ? Promise.resolve([]) : db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, seq: true, trackingNumber: true }, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
+  shipmentIds.length === 0 ? Promise.resolve([]) : db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true }, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
 
 export const TRACKING_SELECT = { id: true, shipmentId: true, parcelId: true, status: true, description: true, location: true, occurredAt: true, recordedAt: true } as const satisfies Prisma.TrackingEventSelect
 export type PortalTrackingRow = Prisma.TrackingEventGetPayload<{ select: typeof TRACKING_SELECT }>

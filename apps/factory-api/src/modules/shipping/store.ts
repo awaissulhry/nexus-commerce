@@ -2,6 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { packingProblems, type PackLine, type PackParcel, type ShipmentFacts, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import type { CommandTools, CommandTx } from '../../core/command'
 
@@ -30,6 +31,8 @@ export const SHIPMENT_HEADER = {
   shippedAt: true,
   deliveredAt: true,
   returnedAt: true,
+  // B-W2b-F14 (schema wave 23): the carrier's expected delivery (at the label's purchase, moved by its tracking).
+  expectedDeliveryAt: true,
   cancelledAt: true,
   cancelReason: true,
   internalNote: true,
@@ -73,6 +76,8 @@ const PARCEL_SELECT = {
   widthCm: true,
   heightCm: true,
   trackingNumber: true,
+  // B-W2b-F14: the carrier's tracking page (https, kept at the label's purchase).
+  trackingUrl: true,
   labelledAt: true,
   version: true,
 } as const satisfies Prisma.ParcelSelect
@@ -112,6 +117,7 @@ export const parcelView = (parcel: ParcelRow, lines: readonly LineRow[]) => ({
   widthCm: decimal(parcel.widthCm, 2),
   heightCm: decimal(parcel.heightCm, 2),
   trackingNumber: parcel.trackingNumber,
+  trackingUrl: trackingPageOf(parcel.trackingUrl),
   labelledAt: parcel.labelledAt ? toUtcIso(parcel.labelledAt) : null,
   garments: lines.filter((line) => line.parcelId === parcel.id).reduce((garments, line) => garments + line.quantity, 0),
 })
@@ -193,6 +199,7 @@ export function headerView(shipment: ShipmentHeader) {
     shippedAt: at(shipment.shippedAt),
     deliveredAt: at(shipment.deliveredAt),
     returnedAt: at(shipment.returnedAt),
+    expectedDeliveryAt: at(shipment.expectedDeliveryAt),
     cancelledAt: at(shipment.cancelledAt),
     createdAt: toUtcIso(shipment.createdAt),
     updatedAt: toUtcIso(shipment.updatedAt),

@@ -31,6 +31,7 @@ import { lockedStatus, readShipment, type ShipmentHeader } from '../store'
 import { carrierProblem, isCarrierRefusal, type CarrierRuntime } from './carrier'
 import { labelFilesOf, labelsView, latestStatuses, readLabelFacts, readLabelParcels, readTracking, shipmentAccountId, statusMap, type LabelsView } from './store'
 import { collectedProblems, voidAllPlan, voidAllProblems, voidOutcomeWords } from '@nexus/factory-domain/shipping/shipments/void'
+import { expectedDeliveryOf, shipmentEtaOf, trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 
 /**
  * Carrier labels (B-W1-48; LOG-025, LOG-032, LOG-059; A2 SCR-067 in the office, SCR-098 on the floor).
@@ -188,9 +189,11 @@ async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accou
       surplus.push(entry.label)
       continue
     }
+    // B-W2b-F14: the carrier's tracking page, only an https one (the database refuses anything else; never shown otherwise).
+    const trackingUrl = trackingPageOf(entry.label.trackingUrl)
     await tools.tx.parcel.update({
       where: { id: row.id },
-      data: { trackingNumber: entry.label.trackingNumber, carrierParcelId: entry.label.providerId, labelledAt: tools.now, version: { increment: 1 } },
+      data: { trackingNumber: entry.label.trackingNumber, carrierParcelId: entry.label.providerId, labelledAt: tools.now, trackingUrl, version: { increment: 1 } },
       select: { id: true },
     })
     const fileIds: string[] = []
@@ -202,16 +205,25 @@ async function recordBought(tools: CommandTools, shipment: ShipmentHeader, accou
       companyId: shipment.companyId,
       siteId: shipment.siteId,
       before: { trackingNumber: null },
-      after: { shipmentId: shipment.id, seq: entry.parcel.seq, trackingNumber: entry.label.trackingNumber, providerId: entry.label.providerId, carrierCode: entry.label.carrierCode, serviceCode: shipment.serviceCode, accountId, fileIds },
+      after: { shipmentId: shipment.id, seq: entry.parcel.seq, trackingNumber: entry.label.trackingNumber, providerId: entry.label.providerId, carrierCode: entry.label.carrierCode, serviceCode: shipment.serviceCode, accountId, fileIds, trackingUrl, expectedDeliveryAt: entry.label.expectedDeliveryAt ?? null },
     })
     parcels.push(row.id)
   }
   const carrierName = shipment.carrierName ?? bought.find((entry) => entry.label.carrierName)?.label.carrierName ?? null
-  const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { integrationAccountId: true } })
-  if (parcels.length > 0 && (current.integrationAccountId === null || (shipment.carrierName === null && carrierName !== null))) {
-    await tools.tx.shipment.update({ where: { id: shipment.id }, data: { integrationAccountId: current.integrationAccountId ?? accountId, ...(shipment.carrierName === null && carrierName !== null ? { carrierName } : {}) }, select: { id: true } })
+  const current = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipment.id }, select: { integrationAccountId: true, expectedDeliveryAt: true } })
+  // B-W2b-F14: the carrier's expected delivery: the latest of the labels just recorded and the one already kept (the goods
+  // have arrived when the last parcel has).
+  const recordedEtas = bought.filter((entry) => parcels.includes(entry.parcel.id)).map((entry) => expectedDeliveryOf(entry.label.expectedDeliveryAt))
+  const eta = recordedEtas.some((value) => value !== null) ? shipmentEtaOf([current.expectedDeliveryAt, ...recordedEtas]) : current.expectedDeliveryAt
+  const etaMoved = (eta?.getTime() ?? null) !== (current.expectedDeliveryAt?.getTime() ?? null)
+  if (parcels.length > 0 && (current.integrationAccountId === null || (shipment.carrierName === null && carrierName !== null) || etaMoved)) {
+    await tools.tx.shipment.update({
+      where: { id: shipment.id },
+      data: { integrationAccountId: current.integrationAccountId ?? accountId, ...(shipment.carrierName === null && carrierName !== null ? { carrierName } : {}), ...(etaMoved ? { expectedDeliveryAt: eta } : {}) },
+      select: { id: true },
+    })
   }
-  tools.audit({ action: 'shipping.buyLabels', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { labelled: parcels, surplus: surplus.length } })
+  tools.audit({ action: 'shipping.buyLabels', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { labelled: parcels, surplus: surplus.length, ...(etaMoved ? { expectedDeliveryAt: eta ? eta.toISOString() : null } : {}) } })
   tools.emit({ type: 'shipment.labels_bought', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, bought: parcels.length, failed: bought.length - parcels.length } })
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'parcels' } })
   return { parcels, surplus }
@@ -233,6 +245,16 @@ async function retireReferences(caller: CommandCaller, shipmentId: string, parce
 }
 
 // ---- void -------------------------------------------------------------------------------------------------------------
+
+/**
+ * B-W2b-F14: once no parcel of the shipment has a label (every one voided), the carrier's expected delivery is forgotten
+ * (the next labels bring their own). Inside the void's command (its record guard moves the shipment's version).
+ */
+async function forgetEtaWithoutLabels(tools: CommandTools, shipmentId: string): Promise<void> {
+  const labelled = await tools.tx.parcel.count({ where: { shipmentId, trackingNumber: { not: null } } })
+  if (labelled > 0) return
+  await tools.tx.shipment.updateMany({ where: { id: shipmentId, expectedDeliveryAt: { not: null } }, data: { expectedDeliveryAt: null } })
+}
 
 /**
  * shipping.labels.void: voids a parcel's label before the goods leave. The carrier first (a refusal changes nothing:
@@ -270,7 +292,8 @@ export async function voidLabel(carrier: CarrierRuntime, caller: CommandCaller, 
       const current = await lockedStatus(tools, shipment.id, ['DRAFT', 'PACKED'], 'a label is voided')
       const row = await tools.tx.parcel.findFirst({ where: { id: parcel.id, shipmentId: shipment.id }, select: { trackingNumber: true, carrierParcelId: true } })
       if (!row || row.carrierParcelId !== parcel.carrierParcelId || row.trackingNumber !== parcel.trackingNumber) throw new ConflictError(`The label of parcel ${parcel.seq} changed meanwhile: read the shipment again.`)
-      await tools.tx.parcel.update({ where: { id: parcel.id }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, version: { increment: 1 } }, select: { id: true } })
+      await tools.tx.parcel.update({ where: { id: parcel.id }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, trackingUrl: null, version: { increment: 1 } }, select: { id: true } })
+      await forgetEtaWithoutLabels(tools, current.id)
       tools.audit({
         action: 'shipping.voidLabel',
         recordType: 'Parcel',
@@ -342,7 +365,7 @@ export async function voidAllLabels(carrier: CarrierRuntime, caller: CommandCall
         const row = await tools.tx.parcel.findFirst({ where: { id: entry.parcelId, shipmentId: shipment.id }, select: { trackingNumber: true, carrierParcelId: true } })
         // Changed meanwhile (bought again, voided by another): the carrier's answer stands, the row is left as it is now.
         if (!row || row.carrierParcelId !== entry.providerId || row.trackingNumber !== entry.trackingNumber) continue
-        await tools.tx.parcel.update({ where: { id: entry.parcelId }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, version: { increment: 1 } }, select: { id: true } })
+        await tools.tx.parcel.update({ where: { id: entry.parcelId }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, trackingUrl: null, version: { increment: 1 } }, select: { id: true } })
         tools.audit({
           action: 'shipping.voidLabel',
           recordType: 'Parcel',
@@ -355,6 +378,7 @@ export async function voidAllLabels(carrier: CarrierRuntime, caller: CommandCall
         })
         tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: entry.parcelId, seq: entry.seq, queued: entry.carrier === 'QUEUED' } })
       }
+      await forgetEtaWithoutLabels(tools, current.id)
       tools.audit({ action: 'shipping.voidLabels', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { voided: cancelled.map((entry) => entry.seq), kept: outcomes.filter((outcome) => !outcome.ok).map((outcome) => outcome.seq) }, reason: body.reason })
       tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels' } })
       return { voided: cancelled.length }

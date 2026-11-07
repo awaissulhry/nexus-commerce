@@ -378,6 +378,11 @@ describe('the supplier profile: changes the buyer checks (SCM-097)', () => {
     expect((await call(anna, 'POST', '/portal/supplier-profile/changes', { company: { website: 'https://other.tannery-p2.example' } })).status).toBe(409)
     profile = await as(anna, 'GET', '/portal/supplier-profile')
     expect(profile.company).toMatchObject({ website: 'https://old.tannery-p2.example', waiting: true })
+    // B-W2b-F15: Home › Approvals says the website changed (it read "addresses: 0, contacts: 0").
+    const today = (await as(buyer, 'GET', '/home/today?limit=200&kind=SUPPLIER_CHANGE')).items.find((item: Json) => item.record.id === P2)
+    expect(today.sentence).toMatch(/sent a change of its website for our check\.$/)
+    expect(today.words.sentence).toMatchObject({ key: 'SUPPLIER_CHANGE.WAITING_WEBSITE' })
+    expect(today.words.sentence.params).not.toHaveProperty('addresses')
     // The office changed it meanwhile: the approval stops in words (the request stays OPEN); set back, it applies.
     const moved = (await one('SELECT version FROM "Party" WHERE id = $1', [P2])).version
     await as(buyer, 'PATCH', `/parties/${P2}`, { version: moved, website: 'https://meanwhile.tannery-p2.example' })

@@ -3,6 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { MAX_ANSWER, MAX_NOTE, REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOFF_STATUSES, MAX_CUTOFF_DAYS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { money } from '@nexus/factory-domain/money/marked'
 import { diffView, impactView } from '../orders/daily-contract'
 
 /**
@@ -33,6 +34,20 @@ const cell = output({
   asked: z.number().int(),
 })
 
+/**
+ * B-W2b-F14: a cancel's fee (SalesSettings.cancelFeePct): the percent and its words, and per line the fee of cancelling it
+ * with the total, in minor units of the order's currency — prices, dropped for a reader without the grain. Shown only: no
+ * money moves.
+ */
+const cancelFee = output({
+  /** Percent of each cancelled line's net value (decimal text); null: free. */
+  pct: z.string().nullable(),
+  words,
+  currency: z.string(),
+  lines: z.array(output({ lineId: id(), seq: z.number().int(), fee: money.price(z.number().int()) })),
+  totalFee: money.price(z.number().int()),
+})
+
 const requestFields = {
   id: id(),
   orderId: id(),
@@ -56,6 +71,8 @@ const requestFields = {
   answer: z.string().nullable(),
   answeredAt: instant().nullable(),
   withdrawnAt: instant().nullable(),
+  /** B-W2b-F14: a waiting cancel's fee as the settings say it now (null: a change, or answered or withdrawn). */
+  cancelFee: cancelFee.nullable(),
   version: z.number().int(),
 }
 
@@ -72,7 +89,7 @@ export const rulesContract = defineContract({
   response: {
     200: output({
       asOf: instant(),
-      order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.enum(SALES_ORDER_STATUSES), requestedDate: day.nullable(), promiseDate: day.nullable(), version: z.number().int() }),
+      order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.enum(SALES_ORDER_STATUSES), requestedDate: day.nullable(), promiseDate: day.nullable(), currency: z.string(), version: z.number().int() }),
       /** May a change be asked at all; may the whole order be asked to be cancelled. */
       change: verdict,
       cancel: verdict,
@@ -87,8 +104,15 @@ export const rulesContract = defineContract({
           sizes: z.array(output({ size: z.string(), quantity: z.number().int(), offered: z.boolean() })),
           change: verdict,
           cancel: verdict,
+          /** B-W2b-F14: the fee of cancelling this line now (a price; 0 when free). */
+          cancelFee: money.price(z.number().int()),
         }),
       ),
+      /**
+       * B-W2b-F14: "Ask to cancel"'s fee before the click: the percent and its words, and the whole order's fee (the lines
+       * not closed short); each line's own is on the line.
+       */
+      cancelFee: output({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: money.price(z.number().int()) }),
       /** The cancel reasons (the CANCEL reason list), and whether one asks for their words. */
       reasons: z.array(output({ code: z.string(), words, needsNote: z.boolean() })),
       /** Their delivery addresses in use (for "Ship-to"). */
@@ -199,7 +223,14 @@ export const acceptContract = defineContract({
     /** The amendment's (or the cancel's) reason, kept with the order; default: the request's own words. */
     reason: z.string().trim().min(1).max(MAX_REASON).optional(),
   }),
-  response: { 200: output({ request: officeRequest, orderCancelled: z.boolean() }) },
+  response: {
+    200: output({
+      request: officeRequest,
+      orderCancelled: z.boolean(),
+      /** B-W2b-F14: a cancel's fee as it stood when accepted (shown to the customer; no money moves); null: a change. */
+      cancelFee: cancelFee.nullable(),
+    }),
+  },
 })
 
 export const refuseContract = defineContract({
@@ -214,6 +245,8 @@ const cutoffs = output({
   cancelCutoffStatus: z.enum(CUTOFF_STATUSES).nullable(),
   cancelCutoffDays: z.number().int().nullable(),
   changeCutoffStatus: z.enum(CUTOFF_STATUSES).nullable(),
+  /** B-W2b-F14: the cancel fee, percent of the cancelled lines' net value (decimal text, 0–100); null: free. */
+  cancelFeePct: z.string().nullable(),
 })
 
 const settingsAnswer = output({
@@ -224,6 +257,8 @@ const settingsAnswer = output({
   inForce: cutoffs,
   /** The row asked for (the company's, or the tenant's), to save it; null: no sales settings saved there yet. */
   row: output({ id: id(), version: z.number().int(), cutoffs }).nullable(),
+  /** B-W2b-F14: the fee in force in words ("Free to cancel", "Fee 15% of the cancelled lines' value"). */
+  cancelFeeWords: words,
 })
 
 export const settingsContract = defineContract({ querystring: input({ companyId: id().optional() }), response: { 200: settingsAnswer } })
@@ -235,6 +270,8 @@ export const saveSettingsContract = defineContract({
     cancelCutoffStatus: z.enum(CUTOFF_STATUSES).nullable(),
     cancelCutoffDays: z.number().int().min(1).max(MAX_CUTOFF_DAYS).nullable(),
     changeCutoffStatus: z.enum(CUTOFF_STATUSES).nullable(),
+    /** B-W2b-F14: the cancel fee, percent 0–100 with at most 4 decimals ("15", "12.5"); null: free; left out: unchanged. */
+    cancelFeePct: z.string().trim().max(20).nullable().optional(),
   }),
   response: { 200: settingsAnswer },
 })

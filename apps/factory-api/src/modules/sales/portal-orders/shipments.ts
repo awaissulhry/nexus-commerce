@@ -1,9 +1,19 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { customerShipmentStatusOf, isOnTheWay, SHIPMENT_STATUS_WORDS, shipmentMilestonesOf, SHOWN_SHIPMENT_STATUSES, stillToShipOf, TRACKING_WORDS } from '@nexus/factory-domain/sales/portal-orders/shipments'
+import {
+  customerEtaOf,
+  customerShipmentStatusOf,
+  isOnTheWay,
+  SHIPMENT_STATUS_WORDS,
+  shipmentMilestonesOf,
+  SHOWN_SHIPMENT_STATUSES,
+  stillToShipOf,
+  trackingLinkOf,
+  TRACKING_WORDS,
+} from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { partnerOrder, portalReader } from './access'
 import { latestByShipment, progressOfLines } from './orders'
-import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalTrackingRow } from './store'
+import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -15,11 +25,19 @@ import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPaper
  *                                                 carries, the papers shared with the portal; and what is still to ship per
  *                                                 line and size with the day expected (backorders after a partial shipment)
  *   GET /portal/sales-orders/in-transit           every shipment of the party on the way, across its orders
+ * B-W2b-F14: each shipment's expected delivery as the carrier says it (while packed or on the way) and each parcel's "Track
+ * on the carrier's site" link (an https tracking page only).
  * Partner reads only (the party's scope); the style and colourway names are the tenant's (office scope, after the partner
  * read). The carrier's own words of an event pass as written; no office note, no freight, no person.
  */
 
 const LIVE = { events: ['partner_notification.created'] }
+
+/** The customer's ETA (B-W2b-F14): while packed or on the way. */
+const etaOf = (shipment: PortalShipmentRow): string | null => {
+  const eta = customerEtaOf(shipment.status, shipment.expectedDeliveryAt)
+  return eta ? toUtcIso(eta) : null
+}
 
 function eventView(event: PortalTrackingRow, parcelSeq: number | null) {
   return { at: toUtcIso(event.occurredAt), status: event.status, words: TRACKING_WORDS[event.status], description: event.description, location: event.location, parcelSeq }
@@ -70,6 +88,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       packedAt: shipment.packedAt ? toUtcIso(shipment.packedAt) : null,
       shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
       deliveredAt: shipment.deliveredAt ? toUtcIso(shipment.deliveredAt) : null,
+      expectedDeliveryAt: etaOf(shipment),
       ddt: read.ddts.get(shipment.id) ?? null,
       milestones: shipmentMilestonesOf({ status: shipment.status, packedAt: shipment.packedAt, shippedAt: shipment.shippedAt, deliveredAt: shipment.deliveredAt, events }).map((view) => ({
         key: view.key,
@@ -82,7 +101,14 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
         .map((parcel) => {
           // Its own events and those of the whole shipment (the carrier often reports the shipment), the newest one.
           const last = events.filter((event) => event.parcelId === parcel.id || event.parcelId === null).at(-1) ?? null
-          return { seq: parcel.seq, trackingNumber: parcel.trackingNumber, status: last?.status ?? null, words: last ? TRACKING_WORDS[last.status] : null, lastEvent: last ? eventView(last, parcel.seq) : null }
+          return {
+            seq: parcel.seq,
+            trackingNumber: parcel.trackingNumber,
+            trackingLink: trackingLinkOf(parcel.trackingUrl),
+            status: last?.status ?? null,
+            words: last ? TRACKING_WORDS[last.status] : null,
+            lastEvent: last ? eventView(last, parcel.seq) : null,
+          }
         }),
       events: [...events].reverse().map((event) => eventView(event, event.parcelId ? (parcelSeq.get(event.parcelId) ?? null) : null)),
       lines: read.contents
@@ -140,7 +166,12 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
         words: SHIPMENT_STATUS_WORDS[status],
         carrierName: shipment.carrierName,
         shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
+        expectedDeliveryAt: etaOf(shipment),
         trackingNumbers: read.parcels.filter((parcel) => parcel.shipmentId === shipment.id && parcel.trackingNumber !== null).map((parcel) => parcel.trackingNumber!),
+        trackingLinks: read.parcels.flatMap((parcel) => {
+          const link = parcel.shipmentId === shipment.id && parcel.trackingNumber !== null ? trackingLinkOf(parcel.trackingUrl) : null
+          return link ? [{ trackingNumber: parcel.trackingNumber!, ...link }] : []
+        }),
         lastEvent: last ? eventView(last, last.parcelId ? (parcelSeq.get(last.parcelId) ?? null) : null) : null,
       }
     })

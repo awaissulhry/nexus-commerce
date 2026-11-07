@@ -226,3 +226,41 @@ export function pollDue(parcel: { readonly labelledAt: Date | null; readonly lat
   const hours = Math.floor((now.getTime() - since.getTime()) / (60 * 60_000))
   return hours >= POLL_AFTER_HOURS && hours % POLL_AFTER_HOURS === 0
 }
+
+// ---- the carrier's ETA and tracking page (B-W2b-F14; schema wave 23, B-W2b-175's need) ---------------------------------
+
+/** The longest tracking page kept (the database's Parcel_tracking_url_check). */
+export const MAX_TRACKING_URL = 2000
+
+/**
+ * The carrier's tracking page as the factory keeps and shows it: an https address without spaces, up to 2000 characters
+ * (the database's Parcel_tracking_url_check); anything else (http, a relative path, words) is never kept nor shown: null.
+ */
+export function trackingPageOf(url: string | null | undefined): string | null {
+  if (typeof url !== 'string') return null
+  const value = url.trim()
+  return /^https:\/\/[^\s]+$/i.test(value) && value.length <= MAX_TRACKING_URL ? value : null
+}
+
+/**
+ * The carrier's expected delivery as an instant: an ISO instant as given; a day alone ("2026-11-10") at noon UTC (the same
+ * day in every European time zone). Anything else: null (the carrier said nothing usable).
+ */
+export function expectedDeliveryOf(value: string | null | undefined): Date | null {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  const at = day ? new Date(`${text}T12:00:00.000Z`) : /^\d{4}-\d{2}-\d{2}T/.test(text) ? new Date(text) : null
+  if (!at || Number.isNaN(at.getTime())) return null
+  if (day && at.toISOString().slice(0, 10) !== text) return null
+  return at
+}
+
+/**
+ * The shipment's ETA from its parcels' (each the carrier's latest word): the latest of them (the goods have arrived when
+ * the last parcel has); null when no parcel names one.
+ */
+export function shipmentEtaOf(etas: readonly (Date | null)[]): Date | null {
+  const known = etas.filter((eta): eta is Date => eta !== null)
+  return known.length === 0 ? null : new Date(Math.max(...known.map((eta) => eta.getTime())))
+}

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { latestByParcel, POLL_BATCH, pollDue, statusOfSendcloudCode, trackingMoveOf, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
+import { expectedDeliveryOf, latestByParcel, POLL_BATCH, pollDue, shipmentEtaOf, statusOfSendcloudCode, trackingMoveOf, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import { callerFor, command, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSettings } from '../../../core/command'
 import { defineCron, type CronJob } from '../../../core/cron'
 import type { Log } from '../../../core/queue'
@@ -136,12 +136,16 @@ export async function pollShipment(carrier: CarrierRuntime, caller: CommandCalle
   const latest = latestByParcel(shipment.trackingEvents)
   const incoming: IncomingTracking[] = []
   const failures: string[] = []
+  // B-W2b-F14: each polled parcel's expected delivery as the carrier says it now (its newest event that names one).
+  const etas: (Date | null)[] = []
   for (const parcel of shipment.parcels) {
     const last = latest.get(parcel.id)
     if (parcel.trackingNumber === null || (last && (last.status === 'DELIVERED' || last.status === 'RETURNED'))) continue
     if (parcel.carrierParcelId === null) continue
     try {
       const events = await carrier.tracking(caller, shipment.integrationAccountId, { providerId: parcel.carrierParcelId, trackingNumber: parcel.trackingNumber })
+      const newest = [...events].filter((event) => expectedDeliveryOf(event.expectedDeliveryAt) !== null).sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt)).at(-1)
+      etas.push(newest ? expectedDeliveryOf(newest.expectedDeliveryAt) : null)
       for (const event of events) {
         const status = statusOfSendcloudCode(event.code)
         const occurredAt = new Date(event.occurredAt)
@@ -154,9 +158,9 @@ export async function pollShipment(carrier: CarrierRuntime, caller: CommandCalle
     }
   }
   const { result } = await command(caller, { name: 'shipping.recordTracking', input: { shipmentId, source: 'POLL', events: incoming.length }, ...(causationId ? { causationId } : {}) }, async (tools) => {
-    const outcome = await recordTracking(tools, shipmentId, incoming, 'POLL')
+    const outcome = await recordTracking(tools, shipmentId, incoming, 'POLL', { expectedDeliveryAt: shipmentEtaOf(etas) })
     const row = await tools.tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, select: { companyId: true, siteId: true } })
-    tools.audit({ action: 'shipping.pollTracking', recordType: 'Shipment', recordId: shipmentId, companyId: row.companyId, siteId: row.siteId, after: { asked: incoming.length, recorded: outcome.recorded, move: outcome.move.kind === 'move' ? outcome.move.to : null, failures } })
+    tools.audit({ action: 'shipping.pollTracking', recordType: 'Shipment', recordId: shipmentId, companyId: row.companyId, siteId: row.siteId, after: { asked: incoming.length, recorded: outcome.recorded, move: outcome.move.kind === 'move' ? outcome.move.to : null, failures, ...(outcome.etaMovedTo ? { expectedDeliveryAt: outcome.etaMovedTo } : {}) } })
     return { recorded: outcome.recorded, moved: outcome.move.kind === 'move' ? outcome.move.to : null }
   })
   return { ...result, failures }
