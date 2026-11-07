@@ -3,6 +3,8 @@ import type { EventCatalogue } from '../../events/catalogue'
 import { isMoneyField } from '../../events/define'
 import type { LiveMessage, LiveView } from '../../events/envelope'
 import { PORTAL_HOME_VIEW } from '../tasks/permissions'
+// B-W2b-182: the supplier's ship notices.
+import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -34,6 +36,10 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'partner_task.reopened': tasks([]),
   'partner_task.due_moved': tasks([]),
   'partner_notification.created': { permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['partyId', 'count'] },
+  // B-W2b-182: a supplier's ship notices (sent, changed, cancelled, received by our warehouse, reopened): its list updates.
+  ...Object.fromEntries(
+    ['sent', 'changed', 'cancelled', 'received', 'reopened'].map((event) => [`ship_notice.${event}`, { permission: PORTAL_SHIP_NOTICES_VIEW, party: 'partyId', fields: ['shipNoticeId', 'number', 'purchaseOrderId', 'status', 'partyId'] }]),
+  ),
 })
 
 /**

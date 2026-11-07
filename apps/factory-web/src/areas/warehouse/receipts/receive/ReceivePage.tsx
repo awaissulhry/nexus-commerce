@@ -10,6 +10,9 @@ import { buyingCan, phrase, readProblem, todayIn, writeProblem, type Loaded, typ
 import { expectedLines, recordReceipt, type ExpectedLine, type Recorded } from '../api'
 import { receiptBody, receiveDraft, type ReceiveDraft } from '../model'
 import { ReceiveView } from './view/ReceiveView'
+// B-W2b-182 (SCM-106): the form filled from a supplier's ship notice (`?notice=`).
+import { readOfficeNotice } from '../inbound/api'
+import { draftFromNotice } from '../inbound/model'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -38,6 +41,7 @@ function ReceiveContainer() {
   const can = useMemo(() => buyingCan(session.permissions), [session.permissions])
   const orderId = params?.get('order') ?? null
   const only = useMemo(() => (params?.get('lines') ?? '').split(',').filter(Boolean), [params])
+  const noticeId = params?.get('notice') ?? null
 
   const [orders, setOrders] = useState<Loaded<ExpectedLine[]>>({ status: 'loading' })
   const [draft, setDraft] = useState<ReceiveDraft | null>(null)
@@ -55,13 +59,17 @@ function ReceiveContainer() {
       setOrders({ status: 'ready', value: lines })
       if (orderId) {
         const own = lines.filter((line) => line.purchaseOrderId === orderId)
-        setDraft(own.length > 0 ? receiveDraft(orderId, own, only) : null)
+        // B-W2b-182: filled from the ship notice when it still takes goods (else the order's open lines, and why).
+        const notice = noticeId && own.length > 0 ? await readOfficeNotice(api, noticeId).catch(() => null) : null
+        if (noticeId && own.length > 0 && notice?.prefill?.purchaseOrderId === orderId && notice.canReceive) setDraft(draftFromNotice(orderId, own, notice.prefill))
+        else setDraft(own.length > 0 ? receiveDraft(orderId, own, only) : null)
         if (own.length === 0) setProblem(phrase('rc.receive.nothingOpen'))
+        else if (noticeId && !(notice?.prefill?.purchaseOrderId === orderId && notice.canReceive)) setProblem(phrase('rc.receive.noticeHeld'))
       } else setDraft(null)
     } catch (error) {
       setOrders({ status: 'error', problem: readProblem(error) })
     }
-  }, [api, can.receive, orderId, only])
+  }, [api, can.receive, orderId, only, noticeId])
 
   useEffect(() => {
     setResult(null)

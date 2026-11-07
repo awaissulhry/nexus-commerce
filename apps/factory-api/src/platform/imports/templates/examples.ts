@@ -43,6 +43,11 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { employeeCode: '0142', firstName: 'Esempio', lastName: 'Persona Uno', kind: 'EMPLOYEE', site: 'A1', homeLine: 'L1', department: 'Sewing', jobRole: 'Machinist', contract: 'FULL_TIME', weeklyHours: '40', startDate: '2026-03-02', language: 'it' },
     { employeeCode: 'INT-07', firstName: 'Esempio', lastName: 'Persona Due', kind: 'AGENCY', agency: 'AGE-001', site: 'A1', contract: 'PART_TIME', weeklyHours: '20', startDate: '2026-11-02', endDate: '2027-01-29', language: 'ro' },
   ],
+  // B-W2b-182: a tannery's packing list on a sent ship notice (made-up numbers).
+  'purchasing.packingList': [
+    { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },
+    { notice: 'ASN-2026-0001', hideNumber: '2231-002', area: '19.85', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.25', dyeBatch: '2231' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

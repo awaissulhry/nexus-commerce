@@ -103,6 +103,8 @@ import { events as safetyRecords } from '../safety-records/events'
 import { events as branding } from '../branding/events'
 // B-W2b-162: partner organisations and their people (portal settings, invitations, changes, access ending soon).
 import { events as partners } from '../partners/events'
+// B-W2b-182: ship notices (sent, changed, cancelled, received, reopened).
+import { events as shipNotices } from '../ship-notices/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -272,7 +274,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-162
   ...partners,
   // B-W2b-167
-  ...portal] as const satisfies readonly EventDefinition[]
+  ...portal,
+  // B-W2b-182
+  ...shipNotices] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

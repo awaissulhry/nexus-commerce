@@ -1366,6 +1366,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   Object.fromEntries(SALES_ORDER_READER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_VIEW]])),
   // B-W2b-174: the supplier's Orders role sees our purchase orders (never a price, C2); answering also needs portal.approve.
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
+  // B-W2b-182: the supplier's Orders role sees and announces its deliveries (never a price, C2); announcing takes portal.upload.
+  { 'supplier-orders': ['portal.shipNotices.view' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

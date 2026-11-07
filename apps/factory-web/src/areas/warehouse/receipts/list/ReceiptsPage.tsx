@@ -13,6 +13,9 @@ import { dailyCan, hideListHeld, NAMESPACE, readSay } from '../daily-model'
 import { countReceipts, expectedLines, listReceipts, type ReceiptCounts } from '../api'
 import { receiptQuery, receiptViewOf, type ReceiptsListModel, type ReceiptView } from '../model'
 import { ReceiptsListView } from './view/ReceiptsListView'
+// B-W2b-182 (SCM-110): the inbound board and its switch.
+import { InboundBoard, useInboundOn } from '../inbound/InboundBoard'
+import { InboundMenu } from '../inbound/view/InboundBoardView'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -190,6 +193,8 @@ function ReceiptsContainer() {
     if (!wizardOpen) loadSummary()
   }, [wizardOpen, loadSummary])
 
+  const inbound = useInboundOn()
+
   const model: ReceiptsListModel = {
     prefix,
     can,
@@ -209,6 +214,7 @@ function ReceiptsContainer() {
   return (
     <ReceiptsListView
       model={model}
+      inbound={{ menu: <InboundMenu on={inbound.on !== false} onToggle={inbound.toggle} />, section: can.stockView && inbound.on === true ? <InboundBoard on prefix={prefix} /> : null }}
       actions={{
         onView: (next) => router.replace(address({ view: next })),
         onSearch: (next) => router.replace(address({ q: next })),

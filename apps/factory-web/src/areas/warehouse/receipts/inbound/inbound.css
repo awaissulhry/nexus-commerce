@@ -1,0 +1,71 @@
+/*
+ * The inbound board (B-W2b-182; design warehouse.receipts sec:rc-inbound) — LAYOUT only, semantic tokens (no colours of its
+ * own). The board is the design system's BoardView; no page max-width: the section fills the shell's main area and the
+ * day columns share its width (the board becomes a list on a phone by itself).
+ */
+
+.fw-ib {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ib-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-ib-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ib-title h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ib-sub,
+.fw-ib-status,
+.fw-ib-none {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ib-none {
+  margin: 0;
+}
+
+.fw-ib-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ib-site {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ib-site-name {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ib-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}

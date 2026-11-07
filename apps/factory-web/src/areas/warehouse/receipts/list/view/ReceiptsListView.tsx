@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Download, MoreHorizontal, PackageCheck, Search, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
@@ -29,15 +29,21 @@ export type { ReceiptsListActions, ReceiptsListModel } from '../../model'
  * supplier, PO, the supplier's DDT, lots released of all, hides and quantities, value with the cost grain). `/`
  * searches a receipt or DDT number; `c` receives goods.
  */
-export function ReceiptsListView({ model, actions }: { model: ReceiptsListModel; actions?: ReceiptsListActions }) {
+export function ReceiptsListView({ model, actions, inbound }: { model: ReceiptsListModel; actions?: ReceiptsListActions; inbound?: InboundSlots }) {
   return (
     <WithMessages namespaces={['buying', 'lists', DAILY]}>
-      <ReceiptsList model={model} actions={actions} />
+      <ReceiptsList model={model} actions={actions} inbound={inbound} />
     </WithMessages>
   )
 }
 
-function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: ReceiptsListActions }) {
+/** B-W2b-182 (SCM-110): the inbound board (its own section, ./inbound) and its switch in the page's ⋯ menu. */
+export interface InboundSlots {
+  menu?: ReactNode
+  section?: ReactNode
+}
+
+function ReceiptsList({ model, actions, inbound }: { model: ReceiptsListModel; actions?: ReceiptsListActions; inbound?: InboundSlots }) {
   const t = useT('buying')
   const td = useT(DAILY)
   // B-W2a-63: the W2a view's words are this step's catalogue's.
@@ -302,6 +308,7 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
           <Button size="sm" variant="primary" heldReason={model.can.receive ? null : t('held.noReceive')} onClick={() => actions?.onReceive?.(null)} aria-keyshortcuts="c">
             <PackageCheck size={14} aria-hidden /> {t('rc.list.receive')}
           </Button>
+          {inbound?.menu}
         </span>
       </div>
       {model.hideList?.summary && <HideListTotals model={model.hideList} actions={actions?.hideList} prefix={model.prefix} />}
@@ -329,6 +336,8 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
           }
         })}
       />
+
+      {inbound?.section}
 
       {expectedView ? (
         <ListFrame<ExpectedLine>
