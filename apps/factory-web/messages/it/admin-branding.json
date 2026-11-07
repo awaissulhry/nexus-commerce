@@ -1,0 +1,100 @@
+{
+  "brand": {
+    "intro": "Come ogni società si presenta a clienti e fornitori: il logo sul portale, sulle pagine dei link e sui documenti, il suo colore e il nome con cui partono le sue e-mail.",
+    "title": "Marchio",
+    "description": "Logo, colori e nome mittente delle e-mail per ogni società",
+    "newTab": "(si apre in una nuova scheda)",
+    "readOnly": "Puoi vedere il marchio di questa società. Per cambiarlo serve il permesso di cambiare il marchio di una società (lo ha un amministratore).",
+    "keys": {
+      "save": "Salva il marchio"
+    },
+    "empty": {
+      "title": "Nessun marchio per ora",
+      "body": "Clienti e fornitori vedono {company} scritto in testo, con i colori standard.",
+      "action": "Inizia dal logo"
+    },
+    "logo": {
+      "logo": {
+        "label": "Logo",
+        "hint": "Sul portale, sulle pagine dei link e sopra il nome della società nei documenti. PNG o JPEG, fino a 1 MB; un logo largo su sfondo chiaro rende meglio."
+      },
+      "logoDark": {
+        "label": "Logo per le pagine scure",
+        "hint": "Una versione chiara per le pagine in modalità scura. Vuoto: si usa il logo qui sopra anche sulle pagine scure."
+      },
+      "alt": "Logo: {name}",
+      "none": "Nessun logo: il nome della società in testo",
+      "noneDark": "Nessuno: si usa il logo qui sopra",
+      "add": "Aggiungi un logo",
+      "replace": "Sostituisci il logo",
+      "remove": "Rimuovi",
+      "hint": "PNG o JPEG, fino a 1 MB",
+      "uploading": "Caricamento dell'immagine…",
+      "problem": {
+        "type": "Questo file non è un'immagine PNG o JPEG. Salva il logo come PNG o JPEG e sceglilo di nuovo.",
+        "size": "Questa immagine supera 1 MB. Rimpiccioliscila e sceglila di nuovo.",
+        "notPicture": "Il file dice di essere un'immagine, ma il contenuto non è un PNG o un JPEG. Esporta di nuovo il logo e sceglilo.",
+        "upload": "Non è stato possibile caricare l'immagine. Controlla la connessione e sceglila di nuovo."
+      }
+    },
+    "field": {
+      "accent": {
+        "label": "Colore di accento",
+        "hint": "Il colore della società come #rrggbb. Si usa solo dove si legge bene: dove non si legge restano i colori standard.",
+        "invalid": "Scrivi un colore come #rrggbb, per esempio #1f5fa8."
+      },
+      "sender": {
+        "label": "Nome mittente delle e-mail",
+        "hint": "Il nome con cui partono le e-mail a clienti e fornitori. Vuoto: {company}.",
+        "tooLong": "Al massimo {max} caratteri.",
+        "unsafe": "Niente parentesi angolari, virgolette o barre rovesciate: il nome va nella riga Da dell'e-mail."
+      },
+      "label": {
+        "label": "Nome del portale",
+        "hint": "Come si chiama il portale, mostrato prima che un partner acceda. Vuoto: {company}.",
+        "tooLong": "Al massimo {max} caratteri."
+      },
+      "oneLine": "Tienilo su una riga, senza caratteri di controllo speciali."
+    },
+    "theme": {
+      "light": "Pagine chiare",
+      "dark": "Pagine scure"
+    },
+    "use": {
+      "PRIMARY": "Pulsanti, link e segni in questo colore ({ratio} rispetto alla pagina).",
+      "ACCENT": "Solo linee e segni in questo colore; pulsanti e link restano nel colore standard (arriva a {ratio}, a loro serve 7:1).",
+      "NONE": "Non usato: arriva solo a {ratio} rispetto alla pagina. Restano i colori standard.",
+      "NOT_GIVEN": "Nessun colore: i colori standard."
+    },
+    "held": {
+      "noRight": "Per cambiare il marchio serve il permesso di cambiare il marchio di una società.",
+      "uploading": "Aspetta che l'immagine sia caricata.",
+      "problems": "Correggi prima i campi segnati in rosso.",
+      "lightFirst": "Aggiungi prima il logo per le pagine chiare."
+    },
+    "preview": {
+      "label": "Cosa vedranno clienti e fornitori",
+      "document": "Anteprima di un documento",
+      "heldLegal": "I dati legali della società non sono ancora completi: un documento non si può stampare.",
+      "portal": "Portale e pagine dei link",
+      "portalTitle": "Accedi a {portal}",
+      "portalButton": "Inviami un link di accesso",
+      "portalLink": "Informativa privacy",
+      "mail": "E-mail",
+      "mailFrom": "Da",
+      "mailFromValue": "Il tuo nome tramite {sender}",
+      "mailSignature": "Sotto il messaggio",
+      "mailSignatureValue": "Il tuo nome · {sender}",
+      "documents": "Documenti",
+      "documentsLogo": "Preventivi, ordini di acquisto, DDT, liste di imballo, copie di cortesia delle fatture e gli altri documenti stampati da Nexus riportano il logo sopra il nome della società.",
+      "documentsName": "I documenti stampano {company} senza logo.",
+      "documentsSaved": "Le anteprime dei documenti mostrano il marchio salvato."
+    },
+    "problem": {
+      "save": "Il marchio non è stato salvato"
+    },
+    "done": {
+      "saved": "Marchio salvato. Da ora lo usano il portale, le pagine dei link, le e-mail e i nuovi documenti."
+    }
+  }
+}

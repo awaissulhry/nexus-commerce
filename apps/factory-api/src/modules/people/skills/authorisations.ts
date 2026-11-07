@@ -7,6 +7,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { assertMay, assertMayWrite, assertVersion, dateOf, dayOf, dayOrNull, officeOf, problemsError, refuse } from '../employees/access'
 import { assertPersonDecides } from '../privacy/decide'
 import { authorisationViews, lockPerson, readAuthorisation, type AuthorisationRow } from './store'
+import { authorisationWords, trainingOfAuthorisation } from './training'
 
 /**
  * Machine authorisations (B-W2b-39; MES-246 "dangerous machines accept sign-in only from trained, authorised people";
@@ -23,9 +24,10 @@ import { authorisationViews, lockPerson, readAuthorisation, type AuthorisationRo
  *   POST /people/skills/authorisations/:authorisationId/revoke     revoke it with the reason (final; a new one is a new
  *                                                                   record)
  *
- * The first authorisation of a class at a site keeps the class under authorisation there (check.ts keptClassesAt): from
- * then on the qualification check holds anyone of the site without one on that class's machines. Required training and
- * fitness (yes / no only) come with W2b-2.
+ * Whether a class asks an authorisation is MachineClass.authorisationRequired (B-W2b-139, ./training.ts): the qualification
+ * check holds anyone without one on its machines. The courses the class asks are listed in the answer (B-W2b-139): one not
+ * held when due holds the authorisation (it is still given, "held until … is valid"); the modal reads them first with GET
+ * /people/skills/authorisations/prerequisites. Fitness (yes / no only) comes with the health pages (B-W2b-135).
  */
 
 const MANAGE_WORDS = 'Machine authorisations are given by a role that authorises people on machines (people.authorisations.manage).'
@@ -62,7 +64,7 @@ export async function authorise(caller: CommandCaller, body: AuthoriseBody, idem
     const person = await lockPerson(tx, body.employeeId)
     refuseSelf(person, actorId)
     if (person.status !== 'ACTIVE') refuse('EMPLOYEE_LEFT', 'This person has left: they are authorised on no machine.', 'employeeId')
-    const machineClass = isUuid(body.machineClassId) ? await tx.machineClass.findUnique({ where: { id: body.machineClassId }, select: { id: true, code: true, labelEn: true, active: true } }) : null
+    const machineClass = isUuid(body.machineClassId) ? await tx.machineClass.findUnique({ where: { id: body.machineClassId }, select: { id: true, code: true, labelEn: true, active: true, authorisationRequired: true } }) : null
     if (!machineClass) throw new NotFoundError('Machine class not found.')
     if (!machineClass.active) refuse('CLASS_INACTIVE', `The class ${machineClass.labelEn} is archived.`, 'machineClassId')
     const today = businessDate(now)
@@ -91,7 +93,9 @@ export async function authorise(caller: CommandCaller, body: AuthoriseBody, idem
     tools.audit({ action: 'people.authoriseMachine', recordType: 'MachineAuthorisation', recordId: id, companyId: person.companyId, siteId: person.siteId, after: { ...audited(row), employeeId: person.id } })
     emitAuthorisation(tools, row, 'AUTHORISED')
     const [view] = await authorisationViews(tx, [row], today)
-    return { authorisation: view!, words: authorisedOn === today ? `Can work on ${machineClass.labelEn} machines from today.` : `Can work on ${machineClass.labelEn} machines from ${authorisedOn}.` }
+    // B-W2b-139: the courses the class asks; one not held when due holds the authorisation from its first day.
+    const { training, holding } = await trainingOfAuthorisation(tx, person.id, machineClass, authorisedOn, today)
+    return { authorisation: view!, words: authorisationWords(machineClass.labelEn, authorisedOn, today, machineClass.authorisationRequired, holding), training, held: machineClass.authorisationRequired && holding.length > 0 }
   })
   return { ...result, replayed }
 }
