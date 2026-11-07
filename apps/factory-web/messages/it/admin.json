@@ -1983,6 +1983,10 @@
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "portal_payments_view": "Vedere cosa deve pagare la propria organizzazione: fatture e acconti aperti, scadenze ed estratto conto",
-    "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA"
+    "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA",
+    "portal_customerDocuments_view": "Vedere i documenti della propria organizzazione: documenti di consegna, conferme d'ordine e preventivi (prezzi solo per i ruoli che li vedono), altri file condivisi; aprirli e scaricarli, ogni scaricamento registrato",
+    "portal_customerDocuments_conformity": "Vedere i documenti di conformità: dichiarazioni di conformità, note informative, certificati di conformità, rapporti di ispezione e di prova; per ogni modello ricevuto, la dichiarazione e il certificato validi alla data di spedizione",
+    "portal_customerDocuments_finance": "Vedere fatture e note di credito (PDF e fattura elettronica XML) e gli estratti conto inviati; solo per i ruoli che vedono i prezzi",
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }
