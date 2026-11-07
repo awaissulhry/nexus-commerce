@@ -58,7 +58,7 @@ export const ppeCan = (permissions: readonly string[]): PpeCan => ({
  * the floor tablet" is held with its reason in the issue dialog (a person sent there would find nothing). B-W2b-145 sets it
  * true when its floor screen ships.
  */
-export const TABLET_RECEIPT_READY = false
+export const TABLET_RECEIPT_READY = true
 
 // ---- the address ------------------------------------------------------------------------------------------------------------
 

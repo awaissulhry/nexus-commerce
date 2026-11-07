@@ -96,7 +96,7 @@ describe('ppe: the address, the tiles, who may do what', () => {
     expect(recordAddress({ type: 'PpeIssue', id: 'r-1' }, OFFICE_PAGES)).toBe('/plant/ppe/receipt?receipt=r-1')
     expect(recordAddress({ type: 'PpeItem', id: 'i-1' }, OFFICE_PAGES)).toBe('/plant/ppe?view=catalogue&item=i-1')
     // The floor's Receive PPE screen is B-W2b-145's: until it ships, "at the tablet" is held with its reason.
-    expect(TABLET_RECEIPT_READY).toBe(false)
+    expect(TABLET_RECEIPT_READY).toBe(true)
   })
 })
 

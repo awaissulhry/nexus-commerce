@@ -284,7 +284,7 @@
     "signedAtHint": "Quando la persona ha firmato il foglio. Lascia vuoto: adesso.",
     "scanHint": "Il foglio firmato: un PDF o una foto (JPG, PNG), fino a 20 MB. Si può aggiungere dopo da Consegne.",
     "scanReady": "Caricata con la ricevuta",
-    "tabletSteps": "Chiedi alla persona di andare a un tablet di {site}: Formazione e DPI › Ricevi DPI. Scansiona il badge, controlla i DPI e firma con il proprio PIN.",
+    "tabletSteps": "Chiedi alla persona di andare a un tablet di {site}: Firma formazione e DPI › Ricevi DPI. Scansiona il badge, controlla i DPI e firma con il proprio PIN.",
     "theirSite": "la sua sede",
     "tabletNothing": "Qui non si registra nulla: la ricevuta nasce sul tablet quando la persona firma. Il tablet propone i DPI del kit che le mancano.",
     "doneTablet": "Fatto",
@@ -375,7 +375,7 @@
     "refusedRow": "{label}: {why}"
   },
   "notice": {
-    "tablet": "Chiedi a {name} di firmare su un tablet di {site} (Formazione e DPI › Ricevi DPI).",
+    "tablet": "Chiedi a {name} di firmare su un tablet di {site} (Firma formazione e DPI › Ricevi DPI).",
     "issued_one": "Ricevuta di {name} registrata con la scansione firmata: {count} DPI.",
     "issued_other": "Ricevuta di {name} registrata con la scansione firmata: {count} DPI.",
     "issuedNoScan_one": "Ricevuta di {name} registrata: {count} DPI. Risulta non firmata finché non si aggiunge la scansione (Consegne).",
