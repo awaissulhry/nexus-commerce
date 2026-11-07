@@ -115,6 +115,10 @@ import { events as salesChangeRequests } from '../sales-change-requests/events'
 import { events as shipNotices } from '../ship-notices/events'
 // B-W2b-189: a supplier's documents and profile in the portal (uploads checked, profile changes decided).
 import { events as supplierPortal } from '../supplier-portal/events'
+// B-W2b-192: returns and complaints from outside (a return request sent, a claim link made, an answer published, an 8D shared).
+import { events as portalReturns } from '../portal-returns/events'
+// B-W2b-184: approval requests to partners (asked, answered, withdrawn, expired).
+import { events as approvalsOut } from '../approvals-out/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -296,7 +300,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-182
   ...shipNotices,
   // B-W2b-189
-  ...supplierPortal] as const satisfies readonly EventDefinition[]
+  ...supplierPortal,
+  // B-W2b-192
+  ...portalReturns,
+  // B-W2b-184
+  ...approvalsOut] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -252,7 +252,7 @@ export async function answerCheck(caller: CommandCaller, complaintId: string) {
   })
 }
 
-interface PreparedLetter {
+export interface PreparedLetter {
   readonly fingerprint: string
   readonly language: DocumentLanguage
   readonly current: { readonly id: string; readonly version: number; readonly fileId: string } | null
@@ -260,8 +260,11 @@ interface PreparedLetter {
   readonly file: PreparedGeneratedFile | null
 }
 
-/** Prepares the letter OUTSIDE any transaction (the store put): shared with the customer's party, so the mail carries it. */
-async function prepareLetter(files: FilesRuntime, caller: CommandCaller, context: OfficeContext, row: ComplaintRow): Promise<PreparedLetter> {
+/**
+ * Prepares the letter OUTSIDE any transaction (the store put): shared with the customer's party, so the mail carries it.
+ * B-W2b-192 (CO5:02): the portal's publish (modules/quality/complaints/portal) keeps the same letter.
+ */
+export async function prepareLetter(files: FilesRuntime, caller: CommandCaller, context: OfficeContext, row: ComplaintRow): Promise<PreparedLetter> {
   const company = await companyLegalOf(caller, row.companyId)
   const problems = legalProblems(company)
   if (problems.length > 0) throw refusal(problems)
@@ -351,7 +354,7 @@ export async function sendAnswer(files: FilesRuntime, caller: CommandCaller, com
 }
 
 /** Keeps the prepared letter inside the send's command (the complaint's row is held): the next version and its file's row. */
-async function keepLetterInCommand(tools: CommandTools, row: ComplaintRow, prepared: PreparedLetter): Promise<{ id: string; version: number; fileId: string }> {
+export async function keepLetterInCommand(tools: CommandTools, row: ComplaintRow, prepared: PreparedLetter): Promise<{ id: string; version: number; fileId: string }> {
   const { tx, now } = tools
   if (prepared.current) return prepared.current
   const last = await tx.generatedDocument.findFirst({ where: { recordType: COMPLAINT_RECORD, recordId: row.id, kind: 'COMPLAINT_ANSWER' }, select: { id: true, version: true, fingerprint: true, language: true, fileId: true }, orderBy: { version: 'desc' } })

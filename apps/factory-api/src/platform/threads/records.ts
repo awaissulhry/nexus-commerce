@@ -220,6 +220,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const capa = await client.capa.findUnique({ where: { id }, select: { companyId: true, customerId: true } })
     return capa ? { companyId: capa.companyId, siteId: null, partyId: capa.customerId } : null
   },
+  // B-W2b-184 (platform/approvals-out): an approval request's own conversation (an outside signer's answer, the questions
+  // about a request whose record has no thread of its partner): its company and the partner asked.
+  ApprovalRequest: async (client, id) => {
+    const request = await client.approvalRequest.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return request ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

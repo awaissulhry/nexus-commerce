@@ -29,18 +29,23 @@ export interface HoldFact {
   /** The reason in words ("Customer request"), else its code. */
   readonly reason: string
   readonly placedAt: string
+  /** B-W2b-184: who lifts a hold that is not quality's (a design proof: the customer's approval), in words. Default quality. */
+  readonly liftedBy?: string
 }
 
 export function holdsCheck(number: string, holds: readonly HoldFact[]): ReleaseCheck {
   if (holds.length === 0) return { code: 'HOLDS', state: 'OK', message: `Work order ${number} is not on hold.`, problems: [] }
   const problems: Issue[] = holds.map((hold) => ({
     path: hold.holdId ? `holds/${hold.holdId}` : 'checks/HOLDS',
-    message: `On hold since ${hold.placedAt.slice(0, 10)}: ${hold.reason}. Quality releases the hold first.`,
+    message: `On hold since ${hold.placedAt.slice(0, 10)}: ${hold.reason}. ${hold.liftedBy ?? 'Quality releases the hold first.'}`,
   }))
+  const quality = holds.every((hold) => hold.liftedBy === undefined)
   return {
     code: 'HOLDS',
     state: 'BLOCKED',
-    message: `Work order ${number} is on hold (${holds.map((hold) => hold.reason).join('; ')}): it is released only after quality releases ${holds.length === 1 ? 'the hold' : `its ${holds.length} holds`}.`,
+    message: quality
+      ? `Work order ${number} is on hold (${holds.map((hold) => hold.reason).join('; ')}): it is released only after quality releases ${holds.length === 1 ? 'the hold' : `its ${holds.length} holds`}.`
+      : `Work order ${number} is on hold (${holds.map((hold) => hold.reason).join('; ')}): it is released only after ${holds.length === 1 ? 'the hold is' : `its ${holds.length} holds are`} lifted.`,
     problems,
   }
 }

@@ -20,6 +20,18 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   put the actor back into `SCOPE_DEFINITIONS` and the cache back to one client per person) and when one more client
   costs more than 130 MB of heap.
 - `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database built from the migrations.
+- The test migration lock (B-W2b-F11, `src/testing/migration-lock.ts`): builds of test databases on one server take
+  turns under `MIGRATION_LOCK`, now a transaction-level advisory lock on a connection of its own that is closed when the
+  build ends. A killed process frees it at once; one that stops acting (frozen, stalled, a lost socket) stops its
+  `SELECT 1` heartbeat, and the server ends its session after 60 s idle (`idle_in_transaction_session_timeout`); a
+  build that holds it over 5 min gives it back and fails. A waiter waits 5 s at a time and reads the holder from
+  `pg_locks` and `pg_stat_activity`; a holder idle for 3 min, or 15 min of waiting, ends the wait with a
+  `MigrationLockError` that names it (pid, application_name, state, idle time, last query). The kit never ends anyone
+  else's session. Every kit connection is named `factory-test <lock|root|admin> <client pid> <database>`, so a holder can
+  be traced to its process (Docker hides the client port). `check-migrations-replay` still takes the old session-level
+  lock on the same key; the two exclude each other. A Mac that sleeps freezes every holder and the server alike, and on
+  waking the server counts the sleep as idle time (11-07's 600 s "stuck" holder matched a 596 s sleep): a build caught
+  by a sleep may lose the lock and fail with a clear message; run it again.
 - `@nexus/factory-db/test-database`: the test-database guard.
 - The walls (`src/roles.ts`, plan A1 §2.2): NOLOGIN roles `factory_runtime`, `factory_floor_runtime`,
   `factory_partner_runtime`, `factory_platform`; the login `factory_app` enters each WITH INHERIT FALSE, SET TRUE, so

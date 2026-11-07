@@ -32,9 +32,9 @@ describe('the thirteen purposes', () => {
     for (const template of ROLE_TEMPLATES) for (const name of LINK_SESSION_PERMISSIONS) expect(template.permissions, template.key).not.toContain(name)
   })
 
-  it('give the price grain to PAYMENT alone of the new ones, and nothing beyond price to any', () => {
+  it('give the price grain to PAYMENT and (B-W2b-184, a revised order of the party\'s own) APPROVAL of the new ones, and nothing beyond price to any', () => {
     const W2B = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'JOB_ACCEPT', 'APPROVAL', 'RECORD_INVITE', 'SECURE_FILE'] as const
-    expect(W2B.filter((purpose) => PURPOSE_RULES[purpose].grains.length > 0)).toEqual(['PAYMENT'])
+    expect(W2B.filter((purpose) => PURPOSE_RULES[purpose].grains.length > 0)).toEqual(['PAYMENT', 'APPROVAL'])
     expect(linkPermissions('PAYMENT')).toEqual(['links.open', 'links.pay', 'money.price'])
     expect(linkPermissions('JOB_ACCEPT')).toEqual(['links.accept', 'links.decline', 'links.moveDate', 'links.open'])
   })

@@ -4,6 +4,7 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
 import { readMigrations } from '../policies'
 import { assertTestDatabaseUrl } from '../test-database'
 import { MIGRATIONS_DIR } from '../tools'
+import { testKitApplicationName, withMigrationLock } from './migration-lock'
 
 /**
  * Test support (`@nexus/factory-db/testing`): a throwaway database built from the checked-in migrations, one per test
@@ -14,8 +15,10 @@ import { MIGRATIONS_DIR } from '../tools'
  *            which drops whatever a crashed file left behind) or "adhoc"
  *
  * The migrations create the factory's roles, which are cluster-wide and shared with every worktree on the server.
- * Migrations are applied under MIGRATION_LOCK (an advisory lock in the server's `postgres` database), so two test
- * files never race on them. A test never drops or alters those roles.
+ * Migrations are applied under MIGRATION_LOCK (an advisory lock in the server's `postgres` database, taken by
+ * `withMigrationLock` in ./migration-lock: per transaction, on a connection of its own, freed by the server when its
+ * process stops acting), so two test files never race on them. A test never drops or alters those roles. Every
+ * connection opened here is named `factory-test <role> <pid> <database>` in pg_stat_activity.
  */
 
 export const SERVER_URL = process.env.FACTORY_PG_TEST_SERVER_URL ?? 'postgresql://postgres@127.0.0.1:5442/postgres'
@@ -61,28 +64,31 @@ export async function migratedDatabase(label: string): Promise<MigratedDatabase>
   }
   // The same guard every factory test run passes: loopback, and a factory_test… name.
   assertTestDatabaseUrl(at('postgres'), [])
-  const root = new pg.Client({ connectionString: server.href })
+  const tag = name.slice('factory_test_'.length)
+  const root = new pg.Client({ connectionString: server.href, application_name: testKitApplicationName('root', tag) })
   await root.connect()
-  const admin = new pg.Client({ connectionString: at(decodeURIComponent(server.username) || 'postgres') })
+  const admin = new pg.Client({
+    connectionString: at(decodeURIComponent(server.username) || 'postgres'),
+    application_name: testKitApplicationName('admin', tag),
+  })
   const drop = async (): Promise<void> => {
     await admin.end().catch(() => {})
     await root.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
   }
   try {
+    const migrations = readMigrations(MIGRATIONS_DIR)
     await root.query(`CREATE DATABASE "${name}"`)
     await admin.connect()
-    await root.query('SELECT pg_advisory_lock($1::bigint)', [MIGRATION_LOCK])
-    try {
-      for (const migration of readMigrations(MIGRATIONS_DIR)) {
+    await withMigrationLock({ url: server.href, key: MIGRATION_LOCK, tag }, async (signal) => {
+      for (const migration of migrations) {
+        signal.throwIfAborted()
         try {
           await admin.query(migration.sql)
         } catch (error) {
           throw new Error(`Migration ${migration.folder} failed on ${name}: ${(error as Error).message}`)
         }
       }
-    } finally {
-      await root.query('SELECT pg_advisory_unlock($1::bigint)', [MIGRATION_LOCK])
-    }
+    })
   } catch (error) {
     await drop().catch(() => {})
     await root.end().catch(() => {})
