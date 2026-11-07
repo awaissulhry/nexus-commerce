@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -89,6 +89,10 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-171 (B-W2b-68): My day at a sewing station and on a person's own phone (design floor.myday Modes); the operator's menu opens it
   // everywhere else. Its figures ask the PIN on the page; floor.work is what its API asks.
   { key: 'myday', permission: 'floor.work', modes: ['sewing'], devices: ['PHONE'], built: true, takesScans: false },
+  // SCR-231 (B-W2b-145): Training & PPE sign-off at every station mode and a team leader's line tablet (design floor.training Modes:
+  // sewing, cutting, warehouse, packing, inspection, supervisor); floor.work is what its API asks. A badge scanned there is the
+  // signer's, never a production scan: the worker notice does not hold it. Online only (a PIN is never queued), said on its page.
+  { key: 'training', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], devices: ['LINE'], built: true, takesScans: false },
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
   // (never held by the worker notice). The frame's Help button opens it from any screen too.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
