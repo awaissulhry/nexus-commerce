@@ -103,6 +103,12 @@ import { subcontractorStock } from './subcontracting/stock'
 // B-W2a-76: the floor's subcontract kits (./subcontracting/floor).
 import { floorKitContract, floorKitDdtPdfContract, floorKitsContract, floorReceiveBackContract, floorSendKitContract } from './subcontracting/floor-contract'
 import { floorKit, floorKitDdtPdf, floorKits, floorReceiveBack, floorSendKit } from './subcontracting/floor'
+// B-W2b-176: subcontractor jobs (./portal-jobs): the workshop's portal, its JOB_ACCEPT link, the office's view and acts for it.
+import * as jobContracts from './portal-jobs/contract'
+import * as jobLink from './portal-jobs/link'
+import * as jobOffice from './portal-jobs/office'
+import * as jobPortal from './portal-jobs/portal'
+import { appClock as jobClock } from '../../platform/portal/tasks/clock'
 // B-W2a-44: supplier claims and returns to the supplier (./claims).
 import * as claims from './claims/claims'
 import {
@@ -322,6 +328,36 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     reply.code(201).send(await floorReceiveBack(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
   )
   app.get('/purchasing/subcontracting/kits/:subcontractOrderId/ddts/:ddtId/pdf', { schema: floorKitDdtPdfContract }, async (request) => floorKitDdtPdf(request, request.params.subcontractOrderId, request.params.ddtId))
+
+  // B-W2b-176 (SCM-154 to SCM-157, PLN-163): subcontractor jobs (./portal-jobs). The workshop's portal (no fee, no amount),
+  // its JOB_ACCEPT link (accept, move the date, decline), and on the office's order what the workshop said, the job link,
+  // the answer to a proposed date, and the workshop's acts written by the office for a workshop without e-mail (C3).
+  app.get('/portal/jobs', { schema: jobContracts.portalJobsContract }, async (request) => jobPortal.listPortalJobs(request, request.query, jobClock(app).now()))
+  app.get('/portal/jobs/:subcontractOrderId', { schema: jobContracts.portalJobContract }, async (request) => jobPortal.portalJob(request, request.params.subcontractOrderId))
+  app.post('/portal/jobs/:subcontractOrderId/accept', { schema: jobContracts.portalAcceptContract }, async (request) => jobPortal.acceptInPortal(app, request, request.params.subcontractOrderId, request.body))
+  app.post('/portal/jobs/:subcontractOrderId/decline', { schema: jobContracts.portalDeclineContract }, async (request) => jobPortal.declineInPortal(app, request, request.params.subcontractOrderId, request.body))
+  app.post('/portal/jobs/:subcontractOrderId/kit', { schema: jobContracts.portalKitContract }, async (request) => jobPortal.checkKitInPortal(app, request, request.params.subcontractOrderId, request.body))
+  app.post('/portal/jobs/:subcontractOrderId/kit/photos', { schema: jobContracts.portalPhotoContract }, async (request, reply) => reply.code(201).send(await jobPortal.announcePhoto(request, request.params.subcontractOrderId, request.body)))
+  app.post('/portal/jobs/:subcontractOrderId/kit/photos/:fileId/complete', { schema: jobContracts.portalPhotoCompleteContract }, async (request) => jobPortal.completePhoto(request, request.params.subcontractOrderId, request.params.fileId))
+  app.post('/portal/jobs/:subcontractOrderId/progress', { schema: jobContracts.portalProgressContract }, async (request) => jobPortal.reportInPortal(app, request, request.params.subcontractOrderId, request.body))
+  app.post('/portal/jobs/:subcontractOrderId/returns', { schema: jobContracts.portalReturnContract }, async (request) => jobPortal.announceInPortal(app, request, request.params.subcontractOrderId, request.body))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/workshop', { schema: jobContracts.workshopContract }, async (request) => jobOffice.workshopView(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/job-link', { schema: jobContracts.jobLinkContract }, async (request, reply) => reply.code(201).send(await jobLink.sendJobLink(request, request.params.subcontractOrderId, request.body)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/date', { schema: jobContracts.officeDateContract }, async (request) => jobOffice.decideDate(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/accept', { schema: jobContracts.officeAcceptContract }, async (request) => jobOffice.acceptForWorkshop(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/decline', { schema: jobContracts.officeDeclineContract }, async (request) => jobOffice.declineForWorkshop(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/kit', { schema: jobContracts.officeKitContract }, async (request) => jobOffice.checkKitForWorkshop(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/progress', { schema: jobContracts.officeProgressContract }, async (request) => jobOffice.reportForWorkshop(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/returns', { schema: jobContracts.officeReturnContract }, async (request) => jobOffice.announceForWorkshop(request, request.params.subcontractOrderId, request.body))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/workshop/returns/:returnNoticeId/cancel', { schema: jobContracts.officeCancelReturnContract }, async (request) =>
+    jobOffice.cancelNotice(request, request.params.subcontractOrderId, request.params.returnNoticeId, request.body),
+  )
+  const jobLinkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
+  const jobLimited = { rateLimit: { max: jobLinkUse.max, timeWindow: jobLinkUse.timeWindowMs } }
+  app.get('/link/job', { schema: jobContracts.linkJobContract, config: jobLimited }, async (request) => jobLink.linkJob(request, request.query.language))
+  app.post('/link/job/accept', { schema: jobContracts.linkAcceptContract, config: jobLimited }, async (request) => jobLink.acceptByLink(request, request.body, request.query.language))
+  app.post('/link/job/move-date', { schema: jobContracts.linkMoveDateContract, config: jobLimited }, async (request) => jobLink.moveDateByLink(request, request.body, request.query.language))
+  app.post('/link/job/decline', { schema: jobContracts.linkDeclineContract, config: jobLimited }, async (request) => jobLink.declineByLink(request, request.body, request.query.language))
 
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier.
   app.get('/purchasing/claims', { schema: listClaimsContract }, async (request) => claims.listClaims(request, request.query))

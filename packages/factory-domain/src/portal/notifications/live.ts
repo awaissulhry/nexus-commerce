@@ -3,6 +3,8 @@ import type { EventCatalogue } from '../../events/catalogue'
 import { isMoneyField } from '../../events/define'
 import type { LiveMessage, LiveView } from '../../events/envelope'
 import { PORTAL_HOME_VIEW } from '../tasks/permissions'
+// B-W2b-176: the workshop's jobs.
+import { PORTAL_JOBS_VIEW } from '../../purchasing/portal-jobs/permissions'
 import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
 
 /**
@@ -35,6 +37,13 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'partner_task.reopened': tasks([]),
   'partner_task.due_moved': tasks([]),
   'partner_notification.created': { permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['partyId', 'count'] },
+  // B-W2b-176: a workshop's jobs (its answer, our answer to a proposed date, the kit, progress, send-backs): the cards update.
+  ...Object.fromEntries(
+    ['job_sent', 'job_answered', 'date_decided', 'kit_checked', 'progress_reported', 'return_announced', 'return_cancelled'].map((event) => [
+      `subcontract_order.${event}`,
+      { permission: PORTAL_JOBS_VIEW, party: 'partyId', fields: ['subcontractOrderId', 'number', 'status', 'partyId'] },
+    ]),
+  ),
   // B-W2b-189: our check of a supplier's document, and of its profile change (the page's status and values update).
   'supplier_document.uploaded': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'recordType', 'recordId', 'category'] },
   'supplier_document.accepted': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'documentFileId', 'category'] },

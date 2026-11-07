@@ -118,6 +118,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return order ? { companyId: order.companyId, siteId: null, partyId: order.partyId } : null
   },
+  // modules/sales/change-requests (B-W2b-183): a customer's change or cancel request of an order, the order's company and
+  // customer (the office's notes on it; the answer itself reaches the customer through the portal and its mail).
+  OrderChangeRequest: async (client, id) => {
+    const request = await client.orderChangeRequest.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return request ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
+  },
   // modules/production/work-orders (SCR-070 Activity; B-W1-38 part 2): the work order's company and site; no party (a work
   // order may make the lines of several customers' orders, so its thread stays internal).
   WorkOrder: async (client, id) => {

@@ -40,6 +40,11 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   // B-W2a-49 (modules/sales/pricelists): a price list by its code.
   PriceList: async (client, id) => (await client.priceList.findUnique({ where: { id }, select: { code: true } }))?.code ?? null,
   SalesOrder: async (client, id) => (await client.salesOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2b-183: a change or cancel request by its order's number.
+  OrderChangeRequest: async (client, id) => {
+    const request = await client.orderChangeRequest.findUnique({ where: { id }, select: { kind: true, order: { select: { number: true } } } })
+    return request ? `${request.order.number} ${request.kind === 'CANCEL' ? 'cancel' : 'change'} request` : null
+  },
   WorkOrder: async (client, id) => (await client.workOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   Shipment: async (client, id) => (await client.shipment.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   PpeRegisterEntry: async (client, id) => ((await client.ppeRegisterEntry.findUnique({ where: { id }, select: { id: true } })) ? `PPE register entry ${id.slice(-6)}` : null),

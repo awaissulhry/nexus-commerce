@@ -5,6 +5,11 @@ import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../pe
 import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
 // B-W2b-175: customer orders in the portal.
 import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sales/portal-orders/permissions'
+// B-W2b-178: customer documents in the portal.
+import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissions'
+// B-W2b-190: portal ordering.
+import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
+import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sales/change-requests/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1380,6 +1385,14 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
   // B-W2b-185: the customer's Finance sees what is open and pays it online (FIN-118, FIN-123); the customer Admin follows.
   { 'customer-finance': ['portal.payments.view' as Permission, 'portal.payments.pay' as Permission] },
+  // B-W2b-176: the workshop's Jobs role sees our jobs for it (never a fee or price, C2); its acts take the capabilities.
+  { 'subcontractor-jobs': ['portal.jobs.view' as Permission] },
+  // B-W2b-178: the customer documents by role (delivery papers and the rest; conformity; invoices); not the Designer.
+  CUSTOMER_DOCUMENT_READERS,
+  // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
+  PORTAL_ORDERING_ADDS,
+  // B-W2b-183: the customer roles that ask for a change or a cancel of an order (the Buyer; the Admin follows).
+  Object.fromEntries(ORDER_CHANGE_ASKER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_ASK]])),
   // B-W2b-189: every supplier and workshop role sees what we ask for, its documents and its profile; each Admin follows and
   // alone sends changes of the addresses and contacts (SCM-096, SCM-097).
   Object.fromEntries(['supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs'].map((key) => [key, ['portal.supplierDocuments.view' as Permission, 'portal.supplierProfile.view' as Permission]])),
