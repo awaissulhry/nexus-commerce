@@ -225,7 +225,8 @@ describe('partner tasks (COL-043)', () => {
     await expect(update(office(), 'PartnerTask', task, `status = 'OPEN', version = version + 1`)).rejects.toThrow(/wrong closing/)
     expect(await update(office(), 'PartnerTask', task, `status = 'OPEN', "closedAt" = NULL, version = version + 1`)).toBe(1)
     await expect(admin('DELETE FROM "PartnerTask" WHERE id = $1::uuid', [task])).rejects.toThrow(/cancelled, never deleted/)
-    await expect(admin('TRUNCATE "PartnerTask"')).rejects.toThrow(/TRUNCATE on "PartnerTask" is refused/)
+    // W2b schema wave 23: a supplier upload names the task it answered (a foreign key), so TRUNCATE needs CASCADE to reach the trigger.
+    await expect(admin('TRUNCATE "PartnerTask" CASCADE')).rejects.toThrow(/TRUNCATE on "(PartnerTask|SupplierDocumentUpload)" is refused/)
     await expect(run(office(), 'DELETE FROM "PartnerTask" WHERE false')).rejects.toThrow(DENIED)
   })
 })

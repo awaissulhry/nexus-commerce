@@ -173,9 +173,13 @@ model ApprovalRequest {
   answeredViaLink OneOffLink?    @relation(fields: [tenantId, partyId, answeredViaLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   // ncr.prisma: the concession it asks (CONCESSION).
   ncrConcession   NcrConcession?
+  // W2b safety.prisma (schema wave 23): the DVR signature an outside signer's approval became (LINK).
+  riskAssessmentSignatures RiskAssessmentSignature[]
 
   // The target of the concession's reference: a concession names a request of its own customer.
   @@unique([tenantId, partyId, id])
+  // W2b (schema wave 23): the target of a DVR signature's reference: a signature names a request of its own company.
+  @@unique([tenantId, companyId, id])
   // The requests of a record.
   @@index([tenantId, recordType, recordId])
   // What waits for a party.

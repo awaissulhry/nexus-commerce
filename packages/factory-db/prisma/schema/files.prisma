@@ -166,6 +166,11 @@ model StoredFile {
   // W2b links-depth.prisma (wave 19/22): the links that share it in their set, the approval answers whose markup it is.
   linkFiles            LinkFile[]        @relation("LinkFileFile")
   approvalMarkups      ApprovalRequest[] @relation("ApprovalRequestMarkup")
+  // W2b portal-followups.prisma (schema wave 23): the supplier uploads it is the file of, the document they replace, or
+  // the document in force an accepted one became.
+  supplierUploads        SupplierDocumentUpload[] @relation("SupplierDocumentUploadFile")
+  supplierUploadReplaced SupplierDocumentUpload[] @relation("SupplierDocumentUploadReplaces")
+  supplierUploadAccepted SupplierDocumentUpload[] @relation("SupplierDocumentUploadDocument")
   // W2b time.prisma (wave 5/7): the attendance month close whose LUL calendar it is.
   attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
   // W2b safety.prisma (wave 15/16): the risk assessment versions whose frozen PDF it is.

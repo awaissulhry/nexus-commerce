@@ -1,0 +1,163 @@
+// The portal follow-ups (W2b schema wave 23, B-W2b-F12; features SCM-096, SCM-097; design portal.supplier.profile
+// "Documents" and "Company and contacts"): what a supplier or workshop sends us from its portal that waits for a person of
+// ours, as rows of their own instead of audit rows on the party (B-W2b-189 kept both in the AuditLog until this step).
+//
+//   SupplierDocumentUpload   one document a supplier uploaded (a certificate, a test report, a declaration): the file, what
+//                            it says it is, the record it is for and the request it answers; WAITING until a buyer or quality
+//                            person ACCEPTS it (the kind and expiry confirmed, the file then in force) or REFUSES it (why).
+//   PartyChangeRequest       changes of its own addresses and contacts a supplier asks for: nothing changes on our side
+//                            until a buyer APPROVES them (the parties module applies each in the same command) or REFUSES
+//                            them (why); the supplier may WITHDRAW an OPEN one.
+//
+// The other follow-ups of the wave are columns of the earlier models (each says W2b schema wave 23 where it is): a portal
+// confirmation of a purchase order (supply.prisma), a delivery address that waits for our check (parties.prisma), the
+// channel and wish of a return (returns.prisma), a DVR signature through an approval request (safety.prisma), a partner
+// task handed to a colleague (portal-frame.prisma), the carrier's ETA and tracking page (shipping.prisma), the cancel fee
+// (sales.prisma) and a party's website (parties.prisma).
+//
+// Who sees what (ownership/portal-followups.json): a portal session (factory_partner_runtime) reads its OWN party's rows,
+// inserts its own uploads and change requests, and withdraws an OPEN request of its own; never which office user decided
+// (the decider's name as the supplier reads it is a column of its own). The office reads and writes everything and decides.
+// The …_portal_followups_w2b_guards triggers hold the states for every login. No money column. Nothing is deleted.
+//
+// Uniqueness made only of references (one upload per file, one open request per row it changes) is the API's: a unique
+// key of ids alone cannot be copied by the generated isolation tests.
+
+/// One document a supplier or workshop uploaded in its portal (SCM-096; design portal.supplier.profile "Documents"
+/// Upload): a certificate (LWG, ISO 9001, an insurance), a test report (Cr VI, REACH) or a declaration. The file is a
+/// StoredFile of the party, OFFICE only and untagged while it waits: an unchecked document never counts for a required
+/// document rule. WAITING → ACCEPTED (a buyer or quality person confirmed its kind and expiry; the file in force is the
+/// upload itself, or its copy as the next version of the document it replaces) | REFUSED (why: the supplier reads it, and
+/// an UPLOAD_DOCUMENT task asks again). Decided once; what the supplier said never changes. Never deleted.
+model SupplierDocumentUpload {
+  id                String                       @id @db.Uuid
+  tenantId          String                       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose portal it came through (its buyers check it). Never changes.
+  companyId         String                       @db.Uuid
+  /// The supplier or workshop that sent it (the partner policy key). Never changes.
+  partyId           String                       @db.Uuid
+  /// The file it sent (a StoredFile of the party and of the record below). Never changes.
+  fileId            String                       @db.Uuid
+  /// The record the document is for: `Party` (the supplier itself: its id is partyId), `PurchaseOrder`, `ShipNotice` or
+  /// `SubcontractOrder` of the party; its id, and its label as the supplier read it ("PO-2026-0101"). Never change.
+  recordType        String
+  recordId          String                       @db.Uuid
+  recordLabel       String
+  /// What the supplier says it is: SUPPLIER_CERTIFICATE, TEST_REPORT or DECLARATION. Never changes.
+  category          FileCategory
+  /// As the supplier typed them: who issued it, its number, the day it was issued and the day it expires (not before the
+  /// issue), the articles and lots it covers (up to 20 codes each, as typed: no link to our items or lots), its words.
+  /// Never change.
+  issuer            String?
+  documentNumber    String?
+  issuedOn          DateTime?                    @db.Date
+  expiresOn         DateTime?                    @db.Date
+  articleCodes      String[]                     @default([])
+  lotCodes          String[]                     @default([])
+  note              String?
+  /// The document it replaces (a file of the party), when the supplier said so; the request it answers (an UPLOAD_DOCUMENT
+  /// task of the party), when it answered one. Never change.
+  replacesFileId    String?                      @db.Uuid
+  taskId            String?                      @db.Uuid
+  /// The partner user who uploaded it (a person of the party) and their name as the office reads it. Never change.
+  uploadedById      String                       @db.Uuid
+  uploadedByName    String
+  /// When the file arrived (its upload confirmed): set once, while WAITING.
+  receivedAt        DateTime?                    @db.Timestamptz(3)
+  status            SupplierDocumentUploadStatus @default(WAITING)
+  /// The decision, set once (WAITING → ACCEPTED | REFUSED): when, the office user who decided (the partner never reads
+  /// the id) and their name as the supplier reads it.
+  decidedAt         DateTime?                    @db.Timestamptz(3)
+  decidedById       String?                      @db.Uuid
+  decidedByName     String?
+  /// ACCEPTED: the kind and expiry the reviewer confirmed, and the file now in force (the upload, or its copy as the next
+  /// version of the replaced document).
+  acceptedCategory  FileCategory?
+  acceptedExpiresOn DateTime?                    @db.Date
+  documentFileId    String?                      @db.Uuid
+  /// REFUSED: why, in words the supplier reads (3 to 500 characters).
+  refuseReason      String?
+  version           Int                          @default(1)
+  createdAt         DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                      @db.Uuid
+
+  company      Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party        Party        @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file         StoredFile   @relation("SupplierDocumentUploadFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  replacesFile StoredFile?  @relation("SupplierDocumentUploadReplaces", fields: [tenantId, replacesFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  documentFile StoredFile?  @relation("SupplierDocumentUploadDocument", fields: [tenantId, documentFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  task         PartnerTask? @relation(fields: [tenantId, partyId, taskId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy   User         @relation(fields: [tenantId, uploadedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A party's uploads by state ("Your documents", the open ones).
+  @@index([tenantId, partyId, status])
+  // The office's list and Today: what waits, oldest first.
+  @@index([tenantId, status, createdAt])
+  // The upload of a file.
+  @@index([tenantId, fileId])
+}
+
+/// WAITING → ACCEPTED | REFUSED, once.
+enum SupplierDocumentUploadStatus {
+  /// Uploaded (or announced and still arriving): waits for a buyer or quality person.
+  WAITING
+  ACCEPTED
+  REFUSED
+}
+
+/// Changes of its own addresses and contacts a supplier or workshop asks for in its portal (SCM-097; design
+/// portal.supplier.profile EditModeBar "Send changes for our check"): up to 20 changes, each of one row at the version the
+/// supplier saw (factory-domain purchasing/portal-profile `PlannedChange`); nothing changes on our side until a buyer
+/// decides. OPEN → APPROVED (the parties module applies each change in the same command) | REFUSED (why: the supplier
+/// reads it) | WITHDRAWN (by the supplier). Final once decided; what was asked never changes. Never deleted.
+model PartyChangeRequest {
+  id              String                   @id @db.Uuid
+  tenantId        String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose portal it came through (its buyers decide). Never changes.
+  companyId       String                   @db.Uuid
+  /// The supplier or workshop whose rows it changes (the partner policy key). Never changes.
+  partyId         String                   @db.Uuid
+  /// The partner user who asked (a person of the party) and their name as the office reads it. Never change.
+  requestedById   String                   @db.Uuid
+  requestedByName String
+  /// The changes: a list of 1 to 20 objects (`PlannedChange`: op ADD | CHANGE | REMOVE, target ADDRESS | CONTACT, the row
+  /// and the version it was read at, the fields old → new), in words too (`summary`), and the supplier's note. Never change.
+  changes         Json
+  summary         String
+  note            String?
+  status          PartyChangeRequestStatus @default(OPEN)
+  /// When it left OPEN (APPROVED, REFUSED or WITHDRAWN), set once; who decided (an office user: the partner never reads
+  /// the id; none for WITHDRAWN, the audit row names the person) and their name as the supplier reads it.
+  decidedAt       DateTime?                @db.Timestamptz(3)
+  decidedById     String?                  @db.Uuid
+  decidedByName   String?
+  /// REFUSED: why, in words the supplier reads (3 to 500 characters).
+  refuseReason    String?
+  /// The compare-and-set counter: every change moves it up by exactly one.
+  version         Int                      @default(1)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                  @db.Uuid
+
+  company     Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party       Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User    @relation(fields: [tenantId, requestedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A party's requests by state (the profile's pending changes and last answers).
+  @@index([tenantId, partyId, status])
+  // The office's list and Today: what waits, oldest first.
+  @@index([tenantId, status, createdAt])
+}
+
+/// OPEN → APPROVED | REFUSED | WITHDRAWN, once.
+enum PartyChangeRequestStatus {
+  OPEN
+  /// A buyer approved it: every change was applied in the same command.
+  APPROVED
+  /// A buyer refused it, with the reason the supplier reads.
+  REFUSED
+  /// The supplier took it back while it was OPEN.
+  WITHDRAWN
+}

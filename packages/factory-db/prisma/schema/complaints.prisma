@@ -16,8 +16,12 @@
 // cause in words, and the answer letter: its template, language, words and attachments while it is written, and once sent
 // the version sent (gendocs.prisma COMPLAINT_ANSWER), by whom and how. Never sent by itself: a person reviews and sends.
 //
-// Who sees what (ownership/complaints.json): the office reads and writes; the floor and the portal read nothing here (the
-// customer's claims pages and links are W2b). Never deleted: a complaint logged by mistake is closed with its reason.
+// Who sees what (ownership/complaints.json): the office reads and writes; the floor reads nothing here. W2b schema wave 23
+// (B-W2b-192's need): a portal or link session (factory_partner_runtime) reads its OWN party's complaints, without the
+// triage (category, severity, when and by whom), the owner, the safety alert, the findings and root cause, the answer
+// letter while it is written (its template, words and files: the customer reads the letter sent), the internal note and
+// who answered or wrote a row; it writes nothing here (the API logs a customer's complaint as the person or the tenant's
+// system). Never deleted: a complaint logged by mistake is closed with its reason.
 
 /// A customer complaint (SAL-416): the customer's words, what it is about (an order, a shipment, a style, a serial or a
 /// batch, as reported), its triage and its state. NEW → TRIAGED → INVESTIGATING → ANSWERED → CLOSED (CLOSED, with a
