@@ -124,6 +124,8 @@ export const orderAnswerContract = defineContract({
       decline: output({ at: instant(), reason: z.string().nullable() }).nullable(),
       proposal: output({
         at: instant(),
+        /** B-W2b-F13a: through its link, or by a person of the supplier in the portal. */
+        via: z.enum(['LINK', 'PORTAL']),
         linkId: id().nullable(),
         byName: z.string().nullable(),
         supplierRef: z.string().nullable(),

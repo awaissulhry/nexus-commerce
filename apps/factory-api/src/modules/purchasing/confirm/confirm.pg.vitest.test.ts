@@ -384,7 +384,7 @@ describe('changes per line are a proposal: the buyer accepts or refuses it (SCM-
       answer: 'CHANGES_PROPOSED',
       words: 'The supplier proposed changes: accept or refuse them.',
       confirmation: null,
-      proposal: { linkId, byName: 'Mario Rossi', supplierRef: 'OC-5000', summary: '2 later dates · 1 other quantity · 1 split', decision: null },
+      proposal: { via: 'LINK', linkId, byName: 'Mario Rossi', supplierRef: 'OC-5000', summary: '2 later dates · 1 other quantity · 1 split', decision: null },
       lines: [
         { seq: 10, proposed: { kind: 'SPLIT', quantity: '105.0000', date: addDays(today(), 40), changes: ['SPLIT', 'LATER'] }, confirmed: null },
         { seq: 20, proposed: { kind: 'OTHER', quantity: '12.0000', date: addDays(today(), 38), changes: ['LATER', 'LESS'] }, confirmed: null },
@@ -412,7 +412,7 @@ describe('changes per line are a proposal: the buyer accepts or refuses it (SCM-
       { seq: 10, q: '105.0000', d: addDays(today(), 40) },
       { seq: 20, q: '12.0000', d: addDays(today(), 38) },
     ])
-    expect(await one('SELECT "confirmLinkId", "proposalDecision", "proposalDecidedById", "proposalDecidedAt" IS NOT NULL AS at FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ confirmLinkId: linkId, proposalDecision: 'ACCEPTED', proposalDecidedById: buyerId, at: true })
+    expect(await one('SELECT "confirmLinkId", "confirmedByUserId", "proposalDecision", "proposalDecidedById", "proposalDecidedAt" IS NOT NULL AS at FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ confirmLinkId: linkId, confirmedByUserId: null, proposalDecision: 'ACCEPTED', proposalDecidedById: buyerId, at: true })
     const mail = await one<{ subject: string; to: string[]; bodyText: string }>(`SELECT o.subject, o.to, m."bodyText" FROM "EmailOutbound" o JOIN "Message" m ON m.id = o."messageId" WHERE o."recordId" = $1 AND o.subject LIKE '%modifiche accettate'`, [order.id])
     expect(mail).toMatchObject({ subject: `Ordine di acquisto ${order.number}: modifiche accettate`, to: [ORDERS_P2] })
     expect(mail.bodyText).toContain('A presto.')

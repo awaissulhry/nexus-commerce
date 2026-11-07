@@ -3,7 +3,7 @@ import { assertTransition, canTransition } from '../state/machine'
 import { checkAddress, defaultProblems } from './addresses'
 import { checkContact, duplicateEmails } from './contacts'
 import { COUNTRY_CODES, isCountryCode, isItalianProvince, isLanguageCode, LANGUAGE_CODES } from './geo'
-import { changeParty, isCustomer, isSupplier, newParty, partyMachine, reasonProblems } from './rules'
+import { changeParty, isCustomer, isSupplier, newParty, partyMachine, reasonProblems, websiteProblem } from './rules'
 
 /** Made-up parties only. */
 const TANNERY = { code: ' tan-01 ', legalName: '  Conceria   Esempio  S.r.l. ', roles: ['SUPPLIER', 'CUSTOMER', 'SUPPLIER'] as const }
@@ -13,7 +13,7 @@ describe('a party (SAL-001, SCM-001, SCM-002)', () => {
     const outcome = newParty({ ...TANNERY, roles: [...TANNERY.roles] })
     expect(outcome).toEqual({
       ok: true,
-      party: { code: 'TAN-01', kind: 'ORGANISATION', legalName: 'Conceria Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER', 'SUPPLIER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null },
+      party: { code: 'TAN-01', kind: 'ORGANISATION', legalName: 'Conceria Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER', 'SUPPLIER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null, website: null },
     })
     if (outcome.ok) {
       expect(isCustomer(outcome.party.roles)).toBe(true)
@@ -35,6 +35,18 @@ describe('a party (SAL-001, SCM-001, SCM-002)', () => {
     expect(changeParty(created.party, { roles: ['BRAND', 'CUSTOMER'] })).toMatchObject({ ok: true, changed: ['roles'] })
     expect(changeParty(created.party, { legalName: 'Cliente Esempio S.p.A.' })).toMatchObject({ ok: true, changed: [] })
     expect(changeParty(created.party, { roles: [] })).toMatchObject({ ok: false, issues: [{ path: 'roles' }] })
+  })
+
+  it('W2b wave 23: a website is an http or https address without spaces, up to 200 characters', () => {
+    const created = newParty({ code: 'C-2', legalName: 'Cliente Web S.r.l.', roles: ['SUPPLIER'], website: '  https://www.example.com/it ' })
+    expect(created).toMatchObject({ ok: true, party: { website: 'https://www.example.com/it' } })
+    if (!created.ok) throw new Error('setup')
+    expect(changeParty(created.party, { website: null })).toMatchObject({ ok: true, changed: ['website'], party: { website: null } })
+    expect(changeParty(created.party, { website: '' })).toMatchObject({ ok: true, changed: ['website'], party: { website: null } })
+    for (const bad of ['www.example.com', 'ftp://example.com', 'https://example .com', `https://${'a'.repeat(200)}.com`]) {
+      expect(changeParty(created.party, { website: bad }), bad).toMatchObject({ ok: false, issues: [{ path: 'website' }] })
+    }
+    expect(websiteProblem('http://example.com')).toBeNull()
   })
 
   it('moves PROSPECT → ACTIVE ⇄ BLOCKED and archives only an unblocked party', () => {

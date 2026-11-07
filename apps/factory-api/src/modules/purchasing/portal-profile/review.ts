@@ -1,5 +1,6 @@
 import type { FactoryClient } from '@nexus/factory-db'
-import { InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import type { Prisma } from '@nexus/factory-db'
+import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -7,15 +8,17 @@ import { dayOf } from '@nexus/factory-domain/files/expiry/rules'
 import { isCurrentVersion, nextVersionNo, seriesRootOf } from '@nexus/factory-domain/files/versions/rules'
 import { acceptProblems, documentStateOf, isSupplierDocumentCategory, refuseProblems, reuploadDueOf, type SupplierDocumentState } from '@nexus/factory-domain/purchasing/portal-profile/documents'
 import { SUPPLIER_DOCUMENTS_REVIEW } from '@nexus/factory-domain/purchasing/portal-profile/permissions'
-import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import type { FastifyInstance } from 'fastify'
+import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { closeAnsweredExpiryTasks } from '../../../platform/files/expiry/answered'
 import { contextOf, prepareFileCopy, readOffice, SELECT_FOR, type OfficeRow } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { seriesOf, supersedeEarlierVersions } from '../../../platform/files/versions/supersede'
 import { lockSeries } from '../../../platform/files/versions/versions'
+import { commandOn } from '../../../platform/portal/tasks/clock'
 import { closeOne, openTaskInCommand, TASK_COLUMNS } from '../../../platform/portal/tasks/store'
-import { ACTIONS, iso, LOOK_BACK_DAYS, lockSupplier, partyUploads, recentUploads, uploadOfFile, type UploadRecord } from './store'
+import { ACTIONS, iso, LOOK_BACK_DAYS, partyUploads, recentUploads, uploadOfFile, type UploadRecord } from './store'
 import { refusedFileOf, SUPPLIER_DOCUMENT_SOURCE, supplierDocumentSourceKey } from './task-source'
 
 /**
@@ -35,8 +38,10 @@ import { refusedFileOf, SUPPLIER_DOCUMENT_SOURCE, supplierDocumentSourceKey } fr
  *        again (an UPLOAD_DOCUMENT request, source SupplierDocument, due in 14 days, asked by the reviewer)
  *
  * purchasing.supplierDocuments.review over the upload's company and party (administrator, buyer, quality inspector). Each
- * decision is ONE command naming the file with the version the screen showed (two decisions never both commit), with the
- * supplier's row locked; a decision is final.
+ * decision is ONE command naming the file with the version the screen showed (two decisions never both commit); inside it
+ * the upload's row (SupplierDocumentUpload, W2b schema wave 23) moves WAITING → ACCEPTED | REFUSED by its own
+ * compare-and-set (its version + 1); a decision is final. The commands run on the app's clock (platform/portal/tasks
+ * clock.ts), the one the supplier's portal writes use.
  */
 
 const DAY_MS = 86_400_000
@@ -129,11 +134,20 @@ async function decidable(caller: CommandCaller, fileId: string) {
   return { context, upload, file }
 }
 
-/** Inside a decision's command: the supplier's row locked, then the upload still undecided. */
-async function stillOpen(tools: CommandTools, upload: UploadRecord): Promise<void> {
-  await lockSupplier(tools.tx, upload.partyId)
-  const now = (await partyUploads(tools.tx, upload.partyId)).find((entry) => entry.fileId === upload.fileId)
-  if (now?.decision) throw new InvalidStateError(now.decision.kind === 'ACCEPTED' ? 'This document was accepted already.' : 'This document was refused already.')
+const decidedWords = (status: string): string => (status === 'ACCEPTED' ? 'This document was accepted already.' : 'This document was refused already.')
+
+/**
+ * Inside a decision's command (the file's record guard already holds the file): the upload's row WAITING → the decision,
+ * once, by its own compare-and-set (its version as read here, + 1); a decision that committed meanwhile is refused in words.
+ */
+async function decide(tools: CommandTools, upload: UploadRecord, data: Prisma.SupplierDocumentUploadUncheckedUpdateManyInput): Promise<void> {
+  const now = await tools.tx.supplierDocumentUpload.findUnique({ where: { id: upload.id }, select: { status: true, version: true, receivedAt: true } })
+  if (!now) throw new NotFoundError('File not found.')
+  if (now.status !== 'WAITING') throw new InvalidStateError(decidedWords(now.status))
+  // An accepted file arrived (it is AVAILABLE): a confirm the supplier's page never sent counts as arrived now.
+  const arrived = data.status === 'ACCEPTED' && now.receivedAt === null ? { receivedAt: tools.now } : {}
+  const moved = await tools.tx.supplierDocumentUpload.updateMany({ where: { id: upload.id, status: 'WAITING', version: now.version }, data: { ...data, ...arrived, decidedAt: tools.now, version: now.version + 1 } })
+  if (moved.count !== 1) throw new ConflictError('This document changed since it was read: read it again.')
 }
 
 export interface AcceptBody {
@@ -170,7 +184,7 @@ async function closeRefusedRequests(tools: CommandTools, upload: UploadRecord, c
 }
 
 /** POST /purchasing/supplier-documents/:fileId/accept. */
-export async function acceptDocument(caller: CommandCaller, fileId: string, body: AcceptBody, now: Date, idempotencyKey?: string) {
+export async function acceptDocument(app: FastifyInstance, caller: CommandCaller, fileId: string, body: AcceptBody, now: Date, idempotencyKey?: string) {
   const { context, upload, file } = await decidable(caller, fileId)
   if (file.status !== 'AVAILABLE') throw new InvalidStateError(file.quarantineReason === 'scan_pending' ? 'The virus scan of this document has not finished: accept it once it has.' : 'This file could not be taken (it did not match what was sent, or the scan refused it): refuse it, saying why.')
   const today = businessDate(now)
@@ -192,12 +206,13 @@ export async function acceptDocument(caller: CommandCaller, fileId: string, body
     : null
   const category = body.category
   const expiresOn = body.expiresOn
-  const { result } = await command(
+  // On the app's clock, as the supplier's upload (portal) was: the decision is never before the upload in time.
+  const { result } = await commandOn(
+    app,
     caller,
     { name: 'supplierDocuments.accept', idempotencyKey, input: { fileId, ...body }, record: { type: 'StoredFile', id: fileId, expectedVersion: body.version } },
     async (tools) => {
       const { tx, now: at } = tools
-      await stillOpen(tools, upload)
       const byName = await personName(tx, context.actorId)
       const expiry = expiresOn === null ? null : dateValue(expiresOn)
       let documentFileId = fileId
@@ -257,7 +272,9 @@ export async function acceptDocument(caller: CommandCaller, fileId: string, body
         before: { visibility: file.visibility },
         after: { category, expiresOn, visibility: ['OFFICE', 'PARTNER'], partyId: upload.partyId, uploadFileId: fileId },
       })
-      tools.audit({ action: ACTIONS.accept, recordType: 'Party', recordId: upload.partyId, companyId: upload.companyId, after: { fileId, documentFileId, category, expiresOn, byName } })
+      // The upload's own decision: ACCEPTED with the kind and expiry confirmed and the file now in force.
+      await decide(tools, upload, { status: 'ACCEPTED', decidedById: context.actorId, decidedByName: byName, acceptedCategory: category as never, acceptedExpiresOn: expiry, documentFileId })
+      tools.audit({ action: ACTIONS.accept, recordType: 'Party', recordId: upload.partyId, companyId: upload.companyId, after: { uploadId: upload.id, fileId, documentFileId, category, expiresOn, byName } })
       // The supplier's request for a new version of this document closes once the new date is beyond the reminders.
       await closeAnsweredExpiryTasks(tools, { root, recordType: document.recordType, recordId: document.recordId, today })
       // A request to send a refused document of this kind again, on this record, is answered too.
@@ -275,7 +292,7 @@ export async function acceptDocument(caller: CommandCaller, fileId: string, body
 }
 
 /** POST /purchasing/supplier-documents/:fileId/refuse. */
-export async function refuseDocument(caller: CommandCaller, fileId: string, body: { readonly reason: string; readonly version: number }, now: Date, idempotencyKey?: string) {
+export async function refuseDocument(app: FastifyInstance, caller: CommandCaller, fileId: string, body: { readonly reason: string; readonly version: number }, now: Date, idempotencyKey?: string) {
   const { context, upload } = await decidable(caller, fileId)
   const problems = refuseProblems(body.reason)
   if (problems.length > 0) throw new ValidationError('The refusal is not valid.', problems)
@@ -283,13 +300,15 @@ export async function refuseDocument(caller: CommandCaller, fileId: string, body
   const reason = body.reason.trim()
   const companyId = upload.companyId
   const today = businessDate(now)
-  const { result } = await command(
+  // On the app's clock, as the supplier's upload (portal) was: the decision is never before the upload in time.
+  const { result } = await commandOn(
+    app,
     caller,
     { name: 'supplierDocuments.refuse', idempotencyKey, input: { fileId, ...body }, record: { type: 'StoredFile', id: fileId, expectedVersion: body.version } },
     async (tools) => {
-      await stillOpen(tools, upload)
       const byName = await personName(tools.tx, context.actorId)
-      tools.audit({ action: ACTIONS.refuse, recordType: 'Party', recordId: upload.partyId, companyId, reason, after: { fileId, byName } })
+      await decide(tools, upload, { status: 'REFUSED', decidedById: context.actorId, decidedByName: byName, refuseReason: reason })
+      tools.audit({ action: ACTIONS.refuse, recordType: 'Party', recordId: upload.partyId, companyId, reason, after: { uploadId: upload.id, fileId, byName } })
       // The supplier is asked to upload it again, on the record the document was for.
       const { task } = await openTaskInCommand(tools, {
         companyId,

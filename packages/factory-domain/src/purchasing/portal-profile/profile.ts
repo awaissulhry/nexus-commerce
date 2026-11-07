@@ -1,6 +1,7 @@
 import type { Issue } from '../../core/errors'
 import { ADDRESS_FIELDS, changeAddress, checkAddress, type AddressField, type AddressFields, type AddressInput, type AddressKind } from '../../parties/addresses'
 import { changeContact, checkContact, CONTACT_FIELDS, duplicateEmails, type ContactField, type ContactFields, type ContactInput, type ContactRole } from '../../parties/contacts'
+import { websiteProblem } from '../../parties/rules'
 import { cleanLine } from './documents'
 
 /**
@@ -14,7 +15,9 @@ import { cleanLine } from './documents'
  * why. Each change of an existing address or contact names the version the supplier saw: when the row changed since, the
  * approval stops and says so (the buyer refuses and the supplier sends it again). Two open requests never touch the same
  * row. The legal name and the VAT number are read-only here (their change is a new tax identity, the office's); bank details
- * have their own control and call-back (SCM-007, W2b-5).
+ * have their own control and call-back (SCM-007, W2b-5). Since W2b schema wave 23 (B-W2b-F13a) a request may also change
+ * the company's website (Party.website: a COMPANY change, checked against the website the supplier saw, not a version:
+ * the party's version moves with every office edit of the record).
  *
  *   OPEN → APPROVED (applied) | REFUSED (with the reason) | WITHDRAWN (by the supplier, while OPEN)
  */
@@ -41,9 +44,15 @@ export type ContactChangeInput =
   | { readonly op: 'CHANGE'; readonly contactId: string; readonly version: number; readonly contact: ContactPatch }
   | { readonly op: 'REMOVE'; readonly contactId: string; readonly version: number }
 
+/** W2b wave 23: the company's own fields a supplier may change (its website; null or blank: none). */
+export interface CompanyChangeInput {
+  readonly website: string | null
+}
+
 export interface ProfileChangeInput {
   readonly addresses?: readonly AddressChangeInput[] | undefined
   readonly contacts?: readonly ContactChangeInput[] | undefined
+  readonly company?: CompanyChangeInput | undefined
   /** A word for the buyer ("we moved our warehouse"). */
   readonly note?: string | null | undefined
 }
@@ -63,9 +72,20 @@ export interface CurrentContact {
   readonly status: string
   readonly fields: ContactFields
 }
+/** The party itself (its id and website). */
+export interface CurrentCompany {
+  readonly id: string
+  readonly website: string | null
+}
 export interface CurrentProfile {
   readonly addresses: readonly CurrentAddress[]
   readonly contacts: readonly CurrentContact[]
+  /** Left out: no company change is possible (the request names addresses and contacts only). */
+  readonly company?: CurrentCompany | undefined
+}
+
+export interface CompanyFields {
+  readonly website: string | null
 }
 
 /** One change as kept in the request and shown to the buyer (old → new). JSON-safe. */
@@ -76,6 +96,7 @@ export type PlannedChange =
   | { readonly target: 'CONTACT'; readonly op: 'ADD'; readonly id: null; readonly version: null; readonly before: null; readonly after: ContactFields; readonly changed: readonly ContactField[] }
   | { readonly target: 'CONTACT'; readonly op: 'CHANGE'; readonly id: string; readonly version: number; readonly before: ContactFields; readonly after: ContactFields; readonly changed: readonly ContactField[] }
   | { readonly target: 'CONTACT'; readonly op: 'REMOVE'; readonly id: string; readonly version: number; readonly before: ContactFields; readonly after: null; readonly changed: readonly ContactField[] }
+  | { readonly target: 'COMPANY'; readonly op: 'CHANGE'; readonly id: string; readonly version: null; readonly before: CompanyFields; readonly after: CompanyFields; readonly changed: readonly 'website'[] }
 
 export type PlanOutcome = { readonly ok: true; readonly changes: readonly PlannedChange[]; readonly note: string | null } | { readonly ok: false; readonly issues: readonly Issue[] }
 
@@ -103,8 +124,9 @@ export function planProfileChange(input: ProfileChangeInput, current: CurrentPro
   const changes: PlannedChange[] = []
   const addresses = input.addresses ?? []
   const contacts = input.contacts ?? []
-  if (addresses.length + contacts.length === 0) issues.push({ path: 'body', message: 'Change, add or remove at least one address or contact.' })
-  if (addresses.length + contacts.length > MAX_PROFILE_CHANGES) issues.push({ path: 'body', message: `At most ${MAX_PROFILE_CHANGES} changes at once.` })
+  const company = input.company === undefined || input.company === null ? 0 : 1
+  if (addresses.length + contacts.length + company === 0) issues.push({ path: 'body', message: 'Change, add or remove at least one address or contact, or change your website.' })
+  if (addresses.length + contacts.length + company > MAX_PROFILE_CHANGES) issues.push({ path: 'body', message: `At most ${MAX_PROFILE_CHANGES} changes at once.` })
   const note = cleanLine(input.note)
   if (note !== null && note.length > PROFILE_NOTE_MAX) issues.push({ path: 'body/note', message: `At most ${PROFILE_NOTE_MAX} characters.` })
   const seen = new Set<string>()
@@ -176,6 +198,15 @@ export function planProfileChange(input: ProfileChangeInput, current: CurrentPro
     else changes.push({ target: 'CONTACT', op: 'CHANGE', id: row.id, version: row.version, before: row.fields, after: outcome.contact, changed: outcome.changed })
   }
 
+  if (input.company !== undefined && input.company !== null) {
+    const website = cleanLine(input.company.website)
+    const problem = websiteProblem(website)
+    if (!current.company) issues.push({ path: 'body/company', message: 'Your company is not there any more: read your profile again.' })
+    else if (problem !== null) issues.push({ path: 'body/company/website', message: problem })
+    else if (website === current.company.website) issues.push({ path: 'body/company/website', message: 'Your website stays as it is.' })
+    else changes.push({ target: 'COMPANY', op: 'CHANGE', id: current.company.id, version: null, before: { website: current.company.website }, after: { website }, changed: ['website'] })
+  }
+
   if (issues.length === 0) {
     const twice = duplicateEmails(contactsAfter(current, changes))
     if (twice.length > 0) issues.push({ path: 'body/contacts', message: `Two of your contacts would have ${twice.join(', ')}: one address per contact.` })
@@ -196,9 +227,9 @@ export function contactsAfter(current: CurrentProfile, changes: readonly Planned
   return [...byId.values(), ...added]
 }
 
-/** The rows a request touches ("address:<id>", "contact:<id>"): two open requests never share one. */
+/** The rows a request touches ("address:<id>", "contact:<id>", "company:<party id>"): two open requests never share one. */
 export const touchedKeysOf = (changes: readonly PlannedChange[]): string[] =>
-  changes.filter((change) => change.id !== null).map((change) => `${change.target === 'ADDRESS' ? 'address' : 'contact'}:${change.id}`)
+  changes.filter((change) => change.id !== null).map((change) => `${change.target === 'ADDRESS' ? 'address' : change.target === 'CONTACT' ? 'contact' : 'company'}:${change.id}`)
 
 /**
  * At approval: each change of an existing row against the row now. The same version means the same fields (every change
@@ -208,6 +239,11 @@ export function staleProblems(changes: readonly PlannedChange[], current: Curren
   const problems: string[] = []
   for (const change of changes) {
     if (change.id === null) continue
+    if (change.target === 'COMPANY') {
+      // The website as the supplier saw it (the party's version moves with every office edit of the record).
+      if (!current.company || current.company.website !== change.before.website) problems.push('the website changed after the supplier sent this')
+      continue
+    }
     const rows: readonly { id: string; version: number; status: string }[] = change.target === 'ADDRESS' ? current.addresses : current.contacts
     const row = rows.find((candidate) => candidate.id === change.id)
     const what = change.target === 'ADDRESS' ? `the address ${addressLine(change.before)}` : `the contact ${change.before.name}`
@@ -242,6 +278,7 @@ const valueWords = (field: string, value: unknown): string => {
 
 /** One change in words, old → new, for the buyer's review and the audit row. */
 export function changeSentence(change: PlannedChange): string {
+  if (change.target === 'COMPANY') return `Website ${valueWords('website', change.before.website)} → ${valueWords('website', change.after.website)}.`
   if (change.target === 'ADDRESS') {
     if (change.op === 'ADD') return `New ${addressName(change.after).toLowerCase()}: ${addressLine(change.after)}.`
     if (change.op === 'REMOVE') return `Remove the ${addressName(change.before).toLowerCase()} ${addressLine(change.before)}.`
@@ -254,11 +291,12 @@ export function changeSentence(change: PlannedChange): string {
   return `Contact ${change.before.name}: ${parts.join('; ')}.`
 }
 
-/** "1 address and 2 contacts". */
+/** "1 address and 2 contacts", "the website and 1 contact". */
 export function changeSummary(changes: readonly PlannedChange[]): string {
   const addresses = changes.filter((change) => change.target === 'ADDRESS').length
   const contacts = changes.filter((change) => change.target === 'CONTACT').length
-  const parts = [addresses > 0 ? `${addresses} ${addresses === 1 ? 'address' : 'addresses'}` : null, contacts > 0 ? `${contacts} ${contacts === 1 ? 'contact' : 'contacts'}` : null].filter((part) => part !== null)
+  const website = changes.some((change) => change.target === 'COMPANY')
+  const parts = [website ? 'the website' : null, addresses > 0 ? `${addresses} ${addresses === 1 ? 'address' : 'addresses'}` : null, contacts > 0 ? `${contacts} ${contacts === 1 ? 'contact' : 'contacts'}` : null].filter((part) => part !== null)
   return parts.join(' and ')
 }
 
