@@ -28,8 +28,12 @@
 //
 // Signatures (the design's SignBlock and its PIN variant): OFFICE, a signed-in office user typed their name; FLOOR_PIN, a
 // floor worker of the site signed with badge and PIN on a tablet (the worker named, the device, and the SHA-256 of what
-// they signed); PAPER, the office recorded a signed paper (its scan is a StoredFile of the row). A signature is written
-// once; a register row is never deleted (ended, voided or corrected by a new row).
+// they signed); PAPER, the office recorded a signed paper (its scan is a StoredFile of the row); W2b schema wave 23
+// (B-W2b-184's need): LINK, an outside signer of a DVR version (an outside RSPP, the territorial RLS, the occupational
+// doctor) approved the approval request we sent it (links-depth.prisma ApprovalRequest, answered APPROVED by its link or in
+// the portal): only a DVR signature is signed so, and it names its request (the …_portal_followups_w2b_guards triggers
+// refuse LINK on every other register). A signature is written once; a register row is never deleted (ended, voided or
+// corrected by a new row).
 //
 // Who sees what (ownership/safety.json): the office keeps everything. The floor of a site reads its role sheets, sessions,
 // kits and instruction entries, the course catalogue, the training requirements and the training records (tenant-wide: a
@@ -131,6 +135,9 @@ enum SafetySignMethod {
   FLOOR_PIN
   /// The office recorded a signed paper; its scan is a file of the row.
   PAPER
+  /// W2b (schema wave 23): an outside signer approved our approval request (its APPROVAL link or the portal): a DVR
+  /// signature only, naming its request (RiskAssessmentSignature.approvalRequestId).
+  LINK
 }
 
 /// The notice of a new RLS to INAIL (QHS-226; D.Lgs. 81/2008 art. 18 c.1 aa): after an election or a designation the
@@ -359,9 +366,13 @@ model RiskAssessmentSignature {
   signedOn         DateTime         @db.Date
   signedAt         DateTime         @db.Timestamptz(3)
   method           SafetySignMethod
-  /// OFFICE: the office user who signed; PAPER: the one who recorded the paper. FLOOR_PIN: the worker of the site.
+  /// OFFICE: the office user who signed; PAPER: the one who recorded the paper. FLOOR_PIN: the worker of the site. LINK:
+  /// neither (the request holds the answer's evidence).
   signedById       String?          @db.Uuid
   signedByWorkerId String?          @db.Uuid
+  /// W2b (schema wave 23, B-W2b-184's need): LINK: the approval request the outside signer approved (of this version,
+  /// the same company, its party the appointee's); null for OFFICE, PAPER and FLOOR_PIN.
+  approvalRequestId String?         @db.Uuid
   /// What was signed: the version's SHA-256.
   signatureSha256  String
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
@@ -371,6 +382,8 @@ model RiskAssessmentSignature {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and siteId.
   appointment    SafetyAppointment?    @relation(fields: [tenantId, companyId, appointmentId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   signedByWorker Worker?               @relation("RiskAssessmentSignatureWorker", fields: [tenantId, siteId, signedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (schema wave 23): the approval request a LINK signature came through (Restrict, as above).
+  approvalRequest ApprovalRequest?     @relation(fields: [tenantId, companyId, approvalRequestId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, key])
   @@index([tenantId, versionId])

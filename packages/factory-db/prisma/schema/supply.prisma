@@ -7,7 +7,8 @@
 // A purchase order: DRAFT → SENT → CONFIRMED → PARTLY_RECEIVED → RECEIVED → CLOSED, or CANCELLED (PO approval,
 // SCM-078, is W2b; new states are additive). The supplier answers the PO_CONFIRM link (factory-domain links/purposes):
 // confirm (SENT → CONFIRMED), decline (SENT → DECLINED; the office changes the order and sends it again, or cancels
-// it), or answer with changes (SENT → CHANGES_PROPOSED, B-W1-31; Owner question P2, answer A: the buyer decides: accepted →
+// it), or answer with changes (SENT → CHANGES_PROPOSED, B-W1-31; W2b schema wave 23: in the portal too, by a person of the
+// supplier instead of a link; Owner question P2, answer A: the buyer decides: accepted →
 // CONFIRMED with the proposal as the confirmation, refused → SENT again). A SENT or DECLINED order goes back to DRAFT to be changed (its revision goes up by one); goods may arrive before
 // the supplier confirmed (SENT → PARTLY_RECEIVED | RECEIVED); a reversed receipt moves it back. The lines change only
 // while the order is DRAFT; the supplier's confirmation (the order's and each line's) is set once and never changed
@@ -82,8 +83,11 @@ model PurchaseOrder {
   /// The supplier's confirmation: set once, in the move SENT → CONFIRMED, never changed after.
   confirmedAt     DateTime?                    @db.Timestamptz(3)
   confirmedVia    PurchaseConfirmationChannel?
-  /// LINK: the PO_CONFIRM link it came through (a link of the same party); null for OFFICE.
+  /// LINK: the PO_CONFIRM link it came through (a link of the same party); null for OFFICE and PORTAL.
   confirmLinkId   String?                      @db.Uuid
+  /// W2b (schema wave 23, B-W2b-174's need): PORTAL: the partner user who confirmed it in the portal (an active person of
+  /// the order's party); null for LINK and OFFICE. Set and cleared with the rest of the confirmation.
+  confirmedByUserId String?                    @db.Uuid
   /// The name the supplier typed on the link (optional), or the person the office heard from.
   confirmedByName String?
   /// The supplier's own order or confirmation number.
@@ -97,6 +101,10 @@ model PurchaseOrder {
   /// name it typed (optional), its reference and note. Kept after the buyer's decision; a new proposal replaces it.
   proposedAt           DateTime?                 @db.Timestamptz(3)
   proposalLinkId       String?                   @db.Uuid
+  /// W2b (schema wave 23): a proposal made in the portal names the partner user who made it (an active person of the
+  /// order's party) instead of a link: a proposal names exactly one of the two. Accepted, a portal proposal becomes a
+  /// PORTAL confirmation by the same person (a link's a LINK confirmation through the same link).
+  proposedByUserId     String?                   @db.Uuid
   proposedByName       String?
   proposalSupplierRef  String?
   proposalNote         String?
@@ -122,6 +130,9 @@ model PurchaseOrder {
   contact       PartyContact?       @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   confirmLink   OneOffLink?         @relation("PurchaseOrderConfirmLink", fields: [tenantId, partyId, confirmLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   proposalLink  OneOffLink?         @relation("PurchaseOrderProposalLink", fields: [tenantId, partyId, proposalLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (schema wave 23): the partner users who confirmed it, or proposed its changes, in the portal.
+  confirmedByUser User?         @relation("PurchaseOrderConfirmedByUser", fields: [tenantId, confirmedByUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  proposedByUser  User?         @relation("PurchaseOrderProposedByUser", fields: [tenantId, proposedByUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         PurchaseOrderLine[]
   // inventory.prisma: the goods received against it.
   goodsReceipts GoodsReceipt[]
@@ -170,6 +181,8 @@ enum PurchaseConfirmationChannel {
   LINK
   /// The office recorded it from the supplier's mail or call.
   OFFICE
+  /// W2b (schema wave 23): a person of the supplier answered it in the portal (PurchaseOrder.confirmedByUserId).
+  PORTAL
 }
 
 /// One material of a purchase order (SCM-050, SCM-075): what, which colour, how much in which unit, at what price, by

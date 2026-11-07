@@ -132,9 +132,14 @@ describe('the walls', () => {
   it('gives the floor and the portal nothing of terms, lists, amendments, schedules, repairs and complaints', async () => {
     for (const table of ['PaymentTerms', 'PriceList', 'PriceListVersion', 'PriceListEntry', 'SalesOrderAmendment', 'SalesOrderMilestone', 'RepairOrder', 'RepairStageEvent', 'Complaint']) {
       await expect(sql(floor(), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(DENIED)
-      await expect(sql(partner(), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(DENIED)
+      // W2b schema wave 23 (B-W2b-192's need): the portal reads its own party's complaints, without the office's columns.
+      if (table !== 'Complaint') await expect(sql(partner(), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(DENIED)
     }
-    for (const table of ['ReturnAuthorisation', 'ReturnLine', 'ReturnReceipt']) await expect(sql(partner(), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(DENIED)
+    await expect(sql(partner(), 'SELECT 1 FROM "ReturnReceipt" LIMIT 1')).rejects.toThrow(DENIED)
+    // W2b schema wave 23: the portal reads its own party's RMAs and lines (never the internal note or who decided).
+    for (const table of ['ReturnAuthorisation', 'ReturnLine']) expect((await sql(partner(), `SELECT id FROM "${table}"`)).length, table).toBeGreaterThan(0)
+    await expect(sql(partner(), 'SELECT "internalNote" FROM "ReturnAuthorisation" LIMIT 1')).rejects.toThrow(DENIED)
+    await expect(sql(partner(), 'SELECT "findings" FROM "Complaint" LIMIT 1')).rejects.toThrow(DENIED)
     // The partner still reads its own Party row, with its commercial terms (its own documents show them).
     expect(await sql(partner(), 'SELECT "invoiceTiming"::text AS timing, incoterm FROM "Party"')).toEqual([{ timing: 'MONTHLY', incoterm: 'DAP' }])
   })

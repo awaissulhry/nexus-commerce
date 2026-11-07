@@ -120,7 +120,7 @@ export const orderAnswerContract = defineContract({
       /** WAITING (sent, no answer yet), CONFIRMED, DECLINED, CHANGES_PROPOSED, NOT_SENT, or the order's later state. */
       answer: z.enum(['NOT_SENT', 'WAITING', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'CLOSED']),
       words: z.string(),
-      confirmation: output({ at: instant(), via: z.enum(['LINK', 'OFFICE']), linkId: id().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
+      confirmation: output({ at: instant(), via: z.enum(['LINK', 'OFFICE', 'PORTAL']), linkId: id().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
       decline: output({ at: instant(), reason: z.string().nullable() }).nullable(),
       proposal: output({
         at: instant(),
