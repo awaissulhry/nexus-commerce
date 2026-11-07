@@ -19,7 +19,8 @@
 // Money (A1 §2.6): the fee per piece and the order's amount are costs (`@grain cost`), office only.
 //
 // Who sees what (ownership/subcontract.json): the office reads and writes; the floor and portal or link sessions read
-// none of it (the floor moves the kit through the stock ledger; a workshop portal is W2b). Nobody deletes an order (it
+// none of it (the floor moves the kit through the stock ledger; the workshop portal, W2b wave 22/22 below, reads and
+// answers its own orders and kit lines). Nobody deletes an order (it
 // is cancelled); the office deletes the operations of a DRAFT order and the kit lines still PLANNED.
 //
 // Every child row carries its order's siteId (and work order or workshop) in its reference, so it can never belong to
@@ -33,6 +34,12 @@
 // reason); receipts are append-only. A receipt line may report the outside operation on the bundle's way through the
 // work order (production.prisma OperationScan.subcontractReceiptLineId). Office only, like the rest of this file: the
 // floor's kit task (B-W2a-76) writes through the tenant's system caller.
+//
+// W2b (schema wave 22/22, B-W2b-158; the workshop portal and its JOB_ACCEPT link, SCM-154, SCM-155): the workshop answers
+// the job on the order (accepted, with another due-back date it proposes, or declined; the office answers a proposed
+// date) and checks the kit it received line by line. A portal or link session (factory_partner_runtime) reads its OWN
+// party's orders and kit lines, never a fee, amount or internal note, and writes only those answers (the
+// …_portal_supply_w2b_guards triggers); its progress reports and return notices are portal-supply.prisma's.
 
 /// An order to an outside workshop for operations of one work order (SCM-138).
 model SubcontractOrder {
@@ -72,6 +79,23 @@ model SubcontractOrder {
   /// Set exactly while CANCELLED, with the reason.
   cancelledAt      DateTime?              @db.Timestamptz(3)
   cancelReason     String?
+  /// W2b (wave 22/22, B-W2b-158; JOB_ACCEPT, PLN-163, SCM-154; design links.job, portal.supplier.jobs "Accept job",
+  /// "Decline this job"): the workshop's answer to the job, given once, through its JOB_ACCEPT link, the portal, or the
+  /// office for a workshop without e-mail (Owner answer C3); cleared only when the order goes back to DRAFT. Accepted
+  /// (while ISSUED, AT_WORKSHOP or PARTLY_RECEIVED): when, the name it gave (optional), and another due-back date it
+  /// proposes with why (optional). Declined (while ISSUED or AT_WORKSHOP): when, why, the name it gave (optional).
+  acceptedAt              DateTime?                 @db.Timestamptz(3)
+  acceptedByName          String?
+  proposedDate            DateTime?                 @db.Date
+  proposedDateReason      String?
+  declinedAt              DateTime?                 @db.Timestamptz(3)
+  declinedByName          String?
+  declineReason           String?
+  /// The office's answer to the proposed date, once: ACCEPTED (the expected-back date becomes it) or REFUSED; when, by
+  /// whom (a partner session reads the answer and its time, never who).
+  proposedDateDecision    PurchaseProposalDecision?
+  proposedDateDecidedAt   DateTime?                 @db.Timestamptz(3)
+  proposedDateDecidedById String?                   @db.Uuid
   version          Int                    @default(1)
   createdAt        DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
@@ -86,6 +110,9 @@ model SubcontractOrder {
   // W2b (B-W2b-01): the bundles that went out with its kit, and what came back.
   bundles    SubcontractBundle[]
   receipts   SubcontractReceipt[]
+  // W2b portal-supply.prisma (wave 22/22): the workshop's progress reports and return notices.
+  progressReports SubcontractProgressReport[]
+  returnNotices   SubcontractReturnNotice[]
   // W2b-2 cutting.prisma (wave 13/16): the secondary processes it takes outside.
   secondaryProcesses SecondaryProcess[]
   // W2a payables.prisma, cost-ledger.prisma (wave 7/7): the subcontractor's invoice lines that bill it, their matches,
@@ -100,6 +127,9 @@ model SubcontractOrder {
   @@unique([tenantId, siteId, workOrderId, id])
   // The target of the kit lines' reference: a line names its order's site and workshop.
   @@unique([tenantId, siteId, partyId, id])
+  // W2b (wave 22/22): the target of the progress reports' and return notices' reference: of the order's site, work order
+  // and workshop.
+  @@unique([tenantId, siteId, workOrderId, partyId, id])
 }
 
 /// DRAFT → ISSUED → AT_WORKSHOP → PARTLY_RECEIVED → RECEIVED → CLOSED; ISSUED → DRAFT (to change it); AT_WORKSHOP →
@@ -156,10 +186,14 @@ model SubcontractOperation {
   workOrderOperation WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b (B-W2b-01): what came back of it, receipt by receipt.
   receiptLines       SubcontractReceiptLine[]
+  // W2b portal-supply.prisma (wave 22/22): the workshop's progress reports of it.
+  progressReports    SubcontractProgressReport[]
 
   @@unique([tenantId, subcontractOrderId, seq])
   // W2b: the target of the receipt lines' reference: an operation of the line's own work order.
   @@unique([tenantId, siteId, workOrderId, id])
+  // W2b (wave 22/22): the target of the progress reports' reference: an operation of the report's own order.
+  @@unique([tenantId, siteId, workOrderId, subcontractOrderId, id])
 }
 
 /// One component of the kit sent to the workshop (SCM-140): what, which colour, lot and hide, how much; once SENT, the
@@ -189,6 +223,14 @@ model SubcontractKitLine {
   moveId             String?                  @db.Uuid
   ddtId              String?                  @db.Uuid
   note               String?
+  /// W2b (wave 22/22, B-W2b-158; SCM-155, design portal.supplier.jobs "Kit received"): the workshop's check of what came:
+  /// when, how much it counted (in `uom`, 0 or more; "all received as listed" is the line's quantity), and what was
+  /// missing or damaged, in its words (a photo of it is a file of the line). Written once, all together, only while the
+  /// line is SENT and not before it was sent, by the workshop (portal or link) or the office for it; cleared only when the
+  /// line goes back to PLANNED (its transfer reversed).
+  receivedByWorkshopAt       DateTime?        @db.Timestamptz(3)
+  receivedByWorkshopQuantity Decimal?         @db.Decimal(18, 4)
+  receivedByWorkshopNote     String?
   version            Int                      @default(1)
   createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
@@ -276,10 +318,14 @@ model SubcontractReceipt {
   lines            SubcontractReceiptLine[]
   // W2b inspection-plans.prisma (wave 10/16): the incoming inspections of what came back.
   incomingInspections IncomingInspection[]
+  // W2b portal-supply.prisma (wave 22/22): the workshop's return notices it was written from.
+  returnNotices    SubcontractReturnNotice[]
 
   @@unique([tenantId, subcontractOrderId, seq])
   // The target of the lines' reference: a receipt of the line's own site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
+  // W2b (wave 22/22): the target of the return notices' reference: a receipt of the notice's own order.
+  @@unique([tenantId, siteId, workOrderId, subcontractOrderId, id])
 }
 
 /// One operation (and bundle) of a receipt (W2b, B-W2b-01): how many pieces came back good, defective (rejected) and

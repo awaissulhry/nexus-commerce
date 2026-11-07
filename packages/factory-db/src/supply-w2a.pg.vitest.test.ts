@@ -131,7 +131,7 @@ const status = async (table: string, id: string) => String((await admin(`SELECT 
 describe('the walls', () => {
   const models = classifiedModels(loadSchema(), loadOwnership()).filter(({ model }) => FILES.has(model.file))
 
-  it('the new tables are the office’s: the floor reads none, the partner only its own revisions without prices', async () => {
+  it('the new tables are the office’s: the floor reads none, the partner only its own revisions (W2b: subcontract orders and kit lines) without prices', async () => {
     expect(models.map(({ model }) => model.name).sort()).toEqual([
       'PurchaseOrderReminder',
       'PurchaseOrderRevision',
@@ -155,8 +155,10 @@ describe('the walls', () => {
         await expect(sql(partner(A.P1), `SELECT 1 FROM "${model.table}" LIMIT 1`), model.name).rejects.toThrow(DENIED)
         continue
       }
-      expect(model.name).toBe('PurchaseOrderRevision')
-      expect(access.privileges).toEqual(['select'])
+      // W2b schema wave 22/22 (B-W2b-158): the workshop reads its own subcontract orders and kit lines and answers them (the
+      // guards keep it to its answer and its kit check).
+      expect(['PurchaseOrderRevision', 'SubcontractOrder', 'SubcontractKitLine'], model.name).toContain(model.name)
+      expect(access.privileges).toEqual(model.name === 'PurchaseOrderRevision' ? ['select'] : ['select', 'update'])
       for (const { column } of partnerWalledColumns(model)) expect(access.hiddenColumns, `${model.name}.${column}`).toContain(column)
       for (const column of access.hiddenColumns ?? []) await expect(sql(partner(A.P1), `SELECT "${column}" FROM "${model.table}" LIMIT 1`), column).rejects.toThrow(DENIED)
     }

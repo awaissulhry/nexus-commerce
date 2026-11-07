@@ -309,6 +309,8 @@ model WorkOrderSize {
   cutOrderLines       CutOrderLine[]
   recutTickets        CutTicket[]
   garmentDowngrades   GarmentDowngrade[]
+  // W2b portal-supply.prisma (wave 22/22): the workshop's progress reports of the cell.
+  subcontractProgressReports SubcontractProgressReport[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
@@ -589,6 +591,8 @@ model Bundle {
   // W2b subcontract.prisma (B-W2b-01): its trips to workshops, and what came back of it.
   subcontractBundles      SubcontractBundle[]
   subcontractReceiptLines SubcontractReceiptLine[]
+  // W2b portal-supply.prisma (wave 22/22): the workshop's progress reports of it.
+  subcontractProgressReports SubcontractProgressReport[]
   // W2b inspection-plans.prisma (wave 10/16): the in-process checks of it.
   inProcessChecks         InProcessCheck[]
 

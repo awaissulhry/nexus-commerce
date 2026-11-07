@@ -1,12 +1,13 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/subcontract.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes subcontract orders with their operations and kit lines through apps/factory-api's modules/purchasing/subcontracting (B-W2a-25), always through command(); the kit's stock moves (TRANSFER into the workshop's SUBCONTRACTOR location) are the stock ledger's, which the floor posts as it does any move. The fee per piece and the order's amount are costs (@grain cost). No W2a step needs the floor or a portal or link session here (a workshop portal is W2b): they read nothing. Nobody deletes an order (it is cancelled); the office deletes the operations of a DRAFT order and the kit lines still PLANNED (the …_supply_w2a_guards triggers hold the states for every login). W2b (B-W2b-01): the bundles that went out with a kit (SubcontractBundle), and the receipts with their lines (SubcontractReceipt, SubcontractReceiptLine: append-only, the …_followups_stock_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login) are office only too: the floor's kit task (B-W2a-76) writes them through the tenant's system caller. A bundle row is removed only while nothing of it came back. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/subcontract.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes subcontract orders with their operations and kit lines through apps/factory-api's modules/purchasing/subcontracting (B-W2a-25), always through command(); the kit's stock moves (TRANSFER into the workshop's SUBCONTRACTOR location) are the stock ledger's, which the floor posts as it does any move. The fee per piece and the order's amount are costs (@grain cost). No W2a step needs the floor or a portal or link session here. W2b schema wave 22/22 (B-W2b-158, the workshop portal and its JOB_ACCEPT link): a portal or link session (factory_partner_runtime, scopedBy party) reads its own party's subcontract orders and kit lines, never a fee, amount or internal note nor which office user wrote, issued or decided (hiddenColumns), and writes only the workshop's answer to the job and its check of the kit received (the …_portal_supply_w2b_guards triggers refuse any other partner change); the operations, bundles and receipts stay office only (no party key: the API reads them in the tenant's system context for the workshop's pages). Nobody deletes an order (it is cancelled); the office deletes the operations of a DRAFT order and the kit lines still PLANNED (the …_supply_w2a_guards triggers hold the states for every login). W2b (B-W2b-01): the bundles that went out with a kit (SubcontractBundle), and the receipts with their lines (SubcontractReceipt, SubcontractReceiptLine: append-only, the …_followups_stock_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login) are office only too: the floor's kit task (B-W2a-76) writes them through the tenant's system caller. A bundle row is removed only while nothing of it came back. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "SubcontractOrder": {
-      "about": "The office drafts a subcontract order for a work order, issues it to the workshop, moves it as the kit goes out and the goods come back, closes or cancels it. Office only.",
+      "about": "The office drafts a subcontract order for a work order, issues it to the workshop, moves it as the kit goes out and the goods come back, closes or cancels it, and answers a due-back date the workshop proposes. W2b (wave 22/22): the workshop (portal or JOB_ACCEPT link session) reads its own orders without the fee amount, internal note or who issued or decided, and answers a job once (accepted, with another date it proposes, or declined); the office records that answer for a workshop without e-mail.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["netAmount", "internalNote", "issuedById", "proposedDateDecidedById", "createdById"] }
       }
     },
     "SubcontractOperation": {
@@ -18,11 +19,12 @@
       }
     },
     "SubcontractKitLine": {
-      "about": "The office plans the kit, records each line sent with its transfer move and DDT, cancels a line, deletes one still PLANNED. Office only.",
+      "about": "The office plans the kit, records each line sent with its transfer move and DDT, cancels a line, deletes one still PLANNED. W2b (wave 22/22): the workshop (portal or link session) reads its own orders' kit lines and checks each SENT line once (when, the count, what was missing or damaged); the office records that check for a workshop without e-mail.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
       }
     },
     "SubcontractBundle": {
