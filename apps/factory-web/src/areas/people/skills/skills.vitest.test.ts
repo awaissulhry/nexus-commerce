@@ -27,6 +27,8 @@ import {
   levelOfKey,
   matrixColumns,
   placesOf,
+  tileValue,
+  trainingOf,
   printAddress,
   printIdsOf,
   reasonHeld,
@@ -84,10 +86,19 @@ describe('skills: the address', () => {
 })
 
 describe('skills: the matrix', () => {
-  it('columns: skills, then machines; Show narrows them', () => {
-    expect(matrixColumns(MATRIX, 'ALL').map((column) => column.kind)).toEqual([...SKILLS.map(() => 'skill'), 'machine', 'machine'])
+  it('columns: skills, then machines, then the safety courses (B-W2b-146); Show narrows them', () => {
+    expect(matrixColumns(MATRIX, 'ALL').map((column) => column.kind)).toEqual([...SKILLS.map(() => 'skill'), 'machine', 'machine', ...MATRIX.courses.map(() => 'course')])
     expect(matrixColumns(MATRIX, 'SKILLS').every((column) => column.kind === 'skill')).toBe(true)
     expect(matrixColumns(MATRIX, 'MACHINES').every((column) => column.kind === 'machine')).toBe(true)
+    expect(matrixColumns(MATRIX, 'SAFETY').map((column) => column.id)).toEqual(MATRIX.courses.map((course) => course.id))
+  })
+
+  it('the training tiles say "—" (null) when the caller reads no safety record; never a figure about one person', () => {
+    expect(tileValue(MATRIX.tiles, 'TRAINING_OVERDUE')).toBe(2)
+    expect(tileValue({ ...MATRIX.tiles, trainingOverdue: null }, 'TRAINING_OVERDUE')).toBeNull()
+    expect(tileValue(MATRIX.tiles, 'AUTHORISATIONS_HELD')).toBe(1)
+    expect(trainingOf(ROWS[1]!, MATRIX.courses[1]!.id)?.state).toBe('NEEDED')
+    expect(trainingOf({ ...ROWS[1]!, trainings: null }, MATRIX.courses[1]!.id)).toBeNull()
   })
 
   it('line and team narrow by what each row shows', () => {

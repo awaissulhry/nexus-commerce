@@ -10,13 +10,14 @@ import { className, skillName, skillsCan, skillsProblem, type DialogPerson } fro
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useSkillDialogs } from '../use-skill-dialogs'
 import { EmployeeSkillsView, type EmployeeSkillsActions, type EmployeeSkillsModel } from './view/EmployeeSkillsView'
+import { EmployeeTraining } from './training/EmployeeTraining'
 
 const LIVE = ['employee_skill.changed', 'machine_authorisation.changed']
 
 /**
  * People › Employees › the record's Skills & training tab (design people.employees rec:Employee/skills, GET
  * /people/employees/:id/skills, people.skills.view): what this person can do and may operate, who decided and when. The
- * dialogs are the matrix's own. Training and hands-on instruction join in W2b-2.
+ * dialogs are the matrix's own. W2b-2 (B-W2b-146): Safety training and hands-on instruction below (`training/`).
  */
 export function EmployeeSkills({ employeeId }: { employeeId: string }) {
   const api = useOfficeApi()
@@ -94,6 +95,7 @@ export function EmployeeSkills({ employeeId }: { employeeId: string }) {
 
   const held = new Set((value?.levels ?? []).map((row) => row.skill.id))
   return (
+    <>
     <EmployeeSkillsView
       model={{
         can,
@@ -104,6 +106,9 @@ export function EmployeeSkills({ employeeId }: { employeeId: string }) {
       }}
       actions={actions}
     />
+    {/* B-W2b-146: Safety training and hands-on instruction (safety.view), below the skills. */}
+    <EmployeeTraining employeeId={employeeId} />
+    </>
   )
 }
 

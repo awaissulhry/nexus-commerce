@@ -1,0 +1,254 @@
+/*
+ * People › Skills & training, the training part (B-W2b-146): the lens switch, the sections' heads, the dialogs' forms and
+ * tables, the two PDF windows and the employee's Safety tab. The controls are the design system's; semantic tokens only,
+ * no colours of their own. A due date is said by the DS DueCell (an icon and words, never a colour alone).
+ */
+.fw-tr-lenses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-head h2,
+.fw-tr-head h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-tr-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-tr-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tr-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tr-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tr-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fw-tr-grid2,
+  .fw-tr-grid3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-tr-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-tr-cell > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-tr-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-tr-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-tr-plain {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-tr-plain li + li {
+  margin-top: var(--nds-space-4);
+}
+
+.fw-tr-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-line {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
+  align-items: end;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fw-tr-line,
+  .fw-tr-person {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+
+.fw-tr-shaded {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: 0 var(--nds-space-4);
+  border-left: 2px solid var(--nds-border-strong);
+}
+
+.fw-tr-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-tr-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .fw-tr-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-tr-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-tr-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-tr-band h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@media print {
+  .fw-tr-noprint {
+    display: none !important;
+  }
+}
+
+.fw-tr-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-tr-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-tr-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-tr-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+/* An input inside a narrow table cell fills the cell and never pushes it wider. */
+.fw-tr-fill {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A record's name in a list row: a real button (the row opens with Enter too). */
+.fw-tr-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nds-text-link);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fw-tr-link:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}

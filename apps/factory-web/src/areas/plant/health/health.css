@@ -1,0 +1,235 @@
+/*
+ * Plant › Health & safety › Health surveillance (SCR-212, B-W2b-148) LAYOUT: the band, the protected page's note, the tiles,
+ * the due list, the judgements, the plans per role, the dialogs' forms and the two windows (the doctor's visit list, a
+ * judgement's copy). The page fills the shell's main area (no max-width: Owner rule 2026-10-29); the controls are the design
+ * system's; semantic tokens only.
+ */
+.fw-hv,
+.fw-hv-section,
+.fw-hv-stack,
+.fw-hv-form,
+.fw-hv-loading,
+.fw-hv-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-hv,
+.fw-hv-tab {
+  gap: var(--nds-space-20);
+}
+
+.fw-hv-section,
+.fw-hv-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-hv-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-hv-band,
+.fw-hv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-hv-status,
+.fw-hv-actions,
+.fw-hv-tools,
+.fw-hv-row,
+.fw-hv-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-hv-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-hv-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-hv-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hv-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hv-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-hv-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-hv-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-hv-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-hv-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-hv-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-hv-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-hv-clip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-hv-hidden {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hv-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hv-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-hv-who-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 420px;
+}
+
+.fw-hv-plans {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-hv-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-hv-fieldset,
+.fw-hv-byhand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-hv-fieldset > legend {
+  padding: 0 var(--nds-space-4);
+  font-weight: 600;
+}
+
+.fw-hv-outcomes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-hv-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-4);
+}
+
+.fw-hv-picks,
+.fw-hv-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-hv-proposal {
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-hv-proposal[data-refused],
+.fw-hv-byhand[data-refused] {
+  border-color: var(--nds-danger);
+}
+
+.fw-hv-print-note {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hv-copy-image {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
