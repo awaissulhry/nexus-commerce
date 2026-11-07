@@ -101,9 +101,10 @@ export interface PlannedLine {
 
 /**
  * Each line of the body resolved to a row of what may come back: the problems at `<path>/<i>/<field>` (400) and the
- * quantities above what may come back (409, "with the sold number"), never thrown.
+ * quantities above what may come back (409, "with the sold number"), never thrown. B-W2b-192: the portal's and the claim
+ * link's return requests (modules/sales/portal-returns) plan their lines here too.
  */
-async function planLines(db: Reader, rows: readonly ReturnableRow[], lines: readonly NewLineBody[], path: string): Promise<{ planned: PlannedLine[]; problems: Issue[]; aboveSold: Issue[] }> {
+export async function planLines(db: Reader, rows: readonly ReturnableRow[], lines: readonly NewLineBody[], path: string): Promise<{ planned: PlannedLine[]; problems: Issue[]; aboveSold: Issue[] }> {
   const problems: Issue[] = []
   const aboveSold: Issue[] = []
   const planned: PlannedLine[] = []

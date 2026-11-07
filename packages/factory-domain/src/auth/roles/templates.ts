@@ -9,6 +9,8 @@ import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sa
 import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissions'
 // B-W2b-190: portal ordering.
 import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
+// B-W2b-192: returns and complaints from outside.
+import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1378,6 +1380,9 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   CUSTOMER_DOCUMENT_READERS,
   // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
   PORTAL_ORDERING_ADDS,
+  // B-W2b-192: the Returns & claims page to the customer Buyer, Finance, Quality and Viewer; asking to the Buyer and Quality;
+  // the complaints' investigation (answer letter, 8D) to Quality.
+  PORTAL_RETURNS_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

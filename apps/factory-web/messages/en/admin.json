@@ -1991,6 +1991,9 @@
     "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
+    "portal_returns_view": "See your organisation's returns and complaints: each case with its next step, what was asked, where it is, the return instructions and, for roles that show prices, the credit note",
+    "portal_returns_request": "Ask for a return or report a quality problem, add photos while it is not decided, and cancel a return request before the goods leave",
+    "portal_complaints_view": "Follow your quality complaints: the investigation's steps, our answer letter and the 8D report once shared with you",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }
