@@ -628,6 +628,15 @@ const PARTNERS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
   sales: ['partners.view', 'partners.invite', 'partners.manage', 'partners.preview'],
   buyer: ['partners.view', 'partners.invite', 'partners.manage', 'partners.preview'],
 })
+/**
+ * B-W2b-167 (tasks for partners, COL-043; design office home.tasks "tasks staff give the customer"): who looks after a
+ * partner's portal also asks it for documents, answers, measurements and progress, and moves or withdraws those requests.
+ */
+const PARTNER_TASKS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['partners.tasks.manage'],
+  sales: ['partners.tasks.manage'],
+  buyer: ['partners.tasks.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -720,7 +729,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-139
   ...(audience === 'office' ? (RECORDS_ADDS[key] ?? []) : []),
   // B-W2b-162
-  ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : []),
+  // B-W2b-167
+  ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1334,7 +1345,12 @@ if (problems.length > 0) throw new Error(`Role templates are not valid: ${proble
  * to them HERE: one map per step (partner template key → permissions) in PARTNER_ADDS, one line each; the Admin of a kind
  * follows its kind's other roles by itself.
  */
-const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = []
+const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = [
+  // B-W2b-167: every main role sees its Home (tasks, notifications, counts, the live channel); each Admin follows.
+  Object.fromEntries(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs', 'guest-accountant'].map((key) => [key, ['portal.home.view' as Permission]])),
+  // B-W2b-168: every main partner role searches its portal (SAL-084); each Admin follows.
+  Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
+]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
 if (partnerProblems.length > 0) throw new Error(`Partner role templates are not valid: ${partnerProblems.join('; ')}`)

@@ -21,6 +21,8 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { depositOfVersion, depositViewOf, instructionsFor } from '../deposits/deposits'
 import { afterAcceptance } from './after-acceptance'
 import { CUSTOMER_QUOTE_COLUMNS, customerQuoteOf, dayOf, lineLabels, readCustomerLines, readCustomerVersions, type CustomerVersionRow, type Reader } from './frozen'
+// B-W2b-165 (SAL-199): the proofs the customer accepts with the quote.
+import { acceptProofsInCommand, linkProofsOf } from '../quote-proofs/link'
 
 /**
  * The customer's side of a sent quote, through its one-off QUOTE_ACCEPT link (B-W1-24; A1 §2.5, §3.10 "Links"; SAL-093,
@@ -115,6 +117,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     date: businessDate(version.sentAt ?? version.createdAt),
     depositDueDays: extra.depositDueDays,
   })
+  const proofs = await request.withClient((client) => linkProofsOf(client, version.id))
   const acceptance = version.status === 'ACCEPTED' ? await request.withClient((client) => client.quoteAcceptance.findFirst({ where: { versionId: version.id }, select: { signerName: true, acceptedAt: true, documentSha256: true, termsVersion: true } })) : null
   const answers = status.canAnswer
     ? (['accept', 'decline'] as const).map((action) => ({ action, ...evidenceNeeds(link.purpose, action, { email: link.email }), noWithdrawal: action === 'accept' && version.noWithdrawal }))
@@ -157,6 +160,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
       noWithdrawal: customer.noWithdrawal,
       terms: { termsVersion: customer.terms.termsVersion, clauses: customer.terms.clauses.map((clause) => ({ ...clause })) },
       document: document ? { fileId: document.id, name: document.originalName, sha256: document.sha256, sizeBytes: document.sizeBytes } : null,
+      proofs,
     },
     state: status.state,
     message: status.message,
@@ -222,6 +226,8 @@ export interface AnswerBody {
   readonly email?: string | null | undefined
   readonly noWithdrawalAccepted?: boolean | undefined
   readonly note?: string | null | undefined
+  /** B-W2b-165: the proofs the page showed (accept only). */
+  readonly proofFileIds?: readonly string[] | undefined
 }
 
 const refuse = (problem: { readonly path: string; readonly message: string; readonly state: string }): DomainError =>
@@ -270,13 +276,14 @@ export async function answerQuote(request: FastifyRequest, action: 'accept' | 'd
           },
         ],
       })
+      const proofs = await acceptProofsInCommand(tools, { quote, version, acceptanceId, shown: body.proofFileIds })
       tools.audit({
         action: 'quotes.accept',
         recordType: 'Quote',
         recordId: quote.id,
         companyId: quote.companyId,
         before: { status: 'SENT' },
-        after: { status, versionId: version.id, revision: version.revision, acceptanceId, evidenceId: use.evidenceId, signerName: use.typedName, emailCheck: use.emailCheck, documentSha256: version.documentSha256, termsVersion: version.termsVersion, noWithdrawalAccepted, note },
+        after: { status, versionId: version.id, revision: version.revision, acceptanceId, evidenceId: use.evidenceId, signerName: use.typedName, emailCheck: use.emailCheck, documentSha256: version.documentSha256, termsVersion: version.termsVersion, noWithdrawalAccepted, note, proofFileIds: proofs.map((proof) => proof.fileId) },
       })
       tools.emit({
         type: 'quote.accepted',

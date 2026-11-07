@@ -1823,6 +1823,7 @@
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
     "inventory_receipts_documents_request": "Ask the supplier for a receipt's missing documents",
     "search_rebuild": "Rebuild the search index of the whole group",
+    "portal_search": "Search your orders, documents and jobs by your own references and ours",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
     "planning_schedule_publish": "Publish the schedule to the floor",
     "planning_leather_manage": "Change a style's cutting loss from its cuts",
@@ -1973,6 +1974,8 @@
     "portal_colleagues_manage": "Your organisation's portal admin: invite colleagues, change roles, deactivate",
     "portal_comment": "Write messages on the records the role shows",
     "portal_upload": "Send files on the records the role shows",
-    "portal_approve": "Approve, accept or sign on the records the role shows"
+    "portal_approve": "Approve, accept or sign on the records the role shows",
+    "portal_home_view": "See your Home: what waits for you, your notifications and your organisation's counts",
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }

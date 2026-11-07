@@ -30,6 +30,8 @@ import { detailInCommand, onQuote } from './quotes'
 import { quoteRulesFor } from './rules'
 import { grainsOf, officeContextOf, officeQuote, readCurrentVersion, readQuote, storedVat, treatmentFor, treatmentOfStored, type QuoteParty, type QuoteRow } from './store'
 import { forCaller, readFacts, type QuoteDetail } from './views'
+// B-W2b-165 (SAL-199): the proofs go with the version: a proof not ready blocks the send, the send freezes them.
+import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
 
 /**
  * Sending a quote (B-W1-24; A1 §2.5 "Sending freezes a version"; SAL-157, SAL-192, SAL-194, SAL-093; GAP-005, GAP-008;
@@ -131,7 +133,7 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
   const versions = await readCustomerVersions(db, quote.id)
   const standing = versions.find((row) => row.revision < version.revision && row.status === 'SENT' && row.firmOffer && row.validUntil !== null && dayOf(row.validUntil)! >= today)
   const bank = await depositBankDetailsFor(db, quote.companyId)
-  const checks = sendChecks({
+  let checks = sendChecks({
     issues: facts.issues,
     status: version.status,
     approvalNeeded: facts.priced.approvalNeeded,
@@ -146,6 +148,8 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
     depositAsked: version.depositAmount !== null && version.depositAmount > 0,
     bankDetailsKnown: bank !== null,
   })
+  const proofChecks = await proofSendChecks(db, version.id)
+  if (proofChecks.length > 0) checks = { ready: false, checks: [...checks.checks, ...proofChecks] }
 
   let billTo: BillToSnapshot | null = null
   if (billRow && party?.identity) {
@@ -306,6 +310,7 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
         select: { id: true },
       })
       await tx.quote.update({ where: { id: current.id }, data: { status: 'SENT' }, select: { id: true } })
+      await freezeProofsInCommand(tools, { companyId: current.companyId, partyId: current.partyId, number: current.number, versionId: version.id, revision: version.revision })
       const link = await insertAcceptLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
       const mail = await queueLinkMail(tools, {
         quoteId: current.id,

@@ -380,7 +380,7 @@ describe('the partner session', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     )
     const browser = await portalBrowser(h)
     browser.cookies.set(PORTAL_COOKIE, token.value)
-    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.colleagues.view', 'threads.read'], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
+    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.colleagues.view', 'portal.home.view', 'portal.search', 'threads.read'], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
     expect((await browser.post('/portal/sessions/refresh')).status).toBe(200)
     const write = await browser.post('/portal/first-visit', { noticeId: world.noticeId, noticeLocale: 'en', sha256: 'a'.repeat(64) })
     expect(write.status).toBe(403)

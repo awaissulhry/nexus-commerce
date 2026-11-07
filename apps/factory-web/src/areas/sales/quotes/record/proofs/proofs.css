@@ -1,0 +1,63 @@
+/*
+ * Documents › Proofs (SCR-035-proofs, B-W2b-165): the panel's LAYOUT inside the quote record. Controls are the design
+ * system's; semantic tokens only.
+ */
+.fw-qp,
+.fw-qp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-qp-held {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+}
+
+.fw-qp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-qp-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-qp-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-qp-accepted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qp-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
