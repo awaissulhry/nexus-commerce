@@ -1,6 +1,6 @@
 import { blockingLeft, payrollChecks, type CheckFacts, type PayrollCheck } from '@nexus/factory-domain/people/payroll/checks'
 import { HOUR_CODES, mappingKey, type HourCode, type PayrollCodeKind } from '@nexus/factory-domain/people/payroll/codes'
-import { layoutConfirmed, overflowingValues, parseDefinition, printsProviderCode, type FileContext } from '@nexus/factory-domain/people/payroll/layouts'
+import { layoutConfirmed, overflowingValues, printsProviderCode, type FileContext } from '@nexus/factory-domain/people/payroll/layouts'
 import { carriesPay, earningFacts, flatValues, personValues, type MappedCode, type PayrollValue, type PersonFacts, type PersonValues } from '@nexus/factory-domain/people/payroll/values'
 import { paysOn } from '@nexus/factory-domain/people/earnings/rules'
 import { eachDay } from '@nexus/factory-domain/calendars/dates'
@@ -8,7 +8,7 @@ import { dateOf, dayOf } from '../employees/access'
 import type { Client } from '../attendance/store'
 import { closeOfMonth, codesById, gatesOf, lineDaysLeft, monthDays, monthFactsOf, type CloseRow, type Gates, type Place } from '../close/store'
 import { PayFacts, periodOfMonth, type PeriodRecord } from '../earnings/store'
-import { contextOfFile, periodDaysOf, type LayoutRow } from './store'
+import { companyPayrollCode, contextOfFile, layoutAsUsed, periodDaysOf, type LayoutRow } from './store'
 
 /**
  * What a payroll export carries (B-W2b-54; MES-267, MES-272): one reader of the month's figures. Hours come from close/store's
@@ -126,7 +126,8 @@ export async function monthChecks(db: Client, place: Place, month: string, input
   const facts = await monthFactsOf(db, place, month, { gates, closed, lineDaysOpen: input.lineDaysOpen, now: input.now })
   const people = await monthPeople(db, place, month, input.now)
   const context = contextOfFile(place, month, input.revision)
-  const definition = input.layout ? parseDefinition(input.layout.definition) : null
+  // The layout as the file would use it: the company's payroll code is in the company column, so it counts for LAYOUT_FITS.
+  const definition = input.layout ? layoutAsUsed(input.layout, await companyPayrollCode(db, place.company.id)).definition : null
   const asked: CheckFacts = {
     month,
     closed,

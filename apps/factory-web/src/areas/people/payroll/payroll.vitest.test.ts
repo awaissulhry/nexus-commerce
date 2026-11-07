@@ -395,6 +395,9 @@ describe('payroll: a file', () => {
     expect(sendRowHeld(replaced, HR)).toEqual({ key: 'held.replaced' })
     expect(sendRowHeld(EXPORTS[3]!, HR)).toEqual({ key: 'held.notExported' })
     expect(sendRowHeld(EXPORTS[0]!, { ...HR, manage: false })).toEqual({ key: 'held.noManage' })
+    // B-W2b-163's rule on the record: a file with amounts never goes by link; one of hours may.
+    expect(sendRowHeld({ ...EXPORTS[0]!, carriesPay: true }, HR)).toEqual({ key: 'held.payByLink' })
+    expect(sendRowHeld({ ...EXPORTS[0]!, carriesPay: false }, HR)).toBeNull()
   })
 
   it('a selected rows CSV carries no person and no figure', () => {
@@ -421,6 +424,7 @@ describe('payroll: a refusal in words', () => {
 
   it('names the refusal by its code; CHECKS_OPEN counts the checks', () => {
     expect(payrollProblem(refused('refusal/ALREADY_EXPORTED'))).toEqual({ key: 'refusal.ALREADY_EXPORTED' })
+    expect(payrollProblem(refused('refusal/PAY_FIGURES'))).toEqual({ key: 'refusal.PAY_FIGURES' })
     expect(refusalCodeOf(refused('refusal/NOPE'))).toBeNull()
     const open = refused('refusal/CHECKS_OPEN', 'check/EMPLOYEE_CODES', 'check/DAYS_APPROVED')
     expect(refusedChecks(open)).toEqual(['EMPLOYEE_CODES', 'DAYS_APPROVED'])

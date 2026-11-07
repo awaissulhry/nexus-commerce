@@ -9,7 +9,7 @@ import type { Check, CheckCode, CodeRow, ExportFile, ExportLink, ExportRecord, E
  */
 
 const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(n).padStart(12, '0')}`
-const COMPANY_REF = { code: 'DEMO', legalName: 'Officina Demo S.r.l.' }
+const COMPANY_REF = { code: 'DEMO', legalName: 'Officina Demo S.r.l.', payrollCode: '000123' }
 const SEAL_1 = '9f2c4e1ab7d05c38e61f4a2b90c7d3e85a1b6f04c2d97e13b8a05f6d4c1e7a92'
 const SEAL_2 = '3b7e90d1c4a2f8665e13d7a9b0c2f41e86d5a7c3190be2f4d8a6c1750e9b3f24'
 
@@ -18,6 +18,7 @@ export const layoutOf = (over: Partial<Layout> & Pick<Layout, 'name' | 'format'>
   companyId: COMPANY,
   provider: null,
   definition: STARTERS.GENERIC_CSV.definition as Layout['definition'],
+  confirmation: null,
   status: 'ACTIVE',
   note: null,
   confirmed: true,
@@ -29,7 +30,7 @@ export const layoutOf = (over: Partial<Layout> & Pick<Layout, 'name' | 'format'>
 export const LAYOUT_CSV = layoutOf({ name: 'CSV generico', format: 'DELIMITED' })
 export const LAYOUT_EXCEL = layoutOf({ id: uid('6001', 2), name: 'Excel generico', format: 'SPREADSHEET', definition: STARTERS.GENERIC_EXCEL.definition as Layout['definition'] })
 export const LAYOUT_ZUCCHETTI = layoutOf({ id: uid('6001', 3), name: 'Importazione Zucchetti', format: 'FIXED_WIDTH', provider: 'Zucchetti', confirmed: false, definition: STARTERS.ZUCCHETTI.definition as Layout['definition'] })
-export const LAYOUT_CONFIRMED = layoutOf({ ...LAYOUT_ZUCCHETTI, name: 'Tracciato consulente', confirmed: true, definition: { ...(STARTERS.ZUCCHETTI.definition as Layout['definition']), companyCode: '000123', confirmation: { on: '2026-10-20', by: 'Studio Demo' } } })
+export const LAYOUT_CONFIRMED = layoutOf({ ...LAYOUT_ZUCCHETTI, name: 'Tracciato consulente', confirmed: true, definition: STARTERS.ZUCCHETTI.definition as Layout['definition'], confirmation: { on: '2026-10-20', by: 'Studio Demo' } })
 
 export const LAYOUTS: LayoutsAnswer = {
   companyId: COMPANY,
@@ -190,6 +191,7 @@ export const recordOf = (over: Partial<ExportRecord> = {}): ExportRecord => ({
   cancelReason: null,
   note: null,
   carriesPay: true,
+  consultant: { partyId: uid('6006', 1), name: 'Studio Demo', email: 'studio@example.com' },
   actions: { correct: { allowed: true }, cancel: { allowed: false }, send: { allowed: true }, open: { allowed: true } },
   ...over,
 })

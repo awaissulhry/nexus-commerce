@@ -363,6 +363,22 @@ describe('my statement (c.c. art. 2101 c.3)', () => {
     expect(JSON.stringify(refused.body)).toContain('refusal/NO_PRINTER')
   })
 
+  it('B-W2b-89: the printer the office names for statements comes first; archived, the statement is held, never sent elsewhere', async () => {
+    const office = (await admin<{ id: string }>(`SELECT id FROM "Printer" WHERE "tenantId" = $1 AND code = 'A4-OFFICE'`, [T]))[0]!.id
+    await admin(`INSERT INTO "PeopleSettings" (id, "tenantId", "companyId", "statementPrinterId", "updatedAt") VALUES ($1, $2, $1, $3, now()) ON CONFLICT (id) DO UPDATE SET "statementPrinterId" = EXCLUDED."statementPrinterId"`, [companyA, T, office])
+    expect((await myDay()).printer).toBe(true)
+    const named = await tablet.post(`/people/myday/statements/${period.statement}/print`, {}, keyed())
+    expect(named.status, JSON.stringify(named.body)).toBe(201)
+    expect(named.body).toMatchObject({ printer: { code: 'A4-OFFICE' } })
+    await admin(`UPDATE "Printer" SET status = 'ARCHIVED' WHERE id = $1`, [office])
+    expect((await myDay()).printer).toBe(false)
+    const held = await tablet.post(`/people/myday/statements/${period.statement}/print`, {}, keyed())
+    expect(held.status).toBe(409)
+    expect(JSON.stringify(held.body)).toContain('refusal/NO_PRINTER')
+    await admin(`UPDATE "Printer" SET status = 'ACTIVE' WHERE id = $1`, [office])
+    await admin(`UPDATE "PeopleSettings" SET "statementPrinterId" = NULL WHERE id = $1`, [companyA])
+  })
+
   it('the floor and the office print the same file: one statement document (B-W2b-62)', async () => {
     const device = (await admin<{ id: string }>('SELECT "deviceId" AS id FROM "FloorSession" WHERE "tenantId" = $1 AND "workerId" = $2 ORDER BY "startedAt" DESC LIMIT 1', [T, operator]))[0]!.id
     await replica(`UPDATE "Device" SET mode = 'PHONE', "stationId" = NULL, "personalWorkerId" = '${operator}' WHERE id = '${device}'`)

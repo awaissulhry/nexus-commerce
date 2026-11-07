@@ -15,6 +15,7 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import type { CommandCaller } from '../../../core/command'
 import { buildApp } from '../../../core/app'
 import { SYSTEM_ACTOR_ID, testAuthenticator, withContextClient, type RequestContext, type SessionContext } from '../../../core/context'
+import { serverClock } from '../../../core/time'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
@@ -474,7 +475,9 @@ describe('a decision dated later than now (an import, a clock ahead)', () => {
   it('closes from its date on, not before: 409 in words, never a 500', async () => {
     const notice = (await admin('SELECT id FROM "PrivacyNotice" WHERE "companyId" = $1 AND kind = \'WORKER_FLOOR\' AND status = \'PUBLISHED\'', [A.companyA]))[0]!
     const dpia = (await admin('SELECT id FROM "PrivacyDpia" WHERE "companyId" = $1 AND status = \'STORED\'', [A.companyA]))[0]!
-    const later = new Date(h.clock.now().getTime() + 7 * 86_400_000)
+    // Later than the clock the command checks (serverClock), not the harness clock: that one starts on a fixed day and
+    // only moves the sign-in and step-up, so "harness clock + 7 days" fell behind the real day from 2026-11-04 on.
+    const later = new Date(serverClock.now().getTime() + 7 * 86_400_000)
     const id = newId()
     await admin(
       'INSERT INTO "PeopleLegalGate" (id, "tenantId", "companyId", "siteId", purpose, basis, "basisReference", "noticeId", "dpiaId", "switchedOnAt", "switchedOnById", "updatedAt") VALUES ($1, $2, $3, $4, \'PERFORMANCE\', \'UNION_AGREEMENT\', \'Imported agreement (made up)\', $5, $6, $7, $8, now())',

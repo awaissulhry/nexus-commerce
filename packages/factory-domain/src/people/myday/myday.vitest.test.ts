@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { localInstant } from '../../calendars/dates'
 import type { CompanyLegal } from '../../documents/model'
 import type { StatementSummary } from '../earnings/statement'
-import { MYDAY_CLOSE_AFTER_MS, MYDAY_REFUSALS, monthPays, myPaceOf, officePrinterOf, targetHours } from './rules'
+import { MYDAY_CLOSE_AFTER_MS, MYDAY_REFUSALS, monthPays, myPaceOf, officePrinterOf, statementPrinterOf, targetHours } from './rules'
 import { workerStatementDocument } from '../earnings/statement-document'
 import { myStatementDocument } from './statement-document'
 
@@ -60,6 +60,18 @@ describe('money and the printer', () => {
     expect(officePrinterOf([])).toBeNull()
     expect(officePrinterOf(['A4'])).toBe('A4')
     expect(officePrinterOf(['A4', 'DOCK'])).toBeNull()
+  })
+
+  it('the printer the office named for statements comes first, wherever it stands; archived, it holds (B-W2b-89)', () => {
+    const office = { id: 'office', kind: 'A4_PDF', status: 'ACTIVE' }
+    const dock = { id: 'dock', kind: 'A4_PDF', status: 'ACTIVE' }
+    expect(statementPrinterOf({ id: 'office', printer: office }, [])).toBe(office)
+    expect(statementPrinterOf({ id: 'office', printer: { ...office, status: 'ARCHIVED' } }, [dock])).toBeNull()
+    expect(statementPrinterOf({ id: 'office', printer: { ...office, kind: 'LABEL_ZPL' } }, [dock])).toBeNull()
+    expect(statementPrinterOf({ id: 'office', printer: null }, [dock])).toBeNull()
+    // None named: B-W2b-68's rule, the site's only active A4 printer.
+    expect(statementPrinterOf({ id: null, printer: null }, [dock])).toBe(dock)
+    expect(statementPrinterOf({ id: null, printer: null }, [dock, office])).toBeNull()
   })
 
   it('closes after a minute, shorter than a station\'s idle time; every refusal says what to do', () => {

@@ -1,0 +1,211 @@
+{
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Supplier certificate",
+    "TEST_REPORT": "Test report",
+    "DECLARATION": "Declaration",
+    "QUESTIONNAIRE": "Supplier questionnaire",
+    "POD": "Proof of delivery",
+    "CMR": "CMR consignment note",
+    "DDT_PHOTO": "Photo of the supplier's DDT",
+    "CARRIER_INVOICE": "Carrier's invoice",
+    "PROOF": "Proof to approve",
+    "SAMPLE_PHOTO": "Sample photo",
+    "CLAIM_PHOTO": "Claim photo",
+    "MACHINE_CE": "CE declaration",
+    "MANUAL": "Manual",
+    "CHECK_REPORT": "Check report",
+    "BEFORE_WORK": "Photo before the work",
+    "AFTER_WORK": "Photo after the work",
+    "BODY_PHOTO": "Body photo",
+    "OTHER": "Other document"
+  },
+  "status": {
+    "SENT": "Sent",
+    "CONFIRMED": "Confirmed",
+    "RECEIVED": "Received",
+    "CLOSED": "Closed",
+    "POSTED": "Posted",
+    "ISSUED": "Issued",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "ACTIVE": "Active"
+  },
+  "recordType": {
+    "PurchaseOrder": "Purchase order",
+    "GoodsReceipt": "Goods receipt",
+    "ShipNotice": "Ship notice",
+    "SubcontractOrder": "Subcontract order",
+    "Shipment": "Shipment",
+    "Party": "Customer or supplier",
+    "WorkOrder": "Work order",
+    "SalesOrder": "Sales order",
+    "Quote": "Quote",
+    "Style": "Style",
+    "Certificate": "Certificate",
+    "Inspection": "Inspection",
+    "SupplierInvoice": "Supplier invoice",
+    "AccountingExport": "Accounting export",
+    "Company": "Company"
+  },
+  "role": {
+    "ANY": "Every record",
+    "CUSTOMER": "Customers",
+    "BRAND": "Brands",
+    "SUPPLIER": "Suppliers",
+    "SUBCONTRACTOR": "Subcontractors",
+    "CARRIER": "Carriers",
+    "CONSULTANT": "Consultants"
+  },
+  "required": {
+    "label": "What {status} needs",
+    "blocks_one": "Cannot move to {status} yet: {count} document missing",
+    "blocks_other": "Cannot move to {status} yet: {count} documents missing",
+    "warns_one": "Before {status}: {count} document to add (it does not block)",
+    "warns_other": "Before {status}: {count} documents to add (they do not block)",
+    "reason": {
+      "MET": "On file",
+      "MISSING": "Missing",
+      "EXPIRED": "Expired"
+    },
+    "level": {
+      "BLOCK": "Blocks the move",
+      "WARN": "Only warns"
+    },
+    "expiredOn": "expired on {date}",
+    "how": "Upload the document here (or on the supplier), then say what it is and until when with \"What it is\".",
+    "partyDocuments": "Also counted, from the record's customer or supplier: {names}",
+    "unreadable": "What this record needs before its next steps could not be read.",
+    "retry": "Try again"
+  },
+  "versions": {
+    "open": "Versions",
+    "openNamed": "Versions of {name}",
+    "title": "Versions of {name}",
+    "intro": "Every version is kept, read-only. Restore makes a new version from an earlier one; tick two pictures to see them side by side.",
+    "close": "Close",
+    "compare": "Side by side",
+    "compareLabel": "Two versions side by side",
+    "compareLoading": "Opening the two pictures…",
+    "compareClose": "Hide side by side",
+    "loading": "Reading the versions…",
+    "tableLabel": "Versions of {name}",
+    "col": {
+      "pick": "Pick",
+      "version": "Version",
+      "who": "Added by",
+      "when": "When",
+      "size": "Size",
+      "uses": "Used by",
+      "actions": "Actions"
+    },
+    "pickNamed": "Pick version {n} for side by side",
+    "number": "v{n}",
+    "current": "In force",
+    "earlier": "Earlier",
+    "madeByMarkup_one": "Marked up ({count} mark)",
+    "madeByMarkup_other": "Marked up ({count} marks)",
+    "markups_one": "{count} markup drawn on it",
+    "markups_other": "{count} markups drawn on it",
+    "byPartner": "{name} (partner)",
+    "bySystem": "Nexus (a copy or a document it made)",
+    "usedByNone": "No other record",
+    "usedBy": "{record} uses v{n}",
+    "preview": "Open",
+    "restore": "Restore",
+    "pictureAlt": "Version {n} of {name}",
+    "held": {
+      "current": "This version is already in force.",
+      "notAvailable": "This version is not available (still uploading, held or refused).",
+      "uploading": "A new version is still uploading: confirm it or give it up first.",
+      "busy": "Restoring…",
+      "pickTwo": "Tick two versions to see them side by side.",
+      "pictures": "Side by side shows two pictures; a PDF opens on its own."
+    }
+  },
+  "tag": {
+    "open": "What it is",
+    "openNamed": "What {name} is and until when",
+    "title": "What {name} is",
+    "intro": "Say what this document is and the last day it is valid. Nexus reminds 30 and 7 days before; a document shared with the partner asks the partner for a new version.",
+    "category": "Kind of document",
+    "categoryHint": "A required-document rule counts only documents of its kind.",
+    "categoryNone": "Not said",
+    "expiresOn": "Valid until",
+    "expiresHint": "Leave it empty when the document does not expire. A new date starts the reminders again.",
+    "noExpiry": "Does not expire",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "problem": {
+      "date": "The date is not a valid date, or more than 20 years away.",
+      "category": "Pick a kind from the list."
+    }
+  },
+  "markup": {
+    "open": "Mark up",
+    "openNamed": "Mark up {name}",
+    "title": "Mark up {name}",
+    "introPicture": "Draw arrows and circles on the picture. Saved, the marked picture becomes the next version; the original stays, read-only.",
+    "introPdf": "Draw arrows and circles on a page. The marks are kept beside the PDF; the PDF itself never changes.",
+    "close": "Close",
+    "pagesLabel": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pageOf": "Page {page} of {pages}",
+    "page": "Page {page}",
+    "loadingPage": "Drawing the page…",
+    "loadingPicture": "Opening the picture…",
+    "surface": "Marks on {name}",
+    "savePicture": "Save as a new version",
+    "savePdf": "Keep the marks on this page",
+    "saving": "Saving the marks…",
+    "note": "Note",
+    "noteHint": "What the marks mean (optional).",
+    "earlierLabel": "Earlier markups",
+    "earlier": "Earlier markups of this file",
+    "earlierPage": "Marks already on this page",
+    "overlayLabel": "Page {page} with its marks",
+    "none": "None yet.",
+    "noNote": "No note",
+    "itemMeta_one": "{who} · {at} · {count} mark",
+    "itemMeta_other": "{who} · {at} · {count} marks",
+    "madeVersion": "made a new version",
+    "held": {
+      "noMarks": "Draw at least one arrow or circle first.",
+      "firstPage": "This is the first page.",
+      "lastPage": "This is the last page."
+    }
+  },
+  "depth": {
+    "notice": {
+      "restored": "The earlier version is back as a new version.",
+      "tagged": "Saved: what the document is and until when.",
+      "marked": "The marked picture is the new version; the original stays, read-only.",
+      "overlay": "The marks are kept on this page."
+    },
+    "held": {
+      "noUpload": "You need the right to upload files on this record.",
+      "notMarkable": "Only a picture (JPEG, PNG, WebP) or a PDF can be marked up.",
+      "notCurrent": "An earlier version is read-only: use the version in force.",
+      "reading": "Still reading this record's documents.",
+      "unreadable": "This record's documents could not be read: try again above."
+    },
+    "problem": {
+      "store": "The file store did not answer: try again in a moment.",
+      "failed": "That did not work: try again.",
+      "conflict": "Someone changed this file meanwhile: it was read again; check and try again.",
+      "forbidden": "You may not do this on this record.",
+      "notFound": "This file is no longer there.",
+      "invalid": "Nexus did not accept this: check what was drawn or typed.",
+      "unavailable": "Nexus is not reachable right now: try again in a moment."
+    }
+  },
+  "expiry": {
+    "expired": "Expired on {date}",
+    "today": "Expires today ({date})",
+    "soon_one": "Expires in {count} day ({date})",
+    "soon_other": "Expires in {count} days ({date})",
+    "valid": "Valid until {date}"
+  }
+}

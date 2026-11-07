@@ -1,0 +1,80 @@
+{
+  "req": {
+    "intro": "Documenti che un tipo di record deve avere prima di un cambio di stato, per società: se manca, blocca il passaggio o avvisa soltanto. Ogni record mostra cosa gli manca nel pannello File, prima che qualcuno provi il passaggio.",
+    "new": "Nuova regola",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "table": {
+      "label": "Documenti richiesti"
+    },
+    "col": {
+      "recordType": "Tipo di record",
+      "category": "Documento",
+      "beforeStatus": "Richiesto prima di",
+      "partyRole": "Per",
+      "level": "Blocca il passaggio",
+      "active": "Attiva",
+      "changed": "Ultima modifica"
+    },
+    "level": {
+      "BLOCK": "Blocca",
+      "WARN": "Solo avviso"
+    },
+    "on": "Attiva",
+    "off": "Disattivata",
+    "switch": {
+      "level": "{what} prima di {status} blocca il passaggio",
+      "active": "La regola per {what} prima di {status} è attiva"
+    },
+    "showOff_one": "Mostra disattivate ({count})",
+    "showOff_other": "Mostra disattivate ({count})",
+    "feeds": "Una regola si disattiva, non si cancella. I primi passaggi di stato che consultano queste regole sono i documenti del fornitore e l'avviso di spedizione; fino ad allora ogni record mostra cosa gli serve nel pannello File.",
+    "keys": {
+      "new": "Nuova regola"
+    },
+    "bulk": {
+      "off_one": "Disattiva {count}",
+      "off_other": "Disattiva {count}",
+      "on_one": "Attiva {count}",
+      "on_other": "Attiva {count}",
+      "doneOff": "{count} di {of} disattivate",
+      "doneOn": "{count} di {of} attivate"
+    },
+    "empty": {
+      "title": "Nessun documento richiesto per ora",
+      "body": "Aggiungi una regola: per esempio un certificato del fornitore prima che un ordine d'acquisto sia confermato.",
+      "bodyOff_one": "Solo {count} regola disattivata: spunta \"Mostra disattivate\" per vederla.",
+      "bodyOff_other": "Solo {count} regole disattivate: spunta \"Mostra disattivate\" per vederle."
+    },
+    "dialog": {
+      "title": "Nuovo documento richiesto",
+      "intro": "Il record non può passare allo stato (o viene avvisato) finché non ha un documento valido di questo tipo, su di sé o sul suo cliente o fornitore.",
+      "statusHint": "Lo stato verso cui passa il record.",
+      "roleHint": "Solo i record il cui cliente o fornitore ha questo ruolo, oppure ogni record.",
+      "blockHint": "Il passaggio è rifiutato finché il documento non è presente e valido.",
+      "warnHint": "Il passaggio procede; il documento mancante viene segnalato.",
+      "sentence": "{what} su {type} prima di {status} — {role}.",
+      "cancel": "Annulla",
+      "add": "Aggiungi regola"
+    },
+    "held": {
+      "noRight": "Serve il permesso di cambiare i documenti richiesti.",
+      "saving": "Salvataggio…",
+      "reading": "Lettura delle regole in corso.",
+      "pickCompany": "Scegli prima una società: una regola appartiene a una società.",
+      "status": "Scegli uno stato di questo tipo di record.",
+      "duplicate": "Una regola attiva chiede già questo documento prima di questo stato: modifica quella regola.",
+      "allOn": "Le regole spuntate sono già attive.",
+      "allOff": "Le regole spuntate sono già disattivate."
+    },
+    "problem": {
+      "conflict": "Qualcuno ha cambiato questa regola nel frattempo: le regole sono state rilette."
+    },
+    "done": {
+      "created": "Regola aggiunta.",
+      "level": "Salvato: cosa fa un documento mancante.",
+      "on": "Regola attivata.",
+      "off": "Regola disattivata."
+    }
+  }
+}

@@ -3,12 +3,14 @@ import { ABSENCE_CATEGORIES } from '@nexus/factory-domain/people/attendance/abse
 import { RULE_ACTIONS, RULE_KINDS, RULE_SOURCES } from '@nexus/factory-domain/people/limits/rules'
 import { MISSING_CODES } from '@nexus/factory-domain/people/privacy/gate'
 import { GATE_PURPOSES } from '@nexus/factory-domain/people/privacy/purposes'
+import { CONSULTANT_PROBLEMS, PRINTER_PROBLEMS } from '@nexus/factory-domain/people/payroll/settings'
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 /**
  * Every call of People › People settings (SCR-265; B-W2b-65 on the API of B-W2b-37 rounding and absence codes, B-W2b-42
- * working-time limits, B-W2b-27 privacy), with the answer's shape checked (zod; unknown fields are dropped). No answer
+ * working-time limits, B-W2b-27 privacy; B-W2b-89 payroll and statements, the standard review limits), with the answer's
+ * shape checked (zod; unknown fields are dropped). No answer
  * here holds a figure about a person. The API's English is never drawn: the screens say their own words from codes.
  */
 
@@ -196,6 +198,52 @@ export const switchOn = (api: ApiClient, siteId: string, purpose: GatePurpose, b
 export const switchOff = (api: ApiClient, siteId: string, purpose: GatePurpose, body: { version: number; reason: string }) => api.post(gatePath(siteId, purpose, 'switch-off'), { body, schema: changeResult, idempotencyKey: newIdempotencyKey() })
 export const changeLeads = (api: ApiClient, siteId: string, purpose: GatePurpose, body: { version: number; leadsSeeFigures: boolean; reason?: string | null }, idempotencyKey: string) =>
   api.post(gatePath(siteId, purpose, 'leads'), { body, schema: changeResult, idempotencyKey })
+
+// ---- payroll and statements (B-W2b-89) -------------------------------------------------------------------------------------
+
+const siteRef = z.object({ id: z.string(), code: z.string(), name: z.string() })
+export { CONSULTANT_PROBLEMS, PRINTER_PROBLEMS }
+const payrollSchema = z.object({
+  companyId: z.string(),
+  version: z.number().nullable(),
+  company: z.object({ code: z.string(), legalName: z.string() }),
+  payrollCode: z.string().nullable(),
+  consultant: z.object({ partyId: z.string(), code: z.string().nullable(), name: z.string().nullable(), email: z.string().nullable(), problem: z.enum(CONSULTANT_PROBLEMS).nullable() }).nullable(),
+  statementPrinter: z.object({ id: z.string(), code: z.string().nullable(), name: z.string().nullable(), site: siteRef.nullable(), problem: z.enum(PRINTER_PROBLEMS).nullable() }).nullable(),
+  choices: z.object({
+    consultants: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), email: z.string().nullable(), companyWide: z.boolean() })),
+    printers: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), site: siteRef })),
+  }),
+  canManage: z.boolean(),
+})
+export type PayrollSettings = z.infer<typeof payrollSchema>
+export interface PayrollBody {
+  companyId: string
+  version: number | null
+  consultantPartyId: string | null
+  payrollCode: string | null
+  statementPrinterId: string | null
+}
+
+export const getPayrollSettings = (api: ApiClient, companyId: string) => api.get('/people/payroll/settings', { query: { companyId }, schema: payrollSchema })
+export const savePayrollSettings = (api: ApiClient, body: PayrollBody) => api.request('PUT', '/people/payroll/settings', { body, schema: payrollSchema, idempotencyKey: newIdempotencyKey() })
+
+/** A new labour consultant: a party with the Consultant role only, of this company, and the person to write to. */
+export const createConsultant = (api: ApiClient, body: { companyId: string; code: string; name: string; email: string | null }) =>
+  api.post('/parties', {
+    body: { companyId: body.companyId, code: body.code, kind: 'ORGANISATION', legalName: body.name, roles: ['CONSULTANT'], ...(body.email ? { contacts: [{ name: body.name, email: body.email }] } : {}) },
+    schema: z.object({ party: z.object({ id: z.string() }) }),
+    idempotencyKey: newIdempotencyKey(),
+  })
+
+// ---- the standard review limits (B-W2b-89) ----------------------------------------------------------------------------------
+
+const reviewSchema = z.object({ companyId: z.string(), version: z.number().nullable(), tolerancePercent: z.number(), minBundles: z.number(), windowDays: z.number(), canManage: z.boolean() })
+export type ReviewRule = z.infer<typeof reviewSchema>
+
+export const getReviewRule = (api: ApiClient, companyId: string) => api.get('/people/efficiency/review/rule', { query: { companyId }, schema: reviewSchema })
+export const saveReviewRule = (api: ApiClient, body: { companyId: string; version: number | null; tolerancePercent: number; minBundles: number }) =>
+  api.request('PUT', '/people/efficiency/review/rule', { body, schema: reviewSchema, idempotencyKey: newIdempotencyKey() })
 
 // ---- history ----------------------------------------------------------------------------------------------------------------
 

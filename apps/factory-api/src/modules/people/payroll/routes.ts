@@ -17,8 +17,10 @@ import {
   monthContract,
   openFileContract,
   patchLayoutContract,
+  payrollSettingsContract,
   previewContract,
   putCodeContract,
+  savePayrollSettingsContract,
   sendContract,
   showContract,
   withdrawContract,
@@ -28,10 +30,12 @@ import { archiveLayout, createLayout, listLayouts, patchLayout } from './layouts
 import { manifest } from './manifest'
 import { monthView, previewMonth, showCheck } from './month'
 import { downloadLinkFile, linkFiles, sendExport, withdrawLink } from './send'
+import { readPayrollSettings, savePayrollSettings } from './settings'
 
 /**
  * The payroll export (B-W2b-54): the month and its checks (./month.ts), the code mapping (./codes.ts), the layouts (./layouts.ts),
- * the exports and corrections (./exports.ts) and the secure link (./send.ts). Each write is one command with an
+ * the exports and corrections (./exports.ts), the secure link (./send.ts), and People settings › Payroll and statements
+ * (./settings.ts). Each write is one command with an
  * Idempotency-Key; the link's two routes are rate limited per address, as every link route.
  */
 export default defineRoutes('people.payroll', manifest, async (app) => {
@@ -41,6 +45,9 @@ export default defineRoutes('people.payroll', manifest, async (app) => {
   app.get('/people/payroll/month', { schema: monthContract }, async (request) => monthView(request, request.query))
   app.post('/people/payroll/month/show', { schema: showContract }, async (request) => showCheck(request, request.body, idempotencyKeyFrom(request)))
   app.post('/people/payroll/preview', { schema: previewContract }, async (request) => previewMonth(request, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/people/payroll/settings', { schema: payrollSettingsContract }, async (request) => readPayrollSettings(request, request.query))
+  app.put('/people/payroll/settings', { schema: savePayrollSettingsContract }, async (request) => savePayrollSettings(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/people/payroll/codes', { schema: codesContract }, async (request) => listCodes(request, request.query))
   app.put('/people/payroll/codes', { schema: putCodeContract }, async (request) => putCode(request, request.body, idempotencyKeyFrom(request)))

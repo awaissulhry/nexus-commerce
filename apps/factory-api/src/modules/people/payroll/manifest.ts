@@ -29,6 +29,9 @@ export const manifest = defineManifest({
   'POST /people/payroll/exports/:exportId/files/:fileId/open': records,
   'POST /people/payroll/exports/:exportId/send': manage,
   'POST /people/payroll/exports/:exportId/links/:linkId/withdraw': manage,
+  // B-W2b-89: People settings › Payroll and statements.
+  'GET /people/payroll/settings': view,
+  'PUT /people/payroll/settings': manage,
   'GET /people/payroll/link/files': link,
   'POST /people/payroll/link/files/:fileId/download': link,
 })

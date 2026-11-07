@@ -1644,6 +1644,7 @@
     "imports_apply": "Apply an import's plan",
     "documents_view": "Preview a company's document layouts",
     "documents_branding_manage": "Change a company's branding: logo, accent colour, sender name for mail, portal name",
+    "documents_required_manage": "Say which documents a record type must have before a status move, and whether a missing one blocks it",
     "print_view": "See a site's printers and print jobs",
     "print_labels": "Print labels",
     "print_documents": "Print documents",
@@ -1977,6 +1978,11 @@
     "portal_upload": "Send files on the records the role shows",
     "portal_approve": "Approve, accept or sign on the records the role shows",
     "portal_home_view": "See your Home: what waits for you, your notifications and your organisation's counts",
-    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
+    "portal_salesOrders_view": "See your organisation's orders: status and dates, the promised date and why it moved, what is still to ship, shipments and tracking, production progress when shared",
+    "portal_purchaseOrders_view": "See our purchase orders: lines, dates, versions and what changed, a copy without prices; answer them when you may approve",
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
+    "portal_payments_view": "See what your organisation has to pay: open invoices and deposits, due dates and the statement of account",
+    "portal_payments_pay": "Pay an open invoice or deposit online, by card or SEPA Direct Debit"
   }
 }

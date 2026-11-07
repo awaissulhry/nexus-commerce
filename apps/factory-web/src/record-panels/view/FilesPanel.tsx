@@ -13,7 +13,6 @@ import {
   acceptFor,
   audienceBadges,
   canPreview,
-  fileGroups,
   retentionFacts,
   uploadChoices,
   type FileAudience,
@@ -22,6 +21,9 @@ import {
   type RecordPanelsViewModel,
 } from '../model'
 import type { RecordPanelsActions } from './actions'
+// B-W2b-177: the files in depth (what a move needs, a document's type and expiry, versions, markup).
+import { seriesGroups } from '../files/model'
+import { DepthActions, DepthDialogs, DepthTags, DepthTop } from '../files/view/DepthParts'
 
 /**
  * The record's files (COL-045, COL-050): who sees each one (badges), its versions (same name, newest on top), what keeps
@@ -40,6 +42,8 @@ export function FilesPanel({ model, actions, now }: { model: RecordPanelsViewMod
       ) : (
         <p className="fw-rp-muted fw-rp-small">{t('files.upload.ownedAll')}</p>
       ))}
+
+      <DepthTop depth={model.depth} actions={actions?.fileDepth} />
 
       {model.uploads.length > 0 && (
         <ul className="fw-rp-filelist" aria-label={t('files.uploadsLabel')}>
@@ -77,19 +81,19 @@ export function FilesPanel({ model, actions, now }: { model: RecordPanelsViewMod
         <p className="fw-rp-loading" role="status">
           <Spinner size={14} /> {t('files.loading')}
         </p>
-      ) : fileGroups(items).length === 0 ? (
+      ) : seriesGroups(items).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t('files.empty.title')} description={t(model.can.upload ? 'files.empty.bodyUpload' : 'files.empty.body')} />
       ) : (
         <ul className="fw-rp-filelist" aria-label={t('files.listLabel')}>
-          {fileGroups(items).map((group) => (
+          {seriesGroups(items).map((group) => (
             <li key={group.key} className="fw-rp-file">
-              <FileItem file={group.latest} model={model} actions={actions} now={now} version={group.earlier.length > 0 ? group.earlier.length + 1 : null} />
+              <FileItem file={group.latest} model={model} actions={actions} now={now} version={group.earlier.length > 0 ? (group.latest.versionNo ?? group.earlier.length + 1) : null} />
               {group.earlier.length > 0 && (
                 <Disclosure className="fw-rp-versions" summary={t('files.earlier', { count: group.earlier.length })}>
                   <ul className="fw-rp-filelist">
                     {group.earlier.map((file, index) => (
                       <li key={file.id} className="fw-rp-file">
-                        <FileItem file={file} model={model} actions={actions} now={now} version={group.earlier.length - index} />
+                        <FileItem file={file} model={model} actions={actions} now={now} version={file.versionNo ?? group.earlier.length - index} />
                       </li>
                     ))}
                   </ul>
@@ -112,6 +116,7 @@ export function FilesPanel({ model, actions, now }: { model: RecordPanelsViewMod
           />
         )}
       </Modal>
+      <DepthDialogs depth={model.depth} actions={actions?.fileDepth} />
     </div>
   )
 }
@@ -144,6 +149,7 @@ function FileItem({ file, model, actions, now, version }: { file: PanelFile; mod
             {t(fact.key, fact.until ? { date: formatDate(fact.until, { locale }) } : undefined)}
           </Tag>
         ))}
+        <DepthTags depth={model.depth} file={file} />
       </div>
       <div className="fw-rp-file-actions">
         {canPreview(file) && (
@@ -154,6 +160,7 @@ function FileItem({ file, model, actions, now, version }: { file: PanelFile; mod
         <Button size="sm" variant="quiet" onClick={() => actions?.onDownload?.(file.id)} heldReason={held} aria-label={t('files.downloadNamed', { name: file.name })}>
           <Download size={14} aria-hidden /> {t('files.download')}
         </Button>
+        <DepthActions depth={model.depth} file={file} actions={actions?.fileDepth} />
       </div>
     </>
   )

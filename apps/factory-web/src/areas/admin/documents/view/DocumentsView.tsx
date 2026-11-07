@@ -101,6 +101,7 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
       // B-W2b-161: Branding, for whoever may see the documents: 5, its place in the design's six lists (E-mails and
       // Labels, 3 and 4, come with their steps).
       else if (event.key === '5' && model.can.documents) actions?.onView?.('branding')
+      else if (event.key === '6' && model.can.documents) actions?.onView?.('required')
       else if (event.key === 'c' && !newSeriesHeld(model)) actions?.onDialog?.({ kind: 'new' })
       else return
       event.preventDefault()
@@ -118,6 +119,8 @@ function usePageKeys(branding = false): ListKey[] {
     { keys: ['2'], does: t('docs.keys.documents') },
     // B-W2b-161: Branding.
     ...(branding ? [{ keys: ['5'], does: t('docs.keys.branding') }] : []),
+    // B-W2b-177: Required documents.
+    ...(branding ? [{ keys: ['6'], does: t('docs.keys.required') }] : []),
     { keys: ['c'], does: t('docs.keys.newSeries') },
   ]
 }
@@ -177,6 +180,8 @@ function ListTools({ model, actions }: { model: DocumentsViewModel; actions?: Do
           { value: 'documents', label: t('docs.views.documents') },
           // B-W2b-161: Branding, for whoever may see the documents.
           ...(model.can.documents ? [{ value: 'branding', label: t('docs.views.branding') }] : []),
+          // B-W2b-177: Required documents (6), for whoever may see the documents.
+          ...(model.can.documents ? [{ value: 'required', label: t('docs.views.required') }] : []),
         ]}
       />
       {companies.length > 1 && (
