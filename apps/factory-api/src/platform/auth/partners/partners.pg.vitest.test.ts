@@ -121,7 +121,7 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     const bea = await signedIn(email)
     expect((await bea.get('/portal/me')).body.permissions).toEqual([])
     await acknowledge(bea)
-    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.approve', 'portal.colleagues.view', 'portal.comment', 'portal.home.view', 'portal.salesOrders.view', 'portal.search', 'portal.upload', 'threads.read'])
+    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.approve', 'portal.colleagues.view', 'portal.comment', 'portal.home.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.search', 'portal.upload', 'threads.read'])
     const access = await bea.get('/portal/access')
     expect(access.body).toMatchObject({ kind: 'CUSTOMER', role: { key: 'customer-buyer', name: 'Buyer', seesPrices: true, admin: false }, capabilities: ['comment', 'upload', 'approve'], admins: [], preview: false })
     const team = await bea.get('/portal/colleagues')

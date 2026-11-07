@@ -104,6 +104,8 @@ async function referencesOf(db: Reader, lineIds: readonly string[]): Promise<Map
   for (const row of await db.shipmentLine.findMany({ where, select: { salesOrderLineId: true } })) note(row.salesOrderLineId, 'a shipment')
   for (const row of await db.invoiceLine.findMany({ where, select: { salesOrderLineId: true } })) note(row.salesOrderLineId, 'an invoice')
   for (const row of await db.returnLine.findMany({ where, select: { salesOrderLineId: true } })) note(row.salesOrderLineId, 'a return')
+  // B-W2b-183: a customer's change or cancel request names the line (OrderChangeRequestLine keeps it).
+  for (const row of await db.orderChangeRequestLine.findMany({ where: { orderLineId: { in: [...lineIds] } }, select: { orderLineId: true } })) note(row.orderLineId, "a customer's change request")
   return found
 }
 
@@ -285,143 +287,150 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
 export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
-    const { tx, now } = tools
-    const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
-    await lockOrderLines(tx, context.tenantId, lineIds)
-    // B-W2a-F2: the deposit requests of the open before-shipping steps, before the order's row (a payment takes a
-    // request's lock, then the order's row).
-    await lockStepRequests(tools, order.id)
-    const locked = await lockOrder(tx, order.id, body.version)
-    const fresh = (await readOrder(tx, order.id))!
-    const facts = await readOrderFacts(tx, fresh)
-    const plan = await planAmendment(tx, fresh, locked.status, facts, body, now)
-    if (isIssueList(plan)) {
-      if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
-      throw invalid(plan)
-    }
-    const actorId = actorIdOf(tools)
-    // Removed lines (nothing refers to them: planAmendment checked).
-    for (const lineId of plan.removed) {
-      await tx.salesOrderLineSize.deleteMany({ where: { lineId } })
-      await tx.salesOrderLine.delete({ where: { id: lineId }, select: { id: true } })
-    }
-    const finalIds: string[] = []
-    for (const [index, line] of plan.priced.lines.entries()) {
-      const sizesOf = (lineId: string) => line.sizes.map((size) => ({ id: newId(), lineId, partyId: order.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, createdAt: now, updatedAt: now, createdById: actorId }))
-      if (line.id !== null) {
-        finalIds[index] = line.id
-        if (!line.changed && plan.before.lines.find((entry) => entry.id === line.id)!.netAmount === line.netAmount) continue
-        await tx.salesOrderLine.update({
-          where: { id: line.id },
-          data: { quantity: line.quantity, unitPrice: line.unitPrice, netAmount: line.netAmount, vatAmount: line.vatAmount, vatRatePct: line.vatRatePct, vatNature: line.vatNature, costAmount: line.costAmount, description: line.description, note: line.note, updatedAt: now, version: { increment: 1 } },
-          select: { id: true },
-        })
-        await tx.salesOrderLineSize.deleteMany({ where: { lineId: line.id } })
-        await tx.salesOrderLineSize.createMany({ data: sizesOf(line.id) })
-        continue
-      }
-      const id = newId()
-      finalIds[index] = id
-      await tx.salesOrderLine.create({
-        data: {
-          id,
-          companyId: order.companyId,
-          orderId: order.id,
-          partyId: order.partyId,
-          seq: line.seq,
-          kind: line.kind,
-          styleId: line.styleId,
-          styleRevisionId: line.styleRevisionId,
-          colourwayId: line.colourwayId,
-          description: line.description,
-          note: line.note,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          netAmount: line.netAmount,
-          vatRatePct: line.vatRatePct,
-          vatNature: line.vatNature,
-          vatAmount: line.vatAmount,
-          unitCost: line.unitCost,
-          costAmount: line.costAmount,
-          createdAt: now,
-          updatedAt: now,
-          createdById: actorId,
-        },
-        select: { id: true },
-      })
-      await tx.salesOrderLineSize.createMany({ data: sizesOf(id) })
-    }
-    // The snapshot after names the new lines by the ids they got.
-    const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
-    const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
-    const reacceptanceNeeded = plan.diff.reacceptanceNeeded
-    await tx.salesOrder.update({
-      where: { id: order.id },
-      data: {
-        netAmount: plan.priced.netAmount,
-        vatAmount: plan.priced.vatAmount,
-        grossAmount: plan.priced.grossAmount,
-        costAmount: plan.priced.costAmount,
-        customerRef: plan.header.customerRef,
-        requestedDate: plan.header.requestedDate === null ? null : asDay(plan.header.requestedDate),
-        ...(reacceptanceNeeded ? { reapprovalNeededAt: now } : {}),
-        updatedAt: now,
-        version: { increment: 1 },
-      },
-      select: { id: true },
-    })
-    const revision = nextRevision((await tx.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
-    const amendmentId = newId()
-    await tx.salesOrderAmendment.create({
-      data: {
-        id: amendmentId,
-        companyId: order.companyId,
-        orderId: order.id,
-        partyId: order.partyId,
-        revision,
-        reason: body.reason!.trim(),
-        before: plan.before as unknown as Prisma.InputJsonValue,
-        after: after as unknown as Prisma.InputJsonValue,
-        netAmountBefore: plan.diff.netBefore,
-        netAmountAfter: plan.diff.netAfter,
-        grossAmountBefore: plan.diff.grossBefore,
-        grossAmountAfter: plan.diff.grossAfter,
-        reacceptanceNeeded,
-        requestId: tools.context.requestId,
-        createdAt: now,
-        createdById: actorId,
-      },
-      select: { id: true },
-    })
-    const schedule = await remakeScheduleInCommand(tools, fresh, plan.priced.grossAmount, revision)
-    const changedLineIds = [...new Set([...plan.diff.lines.map((line) => newIds.get(line.lineId) ?? line.lineId)])]
-    tools.audit({
-      action: 'orders.amend',
-      recordType: 'SalesOrder',
-      recordId: order.id,
-      companyId: order.companyId,
-      before: { netAmount: markMoney('price', plan.diff.netBefore), grossAmount: markMoney('price', plan.diff.grossBefore), lines: plan.before.lines.length },
-      after: {
-        amendmentId,
-        revision,
-        changes: plan.diff.lines.map((line) => ({ change: line.change, lineId: newIds.get(line.lineId) ?? line.lineId, seq: line.seq, piecesBefore: line.piecesBefore, piecesAfter: line.piecesAfter })),
-        removedLineIds: plan.removed,
-        netAmount: markMoney('price', plan.diff.netAfter),
-        grossAmount: markMoney('price', plan.diff.grossAfter),
-        reacceptanceNeeded,
-        scheduleRemade: schedule.inserted.length > 0 || schedule.cancelled.length > 0,
-      },
-      reason: body.reason!.trim(),
-    })
-    tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds } })
-    return { amendmentId }
-  })
+  const { result } = await command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, (tools) => amendInCommand(tools, context.tenantId, order, body))
   const amendment = await caller.withClient(async (client) => {
     const row = await client.salesOrderAmendment.findUniqueOrThrow({ where: { id: result.amendmentId }, select: AMENDMENT_COLUMNS })
     return amendmentViewOf(row, await namesOf(client, [row.createdById]))
   })
   return { order: await recordAfter(caller, order.id), amendment }
+}
+
+/**
+ * The amendment's work inside a command that is already open (steps 1–3 of the module's head): the order applyAmendment's
+ * own command amends, and B-W2b-183's accepted change request (modules/sales/change-requests) in the same command that
+ * answers the request. The caller checked orders.manage over `order`.
+ */
+export async function amendInCommand(tools: CommandTools, tenantId: string, order: OrderRow, body: AmendBody): Promise<{ amendmentId: string }> {
+  const { tx, now } = tools
+  const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
+  await lockOrderLines(tx, tenantId, lineIds)
+  // B-W2a-F2: the deposit requests of the open before-shipping steps, before the order's row (a payment takes a
+  // request's lock, then the order's row).
+  await lockStepRequests(tools, order.id)
+  const locked = await lockOrder(tx, order.id, body.version)
+  const fresh = (await readOrder(tx, order.id))!
+  const facts = await readOrderFacts(tx, fresh)
+  const plan = await planAmendment(tx, fresh, locked.status, facts, body, now)
+  if (isIssueList(plan)) {
+    if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
+    throw invalid(plan)
+  }
+  const actorId = actorIdOf(tools)
+  // Removed lines (nothing refers to them: planAmendment checked).
+  for (const lineId of plan.removed) {
+    await tx.salesOrderLineSize.deleteMany({ where: { lineId } })
+    await tx.salesOrderLine.delete({ where: { id: lineId }, select: { id: true } })
+  }
+  const finalIds: string[] = []
+  for (const [index, line] of plan.priced.lines.entries()) {
+    const sizesOf = (lineId: string) => line.sizes.map((size) => ({ id: newId(), lineId, partyId: order.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, createdAt: now, updatedAt: now, createdById: actorId }))
+    if (line.id !== null) {
+      finalIds[index] = line.id
+      if (!line.changed && plan.before.lines.find((entry) => entry.id === line.id)!.netAmount === line.netAmount) continue
+      await tx.salesOrderLine.update({
+        where: { id: line.id },
+        data: { quantity: line.quantity, unitPrice: line.unitPrice, netAmount: line.netAmount, vatAmount: line.vatAmount, vatRatePct: line.vatRatePct, vatNature: line.vatNature, costAmount: line.costAmount, description: line.description, note: line.note, updatedAt: now, version: { increment: 1 } },
+        select: { id: true },
+      })
+      await tx.salesOrderLineSize.deleteMany({ where: { lineId: line.id } })
+      await tx.salesOrderLineSize.createMany({ data: sizesOf(line.id) })
+      continue
+    }
+    const id = newId()
+    finalIds[index] = id
+    await tx.salesOrderLine.create({
+      data: {
+        id,
+        companyId: order.companyId,
+        orderId: order.id,
+        partyId: order.partyId,
+        seq: line.seq,
+        kind: line.kind,
+        styleId: line.styleId,
+        styleRevisionId: line.styleRevisionId,
+        colourwayId: line.colourwayId,
+        description: line.description,
+        note: line.note,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        netAmount: line.netAmount,
+        vatRatePct: line.vatRatePct,
+        vatNature: line.vatNature,
+        vatAmount: line.vatAmount,
+        unitCost: line.unitCost,
+        costAmount: line.costAmount,
+        createdAt: now,
+        updatedAt: now,
+        createdById: actorId,
+      },
+      select: { id: true },
+    })
+    await tx.salesOrderLineSize.createMany({ data: sizesOf(id) })
+  }
+  // The snapshot after names the new lines by the ids they got.
+  const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
+  const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
+  const reacceptanceNeeded = plan.diff.reacceptanceNeeded
+  await tx.salesOrder.update({
+    where: { id: order.id },
+    data: {
+      netAmount: plan.priced.netAmount,
+      vatAmount: plan.priced.vatAmount,
+      grossAmount: plan.priced.grossAmount,
+      costAmount: plan.priced.costAmount,
+      customerRef: plan.header.customerRef,
+      requestedDate: plan.header.requestedDate === null ? null : asDay(plan.header.requestedDate),
+      ...(reacceptanceNeeded ? { reapprovalNeededAt: now } : {}),
+      updatedAt: now,
+      version: { increment: 1 },
+    },
+    select: { id: true },
+  })
+  const revision = nextRevision((await tx.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
+  const amendmentId = newId()
+  await tx.salesOrderAmendment.create({
+    data: {
+      id: amendmentId,
+      companyId: order.companyId,
+      orderId: order.id,
+      partyId: order.partyId,
+      revision,
+      reason: body.reason!.trim(),
+      before: plan.before as unknown as Prisma.InputJsonValue,
+      after: after as unknown as Prisma.InputJsonValue,
+      netAmountBefore: plan.diff.netBefore,
+      netAmountAfter: plan.diff.netAfter,
+      grossAmountBefore: plan.diff.grossBefore,
+      grossAmountAfter: plan.diff.grossAfter,
+      reacceptanceNeeded,
+      requestId: tools.context.requestId,
+      createdAt: now,
+      createdById: actorId,
+    },
+    select: { id: true },
+  })
+  const schedule = await remakeScheduleInCommand(tools, fresh, plan.priced.grossAmount, revision)
+  const changedLineIds = [...new Set([...plan.diff.lines.map((line) => newIds.get(line.lineId) ?? line.lineId)])]
+  tools.audit({
+    action: 'orders.amend',
+    recordType: 'SalesOrder',
+    recordId: order.id,
+    companyId: order.companyId,
+    before: { netAmount: markMoney('price', plan.diff.netBefore), grossAmount: markMoney('price', plan.diff.grossBefore), lines: plan.before.lines.length },
+    after: {
+      amendmentId,
+      revision,
+      changes: plan.diff.lines.map((line) => ({ change: line.change, lineId: newIds.get(line.lineId) ?? line.lineId, seq: line.seq, piecesBefore: line.piecesBefore, piecesAfter: line.piecesAfter })),
+      removedLineIds: plan.removed,
+      netAmount: markMoney('price', plan.diff.netAfter),
+      grossAmount: markMoney('price', plan.diff.grossAfter),
+      reacceptanceNeeded,
+      scheduleRemade: schedule.inserted.length > 0 || schedule.cancelled.length > 0,
+    },
+    reason: body.reason!.trim(),
+  })
+  tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds } })
+  return { amendmentId }
 }
 
 // ---- the Changes tab ------------------------------------------------------------------------------------------------------

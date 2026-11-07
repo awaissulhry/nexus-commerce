@@ -1977,6 +1977,7 @@
     "portal_approve": "Approve, accept or sign on the records the role shows",
     "portal_home_view": "See your Home: what waits for you, your notifications and your organisation's counts",
     "portal_salesOrders_view": "See your organisation's orders: status and dates, the promised date and why it moved, what is still to ship, shipments and tracking, production progress when shared",
+    "portal_salesOrders_ask": "Ask the factory to change or cancel your organisation's orders within the cut-off rules, and withdraw a request while it waits",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }

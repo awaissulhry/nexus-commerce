@@ -300,7 +300,7 @@ describe('the owner: everything that waits, from every area and company, ranked'
     expect(tiles.every((tile) => tile.complete === true)).toBe(true)
     // Approvals are the decisions a person reviews; everything else is an alert.
     // (B-W2b-17: an NCR decision waiting for an approval is an approval decided on the NCR's own record.)
-    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || item.kind === 'NCR_DECISION' ? 'APPROVAL' : 'ALERT')
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'ORDER_CHANGE_REQUEST'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
     for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
       const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
@@ -309,8 +309,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
       expect(pressed.counts.tiles).toEqual(tiles)
     }
     // A deep link by kind still works, and its count is the kind's.
-    // B-W2b-17: + NCR_DECISION.
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(15)
+    // B-W2b-17: + NCR_DECISION; B-W2b-183: + ORDER_CHANGE_REQUEST (the seeded open change request).
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(16)
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)
@@ -399,7 +399,8 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
     expect(text).not.toContain('purchaseAmount')
     expect(text).not.toContain('marginAmount')
     expect(itemOf(answer, ids.quote)).toBeUndefined()
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
+    // B-W2b-183: + the customers' change and cancel requests the sales role answers (none waits here).
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'ORDER_CHANGE_REQUEST'])
   })
 
   it('mail to sort: the email-in list of whoever sorts the company’s mail (triage, held, unreadable), opened in its own review', async () => {

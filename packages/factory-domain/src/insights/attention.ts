@@ -72,6 +72,9 @@ export const ATTENTION_KINDS = [
   // B-W2b-17 (B-W2a-47's gap, design home.approvals "every request that needs my yes"): NCR decisions that wait for an
   // approval (four eyes: never the person who decided them), in the Approvals tile; decided on the NCR's own record.
   'NCR_DECISION',
+  // B-W2b-183 (design home.approvals "every request that needs my yes", portal.customer.orders conn "the change request
+  // lands" in the office): a customer's change or cancel request from the portal, waiting for the office's answer.
+  'ORDER_CHANGE_REQUEST',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -296,6 +299,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [QUALITY_NCR_APPROVE],
     decide: 'OPEN',
     live: ['ncr.decision_changed', 'ncr.stage_changed'],
+  }),
+  // B-W2b-183: a customer's change or cancel request from the portal (modules/insights/sources/portal-change-requests.ts),
+  // answered on the order (accept: the amendment or the cancel; refuse with words) by whoever manages the customer's orders.
+  ORDER_CHANGE_REQUEST: rule({
+    kind: 'ORDER_CHANGE_REQUEST',
+    category: 'APPROVAL',
+    label: "Customers' change and cancel requests waiting for your answer",
+    view: ORDERS_VIEW,
+    act: [ORDERS_MANAGE],
+    decide: 'OPEN',
+    live: ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',

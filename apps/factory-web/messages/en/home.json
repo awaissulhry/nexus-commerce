@@ -100,7 +100,8 @@
       "TASK_DUE": "My tasks due",
       "MENTION": "Mentions",
       "RULE_ALERT": "Exception rule alerts",
-      "NCR_DECISION": "NCR decisions to approve"
+      "NCR_DECISION": "NCR decisions to approve",
+      "ORDER_CHANGE_REQUEST": "Customers' change and cancel requests"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -414,6 +415,13 @@
       "MAIL_TO_SORT.FAILED.blocks": "Throw it away, or ask the sender to send it again.",
       "NCR_DECISION.WAITING_APPROVAL": "NCR {number} waits for the approval of its decision {code} for {quantity}.",
       "NCR_DECISION.blocks": "It is not carried out, and the NCR is not decided, until another person approves it.",
+      "ORDER_CHANGE_REQUEST.CHANGE_one": "{customer} asks to change {count} size of order {number}.",
+      "ORDER_CHANGE_REQUEST.CHANGE_other": "{customer} asks to change {count} sizes of order {number}.",
+      "ORDER_CHANGE_REQUEST.CHANGE_DELIVERY": "{customer} asks to change the delivery of order {number}.",
+      "ORDER_CHANGE_REQUEST.CANCEL": "{customer} asks to cancel order {number}.",
+      "ORDER_CHANGE_REQUEST.CANCEL_LINES_one": "{customer} asks to cancel {count} line of order {number}.",
+      "ORDER_CHANGE_REQUEST.CANCEL_LINES_other": "{customer} asks to cancel {count} lines of order {number}.",
+      "ORDER_CHANGE_REQUEST.blocks": "The customer waits for your answer: accept it (the order is amended or cancelled) or refuse it with a reason.",
       "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
       "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
       "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
@@ -434,6 +442,7 @@
       "why.STYLE_COMPLIANCE.product_bom_release": "You release style revisions.",
       "why.MAIL_TO_SORT.email_triage": "You sort this company's received mail.",
       "why.NCR_DECISION.quality_ncr_approve": "You approve NCR decisions at this site, and someone else decided it.",
+      "why.ORDER_CHANGE_REQUEST.orders_manage": "You manage this customer's orders.",
       "code": {
         "checks": {
           "REVISION": "revision",
