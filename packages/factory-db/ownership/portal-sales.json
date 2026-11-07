@@ -1,0 +1,71 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/portal-sales.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b schema wave 21/22 (B-W2b-157). Portal sessions run as factory_partner_runtime behind their party's wall (scopedBy party): a customer keeps its own order request drafts (the request, its lines and their sizes: insert, update, delete), sends and withdraws them, asks for a change or a cancel of its own orders and withdraws the ask, and reads its own payment intents; never the office person who decided or answered (hiddenColumns). The office (factory_runtime; the tenant's system context of the API, the worker and the provider's webhook) numbers and sends a draft for the portal (the partner role has no numbering grant), decides requests and answers change requests through apps/factory-api with command(), and makes and moves payment intents; it never writes a customer's draft lines. Each partner and office write is held to its columns and moves by the …_portal_sales_w2b_guards triggers. Nothing is deleted but a customer's own draft. No floor grant: none of this is floor work. No cost or margin column: the price a customer was shown is the price grain. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PortalOrderRequest": {
+      "about": "A customer starts a draft (insert), edits it (update), discards it (delete, a DRAFT only), sends it (DRAFT to SENT with its number, in the API's system context or its own session) and withdraws a sent one; it reads its own requests, never who in the office decided. The office sends a portal draft with the number it allocated, and decides a SENT request: ACCEPTED naming the order or quote it made, or REFUSED in words. The guard keeps a DRAFT the customer's and a decided request frozen.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "insert", "update", "delete"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["decidedById"]
+        }
+      }
+    },
+    "PortalOrderRequestLine": {
+      "about": "The customer writes and removes its draft's lines (style, colourway, the price it was shown, the past order line a reorder copied) while the request is a DRAFT (the guard); the office reads them to make the order or quote.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"] }
+      }
+    },
+    "PortalOrderRequestSize": {
+      "about": "The customer writes and removes the pieces per size of its draft's lines while the request is a DRAFT (the guard); the office reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"] }
+      }
+    },
+    "OrderChangeRequest": {
+      "about": "A customer asks for a change or a cancel of its own CONFIRMED, IN_PRODUCTION or READY order (insert, OPEN) and withdraws an OPEN ask (the only partner update the guard lets through); it reads its own requests and the office's answer, never who answered. The office answers: ACCEPTED (naming the amendment it made) or REFUSED in words. The cut-off rules are checked by the API (SalesSettings has no party key, so the partner role cannot read them).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "insert", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["answeredById"]
+        }
+      }
+    },
+    "OrderChangeRequestLine": {
+      "about": "The customer writes the cells it asks for with its OPEN request (a line of the request's order, the pieces before and asked); nobody changes or removes one. The office reads them to answer.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"] }
+      }
+    },
+    "PaymentIntent": {
+      "about": "The API makes an intent in the tenant's system context before it calls the payment provider (for a portal user or a PAYMENT or DEPOSIT_INFO link), and the provider's signed webhook moves it (WAITING, SUCCEEDED with the Payment the payments command recorded, FAILED, CANCELLED); never deleted. A customer reads its own intents (status, amount, the provider's reference for the receipt), never the provider account it ran on nor who started it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["providerAccountId", "createdById"]
+        }
+      }
+    }
+  }
+}

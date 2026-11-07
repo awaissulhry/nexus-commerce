@@ -104,6 +104,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // each company's ticket series prints its own prefix. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:CUT_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CUT_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:CUT_TICKET:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CUT_TICKET', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `CT${company}-{YYYY}-{N:5}`, fiscal: false, createdById: actorId },
+      // W2b wave 21/22: a customer's order request from the portal is numbered from it when it is sent (B-W2b-190; design
+      // "our request RQ-0087"): without one, a portal draft cannot be sent. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:PORTAL_REQUEST:MAIN:ALL`).slice(8)}`, companyId, kind: 'PORTAL_REQUEST', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'RQ-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

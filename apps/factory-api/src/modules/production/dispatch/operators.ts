@@ -5,6 +5,7 @@ import { PRODUCTION_DISPATCH_MANAGE } from '@nexus/factory-domain/production/dis
 import { DISPATCH_LIMITS, DISPATCH_REFUSALS } from '@nexus/factory-domain/production/dispatch/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
+import type { SkillRequirement } from '@nexus/factory-domain/people/skills/qualification'
 import { qualificationCheck } from '../../people/skills/check'
 import { scanSubjectFor } from '../settings/subject'
 import { contextOf, knownSite, may, readerOf, refuse } from './access'
@@ -74,8 +75,8 @@ export async function dispatchOperators(caller: CommandCaller, query: OperatorsQ
     const out = []
     for (const { worker, clocked, onLine } of shown) {
       const check = await qualificationCheck(db, { workerId: worker.id, workOrderOperationId: facts.operation?.id ?? null, stationId: facts.station?.id ?? null }, { names: 'DISPLAY', now })
-      const skill = check.requirements.find((requirement) => requirement.kind === 'OPERATION')
-      const level = skill && skill.kind !== 'AUTHORISATION' ? skill.level : null
+      const skill = check.requirements.find((requirement): requirement is SkillRequirement => requirement.kind === 'OPERATION')
+      const level = skill ? skill.level : null
       out.push({
         workerId: worker.id,
         name: worker.displayName,

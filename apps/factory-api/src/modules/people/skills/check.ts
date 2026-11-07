@@ -8,6 +8,7 @@ import {
   assignmentOutcome,
   lineSkillsOf,
   qualificationOf,
+  type CourseNeed,
   type HeldLevel,
   type MachineNeed,
   type OperationNeed,
@@ -19,6 +20,7 @@ import type { SkillLevel } from '@nexus/factory-domain/people/skills/rules'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { classCoursesOf, courseHoldingsOf } from '../../safety/records/holdings'
 import { assertMay, dayOf, dayOrNull, officeOf } from '../employees/access'
 import { qualificationRuleFor, type QualificationRule } from './rule'
 
@@ -44,16 +46,32 @@ import { qualificationRuleFor, type QualificationRule } from './rule'
  * Routes (./routes.ts): GET /people/skills/check (office), GET /people/skills/floor/check (floor), GET
  * /people/skills/line-check (the loan dialog's "Can do 3 of 5 operations on Line B").
  *
- * A class of machine is KEPT under authorisation at a site once the site keeps one for it: at least one authorisation of
- * that class for a person of the site (in force, ended or revoked). There is no column saying which classes need one yet
- * (gap: MachineClass.authorisationRequired); the first authorisation of a class at a site is the office's act that keeps
- * it. Nothing here is a figure about one person's work.
+ * A class of machine is KEPT under authorisation when the office says it asks one (MachineClass.authorisationRequired,
+ * B-W2b-139: it replaced B-W2b-39's "kept at a site once the site keeps one"; set with PUT
+ * /people/skills/machine-classes/:id/authorisation-rule). Expired or missing training holds an authorisation in force
+ * (B-W2b-139): the courses the class asks (modules/safety/records/holdings.ts, read in the caller's own scope) go into the
+ * check as factory-domain `CourseNeed`s. Nothing here is a figure about one person's work.
  */
 
 type Client = FactoryClient | CommandTx
 type Reader = Pick<
   CommandTx,
-  'employee' | 'worker' | 'skill' | 'employeeSkill' | 'machineAuthorisation' | 'machine' | 'machineClass' | 'operation' | 'workOrderOperation' | 'station' | 'workCentre' | 'line' | 'device' | 'productionSettings'
+  | 'employee'
+  | 'worker'
+  | 'skill'
+  | 'employeeSkill'
+  | 'machineAuthorisation'
+  | 'machine'
+  | 'machineClass'
+  | 'operation'
+  | 'workOrderOperation'
+  | 'station'
+  | 'workCentre'
+  | 'line'
+  | 'device'
+  | 'productionSettings'
+  | 'trainingRequirement'
+  | 'trainingRecord'
 >
 
 export interface QualificationInput {
@@ -174,11 +192,11 @@ async function skillsAbout(db: Reader, companyId: string, about: { operationIds?
   })
 }
 
-/** The classes kept under authorisation at a site (see above). */
-export async function keptClassesAt(db: Pick<CommandTx, 'machineAuthorisation'>, siteId: string, classIds: readonly string[]): Promise<Set<string>> {
+/** The classes that ask an authorisation (MachineClass.authorisationRequired; see above). */
+export async function requiredClassesOf(db: Pick<CommandTx, 'machineClass'>, classIds: readonly string[]): Promise<Set<string>> {
   if (classIds.length === 0) return new Set()
-  const rows = await db.machineAuthorisation.findMany({ where: { siteId, machineClassId: { in: [...classIds] } }, distinct: ['machineClassId'], select: { machineClassId: true } })
-  return new Set(rows.map((row) => row.machineClassId))
+  const rows = await db.machineClass.findMany({ where: { id: { in: [...new Set(classIds)] }, authorisationRequired: true }, select: { id: true } })
+  return new Set(rows.map((row) => row.id))
 }
 
 const needOf = (skill: { id: string; code: string; name: string }, levels: Map<string, HeldLevel>): SkillNeed => ({ skillId: skill.id, code: skill.code, name: skill.name, held: levels.get(skill.id) ?? null })
@@ -195,10 +213,20 @@ export async function qualificationCheck(db: Reader, input: QualificationInput, 
   const skills = await skillsAbout(db, person.companyId, { operationIds: operation ? [operation.id] : [], classIds })
   const levels = await levelsOf(db, person.employeeId, skills.map((skill) => skill.id))
   const workSite = machines[0]?.siteId ?? operation?.siteId ?? person.siteId
-  const kept = await keptClassesAt(db, workSite, classIds)
+  const kept = await requiredClassesOf(db, classIds)
   const authorisations = person.employeeId && classIds.length > 0
     ? await db.machineAuthorisation.findMany({ where: { employeeId: person.employeeId, machineClassId: { in: classIds }, revokedAt: null }, select: { id: true, machineClassId: true, authorisedOn: true, validUntil: true } })
     : []
+  // B-W2b-139: the courses the kept classes the person is authorised on ask, and what the person holds of them today.
+  const trainedClasses = classIds.filter((classId) => kept.has(classId) && authorisations.some((row) => row.machineClassId === classId))
+  const classCourses = await classCoursesOf(db, trainedClasses)
+  const courseIds = [...classCourses.values()].flat().map((course) => course.courseId)
+  const holdings = person.employeeId && courseIds.length > 0 ? await courseHoldingsOf(db, person.employeeId, courseIds, today) : new Map()
+  const coursesOf = (classId: string): CourseNeed[] =>
+    (classCourses.get(classId) ?? []).map((course) => {
+      const holding = holdings.get(course.courseId)
+      return { courseId: course.courseId, code: course.code, name: course.name, withinDays: course.withinDays, met: holding?.met ?? false, validUntil: holding?.validUntil ?? null, everPassed: holding?.everPassed ?? false }
+    })
   const rule = await qualificationRuleFor(db, workSite)
 
   const operationNeed: OperationNeed | null = operation
@@ -214,6 +242,7 @@ export async function qualificationCheck(db: Reader, input: QualificationInput, 
       kept: kept.has(machineClass.id),
       authorisation: row ? { authorisationId: row.id, authorisedOn: dayOf(row.authorisedOn), validUntil: dayOrNull(row.validUntil) } : null,
       skills: skills.filter((skill) => skill.machineClassId === machineClass.id).map((skill) => needOf(skill, levels)),
+      courses: coursesOf(machineClass.id),
     }
   })
   const result = qualificationOf({ today, mode: rule.mode, person: { name: person.name, active: person.active, hasRecord: person.employeeId !== null }, operation: operationNeed, machines: machineNeeds })
