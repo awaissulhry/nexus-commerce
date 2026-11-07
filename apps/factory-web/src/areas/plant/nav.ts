@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, CalendarClock, Cog, FlaskConical, HardHat, ShieldAlert, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, ShieldAlert, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -37,6 +37,8 @@ export const officeArea: OfficeAreaNav = {
         id: 'plant-safety',
         label: 'shell:nav.plant.safety',
         items: [
+          // B-W2b-144: the risk assessment (SCR-209) — the DVR per site with its versions and signatures, the improvement plan, the role sheets (GET /safety/risk/assessments, safety.view).
+          { id: 'plant-risk', label: 'shell:nav.plant.risk', href: '/plant/risk', icon: FileCheck2, permission: 'safety.view' },
           // B-W2b-149: Incidents (SCR-210), injuries, near misses and hazards with the INAIL deadline (GET /safety/incidents, safety.incidents.view).
           { id: 'plant-incidents', label: 'shell:nav.plant.incidents', href: '/plant/incidents', icon: ShieldAlert, permission: 'safety.incidents.view' },
           // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
