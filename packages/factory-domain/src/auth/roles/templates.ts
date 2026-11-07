@@ -639,6 +639,14 @@ const PARTNER_TASKS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   sales: ['partners.tasks.manage'],
   buyer: ['partners.tasks.manage'],
 })
+/**
+ * B-W2b-177 (COL-048; design admin.documents › Required documents): the administrator keeps the rules of every record type;
+ * the buyer keeps those of what suppliers send (certificates, test reports, declarations before a PO is confirmed).
+ */
+const REQUIRED_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['documents.required.manage'],
+  buyer: ['documents.required.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -733,7 +741,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-162
   ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : []),
   // B-W2b-167
-  ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
+  // B-W2b-177
+  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

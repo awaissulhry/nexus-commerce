@@ -1,0 +1,211 @@
+{
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Certificato del fornitore",
+    "TEST_REPORT": "Rapporto di prova",
+    "DECLARATION": "Dichiarazione",
+    "QUESTIONNAIRE": "Questionario fornitore",
+    "POD": "Prova di consegna",
+    "CMR": "Lettera di vettura CMR",
+    "DDT_PHOTO": "Foto del DDT del fornitore",
+    "CARRIER_INVOICE": "Fattura del vettore",
+    "PROOF": "Bozza da approvare",
+    "SAMPLE_PHOTO": "Foto del campione",
+    "CLAIM_PHOTO": "Foto del reclamo",
+    "MACHINE_CE": "Dichiarazione CE",
+    "MANUAL": "Manuale",
+    "CHECK_REPORT": "Verbale di verifica",
+    "BEFORE_WORK": "Foto prima dell'intervento",
+    "AFTER_WORK": "Foto dopo l'intervento",
+    "BODY_PHOTO": "Foto per le misure",
+    "OTHER": "Altro documento"
+  },
+  "status": {
+    "SENT": "Inviato",
+    "CONFIRMED": "Confermato",
+    "RECEIVED": "Ricevuto",
+    "CLOSED": "Chiuso",
+    "POSTED": "Registrato",
+    "ISSUED": "Emesso",
+    "PACKED": "Imballato",
+    "SHIPPED": "Spedito",
+    "DELIVERED": "Consegnato",
+    "ACTIVE": "Attivo"
+  },
+  "recordType": {
+    "PurchaseOrder": "Ordine d'acquisto",
+    "GoodsReceipt": "Ricevimento merce",
+    "ShipNotice": "Avviso di spedizione",
+    "SubcontractOrder": "Ordine di conto lavoro",
+    "Shipment": "Spedizione",
+    "Party": "Cliente o fornitore",
+    "WorkOrder": "Ordine di lavoro",
+    "SalesOrder": "Ordine di vendita",
+    "Quote": "Preventivo",
+    "Style": "Modello",
+    "Certificate": "Certificato",
+    "Inspection": "Ispezione",
+    "SupplierInvoice": "Fattura fornitore",
+    "AccountingExport": "Esportazione contabile",
+    "Company": "Società"
+  },
+  "role": {
+    "ANY": "Ogni record",
+    "CUSTOMER": "Clienti",
+    "BRAND": "Marchi",
+    "SUPPLIER": "Fornitori",
+    "SUBCONTRACTOR": "Terzisti",
+    "CARRIER": "Vettori",
+    "CONSULTANT": "Consulenti"
+  },
+  "required": {
+    "label": "Cosa serve per {status}",
+    "blocks_one": "Non può passare a {status}: manca {count} documento",
+    "blocks_other": "Non può passare a {status}: mancano {count} documenti",
+    "warns_one": "Prima di {status}: {count} documento da aggiungere (non blocca)",
+    "warns_other": "Prima di {status}: {count} documenti da aggiungere (non bloccano)",
+    "reason": {
+      "MET": "Presente",
+      "MISSING": "Manca",
+      "EXPIRED": "Scaduto"
+    },
+    "level": {
+      "BLOCK": "Blocca il passaggio",
+      "WARN": "Solo avviso"
+    },
+    "expiredOn": "scaduto il {date}",
+    "how": "Carica qui il documento (o sul fornitore), poi indica cosa è e fino a quando con \"Cosa è\".",
+    "partyDocuments": "Contano anche, dal cliente o fornitore del record: {names}",
+    "unreadable": "Non è stato possibile leggere cosa serve a questo record per i prossimi passaggi.",
+    "retry": "Riprova"
+  },
+  "versions": {
+    "open": "Versioni",
+    "openNamed": "Versioni di {name}",
+    "title": "Versioni di {name}",
+    "intro": "Ogni versione resta, in sola lettura. Ripristina crea una nuova versione da una precedente; spunta due immagini per vederle affiancate.",
+    "close": "Chiudi",
+    "compare": "Affianca",
+    "compareLabel": "Due versioni affiancate",
+    "compareLoading": "Apertura delle due immagini…",
+    "compareClose": "Nascondi il confronto",
+    "loading": "Lettura delle versioni…",
+    "tableLabel": "Versioni di {name}",
+    "col": {
+      "pick": "Scegli",
+      "version": "Versione",
+      "who": "Aggiunta da",
+      "when": "Quando",
+      "size": "Dimensione",
+      "uses": "Usata da",
+      "actions": "Azioni"
+    },
+    "pickNamed": "Scegli la versione {n} per il confronto",
+    "number": "v{n}",
+    "current": "In vigore",
+    "earlier": "Precedente",
+    "madeByMarkup_one": "Annotata ({count} segno)",
+    "madeByMarkup_other": "Annotata ({count} segni)",
+    "markups_one": "{count} annotazione su questa versione",
+    "markups_other": "{count} annotazioni su questa versione",
+    "byPartner": "{name} (partner)",
+    "bySystem": "Nexus (una copia o un documento generato)",
+    "usedByNone": "Nessun altro record",
+    "usedBy": "{record} usa la v{n}",
+    "preview": "Apri",
+    "restore": "Ripristina",
+    "pictureAlt": "Versione {n} di {name}",
+    "held": {
+      "current": "Questa versione è già in vigore.",
+      "notAvailable": "Questa versione non è disponibile (in caricamento, trattenuta o rifiutata).",
+      "uploading": "Una nuova versione è ancora in caricamento: confermala o annullala prima.",
+      "busy": "Ripristino in corso…",
+      "pickTwo": "Spunta due versioni per vederle affiancate.",
+      "pictures": "Il confronto mostra due immagini; un PDF si apre da solo."
+    }
+  },
+  "tag": {
+    "open": "Cosa è",
+    "openNamed": "Cosa è {name} e fino a quando",
+    "title": "Cosa è {name}",
+    "intro": "Indica cosa è questo documento e l'ultimo giorno di validità. Nexus avvisa 30 e 7 giorni prima; un documento condiviso con il partner gli chiede una nuova versione.",
+    "category": "Tipo di documento",
+    "categoryHint": "Una regola dei documenti richiesti conta solo i documenti del suo tipo.",
+    "categoryNone": "Non indicato",
+    "expiresOn": "Valido fino al",
+    "expiresHint": "Lascialo vuoto se il documento non scade. Una nuova data fa ripartire gli avvisi.",
+    "noExpiry": "Non scade",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "problem": {
+      "date": "La data non è valida o è oltre 20 anni.",
+      "category": "Scegli un tipo dalla lista."
+    }
+  },
+  "markup": {
+    "open": "Annota",
+    "openNamed": "Annota {name}",
+    "title": "Annota {name}",
+    "introPicture": "Disegna frecce e cerchi sull'immagine. Salvata, l'immagine annotata diventa la versione successiva; l'originale resta in sola lettura.",
+    "introPdf": "Disegna frecce e cerchi su una pagina. I segni restano accanto al PDF; il PDF non cambia mai.",
+    "close": "Chiudi",
+    "pagesLabel": "Pagine",
+    "previousPage": "Pagina precedente",
+    "nextPage": "Pagina successiva",
+    "pageOf": "Pagina {page} di {pages}",
+    "page": "Pagina {page}",
+    "loadingPage": "Disegno della pagina…",
+    "loadingPicture": "Apertura dell'immagine…",
+    "surface": "Segni su {name}",
+    "savePicture": "Salva come nuova versione",
+    "savePdf": "Salva i segni su questa pagina",
+    "saving": "Salvataggio dei segni…",
+    "note": "Nota",
+    "noteHint": "Cosa indicano i segni (facoltativo).",
+    "earlierLabel": "Annotazioni precedenti",
+    "earlier": "Annotazioni precedenti di questo file",
+    "earlierPage": "Segni già su questa pagina",
+    "overlayLabel": "Pagina {page} con i suoi segni",
+    "none": "Nessuna per ora.",
+    "noNote": "Nessuna nota",
+    "itemMeta_one": "{who} · {at} · {count} segno",
+    "itemMeta_other": "{who} · {at} · {count} segni",
+    "madeVersion": "ha creato una nuova versione",
+    "held": {
+      "noMarks": "Disegna prima almeno una freccia o un cerchio.",
+      "firstPage": "Questa è la prima pagina.",
+      "lastPage": "Questa è l'ultima pagina."
+    }
+  },
+  "depth": {
+    "notice": {
+      "restored": "La versione precedente è tornata come nuova versione.",
+      "tagged": "Salvato: cosa è il documento e fino a quando.",
+      "marked": "L'immagine annotata è la nuova versione; l'originale resta in sola lettura.",
+      "overlay": "I segni sono salvati su questa pagina."
+    },
+    "held": {
+      "noUpload": "Serve il permesso di caricare file su questo record.",
+      "notMarkable": "Si possono annotare solo immagini (JPEG, PNG, WebP) o PDF.",
+      "notCurrent": "Una versione precedente è in sola lettura: usa la versione in vigore.",
+      "reading": "Lettura dei documenti del record in corso.",
+      "unreadable": "Non è stato possibile leggere i documenti del record: riprova sopra."
+    },
+    "problem": {
+      "store": "L'archivio dei file non ha risposto: riprova tra poco.",
+      "failed": "Non è riuscito: riprova.",
+      "conflict": "Qualcuno ha cambiato questo file nel frattempo: è stato riletto; controlla e riprova.",
+      "forbidden": "Non puoi farlo su questo record.",
+      "notFound": "Questo file non c'è più.",
+      "invalid": "Nexus non lo ha accettato: controlla cosa è stato disegnato o scritto.",
+      "unavailable": "Nexus non è raggiungibile ora: riprova tra poco."
+    }
+  },
+  "expiry": {
+    "expired": "Scaduto il {date}",
+    "today": "Scade oggi ({date})",
+    "soon_one": "Scade tra {count} giorno ({date})",
+    "soon_other": "Scade tra {count} giorni ({date})",
+    "valid": "Valido fino al {date}"
+  }
+}

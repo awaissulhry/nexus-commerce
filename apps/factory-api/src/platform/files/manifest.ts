@@ -28,6 +28,15 @@ export const manifest = defineManifest({
   'POST /files/uploads/:sessionId/sync': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'POST /files/uploads/:sessionId/complete': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'DELETE /files/uploads/:sessionId': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  // B-W2b-177: required documents (COL-048), a document's type and expiry (COL-049), markup (COL-055), the Versions pop-up.
+  'GET /files/required-rules': { audiences: ['office'], permission: 'documents.view', scope: 'record' },
+  'POST /files/required-rules': { audiences: ['office'], permission: 'documents.required.manage', scope: 'record' },
+  'PATCH /files/required-rules/:ruleId': { audiences: ['office'], permission: 'documents.required.manage', scope: 'record' },
+  'GET /files/documents': { audiences: ['office'], permission: 'files.read', scope: 'record' },
+  'PUT /files/:fileId/document': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'POST /files/:fileId/markups': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'GET /files/:fileId/markups': { audiences: ['office'], permission: 'files.read', scope: 'record' },
+  'GET /files/:fileId/history': { audiences: ['office'], permission: 'files.read', scope: 'record' },
   'PUT /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

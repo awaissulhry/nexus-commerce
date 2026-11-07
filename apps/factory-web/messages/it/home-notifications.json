@@ -247,6 +247,9 @@
         "incidentReported": "Nuova segnalazione {record}: {title}",
         "inailDue": "Comunicazione INAIL per {record} da inviare entro {title}",
         "inailLate": "Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}"
+      },
+      "files": {
+        "expiryDue": "{kind} su {record} scade il {title}"
       }
     },
     "fallback": "Novità su {record}",

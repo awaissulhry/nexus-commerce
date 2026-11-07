@@ -202,6 +202,8 @@ import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safe
 import { SAFETY_RECORDS_DEFINITIONS, SAFETY_RECORDS_PERMISSIONS } from '../../safety/records/permissions'
 // B-W2b-161: company branding (documents.branding.manage: logo, accent, sender name, portal label; step-up).
 import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permissions'
+// B-W2b-177: required documents per record type before a status move (documents.required.manage).
+import { REQUIRED_DOCUMENTS_DEFINITIONS, REQUIRED_DOCUMENTS_PERMISSIONS } from '../../files/required/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -691,6 +693,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_SALES_ORDERS_DEFINITIONS,
   // B-W2b-174: supplier orders in the portal.
   PORTAL_PURCHASE_ORDERS_DEFINITIONS,
+  // B-W2b-177: required documents.
+  REQUIRED_DOCUMENTS_DEFINITIONS,
   MONEY_PERMISSIONS,
   // B-W2b-168: portal search (partner roles only; its area `portal` is declared above, so the area order stays).
   PORTAL_SEARCH_DEFINITIONS,
@@ -899,6 +903,8 @@ for (const name of PARTNER_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PORTAL_SALES_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-174: supplier orders in the portal (partner roles only).
 for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-177: required documents.
+for (const name of REQUIRED_DOCUMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

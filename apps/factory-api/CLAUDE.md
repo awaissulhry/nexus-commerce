@@ -441,6 +441,19 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   them; cron `files.expireLargeUploads` (hourly). Copies: recordGeneratedFile writes `sourceFileId` from prepareFileCopy (FV1:01).
   Uploads from outside (portal, link) call `multipart/outside.ts assertOutsideUploadsOpen()` first: closed on staging/production
   unless FACTORY_VIRUS_SCAN=clamav (FV1:02; GATE-SPEND).
+- Required documents, expiry and markup (B-W2b-177; COL-048, COL-049, COL-055; `platform/files/{required,expiry,markup}/`,
+  factory-domain `files/{required,expiry,markup}`): a module's status command calls `required/check.ts assertRequiredDocuments(tools,
+  { recordType, recordId, toStatus })` — BLOCK rules not met refuse the move (409 in words), WARN ones come back; satisfied by a
+  CURRENT categorised version valid today on the record or its party (registry: PurchaseOrder, GoodsReceipt, ShipNotice,
+  SubcontractOrder, Shipment, Party). Rules: `GET|POST /files/required-rules`, `PATCH …/:ruleId` (documents.view /
+  documents.required.manage; switched off, never deleted). `GET /files/documents?recordType&recordId` (each file's category and
+  expiry, each move's needs), `PUT /files/:fileId/document` {category?, expiresOn?, version} (files.upload; a new date clears the
+  reminder). Cron `files.remindExpiry` (06:40 Europe/Rome): 30 then 7 days before, `file.expiry_due` (fan-out
+  `expiry/notices.ts`: the version's uploader and the record's followers), a partner's shared file opens a PartnerTask
+  UPLOAD_DOCUMENT (source `Expiry`, closed once the series' current version is valid beyond 30 days). Markup: `POST
+  /files/:fileId/markups` (a picture: its marked copy announced as the next version, then PUT + the usual confirm; a PDF page: an
+  overlay), `GET …/markups`, `GET /files/:fileId/history` (the Versions pop-up: who, uses by sourceFileId, the markup a version
+  came from). Event `file.marked_up`.
 - Error tracking (B-W2a-42; PLT-218; `src/observability/`): `reportError(error, context)` from the 500 handler
   (core/errors.ts), a job's last failed attempt (outbox/dispatch.ts) and a failed cron tick (core/cron.ts). Every report is
   factory-domain `observability/report` (allow-listed context, scrubbed text: no person, secret or money). Sinks:
