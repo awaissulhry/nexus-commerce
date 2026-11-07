@@ -1825,6 +1825,7 @@
     "inventory_receipts_documents_request": "Chiedere al fornitore i documenti mancanti di un ricevimento",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "portal_search": "Cercare i propri ordini, documenti e lavorazioni con i propri riferimenti e i nostri",
+    "portal_jobs_view": "Vedere le nostre lavorazioni per il proprio laboratorio: operazioni, pezzi per taglia, il kit inviato e il proprio avanzamento; accettare, confermare il kit, comunicare i pezzi finiti e annunciare il reso quando il proprio accesso lo consente",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
     "planning_schedule_publish": "Pubblicare il programma al reparto",
     "planning_leather_manage": "Cambiare la perdita di taglio di un modello dai suoi tagli",

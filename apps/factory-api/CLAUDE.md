@@ -373,6 +373,25 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   `purchase_orders.to_confirm|late`. W1's accept refuses a proposal with a substitute (counter-propose instead); the
   revision start clears the substitute columns; the buyer's note says "in the portal" (event `source`). PG tests:
   `portal-orders/portal-orders.pg.vitest.test.ts`.
+## Subcontractor jobs (`src/modules/purchasing/portal-jobs/`, B-W2b-176; SCM-154 to SCM-157, PLN-163; Owner answers C2, C3)
+- A job is a subcontract order as its workshop sees it: never a fee or amount. Routes live in purchasing's routes.ts and
+  manifest.ts (autoload does not look under a module folder that has its own routes file). Reads (`read.ts`): the order,
+  kit lines, progress reports and return notices in the caller's own scope (portal / link: factory_partner_runtime; select
+  JOB_ORDER_COLUMNS, never the hidden columns), the operations, cells, bundles, items, lots and DDTs in the system scope.
+- Portal (`portal.jobs.view`, the workshop's Jobs role; an act also needs the capability: accept, decline, kit
+  `portal.approve`; progress, send-back `portal.comment`; a damage photo `portal.upload`; a preview never acts):
+  `GET /portal/jobs?chip=&q=`, `GET /portal/jobs/:id`, `POST …/accept|decline|kit|progress|returns`,
+  `POST …/kit/photos` (+ `/:fileId/complete`: a PHOTO of the kit line through the system uploader, OFFICE + PARTNER).
+- Link JOB_ACCEPT: the office's `POST /purchasing/subcontracting/orders/:id/job-link` (mailed, template
+  `purchasing.job_link`, or the URL once); `GET /link/job`, `POST /link/job/accept|move-date|decline` (useLink in the act).
+- Office: `GET …/orders/:id/workshop` (what the workshop said, the links, the receive back each announced send-back
+  prefills), `POST …/workshop/date` (the answer to a proposed date), `…/workshop/accept|decline|kit|progress|returns`
+  (C3: the office acts for a workshop without e-mail, via OFFICE), `…/workshop/returns/:noticeId/cancel` (receive).
+  `POST …/receive` takes `returnNoticeId` (the notice becomes RECEIVED with the receipt).
+- Every act is ONE command naming the order with the page's version (`acts.ts`); events `subcontract_order.job_sent|
+  job_answered|date_decided|kit_checked|progress_reported|return_announced|return_cancelled` (factory-domain
+  `subcontract-jobs/events.ts`). Tasks CONFIRM_KIT and REPORT_PROGRESS (source `SubcontractJob`) open at the kit send;
+  W2a's commands call `tasks.ts settleJobInCommand` after they move an order. PG tests: `portal-jobs.pg.vitest.test.ts`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

@@ -1,0 +1,339 @@
+{
+  "title": "What the workshop said",
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Try again"
+  },
+  "state": {
+    "loading": "Loading what the workshop said…",
+    "slow": "Still loading…",
+    "failed": "Couldn't load what the workshop said"
+  },
+  "problem": {
+    "read": "The server didn't answer as expected. Try again.",
+    "forbidden": "Your role may not see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed the order meanwhile: it was read again. Check and try again.",
+    "state": "The order moved on meanwhile: it was read again. Check what it allows now.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "held": {
+    "busy": "Working…",
+    "manage": "Your role may not act for the workshop: it needs the right to manage subcontract orders.",
+    "receive": "Your role may not receive goods back from a workshop.",
+    "ended": "This job has ended.",
+    "declined": "The workshop declined this job.",
+    "answered": "The workshop answered this job already.",
+    "declinePartly": "Some of the work came back already: it can no longer be declined.",
+    "notSent": "The order has not gone to the workshop yet.",
+    "acceptFirst": "The workshop has not accepted the job yet: record its answer first.",
+    "kitNone": "No kit line waits for the workshop's check.",
+    "noKitYet": "The kit has not left yet: nothing can come back.",
+    "nothingToAnnounce": "Everything at the workshop is announced or back already.",
+    "generic": "Not possible on this order now.",
+    "link": {
+      "accepted": "The workshop accepted already: no link is needed.",
+      "draft": "Send the order to the workshop first."
+    },
+    "date": {
+      "none": "The workshop proposed no other date.",
+      "answered": "We answered the proposed date already."
+    }
+  },
+  "jobState": {
+    "TO_ANSWER": "Waiting for its answer",
+    "DECLINED": "Declined",
+    "WAITING_KIT": "Accepted · kit to send",
+    "IN_WORK": "In work",
+    "PARTLY_BACK": "Partly back",
+    "BACK": "All back",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "answer": {
+    "title": "The job",
+    "waiting": "Sent to the workshop: waiting for its answer (accept, another date, or decline).",
+    "notSent": "Not sent to the workshop yet.",
+    "accepted": "Accepted on {when} by {by}.",
+    "declined": "Declined on {when} by {by}: {reason}",
+    "someone": "the workshop",
+    "proposed": "It proposes {day} instead of {asked}: {reason}",
+    "ourDay": "our day",
+    "dateAccepted": "We accepted that day on {when}: it is the expected-back day.",
+    "dateRefused": "We refused that day on {when}: our day stays.",
+    "acceptDate": "Accept the date",
+    "refuseDate": "Refuse",
+    "dueBack": "Due back",
+    "noDay": "No day set",
+    "kitOut": "Kit sent on",
+    "kitNotYet": "Not yet",
+    "record": "Record its answer…",
+    "held": {
+      "date": "Pick the day it proposes.",
+      "past": "The day it proposes is today or later.",
+      "same": "That is our day: record it as accepted as asked.",
+      "reason": "Say why it needs another day.",
+      "declineReason": "Pick the reason.",
+      "note": "Say why in a few words."
+    }
+  },
+  "reach": {
+    "title": "How the workshop answers",
+    "none": {
+      "title": "No e-mail and no portal for this workshop",
+      "body": "Record its answers here when it tells you by phone or on paper: they are kept as given for it by the office."
+    },
+    "portal": "Its portal is on: {count} person(s) may answer there."
+  },
+  "link": {
+    "send": "Send the job link…",
+    "sendAgain": "Send a new job link…",
+    "list": "The job's links",
+    "col": {
+      "to": "Sent to",
+      "state": "State",
+      "until": "Works until"
+    },
+    "handedOut": "Handed out by us",
+    "state": {
+      "LIVE": "Open",
+      "USED_UP": "Answered",
+      "EXPIRED": "Expired",
+      "REVOKED": "Stopped",
+      "OTHER": "Closed"
+    },
+    "handed": {
+      "title": "The job link, to pass on now",
+      "once": "It is shown this once and not kept: copy it now (for a message to the workshop)."
+    },
+    "copy": "Copy the link",
+    "title": "Send job {number} to the workshop",
+    "what": "One phone page, no install and no price: the job, the sizes, the kit day and the due-back day; the workshop accepts, proposes another date or declines.",
+    "how": "How the link goes",
+    "mail": "By e-mail",
+    "mailHint": "We mail it to the workshop from this order.",
+    "hand": "Get the link to pass on",
+    "handHint": "For a workshop without e-mail: you send it yourself (a message on the phone).",
+    "contact": "To",
+    "typed": "Another address…",
+    "email": "E-mail address",
+    "language": "Language of the page and the mail",
+    "languageDefault": "The workshop's",
+    "languageIt": "Italian",
+    "languageEn": "English",
+    "replaces": "The open link stops working: the new one replaces it.",
+    "confirmMail": "Send the link",
+    "confirmHand": "Show the link",
+    "held": {
+      "address": "Give the address the link goes to."
+    }
+  },
+  "date": {
+    "acceptTitle": "Accept {day} as the due-back day",
+    "refuseTitle": "Refuse {day}",
+    "reason": "The workshop's reason: {reason}",
+    "acceptWhat": "The order's expected-back day becomes {day} (it was {asked}).",
+    "refuseWhat": "Our day {asked} stays; the workshop reads that we refused {day}.",
+    "once": "We answer it once.",
+    "accept": "Accept the date",
+    "refuse": "Refuse the date"
+  },
+  "dialog": {
+    "forWorkshop": "You write this for the workshop (it has no e-mail or told you by phone): it is kept as given by the office.",
+    "name": "Who at the workshop said so",
+    "nameHint": "Optional: else your name is kept."
+  },
+  "answerDialog": {
+    "title": "The workshop's answer on job {number}",
+    "how": "Its answer",
+    "accept": "Accepts as asked",
+    "acceptHint": "The pieces, the sizes and our due-back day.",
+    "move": "Accepts with another day",
+    "moveHint": "We answer the day it proposes.",
+    "decline": "Declines",
+    "declineHint": "With its reason.",
+    "day": "The day it proposes",
+    "why": "Why",
+    "declineReason": "Reason",
+    "pick": "Pick one…",
+    "note": "Its words",
+    "confirmAccept": "Record the acceptance",
+    "confirmDecline": "Record the decline"
+  },
+  "declineReason": {
+    "NO_CAPACITY": "No capacity",
+    "DATES": "The dates do not work",
+    "OTHER": "Other"
+  },
+  "kit": {
+    "title": "Kit received by the workshop",
+    "record": "Record its kit check…",
+    "noneSent": "No kit line has left yet.",
+    "col": {
+      "line": "Line",
+      "component": "Component",
+      "sent": "We sent",
+      "counted": "It counted",
+      "said": "What it said"
+    },
+    "planned": "Not sent yet",
+    "notChecked": "Not confirmed yet",
+    "short": "Less than sent",
+    "asListed": "As listed",
+    "photos": "{count} photo(s): {names}",
+    "held": {
+      "count": "Line {line}: count what came (0 or more).",
+      "more": "Line {line}: we sent {sent}; count again.",
+      "note": "Line {line}: say what is missing or damaged."
+    }
+  },
+  "kitDialog": {
+    "title": "The kit the workshop received for job {number}",
+    "all": "Everything received as listed ({count} line(s))",
+    "counted": "Line {line} {code}: counted (we sent {sent})",
+    "note": "Missing or damaged",
+    "noteHint": "Needed when less came.",
+    "photos": "A photo of damage comes from the workshop's portal; here the words are kept.",
+    "confirm": "Record the kit check"
+  },
+  "progress": {
+    "title": "Progress at the workshop",
+    "record": "Record finished pieces…",
+    "finishBy": "It expects to finish by {day}.",
+    "line": "Line {line} {code} {name}",
+    "finished": "{finished} of {pieces} finished",
+    "bar": "Finished pieces of line {line}",
+    "size": "{cell}: {finished}/{pieces}",
+    "counts": "Sent {sent} · back {back} · announced {announced}",
+    "none": "No report yet.",
+    "reports": "Reports so far",
+    "report": "{finished} finished on line {line} ({what})",
+    "bundle": "bundle {code}",
+    "whole": "the line as a whole",
+    "by": "by {name}",
+    "byOffice": "entered by us for {name}",
+    "reportFinishBy": "finish by {day}",
+    "held": {
+      "whole": "Type whole pieces.",
+      "cell": "Line {line}, {size}: at most {left} more.",
+      "operation": "Line {line}: at most {left} more.",
+      "nothing": "Type the finished pieces of at least one size.",
+      "finishBy": "The finish day is after the order day."
+    }
+  },
+  "progressDialog": {
+    "title": "Finished pieces of job {number}",
+    "whole": "Finished since the last report",
+    "size": "{cell} (finished {finished}/{pieces})",
+    "finishBy": "Will finish by",
+    "finishByHint": "Optional.",
+    "note": "Note",
+    "confirm": "Record the progress"
+  },
+  "returns": {
+    "title": "Send-backs announced",
+    "record": "Record a send-back…",
+    "none": "Nothing announced yet.",
+    "col": {
+      "which": "Send-back",
+      "comes": "What comes",
+      "ddt": "Its DDT",
+      "state": "State",
+      "act": "Receive"
+    },
+    "which": "No. {seq} · expected {day}",
+    "by": "announced by {name}",
+    "byOffice": "entered by us for {name}",
+    "pieces": "{pieces} piece(s) · {parcels} parcel(s)",
+    "scrapped": "line {line}: {scrapped} scrapped ({reason})",
+    "weCollect": "We collect",
+    "theyDeliver": "The workshop delivers",
+    "noDdt": "No DDT given",
+    "state": {
+      "ANNOUNCED": "Announced",
+      "RECEIVED": "Received",
+      "CANCELLED": "Cancelled"
+    },
+    "receive": "Receive back from this",
+    "cancel": "Cancel…",
+    "held": {
+      "whole": "Line {line}: whole pieces, 0 or more.",
+      "reason": "Line {line}: say why pieces were scrapped.",
+      "more": "Line {line}: at most {left} are at the workshop and not announced.",
+      "nothing": "Say what comes back: at least one piece.",
+      "material": "Kit line {line}: a quantity above 0.",
+      "materialMore": "Kit line {line}: we sent {sent}.",
+      "parcels": "From 1 to 9999 parcels.",
+      "day": "The goods arrive today or later.",
+      "ddtNumber": "A DDT date needs its number.",
+      "ddtDate": "The DDT is dated on or before the day the goods arrive."
+    }
+  },
+  "returnsDialog": {
+    "title": "What comes back on job {number}",
+    "nothingMoves": "Nothing moves in stock until the goods are received back.",
+    "left": "At the workshop and not announced: {left} · finished and ready: {ready}",
+    "finished": "Finished",
+    "scrapped": "Scrapped",
+    "scrapReason": "Why scrapped",
+    "material": "Unused material back",
+    "materialLine": "Kit line {line} {code} (we sent {sent})",
+    "parcels": "Parcels",
+    "day": "Arrives on",
+    "ddtNumber": "The workshop's DDT number",
+    "ddtHint": "As printed on its transport document.",
+    "ddtDate": "The DDT's date",
+    "weCollect": "We collect the goods (else the workshop delivers)",
+    "note": "Note",
+    "confirm": "Record the send-back"
+  },
+  "cancelReturn": {
+    "title": "Cancel send-back no. {seq}",
+    "what": "The {pieces} piece(s) announced will not come as announced; nothing moves in stock.",
+    "final": "A cancelled send-back stays in the list; the workshop announces again.",
+    "reason": "Why",
+    "held": {
+      "reason": "Say why it is cancelled."
+    },
+    "confirm": "Cancel the send-back"
+  },
+  "refused": {
+    "proposedDate": "The proposed day was not accepted: from today on, not our day.",
+    "address": "That address cannot take the link: check it.",
+    "scrapReason": "Pick why the pieces were scrapped.",
+    "note": "Add the words it needs.",
+    "reason": "Give the reason.",
+    "kit": "A kit line was not accepted: count again.",
+    "progress": "A count is more than the pieces left: check the sizes.",
+    "material": "A material line was not accepted: check the quantities.",
+    "returns": "More pieces than are at the workshop: check the lines.",
+    "parcels": "From 1 to 9999 parcels.",
+    "day": "The goods arrive today or later.",
+    "ddt": "The DDT was not accepted: its number, and its date not after arrival."
+  },
+  "notice": {
+    "linkSent": "The job link went to the workshop.",
+    "linkHanded": "The job link is ready to pass on: copy it now.",
+    "linkCopied": "Link copied.",
+    "dateAccepted": "Date accepted: the expected-back day moved.",
+    "dateRefused": "Date refused: our day stays.",
+    "accepted": "The workshop's acceptance is recorded.",
+    "declined": "The workshop's decline is recorded.",
+    "kit": "The workshop's kit check is recorded.",
+    "progress": "The finished pieces are recorded: the work order sees them.",
+    "returns": "The send-back is recorded: receive it when the goods arrive.",
+    "returnCancelled": "The send-back is cancelled."
+  },
+  "scrap": {
+    "LEATHER_FLAW": "Leather flaw",
+    "CUT_WRONG": "Cut wrong",
+    "STITCHING": "Stitching beyond repair",
+    "STAIN": "Stain",
+    "TEAR": "Tear or hole",
+    "MACHINE": "Machine damage",
+    "OTHER": "Other"
+  }
+}

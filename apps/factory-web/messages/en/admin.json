@@ -1825,6 +1825,7 @@
     "inventory_receipts_documents_request": "Ask the supplier for a receipt's missing documents",
     "search_rebuild": "Rebuild the search index of the whole group",
     "portal_search": "Search your orders, documents and jobs by your own references and ours",
+    "portal_jobs_view": "See our jobs for your workshop: operations, pieces per size, the kit we sent and your progress; accept, confirm the kit, report and announce the send-back when your access allows",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
     "planning_schedule_publish": "Publish the schedule to the floor",
     "planning_leather_manage": "Change a style's cutting loss from its cuts",

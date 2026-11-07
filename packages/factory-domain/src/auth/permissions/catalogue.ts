@@ -99,6 +99,8 @@ import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions
 import { PORTAL_SEARCH_DEFINITIONS, PORTAL_SEARCH_PERMISSIONS } from '../../search/partner/permissions'
 // B-W2b-185: paying in the customer portal (partner roles only: open items, statement, pay by card or SEPA).
 import { PORTAL_PAYMENTS_DEFINITIONS, PORTAL_PAYMENTS_PERMISSIONS } from '../../payments/online/permissions'
+// B-W2b-176: subcontractor jobs in the portal (portal.jobs.view; partner roles only).
+import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasing/portal-jobs/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -702,6 +704,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_SEARCH_DEFINITIONS,
   // B-W2b-185: paying in the customer portal (partner roles only).
   PORTAL_PAYMENTS_DEFINITIONS,
+  // B-W2b-176: subcontractor jobs in the portal (partner roles only; area `portal`, declared above).
+  PORTAL_JOBS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -784,6 +788,8 @@ for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-168: portal search, flagged partner (never in an office or floor role).
 for (const name of PORTAL_SEARCH_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-176: subcontractor jobs in the portal, flagged partner (never in an office or floor role).
+for (const name of PORTAL_JOBS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2a-35: the plant.
 for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-33: exception rules and stored alerts.

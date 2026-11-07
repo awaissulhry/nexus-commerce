@@ -5,6 +5,7 @@ import { PURCHASE_ORDERS_SOURCE } from './purchase-orders'
 import { EXPIRY_SOURCE } from '../../../files/expiry/source'
 // B-W2b-185: the request to pay each open invoice.
 import { PAY_INVOICE_SOURCE } from '../../../../modules/payments/online/task-source'
+import { SUBCONTRACT_JOBS_SOURCE } from './subcontract-jobs'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -36,6 +37,8 @@ export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   EXPIRY_SOURCE,
   // B-W2b-185: a PAY_INVOICE request per issued invoice while something is open on it (closed by the payment itself).
   PAY_INVOICE_SOURCE,
+  // B-W2b-176: the workshop's requests on a job: confirm the kit we sent, report progress.
+  SUBCONTRACT_JOBS_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

@@ -101,6 +101,31 @@ export const manifest = defineManifest({
   'POST /purchasing/subcontracting/kits/:subcontractOrderId/send': { audiences: ['floor'], permission: 'purchasing.subcontract.kit', scope: 'record' },
   'POST /purchasing/subcontracting/kits/:subcontractOrderId/receive': { audiences: ['floor'], permission: 'purchasing.subcontract.receive', scope: 'record' },
   'GET /purchasing/subcontracting/kits/:subcontractOrderId/ddts/:ddtId/pdf': { audiences: ['floor'], permission: SIGNED_IN, scope: 'record' },
+  // B-W2b-176 (SCM-154 to SCM-157): subcontractor jobs. The workshop's portal (its party; acts also check the capability in the
+  // handler: approve, comment, upload; an office preview never acts), its JOB_ACCEPT link (the link's one order), and the
+  // office's view of what the workshop said, the job link, the date answer and its acts for a workshop without e-mail (C3).
+  'GET /portal/jobs': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'GET /portal/jobs/:subcontractOrderId': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/accept': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/decline': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/kit': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/kit/photos': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/kit/photos/:fileId/complete': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/progress': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'POST /portal/jobs/:subcontractOrderId/returns': { audiences: ['partner'], permission: 'portal.jobs.view', scope: 'party' },
+  'GET /purchasing/subcontracting/orders/:subcontractOrderId/workshop': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/job-link': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/date': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/accept': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/decline': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/kit': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/progress': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/returns': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
+  'POST /purchasing/subcontracting/orders/:subcontractOrderId/workshop/returns/:returnNoticeId/cancel': { audiences: ['office'], permission: 'purchasing.subcontract.receive', scope: 'record' },
+  'GET /link/job': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  'POST /link/job/accept': { audiences: ['link'], permission: 'links.accept', scope: 'record' },
+  'POST /link/job/move-date': { audiences: ['link'], permission: 'links.moveDate', scope: 'record' },
+  'POST /link/job/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier; read with purchasing.view, kept with
   // purchasing.claims.manage, the goods back with purchasing.claims.return (the return DDT also needs shipping.ddt.issue,
   // and "Return to supplier" in one go claims.manage too: both checked in the handler) (./claims).

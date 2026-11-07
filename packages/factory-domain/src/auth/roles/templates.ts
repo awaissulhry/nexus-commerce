@@ -1368,6 +1368,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
   // B-W2b-185: the customer's Finance sees what is open and pays it online (FIN-118, FIN-123); the customer Admin follows.
   { 'customer-finance': ['portal.payments.view' as Permission, 'portal.payments.pay' as Permission] },
+  // B-W2b-176: the workshop's Jobs role sees our jobs for it (never a fee or price, C2); its acts take the capabilities.
+  { 'subcontractor-jobs': ['portal.jobs.view' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
