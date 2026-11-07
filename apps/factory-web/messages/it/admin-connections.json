@@ -54,6 +54,16 @@
         "name": "Segnalazione errori (UE)",
         "for": "Avvisa l'assistenza Nexus degli errori imprevisti, dopo aver tolto dati personali e importi.",
         "how": "Uno per tutte le aziende. Non è ancora attivo: aspetta il sì del titolare con il suo costo e l'accordo con il responsabile del trattamento."
+      },
+      "PAYMENT_FAKE": {
+        "name": "Pagamenti con carta (prova)",
+        "for": "Il sostituto di Nexus di un fornitore di pagamenti con carta: i clienti possono provare a pagare un acconto o una fattura con carta, e non si muove denaro.",
+        "how": "Solo per le prove in locale e di test; non incassa mai un pagamento vero."
+      },
+      "STRIPE": {
+        "name": "Pagamenti con carta (Stripe)",
+        "for": "Permette ai clienti di pagare acconti e fatture con carta o addebito SEPA; la carta si digita nei campi di Stripe, mai in Nexus.",
+        "how": "Uno per società: ogni società incassa i propri pagamenti. Non è ancora attivo: aspetta il sì del titolare con le commissioni esatte; il bonifico resta il modo predefinito."
       }
     },
     "laterService": {

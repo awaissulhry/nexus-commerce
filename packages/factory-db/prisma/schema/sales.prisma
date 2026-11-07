@@ -47,6 +47,10 @@
 // PARTLY_SHIPPED (the only change its lines take then: the …_sales_w2a_guards triggers); a quote version and an order
 // keep the payment terms of the library they were made with, a quote version the price list version its list prices came
 // from (pricing.prisma); the sales settings hold the return policy (returns.prisma).
+//
+// W2b (schema wave 21/22, B-W2b-157): a customer's order request from the portal and its change and cancel requests are
+// portal-sales.prisma's; an order or a quote names nothing of them (the request names what it became), and the sales
+// settings hold the cut-off rules those requests are checked against.
 
 /// A quote of a company to a party (SAL-143): its number, its party and contact, and the status of its current version.
 /// Its documents are its versions.
@@ -83,6 +87,8 @@ model Quote {
   party    Party          @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   contact  PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   versions QuoteVersion[]
+  // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from.
+  portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestQuote")
 
   @@unique([tenantId, companyId, number])
   // The target of the versions' reference: a version names its quote's party.
@@ -484,6 +490,8 @@ model DepositRequest {
   allocations  PaymentAllocation[]
   // The step of its order's payment schedule it is asked for: the deposit, or a balance before shipping (B-W2a-F2).
   milestones   SalesOrderMilestone[]
+  // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
+  paymentIntents PaymentIntent[]
 
   // The target of the references from its deposit invoices and payment allocations: the same company and party.
   @@unique([tenantId, companyId, partyId, id])
@@ -591,6 +599,9 @@ model SalesOrder {
   replacementFor  ReturnAuthorisation[] @relation("ReturnReplacementOrder")
   // complaints.prisma: the complaints about it.
   complaints      Complaint[]
+  // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from, its change and cancel requests.
+  portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestOrder")
+  changeRequests      OrderChangeRequest[] @relation("OrderChangeRequestOrder")
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -693,6 +704,10 @@ model SalesOrderLine {
   // returns.prisma: the return lines of its goods, and those it replaces (a replacement order's line).
   returnLines        ReturnLine[]         @relation("ReturnLineOrderLine")
   replacedReturnLines ReturnLine[]        @relation("ReturnLineReplacement")
+  // W2b portal-sales.prisma (wave 21/22): the portal request lines copied from it (a reorder), the change and cancel
+  // requests that ask for it.
+  portalRequestLines PortalOrderRequestLine[] @relation("PortalOrderRequestLineSource")
+  changeRequestLines OrderChangeRequestLine[] @relation("OrderChangeRequestLineOrderLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
@@ -754,6 +769,15 @@ model SalesSettings {
   returnFreightPaidBy    ReturnFreightPayer?
   returnRestockingFeePct Decimal?            @db.Decimal(7, 4)
   returnConditions       String?
+  /// W2b (wave 21/22; SAL-077, SAL-078; design portal.customer.orders "Ask for a change", "Ask to cancel"): the cut-off
+  /// rules a customer's change or cancel request from the portal is checked against (B-W2b-183 tells them before the
+  /// click and refuses in words): from which order status on a cancel is no longer asked, and within how many days of
+  /// the promise date (1 to 365); from which order status on a change is no longer asked. A status is CONFIRMED (never
+  /// from the portal), IN_PRODUCTION or READY; null: no rule of that kind (an order is asked about only while CONFIRMED,
+  /// IN_PRODUCTION or READY in any case). Cells of lines already cut are held by the production data, not by these.
+  cancelCutoffStatus     SalesOrderStatus?
+  cancelCutoffDays       Int?
+  changeCutoffStatus     SalesOrderStatus?
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -807,8 +831,12 @@ model SalesOrderAmendment {
   createdById        String?  @db.Uuid
 
   order SalesOrder @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b portal-sales.prisma (wave 21/22): the customer's change request it answers.
+  changeRequests OrderChangeRequest[] @relation("OrderChangeRequestAmendment")
 
   @@unique([tenantId, orderId, revision])
+  // W2b (wave 21/22): the target of a change request's reference: an amendment of the request's own order.
+  @@unique([tenantId, orderId, id])
 }
 
 /// One step of an order's payment schedule (SAL-216; design order.money.schedule): what is due when (the deposit on the

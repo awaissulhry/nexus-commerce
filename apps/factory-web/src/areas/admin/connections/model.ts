@@ -15,13 +15,14 @@ import type { DeliveryModel } from './delivery/model'
  */
 
 /** The catalogue order of the services (design `connect`: e-mail, files, SDI, carrier, VAT check). */
-export const PROVIDER_ORDER: readonly IntegrationProvider[] = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING']
+export const PROVIDER_ORDER: readonly IntegrationProvider[] = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE']
 /**
- * B-W2b-24: services that wait for the Owner's spend yes (GATE-SPEND: the virus-scan service, EU error tracking). Listed
+ * B-W2b-24: services that wait for the Owner's spend yes (GATE-SPEND: the virus-scan service, EU error tracking; B-W2b-157:
+ * the card payment provider and its FAKE stand-in, which no live tenant has). Listed
  * when an account exists (its calls are ledgered like any other) and in the catalogue; never a "Not connected" row in
  * the services list, which would ask for something nobody may buy yet.
  */
-export const AWAITING_SPEND: ReadonlySet<IntegrationProvider> = new Set(['CLAMAV', 'ERROR_TRACKING'])
+export const AWAITING_SPEND: ReadonlySet<IntegrationProvider> = new Set(['CLAMAV', 'ERROR_TRACKING', 'PAYMENT_FAKE', 'STRIPE'])
 /** One account per company (the SDI intermediary, the carrier); the others are tenant-wide (the environment's). */
 export const PER_COMPANY: ReadonlySet<IntegrationProvider> = new Set(['SDI', 'SENDCLOUD'])
 /** Services the design names for later waves (shown in the catalogue as "later"). */

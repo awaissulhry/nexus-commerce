@@ -141,6 +141,9 @@ model Company {
   quotes               Quote[]
   salesOrders          SalesOrder[]
   depositRequests      DepositRequest[]
+  // W2b portal-sales.prisma (wave 21/22): the order requests its customers sent from the portal, their payment intents.
+  portalOrderRequests  PortalOrderRequest[]
+  paymentIntents       PaymentIntent[]
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
   qualitySettings      QualitySettings[]
