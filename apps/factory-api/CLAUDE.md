@@ -374,6 +374,26 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   revision start clears the substitute columns; the buyer's note says "in the portal" (event `source`). PG tests:
   `portal-orders/portal-orders.pg.vitest.test.ts`.
 
+## Supplier documents and profile in the portal (`src/modules/purchasing/portal-profile/`, B-W2b-189; SCM-096, SCM-097)
+- Portal (purchasing's routes.ts/manifest.ts, scope party, no grain): `GET /portal/supplier-documents` ("We ask for": the
+  company's required-document rules MISSING/EXPIRED on the supplier's record and its open POs, ship notices and jobs, a
+  company-wide kind once on the party, plus open UPLOAD_DOCUMENT tasks; "Your documents"), `POST /portal/supplier-documents`
+  (+ `/:fileId/complete`; `portal.supplierDocuments.view` + the person's `portal.upload`; `assertOutsideUploadsOpen`): a
+  CERTIFICATE file of the party (or the record asked about) uploaded as the tenant's system caller, OFFICE only, NOT tagged,
+  so it counts for nothing until accepted. `GET /portal/supplier-profile`, `POST …/changes` (`portal.supplierProfile.change`,
+  the Admin), `POST …/changes/:requestId/withdraw`: a change request (≤ 20 address/contact changes, parties' own rules, the
+  version each row was seen at) that changes nothing until the buyer's yes.
+- Office: `GET /purchasing/supplier-documents`, `POST …/:fileId/accept {category, expiresOn, replacesFileId?, version}`
+  (tags it, shares it PARTNER with the party; a replacement becomes the replaced document's NEXT VERSION as a copy, which
+  supersedes it and closes its expiry request) and `…/refuse {reason, version}` (an UPLOAD_DOCUMENT task, source
+  `SupplierDocument`, due in 14 days) — `purchasing.supplierDocuments.review`; `GET /purchasing/supplier-changes`, `POST
+  …/:requestId/approve|refuse` — `purchasing.supplierChanges.decide` (applies with the parties module's inserts and version
+  bumps; a row changed since stops it, 409). Today kinds SUPPLIER_DOCUMENT and SUPPLIER_CHANGE (Approvals).
+- NO TABLE (schema need): uploads and change requests are AUDIT ROWS on the supplier's record (recordType Party:
+  `supplierDocuments.upload|received|accept|refuse`, `supplierProfile.requestChange|withdrawChange|approveChange|
+  refuseChange`; `store.ts`), written with the party row locked, read in the office/system scope only. `parties.ts`
+  moveParty calls `assertRequiredDocuments` for a move to ACTIVE. PG tests: `portal-profile.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

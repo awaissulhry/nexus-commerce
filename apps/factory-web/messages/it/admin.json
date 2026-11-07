@@ -1982,6 +1982,11 @@
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "portal_payments_view": "Vedere cosa deve pagare la propria organizzazione: fatture e acconti aperti, scadenze ed estratto conto",
-    "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA"
+    "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA",
+    "portal_supplierDocuments_view": "Vedere i documenti che chiediamo alla propria organizzazione, con il motivo e la scadenza, e i propri documenti con la nostra verifica e la loro validità; inviarne uno se si può caricare",
+    "portal_supplierProfile_view": "Vedere i dati aziendali, gli indirizzi e i contatti della propria organizzazione e le modifiche in attesa della nostra verifica",
+    "portal_supplierProfile_change": "Inviare modifiche a indirizzi e contatti della propria organizzazione per la nostra verifica; valgono quando il buyer le approva",
+    "purchasing_supplierDocuments_review": "Accettare un documento inviato da un fornitore nel portale (cos'è, fino a quando) o rifiutarlo indicando il motivo",
+    "purchasing_supplierChanges_decide": "Approvare una modifica di indirizzi e contatti inviata da un fornitore nel portale, o rifiutarla indicando il motivo"
   }
 }

@@ -300,7 +300,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     expect(tiles.every((tile) => tile.complete === true)).toBe(true)
     // Approvals are the decisions a person reviews; everything else is an alert.
     // (B-W2b-17: an NCR decision waiting for an approval is an approval decided on the NCR's own record.)
-    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || item.kind === 'NCR_DECISION' ? 'APPROVAL' : 'ALERT')
+    // (B-W2b-189: a supplier's profile change and document too, decided on the supplier's record.)
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
     for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
       const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
@@ -309,8 +310,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
       expect(pressed.counts.tiles).toEqual(tiles)
     }
     // A deep link by kind still works, and its count is the kind's.
-    // B-W2b-17: + NCR_DECISION.
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(15)
+    // B-W2b-17: + NCR_DECISION. B-W2b-189: + SUPPLIER_CHANGE, SUPPLIER_DOCUMENT.
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(17)
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)
@@ -359,6 +360,9 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
       ['PO_PROPOSAL', 0],
       ['PO_NOT_CONFIRMED', 1],
       ['MAIL_TO_SORT', 3],
+      // B-W2b-189: suppliers' profile changes and documents to check (none here).
+      ['SUPPLIER_CHANGE', 0],
+      ['SUPPLIER_DOCUMENT', 0],
     ])
     expect(answer.counts.tiles.map((tile: Json) => [tile.tile, tile.count])).toEqual([
       ['ALL', 4],

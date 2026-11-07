@@ -11,6 +11,8 @@ import { orderPromise, quoteApproval } from './sales'
 import { mentioned, taskDue } from './personal'
 import { ruleAlerts } from './alerts'
 import { ncrDecision } from './ncr-decisions'
+// B-W2b-189: what suppliers sent in the portal that waits for a check (profile changes, documents).
+import { supplierChange, supplierDocument } from './supplier-changes'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -35,4 +37,7 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   RULE_ALERT: ruleAlerts,
   // B-W2b-17: NCR decisions waiting for an approval (the Approvals tile).
   NCR_DECISION: ncrDecision,
+  // B-W2b-189: suppliers' changes of addresses and contacts, and their documents, waiting for a check (the Approvals tile).
+  SUPPLIER_CHANGE: supplierChange,
+  SUPPLIER_DOCUMENT: supplierDocument,
 })

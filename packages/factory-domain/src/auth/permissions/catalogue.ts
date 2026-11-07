@@ -35,6 +35,8 @@ import { PARTNER_TASKS_DEFINITIONS, PARTNER_TASKS_PERMISSIONS, PORTAL_HOME_DEFIN
 import { PORTAL_SALES_ORDERS_DEFINITIONS, PORTAL_SALES_ORDERS_PERMISSIONS } from '../../sales/portal-orders/permissions'
 // B-W2b-174: supplier orders in the portal (portal.purchaseOrders.view; partner roles only).
 import { PORTAL_PURCHASE_ORDERS_DEFINITIONS, PORTAL_PURCHASE_ORDERS_PERMISSIONS } from '../../purchasing/portal-orders/permissions'
+// B-W2b-189: supplier documents and profile in the portal (partner) and their check (office).
+import { PORTAL_SUPPLIER_PROFILE_DEFINITIONS, PORTAL_SUPPLIER_PROFILE_PERMISSIONS, SUPPLIER_REVIEW_DEFINITIONS, SUPPLIER_REVIEW_PERMISSIONS } from '../../purchasing/portal-profile/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -702,6 +704,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_SEARCH_DEFINITIONS,
   // B-W2b-185: paying in the customer portal (partner roles only).
   PORTAL_PAYMENTS_DEFINITIONS,
+  // B-W2b-189: supplier documents and profile in the portal (partner roles only), and the office's check.
+  PORTAL_SUPPLIER_PROFILE_DEFINITIONS,
+  SUPPLIER_REVIEW_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -911,6 +916,9 @@ for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.g
 for (const name of REQUIRED_DOCUMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-185: paying in the customer portal, flagged partner.
 for (const name of PORTAL_PAYMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-189: supplier documents and profile in the portal, flagged partner; the office's check.
+for (const name of PORTAL_SUPPLIER_PROFILE_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+for (const name of SUPPLIER_REVIEW_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

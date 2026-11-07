@@ -105,6 +105,8 @@ import { events as branding } from '../branding/events'
 import { events as partners } from '../partners/events'
 // B-W2b-185: paying online (payment intents started and finished, the payment link sent).
 import { events as paymentIntents } from '../payment-intents/events'
+// B-W2b-189: a supplier's documents and profile in the portal (uploads checked, profile changes decided).
+import { events as supplierPortal } from '../supplier-portal/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -276,7 +278,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-167
   ...portal,
   // B-W2b-185
-  ...paymentIntents] as const satisfies readonly EventDefinition[]
+  ...paymentIntents,
+  // B-W2b-189
+  ...supplierPortal] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

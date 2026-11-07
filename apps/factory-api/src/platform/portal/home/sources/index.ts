@@ -7,6 +7,8 @@ import { TASK_COUNTS } from './tasks'
 import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home'
 // B-W2b-185: the customer's open and late invoices (Finance and Admin).
 import { PAYMENT_COUNTS } from '../../../../modules/payments/online/home'
+// B-W2b-189: what we ask a supplier for, and its documents expiring.
+import { SUPPLIER_DOCUMENT_COUNTS } from '../../../../modules/purchasing/portal-profile/home'
 
 /**
  * Where a partner's Home counts come from (B-W2b-167; plan W2b-3 "Sources": "Home counts through a sources folder like the
@@ -31,6 +33,8 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   PURCHASE_ORDER_COUNTS,
   // B-W2b-185: invoices to pay and overdue (customers' Finance and Admin; null for everyone else).
   PAYMENT_COUNTS,
+  // B-W2b-189: documents we ask a supplier or workshop for, and those expiring (null without the documents page).
+  SUPPLIER_DOCUMENT_COUNTS,
 ])
 
 const problems = homeCountProblems(HOME_SOURCES.flatMap((source) => source.counts))

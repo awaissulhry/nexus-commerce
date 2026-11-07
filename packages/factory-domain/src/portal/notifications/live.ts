@@ -3,6 +3,7 @@ import type { EventCatalogue } from '../../events/catalogue'
 import { isMoneyField } from '../../events/define'
 import type { LiveMessage, LiveView } from '../../events/envelope'
 import { PORTAL_HOME_VIEW } from '../tasks/permissions'
+import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -34,6 +35,13 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'partner_task.reopened': tasks([]),
   'partner_task.due_moved': tasks([]),
   'partner_notification.created': { permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['partyId', 'count'] },
+  // B-W2b-189: our check of a supplier's document, and of its profile change (the page's status and values update).
+  'supplier_document.uploaded': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'recordType', 'recordId', 'category'] },
+  'supplier_document.accepted': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'documentFileId', 'category'] },
+  'supplier_document.refused': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId'] },
+  'supplier_profile.change_requested': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
+  'supplier_profile.change_withdrawn': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
+  'supplier_profile.change_decided': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId', 'outcome'] },
 })
 
 /**

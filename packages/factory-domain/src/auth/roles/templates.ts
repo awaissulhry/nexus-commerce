@@ -647,6 +647,16 @@ const REQUIRED_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> =
   admin: ['documents.required.manage'],
   buyer: ['documents.required.manage'],
 })
+/**
+ * B-W2b-189 (SCM-096, SCM-097; design portal.supplier.documents "a buyer or quality person accepts it", portal.supplier.profile
+ * "changes go to the buyer"): who checks what suppliers send in the portal — their documents (administrator, buyer, quality
+ * inspector) and their changes of addresses and contacts (administrator, buyer).
+ */
+const SUPPLIER_REVIEW_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  buyer: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  quality_inspector: ['purchasing.supplierDocuments.review'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -743,7 +753,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-167
   ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
   // B-W2b-177
-  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
+  // B-W2b-189
+  ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1368,6 +1380,10 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },
   // B-W2b-185: the customer's Finance sees what is open and pays it online (FIN-118, FIN-123); the customer Admin follows.
   { 'customer-finance': ['portal.payments.view' as Permission, 'portal.payments.pay' as Permission] },
+  // B-W2b-189: every supplier and workshop role sees what we ask for, its documents and its profile; each Admin follows and
+  // alone sends changes of the addresses and contacts (SCM-096, SCM-097).
+  Object.fromEntries(['supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs'].map((key) => [key, ['portal.supplierDocuments.view' as Permission, 'portal.supplierProfile.view' as Permission]])),
+  { 'supplier-admin': ['portal.supplierProfile.change' as Permission], 'subcontractor-admin': ['portal.supplierProfile.change' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
