@@ -367,7 +367,8 @@ describe('the partner session', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect((await officeBrowser.get('/auth/office/me')).body.user.email).toBe('officer@portal-a.example')
   })
 
-  it('an office preview is read-only and holds no permission', async () => {
+  // B-W2b-162: a preview holds the reads its party's people could do (partners/preview-grants.ts), never a write or money.
+  it('an office preview is read-only and holds only the reads of its party\'s people', async () => {
     const owner = await addUser(h, tenant, { email: 'previewer@portal-a.example', role: 'owner' })
     const token = mintPortalToken('session', { tenantId: tenant.id, scopeId: world.partyId, userId: owner.id })
     const now = h.clock.now()
@@ -379,7 +380,7 @@ describe('the partner session', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     )
     const browser = await portalBrowser(h)
     browser.cookies.set(PORTAL_COOKIE, token.value)
-    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: [], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
+    expect((await browser.get('/portal/me')).body).toMatchObject({ preview: true, permissions: ['files.read', 'portal.colleagues.view', 'threads.read'], terms: null, user: { email: 'previewer@portal-a.example', partnerKind: null } })
     expect((await browser.post('/portal/sessions/refresh')).status).toBe(200)
     const write = await browser.post('/portal/first-visit', { noticeId: world.noticeId, noticeLocale: 'en', sha256: 'a'.repeat(64) })
     expect(write.status).toBe(403)

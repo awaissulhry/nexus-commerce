@@ -1,6 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { normalizeContent } from '@nexus/factory-domain/auth/roles/roles'
-import { ROLE_TEMPLATES, templateOf, type RoleTemplate } from '@nexus/factory-domain/auth/roles/templates'
+// B-W2b-162: the system roles are the office, floor and partner templates (SYSTEM_ROLE_TEMPLATES).
+import { SYSTEM_ROLE_TEMPLATES, systemTemplateOf, type SystemRoleTemplate } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { CommandTx } from '../../../core/command'
 
@@ -32,7 +33,7 @@ export interface SystemRoleChange {
 
 const RETIRED: Omit<SystemRoleContent, 'name' | 'description'> = { requireMfa: false, permissions: [], grains: [] }
 
-export function templateContent(template: RoleTemplate): SystemRoleContent {
+export function templateContent(template: SystemRoleTemplate): SystemRoleContent {
   const { permissions, grains } = normalizeContent(template)
   return { name: template.name, description: template.description, requireMfa: template.requireMfa, permissions, grains }
 }
@@ -50,14 +51,14 @@ const CONTENT_SELECT = { id: true, key: true, name: true, description: true, req
  * What a system row should hold: its template's content, except that a tenant may ASK two-factor of a ready-made office
  * role whose template does not (B-W2a-36, PLT-045: platform/admin/security): a sync keeps that raise, never lowers it.
  */
-export function contentFor(template: RoleTemplate, row: { readonly requireMfa: boolean } | undefined): SystemRoleContent {
+export function contentFor(template: SystemRoleTemplate, row: { readonly requireMfa: boolean } | undefined): SystemRoleContent {
   const content = templateContent(template)
   return row?.requireMfa && !content.requireMfa && template.audience === 'office' ? { ...content, requireMfa: true } : content
 }
 
 /** A system row differs from its template (or has none left). */
 export function isOutdated(row: { readonly key: string } & SystemRoleContent): boolean {
-  const template = templateOf(row.key)
+  const template = systemTemplateOf(row.key)
   return template ? !same(row, contentFor(template, row)) : row.permissions.length > 0 || row.grains.length > 0 || row.requireMfa
 }
 
@@ -66,14 +67,14 @@ export async function systemRoleChanges(client: FactoryClient | CommandTx): Prom
   const rows = await client.role.findMany({ where: { system: true }, select: CONTENT_SELECT, orderBy: { key: 'asc' } })
   const byKey = new Map(rows.map((row) => [row.key, row]))
   const changes: SystemRoleChange[] = []
-  for (const template of ROLE_TEMPLATES) {
+  for (const template of SYSTEM_ROLE_TEMPLATES) {
     const row = byKey.get(template.key)
     const after = contentFor(template, row)
     if (!row) changes.push({ key: template.key, roleId: newId(), kind: 'created', before: null, after })
     else if (!same(row, after)) changes.push({ key: template.key, roleId: row.id, kind: 'updated', before: contentOfRow(row), after })
   }
   for (const row of rows) {
-    if (templateOf(row.key) || !isOutdated(row)) continue
+    if (systemTemplateOf(row.key) || !isOutdated(row)) continue
     changes.push({ key: row.key, roleId: row.id, kind: 'retired', before: contentOfRow(row), after: { ...contentOfRow(row), ...RETIRED } })
   }
   return changes
@@ -95,7 +96,7 @@ export async function applySystemRoleChanges(tx: FactoryClient | CommandTx, chan
     const raised = change.after.requireMfa && change.before?.requireMfa !== true
     if (change.kind === 'created') {
       // A template's audience never changes, so it is set once, when its system role is made.
-      const audience = templateOf(change.key)?.audience === 'floor' ? 'FLOOR' : 'OFFICE'
+      const audience = ({ office: 'OFFICE', floor: 'FLOOR', partner: 'PARTNER' } as const)[systemTemplateOf(change.key)?.audience ?? 'office']
       await tx.role.create({ data: { id: change.roleId, key: change.key, system: true, audience, ...data, requireMfaSince: change.after.requireMfa ? at.now : null, createdAt: at.now, createdById: at.actorId } })
     } else {
       await tx.role.update({ where: { id: change.roleId }, data: { ...data, ...(raised ? { requireMfaSince: at.now } : {}), version: { increment: 1 } } })

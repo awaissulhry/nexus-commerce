@@ -1600,7 +1600,9 @@
     "receivables": "Receivables and reminders",
     "payables": "Supplier invoices",
     "people": "People",
-    "safety": "Safety at work"
+    "safety": "Safety at work",
+    "partners": "Partner portals",
+    "portal": "Portal (partners)"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1959,6 +1961,15 @@
     "safety_health_view": "Protected: see who is due which health surveillance visit and the fitness judgements (outcome and task limits, never a diagnosis), print the visit list for the doctor; each view is recorded",
     "safety_health_manage": "Keep the health surveillance visits (plan, book, move, cancel, done) and record or void the doctor’s fitness judgements with their copy",
     "safety_health_plans": "Keep the health surveillance plans per role as the doctor set them: how often, the doctor, the end-of-employment visit",
-    "safety_health_views": "See who looked at the health records and who checked a person’s fitness yes or no (for HR and the data protection officer)"
+    "safety_health_views": "See who looked at the health records and who checked a person’s fitness yes or no (for HR and the data protection officer)",
+    "partners_view": "See a customer's or supplier's portal access: its switch, limits, people and roles",
+    "partners_invite": "Invite partner people to their portal, send the invitation again, revoke it",
+    "partners_manage": "Change portal people's roles and end of access, suspend or deactivate them; switch a portal on, its limits and production progress",
+    "partners_preview": "Open a partner's portal as it shows to them, read-only",
+    "portal_colleagues_view": "See your organisation's portal users and their roles",
+    "portal_colleagues_manage": "Your organisation's portal admin: invite colleagues, change roles, deactivate",
+    "portal_comment": "Write messages on the records the role shows",
+    "portal_upload": "Send files on the records the role shows",
+    "portal_approve": "Approve, accept or sign on the records the role shows"
   }
 }

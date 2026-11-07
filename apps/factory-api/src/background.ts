@@ -97,6 +97,8 @@ import { incidentHandlers } from './modules/safety/incidents/handlers'
 import { healthDueListCron, healthHandlers } from './modules/safety/health/jobs'
 // B-W2b-159: the dead portal sign-in codes are purged (a day after they expired).
 import { portalCodePurgeCron } from './platform/auth/portal/purge'
+// B-W2b-162: partner people whose access ends within 7 days are told once (PLT-022).
+import { accessEndingCron } from './platform/auth/partners/access-ending'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -269,6 +271,8 @@ if (mode === 'worker') {
   crons.push(healthDueListCron({ database, log }))
   // B-W2b-159: hourly, the portal sign-in and step-up codes that expired more than a day ago are deleted (PLT-050).
   crons.push(portalCodePurgeCron({ database, log }))
+  // B-W2b-162: daily, the partner people whose end of access is within 7 days are told once per end (PLT-022).
+  crons.push(accessEndingCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
