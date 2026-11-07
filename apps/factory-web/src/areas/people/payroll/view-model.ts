@@ -40,7 +40,8 @@ export interface ShowDialog {
 }
 
 /** What Send and the correction need of a file (a row of the list or the record). */
-export type ExportTarget = Pick<ExportRow, 'id' | 'month' | 'revision' | 'number' | 'status' | 'correctedById' | 'version' | 'sentTo'> & { layout: Pick<ExportRow['layout'], 'id' | 'name' | 'provider' | 'confirmed'> }
+/** A file a pop-up acts on: a row of Exports, or the record (which also names the company's labour consultant, B-W2b-89). */
+export type ExportTarget = Pick<ExportRow, 'id' | 'month' | 'revision' | 'number' | 'status' | 'correctedById' | 'version' | 'sentTo'> & { layout: Pick<ExportRow['layout'], 'id' | 'name' | 'provider' | 'confirmed'>; consultant?: { readonly email: string | null } | null }
 
 export interface SendDialog {
   target: ExportTarget

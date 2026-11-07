@@ -4,7 +4,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { isDocumentLanguage, type DocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { LUL_RETENTION_YEARS } from '@nexus/factory-domain/people/close/rules'
 import type { StatementSummary } from '@nexus/factory-domain/people/earnings/statement'
-import { MYDAY_REFUSALS, officePrinterOf, type MyDayRefusal } from '@nexus/factory-domain/people/myday/rules'
+import { MYDAY_REFUSALS, type MyDayRefusal } from '@nexus/factory-domain/people/myday/rules'
 import { myStatementDocument } from '@nexus/factory-domain/people/myday/statement-document'
 import { command, type CommandCaller } from '../../../core/command'
 import type { FloorContext } from '../../../core/context'
@@ -16,6 +16,7 @@ import { floorOf } from '../../production/labour/access'
 import { fullName } from '../attendance/store'
 import { systemOf } from '../clock/access'
 import { monthOfPeriod, periodById } from '../earnings/store'
+import { statementPrinterFor } from './printer'
 
 /**
  * My statement on paper or as a file (B-W2b-68; design floor.myday "Print sends the PDF to the office printer in your name; in
@@ -25,7 +26,8 @@ import { monthOfPeriod, periodById } from '../earnings/store'
  *
  *   PDF     a person's own phone only: a shared tablet must keep no pay document (its downloads, its tabs). No stored file.
  *   print   any tablet: one command stores the statement's PDF once (`WorkerStatement.fileId`, office only, kept as long as the
- *           LUL) and queues the job on the site's office printer, with the worker and the device on it ("in your name").
+ *           LUL) and queues the job on the office printer of statements (./printer.ts: the one People settings names, else the
+ *           site's only A4 printer), with the worker and the device on it ("in your name").
  */
 
 class MyDayRefusedError extends ConflictError {
@@ -94,8 +96,7 @@ export async function printMyStatement(caller: CommandCaller, statementId: strin
   const system = systemOf(caller)
   const found = await ownApproved(system, context, statementId)
   const { row } = found
-  const printers = await system.withClient((db) => db.printer.findMany({ where: { siteId: context.siteId, kind: 'A4_PDF', status: 'ACTIVE' }, select: { id: true, code: true, name: true, companyId: true, siteId: true }, take: 2 }))
-  const printer = officePrinterOf(printers)
+  const printer = await system.withClient((db) => statementPrinterFor(db, { companyId: row.companyId, siteId: context.siteId }))
   if (!printer) throw new MyDayRefusedError(MYDAY_REFUSALS.NO_PRINTER)
   const month = monthOfPeriod(found.period)
   let prepared: PreparedGeneratedFile | null = null

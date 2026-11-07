@@ -30,10 +30,36 @@ import type { LevelFacts } from '../skills/rules'
 export const EFFICIENCY_LIMITS = Object.freeze({ reasonMin: 3, reasonMax: 500, maxStandardMinutes: 9999.999 })
 
 /**
- * The standard review's rule. People settings has no column for these yet (a schema need of B-W2b-44), so they are the
- * build's defaults, the same for every company: "a set %" and "enough bundles" of the design.
+ * The standard review's rule: "a set %" and "enough bundles" of the design. Each company sets both in People settings
+ * (PeopleSettings.standardReviewPercent, standardReviewMinBundles; B-W2b-89); these are the defaults of a company that has
+ * not, the same as the columns' defaults. The window (60 days) stays a constant of the build.
  */
 export const STANDARD_REVIEW = Object.freeze({ tolerancePercent: 10, minBundles: 5, windowDays: 60 })
+
+/** The two numbers a company sets: off by more than this percent, over at least this many bundles. */
+export interface ReviewRule {
+  readonly tolerancePercent: number
+  readonly minBundles: number
+}
+
+/** What the database allows too (the people settings' guard): 1 to 100 percent, 1 to 1000 bundles. */
+export const REVIEW_RULE_LIMITS = Object.freeze({ percentMin: 1, percentMax: 100, bundlesMin: 1, bundlesMax: 1000 })
+
+/** The company's rule from its People settings row; none yet: the defaults. */
+export const reviewRuleOf = (settings: { readonly standardReviewPercent: number; readonly standardReviewMinBundles: number } | null): ReviewRule =>
+  settings ? { tolerancePercent: settings.standardReviewPercent, minBundles: settings.standardReviewMinBundles } : { tolerancePercent: STANDARD_REVIEW.tolerancePercent, minBundles: STANDARD_REVIEW.minBundles }
+
+/** The rule's problems, at `<at>/tolerancePercent` and `<at>/minBundles`. */
+export function reviewRuleProblems(rule: ReviewRule, at = 'body'): Issue[] {
+  const problems: Issue[] = []
+  const whole = (value: number, min: number, max: number) => Number.isSafeInteger(value) && value >= min && value <= max
+  if (!whole(rule.tolerancePercent, REVIEW_RULE_LIMITS.percentMin, REVIEW_RULE_LIMITS.percentMax)) problems.push({ path: `${at}/tolerancePercent`, message: `A whole percent from ${REVIEW_RULE_LIMITS.percentMin} to ${REVIEW_RULE_LIMITS.percentMax}.` })
+  if (!whole(rule.minBundles, REVIEW_RULE_LIMITS.bundlesMin, REVIEW_RULE_LIMITS.bundlesMax)) problems.push({ path: `${at}/minBundles`, message: `A whole number of bundles from ${REVIEW_RULE_LIMITS.bundlesMin} to ${REVIEW_RULE_LIMITS.bundlesMax}.` })
+  return problems
+}
+
+/** The queue's rule in words (the API's sentence; screens say it from their own words). */
+export const reviewRuleWords = (rule: ReviewRule): string => `Operations more than ${rule.tolerancePercent}% off their standard, in either direction, over at least ${rule.minBundles} bundles of the last ${STANDARD_REVIEW.windowDays} days.`
 
 const ZERO = new Dec(0)
 const num = (value: string | number): Decimal => new Dec(value)
@@ -288,7 +314,7 @@ const differenceFigure = (value: Decimal | null): string | null => (value === nu
 const offBeyond = (difference: Decimal | null, tolerancePercent: number): boolean => difference !== null && difference.abs().gt(tolerancePercent)
 
 /** One operation's figures against its standard over these samples, with the headcount they stand on. */
-export function operationFiguresOf(samples: readonly OperationSample[], standardMinutes: string, rule: { readonly tolerancePercent: number; readonly minBundles: number } = STANDARD_REVIEW): { readonly people: number; readonly figures: OperationFigures } {
+export function operationFiguresOf(samples: readonly OperationSample[], standardMinutes: string, rule: ReviewRule = STANDARD_REVIEW): { readonly people: number; readonly figures: OperationFigures } {
   const actual = actualOf(samples)
   const difference = differenceOf(actual, standardMinutes)
   const state: OperationState = samples.length < rule.minBundles ? 'TOO_FEW_BUNDLES' : offBeyond(difference, rule.tolerancePercent) ? 'REVIEW' : 'WITHIN'
@@ -398,7 +424,7 @@ export interface ReviewPlace {
  * decided operation comes back only when enough newer bundles are off again. INVESTIGATE and SEND keep it on until a
  * person keeps or changes it, whatever the figures say.
  */
-export function reviewPlaceOf(samples: readonly OperationSample[], mark: ReviewMark | null, standardMinutes: string, rule: { readonly tolerancePercent: number; readonly minBundles: number } = STANDARD_REVIEW): ReviewPlace {
+export function reviewPlaceOf(samples: readonly OperationSample[], mark: ReviewMark | null, standardMinutes: string, rule: ReviewRule = STANDARD_REVIEW): ReviewPlace {
   if (mark?.decision === 'INVESTIGATE') return { reason: 'INVESTIGATING', samples }
   if (mark?.decision === 'SEND') return { reason: 'SENT', samples }
   const counted = mark ? samples.filter((sample) => sample.at > mark.at) : samples
