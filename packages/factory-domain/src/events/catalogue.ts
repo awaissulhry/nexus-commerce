@@ -103,6 +103,14 @@ import { events as safetyRecords } from '../safety-records/events'
 import { events as branding } from '../branding/events'
 // B-W2b-162: partner organisations and their people (portal settings, invitations, changes, access ending soon).
 import { events as partners } from '../partners/events'
+// B-W2b-185: paying online (payment intents started and finished, the payment link sent).
+import { events as paymentIntents } from '../payment-intents/events'
+// B-W2b-176: the workshop's answers on its subcontract jobs (accepted, declined, a date answered, kit checked, progress, a send-back).
+import { events as subcontractJobs } from '../subcontract-jobs/events'
+// B-W2b-190: portal order requests (sent, accepted, refused, withdrawn).
+import { events as portalOrdering } from '../portal-ordering/events'
+// B-W2b-183: change and cancel requests from the portal (asked, withdrawn, answered).
+import { events as salesChangeRequests } from '../sales-change-requests/events'
 // B-W2b-182: ship notices (sent, changed, cancelled, received, reopened).
 import { events as shipNotices } from '../ship-notices/events'
 import type { EventDefinition } from './define'
@@ -275,6 +283,14 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...partners,
   // B-W2b-167
   ...portal,
+  // B-W2b-185
+  ...paymentIntents,
+  // B-W2b-176
+  ...subcontractJobs,
+  // B-W2b-190
+  ...portalOrdering,
+  // B-W2b-183
+  ...salesChangeRequests,
   // B-W2b-182
   ...shipNotices] as const satisfies readonly EventDefinition[]
 

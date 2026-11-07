@@ -2,9 +2,14 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { homeCountProblems, type HomeCountDefinition } from '@nexus/factory-domain/portal/home/counts'
 import { NOTIFICATION_COUNTS } from './notifications'
 import { PURCHASE_ORDER_COUNTS } from './purchase-orders'
+import { SUBCONTRACT_JOB_COUNTS } from './subcontract-jobs'
 import { TASK_COUNTS } from './tasks'
 // B-W2b-175: a customer's orders (open, in production, shipping this week, on the way).
 import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home'
+// B-W2b-185: the customer's open and late invoices (Finance and Admin).
+import { PAYMENT_COUNTS } from '../../../../modules/payments/online/home'
+// B-W2b-178: a customer's new documents (since the last visit, until opened).
+import { CUSTOMER_DOCUMENT_COUNTS } from '../../../../modules/sales/portal-documents/home'
 // B-W2b-182: a supplier's deliveries (to announce, on their way).
 import { SHIP_NOTICE_COUNTS } from '../../../../modules/purchasing/ship-notices/home'
 
@@ -29,6 +34,12 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   SALES_ORDER_COUNTS,
   // B-W2b-174: the supplier's purchase orders to confirm and late.
   PURCHASE_ORDER_COUNTS,
+  // B-W2b-185: invoices to pay and overdue (customers' Finance and Admin; null for everyone else).
+  PAYMENT_COUNTS,
+  // B-W2b-176: the workshop's jobs to accept, kits to confirm, ready to send back, late.
+  SUBCONTRACT_JOB_COUNTS,
+  // B-W2b-178: a customer's new documents.
+  CUSTOMER_DOCUMENT_COUNTS,
   // B-W2b-182: the supplier's deliveries to announce and on their way.
   SHIP_NOTICE_COUNTS,
 ])

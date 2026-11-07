@@ -18,6 +18,8 @@ import { machinesImportAdapter } from '../../modules/plant/machines/import'
 import { itemParametersImportAdapter } from '../../modules/planning/settings/importer'
 // W2b (B-W2b-26): the employees, from the payroll provider's export or a CSV (People › Employees › Import).
 import { employeesImportAdapter } from './importers/employees'
+// W2b (B-W2b-190): a customer's order sheet, read by the portal's dry run (never an office import job).
+import { portalOrderLinesImportAdapter } from '../../modules/sales/portal-ordering/importer'
 // W2b (B-W2b-182): a tannery's packing list mailed instead of sent in the portal, onto its sent ship notice.
 import { packingListImportAdapter } from '../../modules/purchasing/ship-notices/importer'
 
@@ -114,6 +116,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   itemParametersImportAdapter,
   // B-W2b-26
   employeesImportAdapter,
+  // B-W2b-190
+  portalOrderLinesImportAdapter,
   // B-W2b-182
   packingListImportAdapter,
 ])

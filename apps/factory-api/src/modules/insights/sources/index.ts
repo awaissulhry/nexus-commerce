@@ -11,6 +11,9 @@ import { orderPromise, quoteApproval } from './sales'
 import { mentioned, taskDue } from './personal'
 import { ruleAlerts } from './alerts'
 import { ncrDecision } from './ncr-decisions'
+// B-W2b-190: order requests customers sent from the portal.
+import { portalOrderRequest } from './portal-order-requests'
+import { portalChangeRequests } from './portal-change-requests'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -35,4 +38,8 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   RULE_ALERT: ruleAlerts,
   // B-W2b-17: NCR decisions waiting for an approval (the Approvals tile).
   NCR_DECISION: ncrDecision,
+  // B-W2b-190: order requests from the customer portal waiting for a decision (the Approvals tile).
+  PORTAL_ORDER_REQUEST: portalOrderRequest,
+  // B-W2b-183: customers' change and cancel requests from the portal waiting for an answer (the Approvals tile).
+  ORDER_CHANGE_REQUEST: portalChangeRequests,
 })

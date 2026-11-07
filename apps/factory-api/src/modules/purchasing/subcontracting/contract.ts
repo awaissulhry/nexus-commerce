@@ -399,6 +399,8 @@ export const receiveContract = defineContract({
     supplierDdt: input({ number: z.string().trim().min(1).max(40), date: businessDate().nullish() }).nullish(),
     note: note(),
     periodLockOverride: periodLockOverride.optional(),
+    /** B-W2b-176: the workshop's send-back this receipt was written from (../portal-jobs; it becomes RECEIVED). */
+    returnNoticeId: id().optional(),
   }),
   response: {
     201: output({

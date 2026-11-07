@@ -370,6 +370,8 @@ export interface ReceiveBody {
   returns: { itemId: string; itemColourId?: string | null; lotId?: string | null; hideId?: string | null; quantity: string; uom?: string; toLocationId: string }[]
   supplierDdt?: { number: string; date?: string | null } | null
   note?: string | null
+  /** B-W2b-176: the workshop's announced send-back this receipt is written from. */
+  returnNoticeId?: string
 }
 
 const receiveAnswerSchema = z.object({ order: orderSchema, receipt: receiptSchema, ledger: z.object({ posted: z.number(), waiting: z.array(z.string()) }) })

@@ -2,6 +2,8 @@ import type { NumberFormat } from '@nexus/factory-domain/imports/cells'
 import type { TemplateExample } from '@nexus/factory-domain/imports/templates'
 import { openingTemplate } from '@nexus/factory-domain/inventory/opening/importer'
 import { openingStockImporter } from '@nexus/factory-domain/inventory/opening/importer'
+// B-W2b-190: the customer portal's order sheet (its own made-up rows, shared with the portal's template).
+import { ORDER_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/sales/portal-ordering/upload'
 
 /**
  * The made-up example rows of each importer's template (B-W2a-41; PLT-177): one or two rows a person can copy, never
@@ -43,6 +45,8 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { employeeCode: '0142', firstName: 'Esempio', lastName: 'Persona Uno', kind: 'EMPLOYEE', site: 'A1', homeLine: 'L1', department: 'Sewing', jobRole: 'Machinist', contract: 'FULL_TIME', weeklyHours: '40', startDate: '2026-03-02', language: 'it' },
     { employeeCode: 'INT-07', firstName: 'Esempio', lastName: 'Persona Due', kind: 'AGENCY', agency: 'AGE-001', site: 'A1', contract: 'PART_TIME', weeklyHours: '20', startDate: '2026-11-02', endDate: '2027-01-29', language: 'ro' },
   ],
+  // B-W2b-190
+  'sales.portalOrderLines': ORDER_TEMPLATE_EXAMPLES,
   // B-W2b-182: a tannery's packing list on a sent ship notice (made-up numbers).
   'purchasing.packingList': [
     { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },
