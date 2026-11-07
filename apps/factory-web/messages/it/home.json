@@ -102,7 +102,9 @@
       "RULE_ALERT": "Avvisi delle regole di eccezione",
       "NCR_DECISION": "Decisioni di NC da approvare",
       "PORTAL_ORDER_REQUEST": "Richieste d'ordine dal portale da decidere",
-      "ORDER_CHANGE_REQUEST": "Richieste di modifica e annullamento dei clienti"
+      "ORDER_CHANGE_REQUEST": "Richieste di modifica e annullamento dei clienti",
+      "SUPPLIER_CHANGE": "Modifiche al profilo dei fornitori",
+      "SUPPLIER_DOCUMENT": "Documenti dei fornitori da verificare"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -425,6 +427,10 @@
       "ORDER_CHANGE_REQUEST.CANCEL_LINES_one": "{customer} chiede di annullare {count} riga dell'ordine {number}.",
       "ORDER_CHANGE_REQUEST.CANCEL_LINES_other": "{customer} chiede di annullare {count} righe dell'ordine {number}.",
       "ORDER_CHANGE_REQUEST.blocks": "Il cliente aspetta la tua risposta: accettala (l'ordine viene modificato o annullato) oppure rifiutala con un motivo.",
+      "SUPPLIER_CHANGE.WAITING": "{supplier} ha inviato modifiche al suo profilo per la nostra verifica (indirizzi: {addresses}, contatti: {contacts}).",
+      "SUPPLIER_CHANGE.blocks": "Da noi non cambia nulla finché non la approvi; il fornitore la vede in attesa della nostra verifica.",
+      "SUPPLIER_DOCUMENT.WAITING": "{supplier} ha inviato {name} per la nostra verifica.",
+      "SUPPLIER_DOCUMENT.blocks": "Non viene condiviso né conta per i documenti richiesti finché qualcuno non lo accetta.",
       "why.ORDER_PROMISE.orders_manage": "Gestisci gli ordini di questo cliente e le loro date promesse.",
       "why.WORK_ORDER_HELD.workorders_release": "Rilasci gli ordini di lavoro di questo stabilimento.",
       "why.LOT_HOLD.quality_lots_release": "Rilasci i lotti di questo stabilimento.",
@@ -447,6 +453,8 @@
       "why.NCR_DECISION.quality_ncr_approve": "Approvi le decisioni delle NC di questo stabilimento, e l'ha decisa qualcun altro.",
       "why.PORTAL_ORDER_REQUEST.orders_manage": "Prendi gli ordini di questo cliente.",
       "why.ORDER_CHANGE_REQUEST.orders_manage": "Gestisci gli ordini di questo cliente.",
+      "why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide": "Verifichi le modifiche di indirizzi e contatti dei fornitori.",
+      "why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review": "Verifichi certificati, rapporti di prova e dichiarazioni inviati dai fornitori.",
       "code": {
         "checks": {
           "REVISION": "revisione",

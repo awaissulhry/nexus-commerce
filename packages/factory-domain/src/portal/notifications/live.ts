@@ -7,6 +7,7 @@ import { PORTAL_HOME_VIEW } from '../tasks/permissions'
 import { PORTAL_JOBS_VIEW } from '../../purchasing/portal-jobs/permissions'
 // B-W2b-182: the supplier's ship notices.
 import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissions'
+import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -49,6 +50,13 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   ...Object.fromEntries(
     ['sent', 'changed', 'cancelled', 'received', 'reopened'].map((event) => [`ship_notice.${event}`, { permission: PORTAL_SHIP_NOTICES_VIEW, party: 'partyId', fields: ['shipNoticeId', 'number', 'purchaseOrderId', 'status', 'partyId'] }]),
   ),
+  // B-W2b-189: our check of a supplier's document, and of its profile change (the page's status and values update).
+  'supplier_document.uploaded': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'recordType', 'recordId', 'category'] },
+  'supplier_document.accepted': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'documentFileId', 'category'] },
+  'supplier_document.refused': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId'] },
+  'supplier_profile.change_requested': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
+  'supplier_profile.change_withdrawn': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
+  'supplier_profile.change_decided': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId', 'outcome'] },
 })
 
 /**

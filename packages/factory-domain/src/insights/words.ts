@@ -131,6 +131,11 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-17: an NCR decision waiting for an approval.
   'NCR_DECISION.WAITING_APPROVAL': 'NCR {number} waits for the approval of its decision {code} for {quantity}.',
   'NCR_DECISION.blocks': 'It is not carried out, and the NCR is not decided, until another person approves it.',
+  // B-W2b-189: a supplier's profile change and a supplier's document, each waiting for a check.
+  'SUPPLIER_CHANGE.WAITING': '{supplier} sent changes of its profile for our check (addresses: {addresses}, contacts: {contacts}).',
+  'SUPPLIER_CHANGE.blocks': 'Nothing changes on our side until you approve it; the supplier sees it waiting for our check.',
+  'SUPPLIER_DOCUMENT.WAITING': '{supplier} sent {name} for our check.',
+  'SUPPLIER_DOCUMENT.blocks': 'It is not shared back and does not count for the required documents until someone accepts it.',
 
   // B-W2b-190: an order request a customer sent from the portal.
   'PORTAL_ORDER_REQUEST.SENT': 'Order request {number} from {customer} waits for your decision: {pieces} pieces on {lines} lines.',
@@ -166,6 +171,8 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.NCR_DECISION.quality_ncr_approve': "You approve NCR decisions at this site, and someone else decided it.",
   'why.PORTAL_ORDER_REQUEST.orders_manage': "You take this customer's orders.",
   'why.ORDER_CHANGE_REQUEST.orders_manage': "You manage this customer's orders.",
+  'why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide': "You check suppliers' changes of their addresses and contacts.",
+  'why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review': "You check the certificates, test reports and declarations suppliers send.",
 })
 
 /** At most five values, then "and N more". */
@@ -321,6 +328,16 @@ export function poConfirmationWords(facts: { readonly number: string; readonly s
 
 export function quoteAnswerWords(facts: { readonly number: string; readonly revision: number; readonly customer: string }): string {
   return `Quote ${facts.number} (revision ${facts.revision}) you sent to ${facts.customer} is not answered yet.`
+}
+
+/** B-W2b-189: a supplier's change of its profile waiting for the buyer (how many addresses and contacts it changes). */
+export function supplierChangeWords(facts: { readonly supplier: string; readonly addresses: number; readonly contacts: number }): RowWords {
+  return { sentence: phrase('SUPPLIER_CHANGE.WAITING', { supplier: facts.supplier, addresses: facts.addresses, contacts: facts.contacts }), blocks: phrase('SUPPLIER_CHANGE.blocks') }
+}
+
+/** B-W2b-189: a supplier's document waiting for our check (`name`: the file's name as sent). */
+export function supplierDocumentWords(facts: { readonly supplier: string; readonly name: string }): RowWords {
+  return { sentence: phrase('SUPPLIER_DOCUMENT.WAITING', { supplier: facts.supplier, name: facts.name }), blocks: phrase('SUPPLIER_DOCUMENT.blocks') }
 }
 
 /** B-W2b-17: an NCR decision waiting for an approval (`quantity`: "12 PCS", the decision's quantity and unit). */

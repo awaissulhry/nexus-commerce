@@ -43,6 +43,8 @@ import { PORTAL_ORDERING_DEFINITIONS, PORTAL_ORDERING_PERMISSIONS } from '../../
 import { PORTAL_ORDER_CHANGES_DEFINITIONS, PORTAL_ORDER_CHANGES_PERMISSIONS } from '../../sales/change-requests/permissions'
 // B-W2b-182: ship notices in the portal (portal.shipNotices.view; partner roles only).
 import { PORTAL_SHIP_NOTICES_DEFINITIONS, PORTAL_SHIP_NOTICES_PERMISSIONS } from '../../purchasing/ship-notices/permissions'
+// B-W2b-189: supplier documents and profile in the portal (partner) and their check (office).
+import { PORTAL_SUPPLIER_PROFILE_DEFINITIONS, PORTAL_SUPPLIER_PROFILE_PERMISSIONS, SUPPLIER_REVIEW_DEFINITIONS, SUPPLIER_REVIEW_PERMISSIONS } from '../../purchasing/portal-profile/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -109,6 +111,8 @@ import { PORTAL_SEARCH_DEFINITIONS, PORTAL_SEARCH_PERMISSIONS } from '../../sear
 import { PORTAL_PAYMENTS_DEFINITIONS, PORTAL_PAYMENTS_PERMISSIONS } from '../../payments/online/permissions'
 // B-W2b-176: subcontractor jobs in the portal (portal.jobs.view; partner roles only).
 import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasing/portal-jobs/permissions'
+// B-W2b-192: returns and complaints from outside (portal.returns.*, portal.complaints.view; partner roles only).
+import { PORTAL_RETURNS_DEFINITIONS, PORTAL_RETURNS_PERMISSIONS } from '../../sales/portal-returns/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -722,6 +726,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_JOBS_DEFINITIONS,
   // B-W2b-182: ship notices in the portal (partner roles only; area `portal`, declared above).
   PORTAL_SHIP_NOTICES_DEFINITIONS,
+  // B-W2b-189: supplier documents and profile in the portal (partner roles only), and the office's check.
+  PORTAL_SUPPLIER_PROFILE_DEFINITIONS,
+  SUPPLIER_REVIEW_DEFINITIONS,
+  // B-W2b-192: returns and complaints from outside (partner roles only; area `portal`, declared above).
+  PORTAL_RETURNS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -941,6 +950,11 @@ for (const name of PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS) if (FACTORY_PERMISSION
 for (const name of PORTAL_ORDERING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-183: change and cancel requests from the portal (partner roles only).
 for (const name of PORTAL_ORDER_CHANGES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-189: supplier documents and profile in the portal, flagged partner; the office's check.
+for (const name of PORTAL_SUPPLIER_PROFILE_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+for (const name of SUPPLIER_REVIEW_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-192: returns and complaints from outside (partner roles only).
+for (const name of PORTAL_RETURNS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

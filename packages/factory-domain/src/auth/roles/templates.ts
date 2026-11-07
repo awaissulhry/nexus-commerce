@@ -10,6 +10,8 @@ import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissi
 // B-W2b-190: portal ordering.
 import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
 import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sales/change-requests/permissions'
+// B-W2b-192: returns and complaints from outside.
+import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -652,6 +654,16 @@ const REQUIRED_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> =
   admin: ['documents.required.manage'],
   buyer: ['documents.required.manage'],
 })
+/**
+ * B-W2b-189 (SCM-096, SCM-097; design portal.supplier.documents "a buyer or quality person accepts it", portal.supplier.profile
+ * "changes go to the buyer"): who checks what suppliers send in the portal — their documents (administrator, buyer, quality
+ * inspector) and their changes of addresses and contacts (administrator, buyer).
+ */
+const SUPPLIER_REVIEW_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  buyer: ['purchasing.supplierDocuments.review', 'purchasing.supplierChanges.decide'],
+  quality_inspector: ['purchasing.supplierDocuments.review'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -748,7 +760,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-167
   ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
   // B-W2b-177
-  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
+  // B-W2b-189
+  ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1383,6 +1397,13 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   Object.fromEntries(ORDER_CHANGE_ASKER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_ASK]])),
   // B-W2b-182: the supplier's Orders role sees and announces its deliveries (never a price, C2); announcing takes portal.upload.
   { 'supplier-orders': ['portal.shipNotices.view' as Permission] },
+  // B-W2b-189: every supplier and workshop role sees what we ask for, its documents and its profile; each Admin follows and
+  // alone sends changes of the addresses and contacts (SCM-096, SCM-097).
+  Object.fromEntries(['supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs'].map((key) => [key, ['portal.supplierDocuments.view' as Permission, 'portal.supplierProfile.view' as Permission]])),
+  { 'supplier-admin': ['portal.supplierProfile.change' as Permission], 'subcontractor-admin': ['portal.supplierProfile.change' as Permission] },
+  // B-W2b-192: the Returns & claims page to the customer Buyer, Finance, Quality and Viewer; asking to the Buyer and Quality;
+  // the complaints' investigation (answer letter, 8D) to Quality.
+  PORTAL_RETURNS_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

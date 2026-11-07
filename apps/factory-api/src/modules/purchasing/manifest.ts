@@ -173,4 +173,19 @@ export const manifest = defineManifest({
   'POST /portal/ship-notices/:shipNoticeId/packing-list/sheet': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
   'POST /portal/ship-notices/:shipNoticeId/send': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
   'POST /portal/ship-notices/:shipNoticeId/cancel': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  // B-W2b-189 (SCM-096, SCM-097): the supplier's documents and profile, the session's party (row-level security), no grain.
+  // Sending a document also needs the person's capability portal.upload (checked in the handler; an office preview never).
+  'GET /portal/supplier-documents': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'POST /portal/supplier-documents': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'POST /portal/supplier-documents/:fileId/complete': { audiences: ['partner'], permission: 'portal.supplierDocuments.view', scope: 'party' },
+  'GET /portal/supplier-profile': { audiences: ['partner'], permission: 'portal.supplierProfile.view', scope: 'party' },
+  'POST /portal/supplier-profile/changes': { audiences: ['partner'], permission: 'portal.supplierProfile.change', scope: 'party' },
+  'POST /portal/supplier-profile/changes/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.supplierProfile.change', scope: 'party' },
+  // B-W2b-189: the office's check (can() over each upload's or request's company and supplier in the handler).
+  'GET /purchasing/supplier-documents': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'POST /purchasing/supplier-documents/:fileId/accept': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'POST /purchasing/supplier-documents/:fileId/refuse': { audiences: ['office'], permission: 'purchasing.supplierDocuments.review', scope: 'record' },
+  'GET /purchasing/supplier-changes': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
+  'POST /purchasing/supplier-changes/:requestId/approve': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
+  'POST /purchasing/supplier-changes/:requestId/refuse': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
 })
