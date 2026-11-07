@@ -73,8 +73,11 @@
       "preventive": "Manutenzione programmata e verifiche",
       "safety": "Salute e sicurezza",
       "incidents": "Infortuni e quasi incidenti",
+      "health": "Sorveglianza sanitaria",
       "calendar": "Scadenzario sicurezza",
+      "ppe": "DPI ai lavoratori",
       "chemicals": "Sostanze e rifiuti",
+      "risk": "Valutazione dei rischi (DVR)",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni stabilimento"
     },

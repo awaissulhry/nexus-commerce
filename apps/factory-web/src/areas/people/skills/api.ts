@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { AUTHORISATION_STATES, SKILL_KINDS, SKILL_LEVELS, SKILL_STATUSES, TRAINEE_STATES, type SkillLevel } from '@nexus/factory-domain/people/skills/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+import { courseRefSchema, dueCellSchema } from './training/api'
 
 /**
  * Every call of People › Skills & training and the employee's Skills tab (B-W2b-65 on the API of B-W2b-39), with the
@@ -77,7 +78,8 @@ export type Authorisation = z.infer<typeof authorisationSchema>
 
 const levelCell = z.object({ skillId: z.string(), levelId: z.string(), level: z.enum(SKILL_LEVELS), since: z.string(), traineeUntil: z.string().nullable(), trainee: z.enum(TRAINEE_STATES), signedOffOn: z.string().nullable(), version: z.number() })
 export type LevelCell = z.infer<typeof levelCell>
-const authorisationCell = z.object({ machineClassId: z.string(), authorisationId: z.string(), state: z.enum(AUTHORISATION_STATES), authorisedOn: z.string(), validUntil: z.string().nullable(), ending: z.boolean(), version: z.number() })
+// B-W2b-146: `held` = held by expired or missing training (B-W2b-139; design "Machines (Authorised / Held / —)"), and the courses.
+const authorisationCell = z.object({ machineClassId: z.string(), authorisationId: z.string(), state: z.enum(AUTHORISATION_STATES), authorisedOn: z.string(), validUntil: z.string().nullable(), ending: z.boolean(), held: z.boolean().default(false), heldBy: z.array(z.string()).default([]), version: z.number() })
 export type AuthorisationCell = z.infer<typeof authorisationCell>
 
 const matrixRow = z.object({
@@ -90,6 +92,8 @@ const matrixRow = z.object({
   team: ref.nullable(),
   levels: z.array(levelCell),
   authorisations: z.array(authorisationCell),
+  /** B-W2b-146: the Safety column group's DueCells; null when the caller does not read this person's safety records. */
+  trainings: z.array(dueCellSchema).nullable().default(null),
   canManage: z.boolean(),
   canAuthorise: z.boolean(),
 })
@@ -100,8 +104,19 @@ const matrixSchema = z.object({
   complete: z.boolean(),
   skills: z.array(skillSchema),
   machineClasses: z.array(machineClass.extend({ active: z.boolean(), keptAtSites: z.array(z.string()) })),
+  /** B-W2b-146: the safety courses of the cells (the Safety column group). */
+  courses: z.array(courseRefSchema).default([]),
   sites: z.array(ref),
-  tiles: z.object({ trainees: z.number(), traineesOverdue: z.number(), authorisationsEnding: z.number() }),
+  tiles: z.object({
+    trainees: z.number(),
+    traineesOverdue: z.number(),
+    authorisationsEnding: z.number(),
+    /** Person × course; null when the caller reads no one's safety records. */
+    trainingOverdue: z.number().nullable().default(null),
+    trainingDueSoon: z.number().nullable().default(null),
+    authorisationsHeld: z.number().default(0),
+    languageNotChecked: z.number().nullable().default(null),
+  }),
   today: z.string(),
 })
 export type Matrix = z.infer<typeof matrixSchema>
@@ -109,8 +124,8 @@ export type MatrixClass = Matrix['machineClasses'][number]
 
 export interface MatrixQuery {
   siteId?: string | null
-  show?: 'ALL' | 'SKILLS' | 'MACHINES'
-  tile?: 'TRAINEES' | 'AUTHORISATIONS_ENDING' | null
+  show?: 'ALL' | 'SKILLS' | 'MACHINES' | 'SAFETY'
+  tile?: 'TRAINEES' | 'AUTHORISATIONS_ENDING' | 'TRAINING_OVERDUE' | 'TRAINING_DUE_SOON' | 'AUTHORISATIONS_HELD' | 'LANGUAGE_NOT_CHECKED' | null
   sort?: 'TEAM' | 'NAME'
   q?: string | null
 }

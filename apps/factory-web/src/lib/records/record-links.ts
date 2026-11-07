@@ -114,6 +114,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-55 People › Employees (SCR-085): an employee's record; a team opens on the Teams view of Employees.
   Employee: '/people/employees/[id]',
   Team: '/people/employees?view=teams&team=[id]',
+  // B-W2b-146 People › Skills & training: a course opens in its Course pop-up, a training record in its certificate tab.
+  SafetyCourse: '/people/skills?view=courses&course=[id]',
+  TrainingRecord: '/people/skills/certificate?record=[id]',
   // B-W2b-60 People › Shifts (SCR-263): an overtime request opens in its modal.
   OvertimeRequest: '/people/shifts?open=[id]',
   // B-W2b-62 People › Piece rates (SCR-158): a rate version, a pay period, a held scan and an entry open in their modals.
@@ -138,9 +141,21 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Chemical: '/plant/chemicals?open=[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
+  // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
+  HealthVisit: '/plant/health?visit=[id]',
+  FitnessJudgement: '/plant/health?judgement=[id]',
+  HealthPlan: '/plant/health?plan=[id]',
   // B-W2b-141 Plant settings (SCR-241): a routing rule and a statutory check type open in their dialog.
   RequestRoutingRule: '/plant/settings?rule=[id]',
   MachineCheckType: '/plant/settings?type=[id]',
+  // B-W2b-144 Plant › Risk assessment (SCR-209): an assessment opens its page; a measure its assessment's plan tab (the page
+  // finds it); a role sheet its window.
+  RiskAssessment: '/plant/risk/[id]',
+  RiskMeasure: '/plant/risk?measure=[id]',
+  RoleSheet: '/plant/risk?sheet=[id]',
+  // B-W2b-147 Plant › PPE for workers (SCR-211): a PPE issue (any line id names its receipt) opens its receipt tab, an item its dialog.
+  PpeIssue: '/plant/ppe/receipt?receipt=[id]',
+  PpeItem: '/plant/ppe?view=catalogue&item=[id]',
 })
 
 /**
@@ -266,9 +281,16 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/chemicals': '/plant/chemicals',
   // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
   '/safety/incidents': '/plant/incidents',
+  // B-W2b-148: the health page's frame (the tiles) and its plans per role.
+  '/safety/health': '/plant/health',
+  '/safety/health/plans': '/plant/health',
   // B-W2b-141: the routing rules and the statutory check types are sections of Plant settings (SCR-241).
   '/plant/settings/routing': '/plant/settings',
   '/plant/checks/types': '/plant/settings',
+  // B-W2b-144: the assessments, the improvement plan (`?view=`) and the role sheets (`?q=`) of SCR-209.
+  '/safety/risk/assessments': '/plant/risk',
+  '/safety/risk/measures': '/plant/risk',
+  '/safety/rolesheets': '/plant/risk',
 })
 
 export interface RecordRef {

@@ -102,6 +102,8 @@ import { linkDraftPurgeCron } from './platform/links/drafts'
 // B-W2b-160: a picture's stripped copy after its scan (file.available); uploads in parts given up after seven days.
 import { stripPicturesHandler } from './platform/files/thumbs/handler'
 import { largeUploadExpiryCron } from './platform/files/multipart/expiry'
+// B-W2b-162: partner people whose access ends within 7 days are told once (PLT-022).
+import { accessEndingCron } from './platform/auth/partners/access-ending'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -278,6 +280,8 @@ if (mode === 'worker') {
   // B-W2b-163: hourly, the drafts of link forms (measurements, claims, questionnaires) 7 days after their link expired.
   crons.push(linkDraftPurgeCron({ database, log }))
   crons.push(largeUploadExpiryCron({ database, log }))
+  // B-W2b-162: daily, the partner people whose end of access is within 7 days are told once per end (PLT-022).
+  crons.push(accessEndingCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
