@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { ExternalLink, Link2 } from 'lucide-react'
 import { Banner, Card, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
@@ -20,7 +21,7 @@ const DEPOSIT_TONE = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANC
  * the acceptance's evidence (append-only) and the deposit request made at acceptance. The record's files are in
  * Activity › Files.
  */
-export function DocumentsTab({ quote, model, actions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions }) {
+export function DocumentsTab({ quote, model, actions, proofs }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; /** B-W2b-165 (SAL-199): the proofs panel (record/proofs). */ proofs?: ReactNode }) {
   const t = useT('sales')
   const shell = useT('shell')
   const locale = useLocale()
@@ -76,6 +77,8 @@ export function DocumentsTab({ quote, model, actions }: { quote: QuoteDetail; mo
           </p>
         )}
       </Card>
+
+      {proofs}
 
       <div className="fw-q-cards">
         <Card padded>

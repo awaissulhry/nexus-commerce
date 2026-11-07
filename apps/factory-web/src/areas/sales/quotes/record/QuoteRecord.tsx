@@ -44,6 +44,7 @@ import { readProblem, writeProblem } from '../problems'
 import type { ComposerState, Loaded, QuoteDialog, QuoteNotice, QuoteRecordViewModel, SaveState } from './record-model'
 import { sendItems } from './send-model'
 import { QuoteRecordView } from './view/QuoteRecordView'
+import { QuoteProofs } from './proofs/QuoteProofs'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.sales.dock.Quote'
@@ -507,6 +508,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   return (
     <QuoteRecordView
       model={model}
+      proofs={value ? <QuoteProofs api={api} quoteId={value.id} /> : null}
       panels={value ? <RecordPanels record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
       actions={{
         onRetry: loadAll,

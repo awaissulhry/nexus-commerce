@@ -31,6 +31,8 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  *                             from the ACCEPTED version, in the system step after the acceptance)
  *   quote.declined            the customer declined the version through its link
  *   quote.link_requested      the customer asked for a new link (an ended offer, a replaced version)
+ *   quote.proofs_changed      B-W2b-165 (SAL-199): a proof was added to an unsent version, replaced by a new version,
+ *                             removed, or carried over from an earlier version (the files named)
  *   deposit_request.created   the deposit request of an accepted version (OPEN), with its fiscal decision
  *   company.bank_details_changed  a company's bank account was set, changed or removed (the IBAN masked): the owners and
  *                             administrators are told (live: companies.bank.view)
@@ -203,6 +205,14 @@ export const events = [
     context: 'sales',
     description: "The customer asked, through the quote's link, for a new one (the offer ended, or a newer version replaced it).",
     payload: z.strictObject({ ...ids, linkId: z.uuid(), state: z.enum(LINK_QUOTE_STATES) }),
+    live,
+  }),
+  // B-W2b-165 (SAL-199): the proofs of an unsent version.
+  defineEvent({
+    type: 'quote.proofs_changed',
+    context: 'sales',
+    description: "A quote version's proofs changed before it was sent: a proof added, replaced by a new version, removed, or carried over from an earlier version.",
+    payload: z.strictObject({ ...ids, change: z.enum(['added', 'replaced', 'removed', 'carried']), fileIds: z.array(z.uuid()) }),
     live,
   }),
   defineEvent({

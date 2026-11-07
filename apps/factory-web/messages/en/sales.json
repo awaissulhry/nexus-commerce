@@ -76,6 +76,7 @@
     "FIRM_OFFER_STANDS": "An earlier version is a firm offer that still stands: it cannot be replaced yet.",
     "TERMS_VERSION": "Give your terms a version, so the acceptance records which ones were accepted.",
     "NO_BANK_DETAILS": "The company has no bank details yet: the deposit instructions follow separately.",
+    "PROOF_NOT_READY": "A proof is still uploading, being checked or was refused (Documents › Proofs): finish it or remove it.",
     "pass": {
       "approval": "Approval done or not needed",
       "validity": "Validity set",

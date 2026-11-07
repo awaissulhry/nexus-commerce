@@ -62,9 +62,27 @@ function linkQuote(overrides: Omit<Partial<LinkQuote>, 'quote'> & { quote?: Part
         ],
       },
       document: { fileId: '0190f0e2-9999-7000-8000-300000000001', name: 'Preventivo Q-2026-0142 v1.pdf', sha256: SHA, sizeBytes: 48211 },
+      proofs: [],
       ...quote,
     },
   }
+}
+
+// B-W2b-165 (SAL-199): made-up proofs — an artwork proof (PDF, its second version), a size chart and a placement sketch
+// (pictures drawn here as SVG; the live page gets the stripped bytes of a JPEG, PNG or WebP).
+const svg = (body: string): string => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240"><rect width="320" height="240" fill="#f4f1ea"/>${body}</svg>`)}`
+const CHART = svg('<g font-family="sans-serif" font-size="14" fill="#333"><text x="20" y="34" font-weight="bold">Tabella taglie demo</text><text x="20" y="70">50 · torace 100 · manica 62</text><text x="20" y="96">52 · torace 104 · manica 63</text><text x="20" y="122">54 · torace 108 · manica 64</text></g>')
+const SKETCH = svg('<path d="M110 40 L210 40 L250 90 L230 200 L90 200 L70 90 Z" fill="none" stroke="#333" stroke-width="3"/><circle cx="185" cy="95" r="16" fill="#b22"/><text x="20" y="228" font-family="sans-serif" font-size="13" fill="#333">Logo demo sul petto, 6 cm</text>')
+const ARTWORK_PDF = samplePdf(['Prova grafica demo v2', 'Logo ricamato sul petto, 6 cm', 'Colori: nero, rosso'])
+const PROOFS: LinkQuote['quote']['proofs'] = [
+  { fileId: '0190f0e2-9999-7000-8000-700000000001', name: 'Prova grafica logo.pdf', contentType: 'application/pdf', shape: 'PDF', sizeBytes: 184_320, sha256: '9fc5a7321a455e5a139aaac77b30a8add3b0ba0b56f6f822892af999c5a78243', versionNo: 2 },
+  { fileId: '0190f0e2-9999-7000-8000-700000000002', name: 'Tabella taglie.png', contentType: 'image/png', shape: 'PICTURE', sizeBytes: 96_412, sha256: '8e8582ea34d58c671ab5d546e8d1a11c688d7b246a7fd9aee0316246094b3a0b', versionNo: 1 },
+  { fileId: '0190f0e2-9999-7000-8000-700000000003', name: 'Posizione logo.jpg', contentType: 'image/jpeg', shape: 'PICTURE', sizeBytes: 1_311_744, sha256: '41d0c35b7e6a2f9184c0de57a3b19f2c6e8d40a7b5c3e1f9d2a6b8c0e4f17a35', versionNo: 1 },
+]
+const PROOFS_READ: QuoteAcceptViewModel['proofs'] = {
+  [PROOFS[0]!.fileId]: { src: ARTWORK_PDF, problem: false },
+  [PROOFS[1]!.fileId]: { src: CHART, problem: false },
+  [PROOFS[2]!.fileId]: { src: SKETCH, problem: false },
 }
 
 const ACCEPTED = linkQuote({
@@ -124,6 +142,14 @@ export const designScreen = defineDesignScreen<QuoteAcceptViewModel>({
     { id: 'superseded', label: 'Replaced by a newer version', model: model({ quote: linkQuote({ state: 'SUPERSEDED', answers: [] }) }) },
     { id: 'withdrawn', label: 'Withdrawn by the seller', model: model({ quote: linkQuote({ state: 'CANCELLED', answers: [] }) }) },
     { id: 'pdf-problem', label: "The PDF can't be shown (answering still possible)", model: model({ pdf: { src: null, problem: true } }) },
+    // B-W2b-165 (SAL-199): the proofs accepted with the quote.
+    { id: 'proofs', label: 'Proofs · open, with an artwork PDF and two pictures', model: model({ quote: linkQuote({ quote: { proofs: PROOFS } }), proofs: PROOFS_READ }), note: 'Proofs you accept with it, between the PDF and the terms; the sign block says the proofs are accepted with it.' },
+    { id: 'proofs-picture', label: 'Proofs · a picture open full size', model: model({ quote: linkQuote({ quote: { proofs: PROOFS } }), proofs: PROOFS_READ, proofOpen: PROOFS[1]!.fileId }), note: 'Previous / Next over every proof, ← →, Esc closes.' },
+    { id: 'proofs-pdf', label: 'Proofs · the artwork PDF open', model: model({ quote: linkQuote({ quote: { proofs: PROOFS } }), proofs: PROOFS_READ, proofOpen: PROOFS[0]!.fileId }), note: 'Previous held at the first proof, with the reason.' },
+    { id: 'proofs-loading', label: 'Proofs · still loading', model: model({ quote: linkQuote({ quote: { proofs: PROOFS } }), proofs: {} }) },
+    { id: 'proofs-error', label: "Proofs · a picture can't be read (answering still possible)", model: model({ quote: linkQuote({ quote: { proofs: PROOFS } }), proofs: { ...PROOFS_READ, [PROOFS[2]!.fileId]: { src: null, problem: true } } }), note: 'That proof says so with Try again; the others open.' },
+    { id: 'proofs-consumer', label: 'Proofs · a consumer, one proof', model: model({ quote: { ...consumer, quote: { ...consumer.quote, proofs: [PROOFS[0]!] } }, proofs: PROOFS_READ }) },
+    { id: 'proofs-accepted', label: 'Proofs · accepted, named in the end state', model: model({ quote: { ...ACCEPTED, quote: { ...ACCEPTED.quote, proofs: PROOFS } }, proofs: PROOFS_READ, answer: 'done' }) },
     { id: 'unavailable', label: 'Link no longer opens (used, expired or withdrawn)', model: model({ link: 'unavailable', quote: null }) },
     { id: 'wrong-person', label: 'The wrong person', model: model({ link: 'wrong_person', quote: null }) },
     { id: 'loading', label: 'Opening the link', model: model({ link: 'loading', quote: null }) },

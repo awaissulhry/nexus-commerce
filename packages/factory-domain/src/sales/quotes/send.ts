@@ -19,7 +19,8 @@ import { addDays, sendBlockers, STATUS_WORDS, type QuoteIssue, type QuoteVersion
  * valid certificate, an EU business taxed at 22 % for want of a VIES proof, a deposit without the company's bank details.
  */
 
-export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS'] as const
+// B-W2b-165 (SAL-199): PROOF_NOT_READY, a proof of the version still uploading, being checked or refused (sales/quote-proofs).
+export const SEND_CHECK_CODES = ['COMPANY_LEGAL', 'BILL_TO_INCOMPLETE', 'SHIP_TO_INCOMPLETE', 'SDI_IDENTITY', 'VAT_CHANGED', 'FIRM_OFFER_STANDS', 'TERMS_VERSION', 'NO_BANK_DETAILS', 'PROOF_NOT_READY'] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 
 export interface SendCheck {
