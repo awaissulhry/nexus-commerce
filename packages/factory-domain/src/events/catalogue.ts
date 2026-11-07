@@ -107,6 +107,8 @@ import { events as partners } from '../partners/events'
 import { events as paymentIntents } from '../payment-intents/events'
 // B-W2b-176: the workshop's answers on its subcontract jobs (accepted, declined, a date answered, kit checked, progress, a send-back).
 import { events as subcontractJobs } from '../subcontract-jobs/events'
+// B-W2b-190: portal order requests (sent, accepted, refused, withdrawn).
+import { events as portalOrdering } from '../portal-ordering/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -280,7 +282,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-185
   ...paymentIntents,
   // B-W2b-176
-  ...subcontractJobs] as const satisfies readonly EventDefinition[]
+  ...subcontractJobs,
+  // B-W2b-190
+  ...portalOrdering] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

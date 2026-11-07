@@ -7,6 +7,8 @@ import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate
 import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sales/portal-orders/permissions'
 // B-W2b-178: customer documents in the portal.
 import { CUSTOMER_DOCUMENT_READERS } from '../../sales/portal-documents/permissions'
+// B-W2b-190: portal ordering.
+import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1374,6 +1376,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'subcontractor-jobs': ['portal.jobs.view' as Permission] },
   // B-W2b-178: the customer documents by role (delivery papers and the rest; conformity; invoices); not the Designer.
   CUSTOMER_DOCUMENT_READERS,
+  // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
+  PORTAL_ORDERING_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
