@@ -11,6 +11,7 @@ import { addRole, addTenant, addUser, Browser, enrolTotp, startHarness, type Har
 import { systemContext } from '../../outbox/system'
 import { runPartnerDigests } from '../notifications/digest'
 import { partnerFanOut, partnerFanOutEvents } from '../notifications/fan-out'
+import { unsubscribeKeyOf } from '../notifications/mail'
 import { remindPartnerTasks } from './reminders'
 
 /**
@@ -70,7 +71,7 @@ const system = () => callerFor(h.database, systemContext(tenant.id, `test-${newI
 async function fanOutAll(): Promise<number> {
   let made = 0
   for (const type of partnerFanOutEvents()) {
-    for (const row of await outbox(type)) made += await partnerFanOut(system(), { eventId: row.id, type: row.type, tenantId: tenant.id, companyId: row.companyId, siteId: null, payload: row.payload } as never, { clock: h.clock })
+    for (const row of await outbox(type)) made += await partnerFanOut(system(), { eventId: row.id, type: row.type, tenantId: tenant.id, companyId: row.companyId, siteId: null, payload: row.payload } as never, { clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
   }
   return made
 }
@@ -278,13 +279,13 @@ describe('notifications, e-mail settings and summaries (PLT-148, COL-063)', { ti
     while (![1, 2, 3, 4, 5].includes(new Date(next.toLocaleString('en-US', { timeZone: 'Europe/Rome' })).getDay())) next.setTime(next.getTime() + 86_400_000)
     const day = next.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
     h.clock.set(new Date(`${day}T07:30:00Z`))
-    const first = await runPartnerDigests({ database: h.database, log, clock: h.clock })
+    const first = await runPartnerDigests({ database: h.database, log, clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
     expect(first.sent).toBeGreaterThanOrEqual(1)
     const summary = mailsTo(people.admin, 'portal.digest')
     expect(summary).toHaveLength(1)
     expect(textOf(summary[0]!.raw)).toContain('Reminder: Upload the document we asked for on')
     expect(await deliveriesOf(reminders[0]!.id)).toEqual([expect.objectContaining({ channel: 'EMAIL_DIGEST', outcome: 'SENT' })])
-    await runPartnerDigests({ database: h.database, log, clock: h.clock })
+    await runPartnerDigests({ database: h.database, log, clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
     expect(mailsTo(people.admin, 'portal.digest')).toHaveLength(1)
     // The buyer unsubscribed: no summary for them.
     expect(mailsTo(people.buyer, 'portal.digest')).toEqual([])

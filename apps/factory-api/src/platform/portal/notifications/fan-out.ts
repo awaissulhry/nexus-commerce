@@ -12,7 +12,7 @@ import { defineHandler, type EventHandler } from '../../outbox/dispatch'
 import { processEmail, type EmailRuntime } from '../../email-out/service'
 import { latestOfGroup } from '../../notifications/store'
 import { partyReaders } from '../tasks/people'
-import { logPartnerDeliveries, sendPartnerMail } from './mail'
+import { logPartnerDeliveries, sendPartnerMail, unsubscribeKeyFor } from './mail'
 import { PARTNER_RULES } from './rules'
 import { preferencesOf } from './settings'
 
@@ -58,12 +58,14 @@ interface Made {
 }
 
 export interface PartnerFanOutOptions {
+  /** The key of the unsubscribe links (mail.ts unsubscribeKeyOf / unsubscribeKeyFor): the caller's, never read from the env here. */
+  readonly unsubscribeKey: Buffer
   readonly runtime?: () => EmailRuntime
   readonly clock?: Clock
 }
 
 /** One event's partner notifications and instant mails (the handler's work; tests call it). How many notifications were made. */
-export async function partnerFanOut(caller: CommandCaller, event: Pick<EventEnvelope, 'eventId' | 'type'> & Partial<EventEnvelope>, options: PartnerFanOutOptions = {}): Promise<number> {
+export async function partnerFanOut(caller: CommandCaller, event: Pick<EventEnvelope, 'eventId' | 'type'> & Partial<EventEnvelope>, options: PartnerFanOutOptions): Promise<number> {
   const rules = PARTNER_RULES.filter((rule) => rule.events.includes(event.type))
   if (rules.length === 0) return 0
   const envelope = event as EventEnvelope
@@ -147,7 +149,7 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
       const sentence = partnerSentence({ messageKey: row.messageKey, recordLabel: row.record.label, params: row.params }, row.locale, companyName ? (companyName.tradeName ?? companyName.legalName) : '')
       const link = portalRecordUrl(runtime.webOrigin, company?.code ?? row.partyId, row.record.type, row.record.id, row.anchor)
       try {
-        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: { kind: 'notification', item: { notificationId: row.id, sentence, link } }, runtime, ...(options.clock ? { clock: options.clock } : {}) })
+        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: { kind: 'notification', item: { notificationId: row.id, sentence, link } }, runtime, unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
       } catch (error) {
         outcome = { outcome: 'FAILED', outboundId: null, detail: (error as Error).name === 'NoSenderError' ? 'the tenant has no verified sending identity' : 'the mail could not be made' }
       }
@@ -161,12 +163,14 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
   }
 }
 
-export function partnerNotificationsHandler(options: PartnerFanOutOptions = {}): EventHandler {
+/** The worker's handler. `cookieSecret` is read when an event is handled (background.ts loads its env after the lists). */
+export function partnerNotificationsHandler(options: Omit<PartnerFanOutOptions, 'unsubscribeKey'> & { readonly cookieSecret: () => string }): EventHandler {
+  const { cookieSecret, ...rest } = options
   return defineHandler({
     name: PARTNER_FAN_OUT_HANDLER,
     events: partnerFanOutEvents(),
     async handle(event, tools) {
-      await partnerFanOut(tools.caller, event, options)
+      await partnerFanOut(tools.caller, event, { ...rest, unsubscribeKey: unsubscribeKeyFor(cookieSecret()) })
     },
   })
 }

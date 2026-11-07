@@ -20,7 +20,7 @@ import { commandOn } from '../tasks/clock'
 import { portalSessionOf } from '../../auth/portal/authenticator'
 import { assertCsrf } from '../../auth/sessions/cookies'
 import { officeAuthOf } from '../../auth/sessions/office-auth'
-import { unsubscribeKey } from './mail'
+import { unsubscribeKeyOf } from './mail'
 
 /**
  * A partner person's e-mail settings (B-W2b-167; COL-063, PLT-148; design portal.frame E-mail settings, portal.signin
@@ -107,8 +107,8 @@ const mask = (email: string): string => {
 }
 
 async function personOfToken(app: FastifyInstance, token: unknown) {
-  const reference = readUnsubscribeToken(unsubscribeKey(), token)
   const auth = officeAuthOf(app)
+  const reference = readUnsubscribeToken(unsubscribeKeyOf(auth.secrets), token)
   const tenant = reference ? await auth.inPlatform((client) => client.tenant.findUnique({ where: { id: reference.tenantId }, select: { status: true } })) : null
   const person = reference && tenant?.status === 'ACTIVE' ? await auth.inTenant(reference.tenantId, reference.userId, (client) => client.user.findUnique({ where: { id: reference.userId }, select: { id: true, email: true, audience: true, partyId: true } })) : null
   if (!reference || !person || person.audience !== 'PARTNER' || person.partyId === null) throw new NotFoundError('This unsubscribe link no longer works. Manage your e-mails in the portal.')

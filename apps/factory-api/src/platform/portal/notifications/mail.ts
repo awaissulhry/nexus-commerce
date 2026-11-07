@@ -6,10 +6,9 @@ import { identityReady, normalizeAddress } from '@nexus/factory-domain/email/rul
 import { portalEmailSettingsUrl } from '@nexus/factory-domain/portal/home/links'
 import { composeDigestMail, composeNotificationMail, PORTAL_MAIL_TEMPLATES, unsubscribeToken, unsubscribeUrl, type ComposedMail, type MailItem } from '@nexus/factory-domain/portal/notifications/mail'
 import { abuseKey } from '../../abuse/guard'
-import { authSecrets } from '../../auth/sessions/secrets'
+import { authSecrets, type AuthSecrets } from '../../auth/sessions/secrets'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
 import type { Clock } from '../../../core/time'
-import { loadFactoryEnv } from '../../../env'
 import { companyLegalOf } from '../../documents/documents'
 import { deliverOutbound } from '../../email-out/outbound'
 import type { EmailRuntime } from '../../email-out/service'
@@ -21,24 +20,17 @@ import type { EmailRuntime } from '../../email-out/service'
  * per notification it carried (EMAIL for one as it happens, EMAIL_DIGEST for a summary's: SENT with the mail's id, or FAILED
  * with why). The sender is the portal company's ready default NOTIFICATION identity (else CONVERSATION, else the tenant's).
  *
- * Every mail carries "Manage e-mails" (the portal's E-mail settings) and the person's signed unsubscribe link (GDPR; the key is
- * derived from the cookie secret, `unsubscribeKey`). A suppressed address is not sent to (deliverOutbound's own check).
+ * Every mail carries "Manage e-mails" (the portal's E-mail settings) and the person's signed unsubscribe link (GDPR). Its key is
+ * derived from the cookie secret and handed in by the caller (the API from its sign-in object's secrets, the worker and the
+ * scheduler from their env at boot): nothing here reads the process's env. A suppressed address is not sent to
+ * (deliverOutbound's own check).
  */
 
-let keyOverride: Buffer | undefined
-let keyFromEnv: Buffer | undefined
+/** The key of the unsubscribe links, from the cookie secret's derived keys (the API's office sign-in object). */
+export const unsubscribeKeyOf = (secrets: Pick<AuthSecrets, 'recoveryCodeHash'>): Buffer => abuseKey(secrets, 'portal-unsubscribe')
 
-/** Tests: the unsubscribe key (undefined: the one derived from the process's cookie secret). */
-export function useUnsubscribeKey(key: Buffer | undefined): void {
-  keyOverride = key
-}
-
-/** The key of the unsubscribe links: derived from FACTORY_COOKIE_SECRET (the API and the worker read the same env). */
-export function unsubscribeKey(): Buffer {
-  if (keyOverride) return keyOverride
-  keyFromEnv ??= abuseKey(authSecrets(loadFactoryEnv().FACTORY_COOKIE_SECRET), 'portal-unsubscribe')
-  return keyFromEnv
-}
+/** The same key from the cookie secret itself (the worker and the scheduler, which have no sign-in object). */
+export const unsubscribeKeyFor = (cookieSecret: string): Buffer => unsubscribeKeyOf(authSecrets(cookieSecret))
 
 const IDENTITY = { id: true, companyId: true, kind: true, domain: true, fromAddress: true, displayName: true, displayNamePolicy: true, status: true, verificationStatus: true, dkimStatus: true } as const
 
@@ -61,7 +53,7 @@ export interface SentMail {
 }
 
 /** Sends one partner mail; never throws for a refused send (FAILED with why), so the caller logs what happened. */
-export async function sendPartnerMail(caller: CommandCaller, input: { readonly tenantId: string; readonly companyId: string; readonly person: MailPerson; readonly body: PartnerMailBody; readonly runtime: EmailRuntime; readonly clock?: Clock }): Promise<SentMail> {
+export async function sendPartnerMail(caller: CommandCaller, input: { readonly tenantId: string; readonly companyId: string; readonly person: MailPerson; readonly body: PartnerMailBody; readonly runtime: EmailRuntime; readonly unsubscribeKey: Buffer; readonly clock?: Clock }): Promise<SentMail> {
   const { person, body, runtime } = input
   const facts = await caller.withClient(async (client) => {
     const identities = await client.emailIdentity.findMany({ where: { status: 'ACTIVE', isDefault: true, kind: { in: ['NOTIFICATION', 'CONVERSATION'] } }, orderBy: [{ kind: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }], select: IDENTITY })
@@ -74,7 +66,7 @@ export async function sendPartnerMail(caller: CommandCaller, input: { readonly t
   const identity = facts.identity
   const legal = await companyLegalOf(caller, input.companyId)
   const footer = footerOf(legal, privacyNoticeUrl(runtime.webOrigin, input.companyId), person.locale)
-  const links = { manage: portalEmailSettingsUrl(runtime.webOrigin, facts.partyCode), unsubscribe: unsubscribeUrl(runtime.webOrigin, unsubscribeToken(unsubscribeKey(), input.tenantId, person.id)) }
+  const links = { manage: portalEmailSettingsUrl(runtime.webOrigin, facts.partyCode), unsubscribe: unsubscribeUrl(runtime.webOrigin, unsubscribeToken(input.unsubscribeKey, input.tenantId, person.id)) }
   const companyName = facts.company ? (facts.company.tradeName ?? facts.company.legalName) : ''
   const mail: ComposedMail =
     body.kind === 'notification'

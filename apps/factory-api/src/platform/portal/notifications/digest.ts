@@ -14,7 +14,7 @@ import { processEmail, type EmailRuntime } from '../../email-out/service'
 import { activeTenants, systemContext } from '../../outbox/system'
 import { partyReaders } from '../tasks/people'
 import { kindTopic } from './fan-out'
-import { logPartnerDeliveries, sendPartnerMail } from './mail'
+import { logPartnerDeliveries, sendPartnerMail, unsubscribeKeyFor } from './mail'
 import { preferencesOf } from './settings'
 
 /**
@@ -33,6 +33,8 @@ const weekdayOf = (instant: Date): number => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri',
 export interface PartnerDigestOptions {
   readonly database: FactoryDatabase
   readonly log: Log
+  /** The key of the unsubscribe links (mail.ts): the caller's, never read from the env here. */
+  readonly unsubscribeKey: Buffer
   readonly clock?: Clock
   readonly runtime?: () => EmailRuntime
 }
@@ -65,7 +67,7 @@ export async function runPartnerDigests(options: PartnerDigestOptions): Promise<
       )
       for (const entry of waiting) {
         try {
-          const outcome = await digestOf(caller, { tenantId, userId: entry.userId, partyId: entry.partyId!, now, dayStart, weekly: frequencies.includes('WEEKLY'), frequencies, runtime: (options.runtime ?? processEmail)(), ...(options.clock ? { clock: options.clock } : {}) })
+          const outcome = await digestOf(caller, { tenantId, userId: entry.userId, partyId: entry.partyId!, now, dayStart, weekly: frequencies.includes('WEEKLY'), frequencies, runtime: (options.runtime ?? processEmail)(), unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
           if (outcome !== 'skip') result[outcome] += 1
         } catch (error) {
           result.failed += 1
@@ -82,7 +84,7 @@ export async function runPartnerDigests(options: PartnerDigestOptions): Promise<
 
 async function digestOf(
   caller: CommandCaller,
-  input: { readonly tenantId: string; readonly userId: string; readonly partyId: string; readonly now: Date; readonly dayStart: Date; readonly weekly: boolean; readonly frequencies: readonly string[]; readonly runtime: EmailRuntime; readonly clock?: Clock },
+  input: { readonly tenantId: string; readonly userId: string; readonly partyId: string; readonly now: Date; readonly dayStart: Date; readonly weekly: boolean; readonly frequencies: readonly string[]; readonly runtime: EmailRuntime; readonly unsubscribeKey: Buffer; readonly clock?: Clock },
 ): Promise<'sent' | 'failed' | 'skip'> {
   const facts = await caller.withClient(async (client) => {
     const sentToday = await client.emailOutbound.findFirst({ where: { recordType: 'User', recordId: input.userId, templateKey: PORTAL_MAIL_TEMPLATES.digest, createdAt: { gte: input.dayStart } }, select: { id: true } })
@@ -113,7 +115,7 @@ async function digestOf(
   const company = await caller.withClient((client) => client.company.findUnique({ where: { id: companyId }, select: { legalName: true, tradeName: true } }))
   const companyName = company ? (company.tradeName ?? company.legalName) : ''
   const items = listed.map((row) => ({ notificationId: row.id, sentence: partnerSentence(row, reader.locale, companyName), link: portalRecordUrl(input.runtime.webOrigin, facts.partyCode, row.recordType, row.recordId, row.anchor) }))
-  const sent = await sendPartnerMail(caller, { tenantId: input.tenantId, companyId, person: { id: reader.personId, email: reader.email, displayName: reader.displayName, locale: reader.locale, partyId: input.partyId }, body: { kind: 'digest', weekly: input.weekly, items, more: ofCompany.length - listed.length }, runtime: input.runtime, ...(input.clock ? { clock: input.clock } : {}) })
+  const sent = await sendPartnerMail(caller, { tenantId: input.tenantId, companyId, person: { id: reader.personId, email: reader.email, displayName: reader.displayName, locale: reader.locale, partyId: input.partyId }, body: { kind: 'digest', weekly: input.weekly, items, more: ofCompany.length - listed.length }, runtime: input.runtime, unsubscribeKey: input.unsubscribeKey, ...(input.clock ? { clock: input.clock } : {}) })
   await logPartnerDeliveries(caller, {
     key: `portal-digest-${input.userId}-${businessDate(input.now)}`,
     channel: 'EMAIL_DIGEST',
@@ -131,13 +133,16 @@ async function digestOf(
   return 'failed'
 }
 
-export function partnerDigestCron(options: PartnerDigestOptions): CronJob {
+/** The scheduler's cron; `cookieSecret` from its env (the unsubscribe links' key). */
+export function partnerDigestCron(options: Omit<PartnerDigestOptions, 'unsubscribeKey'> & { readonly cookieSecret: string }): CronJob {
+  const { cookieSecret, ...rest } = options
+  const settings = { ...rest, unsubscribeKey: unsubscribeKeyFor(cookieSecret) }
   return defineCron({
     name: 'portalNotifications.digest',
     schedule: '*/15 * * * *',
     lockTtlMs: 600_000,
     async run() {
-      const result = await runPartnerDigests(options)
+      const result = await runPartnerDigests(settings)
       if (result.sent + result.failed > 0) options.log.info({ ...result }, 'partner summaries')
     },
   })

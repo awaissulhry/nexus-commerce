@@ -165,7 +165,7 @@ const W2B_125_HANDLERS: readonly EventHandler[] = incidentHandlers()
 const W2B_135_HANDLERS: readonly EventHandler[] = healthHandlers()
 const W2B_160_HANDLERS: readonly EventHandler[] = [stripPicturesHandler()]
 // B-W2b-167: an event that concerns a partner → its people's notifications (and the mails they get as it happens).
-const W2B_167_HANDLERS: readonly EventHandler[] = [partnerNotificationsHandler()]
+const W2B_167_HANDLERS: readonly EventHandler[] = [partnerNotificationsHandler({ cookieSecret: () => env.FACTORY_COOKIE_SECRET })]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -285,7 +285,7 @@ if (mode === 'worker') {
   // B-W2b-162: daily, the partner people whose end of access is within 7 days are told once per end (PLT-022).
   crons.push(accessEndingCron({ database, log }))
   // B-W2b-167: the partner summaries (every 15 minutes, from 08:00 on working days) and the reminders of partner requests (hourly).
-  crons.push(partnerDigestCron({ database, log }), partnerTaskRemindersCron({ database, log }))
+  crons.push(partnerDigestCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }), partnerTaskRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
