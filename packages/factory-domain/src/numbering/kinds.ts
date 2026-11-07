@@ -37,6 +37,8 @@ export const NUMBER_KINDS = [
   // W2a wave 3 (factory-db numbering.prisma): supplier claims (CLM-…) and subcontract orders (SC-…).
   'CLAIM',
   'SUBCONTRACT',
+  // W2b wave 22/22 (factory-db numbering.prisma): a supplier's ship notice (ASN-…), numbered when it is sent.
+  'ASN',
   // W2a wave 4 (factory-db numbering.prisma): stock counts and the year-end inventory (CNT-…).
   'COUNT',
   // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
@@ -201,6 +203,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   COMPLAINT: 'CMP',
   CLAIM: 'CLM',
   SUBCONTRACT: 'SC',
+  ASN: 'ASN',
   COUNT: 'CNT',
   NCR: 'NCR',
   MAINTENANCE_JOB: 'MJ',

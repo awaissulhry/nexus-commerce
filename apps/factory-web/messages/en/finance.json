@@ -686,7 +686,9 @@
     "failed": "Couldn't load the payments",
     "keyRecord": "Record payment",
     "method": {
-      "BANK_TRANSFER": "Bank transfer"
+      "BANK_TRANSFER": "Bank transfer",
+      "CARD": "Card",
+      "SEPA_DEBIT": "SEPA Direct Debit"
     },
     "nothingPlaced": "Not placed yet",
     "rowMenu": "More for {reference}",
@@ -719,6 +721,7 @@
       "invalid": "Something typed is not accepted: check the fields.",
       "moved": "Someone changed it meanwhile: it is read again, check and try again.",
       "not_found": "It is no longer there.",
+      "providerOnly": "A card or SEPA debit payment is recorded only from the customer’s payment at the provider, never by hand: record the bank transfer, or wait for the provider’s payment.",
       "rate_limited": "Too many tries: wait a moment.",
       "reference": "This bank reference was recorded already: a transfer counts once.",
       "signed_out": "Your session ended: sign in again.",

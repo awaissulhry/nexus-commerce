@@ -16,7 +16,7 @@
       }
     },
     "PurchaseOrderLine": {
-      "about": "The office writes the lines of a DRAFT order (and deletes them), and records a line's confirmation heard by mail or phone. The delivery site's floor reads them (what to expect at the dock), never a price. A link session reads its own party's lines without the price or amount, and its confirm sets each line's confirmed quantity and date once, or its proposal for the line, while the order is SENT.",
+      "about": "The office writes the lines of a DRAFT order (and deletes them), and records a line's confirmation heard by mail or phone. The delivery site's floor reads them (what to expect at the dock), never a price. A link session reads its own party's lines without the price or amount, and its confirm sets each line's confirmed quantity and date once, or its proposal for the line, while the order is SENT (W2b wave 22/22: with a substitute and whether the proposal waits for the buyer's yes).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {

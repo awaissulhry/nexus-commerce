@@ -469,9 +469,15 @@ model Payment {
   @@index([tenantId, partyId, receivedOn])
 }
 
-/// How a payment was made. W1: bank transfers only (Q12); card and SEPA debit come later (W2b), as new values.
+/// How a payment was made. W1: bank transfers only (Q12). B-W2b-F7: card and SEPA debit, named as PaymentIntentMethod's
+/// values (portal-sales.prisma), so one word means one thing.
 enum PaymentMethod {
+  /// Typed by the office from the bank statement (the only method recorded by hand).
   BANK_TRANSFER
+  /// A card payment of a succeeded PaymentIntent (B-W2b-185); never recorded by hand.
+  CARD
+  /// A SEPA Direct Debit of a succeeded PaymentIntent (B-W2b-185); never recorded by hand.
+  SEPA_DEBIT
 }
 
 enum PaymentStatus {

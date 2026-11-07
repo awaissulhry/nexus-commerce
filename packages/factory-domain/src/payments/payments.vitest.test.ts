@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { depositLinkMail } from './deposit-link'
-import { bankReferenceProblem, normaliseBankReference, openOnDeposit, openOnInvoice, planAllocations, voidProblems } from './payments'
+import { bankReferenceProblem, manualMethodRefusal, normaliseBankReference, OFFICE_PAYMENT_METHODS, openOnDeposit, openOnInvoice, PAYMENT_METHODS, PAYMENT_REFUSALS, planAllocations, PROVIDER_PAYMENT_METHODS, voidProblems } from './payments'
 
 describe('a payment received (FIN-121, FIN-122)', () => {
   it('the bank reference is kept in one form, so the same transfer typed twice is found', () => {
@@ -23,6 +23,14 @@ describe('a payment received (FIN-121, FIN-122)', () => {
     ], 'EUR')
     expect(plan.allocations).toEqual([])
     expect(plan.issues.map((issue) => issue.message)).toEqual(['The invoice FT-1 is open for 10.00 EUR only; allocate at most that.', 'The payment has 100.00 EUR left to allocate; allocate at most that.'])
+  })
+
+  it('B-W2b-F7: the office types bank transfers only; a card or SEPA debit payment comes from a payment intent, refused by hand in words', () => {
+    expect([...PAYMENT_METHODS].sort()).toEqual([...OFFICE_PAYMENT_METHODS, ...PROVIDER_PAYMENT_METHODS].sort())
+    expect(manualMethodRefusal('BANK_TRANSFER')).toBeNull()
+    expect(manualMethodRefusal('CARD')).toBe('PROVIDER_ONLY')
+    expect(manualMethodRefusal('SEPA_DEBIT')).toBe('PROVIDER_ONLY')
+    expect(PAYMENT_REFUSALS.PROVIDER_ONLY).toContain('payment intent')
   })
 
   it('a payment is voided only once its allocations add up to 0', () => {

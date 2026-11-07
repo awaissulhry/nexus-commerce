@@ -3,6 +3,7 @@ import { DomainError, ForbiddenError, InvalidStateError } from '@nexus/factory-d
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { depositInvoiceDecision, depositRuleNow, type DepositInvoiceDecision } from '@nexus/factory-domain/invoicing/deposit'
 import { INVOICES_ISSUE } from '@nexus/factory-domain/invoicing/permissions'
+import type { PaymentMethod } from '@nexus/factory-domain/payments/payments'
 import { PAYMENTS_RECORD, PAYMENTS_VIEW } from '@nexus/factory-domain/payments/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { serverClock } from '../../core/time'
@@ -36,6 +37,8 @@ export interface DepositReceivedInput {
   readonly amount?: number | undefined
   readonly receivedOn: string
   readonly externalRef: string
+  /** B-W2b-F7: BANK_TRANSFER only (absent: the same); a card or SEPA debit payment is refused in words (checkPayment). */
+  readonly method?: PaymentMethod | undefined
   readonly internalNote?: string | null | undefined
   /** Default true: issue the TD02 now when the rule requires one. */
   readonly issueDepositInvoice?: boolean | undefined
@@ -70,7 +73,7 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
   assertMay(context, PAYMENTS_VIEW, PAYMENTS_RECORD, request ? { companyId: request.companyId, partyId: request.partyId } : null, 'Deposit request')
   const current = request!
   if (current.status !== 'OPEN') throw new InvalidStateError(`The deposit request is ${current.status}: a payment goes to an OPEN request.`)
-  const checked = await checkPayment(caller, { companyId: current.companyId, partyId: current.partyId, amount: body.amount, currency: current.currency, receivedOn: body.receivedOn, externalRef: body.externalRef, internalNote: body.internalNote })
+  const checked = await checkPayment(caller, { companyId: current.companyId, partyId: current.partyId, amount: body.amount, currency: current.currency, receivedOn: body.receivedOn, externalRef: body.externalRef, method: body.method, internalNote: body.internalNote })
 
   // The plan, without a lock: what the payment will pay on the request, and whether a TD02 follows.
   const plan = await caller.withClient(async (client) => {

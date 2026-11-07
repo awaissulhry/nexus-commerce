@@ -43,6 +43,7 @@ import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
 import { seed as seedPortalFrame } from '../seed/portal-frame'
 import { seed as seedPortalSales } from '../seed/portal-sales'
+import { seed as seedPortalSupply } from '../seed/portal-supply'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -304,6 +305,10 @@ beforeAll(async () => {
   // The customer portal schema of W2b (wave 21/22): order requests, change requests, payment intents, measurements by link.
   await seedPortalSales({ db: factory, namespace: 'iso-a' })
   await seedPortalSales({ db: factory, namespace: 'iso-b' })
+  // The supplier portal schema of W2b (wave 22/22): P2's ship notices, answers and job; with partnerScope, rows of P1's own
+  // (a sent purchase order with a draft ship notice, a job at its workshop, an answer) for the partner scope.
+  await seedPortalSupply({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
+  await seedPortalSupply({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -639,6 +644,9 @@ it('covers every classified table and every runtime role', () => {
     'ShadeGroup',
     'ShiftPattern',
     'ShiftSegment',
+    'ShipNotice',
+    'ShipNoticeHide',
+    'ShipNoticeLine',
     'Shipment',
     'ShipmentLine',
     'ShippingSettings',
@@ -660,8 +668,10 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractKitLine',
     'SubcontractOperation',
     'SubcontractOrder',
+    'SubcontractProgressReport',
     'SubcontractReceipt',
     'SubcontractReceiptLine',
+    'SubcontractReturnNotice',
     'SupplierClaim',
     'SupplierClaimLine',
     'SupplierInvoice',
@@ -669,6 +679,8 @@ it('covers every classified table and every runtime role', () => {
     'SupplierInvoiceLine',
     'SupplierInvoiceMatch',
     'SupplierItem',
+    'SupplierQuestionnaire',
+    'SupplierQuestionnaireResponse',
     'Suppression',
     'Task',
     'Team',
