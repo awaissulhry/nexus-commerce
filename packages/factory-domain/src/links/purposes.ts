@@ -39,7 +39,7 @@ const FILES_READ = 'files.read' satisfies Permission
  *   PAYMENT           DepositRequest, Invoice   pay*                                    price   30 / 90   1 / 1
  *   SUPPLIER_ONBOARD  Party                     submit* (typed name)                    none    30 / 60   1 / 1    draft
  *   JOB_ACCEPT        SubcontractOrder          accept*, decline*, moveDate*            none    7 / 30    1 / 1
- *   APPROVAL          ApprovalRequest           approve*, refuse* (typed name)          none    14 / 60   1 / 1
+ *   APPROVAL          ApprovalRequest           approve*, refuse* (typed name)          price   14 / 60   1 / 1
  *   RECORD_INVITE     a record with a thread    post, upload                            none    30 / 180  1 / 1
  *   SECURE_FILE       StoredFile                download*, receive                      none    7 / 30    5 / 20   files, password, receipt
  *
@@ -63,8 +63,8 @@ const FILES_READ = 'files.read' satisfies Permission
  * draft with us (MEASUREMENTS, CLAIM, SUPPLIER_ONBOARD: links/drafts).
  *
  * The price grain goes only to purposes that show the party its OWN document (its quote, its documents, its deposit
- * request, the deposit or invoice it pays: the party scope of the session makes it its own; plan B-W2b-163: PAYMENT and
- * none of the other new ones). A PO_CONFIRM link holds no grain at all: the supplier confirms quantities and dates, never
+ * request, the deposit or invoice it pays: the party scope of the session makes it its own; plan B-W2b-163: PAYMENT; B-W2b-184:
+ * APPROVAL, for a revised order of the party's own, SAL-222). A PO_CONFIRM link holds no grain at all: the supplier confirms quantities and dates, never
  * sees a price on the link (PLAN §4.7 08-buy). Cost, margin, wages and pay never reach a link (the audience cap in
  * auth/grains, the partner role's column grants, and links/pay: no link ever opens a record or a file with pay figures).
  *
@@ -324,7 +324,9 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     recordTypes: ['ApprovalRequest'],
     // "Approve with changes" is an approval with words (ApprovalRequest APPROVED_WITH_CHANGES; evidence APPROVED).
     actions: { open: notCounted, approve: counted('required'), refuse: counted('required') },
-    grains: [],
+    // B-W2b-184: a revised order shows the party its OWN order old → new (SAL-222; design links.approve "price grain of the
+    // party's own document only"); the other kinds carry no money (the API answers prices on REVISED_ORDER only).
+    grains: ['price'],
     expiryDays: { default: 14, max: 60 },
     uses: { default: 1, max: 1 },
     readsFiles: true,

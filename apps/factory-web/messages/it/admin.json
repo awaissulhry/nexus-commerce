@@ -2001,6 +2001,9 @@
     "portal_returns_view": "Vedere i resi e i reclami della vostra organizzazione: ogni pratica con il prossimo passo, cosa è stato chiesto, a che punto è, le istruzioni di reso e, per i ruoli che vedono i prezzi, la nota di credito",
     "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità, aggiungere foto finché non è deciso e annullare una richiesta di reso prima che la merce parta",
     "portal_complaints_view": "Seguire i reclami di qualità: le fasi dell'analisi, la nostra lettera di risposta e il rapporto 8D quando condiviso con voi",
+    "partners_approvals_view": "Vedere le approvazioni chieste a clienti, fornitori e firmatari esterni su un documento: cosa abbiamo chiesto, entro quando, e la risposta firmata con le sue prove",
+    "partners_approvals_ask": "Chiedere a un cliente, fornitore o firmatario esterno di approvare una concessione, un campione, un colore, un pellame, una grafica, una bozza del design, un ordine modificato o una firma; ritirare una richiesta aperta",
+    "portal_approvals_view": "Vedere cosa chiediamo di approvare alla propria organizzazione (campioni, colori, pellami, grafiche, bozze del design, concessioni, ordini modificati) e le risposte date; rispondere richiede il diritto di approvare",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }

@@ -12,6 +12,8 @@ import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
 import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sales/change-requests/permissions'
 // B-W2b-192: returns and complaints from outside.
 import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
+// B-W2b-184: approval requests to partners (the office's asks, the partner's page).
+import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approvals-out/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -762,7 +764,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-177
   ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-189
-  ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : []),
+  // B-W2b-184
+  ...(audience === 'office' ? (PARTNERS_APPROVALS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1404,6 +1408,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   // B-W2b-192: the Returns & claims page to the customer Buyer, Finance, Quality and Viewer; asking to the Buyer and Quality;
   // the complaints' investigation (answer letter, 8D) to Quality.
   PORTAL_RETURNS_ADDS,
+  // B-W2b-184: what we ask the organisation to approve, to every main role that works with us but the invoices-only ones (answering takes portal.approve).
+  PORTAL_APPROVALS_READERS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

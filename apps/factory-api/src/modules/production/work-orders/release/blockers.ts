@@ -5,6 +5,8 @@ import { reasonWords } from '../../../../platform/reasons/service'
 import { livePlanOf, readinessFor, type LivePlan } from '../../../planning/readiness/service'
 import { SITE_COLUMNS as PLANNING_SITE_COLUMNS } from '../../../planning/store'
 import { activeHoldsOf } from '../../../quality/holds/checks'
+// B-W2b-184 (SAL-294): a made-to-measure line's design proof not approved yet holds the release.
+import { proofHoldFacts } from '../../../../platform/approvals-out/proof'
 import type { Reader } from '../store'
 
 /**
@@ -39,6 +41,7 @@ export async function readHoldFacts(db: Reader, workOrderId: string): Promise<Ho
   // ON_HOLD under a record that is not one of these quality holds (an NCR): the work order's own reason.
   const named = row?.holdRecordType === 'QualityHold' && holds.some((hold) => hold.id === row.holdRecordId)
   if (row?.status === 'ON_HOLD' && !named) facts.push({ holdId: null, reason: row.holdReason ?? 'on hold', placedAt: toUtcIso(row.heldAt ?? new Date(0)) })
+  facts.push(...(await proofHoldFacts(db, workOrderId)))
   return facts
 }
 

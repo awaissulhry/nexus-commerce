@@ -112,6 +112,9 @@ import { partnerDigestCron } from './platform/portal/notifications/digest'
 import { partnerTaskRemindersCron } from './platform/portal/tasks/reminders'
 // B-W2b-177: document expiry reminders (30 and 7 days before; the partner asked for a new version).
 import { expiryRemindersCron } from './platform/files/expiry/remind'
+// B-W2b-184: approval requests to partners expire past their due time (and an answer's settle is caught up); office approvals by e-mail.
+import { approvalsSweepCron } from './platform/approvals-out/sweep'
+import { officeApprovalsMailCron } from './modules/insights/sources/approvals-mail'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -298,6 +301,8 @@ if (mode === 'worker') {
   crons.push(partnerDigestCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }), partnerTaskRemindersCron({ database, log }))
   // B-W2b-177: document expiry reminders (daily 06:40 Europe/Rome).
   crons.push(expiryRemindersCron({ database, log }))
+  // B-W2b-184: approval requests (expiry and settle catch-up, every 10 minutes); Home › Approvals by e-mail (every 5 minutes).
+  crons.push(approvalsSweepCron({ database, log }), officeApprovalsMailCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
