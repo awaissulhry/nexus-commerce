@@ -9,7 +9,11 @@ import { companyPrefix } from '../../../lib/session/session'
 import { createMachine, findSuppliers, listClasses, listMachines, machineTiles, plantPlaces, retireMachine, updateMachine, type Machine, type MachineClass, type MachineTiles, type PlantSite } from '../_shared/api'
 import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import { costMinorOf, csvText, fieldOf, isMachineEvent, labelOf, machinesAddressOf, machinesAddressText, machinesQuery, minorText, plantCan, problemOf, readProblem, TIME_ZONE, yearOf, type MachinesAddress } from '../_shared/model'
-import { useWords, type Notice } from '../_shared/parts'
+import { useWords, type Loaded, type Notice } from '../_shared/parts'
+import { readDepth, readNeeding, readWall, type MachineDepth, type WallAnswer } from './depth/api'
+import { depthAddressOf, NEED_TERMS, PAGE_TERMS, withDepthTerms, type DepthAddress, type WallFilter } from './depth/model'
+import { tagMachineOf, useTags } from './depth/use-tags'
+import { DiesSection } from './dies/DiesSection'
 import type { CellState, MachineDraft, MachineRows, MachinesDialog, MachinesListModel } from './view-model'
 import { MachinesView } from './view/MachinesView'
 
@@ -39,8 +43,22 @@ function MachinesContainer() {
   const can = useMemo(() => plantCan(session.permissions), [session.permissions])
   const address = useMemo(() => machinesAddressOf(params), [params])
   const { view, q, siteId, classId } = address
+  // B-W2b-136: the section shown and the two tiles that filter; the dies' own `d…` terms are kept as they are.
+  const depthAddress = useMemo(() => depthAddressOf(params), [params])
+  const { section, need } = depthAddress
 
-  const go = useCallback((next: Partial<MachinesAddress>) => router.replace(`${pathname}${machinesAddressText({ ...address, ...next })}`, { scroll: false }), [router, pathname, address])
+  const go = useCallback(
+    (next: Partial<MachinesAddress>, nextDepth: Partial<DepthAddress> = {}) => {
+      const text = withDepthTerms(machinesAddressText({ ...address, ...next }), { ...depthAddress, ...nextDepth })
+      const query = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text)
+      params?.forEach((value, key) => {
+        if (!(PAGE_TERMS as readonly string[]).includes(key)) query.set(key, value)
+      })
+      const all = query.toString()
+      router.replace(`${pathname}${all ? `?${all}` : ''}`, { scroll: false })
+    },
+    [router, pathname, address, depthAddress, params],
+  )
 
   const [sites, setSites] = useState<PlantSite[]>([])
   const [classes, setClasses] = useState<MachineClass[]>([])
@@ -63,25 +81,46 @@ function MachinesContainer() {
   const [made, setMade] = useState<{ id: string; assetNumber: string } | null>(null)
   const readId = useRef(0)
   const query = useMemo(() => machinesQuery({ view, q, siteId, classId }), [view, q, siteId, classId])
+  const [facts, setFacts] = useState<Record<string, MachineDepth>>({})
+  const [depthTiles, setDepthTiles] = useState<{ checksOverdue: number; noCe: number } | null>(null)
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
+  const readFacts = useCallback(
+    async (ids: readonly string[]) => {
+      try {
+        const answer = await readDepth(api, siteId, ids)
+        setDepthTiles(answer.tiles)
+        setToday(answer.today)
+        setFacts((current) => ({ ...current, ...Object.fromEntries(answer.machines.map((row) => [row.id, row])) }))
+      } catch {
+        setDepthTiles(null)
+      }
+    },
+    [api, siteId],
+  )
+  const page = useCallback(
+    (cursor: string | null) => (need ? readNeeding(api, { siteId, need: NEED_TERMS[need], cursor, limit: PAGE }) : listMachines(api, { ...query, ...(cursor ? { cursor } : {}), limit: PAGE })),
+    [api, need, siteId, query],
+  )
 
   const load = useCallback(async () => {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const page = await listMachines(api, { ...query, limit: PAGE })
+      const read = await page(null)
       const counted = await machineTiles(api, siteId).catch(() => null)
       if (id !== readId.current) return
-      setRows({ items: page.machines, more: page.nextCursor !== null, problem: null })
-      setCursor(page.nextCursor)
+      setRows({ items: read.machines, more: read.nextCursor !== null, problem: null })
+      setCursor(read.nextCursor)
       setTiles(counted)
       setAsOf(new Date().toISOString())
       setUpdates(0)
+      void readFacts(read.machines.map((row) => row.id))
     } catch (error) {
       if (id !== readId.current) return
       setRows({ items: null, more: false, problem: readProblem(error) })
       setTiles(null)
     }
-  }, [api, can.view, query, siteId])
+  }, [api, can.view, page, siteId, readFacts])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -91,13 +130,39 @@ function MachinesContainer() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listMachines(api, { ...query, cursor, limit: PAGE })
-      setRows((current) => ({ items: [...(current.items ?? []), ...page.machines.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
-      setCursor(page.nextCursor)
+      const read = await page(cursor)
+      setRows((current) => ({ items: [...(current.items ?? []), ...read.machines.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: read.nextCursor !== null, problem: null }))
+      setCursor(read.nextCursor)
+      void readFacts(read.machines.map((row) => row.id))
     } catch (error) {
       setNotice({ tone: 'danger', words: problemOf(error) })
     }
-  }, [api, cursor, query])
+  }, [cursor, page, readFacts])
+
+  // The status wall (section `wall`): read when shown, again on a machine's change.
+  const [wall, setWall] = useState<Loaded<WallAnswer>>({ status: 'loading' })
+  const [wallAt, setWallAt] = useState<string | null>(null)
+  const [wallFilter, setWallFilter] = useState<WallFilter>('ALL')
+  const wallTurn = useRef(0)
+  const loadWall = useCallback(() => {
+    if (!can.view || section !== 'wall') return
+    const turn = ++wallTurn.current
+    readWall(api, siteId)
+      .then((value) => {
+        if (turn !== wallTurn.current) return
+        setWall({ status: 'ready', value })
+        setWallAt(value.at)
+      })
+      .catch((error: unknown) => turn === wallTurn.current && setWall({ status: 'error', problem: readProblem(error) }))
+  }, [api, can.view, section, siteId])
+  useEffect(() => {
+    loadWall()
+  }, [loadWall])
+  const refreshWall = useCoalesced(loadWall, 1000)
+
+  // Print QR tags (the band, the bulk bar, `t`, a row's ⋯).
+  const canPrint = session.permissions.includes('print.labels')
+  const { tags, openTags, closeTags, setPrinter, setCopies, printTagsNow, retryTag } = useTags(api, locale, () => void readFacts((rows.items ?? []).map((row) => row.id)))
 
   const refreshTiles = useCoalesced(() => {
     machineTiles(api, siteId)
@@ -109,8 +174,12 @@ function MachinesContainer() {
       if (!isMachineEvent(change.type)) return
       if (change.type.startsWith('machine.')) setUpdates((count) => count + 1)
       refreshTiles()
+      refreshWall()
     },
-    () => void load(),
+    () => {
+      void load()
+      loadWall()
+    },
     can.view,
   )
 
@@ -237,13 +306,39 @@ function MachinesContainer() {
     [rows.items, can.cost, locale, t],
   )
 
-  const model: MachinesListModel = { prefix, can, address: { view, q, siteId, classId }, sites, classes, rows, tiles, asOf, live, updates, timeZone: TIME_ZONE, cells, dialog, notice, made }
+  const model: MachinesListModel = {
+    prefix,
+    can,
+    address: { view, q, siteId, classId },
+    sites,
+    classes,
+    rows,
+    tiles,
+    asOf,
+    live,
+    updates,
+    timeZone: TIME_ZONE,
+    cells,
+    dialog,
+    notice,
+    made,
+    depth: {
+      address: depthAddress,
+      tiles: depthTiles,
+      facts,
+      today,
+      wall: { loaded: wall, filter: wallFilter, asOf: wallAt },
+      tags,
+      canPrint,
+      dies: section === 'dies' ? <DiesSection prefix={prefix} siteId={siteId} sites={sites} /> : undefined,
+    },
+  }
 
   return (
     <MachinesView
       model={model}
       actions={{
-        onView: (next) => go({ view: next }),
+        onView: (next) => go({ view: next }, { need: null }),
         onSearch: (next) => go({ q: next }),
         onSite: (next) => go({ siteId: next }),
         onClass: (next) => go({ classId: next }),
@@ -267,6 +362,16 @@ function MachinesContainer() {
         onSubmitDialog: () => void submitDialog(),
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
+        onSection: (next) => go({ isNew: false }, { section: next }),
+        onNeed: (next) => go({ view: 'inUse' }, { need: next }),
+        onWallFilter: setWallFilter,
+        onRetryWall: loadWall,
+        onOpenTags: (machines) => openTags(machines.map((machine) => tagMachineOf(machine, locale)), canPrint),
+        onTagPrinter: setPrinter,
+        onTagCopies: setCopies,
+        onTagPrint: () => void printTagsNow(),
+        onTagRetry: (job) => void retryTag(job),
+        onTagsClose: closeTags,
       }}
     />
   )

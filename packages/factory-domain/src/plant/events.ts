@@ -62,7 +62,8 @@ export const events = [
       assetNumber: z.string(),
       from: z.enum(MACHINE_STATUSES),
       to: z.enum(MACHINE_STATUSES),
-      cause: z.enum(['REPORT', 'JOB', 'SIGN_SAFE', 'TRIAGE', 'RETIRE']),
+      // B-W2b-136: CHANGE = the office's Change status (with its reason; a release from do-not-use by a technician).
+      cause: z.enum(['REPORT', 'JOB', 'SIGN_SAFE', 'TRIAGE', 'RETIRE', 'CHANGE']),
       recordType: z.enum(['MaintenanceRequest', 'MaintenanceJob', 'Machine']),
       recordId: z.uuid(),
       locked: z.boolean(),
