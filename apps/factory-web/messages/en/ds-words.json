@@ -653,5 +653,154 @@
     "copied": "Copied",
     "copyFailed": "Could not copy",
     "region": "Document seal"
+  },
+  "gateExplainer": {
+    "states": {
+      "pass": "Met",
+      "fail": "Not met",
+      "unknown": "Not known",
+      "notNeeded": "Not needed"
+    },
+    "verdicts": {
+      "open": "Clear",
+      "held": "Blocked",
+      "unknown": "Not known yet"
+    },
+    "summary": "{passed} of {total} checks met",
+    "who": "Who can clear it: {who}",
+    "how": "How: {how}",
+    "override": "Override",
+    "overrideWho": "Who may override: {who}",
+    "asOf": "As it stood on {when}",
+    "list": "Checks",
+    "fix": "Fix",
+    "empty": "Nothing is blocking",
+    "showWhy": "{line} — show why",
+    "none": "No checks are listed for this gate",
+    "held_one": "{count} check not met: {names}",
+    "held_other": "{count} checks not met: {names}",
+    "unknownHeld_one": "{count} check not known yet: {names}",
+    "unknownHeld_other": "{count} checks not known yet: {names}",
+    "namesJoin": "; ",
+    "now": "now: {value}",
+    "allMet_one": "The check is met",
+    "allMet_other": "All {count} checks met",
+    "more": "+{count} more"
+  },
+  "signOffPanel": {
+    "title": "Sign-off",
+    "states": {
+      "signed": "Signed",
+      "waiting": "Waiting",
+      "held": "Held",
+      "rejected": "Rejected",
+      "notNeeded": "Not needed"
+    },
+    "methods": {
+      "pin": "PIN",
+      "code": "Code",
+      "typed": "Typed name"
+    },
+    "ruleStates": {
+      "met": "Met",
+      "broken": "Not met",
+      "unknown": "Not known"
+    },
+    "signedBy": "Signed by {who}",
+    "signedByRole": "Signed by {who} ({role})",
+    "rejectedBy": "Rejected by {who}",
+    "whoMay": "Who may sign: {who}",
+    "fingerprint": "Fingerprint",
+    "summary": "{signed} of {total} signed",
+    "complete": "Every step signed",
+    "rejectedSummary": "Rejected",
+    "steps": "Sign-off steps",
+    "step": "Step {n}",
+    "afterStep": "Waits for step {step}: {label}",
+    "rules": {
+      "maker": {
+        "met": "Did not make these units (from scans)",
+        "broken": "Made some of these units (from scans): another person must sign",
+        "unknown": "Who made these units is not known yet"
+      },
+      "fourEyes": {
+        "met": "A second person signs (four-eyes)",
+        "broken": "You signed an earlier step: a second person must sign this one (four-eyes)",
+        "unknown": "The four-eyes check cannot be made yet"
+      },
+      "authorNotApprover": {
+        "met": "The author does not approve their own work",
+        "broken": "You wrote it: another person must approve it",
+        "unknown": "The author is not known yet"
+      },
+      "other": {
+        "met": "Rule met",
+        "broken": "Rule not met",
+        "unknown": "Rule not checked yet"
+      }
+    }
+  },
+  "limitMeter": {
+    "verdicts": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "belowDetection": "Below detection",
+      "inconclusive": "Not conclusive",
+      "notMeasured": "Not measured",
+      "noLimit": "No limit set"
+    },
+    "tolerance": {
+      "pass": "In tolerance",
+      "over": "Over",
+      "under": "Under",
+      "notMeasured": "Not measured"
+    },
+    "limit": "limit {limit}",
+    "minimum": "minimum {limit}",
+    "belowLoq": "< {loq}",
+    "loq": "limit of quantification {loq}",
+    "nominalSymmetric": "{nominal} ± {plus}",
+    "nominalAsymmetric": "{nominal} −{minus} / +{plus}",
+    "overBy": "over by {by}",
+    "underBy": "under by {by}",
+    "cellOf": "{value} / {limit}"
+  },
+  "floorChecklist": {
+    "groups": "Groups",
+    "states": {
+      "open": "Not started",
+      "partly": "In progress",
+      "passed": "Passed",
+      "failed": "Failed"
+    },
+    "passed": "Passed",
+    "failed": "Failed",
+    "notChecked": "Not checked",
+    "failedBecause": "Failed: {reason}",
+    "withPhoto": "with photo",
+    "optional": "Optional",
+    "pass": "Pass",
+    "fail": "Fail",
+    "groupPasses": "Group passes",
+    "groupAnswered": "Every check in this group is answered",
+    "progress": "{done} of {total} groups done",
+    "checked": "{answered} of {total} checked",
+    "failedCount_one": "{count} failed",
+    "failedCount_other": "{count} failed",
+    "whatIsWrong": "What is wrong with “{item}”?",
+    "reasons": "Reasons",
+    "photo": "Take a photo of “{item}”",
+    "photoNeeded": "This reason needs a photo",
+    "skipPhoto": "No photo",
+    "back": "Back",
+    "cancel": "Cancel",
+    "announcePass": "{item}: passed",
+    "announceFail": "{item}: failed",
+    "announceGroup_one": "{group}: {count} check passed",
+    "announceGroup_other": "{group}: {count} checks passed",
+    "left_one": "{count} required check left: {names}",
+    "left_other": "{count} required checks left: {names}",
+    "namesJoin": ", ",
+    "none": "No checks are listed"
   }
 }

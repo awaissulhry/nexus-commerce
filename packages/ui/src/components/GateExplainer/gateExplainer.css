@@ -1,0 +1,249 @@
+/*
+ * DS — GateExplainer (B-W2b-78). Colours are semantic roles paired as the contrast gate measures them (`--nds-<tone>-text`
+ * on `--nds-<tone>-soft` for the state words; the card on `--nds-surface`). A state is never colour alone: an icon shape
+ * AND a word. Sizes read `--nds-density-*` (the console's sizes at standard, bigger on the floor tier).
+ */
+.nds-gate {
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-gate[data-form='full'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  container: nds-gate / inline-size;
+}
+.nds-gate[data-form='full'][data-verdict='held'] {
+  border-inline-start: 4px solid var(--nds-danger);
+}
+.nds-gate[data-form='full'][data-verdict='unknown'] {
+  border-inline-start: 4px solid var(--nds-warning);
+}
+.nds-gate[data-form='full'][data-verdict='open'] {
+  border-inline-start: 4px solid var(--nds-success);
+}
+.nds-gate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+.nds-gate-icon {
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+  color: var(--nds-text-2);
+}
+.nds-gate-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-gate-answer {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.nds-gate-summary {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-gate-rule,
+.nds-gate-asof {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+.nds-gate-asof {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  justify-self: start;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── the state capsules: the verdict and each check ──────────────────────────────────────────────────────────────── */
+.nds-gate-verdict,
+.nds-gate-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  justify-self: start;
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-gate-state-icon {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-gate-verdict[data-state='pass'],
+.nds-gate-check[data-state='pass'] .nds-gate-state {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-gate-verdict[data-state='fail'],
+.nds-gate-check[data-state='fail'] .nds-gate-state {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-gate-verdict[data-state='unknown'],
+.nds-gate-check[data-state='unknown'] .nds-gate-state {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+
+/* ── the checks ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-gate-checks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-gate-check {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  padding: var(--nds-space-10) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-gate-check:first-child {
+  border-top: 0;
+}
+.nds-gate-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-gate-label {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-gate-now {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+.nds-gate-check[data-state='notNeeded'] .nds-gate-label {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+.nds-gate-reason {
+  overflow-wrap: anywhere;
+}
+.nds-gate-who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-14);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-gate-fix {
+  display: flex;
+  align-items: center;
+}
+.nds-gate-link {
+  color: var(--nds-text-link);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.nds-gate-override {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-sunken);
+}
+.nds-gate-override-title {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+}
+.nds-gate-override-text {
+  margin: 0;
+}
+
+/* ── the compact line, the popover trigger, the list form ───────────────────────────────────────────────────────── */
+.nds-gate[data-form='compact'] {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-8);
+  max-width: 100%;
+}
+.nds-gate-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-gate-pop {
+  display: inline-flex;
+  max-width: 100%;
+}
+.nds-gate-trigger {
+  max-width: 100%;
+  padding: var(--nds-space-2) var(--nds-space-4);
+  border: 0;
+  border-radius: var(--nds-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.nds-gate-trigger:hover .nds-gate-line {
+  text-decoration: underline;
+}
+.nds-gate-trigger:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-focus-ring);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-gate-panel .nds-gate[data-form='full'] {
+  max-width: min(36rem, 90vw);
+  border: 0;
+  border-inline-start: 0;
+  padding: var(--nds-space-4);
+}
+.nds-gate[data-form='list'] {
+  container: nds-gate / inline-size;
+}
+.nds-gate-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-gate-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* A narrow card or list (a phone, a side column, a popover): the state above, the fix under the words — by its own width. */
+@container nds-gate (max-width: 34rem) {
+  .nds-gate-check {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

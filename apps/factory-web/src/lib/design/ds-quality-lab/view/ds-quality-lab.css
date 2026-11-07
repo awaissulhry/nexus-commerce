@@ -1,0 +1,115 @@
+/* The quality and floor parts lab (/design/ds-quality-parts, B-W2b-78): cards that fill the main area (no page max-width). */
+.fw-dql {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dql-card {
+  min-width: 0;
+}
+
+.fw-dql-grid {
+  display: grid;
+  /* At most two columns, so no row leaves an empty column on a wide screen. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(440px, calc((100% - var(--nds-space-24)) / 2))), 1fr));
+  gap: var(--nds-space-24);
+  align-items: start;
+  min-width: 0;
+}
+
+/* The floor box: the floor tier's ground, as on a tablet (it stands in for the FloorFrame floor screens draw inside). */
+.fw-dql-floor {
+  padding: var(--nds-space-16);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-bg);
+  container: nds-floor-frame / inline-size;
+}
+
+.fw-dql-span {
+  grid-column: 1 / -1;
+}
+
+.fw-dql-part,
+.fw-dql-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dql-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-dql-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dql-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dql-held {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dql-done {
+  margin: 0;
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dql-measures {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-dql-measure {
+  display: contents;
+}
+
+.fw-dql-measure dt {
+  color: var(--nds-text-2);
+}
+
+.fw-dql-measure dd {
+  margin: 0;
+}
+
+/* The checklist's photo step: a stand-in for the app's camera (PhotoCapture needs a real camera). */
+.fw-dql-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+.fw-dql-photo-frame {
+  display: grid;
+  place-items: center;
+  width: min(100%, 320px);
+  aspect-ratio: 4 / 3;
+  border: 2px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-dql-photo-frame svg {
+  width: 48px;
+  height: 48px;
+}
