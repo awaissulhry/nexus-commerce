@@ -284,6 +284,16 @@ export const LINK_SESSION_PERMISSIONS: PermissionDefinition[] = definePermission
   accept: { risk: 'write', description: 'Accept the quote the link opens, with a typed name (and the address it was sent to, when known).' },
   decline: { risk: 'write', description: 'Decline the quote or purchase order the link opens.' },
   confirm: { risk: 'write', description: 'Confirm the purchase order the link opens.' },
+  // B-W2b-163: the actions of W2b-3's link purposes.
+  download: { risk: 'read', description: "Download one of the link's files (a document or a secure file); every download is logged." },
+  receive: { risk: 'write', description: 'Confirm "I received these files" on a secure file link, once, with an optional typed name.' },
+  submit: { risk: 'write', description: "Send the link's form: the measurements, the claim or the supplier questionnaire." },
+  approve: { risk: 'write', description: 'Approve the request the link opens, with or without changes, with a typed name.' },
+  refuse: { risk: 'write', description: 'Refuse the request the link opens, with a typed name and the reason.' },
+  pay: { risk: 'write', description: 'Pay its own deposit request or invoice the link opens, online.' },
+  moveDate: { risk: 'write', description: 'Propose another date for the subcontract job the link opens.' },
+  post: { risk: 'write', description: 'Post a message on the record shared with the link, when the share allows comments.' },
+  upload: { risk: 'write', description: 'Upload a file to the record shared with the link, when the share allows uploads.' },
 }).map((definition) => Object.freeze({ ...definition, link: true as const }))
 
 /** The floor devices of the sites (apps/factory-api platform/auth/floor; features PLT-056, PLT-226). */
