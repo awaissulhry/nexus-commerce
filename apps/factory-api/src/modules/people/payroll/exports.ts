@@ -5,7 +5,6 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { storedChecks } from '@nexus/factory-domain/people/payroll/checks'
-import { parseDefinition } from '@nexus/factory-domain/people/payroll/layouts'
 import { PEOPLE_PAYROLL_MANAGE, PEOPLE_PAYROLL_RECORDS, PEOPLE_PAYROLL_VIEW } from '@nexus/factory-domain/people/payroll/permissions'
 import { carriesPay, changeCounts, parseValues, valueChanges, valuesText } from '@nexus/factory-domain/people/payroll/values'
 import { COMMAND_SETTINGS, command, runCommand, type CommandCaller, type CommandSettings, type CommandTools } from '../../../core/command'
@@ -23,7 +22,7 @@ import type { CancelBody, CreateExportBody, ExportsQuery } from './contract'
 import { lineDaysOf, monthChecks, monthPeople } from './facts'
 import { renderFiles, retentionFrom, type PlannedFile } from './files'
 import { valuesView } from './month'
-import { EXPORT_SELECT, exportsOfMonth, latestExported, layoutOf, lockMonthExports, monthOfRow, periodDaysOf, refusePayroll, requireMonthGates, type ExportRow, type LayoutRow } from './store'
+import { companyPayrollCode, EXPORT_SELECT, exportsOfMonth, latestExported, layoutAsUsed, layoutOf, lockMonthExports, monthOfRow, periodDaysOf, refusePayroll, requireMonthGates, type ExportRow, type LayoutRow } from './store'
 import { exportById, exportRecordOf, exportRows } from './views'
 
 /**
@@ -126,6 +125,8 @@ async function draftOf(tools: CommandTools, context: OfficeContext, made: Made, 
   }
   const days = periodDaysOf(body.month)
   const exportId = newId()
+  // The layout as used: its columns, the company's payroll code and the confirmation, frozen with the export.
+  const snapshot = layoutAsUsed(layout, await companyPayrollCode(tx, companyId))
   await payGuarded(() =>
     tx.payrollExport.create({
       data: {
@@ -135,10 +136,11 @@ async function draftOf(tools: CommandTools, context: OfficeContext, made: Made, 
         periodEnd: dateOf(days.to),
         payPeriodId: read.people.piecePayOn ? (read.people.period?.id ?? null) : null,
         layoutId: layout.id,
-        layoutSnapshot: { format: layout.format, provider: layout.provider, definition: parseDefinition(layout.definition) } as unknown as Prisma.InputJsonValue,
+        layoutSnapshot: snapshot as unknown as Prisma.InputJsonValue,
         revision: (latest?.revision ?? 0) + 1,
         correctionOfId: latest?.id ?? null,
-        checks: storedChecks(read.checks, read.people.corrections) as unknown as Prisma.InputJsonValue,
+        checks: storedChecks(read.checks) as unknown as Prisma.InputJsonValue,
+        correctionsCarried: [...read.people.corrections],
         values: read.people.values as unknown as Prisma.InputJsonValue,
         note: body.note ?? null,
         createdAt: now,

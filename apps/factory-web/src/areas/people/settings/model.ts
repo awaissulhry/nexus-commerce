@@ -3,14 +3,19 @@ import { DEFAULT_ATTENDANCE_SETTINGS, ROUNDING_CHOICES, roundMinute, settingsPro
 import { LAW_VALUES, RULE_KINDS, ruleProblems } from '@nexus/factory-domain/people/limits/rules'
 import { CHECKED_LIMITS } from '@nexus/factory-domain/people/limits/checks'
 import { GATE_REASON_MIN, LEADS_BASES } from '@nexus/factory-domain/people/privacy/gate'
+import { REVIEW_RULE_LIMITS, reviewRuleProblems } from '@nexus/factory-domain/people/efficiency/rules'
+import { LAYOUT_LIMITS } from '@nexus/factory-domain/people/payroll/layouts'
+import { PAYROLL_SETTINGS_REFUSALS } from '@nexus/factory-domain/people/payroll/settings'
+import { PARTY_CODE } from '@nexus/factory-domain/parties/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { fieldOf, problemOf, type Words } from '../_shared/model'
-import type { AbsenceCode, AbsenceCategory, CodeFields, CompanyPrivacy, LimitBody, LimitEntry, LimitRule, MonitoringBasis, Rounding, RuleAction, RuleKind, RuleSource } from './api'
+import type { AbsenceCode, AbsenceCategory, CodeFields, CompanyPrivacy, LimitBody, LimitEntry, LimitRule, MonitoringBasis, PayrollBody, PayrollSettings, ReviewRule, Rounding, RuleAction, RuleKind, RuleSource } from './api'
 
 /**
- * The pure rules of People › People settings (SCR-265; B-W2b-65): who may do what, the worked example in words as you type,
- * what a card's edit changes, what still holds a save, which privacy change widens who sees figures (a reason and a fresh
- * code) and which narrows (never asks), and every API sentence said in our words.
+ * The pure rules of People › People settings (SCR-265; B-W2b-65; B-W2b-89 payroll and statements, the standard review): who
+ * may do what, the worked example in words as you type, what a card's edit changes, what still holds a save, which privacy
+ * change widens who sees figures (a reason and a fresh code) and which narrows (never asks), and every API sentence said in
+ * our words.
  */
 
 export const SETTINGS_NAMESPACES = ['people-settings', 'people', 'lists', 'admin'] as const
@@ -29,6 +34,14 @@ export interface SettingsCan {
   limits: boolean
   manageLimits: boolean
   audit: boolean
+  /** people.payroll.view: Payroll and statements read; .manage changes them (B-W2b-89). */
+  payroll: boolean
+  managePayroll: boolean
+  /** people.efficiency.view: the standard review limits read; .review changes them (B-W2b-89). */
+  review: boolean
+  manageReview: boolean
+  /** parties.manage: a new labour consultant can be added from here. */
+  addParty: boolean
 }
 
 export function settingsCan(permissions: readonly string[]): SettingsCan {
@@ -42,6 +55,11 @@ export function settingsCan(permissions: readonly string[]): SettingsCan {
     limits: attendance || held.has('people.limits.manage') || held.has('people.shifts.view'),
     manageLimits: held.has('people.limits.manage'),
     audit: held.has('audit.read'),
+    payroll: held.has('people.payroll.view'),
+    managePayroll: held.has('people.payroll.manage'),
+    review: held.has('people.efficiency.view') || held.has('people.efficiency.review'),
+    manageReview: held.has('people.efficiency.review'),
+    addParty: held.has('parties.manage'),
   }
 }
 
@@ -236,6 +254,75 @@ export function noteWords(text: string): Words {
   return { key: 'note.other' }
 }
 
+// ---- payroll and statements (B-W2b-89) ------------------------------------------------------------------------------------------
+
+export interface PayrollDraft {
+  consultantPartyId: string | null
+  payrollCode: string
+  statementPrinterId: string | null
+}
+
+export const payrollDraftOf = (value: PayrollSettings): PayrollDraft => ({ consultantPartyId: value.consultant?.partyId ?? null, payrollCode: value.payrollCode ?? '', statementPrinterId: value.statementPrinter?.id ?? null })
+
+/** How many of the three differ from what was read. */
+export function payrollChanges(value: PayrollSettings, draft: PayrollDraft): number {
+  const read = payrollDraftOf(value)
+  return [read.consultantPartyId !== draft.consultantPartyId, read.payrollCode.trim() !== draft.payrollCode.trim(), read.statementPrinterId !== draft.statementPrinterId].filter(Boolean).length
+}
+
+export const PAYROLL_CODE_MAX = LAYOUT_LIMITS.companyCode
+
+export const payrollHeld = (draft: PayrollDraft): string | null => (draft.payrollCode.trim().length > PAYROLL_CODE_MAX ? 'payroll.problem.payrollCode' : null)
+
+export const payrollBodyOf = (value: PayrollSettings, draft: PayrollDraft): PayrollBody => ({ companyId: value.companyId, version: value.version, consultantPartyId: draft.consultantPartyId, payrollCode: draft.payrollCode.trim() || null, statementPrinterId: draft.statementPrinterId })
+
+/** A new consultant typed in the dialog. */
+export interface ConsultantDraft {
+  name: string
+  code: string
+  email: string
+}
+
+export const blankConsultant = (): ConsultantDraft => ({ name: '', code: '', email: '' })
+
+/** A party code from the name, as the person types it (they may change it). */
+export const codeFromName = (name: string): string =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24)
+    .replace(/-+$/, '')
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function consultantHeld(draft: ConsultantDraft): string | null {
+  if (draft.name.trim().length === 0) return 'payroll.problem.name'
+  if (!PARTY_CODE.test(draft.code.trim().toUpperCase())) return 'payroll.problem.code'
+  if (draft.email.trim() && !EMAIL.test(draft.email.trim())) return 'payroll.problem.email'
+  return null
+}
+
+// ---- the standard review limits (B-W2b-89) ----------------------------------------------------------------------------------------
+
+export interface ReviewDraft {
+  tolerancePercent: number
+  minBundles: number
+}
+
+export const REVIEW_LIMITS = REVIEW_RULE_LIMITS
+
+export const reviewDraftOf = (value: ReviewRule): ReviewDraft => ({ tolerancePercent: value.tolerancePercent, minBundles: value.minBundles })
+export const reviewChanges = (value: ReviewRule, draft: ReviewDraft): number => [value.tolerancePercent !== draft.tolerancePercent, value.minBundles !== draft.minBundles].filter(Boolean).length
+
+/** The first problem of the two numbers, as a message key (the domain's rule). */
+export function reviewHeld(draft: ReviewDraft): string | null {
+  const field = reviewRuleProblems(draft)[0]?.path.replace(/^body\//, '')
+  return field ? `review.problem.${field}` : null
+}
+
 // ---- refusals ----------------------------------------------------------------------------------------------------------------
 
 /** The words of a failed call: a field of a body by its name, else the People words every page shares. */
@@ -243,7 +330,11 @@ export function settingsProblem(error: unknown): { ns: 'settings' | 'people'; wo
   if (isApiError(error) && error.issues.some((issue) => issuePath(issue) === 'refusal/CODE_TAKEN')) return { ns: 'settings', words: { key: 'field.codeTaken' } }
   if (isApiError(error) && (error.kind === 'invalid' || error.kind === 'conflict')) {
     const field = fieldOf(error)
-    if (field && ['code', 'labelI18n', 'lulCode', 'limitMinutes', 'breakMinutes', 'referenceMonths', 'legalReference', 'reason', 'basis', 'basisCoversLeads', 'leadsSeeFigures', 'minimumGroupSize', 'figureRoleKeys'].includes(field)) return { ns: 'settings', words: { key: `field.${field}` } }
+    if (field && ['code', 'labelI18n', 'lulCode', 'limitMinutes', 'breakMinutes', 'referenceMonths', 'legalReference', 'reason', 'basis', 'basisCoversLeads', 'leadsSeeFigures', 'minimumGroupSize', 'figureRoleKeys', 'payrollCode', 'tolerancePercent', 'minBundles'].includes(field)) return { ns: 'settings', words: { key: `field.${field}` } }
+  }
+  if (isApiError(error)) {
+    const refusal = error.issues.map(issuePath).find((path) => (PAYROLL_SETTINGS_REFUSALS as readonly string[]).some((code) => path === `refusal/${code}`))
+    if (refusal) return { ns: 'settings', words: { key: `refusal.${refusal.slice(8)}` } }
   }
   return { ns: 'people', words: problemOf(error) }
 }

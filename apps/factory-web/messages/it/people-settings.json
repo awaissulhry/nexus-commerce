@@ -303,7 +303,9 @@
     "switchedOn": "Attivato in questo sito.",
     "switchedOff": "Disattivato in questo sito.",
     "widened": "I capi squadra vedono i dati in questo sito.",
-    "narrowed": "I capi squadra non vedono più i dati in questo sito."
+    "narrowed": "I capi squadra non vedono più i dati in questo sito.",
+    "payroll": "Impostazioni paghe salvate.",
+    "review": "Limiti della revisione salvati: la coda li usa da subito."
   },
   "held": {
     "noAudit": "Il tuo ruolo non legge il registro modifiche.",
@@ -311,7 +313,10 @@
     "noLimits": "Il tuo ruolo legge questi limiti ma non li cambia.",
     "noPrivacy": "Solo il titolare li cambia.",
     "allArchived": "Tutti i codici scelti sono archiviati.",
-    "noneArchived": "Nessun codice scelto è archiviato."
+    "noneArchived": "Nessun codice scelto è archiviato.",
+    "noPayroll": "Il tuo ruolo legge queste impostazioni e non le modifica.",
+    "noReview": "Il tuo ruolo legge questi limiti e non li modifica.",
+    "noParties": "Per aggiungere un'anagrafica serve il permesso di gestire le anagrafiche."
   },
   "field": {
     "code": "Controlla il codice.",
@@ -327,7 +332,10 @@
     "basisCoversLeads": "La base registrata non copre i capi squadra.",
     "leadsSeeFigures": "I capi squadra vedono i dati solo dove la base registrata li copre.",
     "minimumGroupSize": "La dimensione del gruppo va da 3 a 50.",
-    "figureRoleKeys": "Controlla i ruoli scelti."
+    "figureRoleKeys": "Controlla i ruoli scelti.",
+    "payrollCode": "Il codice ditta ha al massimo 20 caratteri.",
+    "tolerancePercent": "Una percentuale intera da 1 a 100.",
+    "minBundles": "Un numero intero di mazzetti da 1 a 1000."
   },
   "leave": {
     "title": "Modifiche non salvate",
@@ -356,7 +364,73 @@
       "restoreAbsenceCode": "Codice di assenza ripristinato",
       "saveWorkingTimeLimit": "Limite d'orario salvato",
       "archiveWorkingTimeLimit": "Limite d'orario tolto",
+      "changePayrollSettings": "Impostazioni paghe modificate",
+      "changeStandardReviewRule": "Limiti della revisione modificati",
       "other": "Modificato"
     }
+  },
+  "payroll": {
+    "title": "Paghe e cedolini",
+    "purpose": "Chi elabora le paghe, il codice con cui il suo programma conosce l'azienda e dove si stampano i prospetti dei lavoratori.",
+    "consultant": "Consulente del lavoro",
+    "consultantHint": "Il file paghe va a lui; il suo indirizzo è proposto in Invia.",
+    "consultantMail": "Il file va a {email}.",
+    "consultantNoMail": "Nessun indirizzo in anagrafica: Invia lo chiederà.",
+    "consultantNone": "Nessuno indicato",
+    "consultantGroup": "{name} (tutte le aziende)",
+    "namedNoLonger": "{name} (non più disponibile)",
+    "newConsultant": "Nuovo consulente",
+    "code": "Codice ditta per le paghe",
+    "codeHint": "Il codice con cui il programma del consulente conosce l'azienda. Vuoto: il file riporta {code}.",
+    "printer": "Stampante dei prospetti",
+    "printerHint": "Il prospetto di un lavoratore si stampa qui, a suo nome, ovunque si trovi il tablet.",
+    "printerNone": "Nessuna indicata: il prospetto si stampa sull'unica stampante A4 dello stabilimento e attende dove ce ne sono più.",
+    "printerSite": "L'unica stampante A4 dello stabilimento",
+    "printerAt": "{name} · {site}",
+    "noPrinters": "L'azienda non ha stampanti A4 attive: aggiungine una in Sistema › Dispositivi e stampanti.",
+    "consultantProblem": {
+      "NOT_CONSULTANT": "{name} non ha più il ruolo di consulente: scegli di nuovo il consulente.",
+      "NOT_ACTIVE": "{name} non è più attivo: scegli di nuovo il consulente.",
+      "OTHER_COMPANY": "{name} appartiene a un'altra azienda: scegli di nuovo il consulente.",
+      "GONE": "Il consulente indicato qui non si trova: scegline uno di nuovo."
+    },
+    "printerProblem": {
+      "NOT_A4": "{name} non è una stampante A4: i prospetti attendono finché ne indichi un'altra.",
+      "NOT_ACTIVE": "{name} è archiviata: i prospetti attendono finché indichi un'altra stampante.",
+      "GONE": "La stampante indicata qui non si trova: i prospetti attendono finché ne indichi un'altra."
+    },
+    "problem": {
+      "payrollCode": "Al massimo {max} caratteri.",
+      "name": "Indica il nome del consulente.",
+      "code": "Un codice anagrafica: lettere maiuscole, cifre, punti e trattini, fino a 24.",
+      "email": "Controlla l'indirizzo."
+    },
+    "dialog": {
+      "title": "Nuovo consulente del lavoro",
+      "body": "Un'anagrafica di questa azienda con il solo ruolo di consulente. Viene scelta nella scheda; salva la scheda per indicarla.",
+      "save": "Aggiungi consulente",
+      "name": "Nome",
+      "code": "Codice anagrafica",
+      "codeHint": "Come il consulente compare tra le anagrafiche.",
+      "email": "Indirizzo per il file paghe",
+      "emailHint": "Facoltativo. Il file viaggia con un link inviato qui, mai come allegato."
+    }
+  },
+  "review": {
+    "title": "Revisione dei tempi standard",
+    "purpose": "Quando un'operazione entra nella coda di revisione dei tempi in Efficienza.",
+    "percent": "Scostamento dallo standard oltre",
+    "bundles": "Su almeno",
+    "bundlesUnit": "mazzetti",
+    "example": "La regola",
+    "rule": "Un'operazione entra in coda quando è più veloce o più lenta del suo standard di oltre il {percent}%, su almeno {bundles} mazzetti degli ultimi {days} giorni.",
+    "problem": {
+      "tolerancePercent": "Una percentuale intera da 1 a 100.",
+      "minBundles": "Un numero intero di mazzetti da 1 a 1000."
+    }
+  },
+  "refusal": {
+    "NOT_CONSULTANT": "Scegli un'anagrafica attiva con il ruolo di consulente, di questa azienda o di tutte.",
+    "PRINTER_NOT_USABLE": "I prospetti si stampano su una stampante A4 attiva di questa azienda."
   }
 }

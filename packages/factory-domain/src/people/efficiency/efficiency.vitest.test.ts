@@ -14,6 +14,9 @@ import {
   percentOf,
   personDaysOf,
   reviewPlaceOf,
+  reviewRuleOf,
+  reviewRuleProblems,
+  reviewRuleWords,
   STANDARD_REVIEW,
   timedReportOf,
   totalsOf,
@@ -234,5 +237,31 @@ describe('one person\'s figures', () => {
     expect(isTraineeDay(levels, '2026-05-31')).toBe(false)
     expect(isTraineeDay(levels, '2026-06-09')).toBe(true)
     expect(isTraineeDay(levels, '2026-06-10')).toBe(false)
+  })
+})
+
+describe("the company's standard review rule (B-W2b-89)", () => {
+  it('reads the People settings row, else the defaults (the same as the columns)', () => {
+    expect(reviewRuleOf(null)).toEqual({ tolerancePercent: 10, minBundles: 5 })
+    expect(reviewRuleOf({ standardReviewPercent: 12, standardReviewMinBundles: 8 })).toEqual({ tolerancePercent: 12, minBundles: 8 })
+    expect(reviewRuleWords({ tolerancePercent: 12, minBundles: 8 })).toBe(`Operations more than 12% off their standard, in either direction, over at least 8 bundles of the last ${STANDARD_REVIEW.windowDays} days.`)
+  })
+
+  it('takes 1 to 100 percent over 1 to 1000 bundles, whole numbers, as the database does', () => {
+    expect(reviewRuleProblems({ tolerancePercent: 1, minBundles: 1 })).toEqual([])
+    expect(reviewRuleProblems({ tolerancePercent: 100, minBundles: 1000 })).toEqual([])
+    expect(reviewRuleProblems({ tolerancePercent: 0, minBundles: 1001 }).map((issue) => issue.path)).toEqual(['body/tolerancePercent', 'body/minBundles'])
+    expect(reviewRuleProblems({ tolerancePercent: 10.5, minBundles: 5 }).map((issue) => issue.path)).toEqual(['body/tolerancePercent'])
+  })
+
+  it('a stricter rule puts an operation on the queue that the default leaves off', () => {
+    // Three bundles 7 % over a standard of one minute a piece.
+    const samples = Array.from({ length: 3 }, (_, index) => sample({ personSeconds: 642, at: new Date(Date.UTC(2026, 5, 1, 8, index)) }))
+    expect(operationFiguresOf(samples, '1.000').figures).toMatchObject({ differencePercent: '7.0', state: 'TOO_FEW_BUNDLES' })
+    expect(operationFiguresOf(samples, '1.000', { tolerancePercent: 5, minBundles: 3 }).figures.state).toBe('REVIEW')
+    expect(reviewPlaceOf(samples, null, '1.000', { tolerancePercent: 5, minBundles: 3 }).reason).toBe('OFF_STANDARD')
+    expect(reviewPlaceOf(samples, null, '1.000', { tolerancePercent: 10, minBundles: 3 }).reason).toBeNull()
+    expect(offSinceOf(operationDaysOf(samples, '1.000'), 5)).toBe('2026-06-02')
+    expect(offSinceOf(operationDaysOf(samples, '1.000'))).toBeNull()
   })
 })

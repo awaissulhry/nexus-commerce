@@ -88,6 +88,8 @@ export async function sortFactsOf(tx: CommandTx, row: MailFacts & { readonly sub
     if (contact) suggestion = { senderPartyId: contact.partyId, senderContactId: contact.id }
     if (thread.partyId !== null && sender !== null) {
       const contacts = (await tx.partyContact.findMany({ where: { partyId: thread.partyId, status: 'ACTIVE', email: { not: null } }, select: { email: true } })).map((entry) => entry.email!)
+      // B-W2b-168 (COL-060: one thread whichever way the partner answers): the party's portal people answer our mail too.
+      contacts.push(...(await tx.user.findMany({ where: { audience: 'PARTNER', partyId: thread.partyId, status: 'ACTIVE' }, select: { email: true } })).map((person) => person.email))
       const recipient = await tx.emailOutbound.findFirst({ where: { threadId: thread.id, OR: [{ to: { has: sender } }, { cc: { has: sender } }] }, select: { id: true } })
       senderKnown = knownSender(sender, { contacts, participants: recipient ? [sender] : [] })
     }
