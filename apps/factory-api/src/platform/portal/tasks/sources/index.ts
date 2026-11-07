@@ -3,6 +3,8 @@ import { OFFICE_SOURCE } from './office'
 import { PURCHASE_ORDERS_SOURCE } from './purchase-orders'
 // B-W2b-177: a partner's document about to expire (UPLOAD_DOCUMENT, by the expiry reminder).
 import { EXPIRY_SOURCE } from '../../../files/expiry/source'
+// B-W2b-185: the request to pay each open invoice.
+import { PAY_INVOICE_SOURCE } from '../../../../modules/payments/online/task-source'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -32,6 +34,8 @@ export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   PURCHASE_ORDERS_SOURCE,
   // B-W2b-177: a document shared with the partner expires within 30 days: a new version, please.
   EXPIRY_SOURCE,
+  // B-W2b-185: a PAY_INVOICE request per issued invoice while something is open on it (closed by the payment itself).
+  PAY_INVOICE_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

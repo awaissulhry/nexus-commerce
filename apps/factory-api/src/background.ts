@@ -106,6 +106,8 @@ import { largeUploadExpiryCron } from './platform/files/multipart/expiry'
 import { accessEndingCron } from './platform/auth/partners/access-ending'
 // B-W2b-167: partner notifications (fan-out + instant mails), the partner summaries, the partner task reminders.
 import { partnerNotificationsHandler } from './platform/portal/notifications/fan-out'
+// B-W2b-185: paying online (the PAY_INVOICE requests; after a payment ended: TD02, receipt, cancel at the provider).
+import { onlinePaymentHandlers } from './modules/payments/online/follow-up'
 import { partnerDigestCron } from './platform/portal/notifications/digest'
 import { partnerTaskRemindersCron } from './platform/portal/tasks/reminders'
 // B-W2b-177: document expiry reminders (30 and 7 days before; the partner asked for a new version).
@@ -170,6 +172,8 @@ const W2B_135_HANDLERS: readonly EventHandler[] = healthHandlers()
 const W2B_160_HANDLERS: readonly EventHandler[] = [stripPicturesHandler()]
 // B-W2b-167: an event that concerns a partner → its people's notifications (and the mails they get as it happens).
 const W2B_167_HANDLERS: readonly EventHandler[] = [partnerNotificationsHandler({ cookieSecret: () => env.FACTORY_COOKIE_SECRET })]
+// B-W2b-185: paying online.
+const W2B_185_HANDLERS: readonly EventHandler[] = onlinePaymentHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -238,7 +242,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
