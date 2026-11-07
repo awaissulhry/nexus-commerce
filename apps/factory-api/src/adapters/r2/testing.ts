@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3'
 
@@ -36,17 +37,70 @@ export class FakeR2 {
     this.objects.set(`/${bucket}/${key}`, object)
   }
 
+  /** B-W2b-160 (COL-052): multipart uploads by upload id: the object's path, its type and the parts sent so far. */
+  readonly uploads = new Map<string, { path: string; contentType: string; parts: Map<number, Buffer> }>()
+  private nextUpload = 1
+
+  /** What a browser's presigned UploadPart would store (presigned PUTs never reach this fake through the SDK). */
+  sendPart(uploadId: string, partNumber: number, body: Buffer): void {
+    const upload = this.uploads.get(uploadId)
+    if (!upload) throw new Error(`no multipart upload ${uploadId}`)
+    upload.parts.set(partNumber, body)
+  }
+
+  private multipart(request: { method: string; path: string; headers: Record<string, string>; query?: Record<string, unknown>; body?: unknown }) {
+    const query = request.query ?? {}
+    const path = decodeURIComponent(request.path)
+    const xml = (statusCode: number, text: string) => ({ response: { statusCode, headers: { 'content-type': 'application/xml' }, body: Readable.from([Buffer.from(text)]) } })
+    const noSuchUpload = () => xml(404, '<Error><Code>NoSuchUpload</Code><Message>made-up: no such upload</Message></Error>')
+    const etag = (body: Buffer) => `"${createHash('md5').update(body).digest('hex')}"`
+    const checksum = (body: Buffer) => createHash('sha256').update(body).digest('base64')
+    if (request.method === 'POST' && 'uploads' in query) {
+      const uploadId = `made-up-upload-${this.nextUpload++}`
+      const contentType = Object.entries(request.headers).find(([name]) => name.toLowerCase() === 'content-type')?.[1] ?? 'application/octet-stream'
+      this.uploads.set(uploadId, { path, contentType, parts: new Map() })
+      const [, bucket, ...key] = path.split('/')
+      return xml(200, `<InitiateMultipartUploadResult><Bucket>${bucket}</Bucket><Key>${key.join('/')}</Key><UploadId>${uploadId}</UploadId></InitiateMultipartUploadResult>`)
+    }
+    const uploadId = typeof query.uploadId === 'string' ? query.uploadId : null
+    const upload = uploadId ? this.uploads.get(uploadId) : undefined
+    if (request.method === 'GET') {
+      if (!upload) return noSuchUpload()
+      const parts = [...upload.parts.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([number, body]) => `<Part><PartNumber>${number}</PartNumber><ETag>${etag(body)}</ETag><Size>${body.length}</Size><ChecksumSHA256>${checksum(body)}</ChecksumSHA256></Part>`)
+      return xml(200, `<ListPartsResult><UploadId>${uploadId}</UploadId><IsTruncated>false</IsTruncated>${parts.join('')}</ListPartsResult>`)
+    }
+    if (request.method === 'POST') {
+      if (!upload) return noSuchUpload()
+      const asked = [...String(request.body ?? '').matchAll(/<PartNumber>(\d+)<\/PartNumber>/g)].map((match) => Number(match[1]))
+      const body = Buffer.concat(asked.map((number) => upload.parts.get(number) ?? Buffer.alloc(0)))
+      // Like R2: the joined object's checksum is the parts' (a composite), not the SHA-256 of its bytes.
+      this.objects.set(upload.path, { sizeBytes: body.length, contentType: upload.contentType, sha256: '', body })
+      this.uploads.delete(uploadId!)
+      return xml(200, `<CompleteMultipartUploadResult><ETag>"made-up-${asked.length}"</ETag></CompleteMultipartUploadResult>`)
+    }
+    if (request.method === 'DELETE') {
+      if (!upload) return noSuchUpload()
+      this.uploads.delete(uploadId!)
+      return { response: { statusCode: 204, headers: {}, body: undefined } }
+    }
+    return { response: { statusCode: 405, headers: {}, body: undefined } }
+  }
+
   /** The adapter's `clientFor`: a real S3Client whose transport is this fake. */
   readonly clientFor = (config: S3ClientConfig): S3Client => {
     this.configs.push(config)
     return new S3Client({ ...config, requestHandler: { handle: (request: Parameters<FakeR2['handle']>[0]) => this.handle(request) } as never })
   }
 
-  async handle(request: { method: string; hostname: string; path: string; headers: Record<string, string> }) {
+  async handle(request: { method: string; hostname: string; path: string; headers: Record<string, string>; query?: Record<string, unknown>; body?: unknown }) {
     this.requests.push({ method: request.method, hostname: request.hostname, path: decodeURIComponent(request.path), headers: { ...request.headers } })
     const status = this.failNext
     this.failNext = null
     if (status !== null) return { response: { statusCode: status, headers: {}, body: undefined } }
+    // B-W2b-160: a multipart request (?uploads, ?uploadId=…) is answered by multipart().
+    if (request.query && ('uploads' in request.query || 'uploadId' in request.query)) return this.multipart(request)
     const object = this.objects.get(decodeURIComponent(request.path))
     if (request.method === 'HEAD') {
       if (!object) return { response: { statusCode: 404, headers: {}, body: undefined } }

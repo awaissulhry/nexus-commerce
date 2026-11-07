@@ -1,0 +1,351 @@
+/*
+ * Plant › Health & safety › Risk assessment (SCR-209, B-W2b-144) LAYOUT: the band, the tiles, the three sections, the
+ * record's band and tabs, the version cards with their seal and signers, the role sheet's form card, the dialogs' forms,
+ * the DVR tab and the two print windows. The page fills the shell's main area (no max-width: Owner rule 2026-10-29); the
+ * controls are the design system's; semantic tokens only.
+ */
+.fw-rk,
+.fw-rk-section,
+.fw-rk-form,
+.fw-rk-loading,
+.fw-rk-stack,
+.fw-rk-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rk {
+  gap: var(--nds-space-20);
+}
+
+.fw-rk-section,
+.fw-rk-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-rk-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-rk-band,
+.fw-rk-head,
+.fw-rk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rk-record-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rk-status,
+.fw-rk-actions,
+.fw-rk-tools,
+.fw-rk-row,
+.fw-rk-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rk-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-rk-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-rk-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-rk-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rk-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rk-danger {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rk-ok {
+  color: var(--nds-success-text);
+}
+
+.fw-rk-refused {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-danger-text);
+}
+
+.fw-rk-strong {
+  font-weight: 600;
+}
+
+.fw-rk-code {
+  font-family: var(--nds-font-mono);
+}
+
+.fw-rk-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rk-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-rk-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-rk-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-rk-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-rk-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-rk-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-rk-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Who signed: a role per chip-like word, its mark after it (the words say the state). */
+.fw-rk-signers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-rk-signed,
+.fw-rk-unsigned {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rk-signed {
+  color: var(--nds-success-text);
+}
+
+.fw-rk-unsigned {
+  color: var(--nds-text-2);
+}
+
+/* Forms */
+.fw-rk-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-rk-field-note {
+  align-self: end;
+}
+
+.fw-rk-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-rk-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(140px, 2fr) auto;
+  align-items: end;
+  gap: var(--nds-space-8);
+}
+
+.fw-rk-fieldset .fw-rk-line:has(> :nth-child(4)) {
+  grid-template-columns: minmax(180px, 2fr) minmax(80px, 0.6fr) minmax(160px, 2fr) auto;
+}
+
+.fw-rk-narrow {
+  max-width: 7rem;
+}
+
+.fw-rk-builder {
+  gap: var(--nds-space-16);
+}
+
+.fw-rk-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-rk-step:last-child {
+  border-bottom: 0;
+}
+
+/* The role sheet: two columns of parts on a wide screen. */
+.fw-rk-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--nds-space-16);
+}
+
+.fw-rk-people {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A version: the files and the seal beside the signers on a wide screen. */
+.fw-rk-version-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+  gap: var(--nds-space-16);
+}
+
+.fw-rk-signer-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rk-signer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-rk-burn-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* The DVR tab: the PDF beside its seal on a wide screen. */
+.fw-rk-pdf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-rk-print-note {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rk-print-sign {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr;
+  gap: var(--nds-space-16);
+  margin-top: var(--nds-space-24);
+}
+
+.fw-rk-print-sign > span {
+  padding-top: var(--nds-space-24);
+  border-bottom: 1px solid var(--nds-border-strong, var(--nds-border));
+  font-size: var(--nds-font-size-sm);
+}
+
+@media (max-width: 900px) {
+  .fw-rk-version-grid,
+  .fw-rk-pdf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .fw-rk-line,
+  .fw-rk-fieldset .fw-rk-line:has(> :nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-rk-narrow {
+    max-width: none;
+  }
+}
+
+@media print {
+  .fw-rk-noprint {
+    display: none !important;
+  }
+
+  .fw-rk-page-break {
+    break-before: page;
+  }
+
+  .fw-rk-pdf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A measure's name that opens its window (a quiet button that reads as the name). */
+.fw-rk-link {
+  padding-inline: 0;
+  font-weight: 600;
+  text-align: start;
+  white-space: normal;
+}

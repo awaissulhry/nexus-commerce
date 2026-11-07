@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
-import { QUALIFICATION_DECISIONS, QUALIFICATION_FINDINGS, QUALIFICATION_MODES, QUALIFICATION_OUTCOMES } from '@nexus/factory-domain/people/skills/qualification'
+import { QUALIFICATION_DECISIONS, QUALIFICATION_FINDINGS, QUALIFICATION_MODES, QUALIFICATION_OUTCOMES, TRAINING_NEED_STATES } from '@nexus/factory-domain/people/skills/qualification'
+import { DUE_STATES } from '@nexus/factory-domain/safety/records/rules'
 import { AUTHORISATION_STATES, SKILL_KINDS, SKILL_LEVELS, SKILL_LIMITS, SKILL_STATUSES, TRAINEE_STATES } from '@nexus/factory-domain/people/skills/rules'
 import { refOut } from '../employees/contract'
 
@@ -126,9 +127,44 @@ export const removeLevelContract = defineContract({
 
 // ---- machine authorisations ---------------------------------------------------------------------------------------------
 
+// B-W2b-139: the courses a type of machine asks, against the day the authorisation starts.
+const trainingLineOut = output({ courseId: id(), code: z.string(), name: z.string(), withinDays: z.number().int().nullable(), state: z.enum(TRAINING_NEED_STATES), dueOn: day(), validUntil: day().nullable() })
+const authorisedOut = output({ authorisation: authorisationOut, words: z.string(), training: z.array(trainingLineOut), held: z.boolean() })
+
 export const authoriseContract = defineContract({
   body: input({ employeeId: id(), machineClassId: id(), authorisedOn: businessDate().optional(), validUntil: businessDate().nullable().optional() }),
-  response: { 200: output({ authorisation: authorisationOut, words: z.string() }), 201: output({ authorisation: authorisationOut, words: z.string() }) },
+  response: { 200: authorisedOut, 201: authorisedOut },
+})
+
+export const prerequisitesContract = defineContract({
+  querystring: input({ employeeId: id(), machineClassId: id(), authorisedOn: businessDate().optional() }),
+  response: {
+    200: output({
+      machineClass: classOut.extend({ active: z.boolean(), authorisationRequired: z.boolean() }),
+      authorisedOn: day(),
+      training: z.array(trainingLineOut),
+      trainingValid: z.boolean(),
+      held: z.boolean(),
+      /** Fitness (yes / no only) comes with the health pages (B-W2b-135). */
+      fitness: z.null(),
+      words: z.string(),
+      employeeActive: z.boolean(),
+      today: day(),
+    }),
+  },
+})
+
+export const authorisationRuleContract = defineContract({
+  params: input({ machineClassId: id() }),
+  body: input({ version: version(), required: z.boolean() }),
+  response: {
+    200: output({
+      machineClass: classOut.extend({ active: z.boolean(), authorisationRequired: z.boolean(), version: z.number().int(), updatedAt: z.string() }),
+      changed: z.boolean(),
+      authorisedPeople: z.number().int(),
+      words: z.string(),
+    }),
+  },
 })
 
 export const validUntilContract = defineContract({
@@ -146,7 +182,33 @@ export const revokeContract = defineContract({
 // ---- the matrix, a person's skills, one cell ----------------------------------------------------------------------------
 
 const levelCellOut = output({ skillId: id(), levelId: id(), level: z.enum(SKILL_LEVELS), since: day(), traineeUntil: day().nullable(), trainee: z.enum(TRAINEE_STATES), signedOffOn: day().nullable(), version: z.number().int() })
-const authorisationCellOut = output({ machineClassId: id(), authorisationId: id(), state: z.enum(AUTHORISATION_STATES), authorisedOn: day(), validUntil: day().nullable(), ending: z.boolean(), version: z.number().int() })
+const authorisationCellOut = output({
+  machineClassId: id(),
+  authorisationId: id(),
+  state: z.enum(AUTHORISATION_STATES),
+  authorisedOn: day(),
+  validUntil: day().nullable(),
+  ending: z.boolean(),
+  /** B-W2b-139: held by expired or missing training (design "Machines (Authorised / Held / —)"), and the courses. */
+  held: z.boolean(),
+  heldBy: z.array(id()),
+  version: z.number().int(),
+})
+// B-W2b-139: a safety course's cell (design DueCell: valid until, due, overdue, Needed; shaded = required by the role sheet).
+const trainingCellOut = output({
+  courseId: id(),
+  state: z.enum(DUE_STATES),
+  needed: z.boolean(),
+  required: z.boolean(),
+  dueOn: day().nullable(),
+  overdue: z.boolean(),
+  soon: z.boolean(),
+  neededBy: day().nullable(),
+  record: output({ id: id(), completedOn: day(), validUntil: day().nullable(), languageChecked: z.boolean() }).nullable(),
+  lastResult: z.enum(['PASSED', 'FAILED']).nullable(),
+  languageNotChecked: z.boolean(),
+})
+const courseRefOut = output({ id: id(), code: z.string(), name: z.string(), nameI18n: z.record(z.string(), z.string()).nullable(), type: z.string(), hours: z.string(), refresherMonths: z.number().int().nullable(), status: z.string(), companyId: id().nullable() })
 
 export const matrixContract = defineContract({
   querystring: input({
@@ -154,8 +216,8 @@ export const matrixContract = defineContract({
     companyId: id().optional(),
     lineId: id().optional(),
     teamId: id().optional(),
-    show: z.enum(['ALL', 'SKILLS', 'MACHINES']).optional(),
-    tile: z.enum(['TRAINEES', 'AUTHORISATIONS_ENDING']).optional(),
+    show: z.enum(['ALL', 'SKILLS', 'MACHINES', 'SAFETY']).optional(),
+    tile: z.enum(['TRAINEES', 'AUTHORISATIONS_ENDING', 'TRAINING_OVERDUE', 'TRAINING_DUE_SOON', 'AUTHORISATIONS_HELD', 'LANGUAGE_NOT_CHECKED']).optional(),
     sort: z.enum(['TEAM', 'NAME']).optional(),
     q: z.string().trim().max(80).optional(),
   }),
@@ -172,15 +234,28 @@ export const matrixContract = defineContract({
           team: refOut.nullable(),
           levels: z.array(levelCellOut),
           authorisations: z.array(authorisationCellOut),
+          /** B-W2b-139: null when the caller does not read this person's safety records (safety.view). */
+          trainings: z.array(trainingCellOut).nullable(),
           canManage: z.boolean(),
           canAuthorise: z.boolean(),
         }),
       ),
       complete: z.boolean(),
       skills: z.array(skillOut),
-      machineClasses: z.array(classOut.extend({ active: z.boolean(), keptAtSites: z.array(id()) })),
+      machineClasses: z.array(classOut.extend({ active: z.boolean(), authorisationRequired: z.boolean(), keptAtSites: z.array(id()) })),
+      /** B-W2b-139: the safety courses of the cells (the Safety column group). */
+      courses: z.array(courseRefOut),
       sites: z.array(refOut),
-      tiles: output({ trainees: z.number().int(), traineesOverdue: z.number().int(), authorisationsEnding: z.number().int() }),
+      tiles: output({
+        trainees: z.number().int(),
+        traineesOverdue: z.number().int(),
+        authorisationsEnding: z.number().int(),
+        /** B-W2b-139: person × course; null when the caller reads no one's safety records. */
+        trainingOverdue: z.number().int().nullable(),
+        trainingDueSoon: z.number().int().nullable(),
+        authorisationsHeld: z.number().int(),
+        languageNotChecked: z.number().int().nullable(),
+      }),
       today: day(),
     }),
   },
@@ -221,7 +296,7 @@ export const cellContract = defineContract({
 // ---- the qualification check --------------------------------------------------------------------------------------------
 
 const requirementOut = output({
-  kind: z.enum(['OPERATION', 'MACHINE_SKILL', 'AUTHORISATION']),
+  kind: z.enum(['OPERATION', 'MACHINE_SKILL', 'AUTHORISATION', 'TRAINING']),
   code: z.string(),
   label: z.string(),
   state: z.string(),
@@ -233,6 +308,10 @@ const requirementOut = output({
   authorisationId: id().nullable().optional(),
   authorisedOn: day().nullable().optional(),
   validUntil: day().nullable().optional(),
+  /** B-W2b-139 (kind TRAINING): the course, the class that asks it, the day it is due. */
+  courseId: id().optional(),
+  machineClass: z.string().optional(),
+  dueOn: day().optional(),
 })
 
 const findingOut = output({

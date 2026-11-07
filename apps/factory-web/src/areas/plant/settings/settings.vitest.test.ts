@@ -187,8 +187,8 @@ describe('Plant settings: the calls and the place', () => {
 const TOP = [...new Set(Object.keys(CATALOGUE.en['plant-settings'] ?? {}).map((key) => key.split('.')[0]!.replace(/_(one|other)$/, '')))]
 const LEFT_KEY = new RegExp(`\\b(?:${TOP.join('|')})\\.[a-zA-Z_-]+(?:\\.[a-zA-Z_-]+)*\\b`)
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
-/** Permission names are said on purpose ("plant.view"). */
-const SAID = /\bplant\.[a-zA-Z.]+/g
+/** Permission names are said on purpose ("plant.view", "safety.incidents.view", "people.view", "audit.read"). */
+const SAID = /\b(?:plant|safety|people|audit)\.[a-zA-Z.]+/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

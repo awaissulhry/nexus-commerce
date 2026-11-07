@@ -254,7 +254,7 @@ describe('order amendments, the schedule and closing short', () => {
   it('keeps an amendment as it was applied, of an order that can still change', async () => {
     await expect(admin(`UPDATE "SalesOrderAmendment" SET reason = 'x' WHERE id = $1`, [pricingA.amendmentId])).rejects.toThrow(/append-only/)
     await expect(admin('DELETE FROM "SalesOrderAmendment" WHERE id = $1', [pricingA.amendmentId])).rejects.toThrow(/append-only/)
-    await expect(admin('TRUNCATE "SalesOrderAmendment"')).rejects.toThrow(/append-only/)
+    await expect(admin('TRUNCATE "SalesOrderAmendment" CASCADE')).rejects.toThrow(/append-only/)
     const insert = (orderId: string) =>
       admin(
         `INSERT INTO "SalesOrderAmendment" (id, "tenantId", "companyId", "orderId", "partyId", revision, reason, before, after, "netAmountBefore", "netAmountAfter", "grossAmountBefore", "grossAmountAfter", "requestId")

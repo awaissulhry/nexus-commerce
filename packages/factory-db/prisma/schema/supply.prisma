@@ -125,6 +125,8 @@ model PurchaseOrder {
   lines         PurchaseOrderLine[]
   // inventory.prisma: the goods received against it.
   goodsReceipts GoodsReceipt[]
+  // W2b portal-supply.prisma (wave 22/22): the supplier's ship notices of it.
+  shipNotices   ShipNotice[]
   // W2a sourcing.prisma, claims.prisma: every revision sent, the reminders to confirm, the claims about its goods.
   revisions      PurchaseOrderRevision[]
   reminders      PurchaseOrderReminder[]
@@ -231,6 +233,15 @@ model PurchaseOrderLine {
   proposedSplitQuantity Decimal?  @db.Decimal(18, 4)
   proposedSplitDate     DateTime? @db.Date
   proposalReason        String?
+  /// W2b (wave 22/22, B-W2b-158; SCM-086, design links.po and portal.supplier.orders "Propose a change"): with the
+  /// proposal, the substitute the supplier offers (one of our items, other than the line's, and/or in its words: its own
+  /// article), and whether the proposal waits for the buyer's yes (true: a later date, another quantity, a split, a
+  /// substitute or another change in words; false: answered as asked). Written and cleared with the W1 proposal columns
+  /// (while the order is SENT; cleared while DRAFT); a substitute always waits for the buyer. Accepted, a substitute makes
+  /// a new revision of the order (the line's item changes only while DRAFT).
+  proposedSubstituteItemId String?  @db.Uuid
+  proposedSubstituteNote   String?
+  proposalNeedsBuyer       Boolean  @default(false)
   /// W2a (SCM-059): the line cancelled (nothing more of it is wanted), when, by whom and why; set once, never on a
   /// closed, cancelled or received order. A cancelled line changes no more and takes no goods.
   cancelledAt           DateTime? @db.Timestamptz(3)
@@ -249,6 +260,11 @@ model PurchaseOrderLine {
   purchaseOrder PurchaseOrder         @relation(fields: [tenantId, partyId, siteId, purchaseOrderId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   item          Item                  @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   itemColour    ItemColour?           @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 22/22): the substitute item of the supplier's proposal. Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId.
+  proposedSubstituteItem Item?      @relation("PurchaseOrderLineSubstitute", fields: [tenantId, proposedSubstituteItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b portal-supply.prisma (wave 22/22): the ship notice lines that deliver it.
+  shipNoticeLines ShipNoticeLine[]
   requirements  MaterialRequirement[]
   // W2a planning.prisma: the planning runs' pegging rows that count on it.
   peggings      RequirementPegging[]

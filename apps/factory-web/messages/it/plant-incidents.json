@@ -1,0 +1,672 @@
+{
+  "access": {
+    "body": "Gli infortuni sono aperti ai ruoli sicurezza, HR e produzione (safety.incidents.view). Chiedi all’amministratore se ti servono.",
+    "title": "Nessun accesso agli infortuni"
+  },
+  "action": {
+    "add": "Aggiungi l’azione",
+    "addMake": {
+      "MAINTENANCE_JOB": "Aggiungi e crea l’intervento",
+      "RISK_MEASURE": "Aggiungi al piano di miglioramento",
+      "TRAINING_SESSION": "Aggiungi e pianifica la formazione"
+    },
+    "cancel": "Annulla l’azione",
+    "cancelTitle": "Annulla l’azione {n}",
+    "cancelledAt": "Annullata il {at}",
+    "change": "Modifica",
+    "done": "Segna fatta",
+    "doneBy": "Fatta il {at} da {by}",
+    "doneTitle": "Azione {n} fatta",
+    "due": "Entro il",
+    "editTitle": "Modifica l’azione {n}",
+    "evidence": "Evidenza",
+    "evidenceHint": "Cosa dimostra che è stata fatta (facoltativo).",
+    "mine": "La seguo io",
+    "newTitle": "Nuova azione",
+    "noDue": "Nessun termine",
+    "noOwner": "Ancora nessuno",
+    "overdue": "Scaduta",
+    "owner": "Responsabile",
+    "ownerHint": "Un altro responsabile si indica sull’intervento o sulla misura in cui diventa.",
+    "reason": "Motivo",
+    "save": "Salva",
+    "title": "Cosa va fatto"
+  },
+  "actionStatus": {
+    "CANCELLED": "Annullata",
+    "DONE": "Fatta",
+    "OPEN": "Aperta"
+  },
+  "actions": {
+    "count_one": "{count} azione",
+    "count_other": "{count} azioni",
+    "empty": "Aggiungi cosa deve cambiare perché non succeda di nuovo.",
+    "emptyTitle": "Nessuna azione.",
+    "new": "Nuova azione",
+    "note": "Ognuna può diventare un intervento di manutenzione o una misura del piano di miglioramento in un passo.",
+    "title": "Azioni"
+  },
+  "band": {
+    "export": "Esporta (anonimo)",
+    "exportHint": "Usa Esporta sopra l’elenco: nomi e lesioni non vanno mai nel file.",
+    "label": "Infortuni",
+    "more": "Altro",
+    "nextDeadline": "Prossima scadenza INAIL {number}:",
+    "noDeadline": "Nessuna scadenza INAIL in corso",
+    "print": "Stampa (anonima)",
+    "printHint": "L’elenco filtrato, per la riunione sulla sicurezza: senza nomi.",
+    "reading": "Lettura in corso…",
+    "report": "Segnala un evento"
+  },
+  "bodyPart": {
+    "ABDOMEN": "Addome",
+    "ANKLE": "Caviglia",
+    "ARM": "Braccio",
+    "BACK": "Schiena",
+    "CHEST": "Torace",
+    "ELBOW": "Gomito",
+    "EYE": "Occhio",
+    "FACE": "Viso",
+    "FINGER": "Dito della mano",
+    "FOOT": "Piede",
+    "HAND": "Mano",
+    "HEAD": "Testa",
+    "HIP": "Anca",
+    "KNEE": "Ginocchio",
+    "LEG": "Gamba",
+    "MULTIPLE": "Più parti",
+    "NECK": "Collo",
+    "SHOULDER": "Spalla",
+    "TOE": "Dito del piede",
+    "WRIST": "Polso"
+  },
+  "bulk": {
+    "done": "Segna fatte {count}",
+    "exportOnly": "Esporta le righe scelte (anonime).",
+    "seen": "Segna come viste {count}"
+  },
+  "cancel": {
+    "body": "Una segnalazione fatta per errore o due volte: resta registrata come annullata.",
+    "confirm": "Annulla la segnalazione",
+    "reason": "Motivo",
+    "title": "Annulla {number}"
+  },
+  "close": {
+    "actions_one": "{count} azione aperta",
+    "actions_other": "{count} azioni aperte",
+    "body": "Un evento chiuso conserva tutto; si può riaprire.",
+    "confirm": "Chiudi",
+    "filings_one": "{count} denuncia INAIL in attesa",
+    "filings_other": "{count} denunce INAIL in attesa",
+    "title": "Chiudi {number}"
+  },
+  "col": {
+    "action": "Azione",
+    "actions": "Azioni aperte",
+    "due": "Scadenza",
+    "evidence": "Evidenza",
+    "inail": "INAIL",
+    "injury": "Lesione",
+    "kind": "Tipo",
+    "machine": "Macchina",
+    "madeInto": "Trasformata in",
+    "number": "Numero",
+    "occurredAt": "Quando",
+    "owner": "Responsabile",
+    "people": "Persone",
+    "severity": "Gravità",
+    "site": "Sito",
+    "status": "Stato",
+    "where": "Reparto"
+  },
+  "common": {
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "reading": "Lettura in corso…",
+    "retry": "Riprova",
+    "stillLoading": "Ancora in caricamento…"
+  },
+  "deadline": {
+    "body": "Si invia a mano sul portale INAIL entro 48 ore dal certificato medico; registrala qui una volta inviata.",
+    "dueIn": "da inviare tra {left}",
+    "dueNow": "da inviare ora",
+    "failed": "Non è stato possibile controllare le scadenze INAIL",
+    "label": "Scadenza INAIL",
+    "lateBy": "in ritardo di {span}",
+    "more_one": "Ancora {count} scadenza sotto le 24 ore o in ritardo.",
+    "more_other": "Ancora {count} scadenze sotto le 24 ore o in ritardo.",
+    "open": "Apri",
+    "title": "{number}: denuncia INAIL"
+  },
+  "dialog": {
+    "refused": "Non eseguito"
+  },
+  "filing": {
+    "actual": "Assenza effettiva",
+    "certificate": "Certificato medico ricevuto",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "deadline": "Scadenza",
+    "deadlines": "Scadenze INAIL",
+    "dueBy": "entro il {at}",
+    "expected": "Assenza prevista",
+    "filed": "Inviata",
+    "filedBy": "{at} da {by}",
+    "n": "Denuncia {n}",
+    "needed": "Di nuovo necessaria",
+    "noCertificate": "Non ancora",
+    "noneInjury": "Nessuna denuncia INAIL: registra l’assenza quando arriva il certificato medico (Registra la denuncia INAIL).",
+    "noneOther": "Un quasi incidente o un pericolo non richiede denuncia INAIL.",
+    "notNeeded": "Non necessaria",
+    "notNeededBy": "Segnata come non necessaria il {at} da {by}.",
+    "note": "La scadenza è un dovere dell’azienda: chi vede gli infortuni la vede.",
+    "privacy": "La denuncia nomina la persona ferita e indica l’assenza: dati protetti.",
+    "protocol": "Numero di protocollo INAIL",
+    "receipt": "Ricevuta INAIL",
+    "restricted": "Solo HR e i ruoli della sicurezza vedono la denuncia; la scadenza è sopra.",
+    "title": "Denuncia",
+    "value": "Le denunce",
+    "waitingHint": "Le 48 ore partono dalla ricezione del certificato medico."
+  },
+  "filingDialog": {
+    "calls": "Questa assenza richiede la {type}.",
+    "certificateAt": "Certificato ricevuto il",
+    "certificateHint": "Fa partire le 48 ore.",
+    "certificateRef": "Riferimento del certificato",
+    "choosePerson": "Scegli la persona",
+    "daysHint": "Giorni di assenza oltre il giorno dell’evento.",
+    "dueBy": "Da inviare entro il {at} (48 ore dopo).",
+    "filedAt": "Inviata il",
+    "filedHint": "Una volta inviata: quando, il numero di protocollo INAIL e la sua ricevuta.",
+    "filedLegend": "Inviata sul portale INAIL",
+    "new": "Una nuova denuncia",
+    "noPerson": "Una denuncia è per una persona ferita dell’azienda.",
+    "partly": "Una parte è già stata salvata",
+    "person": "Persona ferita",
+    "privacy": "Aperta per questa denuncia: la vista è stata registrata.",
+    "protocol": "Numero di protocollo",
+    "receipt": "Ricevuta INAIL (PDF)",
+    "receiptHint": "Il PDF che l’INAIL rilascia dopo l’invio (mai il certificato medico).",
+    "receiptOnFile": "In archivio: {name}",
+    "save": "Registra la denuncia",
+    "step": {
+      "add": "la denuncia aggiunta",
+      "edit": "assenza e certificato salvati",
+      "file": "l’invio registrato",
+      "receipt": "la ricevuta caricata"
+    },
+    "title": "Registra la denuncia INAIL · {number}",
+    "type": "Tipo",
+    "typeHint": "Decisa dall’assenza (oltre tre giorni: la denuncia assicurativa).",
+    "which": "Denuncia"
+  },
+  "filingState": {
+    "DUE": "Da inviare",
+    "FILED": "Inviata",
+    "NOT_NEEDED": "Non necessaria",
+    "OVERDUE": "Scaduta",
+    "WAITING_CERTIFICATE": "In attesa del certificato"
+  },
+  "filingType": {
+    "INSURANCE": "Denuncia a fini assicurativi",
+    "STATISTICAL": "Comunicazione a fini statistici"
+  },
+  "held": {
+    "action": {
+      "title": "Scrivi cosa va fatto.",
+      "titleLong": "Al massimo 300 caratteri."
+    },
+    "actionClosed": "Questa azione è fatta o annullata.",
+    "actionsOpen": "Resta aperto finché un’azione è aperta: completa o annulla prima le azioni.",
+    "allSeen": "Gli eventi scelti sono già stati visti.",
+    "cancelled": "Un evento annullato non cambia più.",
+    "company": "Scegli prima un’azienda nella barra in alto.",
+    "filing": {
+      "absence": "Indica i giorni di assenza come numero intero.",
+      "filedAt": "Indica quando è stata inviata.",
+      "person": "Scegli la persona ferita.",
+      "protocol": "Indica il numero di protocollo INAIL.",
+      "receiptAfter": "La ricevuta INAIL arriva dopo l’invio: registra anche l’invio."
+    },
+    "filingWaiting": "Resta aperto finché una denuncia INAIL è in attesa: registrala o segnala non necessaria.",
+    "noChange": "Nessuna modifica.",
+    "noManage": "Lo gestiscono i ruoli della sicurezza (safety.incidents.manage).",
+    "noManagePhoto": "Le foto le aggiungono i ruoli della sicurezza (safety.incidents.manage).",
+    "noPeople": "Solo HR e i ruoli della sicurezza (safety.incidents.people).",
+    "noPlantPicker": "Postazioni e macchine richiedono plant.view: scrivi il luogo a parole.",
+    "noReport": "Segnalare dall’ufficio richiede safety.incidents.report.",
+    "noRows": "Nessun evento in questa pagina.",
+    "noneOpen": "Scegli azioni aperte.",
+    "notClosed": "Si riapre solo un evento chiuso.",
+    "notInjury": "Una denuncia INAIL riguarda un infortunio.",
+    "notOpen": "Solo un evento aperto.",
+    "notOpenActions": "Le azioni cambiano solo con l’evento aperto.",
+    "notOpenEdit": "Un evento chiuso o annullato non cambia più: riaprilo prima.",
+    "person": {
+      "choose": "Scegli la persona dell’azienda, o indica un esterno.",
+      "name": "Indica il nome dell’esterno.",
+      "nameLong": "Al massimo 200 caratteri.",
+      "side": "Il lato va con le parti del corpo colpite."
+    },
+    "photosFull": "Fino a 4 foto con la segnalazione; altre sull’evento.",
+    "reading": "Lettura in corso…",
+    "reason": "Indica il motivo.",
+    "report": {
+      "kind": "Scegli cosa è successo.",
+      "people": "Al massimo 20 persone.",
+      "site": "Scegli il sito.",
+      "what": "Scrivi a parole cosa è successo.",
+      "whatLong": "Al massimo 2000 caratteri.",
+      "when": "Indica quando è successo."
+    },
+    "saving": "Salvataggio…",
+    "trainingLater": "Pianificare la formazione richiede i corsi di sicurezza: arrivano con la pagina Formazione sicurezza."
+  },
+  "involvement": {
+    "INJURED": "Ferito",
+    "INVOLVED": "Coinvolto, non ferito"
+  },
+  "keys": {
+    "all": "Tutte le scorciatoie",
+    "close": "Chiudi la finestra",
+    "filing": "Registra la denuncia INAIL",
+    "openAction": "Apri l’azione",
+    "report": "Segnala un evento",
+    "title": "Scorciatoie da tastiera"
+  },
+  "kind": {
+    "HAZARD": "Pericolo",
+    "INJURY": "Infortunio",
+    "NEAR_MISS": "Quasi incidente"
+  },
+  "law": {
+    "inailPlain": "Il datore di lavoro comunica all’INAIL un infortunio con assenza di almeno un giorno oltre quello dell’evento.",
+    "peoplePlain": "I dati sulla salute sono categorie particolari: li vede solo chi ne ha bisogno e ogni vista è registrata."
+  },
+  "list": {
+    "clear": "Togli i filtri",
+    "count_one": "{count} evento",
+    "count_other": "{count} eventi",
+    "empty": "Chiunque segnala da una postazione o dal telefono in tre tocchi; l’ufficio segnala da qui.",
+    "emptyTitle": "Nessun infortunio registrato.",
+    "failed": "Non è stato possibile leggere gli infortuni",
+    "label": "Infortuni, quasi incidenti e pericoli",
+    "more": "Mostra altri",
+    "moreReading": "Lettura della pagina successiva…",
+    "noneMatch": "Nessun evento corrisponde a questi filtri.",
+    "noneMatchTitle": "Nessun risultato",
+    "note": "Anonimo: nessuna persona nell’elenco.",
+    "rows": "Righe",
+    "search": "Numero",
+    "status": "Stato",
+    "title": "Infortuni e quasi incidenti"
+  },
+  "madeInto": {
+    "MAINTENANCE_JOB": "Intervento di manutenzione",
+    "RISK_MEASURE": "Misura del piano di miglioramento",
+    "TRAINING_SESSION": "Sessione di formazione",
+    "none": "Non collegata"
+  },
+  "make": {
+    "MAINTENANCE_JOB": "Crea un intervento",
+    "NONE": "Solo un’azione",
+    "RISK_MEASURE": "Aggiungi al piano di miglioramento",
+    "TRAINING_SESSION": "Pianifica la formazione",
+    "chooseMachine": "Scegli la macchina",
+    "do": {
+      "MAINTENANCE_JOB": "Crea l’intervento",
+      "NONE": "Salva",
+      "RISK_MEASURE": "Aggiungi al piano",
+      "TRAINING_SESSION": "Pianifica la formazione"
+    },
+    "legend": "Trasformala in",
+    "machine": "Macchina",
+    "machineDefault": "La macchina dell’evento {asset}, se non ne scegli un’altra.",
+    "oneStep": "Trasformala, in un passo",
+    "priority": "Priorità",
+    "priorityDefault": "P2 (predefinita)",
+    "priorityHint": "Il responsabile della manutenzione può cambiarla.",
+    "problem": "Problema per l’intervento",
+    "risk": "Il rischio",
+    "riskHint": "A parole, come lo leggerà il piano di miglioramento (facoltativo).",
+    "title": {
+      "MAINTENANCE_JOB": "Crea un intervento dall’azione {n}",
+      "NONE": "Azione {n}",
+      "RISK_MEASURE": "Aggiungi l’azione {n} al piano di miglioramento",
+      "TRAINING_SESSION": "Pianifica la formazione dall’azione {n}"
+    }
+  },
+  "makeHint": {
+    "MAINTENANCE_JOB": "Un intervento di sicurezza per il responsabile della manutenzione, sulla macchina indicata (P2 se non scegli).",
+    "NONE": "Resta su questo evento.",
+    "RISK_MEASURE": "Una misura pianificata della valutazione dei rischi del sito, che cita questo evento.",
+    "TRAINING_SESSION": "Una sessione di formazione nel sito."
+  },
+  "nature": {
+    "AMPUTATION": "Amputazione",
+    "BRUISE": "Contusione",
+    "BURN": "Ustione",
+    "CHEMICAL_BURN": "Ustione chimica",
+    "CRUSH": "Schiacciamento",
+    "CUT": "Taglio",
+    "ELECTRIC_SHOCK": "Folgorazione",
+    "FOREIGN_BODY": "Corpo estraneo",
+    "FRACTURE": "Frattura",
+    "OTHER": "Altro",
+    "PUNCTURE": "Puntura",
+    "SPRAIN": "Distorsione",
+    "STRAIN": "Stiramento"
+  },
+  "note": {
+    "body": "La denuncia INAIL nomina la persona ferita e indica l’assenza: dati protetti. L’apertura viene registrata.",
+    "confirm": "Apri e registra",
+    "title": "Aprire le denunce di {number}?",
+    "what": "Si aprono le persone coinvolte e le denunce; restano su questa pagina finché le nascondi o esci."
+  },
+  "notice": {
+    "actionAdded": "Azione aggiunta.",
+    "actionCancelled": "Azione annullata.",
+    "actionDone": "Azione fatta.",
+    "actionSaved": "Azione salvata.",
+    "actionsDone_one": "{count} azione fatta.",
+    "actionsDone_other": "{count} azioni fatte.",
+    "cancelled": "{number} annullato.",
+    "closed": "{number} chiuso.",
+    "edited": "Segnalazione salvata.",
+    "filed": "Denuncia INAIL registrata: i promemoria si fermano.",
+    "filingSaved": "Denuncia INAIL salvata.",
+    "made": {
+      "MAINTENANCE_JOB": "Intervento creato.",
+      "RISK_MEASURE": "Aggiunta al piano di miglioramento.",
+      "TRAINING_SESSION": "Sessione di formazione pianificata."
+    },
+    "moreFailed": "La pagina successiva non si è potuta leggere: riprova.",
+    "needed": "La denuncia torna necessaria.",
+    "notNeeded": "La denuncia è segnata come non necessaria.",
+    "open": "Apri {number}",
+    "photo": "Foto aggiunta.",
+    "refusedRow": "{label}: {why}",
+    "reopened": "{number} riaperto.",
+    "reported": "Segnalazione {number} inviata.",
+    "reportedPhotos": "Segnalazione {number} inviata; {count} foto non inviata: aggiungila sull’evento.",
+    "seen_one": "{count} evento segnato come visto dalla sicurezza.",
+    "seen_other": "{count} eventi segnati come visti dalla sicurezza."
+  },
+  "people": {
+    "confirm": "Mostra le persone ({count})",
+    "confirmBody": "I nomi e le lesioni dei {count} eventi di questa pagina restano nell’elenco finché li nascondi o esci. Non vanno mai in un’esportazione o in una stampa.",
+    "confirmNote": "Chi si è fatto male e come: dati protetti. L’apertura viene registrata.",
+    "confirmTitle": "Mostrare le persone coinvolte?",
+    "count": "{count} coinvolte, {injured} ferite",
+    "failed": "Non è stato possibile leggere le persone",
+    "hide": "Nascondi le persone",
+    "none": "Nessuno nominato",
+    "panelNote": "Chi si è fatto male e come sono dati protetti (GDPR art. 9).",
+    "reading": "Lettura delle persone…",
+    "restricted": "Solo HR e i ruoli della sicurezza vedono chi; gli altri vedono il numero.",
+    "show": "Mostra le persone",
+    "shownNote": "Persone di {count} eventi mostrate: questa vista è stata registrata.",
+    "title": "Persone coinvolte",
+    "value": "Chi e come",
+    "who": "Solo HR e i ruoli della sicurezza vedono chi è stato coinvolto e come."
+  },
+  "person": {
+    "firstAid": "Primo soccorso prestato",
+    "hospital": "Inviato in ospedale",
+    "outside": "esterno"
+  },
+  "photos": {
+    "add": "Aggiungi una foto",
+    "addTitle": "Una foto per {number}",
+    "n": "Foto {n}",
+    "none": "Nessuna foto.",
+    "note": "Solo ufficio: una foto può mostrare una lesione.",
+    "open": "Apri",
+    "title": "Foto"
+  },
+  "print": {
+    "allSites": "Tutti i siti",
+    "more": "Si stampano solo i primi {count} eventi: restringi i filtri per gli altri.",
+    "note": "Elenco anonimo per la riunione sulla sicurezza: nessuna persona, lesione o tipo di denuncia.",
+    "number": "Numero",
+    "tableLabel": "Infortuni",
+    "title": "Infortuni e quasi incidenti (anonimo)",
+    "window": "Quando"
+  },
+  "priority": {
+    "P1": "P1 · urgente",
+    "P2": "P2 · a breve",
+    "P3": "P3 · più avanti"
+  },
+  "problem": {
+    "conflict": "È cambiato nel frattempo: rileggilo.",
+    "contract": "Questa pagina e il server non sono allineati: ricarica la pagina.",
+    "field": "Un campo non è valido.",
+    "forbidden": "Non puoi farlo qui.",
+    "internal": "Qualcosa è andato storto da parte nostra: riprova.",
+    "invalid": "Qualcosa non è valido.",
+    "noAnswer": "Nessuna risposta: controlla la connessione e riprova.",
+    "notFound": "Non c’è più.",
+    "rateLimited": "Troppi tentativi: attendi un momento.",
+    "read": "Non si è potuto leggere ora: riprova.",
+    "signedOut": "La sessione è scaduta: accedi di nuovo.",
+    "unavailable": "Il server non ha risposto: riprova."
+  },
+  "record": {
+    "back": "Infortuni",
+    "cancel": "Annulla la segnalazione",
+    "cancelHint": "Un doppione o un errore, con il motivo.",
+    "cancelledAt": "Annullato il {at} da {by}",
+    "close": "Chiudi l’evento",
+    "filing": "Registra la denuncia INAIL",
+    "machine": "Macchina {asset}",
+    "more": "Altro",
+    "notSeen": "Non ancora vista dalla sicurezza",
+    "noun": "Evento",
+    "reopen": "Riapri",
+    "request": "La richiesta di intervento",
+    "seenAt": "Vista dalla sicurezza il {at}",
+    "someone": "qualcuno"
+  },
+  "refusal": {
+    "ACTIONS_OPEN": "Resta aperto finché un’azione è aperta.",
+    "ACTION_NOT_OPEN": "Questa azione è fatta o annullata; non cambia più.",
+    "ANONYMOUS_FROM_OFFICE": "Dall’ufficio una segnalazione porta il tuo nome.",
+    "ANONYMOUS_INJURY": "Un infortunio si segnala con il nome: solo un quasi incidente o un pericolo può essere inviato senza.",
+    "ANONYMOUS_NAMES_NOBODY": "Una segnalazione senza nome non nomina nessuno.",
+    "ANONYMOUS_NOT_QUEUED": "Una segnalazione senza nome si invia subito, mai tenuta in coda sul tablet.",
+    "CERTIFICATE_BEFORE_EVENT": "Il certificato arriva dopo l’evento.",
+    "CERTIFICATE_IN_FUTURE": "Il certificato è arrivato al più tardi adesso.",
+    "CERTIFICATE_MISSING": "Registra prima quando è arrivato il certificato medico: fa partire le 48 ore.",
+    "COURSE_NOT_ACTIVE": "Il corso non è un corso attivo dell’azienda.",
+    "FILED_BEFORE_CERTIFICATE": "La denuncia si invia dopo la ricezione del certificato.",
+    "FILED_IN_FUTURE": "È stata inviata al più tardi adesso.",
+    "FILING_EXISTS": "Questa persona ha già una denuncia di quel tipo: modifica quella.",
+    "FILING_FILED": "Questa denuncia è registrata come inviata; non cambia più.",
+    "FILING_NOT_EMPLOYEE": "Una denuncia INAIL riguarda una persona ferita dell’azienda.",
+    "FILING_NOT_NEEDED_NOW": "Torna necessaria solo una denuncia segnata come non necessaria.",
+    "FILING_WAITING": "Resta aperto finché una denuncia INAIL attende il certificato o l’invio.",
+    "INJURED_NOT_INJURY": "Chi si è fatto male si segnala in un infortunio: scegli Infortunio, o indica la persona come coinvolta.",
+    "MADE_ALREADY": "Questa azione è già stata trasformata.",
+    "NOT_CLOSED": "Si riapre solo un evento chiuso.",
+    "NOT_OPEN": "Questo evento è chiuso o annullato: riaprilo prima.",
+    "NO_ASSESSMENT": "Il sito non ha una valutazione dei rischi attiva per la misura: la gestisce l’RSPP nella pagina della valutazione dei rischi.",
+    "NO_FILING_NEEDED": "Un’assenza inferiore a un giorno oltre quello dell’evento non richiede denuncia INAIL.",
+    "NO_MACHINE": "Un intervento riguarda una macchina: scegli la macchina.",
+    "OCCURRED_IN_FUTURE": "È successo al più tardi adesso.",
+    "PERSON_HAS_FILING": "Questa persona ha una denuncia INAIL: resta nell’evento.",
+    "PERSON_OTHER_COMPANY": "La persona lavora per un’altra azienda: indicala come esterno.",
+    "PERSON_TWICE": "Questa persona è indicata due volte.",
+    "PHOTOS_FULL": "Una segnalazione da tablet accetta fino a 4 foto; altre le aggiunge l’ufficio.",
+    "PHOTO_WINDOW": "Un tablet aggiunge foto entro 30 minuti dalla segnalazione; dopo le aggiunge l’ufficio.",
+    "REQUEST_OTHER_SITE": "La richiesta di intervento deve essere di questo sito.",
+    "STAYS_INJURY": "Resta un infortunio finché una persona vi risulta ferita.",
+    "TRAINER_NOT_ACTIVE": "Il formatore è una persona dell’azienda in servizio, o un formatore esterno per nome.",
+    "WHERE_MISSING": "Indica dove è successo: una postazione, una macchina o un luogo a parole.",
+    "WHERE_OTHER_SITE": "La postazione o la macchina deve essere di questo sito."
+  },
+  "reopen": {
+    "body": "Torna aperto: azioni e denunce si possono cambiare.",
+    "confirm": "Riapri",
+    "title": "Riapri {number}"
+  },
+  "report": {
+    "addPerson": "Aggiungi una persona",
+    "addPhoto": "Aggiungi una foto",
+    "at": "A {site}",
+    "bodyParts": "Parti del corpo colpite",
+    "choosePerson": "Scegli la persona",
+    "chooseSite": "Scegli il sito",
+    "employee": "Una persona dell’azienda",
+    "findPerson": "Cerca per nome o codice",
+    "immediate": "Azione immediata",
+    "immediateHint": "Cosa si è fatto subito (primo soccorso, macchina fermata, zona delimitata).",
+    "injuredOnlyInjury": "Chi si è fatto male si segnala come infortunio: scegli Infortunio sopra.",
+    "involvement": "Ferito o coinvolto",
+    "kind": "Cosa è successo",
+    "machine": "Macchina",
+    "nature": "Natura della lesione",
+    "noStaffList": "L’elenco del personale è aperto all’ufficio sicurezza e a HR: indica un esterno per nome, oppure lascia vuoto e l’ufficio sicurezza aggiunge le persone.",
+    "none": "Nessuna",
+    "outside": "Un esterno",
+    "outsideName": "Nome",
+    "people": "Persone coinvolte (facoltativo)",
+    "peopleFailed": "L’elenco del personale non si è potuto leggere.",
+    "peopleNote": "Registrate con la segnalazione e mai mostrate qui: solo HR e i ruoli della sicurezza le aprono, e ogni apertura è registrata.",
+    "person": "Persona",
+    "personN": "Persona {n}",
+    "photoLabel": "Foto dell’evento",
+    "photoN": "Foto {n}",
+    "photoTitle": "Una foto del luogo",
+    "photos": "Foto",
+    "photosHint": "Fino a 4 foto del luogo; senza volti.",
+    "pickersFailed": "Le postazioni o le macchine non si sono potute leggere: scrivi il luogo a parole.",
+    "place": "Luogo a parole",
+    "placeHint": "es. il corridoio vicino al molo",
+    "refused": "La segnalazione non è stata inviata",
+    "removePerson": "Togli",
+    "removePhoto": "Togli la foto {n}",
+    "send": "Invia segnalazione",
+    "side": "Lato",
+    "site": "Sito",
+    "station": "Postazione",
+    "title": "Segnala un evento",
+    "typeMore": "Più persone corrispondono: scrivi più lettere del nome.",
+    "what": "A parole",
+    "whatHint": "Cosa è successo, senza nominare chi si è fatto male: le persone vanno sotto.",
+    "when": "Quando",
+    "where": "Dove",
+    "whereHint": "Una postazione, una macchina o un luogo a parole: almeno uno.",
+    "who": "Chi"
+  },
+  "reporter": {
+    "anonymous": "Inviato senza nome: nessun lavoratore o tablet registrato.",
+    "office": "Qualcuno dell’ufficio",
+    "system": "Aperto dal blocco macchina (una segnalazione di pericolo).",
+    "worker": "{name} (dal reparto)",
+    "workerHidden": "Un lavoratore della postazione (il sito non registra i lavoratori per nome)."
+  },
+  "row": {
+    "actionsOverdue": "{count} ({overdue} scadute)",
+    "noFiling": "Nessuna denuncia",
+    "nobody": "Nessuno nominato",
+    "notSeen": "Non ancora vista"
+  },
+  "rows": {
+    "HAZARD": "Pericoli",
+    "INAIL_DUE": "Denunce INAIL aperte",
+    "INJURY": "Infortuni",
+    "NEAR_MISS": "Quasi incidenti",
+    "all": "Tutti i tipi"
+  },
+  "rule": {
+    "manual": "L’INAIL non è collegato a Nexus: la denuncia si invia sul suo portale, poi si registra qui.",
+    "portal": "Apri il portale INAIL",
+    "title": "Cosa chiede la legge"
+  },
+  "severity": {
+    "FIRST_AID": "Primo soccorso",
+    "LOST_DAYS": "Giorni persi",
+    "NONE": "Nessuna lesione",
+    "UNKNOWN": "Da valutare"
+  },
+  "side": {
+    "BOTH": "Entrambi i lati",
+    "LEFT": "Sinistra",
+    "RIGHT": "Destra"
+  },
+  "status": {
+    "CANCELLED": "Annullato",
+    "CLOSED": "Chiuso",
+    "OPEN": "Aperto"
+  },
+  "statusFilter": {
+    "ALL": "Tutti, anche annullati",
+    "CANCELLED": "Annullati",
+    "CLOSED": "Chiusi",
+    "OPEN": "Aperti",
+    "default": "Aperti e chiusi"
+  },
+  "tab": {
+    "actions": "Azioni",
+    "authority": "Comunicazione all’ente",
+    "report": "Segnalazione"
+  },
+  "tile": {
+    "actionsOverdue": {
+      "hint": "Azioni aperte oltre il termine: nella scheda Azioni di ogni infortunio (la colonna Azioni dice quante).",
+      "label": "Azioni scadute"
+    },
+    "failed": "I riquadri non si sono potuti leggere.",
+    "hazardsOpen": {
+      "hint": "Pericoli segnalati e non ancora chiusi.",
+      "label": "Pericoli aperti"
+    },
+    "inailOpen": {
+      "hint": "Denunce in attesa del certificato o da inviare: mostra gli infortuni che ne hanno una.",
+      "label": "Scadenze INAIL aperte"
+    },
+    "nearMissesThisMonth": {
+      "hint": "Segnalati dal primo del mese.",
+      "label": "Quasi incidenti del mese"
+    },
+    "openIncidents": {
+      "hint": "Infortuni, quasi incidenti e pericoli non ancora chiusi.",
+      "label": "Infortuni aperti"
+    },
+    "title": "Eventi di sicurezza ora"
+  },
+  "time": {
+    "days": "{days} g {hours} h",
+    "hours": "{hours} h",
+    "minutes": "{minutes} min"
+  },
+  "what": {
+    "closed": "Chiuso",
+    "closedBy": "{at} da {by}",
+    "device": "Dal tablet {device}",
+    "edit": "Modifica",
+    "editing": "Modifica della segnalazione",
+    "fromFloor": "Segnalato dal reparto.",
+    "fromOffice": "Segnalato dall’ufficio.",
+    "immediate": "Azione immediata",
+    "kind": "Tipo",
+    "lockedRequest": "Macchina bloccata perché non sicura: la sua richiesta",
+    "machine": "Macchina {asset}",
+    "noImmediate": "Nessuna registrata",
+    "notSeen": "Non ancora",
+    "place": "Luogo a parole",
+    "refused": "La modifica non è stata salvata",
+    "reportedAt": "Segnalato il {at}",
+    "reporter": "Segnalato da",
+    "request": "La richiesta di intervento",
+    "save": "Salva",
+    "seen": "Vista dalla sicurezza",
+    "seenBy": "{at} da {by}",
+    "severity": "Gravità",
+    "title": "Cosa è successo",
+    "what": "Cosa",
+    "when": "Quando",
+    "where": "Dove"
+  }
+}

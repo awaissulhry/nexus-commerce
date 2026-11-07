@@ -76,6 +76,8 @@ model IntegrationAccount {
   sdiSubmissions   SdiSubmission[]
   // W2b payables.prisma (schema wave 2/7): the (SDI) account's deliveries the pickup could not record.
   sdiInboxItems    SdiInboxItem[]
+  // W2b portal-sales.prisma (wave 21/22): the (payment provider) account's card and SEPA payment intents.
+  paymentIntents   PaymentIntent[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -98,6 +100,10 @@ enum IntegrationProvider {
   CLAMAV
   /// W2b (B-W2b-03; B-W2a-42): the error-tracking sink (an EU processor, GATE-SPEND + GATE-PRIVACY; none chosen yet).
   ERROR_TRACKING
+  /// W2b (B-W2b-157; FIN-123): the card and SEPA payment provider. PAYMENT_FAKE is the factory's own fake (mode FAKE, no
+  /// network: local and test); STRIPE waits for the Owner's yes with its exact cost (GATE-SPEND, W2b-3 question 2).
+  PAYMENT_FAKE
+  STRIPE
 }
 
 /// Which system an account's calls reach.

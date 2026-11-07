@@ -46,12 +46,12 @@
       }
     },
     "MeasurementProfile": {
-      "about": "The office records a rider's measurements and adds a new revision for a change. A portal or link session reads its own party's profiles (the rider's own data), without the internal note or who recorded it.",
+      "about": "The office records a rider's measurements and adds a new revision for a change; W2b (wave 21/22): it (or the system) sets and moves when the photos are deleted, the only update the …_portal_sales_w2b_guards triggers let through. A portal or link session reads its own party's profiles (the rider's own data), without the internal note or who recorded it; W2b: a MEASUREMENTS link session adds the revision the rider sent (insert: the link, when, the notice shown and the photos; the guard refuses any other partner insert).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
       }
     }
   }

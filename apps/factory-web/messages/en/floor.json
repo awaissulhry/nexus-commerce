@@ -396,7 +396,9 @@
       "machine": "Report a machine problem; a technician’s jobs",
       "clock": "Your time today, breaks, forgot badge",
       "myday": "Your minutes, records and statement. Only you see it.",
+      "training": "Sign training attendance; receive PPE with your PIN",
       "help": "One tap calls the right person",
+      "incident": "Someone hurt, a near miss or a hazard",
       "lineview": "Calls, what waits, stations",
       "more_one": "1 more tile",
       "more_other": "{count} more tiles",
@@ -409,9 +411,11 @@
     "machine": "Machine problem",
     "clock": "Clock in & out",
     "myday": "My day",
+    "training": "Training & PPE sign-off",
     "mydayAnswers_one": "{count} answer to your dispute waits",
     "mydayAnswers_other": "{count} answers to your disputes wait",
     "help": "Call for help",
+    "incident": "Report an incident",
     "lineview": "Line view",
     "more": "More",
     "back": "Back"
@@ -719,7 +723,8 @@
       "onBehalf_one": "Entry on behalf: {code} · {count} good",
       "onBehalf_other": "Entry on behalf: {code} · {count} good",
       "progress": "A machine report's progress",
-      "repair": "Repair scan of {code}"
+      "repair": "Repair scan of {code}",
+      "incident": "Incident report"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

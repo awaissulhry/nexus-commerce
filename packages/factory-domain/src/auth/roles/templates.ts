@@ -1,6 +1,8 @@
 import type { Permission } from '../../core/permissions'
 import { GRAINS, isGrain, type Grain } from '../grains/grains'
 import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
+// B-W2b-162: the partner role templates (audience partner).
+import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -593,6 +595,39 @@ const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
 const CHEMICALS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   safety_officer: ['safety.chemicals.manage'],
 })
+// B-W2b-135: health surveillance (GDPR art. 9; D.Lgs. 81/2008 art. 41) — HR and the occupational doctor see the due list and the
+// judgements (each view recorded) and keep them; the safety officer and the doctor keep the plans per role (no person in a plan);
+// HR reads who looked. Office only; owner from every(); read-only none (every one is a write risk on purpose).
+const HEALTH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  hr: ['safety.health.view', 'safety.health.manage', 'safety.health.views'],
+  company_doctor: ['safety.health.view', 'safety.health.manage', 'safety.health.plans'],
+  safety_officer: ['safety.health.plans'],
+})
+/**
+ * B-W2b-139 (training records, due lists, the instruction register, attendance signed on the floor; QHS-243, QHS-244, QHS-246,
+ * QHS-247, QHS-248; design people.skills "Record training", "Instruction register"): the safety officer and HR keep the
+ * training records (sessions, paper sheets, countersignatures in the office, records typed, corrections); the instruction
+ * register also by the production manager and the floor supervisor (the preposti give hands-on instruction). The workers and
+ * the trainer sign on the floor with floor.work: no floor template changes. Office only; owner from every(); read_only gets
+ * none (writes; reading is safety.view).
+ */
+const RECORDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.training.record', 'safety.instruction.record'],
+  hr: ['safety.training.record', 'safety.instruction.record'],
+  production_manager: ['safety.instruction.record'],
+  floor_supervisor: ['safety.instruction.record'],
+})
+/**
+ * B-W2b-162 (partner organisations, their people and roles; PLT-006, SAL-060, SCM-092; design sales.customers and
+ * purchasing.suppliers › Portal access, admin.users): sales looks after its customers' portal access and the buyer its
+ * suppliers' and workshops' (invite, change, switch on, preview); the administrator all of them. The owner from every();
+ * read-only sees who has access (partners.view) through the registry.
+ */
+const PARTNERS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['partners.view', 'partners.invite', 'partners.manage', 'partners.preview'],
+  sales: ['partners.view', 'partners.invite', 'partners.manage', 'partners.preview'],
+  buyer: ['partners.view', 'partners.invite', 'partners.manage', 'partners.preview'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -679,7 +714,13 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-134
   ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
   // B-W2b-143
-  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : []),
+  // B-W2b-135
+  ...(audience === 'office' ? (HEALTH_ADDS[key] ?? []) : []),
+  // B-W2b-139
+  ...(audience === 'office' ? (RECORDS_ADDS[key] ?? []) : []),
+  // B-W2b-162
+  ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -850,6 +891,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'security.view', 'security.drills.record',
       // B-W2a-41: the mail delivery log; unblock an address.
       'email.delivery.view', 'email.delivery.unblock',
+      // B-W2b-161: company branding (logo, accent, sender name, portal label; step-up).
+      'documents.branding.manage',
     ],
     grains: [],
   }),
@@ -1274,8 +1317,40 @@ export function audienceProblems(role: { readonly audience: RoleAudience } & Pic
     if (role.requireMfa) problems.push('a floor role cannot require two-factor')
     return problems
   }
-  return role.permissions.filter(floorPermission).map((permission) => `${permission} is held only by floor roles`)
+  // B-W2b-162: a partner permission (`portal.*`) is held only by partner roles (./partner-templates).
+  const partnerPermission = (permission: string) => FACTORY_PERMISSIONS.get(permission)?.partner === true
+  return [
+    ...role.permissions.filter(floorPermission).map((permission) => `${permission} is held only by floor roles`),
+    ...role.permissions.filter(partnerPermission).map((permission) => `${permission} is held only by partner roles`),
+  ]
 }
 
 const problems = templateProblems(ROLE_TEMPLATES)
 if (problems.length > 0) throw new Error(`Role templates are not valid: ${problems.join('; ')}`)
+
+/**
+ * B-W2b-162: the partner role templates (./partner-templates.ts: customer, supplier, subcontractor and guest roles and the
+ * per-person capabilities), system roles of audience PARTNER in every tenant. A portal step gives its partner permissions
+ * to them HERE: one map per step (partner template key → permissions) in PARTNER_ADDS, one line each; the Admin of a kind
+ * follows its kind's other roles by itself.
+ */
+const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = []
+export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
+const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
+if (partnerProblems.length > 0) throw new Error(`Partner role templates are not valid: ${partnerProblems.join('; ')}`)
+
+/** Every system role a tenant has: the office and floor templates and the partner ones (the API's syncSystemRoles). */
+export type SystemRoleTemplate = RoleTemplate | PartnerRoleTemplate
+export const SYSTEM_ROLE_TEMPLATES: readonly SystemRoleTemplate[] = Object.freeze([...ROLE_TEMPLATES, ...PARTNER_ROLE_TEMPLATES])
+const systemByKey = new Map<string, SystemRoleTemplate>(SYSTEM_ROLE_TEMPLATES.map((entry) => [entry.key, entry]))
+const partnerByKey = new Map(PARTNER_ROLE_TEMPLATES.map((entry) => [entry.key, entry]))
+
+/** The template of a system role of any audience (office, floor or partner). `templateOf` stays office and floor. */
+export function systemTemplateOf(key: string): SystemRoleTemplate | undefined {
+  return systemByKey.get(key)
+}
+
+/** A partner template by its key. */
+export function partnerTemplateOf(key: string): PartnerRoleTemplate | undefined {
+  return partnerByKey.get(key)
+}

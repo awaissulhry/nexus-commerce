@@ -6,9 +6,15 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import { addDays } from '@nexus/factory-domain/people/employees/rules'
 import { PEOPLE_AUTHORISATIONS_MANAGE, PEOPLE_SKILLS_MANAGE, PEOPLE_SKILLS_VIEW } from '@nexus/factory-domain/people/skills/permissions'
 import { authorisationStateOf, endsWithin, traineeStateOf, type SkillLevel } from '@nexus/factory-domain/people/skills/rules'
+import { SAFETY_VIEW } from '@nexus/factory-domain/safety/organisation/permissions'
+import { countDue, dueCellsOf, heldByTrainingOf, type DueCell } from '@nexus/factory-domain/safety/records/rules'
+import { holdingKey } from '@nexus/factory-domain/safety/rolesheets/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { recordFactsOf } from '../../safety/records/holdings'
+import { trainingNeedsOf } from '../../safety/training/needs'
+import { courseRefs } from '../../safety/training/store'
 import { assertMay, dateOf, dayOf, dayOrNull, may, officeOf, scopeOf } from '../employees/access'
 import { userNames } from '../employees/employees'
 import { AUTHORISATION_SELECT, authorisationViews, LEVEL_SELECT, levelViews, SKILL_SELECT, skillView } from './store'
@@ -31,6 +37,14 @@ import { AUTHORISATION_SELECT, authorisationViews, LEVEL_SELECT, levelViews, SKI
  * No column sums people into a score and rows sort by name or team only (AI Act Annex III 4(b); Statuto dei Lavoratori
  * art. 4): a level is a qualification, never a figure about one person's work. The tiles count cells (person × skill),
  * never a person's own number.
+ *
+ * B-W2b-139: the safety columns join the matrix (design "Column groups: … Safety courses (DueCell: valid until, due, overdue,
+ * Needed)", "Shaded cells = required by the person's role sheet", "Machines (Authorised / Held / —)"): for each person the
+ * caller reads with safety.view, one cell per course they need or hold (factory-domain safety/records `dueCellsOf` over
+ * B-W2b-133's needs and the records); an authorisation in force that expired or missing training holds is `held` (with the
+ * courses); a class's `authorisationRequired` decides `keptAtSites` (every site in view when it asks one). Tiles add the
+ * training overdue and due in 60 days (person × course), the authorisations held and the records whose language was not
+ * checked (null when the caller reads no one's safety records).
  */
 
 const ROW_LIMIT = 500
@@ -41,8 +55,8 @@ export interface MatrixQuery {
   readonly companyId?: string | undefined
   readonly lineId?: string | undefined
   readonly teamId?: string | undefined
-  readonly show?: 'ALL' | 'SKILLS' | 'MACHINES' | undefined
-  readonly tile?: 'TRAINEES' | 'AUTHORISATIONS_ENDING' | undefined
+  readonly show?: 'ALL' | 'SKILLS' | 'MACHINES' | 'SAFETY' | undefined
+  readonly tile?: 'TRAINEES' | 'AUTHORISATIONS_ENDING' | 'TRAINING_OVERDUE' | 'TRAINING_DUE_SOON' | 'AUTHORISATIONS_HELD' | 'LANGUAGE_NOT_CHECKED' | undefined
   readonly sort?: 'TEAM' | 'NAME' | undefined
   readonly q?: string | undefined
 }
@@ -77,6 +91,8 @@ export async function skillsMatrix(caller: CommandCaller, query: MatrixQuery) {
         firstName: true,
         lastName: true,
         displayName: true,
+        roleSheetId: true,
+        startDate: true,
         homeLine: { select: { id: true, code: true, name: true } },
         teamMemberships: { where: { until: null }, select: { team: { select: { id: true, code: true, name: true, line: { select: { id: true, code: true, name: true } } } } } },
       },
@@ -85,17 +101,32 @@ export async function skillsMatrix(caller: CommandCaller, query: MatrixQuery) {
     const companies = [...new Set(people.map((person) => person.companyId))]
     const siteIds = [...new Set(people.map((person) => person.siteId))]
     const skills =
-      show === 'MACHINES'
+      show === 'MACHINES' || show === 'SAFETY'
         ? []
         : await client.skill.findMany({ where: { status: 'ACTIVE', OR: [{ companyId: null }, ...(companies.length > 0 ? [{ companyId: { in: companies } }] : [])] }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: SKILL_SELECT })
     const visibleSkills = skills.filter((skill) => skill.companyId === null || can(actorOf(context), PEOPLE_SKILLS_VIEW, { companyId: skill.companyId }))
-    const levels = ids.length === 0 || show === 'MACHINES' ? [] : await client.employeeSkill.findMany({ where: { employeeId: { in: ids }, removedAt: null, skillId: { in: visibleSkills.map((skill) => skill.id) } }, select: { id: true, employeeId: true, skillId: true, level: true, since: true, traineeUntil: true, signedOffOn: true, version: true } })
-    const authorisations = ids.length === 0 || show === 'SKILLS' ? [] : await client.machineAuthorisation.findMany({ where: { employeeId: { in: ids }, revokedAt: null }, select: { id: true, employeeId: true, machineClassId: true, authorisedOn: true, validUntil: true, version: true } })
-    // The classes of the sites in view: of a machine there (not retired), or authorised there (kept under authorisation).
-    const machines = siteIds.length === 0 || show === 'SKILLS' ? [] : await client.machine.findMany({ where: { siteId: { in: siteIds }, status: { not: 'RETIRED' } }, select: { classId: true, siteId: true } })
-    const keptRows = siteIds.length === 0 || show === 'SKILLS' ? [] : await client.machineAuthorisation.findMany({ where: { siteId: { in: siteIds } }, distinct: ['siteId', 'machineClassId'], select: { siteId: true, machineClassId: true } })
+    const levels = ids.length === 0 || show === 'MACHINES' || show === 'SAFETY' ? [] : await client.employeeSkill.findMany({ where: { employeeId: { in: ids }, removedAt: null, skillId: { in: visibleSkills.map((skill) => skill.id) } }, select: { id: true, employeeId: true, skillId: true, level: true, since: true, traineeUntil: true, signedOffOn: true, version: true } })
+    const machinesShown = show === 'ALL' || show === 'MACHINES'
+    const authorisations = ids.length === 0 || !machinesShown ? [] : await client.machineAuthorisation.findMany({ where: { employeeId: { in: ids }, revokedAt: null }, select: { id: true, employeeId: true, machineClassId: true, authorisedOn: true, validUntil: true, version: true } })
+    // The classes of the sites in view: of a machine there (not retired), or authorised there.
+    const machines = siteIds.length === 0 || !machinesShown ? [] : await client.machine.findMany({ where: { siteId: { in: siteIds }, status: { not: 'RETIRED' } }, select: { classId: true, siteId: true } })
+    const keptRows = siteIds.length === 0 || !machinesShown ? [] : await client.machineAuthorisation.findMany({ where: { siteId: { in: siteIds } }, distinct: ['siteId', 'machineClassId'], select: { siteId: true, machineClassId: true } })
     const classIds = [...new Set([...machines.map((machine) => machine.classId), ...keptRows.map((row) => row.machineClassId), ...authorisations.map((row) => row.machineClassId)])]
-    const classes = classIds.length === 0 ? [] : await client.machineClass.findMany({ where: { id: { in: classIds } }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { id: true, code: true, labelEn: true, labelIt: true, active: true } })
+    const classes = classIds.length === 0 ? [] : await client.machineClass.findMany({ where: { id: { in: classIds } }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { id: true, code: true, labelEn: true, labelIt: true, active: true, authorisationRequired: true } })
+    const required = new Set(classes.filter((machineClass) => machineClass.authorisationRequired).map((machineClass) => machineClass.id))
+
+    // B-W2b-139: who needs which course (B-W2b-133) and what the records say; safety cells only for the people the caller
+    // reads with safety.view; an authorisation held by training for every row (the qualification check says the same).
+    const safetyPeople = people.filter((person) => may(context, SAFETY_VIEW, person))
+    const trainingPeople = people.map((person) => ({ employeeId: person.id, name: `${person.firstName} ${person.lastName}`, companyId: person.companyId, siteId: person.siteId, roleSheetId: person.roleSheetId, startDate: dayOf(person.startDate) }))
+    const safetyIds = new Set(safetyPeople.map((person) => person.id))
+    const { needs } = ids.length === 0 || (!machinesShown && safetyIds.size === 0) ? { needs: [] } : await trainingNeedsOf(client, trainingPeople, today)
+    const held = heldByTrainingOf(needs, required)
+    const showSafety = (show === 'ALL' || show === 'SAFETY') && safetyIds.size > 0
+    const cells: DueCell[] = safetyIds.size > 0
+      ? dueCellsOf({ needs: needs.filter((need) => safetyIds.has(need.employeeId)), records: await recordFactsOf(client, [...safetyIds]), today })
+      : []
+    const courses = showSafety ? await courseRefs(client, cells.map((cell) => cell.courseId)) : []
 
     const levelCells = levels.map((row) => {
       const facts = { traineeUntil: dayOrNull(row.traineeUntil), signedOffOn: dayOrNull(row.signedOffOn) }
@@ -103,15 +134,31 @@ export async function skillsMatrix(caller: CommandCaller, query: MatrixQuery) {
     })
     const authorisationCells = authorisations.map((row) => {
       const facts = { authorisedOn: dayOf(row.authorisedOn), validUntil: dayOrNull(row.validUntil), revoked: false }
-      return { employeeId: row.employeeId, machineClassId: row.machineClassId, authorisationId: row.id, state: authorisationStateOf(facts, today), authorisedOn: facts.authorisedOn, validUntil: facts.validUntil, ending: endsWithin(facts, today, until), version: row.version }
+      const state = authorisationStateOf(facts, today)
+      const heldBy = state === 'AUTHORISED' ? (held.get(holdingKey(row.employeeId, row.machineClassId)) ?? []) : []
+      return { employeeId: row.employeeId, machineClassId: row.machineClassId, authorisationId: row.id, state, authorisedOn: facts.authorisedOn, validUntil: facts.validUntil, ending: endsWithin(facts, today, until), held: heldBy.length > 0, heldBy, version: row.version }
     })
     const isTraineeCell = (cell: (typeof levelCells)[number]) => cell.trainee === 'TRAINEE' || cell.trainee === 'OVERDUE'
+    const due = safetyIds.size > 0 ? countDue(cells) : null
     const tiles = {
       trainees: levelCells.filter(isTraineeCell).length,
       traineesOverdue: levelCells.filter((cell) => cell.trainee === 'OVERDUE').length,
       authorisationsEnding: authorisationCells.filter((cell) => cell.ending).length,
+      trainingOverdue: due?.overdue ?? null,
+      trainingDueSoon: due?.dueSoon ?? null,
+      authorisationsHeld: authorisationCells.filter((cell) => cell.held).length,
+      languageNotChecked: due?.languageNotChecked ?? null,
     }
-    const tileHit = new Set(query.tile === 'TRAINEES' ? levelCells.filter(isTraineeCell).map((cell) => cell.employeeId) : query.tile === 'AUTHORISATIONS_ENDING' ? authorisationCells.filter((cell) => cell.ending).map((cell) => cell.employeeId) : ids)
+    const hitsOf = (tile: MatrixQuery['tile']): string[] => {
+      if (tile === 'TRAINEES') return levelCells.filter(isTraineeCell).map((cell) => cell.employeeId)
+      if (tile === 'AUTHORISATIONS_ENDING') return authorisationCells.filter((cell) => cell.ending).map((cell) => cell.employeeId)
+      if (tile === 'AUTHORISATIONS_HELD') return authorisationCells.filter((cell) => cell.held).map((cell) => cell.employeeId)
+      if (tile === 'TRAINING_OVERDUE') return cells.filter((cell) => cell.overdue).map((cell) => cell.employeeId)
+      if (tile === 'TRAINING_DUE_SOON') return cells.filter((cell) => cell.soon).map((cell) => cell.employeeId)
+      if (tile === 'LANGUAGE_NOT_CHECKED') return cells.filter((cell) => cell.languageNotChecked).map((cell) => cell.employeeId)
+      return ids
+    }
+    const tileHit = new Set(hitsOf(query.tile))
     const rows = people
       .filter((person) => tileHit.has(person.id))
       .map((person) => {
@@ -126,6 +173,8 @@ export async function skillsMatrix(caller: CommandCaller, query: MatrixQuery) {
           team: team ? { id: team.id, code: team.code, name: team.name } : null,
           levels: levelCells.filter((cell) => cell.employeeId === person.id).map(({ employeeId: _employeeId, ...cell }) => cell),
           authorisations: authorisationCells.filter((cell) => cell.employeeId === person.id).map(({ employeeId: _employeeId, ...cell }) => cell),
+          // B-W2b-139: null when the caller does not read this person's safety records.
+          trainings: showSafety && safetyIds.has(person.id) ? cells.filter((cell) => cell.employeeId === person.id).map(({ employeeId: _employeeId, ...cell }) => cell) : null,
           canManage: may(context, PEOPLE_SKILLS_MANAGE, person),
           canAuthorise: may(context, PEOPLE_AUTHORISATIONS_MANAGE, person),
           sortKey: [team?.line?.code ?? person.homeLine?.code ?? '~', team?.code ?? '~', person.lastName, person.firstName, person.id],
@@ -137,7 +186,17 @@ export async function skillsMatrix(caller: CommandCaller, query: MatrixQuery) {
       rows: rows.slice(0, ROW_LIMIT).map(({ sortKey: _sortKey, ...row }) => row),
       complete: rows.length <= ROW_LIMIT,
       skills: visibleSkills.map(skillView),
-      machineClasses: classes.map((machineClass) => ({ id: machineClass.id, code: machineClass.code, labelEn: machineClass.labelEn, labelIt: machineClass.labelIt, active: machineClass.active, keptAtSites: keptRows.filter((row) => row.machineClassId === machineClass.id).map((row) => row.siteId) })),
+      machineClasses: classes.map((machineClass) => ({
+        id: machineClass.id,
+        code: machineClass.code,
+        labelEn: machineClass.labelEn,
+        labelIt: machineClass.labelIt,
+        active: machineClass.active,
+        authorisationRequired: machineClass.authorisationRequired,
+        // B-W2b-139: a class asks an authorisation at every site (MachineClass.authorisationRequired).
+        keptAtSites: machineClass.authorisationRequired ? siteIds : [],
+      })),
+      courses,
       sites,
       tiles,
       today,

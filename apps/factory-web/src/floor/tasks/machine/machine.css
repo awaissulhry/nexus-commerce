@@ -145,7 +145,7 @@
   background: var(--nds-surface-sunken);
 }
 
-/* ── Report an incident (held until B-W2b-137) ───────────────────────────────────────────────────────────────────── */
+/* ── Report an incident (B-W2b-137) ──────────────────────────────────────────────────────────────────────────────── */
 .fw-mc-incident {
   display: flex;
 }

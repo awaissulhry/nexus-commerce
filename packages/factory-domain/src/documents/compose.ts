@@ -14,9 +14,11 @@ import {
   isDocumentLanguage,
   isDocumentType,
   REFERENCE_KINDS,
+  attachDocumentLogo,
   type DocumentInput,
   type DocumentLanguage,
   type DocumentLine,
+  type DocumentLogo,
   type DocumentParty,
   type DocumentType,
   type PostalAddress,
@@ -63,7 +65,7 @@ export interface ComposedDocument {
   readonly layout: string
   readonly title: string
   /** The company's name as printed, and the legal lines under it (art. 2250). */
-  readonly issuer: ComposedBlock & { readonly name: string }
+  readonly issuer: ComposedBlock & { readonly name: string; readonly logo?: DocumentLogo | null }
   /** Number and date, at the top right. */
   readonly identity: readonly ComposedFact[]
   /** A preview's banner, or null. */
@@ -365,7 +367,8 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
     language,
     layout: layout.id,
     title,
-    issuer: { heading: words.headings.issuer[input.type], name, lines: legalLines(input.company, language) },
+    // B-W2b-161: the company's logo above its name, when its branding has one (model.ts attachDocumentLogo: not data).
+    issuer: attachDocumentLogo({ heading: words.headings.issuer[input.type], name, lines: legalLines(input.company, language) }, input.company.logo),
     identity: [
       { label: words.number, value: input.number.trim() },
       { label: words.date, value: formatDate(input.date, language) },

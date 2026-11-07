@@ -1,0 +1,262 @@
+{
+  "title": "Firma formazione e DPI",
+  "mode": {
+    "title": "Formazione o DPI?",
+    "training": "Presenza alla formazione",
+    "trainingHint": "Ognuno firma con badge e PIN; il formatore controfirma",
+    "ppe": "Ricevi DPI",
+    "ppeHint": "DPI consegnati a una persona, che firma la ricevuta con il suo PIN",
+    "offline": "Per firmare serve la rete: ogni PIN è controllato subito dall’ufficio e non resta mai su questo tablet.",
+    "paper": "Si firma qui invece che sulla carta: ognuno firma con il proprio PIN e l’ufficio tiene il registro."
+  },
+  "sessions": {
+    "title": "Presenza alla formazione",
+    "loading": "Lettura delle sessioni aperte…",
+    "empty": "Nessuna sessione di formazione aperta in questa sede",
+    "emptyHint": "Il formatore apre la sessione in ufficio (Persone › Competenze e formazione); qui compare subito.",
+    "hint": "Scegli la sessione a cui partecipi.",
+    "signed_one": "{count} firma",
+    "signed_other": "{count} firme",
+    "count_one": "{count} sessione aperta",
+    "count_other": "{count} sessioni aperte"
+  },
+  "keys": {
+    "tab": "Passa da una sessione all’altra",
+    "open": "Apre la sessione selezionata",
+    "back": "Indietro"
+  },
+  "fact": {
+    "day": "Giorno",
+    "hours": "Durata",
+    "hoursValue": "{hours} h",
+    "language": "Lingua",
+    "trainer": "Formatore",
+    "where": "Dove"
+  },
+  "session": {
+    "type": "Sessione di formazione",
+    "loading": "Lettura della sessione…",
+    "signTitle": "Firma la tua presenza",
+    "scan": "Scansiona il tuo badge",
+    "scanHint": "Poi digita il tuo PIN. L’ufficio lo controlla subito; non resta mai su questo tablet.",
+    "pickName": "Scegli il tuo nome",
+    "counts": "{signed} firme · {waiting} da controfirmare"
+  },
+  "who": {
+    "read": "Badge letto",
+    "reading": "Lettura del badge…",
+    "unknown": "Questo badge non è conosciuto qui, oppure la persona non lavora più qui. Chiedi al capo reparto.",
+    "byName": "Scegli invece un nome",
+    "useBadge": "Scansiona invece un badge",
+    "noRoster": "Questo tablet non ha un elenco di nomi: scansiona il badge."
+  },
+  "stopped": {
+    "title": "Le firme sono chiuse",
+    "closed": "Questa sessione è stata chiusa in ufficio: nessuno la firma più.",
+    "cancelled": "Questa sessione è stata annullata in ufficio: nessuno la firma più.",
+    "cancelledWhy": "Questa sessione è stata annullata in ufficio: {reason}"
+  },
+  "done": {
+    "signed": "{name} ha firmato alle {time}. Prossima persona: scansiona il tuo badge.",
+    "countersigned_one": "Il formatore ha controfirmato {count} persona alle {time}.",
+    "countersigned_other": "Il formatore ha controfirmato {count} persone alle {time}."
+  },
+  "attendance": {
+    "title_one": "{count} firma",
+    "title_other": "{count} firme",
+    "empty": "Nessuno ha ancora firmato.",
+    "unnamed": "Una persona di questa sede",
+    "tablet": "Firmato alle {time} sul tablet",
+    "paper": "Firmato su carta, registrato alle {time}",
+    "waiting": "Attende il formatore",
+    "countersigned": "Controfirmato",
+    "notUnderstood": "Lingua non compresa"
+  },
+  "trainer": {
+    "title": "Il formatore: {name}",
+    "hint": "Quando tutti hanno firmato, il formatore verifica la lingua di ogni persona e controfirma con il proprio PIN.",
+    "outside": "{name} non ha un accesso in questa sede: l’ufficio controfirma dal foglio cartaceo."
+  },
+  "sign": {
+    "title": "Firma la tua presenza",
+    "summary": "{day} · {hours} h · formatore {trainer}",
+    "badgeOwner": "Il titolare del badge",
+    "byBadge": "Con il badge",
+    "byName": "Con il nome"
+  },
+  "pin": {
+    "wrong": "Il badge o il PIN è sbagliato, oppure questa persona è bloccata per qualche minuto dopo troppi PIN sbagliati.",
+    "rateLimited": "Troppi tentativi su questo tablet: aspetta un momento, poi riprova.",
+    "offline": "Nessuna rete: la firma la aspetta. Non è stato firmato nulla.",
+    "unavailable": "L’ufficio non ha risposto. Riprova: nulla viene firmato due volte."
+  },
+  "check": {
+    "title": "Ognuno ha compreso la sessione in {language}?",
+    "law": "Il formatore verifica che ogni persona abbia compreso la lingua in cui si è tenuta la sessione (D.Lgs. 81/2008 art. 37 c.13). Rispondi per ogni persona.",
+    "all": "Tutti hanno compreso",
+    "list_one": "{count} persona da controfirmare",
+    "list_other": "{count} persone da controfirmare",
+    "how": "{name} ha compreso?",
+    "understood": "Ha compreso",
+    "notUnderstood": "Non ha compreso",
+    "notUnderstoodMeans": "Chi non ha compreso non supera questa formazione: va ripetuta in una lingua che comprende.",
+    "answered": "{answered} di {total} con risposta"
+  },
+  "countersign": {
+    "title": "Controfirma come formatore",
+    "summary_one": "Controfirmi la presenza di {count} persona.",
+    "summary_other": "Controfirmi la presenza di {count} persone.",
+    "checks": "Hanno compreso: {understood} · non hanno compreso: {notUnderstood}",
+    "trainer": "Formatore"
+  },
+  "ppe": {
+    "title": "Ricevi DPI",
+    "law": "Chi riceve firma la ricevuta con il proprio PIN (D.Lgs. 81/2008 art. 77 c.4).",
+    "scan": "Scansiona il badge di chi riceve",
+    "scanHint": "I DPI che mancano al suo kit compaiono da soli.",
+    "pickName": "Chi riceve?",
+    "tileMissing_one": "Ne manca {count} nel kit",
+    "tileMissing_other": "Ne mancano {count} nel kit"
+  },
+  "person": {
+    "type": "Riceve",
+    "role": "Mansione: {role}",
+    "noRole": "Nessuna scheda mansione: niente è proposto.",
+    "missing_one": "Kit: manca {count} DPI",
+    "missing_other": "Kit: mancano {count} DPI",
+    "complete": "Kit: non manca nulla"
+  },
+  "lines": {
+    "title": "Da consegnare",
+    "empty": "Ancora niente: scegli un DPI qui sotto o scansionane il codice.",
+    "units_one": "{count} pezzo",
+    "units_other": "{count} pezzi"
+  },
+  "add": {
+    "title": "Aggiungi un DPI",
+    "scan": "Scansiona il codice di un DPI",
+    "scanHint": "Scansiona il codice del DPI, oppure tocca il suo riquadro.",
+    "read": "Letto {code}",
+    "unknown": "Nessun DPI con il codice {code} qui: tocca il suo riquadro.",
+    "loading": "Lettura dei DPI…",
+    "none": "Questa azienda non ha ancora DPI: l’ufficio li aggiunge al catalogo dei DPI."
+  },
+  "line": {
+    "type": "Per {name}",
+    "quantity": "Quanti",
+    "less": "Uno in meno",
+    "more": "Uno in più",
+    "atLeastOne": "Almeno uno",
+    "atMost": "Al massimo {count}",
+    "why": "Perché",
+    "size": "Taglia",
+    "oneSize": "Taglia unica: nessuna taglia da scegliere.",
+    "sizeHint": "Scegli la taglia: il DPI viene aggiunto.",
+    "oneSizeShort": "Taglia unica",
+    "sizeValue": "Taglia {size}",
+    "sizeMissing": "Taglia da scegliere",
+    "pickSize": "Scegli la taglia",
+    "fromKit": "dal kit",
+    "unknownItem": "Un DPI non più a catalogo",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "times": "× {count}"
+  },
+  "reason": {
+    "NEW": "Nuovo",
+    "REPLACEMENT": "Sostituzione",
+    "LOST": "Smarrito"
+  },
+  "receipt": {
+    "title": "Firma la ricevuta",
+    "lines_one": "{count} DPI nella ricevuta",
+    "lines_other": "{count} DPI nella ricevuta",
+    "done": "Ricevuta firmata da {name}",
+    "doneAt_one": "{count} pezzo, firmato alle {time}.",
+    "doneAt_other": "{count} pezzi, firmati alle {time}.",
+    "signed": "Firmato: «{statement}»",
+    "office": "L’ufficio vede subito la ricevuta, con i DPI e il modo in cui è stata firmata."
+  },
+  "held": {
+    "offline": "Serve la rete: l’ufficio controlla subito ogni firma",
+    "busy": "Controllo del PIN…",
+    "check": "Prima rispondi per ogni persona",
+    "size": "Prima scegli la taglia",
+    "countersign": {
+      "offline": "Serve la rete",
+      "stopped": "Le firme sono chiuse",
+      "outsideTrainer": "Il formatore non ha un accesso qui: controfirma l’ufficio",
+      "nobody": "Nessuno attende la controfirma del formatore"
+    },
+    "receive": {
+      "offline": "Serve la rete",
+      "empty": "Aggiungi almeno un DPI",
+      "size": "Un DPI attende ancora la taglia",
+      "tooMany": "Al massimo 20 DPI in una ricevuta"
+    }
+  },
+  "action": {
+    "back": "Indietro",
+    "retry": "Riprova",
+    "backToSession": "Torna alla sessione",
+    "countersign": "Controfirma",
+    "toPin": "Controfirma con il PIN",
+    "otherPerson": "Altra persona",
+    "sign": "Firma con il PIN",
+    "remove": "Togli",
+    "lineDone": "Fatto",
+    "changeItems": "Cambia i DPI",
+    "home": "Home",
+    "nextPerson": "Prossima persona"
+  },
+  "refusal": {
+    "SESSION_STOPPED": {
+      "message": "Questa sessione è stata chiusa o annullata in ufficio: le firme sono chiuse.",
+      "fix": "Chiedi al formatore quale sessione è aperta ora."
+    },
+    "ATTENDED_ALREADY": {
+      "message": "Hai già firmato questa sessione.",
+      "fix": "Non c’è altro da fare: la prossima persona scansiona il suo badge."
+    },
+    "PERSON_NOT_ACTIVE": {
+      "message": "Questa persona non lavora più per l’azienda.",
+      "fix": "Chiedi all’ufficio di controllare la scheda della persona."
+    },
+    "PERSON_OTHER_COMPANY": {
+      "message": "Questa persona lavora per un’altra azienda rispetto alla sessione.",
+      "fix": "Chiedi al formatore: si firma una sessione della propria azienda."
+    },
+    "NO_EMPLOYEE": {
+      "message": "Questo accesso non è ancora collegato alla scheda di una persona.",
+      "fix": "Chiedi all’ufficio di collegarlo; intanto firma su carta."
+    },
+    "NOT_THE_TRAINER": {
+      "message": "Controfirma solo il formatore della sessione, con il proprio PIN.",
+      "fix": "Chiedi al formatore di controfirmare."
+    },
+    "NO_TRAINER_WORKER": {
+      "message": "Il formatore non ha un accesso in questa sede.",
+      "fix": "L’ufficio controfirma dal foglio cartaceo."
+    },
+    "COUNTERSIGNED_ALREADY": {
+      "message": "Nel frattempo la presenza di qualcuno è stata controfirmata.",
+      "fix": "L’elenco è stato riletto: controllalo e controfirma di nuovo."
+    },
+    "ATTENDANCE_VOIDED": {
+      "message": "Nel frattempo l’ufficio ha annullato una presenza.",
+      "fix": "L’elenco è stato riletto: controllalo e controfirma di nuovo."
+    },
+    "NOT_OF_SESSION": {
+      "message": "Una presenza non è di questa sessione.",
+      "fix": "L’elenco è stato riletto: controllalo e controfirma di nuovo."
+    },
+    "NOT_ACTIVE": {
+      "message": "Questa persona non lavora più qui: i DPI si consegnano solo a chi lavora per l’azienda.",
+      "fix": "Chiedi all’ufficio di controllare la scheda della persona."
+    },
+    "OTHER_COMPANY": {
+      "message": "Questa persona lavora per un’altra azienda rispetto a questa sede.",
+      "fix": "I DPI si consegnano in una sede della sua azienda."
+    }
+  }
+}

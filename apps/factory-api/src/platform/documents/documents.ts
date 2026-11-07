@@ -5,9 +5,10 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type Clock } from '@nexus/factory-domain/core/time'
 import { composeDocument, type ComposedDocument } from '@nexus/factory-domain/documents/compose'
-import type { CompanyLegal, DocumentInput, DocumentLanguage, DocumentType } from '@nexus/factory-domain/documents/model'
+import { attachDocumentLogo, type CompanyLegal, type DocumentInput, type DocumentLanguage, type DocumentType } from '@nexus/factory-domain/documents/model'
 import { sampleDocument } from '@nexus/factory-domain/documents/sample'
 import type { CommandCaller } from '../../core/command'
+import { documentLogoIn } from '../branding/logo'
 import { actorOf } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import type { FileView } from '../files/contract'
@@ -49,8 +50,10 @@ const addressSchema = z.object({
  */
 export async function companyLegalOf(caller: CommandCaller, companyId: string): Promise<CompanyLegal> {
   if (!isUuid(companyId)) throw new NotFoundError('Company not found.')
-  const row = await caller.withClient((client) =>
-    client.company.findUnique({
+  // B-W2b-161: and the logo of its branding (read only by an office or a system caller; the bytes when the PDF is painted).
+  const { row, logo } = await caller.withClient(async (client) => ({
+    logo: await documentLogoIn(client, caller, companyId),
+    row: await client.company.findUnique({
       where: { id: companyId },
       select: {
         legalName: true,
@@ -68,10 +71,10 @@ export async function companyLegalOf(caller: CommandCaller, companyId: string): 
         documentFooter: true,
       },
     }),
-  )
+  }))
   if (!row) throw new NotFoundError('Company not found.')
   const address = addressSchema.safeParse(row.address)
-  return {
+  const legal: CompanyLegal = {
     legalName: row.legalName,
     tradeName: row.tradeName,
     address: address.success ? address.data : null,
@@ -86,6 +89,7 @@ export async function companyLegalOf(caller: CommandCaller, companyId: string): 
     pec: row.pec,
     documentFooter: row.documentFooter,
   }
+  return attachDocumentLogo(legal, logo)
 }
 
 /** What an issuing module asks to print: its frozen document without the company, which comes from the Company row. */

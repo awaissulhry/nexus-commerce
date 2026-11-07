@@ -8,6 +8,7 @@ import type { Gateway } from '../gateway/gateway'
 import { processGateway } from '../gateway/service'
 import type { FileStoreAdapter } from './port'
 import { fileStorage, type FileStorage } from './store'
+import { multipartStorage, type MultipartStorage } from './multipart/store'
 
 /**
  * The process's files runtime: the store behind the gateway and, with FACTORY_ENV local or test, the local store whose
@@ -18,6 +19,8 @@ import { fileStorage, type FileStorage } from './store'
 
 export interface FilesRuntime {
   readonly storage: FileStorage
+  /** B-W2b-160 (COL-052): large uploads in parts, through the same adapters and gateway. */
+  readonly multipart: MultipartStorage
   /** The local store, or null (staging and production: every FAKE account is refused there anyway). */
   readonly local: LocalFileStore | null
   /** Presigned requests' expiry and the local tokens' check. */
@@ -33,8 +36,10 @@ export interface FilesRuntimeOptions {
 }
 
 export function createFilesRuntime(options: FilesRuntimeOptions): FilesRuntime {
+  const adapters = { r2: options.r2 ?? r2FileStore(), local: options.local }
   return Object.freeze({
-    storage: fileStorage(options.gateway, { r2: options.r2 ?? r2FileStore(), local: options.local }),
+    storage: fileStorage(options.gateway, adapters),
+    multipart: multipartStorage(options.gateway, adapters),
     local: options.local,
     clock: options.clock ?? serverClock,
   })

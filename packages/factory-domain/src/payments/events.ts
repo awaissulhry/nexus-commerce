@@ -1,12 +1,14 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { PAYMENT_METHODS } from './payments'
 
 /**
  * The payments module's events (plan A1 §3.4, §3.5; B-W1-28; FIN-121, FIN-066; Q12). apps/factory-api's
  * modules/payments emits them in the command that makes the change. Payloads carry ids and kinds only: never an amount
  * or a bank reference (a screen refetches what it shows, with its grain).
  *
- *   payment.recorded              a bank transfer received was recorded
+ *   payment.recorded              a bank transfer received was recorded (B-W2b-F7: its method, a card or SEPA debit one
+ *                                 recorded from a payment intent too)
  *   payment.allocated             part of a payment was allocated to a deposit request or an issued invoice (A2 SCR-080's
  *                                 Payment column, SCR-082)
  *   payment.allocation_reversed   an allocation was taken back by a reversal row
@@ -37,8 +39,8 @@ export const events = [
   defineEvent({
     type: 'payment.recorded',
     context: 'payments',
-    description: 'A payment received (a bank transfer) was recorded.',
-    payload: z.strictObject({ paymentId: z.uuid(), partyId: z.uuid(), method: z.literal('BANK_TRANSFER') }),
+    description: 'A payment received (a bank transfer, or a card or SEPA debit payment of a payment intent) was recorded.',
+    payload: z.strictObject({ paymentId: z.uuid(), partyId: z.uuid(), method: z.enum(PAYMENT_METHODS) }),
     live,
   }),
   defineEvent({
