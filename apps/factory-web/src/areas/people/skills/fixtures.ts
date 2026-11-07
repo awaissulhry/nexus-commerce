@@ -1,6 +1,15 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { COMPANY, inShell, PREFIX, SCOPE_ALL, SCOPE_ONE, SIGHT_HR, SIGHT_OFF, SITE_N, SITE_S, TODAY, type PeopleRole, PEOPLE_ROLES } from '../_shared/fixtures'
+import { permissionCheck } from '../../../lib/session/session'
+import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER } from '../../../shell/design-data'
+import { officeNavFor } from '../../../shell/nav/office-nav'
+import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
+import { COMPANY, inShell, PREFIX, SCOPE_ALL, SCOPE_ONE, SIGHT_HR, SIGHT_OFF, SITE_N, SITE_S, SITES, TODAY, type PeopleRole, PEOPLE_ROLES } from '../_shared/fixtures'
+import { cell, DEMO_CATALOGUE, DEMO_COURSE_REFS, DEMO_COURSES, DEMO_INSTRUCTION, DEMO_REQUIREMENTS } from './training/_demo'
+import { lensesFor, trainingAddressOf, trainingCan } from './training/model'
+import type { TrainingDialog } from './training/use-training'
+import type { TrainingPart } from './view/SkillsView'
 import type { Authorisation, CellDetail, EmployeeLevel, EmployeeSkills, Matrix, MatrixRow, Skill } from './api'
 import { dialogPerson, skillsAddressOf, skillsCan } from './model'
 import type { SkillDialog } from './use-skill-dialogs'
@@ -9,8 +18,8 @@ import { SkillsView, type MatrixState, type SkillsModel } from './view/SkillsVie
 /**
  * SCR-160 — Skills & training with made-up people and skills only: the matrix (operations, machines), a tile pressed, Show, sort
  * by name, All sites, a cell's detail (a level, a trainee, a machine), 1–4 saving, every dialog, a refusal, the page's
- * states and the roles the design names (HR, the floor supervisor who may set levels, read-only, no right). The training
- * columns come in W2b-2.
+ * states and the roles the design names (HR, the floor supervisor who may set levels, read-only, no right). W2b-2
+ * (B-W2b-146): the Safety column group, the training tiles, a course cell and Record training from the band.
  */
 
 const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(n).padStart(12, '0')}`
@@ -24,15 +33,17 @@ const TEAM = { id: uid('4004', 1), code: 'A1', name: 'Squadra A1' }
 const TEAM_B = { id: uid('4004', 2), code: 'B1', name: 'Squadra B1' }
 
 const level = (n: number, skillId: string, value: MatrixRow['levels'][number]['level'], extra: Partial<MatrixRow['levels'][number]> = {}): MatrixRow['levels'][number] => ({ skillId, levelId: uid('4005', n), level: value, since: '2026-03-02', traineeUntil: null, trainee: 'NONE', signedOffOn: null, version: 1, ...extra })
-const machine = (n: number, classId: string, extra: Partial<MatrixRow['authorisations'][number]> = {}): MatrixRow['authorisations'][number] => ({ machineClassId: classId, authorisationId: uid('4006', n), state: 'AUTHORISED', authorisedOn: '2026-02-16', validUntil: null, ending: false, version: 1, ...extra })
-const person = (n: number, name: string, extra: Partial<MatrixRow> = {}): MatrixRow => ({ employeeId: uid('4007', n), name, displayName: name.split(' ')[0]!, companyId: COMPANY, siteId: SITE_N.id, line: LINE, team: TEAM, levels: [], authorisations: [], canManage: true, canAuthorise: true, ...extra })
+const machine = (n: number, classId: string, extra: Partial<MatrixRow['authorisations'][number]> = {}): MatrixRow['authorisations'][number] => ({ machineClassId: classId, authorisationId: uid('4006', n), state: 'AUTHORISED', authorisedOn: '2026-02-16', validUntil: null, ending: false, held: false, heldBy: [], version: 1, ...extra })
+const person = (n: number, name: string, extra: Partial<MatrixRow> = {}): MatrixRow => ({ employeeId: uid('4007', n), name, displayName: name.split(' ')[0]!, companyId: COMPANY, siteId: SITE_N.id, line: LINE, team: TEAM, levels: [], authorisations: [], trainings: null, canManage: true, canAuthorise: true, ...extra })
+// B-W2b-146: the Safety column group's cells (made-up): general, specific high risk, supervisor.
+const [GEN, SPEC, SUP] = DEMO_COURSE_REFS.map((course) => course.id) as [string, string, string]
 
 export const ROWS: MatrixRow[] = [
-  person(1, 'Giulia Esempio', { levels: [level(1, SKILLS[0]!.id, 'TRAINER'), level(2, SKILLS[1]!.id, 'EXPERT')], authorisations: [machine(1, pressClass.id)] }),
-  person(2, 'Paolo Prova', { levels: [level(3, SKILLS[0]!.id, 'LEARNING', { traineeUntil: '2026-12-01', trainee: 'TRAINEE' }), level(4, SKILLS[2]!.id, 'CAN_DO')], authorisations: [machine(2, stitchClass.id, { validUntil: '2026-12-10', ending: true })] }),
-  person(3, 'Ion Campione', { levels: [level(5, SKILLS[1]!.id, 'CAN_DO', { traineeUntil: '2026-10-15', trainee: 'OVERDUE' })], authorisations: [machine(3, stitchClass.id, { state: 'EXPIRED', validUntil: '2026-09-30' })] }),
-  person(4, 'Sara Demo', { line: LINE_B, team: TEAM_B, levels: [level(6, SKILLS[2]!.id, 'EXPERT'), level(7, SKILLS[4]!.id, 'CAN_DO')] }),
-  person(5, 'Davide Modello', { line: LINE_B, team: TEAM_B, levels: [level(8, SKILLS[1]!.id, 'TRAINER')], authorisations: [machine(4, pressClass.id, { state: 'NOT_YET', authorisedOn: '2026-11-16' })] }),
+  person(1, 'Giulia Esempio', { levels: [level(1, SKILLS[0]!.id, 'TRAINER'), level(2, SKILLS[1]!.id, 'EXPERT')], authorisations: [machine(1, pressClass.id)], trainings: [cell(GEN, 'VALID', { record: { id: uid('4010', 1), completedOn: '2026-03-02', validUntil: null, languageChecked: true } }), cell(SPEC, 'VALID'), cell(SUP, 'VALID', { required: false })] }),
+  person(2, 'Paolo Prova', { levels: [level(3, SKILLS[0]!.id, 'LEARNING', { traineeUntil: '2026-12-01', trainee: 'TRAINEE' }), level(4, SKILLS[2]!.id, 'CAN_DO')], authorisations: [machine(2, stitchClass.id, { validUntil: '2026-12-10', ending: true }), machine(5, pressClass.id, { held: true, heldBy: [SPEC] })], trainings: [cell(GEN, 'VALID', { record: { id: uid('4010', 2), completedOn: '2026-03-02', validUntil: null, languageChecked: false }, languageNotChecked: true }), cell(SPEC, 'NEEDED', { overdue: true, neededBy: '2026-10-20' })] }),
+  person(3, 'Ion Campione', { levels: [level(5, SKILLS[1]!.id, 'CAN_DO', { traineeUntil: '2026-10-15', trainee: 'OVERDUE' })], authorisations: [machine(3, stitchClass.id, { state: 'EXPIRED', validUntil: '2026-09-30' })], trainings: [cell(GEN, 'VALID'), cell(SPEC, 'EXPIRED'), cell(SUP, 'NEEDED', { neededBy: '2026-12-20' })] }),
+  person(4, 'Sara Demo', { line: LINE_B, team: TEAM_B, levels: [level(6, SKILLS[2]!.id, 'EXPERT'), level(7, SKILLS[4]!.id, 'CAN_DO')], trainings: [cell(GEN, 'DUE_SOON', { required: false }), cell(SPEC, 'VALID')] }),
+  person(5, 'Davide Modello', { line: LINE_B, team: TEAM_B, levels: [level(8, SKILLS[1]!.id, 'TRAINER')], authorisations: [machine(4, pressClass.id, { state: 'NOT_YET', authorisedOn: '2026-11-16' })], trainings: [cell(GEN, 'VALID'), cell(SUP, 'DUE_SOON')] }),
 ]
 const SOUTH = person(6, 'Chiara Copia', { siteId: SITE_S.id, line: { id: uid('4003', 3), code: 'L-S1', name: 'Linea guanti' }, team: { id: uid('4004', 3), code: 'S1', name: 'Squadra S1' }, levels: [level(9, SKILLS[0]!.id, 'CAN_DO')] })
 
@@ -44,8 +55,9 @@ export const MATRIX: Matrix = {
     { ...stitchClass, active: true, keptAtSites: [SITE_N.id] },
     { ...pressClass, active: true, keptAtSites: [] },
   ],
+  courses: DEMO_COURSE_REFS,
   sites: [SITE_N, SITE_S],
-  tiles: { trainees: 2, traineesOverdue: 1, authorisationsEnding: 1 },
+  tiles: { trainees: 2, traineesOverdue: 1, authorisationsEnding: 1, trainingOverdue: 2, trainingDueSoon: 2, authorisationsHeld: 1, languageNotChecked: 1 },
   today: TODAY,
 }
 
@@ -84,7 +96,7 @@ const LEVEL_DETAIL: CellDetail = {
 }
 const MACHINE_DETAIL: CellDetail = { ...LEVEL_DETAIL, levels: [], authorisations: [authorisationRow()], history: [{ id: uid('4008', 3), at: '2026-02-16T08:00:00.000Z', action: 'people.authoriseMachine', recordId: uid('4006', 2), by: 'Anna Esempio', before: null, after: null, reason: null }] }
 
-interface SkillsCase {
+export interface SkillsCase {
   role: PeopleRole
   page: SkillsModel
 }
@@ -92,7 +104,7 @@ interface SkillsCase {
 const common = { busy: false, problem: null }
 const paolo = dialogPerson(ROWS[1]!)
 
-function page(role: PeopleRole, over: Partial<SkillsModel> = {}, terms = ''): SkillsCase {
+export function page(role: PeopleRole, over: Partial<SkillsModel> = {}, terms = ''): SkillsCase {
   const dialogs = over.dialogs
   return {
     role,
@@ -116,15 +128,85 @@ function page(role: PeopleRole, over: Partial<SkillsModel> = {}, terms = ''): Sk
 }
 
 const withDialog = (dialog: SkillDialog, extra: Partial<SkillsModel['dialogs']> = {}) => page('hr', { dialogs: { dialog, ...extra } as SkillsModel['dialogs'] })
-const ready = (value: Matrix): MatrixState => ({ status: 'ready', value })
+
+// ---- B-W2b-146: the training part, with the real role templates (the admin template holds no safety.view) -----------------------
+
+const template = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
+export const TRAINING_ROLES = {
+  hrSafety: template('hr'),
+  safety: template('safety_officer'),
+  production: template('production_manager'),
+  supervisor: template('floor_supervisor'),
+  readOnly: template('read_only'),
+  doctor: template('company_doctor'),
+} as const
+export type TrainingRole = keyof typeof TRAINING_ROLES
+
+/** The Office shell around a page for a role template (the role's navigation: Skills & training opens for safety.view too). */
+export function inShellAs(path: string, page: ReactNode, permissions: readonly string[]): ReactNode {
+  const shell: OfficeShellViewModel = {
+    nav: officeNavFor(permissionCheck([...permissions])),
+    path,
+    switcher: { companies: DEMO_COMPANIES, company: 'DEMO', sites: SITES.map((site) => ({ id: site.id, name: site.name, code: site.code })), site: SITE_N.id, path },
+    user: { displayName: DEMO_USER.displayName, email: DEMO_USER.email },
+    tenantTag: DEMO_TAG,
+    banners: [],
+  }
+  return createElement(OfficeShellView, { model: shell }, page)
+}
+
+export interface TrainingOver {
+  dialog?: TrainingDialog | null
+  courses?: TrainingPart['courses']
+  requirements?: TrainingPart['requirements']
+  instruction?: TrainingPart['instruction']
+}
+
+/** The page's training part as a role sees it, with made-up sections read. */
+export function trainingPart(permissions: readonly string[], terms = '', over: TrainingOver = {}): TrainingPart {
+  const can = trainingCan(permissions)
+  return {
+    can,
+    address: trainingAddressOf(new URLSearchParams(terms), can),
+    lenses: lensesFor(can),
+    courses: over.courses ?? { status: 'ready', value: DEMO_CATALOGUE },
+    requirements: over.requirements ?? { status: 'ready', value: DEMO_REQUIREMENTS },
+    instruction: over.instruction ?? { status: 'ready', value: DEMO_INSTRUCTION },
+    today: TODAY,
+    dialogs: {
+      dialog: over.dialog ?? null,
+      can,
+      courses: DEMO_COURSES.filter((course) => course.status === 'ACTIVE'),
+      people: ROWS.map((row) => ({ employeeId: row.employeeId, name: row.name, companyId: row.companyId, siteId: row.siteId })),
+      machineClasses: DEMO_REQUIREMENTS.machineClasses,
+      today: TODAY,
+      canAddGroupWide: true,
+      riskHref: null,
+      prefix: PREFIX,
+    },
+  }
+}
+
+export interface SkillsCaseAs extends SkillsCase {
+  permissions?: readonly string[]
+}
+
+/** A case of the page for a role template, with the training part (B-W2b-146). */
+export function trainingCase(role: TrainingRole, over: Partial<SkillsModel> = {}, terms = '', training: TrainingOver = {}): SkillsCaseAs {
+  const permissions = TRAINING_ROLES[role]
+  const base = page('hr', over, terms)
+  return { ...base, permissions, page: { ...base.page, can: skillsCan(permissions), training: trainingPart(permissions, terms, training) } }
+}
+export const ready = (value: Matrix): MatrixState => ({ status: 'ready', value })
 const authorise = (over: Partial<Extract<SkillDialog, { kind: 'authorise' }>> = {}): SkillDialog => ({ kind: 'authorise', people: [paolo], fixed: true, draft: { classId: pressClass.id, from: TODAY, until: null }, refused: [], done: 0, ...common, ...over })
 const signoff = (over: Partial<Extract<SkillDialog, { kind: 'signoff' }>> = {}): SkillDialog => ({ kind: 'signoff', person: paolo, skillId: SKILLS[0]!.id, skillLabel: 'Taglio pelle', levelId: uid('4005', 3), version: 2, since: '2026-09-01', draft: { on: TODAY, trainerId: null, level: null }, ...common, ...over })
 
-function SkillsDesign({ model }: { model: SkillsCase }) {
-  return inShell('/people/skills', createElement(SkillsView, { model: model.page }), model.role)
+function SkillsDesign({ model }: { model: SkillsCaseAs }) {
+  const view = createElement(SkillsView, { model: model.page })
+  return model.permissions ? inShellAs('/people/skills', view, model.permissions) : inShell('/people/skills', view, model.role)
 }
 
-export const designScreen = defineDesignScreen<SkillsCase>({
+export const designScreen = defineDesignScreen<SkillsCaseAs>({
   screen: 'SCR-160',
   title: 'Skills matrix (skills and machine authorisations)',
   view: SkillsDesign,
@@ -162,8 +244,16 @@ export const designScreen = defineDesignScreen<SkillsCase>({
     { id: 'no-right', label: 'Sales: no right (no navigation row either)', model: page('sales') },
     { id: 'loading', label: 'Loading', model: page('hr', { matrix: { status: 'loading' }, asOf: null, live: 'connecting' }) },
     { id: 'error', label: "The matrix couldn't be read", model: page('hr', { matrix: { status: 'error', problem: 'problem.unavailable' }, asOf: null }) },
-    { id: 'empty-people', label: 'No people yet', model: page('hr', { matrix: ready({ ...MATRIX, rows: [], tiles: { trainees: 0, traineesOverdue: 0, authorisationsEnding: 0 } }) }) },
-    { id: 'empty-skills', label: 'No skills yet', model: page('hr', { matrix: ready({ ...MATRIX, skills: [], machineClasses: [] }) }) },
+    { id: 'empty-people', label: 'No people yet', model: page('hr', { matrix: ready({ ...MATRIX, rows: [], tiles: { trainees: 0, traineesOverdue: 0, authorisationsEnding: 0, trainingOverdue: 0, trainingDueSoon: 0, authorisationsHeld: 0, languageNotChecked: 0 } }) }) },
+    { id: 'empty-skills', label: 'No skills yet', model: page('hr', { matrix: ready({ ...MATRIX, skills: [], machineClasses: [], courses: [] }) }) },
+    // B-W2b-146 (W2b-2): the Safety column group, its tiles, a course cell, a machine held by its training, Record training.
+    { id: 'safety-hr', label: 'HR (safety reader): every column group, the training tiles, Record training in the band', model: trainingCase('hrSafety'), note: 'Safety courses as DueCells (shaded = the role sheet asks it); Machines show Held when a course is missing; r records training for the rows chosen.' },
+    { id: 'show-safety', label: 'Show: Safety only', model: trainingCase('hrSafety', {}, 'show=SAFETY') },
+    { id: 'tile-training-overdue', label: 'Tile pressed: training overdue (person × course)', model: trainingCase('hrSafety', { matrix: ready({ ...MATRIX, rows: [ROWS[1]!, ROWS[2]!] }) }, 'tile=TRAINING_OVERDUE&show=SAFETY') },
+    { id: 'tile-held', label: 'Tile pressed: machine authorisations held by expired training', model: trainingCase('hrSafety', { matrix: ready({ ...MATRIX, rows: [ROWS[1]!] }) }, 'tile=AUTHORISATIONS_HELD') },
+    { id: 'cell-course', label: 'Cell detail of a course: valid until, the certificate (PDF), Record training', model: trainingCase('hrSafety', { cell: { cell: { employeeId: ROWS[2]!.employeeId, kind: 'course', courseId: SUP }, title: 'Preposto (esempio)', detail: null, problem: null } }, 'show=SAFETY') },
+    { id: 'cell-course-needed', label: 'Cell detail of a course: needed, overdue, no record yet', model: trainingCase('hrSafety', { cell: { cell: { employeeId: ROWS[1]!.employeeId, kind: 'course', courseId: SPEC }, title: 'Specifica rischio alto (esempio)', detail: null, problem: null } }, 'show=SAFETY') },
+    { id: 'no-safety-reader', label: 'Admin without safety.view: the Safety columns empty, its tiles say why', model: page('hr', { matrix: ready({ ...MATRIX, rows: ROWS.map((row) => ({ ...row, trainings: null })), tiles: { ...MATRIX.tiles, trainingOverdue: null, trainingDueSoon: null, languageNotChecked: null } }) }) },
     { id: 'no-match', label: 'Nothing matches', model: page('hr', { matrix: ready({ ...MATRIX, rows: [] }) }, 'q=zzz') },
     { id: 'cut', label: 'More than 500 people: the list says so', model: page('hr', { matrix: ready({ ...MATRIX, complete: false }) }) },
   ],

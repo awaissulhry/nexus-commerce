@@ -1,12 +1,13 @@
 'use client'
 
-import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { MoreHorizontal, Printer, ShieldCheck, Users } from 'lucide-react'
+import { GraduationCap, MoreHorizontal, Printer, ShieldCheck, Users } from 'lucide-react'
 import { Banner, DetailPopover, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
+import { PrivacyNote } from '@nexus/ui/components/PrivacyNote/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, SegmentedControl, Select } from '@nexus/ui/primitives'
-import { CellSaveMark } from '../../../../lib/i18n/ds-parts'
+import { CellSaveMark, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
@@ -19,6 +20,8 @@ import type { Matrix, MatrixRow, SkillLevel } from '../api'
 import {
   authorisationOf,
   cellKey,
+  tileValue,
+  trainingOf,
   className,
   dialogPerson,
   groupOf,
@@ -47,12 +50,19 @@ import { CellPopoverBody, type CellPopoverActions, type CellState } from './Cell
 import { LevelMark, MachineMark } from './cells'
 import { SkillDialogs, useSkillWords, type SkillDialogsModel } from './SkillDialogs'
 import type { SkillDialogActions } from '../use-skill-dialogs'
+import type { Courses, InstructionEntry, InstructionList, Requirements, CourseRef, Course } from '../training/api'
+import { courseName, type Lens, type TrainingAddress, type TrainingCan } from '../training/model'
+import type { Section, TrainingDialogActions } from '../training/use-training'
+import { CoursePopoverBody } from '../training/view/CoursePopover'
+import { useTrainingWords, TrainingDue } from '../training/view/parts'
+import { CoursesLens, InstructionLens, NeedsLens } from '../training/view/TrainingLenses'
+import { TrainingDialogs, type TrainingDialogsModel } from '../training/view/TrainingDialogs'
 import '../skills.css'
 
 /** What the page tells: `ns` names the catalogue that owns the words. */
 export interface SkillNotice {
   tone: 'success' | 'warning' | 'danger'
-  ns: 'skills' | 'people'
+  ns: 'skills' | 'people' | 'training'
   key: string
   params?: Record<string, string | number>
 }
@@ -74,6 +84,37 @@ export interface SkillsModel {
   /** Cells waiting for the API (1–4). */
   saving: readonly string[]
   dialogs: SkillDialogsModel
+  /** B-W2b-146: the training part (lenses, Record training, the safety columns' rights); null in the W2b-1 cases. */
+  training?: TrainingPart | null
+}
+
+/** The training part of the page (B-W2b-146): the lenses the person may open and what each read. */
+export interface TrainingPart {
+  can: TrainingCan
+  address: TrainingAddress
+  lenses: readonly Lens[]
+  courses: Section<Courses>
+  requirements: Section<Requirements>
+  instruction: Section<InstructionList>
+  dialogs: TrainingDialogsModel
+  today: string
+}
+
+export interface TrainingViewActions {
+  onLens?: (lens: Lens) => void
+  onAddress?: (change: Partial<TrainingAddress>) => void
+  onRetry?: () => void
+  onCourse?: (id: string | 'new') => void
+  onStandard?: () => void
+  onArchiveMany?: (courses: Course[]) => void
+  onNeed?: (id: string) => void
+  onClassCourses?: (classId: string) => void
+  onInstruction?: () => void
+  onEntry?: (entry: InstructionEntry) => void
+  onPaperMany?: (entries: InstructionEntry[]) => void
+  /** Record training for these people (the band: none chosen; a selection; a course cell: one person and the course). */
+  onRecord?: (people: DialogPerson[], courseId?: string | null) => void
+  dialog?: TrainingDialogActions
 }
 
 export interface SkillsActions extends CellPopoverActions {
@@ -86,15 +127,61 @@ export interface SkillsActions extends CellPopoverActions {
   onAuthoriseMany?: (people: DialogPerson[]) => void
   onCatalogue?: () => void
   dialog?: SkillDialogActions
+  training?: TrainingViewActions
 }
 
 interface Cells {
   state: CellState | null
   saving: readonly string[]
   actions?: SkillsActions
+  /** B-W2b-146: a course cell's facts. */
+  today?: string
+  prefix?: string
+  canRecord?: boolean
 }
 
 const CellsContext = createContext<Cells>({ state: null, saving: [] })
+
+/** B-W2b-146: a safety course's cell (the DS DueCell, shaded when the role sheet asks it) and its popover. */
+function CourseCell({ row, course, title, grid }: { row: MatrixRow; course: CourseRef; title: string; grid: ICellRendererParams<MatrixRow> }) {
+  const { state, actions, today = '', prefix = '', canRecord = false } = useContext(CellsContext)
+  const t = useTrainingWords()
+  const ref: CellRef = { employeeId: row.employeeId, kind: 'course', courseId: course.id }
+  const open = state !== null && cellKey(state.cell) === cellKey(ref)
+  const cell = trainingOf(row, course.id)
+  const record = cell?.record ?? null
+  return (
+    <span className="fw-sk-cell">
+      <DetailPopover
+        trigger={cell ? <TrainingDue cell={cell} today={today} /> : <span className="fw-sk-none">—</span>}
+        triggerLabel={t('cell.open', { name: row.name, what: title })}
+        triggerClassName="fw-sk-cell-button"
+        label={title}
+        hoverDelay={0}
+        open={open}
+        onOpenChange={(next) => actions?.onCell?.(next ? ref : null, title)}
+        returnFocus={() => {
+          if (grid.node.rowIndex !== null) grid.api.setFocusedCell(grid.node.rowIndex, grid.column ?? '')
+        }}
+      >
+        {({ close }) =>
+          open ? (
+            <CoursePopoverBody
+              title={title}
+              person={row.name}
+              cell={cell}
+              today={today}
+              certificateHref={record ? `${prefix}/people/skills/certificate?record=${encodeURIComponent(record.id)}` : null}
+              canRecord={canRecord}
+              onRecord={() => actions?.training?.onRecord?.([dialogPerson(row)], course.id)}
+              onClose={() => close()}
+            />
+          ) : null
+        }
+      </DetailPopover>
+    </span>
+  )
+}
 
 /** One matrix cell: the DS popover's button around the mark, opened by Enter or a click, Esc back to the cell. */
 function MatrixCell({ cell, title, label, grid, children }: { cell: CellRef; title: string; label: string; grid: ICellRendererParams<MatrixRow>; children: ReactNode }) {
@@ -122,9 +209,33 @@ function MatrixCell({ cell, title, label, grid, children }: { cell: CellRef; tit
   )
 }
 
-export function matrixColumnDefs(columns: readonly MatrixColumn[], words: { t: (key: string, params?: Record<string, string | number>) => string; locale: string }, handlers: { current: { onCell: (cell: CellRef, title: string) => void; onLevel: (row: MatrixRow, skillId: string, level: SkillLevel) => void } }): ColDef<MatrixRow>[] {
+export function matrixColumnDefs(columns: readonly MatrixColumn[], words: { t: (key: string, params?: Record<string, string | number>) => string; locale: string; training?: (key: string, params?: Record<string, string | number>) => string }, handlers: { current: { onCell: (cell: CellRef, title: string) => void; onLevel: (row: MatrixRow, skillId: string, level: SkillLevel) => void } }): ColDef<MatrixRow>[] {
   const { t, locale } = words
+  const training = words.training ?? t
   return columns.map((column): ColDef<MatrixRow> => {
+    if (column.kind === 'course') {
+      const title = courseName(column.course, locale)
+      return {
+        colId: `course.${column.id}`,
+        headerName: title,
+        headerTooltip: `${training('column.course')} · ${column.course.code}`,
+        headerClass: 'fw-sk-head machine',
+        minWidth: 190,
+        flex: 1,
+        sortable: false,
+        valueGetter: (params) => {
+          const cell = params.data ? trainingOf(params.data, column.id) : null
+          return cell ? training(`due.${cell.state}`) : ''
+        },
+        cellRenderer: (params: ICellRendererParams<MatrixRow>) => (params.data ? <CourseCell row={params.data} course={column.course} title={title} grid={params} /> : null),
+        suppressKeyboardEvent: (params) => {
+          const row = params.data
+          if (params.event.type !== 'keydown' || params.event.key !== 'Enter' || !row) return false
+          handlers.current.onCell({ employeeId: row.employeeId, kind: 'course', courseId: column.id }, title)
+          return true
+        },
+      }
+    }
     if (column.kind === 'skill') {
       const title = skillName(column.skill, locale)
       return {
@@ -183,7 +294,7 @@ export function matrixColumnDefs(columns: readonly MatrixColumn[], words: { t: (
         const cell = authorisationOf(row, column.id)
         return (
           <MatrixCell cell={{ employeeId: row.employeeId, kind: 'machine', classId: column.id }} title={title} label={t('cell.open', { name: row.name, what: title })} grid={params}>
-            <MachineMark state={cell?.state ?? null} until={cell?.validUntil ?? null} ending={cell?.ending ?? false} />
+            <MachineMark state={cell?.state ?? null} until={cell?.validUntil ?? null} ending={cell?.ending ?? false} held={cell?.held ?? false} />
           </MatrixCell>
         )
       },
@@ -214,9 +325,13 @@ export function SkillsView({ model, actions }: { model: SkillsModel; actions?: S
 
 function Page({ model, actions }: { model: SkillsModel; actions?: SkillsActions }) {
   const t = useSkillWords()
+  const tr = useTrainingWords()
+  const ds = useDsWords()
   const people = useWords()
   const locale = useLocale()
   const scope = model.scope
+  const training = model.training ?? null
+  const lens: Lens = training?.address.lens ?? 'matrix'
   const [help, setHelp] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const handlers = useRef({ onCell: (_cell: CellRef, _title: string) => undefined as void, onLevel: (_row: MatrixRow, _skill: string, _level: SkillLevel) => undefined as void })
@@ -262,14 +377,28 @@ function Page({ model, actions }: { model: SkillsModel; actions?: SkillsActions 
         },
       },
       ...(site ? [site] : []),
-      ...matrixColumnDefs(skillColumns, { t, locale }, handlers),
+      ...matrixColumnDefs(skillColumns, { t, locale, training: tr }, handlers),
     ]
-  }, [scope, t, locale, address.sort, skillColumns, model.can.employees, model.prefix])
+  }, [scope, t, tr, locale, address.sort, skillColumns, model.can.employees, model.prefix])
 
-  if (!model.can.view) return <NoPeopleAccess permission="people.skills.view" />
+  // `r` records training for the rows chosen (design kb "r — record training for the selection"), never while typing or in a dialog.
+  const recordRef = useRef<() => void>(() => undefined)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'r' || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
+      event.preventDefault()
+      recordRef.current()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  if (!model.can.view && !training?.can.view) return <NoPeopleAccess permission="people.skills.view" />
 
   const empty = matrix !== null && shown.length === 0
-  const noSkills = matrix !== null && matrix.skills.length === 0 && matrix.machineClasses.length === 0
+  const noSkills = matrix !== null && matrix.skills.length === 0 && matrix.machineClasses.length === 0 && matrix.courses.length === 0
   const state: ReactNode =
     model.matrix.status === 'error' ? (
       <EmptyState
@@ -313,56 +442,83 @@ function Page({ model, actions }: { model: SkillsModel; actions?: SkillsActions 
   const heldOf = (row: MatrixRow): string =>
     skillColumns
       .flatMap((column) => {
+        if (column.kind === 'course') {
+          const cell = trainingOf(row, column.id)
+          return cell ? [`${courseName(column.course, locale)}: ${tr(`due.${cell.state}`)}`] : []
+        }
         const name = column.kind === 'skill' ? skillName(column.skill, locale) : className(column.entry, locale)
         const cell = column.kind === 'skill' ? levelOf(row, column.id) : authorisationOf(row, column.id)
         if (!cell) return []
         return [`${name}: ${t('level' in cell ? `level.${cell.level}` : `machine.${cell.state}`)}`]
       })
       .join(' · ')
+  const colIdOf = (column: MatrixColumn) => `${column.kind}.${column.id}`
   const [firstColumn, ...restColumns] = skillColumns
   const cardFields = {
     name: { role: 'title' as const },
     ...(address.sort === 'TEAM' ? { group: { role: 'subtitle' as const, draw: (row: MatrixRow) => groupOf(row) } } : {}),
-    ...(firstColumn ? { [`${firstColumn.kind === 'skill' ? 'skill' : 'machine'}.${firstColumn.id}`]: { role: 'field' as const, label: t('list.holds'), draw: (row: MatrixRow) => heldOf(row) || '—' } } : {}),
-    ...Object.fromEntries(restColumns.map((column) => [`${column.kind === 'skill' ? 'skill' : 'machine'}.${column.id}`, { role: 'hidden' as const }])),
+    ...(firstColumn ? { [colIdOf(firstColumn)]: { role: 'field' as const, label: t('list.holds'), draw: (row: MatrixRow) => heldOf(row) || '—' } } : {}),
+    ...Object.fromEntries(restColumns.map((column) => [colIdOf(column), { role: 'hidden' as const }])),
   }
 
   const picked = shown.filter((row) => selected.includes(row.employeeId))
   const authorisable = picked.filter((row) => row.canAuthorise)
+  const canRecord = training?.can.record ?? false
+  const recordHeld = !canRecord ? tr('held.record') : null
+  recordRef.current = () => {
+    if (canRecord && model.dialogs.dialog === null && !training?.dialogs.dialog) actions?.training?.onRecord?.(lens === 'matrix' ? picked.map(dialogPerson) : [])
+  }
   const ownKeys: readonly ListKey[] = [
     { keys: ['←', '→', '↑', '↓'], does: t('keys.arrows') },
     { keys: ['Enter'], does: t('keys.enter') },
     { keys: ['1', '2', '3', '4'], does: t('keys.levels') },
+    ...(training?.can.view ? [{ keys: ['r'], does: tr('keys.record') }] : []),
   ]
+  const lensKeys: readonly ListKey[] = training?.can.view ? [{ keys: ['r'], does: tr('keys.record') }] : []
 
   const onSearch = (q: string) => actions?.onAddress?.({ q })
 
+  const lensHead =
+    training && training.lenses.length > 1 ? (
+      <div className="fw-tr-lenses">
+        <SegmentedControl ariaLabel={tr('lens.label')} value={lens} onChange={(next) => actions?.training?.onLens?.(next as Lens)} options={training.lenses.map((entry) => ({ value: entry, label: tr(`lens.${entry}`) }))} size="sm" />
+      </div>
+    ) : null
+
   return (
-    <CellsContext.Provider value={{ state: model.cell, saving: model.saving, ...(actions ? { actions } : {}) }}>
+    <CellsContext.Provider value={{ state: model.cell, saving: model.saving, ...(actions ? { actions } : {}), today: matrix?.today ?? training?.today ?? '', prefix: model.prefix, canRecord }}>
       <div className="fw-pp">
         <div className="fw-pp-head">
           <LiveLine asOf={model.asOf} live={model.live} />
           <span className="fw-pp-actions">
-            <Button size="sm" heldReason={model.can.authorise ? (matrix ? null : t('common.loading')) : t('held.noAuthorise')} onClick={() => actions?.onAuthoriseMany?.([])}>
-              <ShieldCheck size={14} aria-hidden /> {t('band.authorise')}
-            </Button>
+            {model.can.view && (
+              <Button size="sm" heldReason={model.can.authorise ? (matrix ? null : t('common.loading')) : t('held.noAuthorise')} onClick={() => actions?.onAuthoriseMany?.([])}>
+                <ShieldCheck size={14} aria-hidden /> {t('band.authorise')}
+              </Button>
+            )}
+            {training?.can.view && (
+              <Button size="sm" variant="primary" heldReason={recordHeld} onClick={() => actions?.training?.onRecord?.([])}>
+                <GraduationCap size={14} aria-hidden /> {tr('band.record')}
+              </Button>
+            )}
             <Menu
               label={<MoreHorizontal size={16} aria-hidden />}
               align="right"
               triggerProps={{ 'aria-label': t('band.more') }}
               items={[
-                { id: 'print', label: t('band.print'), href: printAddress(model.prefix, address), target: '_blank' },
-                ...(model.can.manage ? [{ id: 'catalogue', label: t('band.catalogue'), onSelect: () => actions?.onCatalogue?.() }] : []),
+                ...(model.can.view ? [{ id: 'print', label: t('band.print'), href: printAddress(model.prefix, address), target: '_blank' as const }] : []),
+                ...(training?.can.view ? [{ id: 'due', label: tr('band.duePdf'), href: `${model.prefix}/people/skills/due`, target: '_blank' as const }] : []),
+                ...(model.can.manage && lens === 'matrix' ? [{ id: 'catalogue', label: t('band.catalogue'), onSelect: () => actions?.onCatalogue?.() }] : []),
                 { id: 'keys', label: t('keys.title'), onSelect: () => setHelp(true) },
               ]}
             />
           </span>
         </div>
-        <PeoplePrivacyNote sight={model.sight} text={t('privacy.text')} />
+        {lens === 'matrix' ? <PeoplePrivacyNote sight={model.sight} text={t('privacy.text')} /> : <PrivacyNote level="individual" text={tr('privacy.text')} whoMore={tr('privacy.who')} labels={ds.privacyNote} />}
         {model.notice && (
           <Banner
             tone={model.notice.tone}
-            title={model.notice.ns === 'skills' ? t(model.notice.key, model.notice.params) : people(model.notice.key, model.notice.params)}
+            title={model.notice.ns === 'skills' ? t(model.notice.key, model.notice.params) : model.notice.ns === 'training' ? tr(model.notice.key, model.notice.params) : people(model.notice.key, model.notice.params)}
             action={
               <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
                 {people('common.close')}
@@ -370,76 +526,93 @@ function Page({ model, actions }: { model: SkillsModel; actions?: SkillsActions 
             }
           />
         )}
-        {matrix && !matrix.complete && <Banner tone="info" title={t('list.cut')} />}
+        {lensHead}
+        {lens === 'courses' && training && <CoursesLens section={training.courses} can={training.can} address={training.address} actions={{ ...actions?.training, onHelp: () => setHelp(true) }} />}
+        {lens === 'needs' && training && <NeedsLens section={training.requirements} actions={{ ...actions?.training, onHelp: () => setHelp(true) }} />}
+        {lens === 'instruction' && training && <InstructionLens section={training.instruction} can={training.can} address={training.address} today={training.today} actions={{ ...actions?.training, onHelp: () => setHelp(true) }} />}
+        {lens === 'matrix' && (
+          <>
+            {matrix && !matrix.complete && <Banner tone="info" title={t('list.cut')} />}
 
-        <MetricStrip
-          metrics={SKILL_TILES.map((tile: SkillTile) => ({
-            label: t(`tile.${tile}`),
-            value: matrix ? String(tile === 'TRAINEES' ? matrix.tiles.trainees : matrix.tiles.authorisationsEnding) : '—',
-            hint: tile === 'TRAINEES' && matrix && matrix.tiles.traineesOverdue > 0 ? t('tileHint.overdue', { count: matrix.tiles.traineesOverdue }) : t(`tileHint.${tile}`),
-            onClick: () => actions?.onAddress?.({ tile: address.tile === tile ? null : tile }),
-            active: address.tile === tile,
-          }))}
-        />
+            <MetricStrip
+              metrics={SKILL_TILES.map((tile: SkillTile) => {
+                const value = matrix ? tileValue(matrix.tiles, tile) : null
+                return {
+                  label: t(`tile.${tile}`),
+                  value: value === null ? '—' : String(value),
+                  hint: matrix && value === null ? t('tileHint.noSafety') : tile === 'TRAINEES' && matrix && matrix.tiles.traineesOverdue > 0 ? t('tileHint.overdue', { count: matrix.tiles.traineesOverdue }) : t(`tileHint.${tile}`),
+                  onClick: () => actions?.onAddress?.({ tile: address.tile === tile ? null : tile }),
+                  active: address.tile === tile,
+                }
+              })}
+            />
 
-        <ListFrame<MatrixRow>
-          label={t('list.tableLabel')}
-          title={t('list.title')}
-          rows={matrix ? (state ? [] : shown) : model.matrix.status === 'error' ? [] : null}
-          rowId={(row) => row.employeeId}
-          columns={columns}
-          rowKind="text"
-          count={matrix ? t('list.count', { count: shown.length }) : '—'}
-          search={<Input key={address.q} type="search" size="sm" aria-label={t('list.search')} placeholder={t('list.search')} defaultValue={address.q} onKeyDown={(event) => event.key === 'Enter' && onSearch(event.currentTarget.value)} onBlur={(event) => event.currentTarget.value !== address.q && onSearch(event.currentTarget.value)} />}
-          tools={
-            <>
-              <SegmentedControl ariaLabel={t('list.show')} value={address.show} onChange={(show) => actions?.onAddress?.({ show: show as Show })} options={SHOWS.map((show) => ({ value: show, label: t(`show.${show}`) }))} size="sm" />
-              <SegmentedControl ariaLabel={t('list.sort')} value={address.sort} onChange={(sort) => actions?.onAddress?.({ sort: sort as Sort })} options={SORTS.map((sort) => ({ value: sort, label: t(`sort.${sort}`) }))} size="sm" />
-              <Select size="sm" aria-label={t('list.line')} value={address.lineId ?? ''} onChange={(event) => actions?.onAddress?.({ lineId: event.target.value || null })}>
-                <option value="">{t('list.allLines')}</option>
-                {places.lines.map((line) => (
-                  <option key={line.id} value={line.id}>
-                    {line.label}
-                  </option>
-                ))}
-              </Select>
-              <Select size="sm" aria-label={t('list.team')} value={address.teamId ?? ''} onChange={(event) => actions?.onAddress?.({ teamId: event.target.value || null })}>
-                <option value="">{t('list.allTeams')}</option>
-                {places.teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.label}
-                  </option>
-                ))}
-              </Select>
-              <ScopeSiteChip model={scope} />
-            </>
-          }
-          selection={{
-            selected,
-            onChange: setSelected,
-            actions: (
-              <>
-                <Button size="sm" aria-label={t('list.authoriseCount', { count: authorisable.length })} heldReason={authorisable.length === 0 ? t('held.noAuthorise') : null} onClick={() => actions?.onAuthoriseMany?.(authorisable.map(dialogPerson))}>
-                  <ShieldCheck size={13} aria-hidden /> <SelectionLabel>{t('list.authoriseCount', { count: authorisable.length })}</SelectionLabel>
-                </Button>
-                <Button size="sm" aria-label={t('list.printCount', { count: picked.length })} asChild>
-                  <a href={printAddress(model.prefix, address, picked.map((row) => row.employeeId))} target="_blank" rel="noopener noreferrer">
-                    <Printer size={13} aria-hidden /> <SelectionLabel>{t('list.printCount', { count: picked.length })}</SelectionLabel>
-                  </a>
-                </Button>
-              </>
-            ),
-          }}
-          updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-          keys={ownKeys}
-          onHelp={() => setHelp(true)}
-          state={state}
-          cards={{ fields: cardFields, hrefOf: (row) => (model.can.employees ? `${model.prefix}/people/employees/${encodeURIComponent(row.employeeId)}?tab=skills` : null) }}
-        />
-        <p className="fw-pp-hint">{t('list.foot')}</p>
+            <ListFrame<MatrixRow>
+              label={t('list.tableLabel')}
+              title={t('list.title')}
+              rows={matrix ? (state ? [] : shown) : model.matrix.status === 'error' ? [] : null}
+              rowId={(row) => row.employeeId}
+              columns={columns}
+              rowKind="text"
+              count={matrix ? t('list.count', { count: shown.length }) : '—'}
+              search={<Input key={address.q} type="search" size="sm" aria-label={t('list.search')} placeholder={t('list.search')} defaultValue={address.q} onKeyDown={(event) => event.key === 'Enter' && onSearch(event.currentTarget.value)} onBlur={(event) => event.currentTarget.value !== address.q && onSearch(event.currentTarget.value)} />}
+              tools={
+                <>
+                  <SegmentedControl ariaLabel={t('list.show')} value={address.show} onChange={(show) => actions?.onAddress?.({ show: show as Show })} options={SHOWS.map((show) => ({ value: show, label: t(`show.${show}`) }))} size="sm" />
+                  <SegmentedControl ariaLabel={t('list.sort')} value={address.sort} onChange={(sort) => actions?.onAddress?.({ sort: sort as Sort })} options={SORTS.map((sort) => ({ value: sort, label: t(`sort.${sort}`) }))} size="sm" />
+                  <Select size="sm" aria-label={t('list.line')} value={address.lineId ?? ''} onChange={(event) => actions?.onAddress?.({ lineId: event.target.value || null })}>
+                    <option value="">{t('list.allLines')}</option>
+                    {places.lines.map((line) => (
+                      <option key={line.id} value={line.id}>
+                        {line.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select size="sm" aria-label={t('list.team')} value={address.teamId ?? ''} onChange={(event) => actions?.onAddress?.({ teamId: event.target.value || null })}>
+                    <option value="">{t('list.allTeams')}</option>
+                    {places.teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <ScopeSiteChip model={scope} />
+                </>
+              }
+              selection={{
+                selected,
+                onChange: setSelected,
+                actions: (
+                  <>
+                    {training?.can.view && (
+                      <Button size="sm" variant="primary" aria-label={tr('list.recordCount', { count: picked.length })} heldReason={recordHeld ?? (picked.length === 0 ? tr('held.people') : null)} onClick={() => actions?.training?.onRecord?.(picked.map(dialogPerson))}>
+                        <GraduationCap size={13} aria-hidden /> <SelectionLabel>{tr('list.recordCount', { count: picked.length })}</SelectionLabel>
+                      </Button>
+                    )}
+                    <Button size="sm" aria-label={t('list.authoriseCount', { count: authorisable.length })} heldReason={authorisable.length === 0 ? t('held.noAuthorise') : null} onClick={() => actions?.onAuthoriseMany?.(authorisable.map(dialogPerson))}>
+                      <ShieldCheck size={13} aria-hidden /> <SelectionLabel>{t('list.authoriseCount', { count: authorisable.length })}</SelectionLabel>
+                    </Button>
+                    <Button size="sm" aria-label={t('list.printCount', { count: picked.length })} asChild>
+                      <a href={printAddress(model.prefix, address, picked.map((row) => row.employeeId))} target="_blank" rel="noopener noreferrer">
+                        <Printer size={13} aria-hidden /> <SelectionLabel>{t('list.printCount', { count: picked.length })}</SelectionLabel>
+                      </a>
+                    </Button>
+                  </>
+                ),
+              }}
+              updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+              keys={ownKeys}
+              onHelp={() => setHelp(true)}
+              state={state}
+              cards={{ fields: cardFields, hrefOf: (row) => (model.can.employees ? `${model.prefix}/people/employees/${encodeURIComponent(row.employeeId)}?tab=skills` : null) }}
+            />
+            <p className="fw-pp-hint">{t('list.foot')}</p>
+          </>
+        )}
 
         <SkillDialogs model={model.dialogs} {...(actions?.dialog ? { actions: actions.dialog } : {})} />
-        {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
+        {training && <TrainingDialogs model={training.dialogs} actions={actions?.training?.dialog} />}
+        {help && <KeysModal own={lens === 'matrix' ? ownKeys : lensKeys} onClose={() => setHelp(false)} />}
       </div>
     </CellsContext.Provider>
   )

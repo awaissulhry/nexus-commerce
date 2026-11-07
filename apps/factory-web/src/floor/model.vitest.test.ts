@@ -28,13 +28,14 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'mywork', held: null },
       { key: 'clock', held: null },
       { key: 'myday', held: null },
+      { key: 'training', held: null },
       { key: 'help', held: null },
       { key: 'incident', held: null },
       { key: 'scan', held: 'notice' },
     ])
     // A line tablet's Home: no station's tiles, no warehouse tile; My day (design Modes: sewing, phone) stays in the operator's menu.
     expect(modeOf(null, 'LINE')).toBeNull()
-    expect(homeTiles(null, ['floor.work', 'floor.lead'], false, 'LINE').map((tile) => tile.key)).toEqual(['clock', 'incident', 'lineview', 'scan'])
+    expect(homeTiles(null, ['floor.work', 'floor.lead'], false, 'LINE').map((tile) => tile.key)).toEqual(['clock', 'training', 'incident', 'lineview', 'scan'])
     expect(homeTiles(null, ['floor.work', 'floor.lead'], false, 'PHONE').map((tile) => tile.key)).toEqual(['clock', 'myday', 'incident', 'lineview', 'scan'])
     for (const device of ['LINE', 'PHONE']) for (const tile of homeTiles(null, [...OPERATOR, 'inventory.receive', 'sales.returns.receive', 'purchasing.subcontract.kit'], false, device)) expect(['receive', 'pick', 'returnsin', 'kits']).not.toContain(tile.key)
   })
@@ -44,11 +45,14 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     const pageOf = (mode: 'cutting' | 'packing' | 'warehouse' | 'sewing' | 'inspection', page: number) => tilePage(homeTiles(mode, lead, false), page)
     // B-W2b-137: Report an incident is kept on the first page with the Line view and Scan anything.
     expect(pageOf('cutting', 0).tiles.map((tile) => tile.key)).toEqual(['mywork', 'operation', 'incident', 'lineview', 'scan'])
-    expect(pageOf('cutting', 0)).toMatchObject({ page: 0, pages: 2, more: 5 })
-    expect(pageOf('cutting', 1).tiles.map((tile) => tile.key)).toEqual(['cut', 'bundles', 'machine', 'clock', 'help'])
-    expect(pageOf('cutting', 1)).toMatchObject({ page: 1, pages: 2, more: 0 })
+    expect(pageOf('cutting', 0)).toMatchObject({ page: 0, pages: 3, more: 5 })
+    // B-W2b-145: Training & PPE sign-off makes a lead's cutting Home three pages.
+    expect(pageOf('cutting', 1).tiles.map((tile) => tile.key)).toEqual(['cut', 'bundles', 'machine', 'clock', 'training'])
+    expect(pageOf('cutting', 1)).toMatchObject({ page: 1, pages: 3, more: 1 })
+    expect(pageOf('cutting', 2).tiles.map((tile) => tile.key)).toEqual(['help'])
+    expect(pageOf('cutting', 2)).toMatchObject({ page: 2, pages: 3, more: 0 })
     // A page past the end (a person with fewer tiles took over) is the last one.
-    expect(pageOf('cutting', 9).page).toBe(1)
+    expect(pageOf('cutting', 9).page).toBe(2)
     for (const mode of ['cutting', 'packing', 'warehouse', 'sewing', 'inspection'] as const) {
       const all = homeTiles(mode, lead, false)
       const seen = [0, 1, 2].flatMap((page) => (page < tilePage(all, page).pages ? tilePage(all, page).tiles : []))
@@ -58,8 +62,10 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       for (let page = 0; page < pages; page++) expect(tilePage(all, page).tiles.length + (pages > 1 ? 1 : 0)).toBeLessThanOrEqual(MAX_TILES)
     }
     // Six fit one page, with no More tile; seven do not.
-    const six = homeTiles('cutting', ['floor.work', 'production.cut'], false)
+    // B-W2b-145: a cutter with only Cut a hide now has seven (Training & PPE sign-off); a warehouse operator has six.
+    const six = homeTiles('warehouse', OPERATOR, false)
     expect(tilePage(six, 0)).toEqual({ tiles: six, page: 0, pages: 1, more: 0 })
+    expect(tilePage(homeTiles('cutting', ['floor.work', 'production.cut'], false), 0).pages).toBe(2)
     const many = Array.from({ length: 13 }, (_, at) => ({ key: at === 12 ? ('scan' as const) : ('help' as const), held: null }))
     expect(tilePage(many, 0).pages).toBe(3)
     expect(tilePage(many, 2).tiles).toHaveLength(3)
@@ -72,6 +78,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'cut', held: null },
       { key: 'bundles', held: null },
       { key: 'clock', held: null },
+      { key: 'training', held: null },
       { key: 'help', held: null },
       { key: 'incident', held: null },
       { key: 'scan', held: null },
@@ -79,14 +86,15 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('a tile asks the permission its page\'s API needs (fail closed)', () => {
-    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', 'clock', 'help', 'incident', 'scan'])
-    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'clock', 'help', 'incident', 'scan'])
-    expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'myday', 'help', 'incident', 'scan'])
-    expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'clock', 'myday', 'help', 'incident', 'scan'])
+    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('inspection', ['floor.work', 'quality.inspections.view'], false)).toEqual([
       { key: 'mywork', held: null },
       { key: 'final', held: null },
       { key: 'clock', held: null },
+      { key: 'training', held: null },
       { key: 'help', held: null },
       { key: 'incident', held: null },
       { key: 'scan', held: null },
@@ -97,6 +105,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'operation', held: null },
       { key: 'pack', held: null },
       { key: 'clock', held: null },
+      { key: 'training', held: null },
       { key: 'help', held: null },
       { key: 'incident', held: null },
       { key: 'scan', held: null },
@@ -107,6 +116,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'labels', held: null },
       { key: 'pack', held: null },
       { key: 'clock', held: null },
+      { key: 'training', held: null },
       { key: 'help', held: null },
       { key: 'incident', held: null },
       { key: 'scan', held: null },
@@ -114,9 +124,9 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('drops a tile whose permission the person lacks (Receive needs an office permission)', () => {
-    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['pick', 'clock', 'help', 'incident', 'scan'])
-    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'help', 'incident', 'scan'])
-    expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['mywork', 'labels', 'clock', 'help', 'incident', 'scan'])
+    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['pick', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['mywork', 'labels', 'clock', 'training', 'help', 'incident', 'scan'])
     // A subcontract station: Scan only.
     expect(homeTiles(null, OPERATOR, false, 'STATION').map((tile) => tile.key)).toEqual(['scan'])
   })
@@ -131,17 +141,17 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('holds every scan tile with "Read the notice first" while the notice blocks scans (My work only reads: never held)', () => {
-    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', null, null, null, 'notice'])
+    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', null, null, null, null, 'notice'])
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
   })
 
   it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {
     const reporter = [...OPERATOR, 'plant.report']
-    expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'machine', 'clock', 'myday', 'help', 'incident', 'scan'])
-    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual(['pick', 'machine', 'clock', 'help', 'incident', 'scan'])
+    expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual(['pick', 'machine', 'clock', 'training', 'help', 'incident', 'scan'])
     // A safety report never waits for the privacy notice (the station is named instead of the worker).
     expect(homeTiles('cutting', reporter, true).find((tile) => tile.key === 'machine')).toEqual({ key: 'machine', held: null })
     // A subcontract station (no floor mode): Scan only; without plant.report: no tile.

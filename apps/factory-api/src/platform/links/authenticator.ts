@@ -83,10 +83,8 @@ export function linkAuthenticator(core: { readonly database: FactoryDatabase; re
     const now = core.clock.now()
     const scope = { audience: 'partner', tenantId: token.tenantId, actorId: token.linkId, partyId: token.partyId } as const
     const link = await core.database.withScope(scope, (client) => client.oneOffLink.findUnique({ where: { id: token.linkId }, select: LINK_SELECT }))
-    if (!link || !matchesLinkHash(token, link.tokenHash) || link.partyId !== token.partyId || !isLinkLive(link, now)) throw linkUnavailable()
-    // A purpose this API does not serve yet (W2b-3's, in the schema since B-W2b-154; factory-domain gains them with
-    // B-W2b-163) opens nothing: the same answer as any dead link.
-    if (!isLinkPurpose(link.purpose)) throw linkUnavailable()
+    // A purpose factory-domain does not know (none since B-W2b-163: the schema's thirteen are its thirteen) opens nothing.
+    if (!link || !matchesLinkHash(token, link.tokenHash) || link.partyId !== token.partyId || !isLinkLive(link, now) || !isLinkPurpose(link.purpose)) throw linkUnavailable()
     const tenant = await core.database.withScope({ audience: 'platform' }, (client) =>
       client.tenant.findUnique({ where: { id: token.tenantId }, select: { status: true } }),
     )

@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, CalendarClock, Cog, FlaskConical, HardHat, ShieldAlert, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, ShieldAlert, Shirt, SlidersHorizontal, Stethoscope, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -10,6 +10,9 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  */
 export const officeArea: OfficeAreaNav = {
   order: 12,
+  // B-W2b-148: the safety officer (the plans per role) and the data protection officer (the view log) open Health surveillance
+  // without its person sections.
+  alsoOpens: { 'plant-health': ['safety.health.plans', 'safety.health.views'] },
   area: {
     id: 'plant',
     label: 'shell:nav.plant.area',
@@ -37,8 +40,14 @@ export const officeArea: OfficeAreaNav = {
         id: 'plant-safety',
         label: 'shell:nav.plant.safety',
         items: [
+          // B-W2b-144: the risk assessment (SCR-209) — the DVR per site with its versions and signatures, the improvement plan, the role sheets (GET /safety/risk/assessments, safety.view).
+          { id: 'plant-risk', label: 'shell:nav.plant.risk', href: '/plant/risk', icon: FileCheck2, permission: 'safety.view' },
           // B-W2b-149: Incidents (SCR-210), injuries, near misses and hazards with the INAIL deadline (GET /safety/incidents, safety.incidents.view).
           { id: 'plant-incidents', label: 'shell:nav.plant.incidents', href: '/plant/incidents', icon: ShieldAlert, permission: 'safety.incidents.view' },
+          // B-W2b-147: PPE for workers — who lacks what, issues and receipts, kits per role, the catalogue (GET /safety/ppe/gaps, safety.view).
+          { id: 'plant-ppe', label: 'shell:nav.plant.ppe', href: '/plant/ppe', icon: Shirt, permission: 'safety.view' },
+          // B-W2b-148: Health surveillance (SCR-212), the protected page (GET /safety/health, safety.health.view; alsoOpens above).
+          { id: 'plant-health', label: 'shell:nav.plant.health', href: '/plant/health', icon: Stethoscope, permission: 'safety.health.view' },
           // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
           { id: 'plant-chemicals', label: 'shell:nav.plant.chemicals', href: '/plant/chemicals', icon: FlaskConical, permission: 'safety.view' },
           { id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' },

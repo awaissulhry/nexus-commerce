@@ -332,6 +332,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/preventive',
   '/plant/preventive/register',
   '/plant/preventive/report',
+  // B-W2b-147: Plant › Health & safety › PPE for workers (SCR-211), a receipt's PDF and the person PPE card (new tabs).
+  '/plant/ppe',
+  '/plant/ppe/receipt',
+  '/plant/ppe/card',
   // B-W2b-143: Plant › Health & safety › Chemicals & waste (SCR-213), a sheet's PDF and a cabinet's sheet (new tabs).
   '/plant/chemicals',
   '/plant/chemicals/sds',
@@ -340,6 +344,17 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/incidents',
   '/plant/incidents/[id]',
   '/plant/incidents/print',
+  // B-W2b-144: Plant › Health & safety › Risk assessment (SCR-209), an assessment, the DVR (frozen PDF), the role sheets and
+  // the improvement plan to print (new tabs).
+  '/plant/risk',
+  '/plant/risk/[id]',
+  '/plant/risk/dvr',
+  '/plant/risk/role-sheets',
+  '/plant/risk/plan',
+  // B-W2b-148: Plant › Health & safety › Health surveillance (SCR-212), the doctor's visit list and a judgement's copy (new tabs).
+  '/plant/health',
+  '/plant/health/print',
+  '/plant/health/copy',
   // B-W2b-55: People › Employees (SCR-084), an employee (SCR-085), the badge sheet and the staff list print (new tabs).
   '/people/employees',
   '/people/employees/[id]',
@@ -350,6 +365,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/shifts/print',
   '/people/skills',
   '/people/skills/print',
+  // B-W2b-146: the training part of Skills & training; the certificate and the training due list (PDF, new tabs).
+  '/people/skills/certificate',
+  '/people/skills/due',
   // SCR-159 (B-W2b-63): the wizard and Exports; Past export; its summary and file tabs.
   '/people/payroll',
   '/people/payroll/[id]',
@@ -406,7 +424,7 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

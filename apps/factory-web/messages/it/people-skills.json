@@ -18,13 +18,22 @@
   },
   "tile": {
     "TRAINEES": "Apprendisti senza firma",
-    "AUTHORISATIONS_ENDING": "Autorizzazioni macchina in scadenza"
+    "AUTHORISATIONS_ENDING": "Autorizzazioni macchina in scadenza",
+    "TRAINING_OVERDUE": "Formazione in ritardo (persona × corso)",
+    "TRAINING_DUE_SOON": "Formazione in scadenza in 60 giorni",
+    "AUTHORISATIONS_HELD": "Abilitazioni macchina con formazione scaduta",
+    "LANGUAGE_NOT_CHECKED": "Lingua non verificata"
   },
   "tileHint": {
     "TRAINEES": "Persona × competenza, ancora in formazione",
     "AUTHORISATIONS_ENDING": "Nei prossimi 60 giorni",
     "overdue_one": "{count} oltre la data",
-    "overdue_other": "{count} oltre la data"
+    "overdue_other": "{count} oltre la data",
+    "TRAINING_OVERDUE": "Da fare o scaduta, oltre la data",
+    "TRAINING_DUE_SOON": "Validità entro 60 giorni",
+    "AUTHORISATIONS_HELD": "Bloccate finché il corso non è valido",
+    "LANGUAGE_NOT_CHECKED": "Comprensione non verificata (art. 37 c.13)",
+    "noSafety": "Mostrato a chi legge la sicurezza (safety.view)"
   },
   "list": {
     "title": "Matrice competenze",
@@ -61,7 +70,8 @@
   "show": {
     "ALL": "Tutto",
     "SKILLS": "Competenze",
-    "MACHINES": "Macchine"
+    "MACHINES": "Macchine",
+    "SAFETY": "Sicurezza"
   },
   "sort": {
     "TEAM": "Per squadra",

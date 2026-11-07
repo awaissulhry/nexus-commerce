@@ -10,6 +10,8 @@ import type { Clock } from '../../../core/time'
 import { isFloorRequest } from '../floor/authenticator'
 import { assertCsrf, isUnsafeMethod, sessionCookieOf } from '../sessions/cookies'
 import { portalCookieOf } from './cookies'
+// B-W2b-162: an office preview reads what the party's people could read (no write, no money).
+import { previewGrants } from '../partners/preview-grants'
 import { companyById, partnerById, partnerRoles, partyOf, portalOn, termsState, type PortalCompany, type TermsState } from './store'
 
 /**
@@ -30,7 +32,7 @@ import { companyById, partnerById, partnerRoles, partyOf, portalOn, termsState, 
  *      only reads Session): bookkeeping, not audited;
  *   6. the context: audience partner, the tenant, the person, the party, and the grants of the person's live PARTNER
  *      roles over the session's company and party, price at most — none until the person acknowledged the portal terms
- *      in force (the first visit), none for a preview.
+ *      in force (the first visit); an office preview holds the reads its party's people could do, no money (B-W2b-162).
  * Anything else: no session (401). The person's status, organisation and portal are read on every request, so a
  * suspension, a block, an end of access or the portal switched off stops a session at its next request.
  */
@@ -122,14 +124,14 @@ export function portalAuthenticator(core: { readonly database: FactoryDatabase; 
       if (preview) {
         const viewer = await client.user.findUnique({ where: { id: token.userId }, select: { email: true, displayName: true, locale: true, status: true, audience: true } })
         if (!viewer || viewer.audience !== 'OFFICE' || viewer.status !== 'ACTIVE' || row.previewById !== token.userId) return null
-        return { company, party, person: { ...viewer, partnerKind: null, accessUntil: null }, terms: null, roles: [] }
+        return { company, party, person: { ...viewer, partnerKind: null, accessUntil: null }, terms: null, roles: [], previewGrants: await previewGrants(client, { companyId, partyId: party.id }) }
       }
       const person = await partnerById(client, token.userId)
       if (!person || person.partyId !== token.scopeId) return null
       const terms = await termsState(client, companyId, person.id)
       const problem = portalAccessProblem({ user: person, party, portalOn: await portalOn(client, party.id), termsInForce: terms !== null }, now)
       if (problem !== null) return null
-      return { company, party, person, terms, roles: await partnerRoles(client, person.id, now) }
+      return { company, party, person, terms, roles: await partnerRoles(client, person.id, now), previewGrants: [] }
     })
     if (!found) return null
 
@@ -170,7 +172,7 @@ export function portalAuthenticator(core: { readonly database: FactoryDatabase; 
       tenantId: token.tenantId,
       actorId: token.userId,
       partyId: token.scopeId,
-      grants: partnerGrants(found.roles, { companyId, partyId: token.scopeId }, { termsAcknowledged: found.terms?.acknowledged === true, preview }),
+      grants: preview ? found.previewGrants : partnerGrants(found.roles, { companyId, partyId: token.scopeId }, { termsAcknowledged: found.terms?.acknowledged === true, preview }),
     }
   }
 }

@@ -27,6 +27,8 @@ import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 // B-W2b-24: the controlled override of a migrated document's number (PLT-125).
 import { NUMBERING_OVERRIDE_DEFINITIONS, NUMBERING_OVERRIDE_PERMISSIONS } from '../../numbering/permissions'
 import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
+// B-W2b-162: partner organisations (partners.*, the office's) and the portal's own (portal.*, partner roles only).
+import { PARTNERS_DEFINITIONS, PARTNERS_PERMISSIONS, PORTAL_DEFINITIONS, PORTAL_PERMISSIONS } from '../partners/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -282,6 +284,16 @@ export const LINK_SESSION_PERMISSIONS: PermissionDefinition[] = definePermission
   accept: { risk: 'write', description: 'Accept the quote the link opens, with a typed name (and the address it was sent to, when known).' },
   decline: { risk: 'write', description: 'Decline the quote or purchase order the link opens.' },
   confirm: { risk: 'write', description: 'Confirm the purchase order the link opens.' },
+  // B-W2b-163: the actions of W2b-3's link purposes.
+  download: { risk: 'read', description: "Download one of the link's files (a document or a secure file); every download is logged." },
+  receive: { risk: 'write', description: 'Confirm "I received these files" on a secure file link, once, with an optional typed name.' },
+  submit: { risk: 'write', description: "Send the link's form: the measurements, the claim or the supplier questionnaire." },
+  approve: { risk: 'write', description: 'Approve the request the link opens, with or without changes, with a typed name.' },
+  refuse: { risk: 'write', description: 'Refuse the request the link opens, with a typed name and the reason.' },
+  pay: { risk: 'write', description: 'Pay its own deposit request or invoice the link opens, online.' },
+  moveDate: { risk: 'write', description: 'Propose another date for the subcontract job the link opens.' },
+  post: { risk: 'write', description: 'Post a message on the record shared with the link, when the share allows comments.' },
+  upload: { risk: 'write', description: 'Upload a file to the record shared with the link, when the share allows uploads.' },
 }).map((definition) => Object.freeze({ ...definition, link: true as const }))
 
 /** The floor devices of the sites (apps/factory-api platform/auth/floor; features PLT-056, PLT-226). */
@@ -661,6 +673,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_RECORDS_DEFINITIONS,
   // B-W2b-161: company branding.
   BRANDING_DEFINITIONS,
+  // B-W2b-162: partner organisations (the office's) and the portal's own (partner roles only).
+  PARTNERS_DEFINITIONS,
+  PORTAL_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -855,6 +870,9 @@ for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of SAFETY_RECORDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-161: company branding.
 for (const name of BRANDING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-162: partner organisations and the portal's own (each portal one flagged partner: never in an office or floor role).
+for (const name of PARTNERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

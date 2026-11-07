@@ -238,7 +238,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 
 ## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
 - A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
-  DOCUMENT_VIEW, DEPOSIT_INFO), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
+  DOCUMENT_VIEW, DEPOSIT_INFO; since B-W2b-163 also SHIPMENT_TRACK, MEASUREMENTS, CLAIM, PAYMENT, SUPPLIER_ONBOARD,
+  JOB_ACCEPT, APPROVAL, RECORD_INVITE, SECURE_FILE), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
   bits, `links/token`); only its SHA-256 is stored. The web link is `<web>/l#token=…` (fragment: in no server log); the
   web sends the token in the `x-factory-link` header.
 - `authenticator.ts` (chained before the office cookie): the link is read in the token's PARTY scope
@@ -260,7 +261,15 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   must be in the partner role's hiddenColumns (check-ownership). The OneOffLink guard trigger keeps a link fixed but for
   its uses, revocation and note.
 - PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
-  routes), `guards.pg.vitest.test.ts`.
+  routes), `guards.pg.vitest.test.ts`, `depth.pg.vitest.test.ts` (B-W2b-163).
+- B-W2b-163 (links in depth; COL-051, MES-274): `POST /links/files` (a DOCUMENT_VIEW or SECURE_FILE link of a set of files,
+  LinkFile; record = the first file; optional password sent apart, hashed; mailed to the contact on file or the URL once),
+  link session `GET /link/files`, `POST /link/password` (5 tries, 15-minute hold; right → an unlock key, header
+  x-factory-link-unlock), `POST /link/files/:fileId/download` (DOWNLOADED; a use on SECURE_FILE), `GET …/preview`
+  (DOCUMENT_VIEW), `POST /link/files/received` (SECURE_FILE, once), `GET|PUT /link/draft` (MEASUREMENTS, CLAIM,
+  SUPPLIER_ONBOARD; sealed; cron `links.purgeDrafts`), public `POST /link/renew` ("Ask for a new link" for every purpose: one
+  answer, the abuse guard, a module renewer via `registerLinkRenewer` or the file-set renewal). Pay figures never go by link:
+  `pay.ts assertNoPayByLink` in every link maker (POST /links, file sets, renewals, the payroll Send).
 
 ## Portal sign-in (`src/platform/auth/portal/`, B-W2b-159; PLT-050, PLT-066; Owner answer C3: e-mail codes only)
 - Public `POST /portal/signin/start` {tenant, company?, email} answers `sent` at once for any address; the work runs
@@ -284,7 +293,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - `authenticator.ts`: cookie `__Host-factory_portal` = `ps1.<tenant>.<party>.<user>.<secret>`; the Session is read by its
   hash in THAT party's partner scope, the person, party, portal switch and terms in the office scope, on every request;
   grants = the person's live PARTNER roles over the session's company and party, price at most, NONE until the first
-  visit acknowledged the terms in force and none for an office preview (read-only). `withPortalSessions` (chained in
+  visit acknowledged the terms in force; an office preview (read-only) holds the reads its party's people could do, no
+  money (B-W2b-162 `partners/preview-grants.ts`). `withPortalSessions` (chained in
   `sessions/office-auth.ts` after links): a partner-only route reads the portal cookie or nothing; a route shared with
   office or floor (files, threads) reads it only when it is the request's one session cookie. `portalSessionOf(request)`.
 - `GET /portal/me`, `POST /portal/sessions/refresh`, `GET /portal/terms`, `POST /portal/first-visit` {displayName?,
@@ -302,6 +312,28 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   in Redis under `<prefix>:<env>:abuse:` (keys are HMACs), this process's memory while Redis is down; tests
   `useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore() … }))`. Policies `links.renew` and `public.lookup` are
   declared for B-W2b-163/166/170. PG tests: `portal.pg.vitest.test.ts` (helpers in `portal/testing/portal.ts`).
+
+## Partner organisations, people and roles (`src/platform/auth/partners/`, B-W2b-162; PLT-006, PLT-021, PLT-022, SAL-060, SCM-092)
+- A partner organisation is a Party; its people are User rows (PARTNER, one party, a kind fitting the party's roles:
+  CUSTOMER ← CUSTOMER/BRAND, SUPPLIER, SUBCONTRACTOR, GUEST ← CONSULTANT). Roles: factory-domain `auth/roles/partner-templates.ts`
+  (customer Buyer, Finance, Quality, Designer, Viewer, Admin, price only for Buyer, Finance, Admin; supplier Orders, Invoices,
+  Quality, Admin; subcontractor Jobs, Admin — never a price, C2; guest Accountant), system roles of audience PARTNER synced
+  with the office ones (`SYSTEM_ROLE_TEMPLATES`, roles/system-roles.ts). A person holds ONE main role and the capabilities
+  `partner-comment|upload|approve` (COL-062) beside it; a portal write checks its page's permission AND portal.comment,
+  portal.upload or portal.approve. Partner permissions (`portal.*`) are flagged `partner` in the catalogue: never in an office
+  or floor role (`assignable` leaves them out; `partnerAssignable`). A portal step gives its permissions to the partner
+  templates in templates.ts PARTNER_ADDS (one line per step); a kind's Admin follows.
+- Office (`/partners…`, can() over the party, a tenant-wide party written only over every company; step-up but preview):
+  the Portal access tab, settings (portalOn, maxUsers, allowedRoleKeys, progressShared = C1, customers only), invite (the
+  sign-in page by mail, no token; GATE-PRIVACY `requirePortalTerms`; seats = ACTIVE + SUSPENDED + openly INVITED), resend,
+  revoke, change (role, capabilities, end of access), suspend/reactivate/deactivate, preview (a PARTNER Session marked as
+  the office person's preview, 1 h, the portal cookie in the office browser; audited `partners.preview`), organisations.
+- Portal (`/portal/access`, `/portal/colleagues…`): the admin (portal.colleagues.manage + `requirePortalStepUp`) invites,
+  changes and deactivates colleagues of its own kind only, never itself; a colleague gets the admin's end of access.
+  Commands run as the partner person in the office scope (`byPartner` in audit and events); the first sign-in accepts the
+  invitation (B-W2b-159). Events `partner_portal.settings_changed`, `partner_user.invited|changed|access_ending`.
+- Scheduler cron `partners.accessEnding` (07:20): people whose access ends within 7 days are mailed once per end
+  (receipt key `partners-access-ending:<person>:<end>`). PG tests: `partners.pg.vitest.test.ts`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
