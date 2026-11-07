@@ -1644,6 +1644,7 @@
     "imports_apply": "Apply an import's plan",
     "documents_view": "Preview a company's document layouts",
     "documents_branding_manage": "Change a company's branding: logo, accent colour, sender name for mail, portal name",
+    "documents_required_manage": "Say which documents a record type must have before a status move, and whether a missing one blocks it",
     "print_view": "See a site's printers and print jobs",
     "print_labels": "Print labels",
     "print_documents": "Print documents",

@@ -1,5 +1,7 @@
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { OFFICE_SOURCE } from './office'
+// B-W2b-177: a partner's document about to expire (UPLOAD_DOCUMENT, by the expiry reminder).
+import { EXPIRY_SOURCE } from '../../../files/expiry/source'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -25,6 +27,8 @@ export interface TaskSource {
 export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   // B-W2b-167: what an office person asks a partner for by hand (a document, an answer, measurements, progress).
   OFFICE_SOURCE,
+  // B-W2b-177: a document shared with the partner expires within 30 days: a new version, please.
+  EXPIRY_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

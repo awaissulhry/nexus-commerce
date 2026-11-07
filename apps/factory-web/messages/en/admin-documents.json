@@ -8,20 +8,22 @@
       "numbers": "Show the number series",
       "documents": "Show the document layouts",
       "branding": "Show the branding",
-      "newSeries": "New series"
+      "newSeries": "New series",
+      "required": "Show the required documents"
     },
     "preview": "Preview a document",
     "views": {
       "label": "Which list",
       "numbers": "Numbers",
       "documents": "Documents",
-      "branding": "Branding"
+      "branding": "Branding",
+      "required": "Required documents"
     },
     "company": {
       "label": "Company",
       "all": "All companies"
     },
-    "later": "E-mail and label templates and the documents a record must have come in later steps.",
+    "later": "E-mail and label templates come in later steps.",
     "pattern": {
       "aria": "Pattern {pattern}",
       "year4": "year (2026)",
