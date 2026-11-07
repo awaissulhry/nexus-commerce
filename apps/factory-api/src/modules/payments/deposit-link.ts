@@ -204,9 +204,9 @@ async function revokeOlderLinks(tools: CommandTools, row: DepositRow, address: s
   return revoked
 }
 
-interface LinkMailInput {
-  /** The thread the mail goes on: the quote's, else (B-W2b-16) the order's. */
-  readonly record: { readonly type: 'Quote' | 'SalesOrder'; readonly id: string }
+export interface LinkMailInput {
+  /** The thread the mail goes on: the quote's, else (B-W2b-16) the order's; B-W2b-185: an invoice's payment page, the invoice's. */
+  readonly record: { readonly type: 'Quote' | 'SalesOrder' | 'Invoice'; readonly id: string }
   readonly sender: { readonly userId: string; readonly name: string; readonly email: string | null }
   readonly to: string
   readonly subject: string
@@ -215,8 +215,8 @@ interface LinkMailInput {
   readonly locale: string
 }
 
-/** Inside the command: the thread message and the QUEUED mail on the quote's thread, without the link and its event. */
-function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
+/** Inside the command: the thread message and the QUEUED mail on the quote's thread, without the link and its event (B-W2b-185: also the invoice payment page's). */
+export function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
   const quiet = {
     tx: tools.tx,
     context: tools.context,
@@ -228,8 +228,8 @@ function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
   return sendEmail(quiet, { record: input.record, sender: input.sender, to: [input.to], subject: input.subject, body: input.storedText, locale: input.locale })
 }
 
-/** After the commit: sends the queued mail once, with the link, as the tenant's system. Never throws: the outcome says. */
-async function deliverLinkMail(runtime: EmailRuntime, caller: CommandCaller, outboundId: string, text: string): Promise<DeliveryOutcome> {
+/** After the commit: sends the queued mail once, with the link, as the tenant's system. Never throws: the outcome says (B-W2b-185 too). */
+export async function deliverLinkMail(runtime: EmailRuntime, caller: CommandCaller, outboundId: string, text: string): Promise<DeliveryOutcome> {
   try {
     return await deliverOutbound(runtime, caller, outboundId, {
       retry: false,

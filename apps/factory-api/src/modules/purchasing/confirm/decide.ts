@@ -8,6 +8,8 @@ import { ValidationError } from '@nexus/factory-domain/core/errors'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { detailInCommand, onOrder } from '../orders'
+import { substituteAcceptProblem } from '@nexus/factory-domain/purchasing/portal-orders/answer'
+import { reopenConfirmTask } from '../portal-orders/tasks'
 import { dayOf, dayValue, officeContextOf, officeOrder, quantityText, senderOf } from '../store'
 
 /**
@@ -103,6 +105,10 @@ export async function acceptProposal(caller: CommandCaller, orderId: string, bod
     const { tx, now } = tools
     const proposal = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: current.id }, select: PROPOSAL_ORDER_COLUMNS })
     const lines = await proposalLinesOf(tx, current.id)
+    // B-W2b-174 (SCM-086): a substitute is taken by a new version of the order, never by confirming this one.
+    const substitutes = await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: current.id, cancelledAt: null, closedShortAt: null, OR: [{ proposedSubstituteItemId: { not: null } }, { proposedSubstituteNote: { not: null } }] }, orderBy: { seq: 'asc' }, select: { seq: true } })
+    const substituteProblem = substituteAcceptProblem(substitutes.map((line) => line.seq))
+    if (substituteProblem) throw new InvalidStateError(substituteProblem)
     const accepted = lines.map((line) => {
       const proposed = proposedLineOf(line)
       if (!proposed) throw new InvalidStateError(`Line ${line.seq} holds no proposal: refuse the proposal and send a new link.`)
@@ -181,6 +187,8 @@ export async function refuseProposal(caller: CommandCaller, orderId: string, bod
       data: { status: 'SENT', proposalDecision: 'REFUSED', proposalDecidedAt: now, proposalDecidedById: context.actorId, proposalDecisionNote: note },
       select: { id: true },
     })
+    // B-W2b-174: the order waits for the supplier again: its CONFIRM_PO request of this revision opens again.
+    await reopenConfirmTask(tools, current)
     tools.audit({
       action: 'purchasing.refuseProposal',
       recordType: 'PurchaseOrder',

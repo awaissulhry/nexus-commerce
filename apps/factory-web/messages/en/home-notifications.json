@@ -247,6 +247,9 @@
         "incidentReported": "New report {record}: {title}",
         "inailDue": "INAIL report for {record} due by {title}",
         "inailLate": "INAIL report for {record} is late: it was due by {title}"
+      },
+      "files": {
+        "expiryDue": "{kind} on {record} expires on {title}"
       }
     },
     "fallback": "News on {record}",

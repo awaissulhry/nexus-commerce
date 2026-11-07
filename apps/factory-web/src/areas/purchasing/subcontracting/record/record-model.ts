@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { LiveState } from '../../../_shared/buying/hooks'
 import type { MaterialDetail, MaterialOption } from '../../../_shared/buying/api'
@@ -360,6 +361,8 @@ export interface ReceiveDraft {
   returns: Record<string, ReturnDraft>
   locations: Part<{ id: string; code: string; name: string }[]>
   note: string
+  /** B-W2b-176: the workshop's announced send-back this receipt is written from (./workshop: it becomes RECEIVED). */
+  returnNoticeId?: string
 }
 
 /** A stock row's key (a return line). */
@@ -421,9 +424,11 @@ export function receiveBody(draft: ReceiveDraft, order: SubcontractOrder, now: s
     .filter((line) => line.good + line.defective + line.scrapped > 0)
   const returns = Object.entries(draft.returns)
     .filter(([, entry]) => entry.quantity.trim() !== '')
-    .map(([key, entry]) => {
-      const row = draft.stock.value!.find((candidate) => stockKey(candidate) === key)!
-      return { itemId: row.item.id, itemColourId: row.colour?.id ?? null, lotId: row.lot?.id ?? null, hideId: row.hide?.id ?? null, quantity: decimal(entry.quantity), uom: row.item.baseUom, toLocationId: entry.toLocationId }
+    // B-W2b-176: a return prefilled from the workshop's send-back is sent only for material the workshop's stock holds
+    // (the dialog lists those rows alone).
+    .flatMap(([key, entry]) => {
+      const row = draft.stock.value?.find((candidate) => stockKey(candidate) === key)
+      return row ? [{ itemId: row.item.id, itemColourId: row.colour?.id ?? null, lotId: row.lot?.id ?? null, hideId: row.hide?.id ?? null, quantity: decimal(entry.quantity), uom: row.item.baseUom, toLocationId: entry.toLocationId }] : []
     })
   const today = now.slice(0, 10)
   return {
@@ -433,6 +438,8 @@ export function receiveBody(draft: ReceiveDraft, order: SubcontractOrder, now: s
     returns,
     ...(draft.ddtNumber.trim() ? { supplierDdt: { number: draft.ddtNumber.trim(), date: draft.ddtDate || null } } : {}),
     ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+    // B-W2b-176: the send-back it was prefilled from.
+    ...(draft.returnNoticeId ? { returnNoticeId: draft.returnNoticeId } : {}),
   }
 }
 
@@ -533,6 +540,8 @@ export interface SubcontractRecordModel {
   today: string
   /** Design cases. */
   selected?: readonly string[]
+  /** B-W2b-176: what the workshop said, under the Kit tab (./workshop; the container's panel, or a design case's view). */
+  workshop?: ReactNode
 }
 
 export interface SubcontractRecordActions {
@@ -548,6 +557,8 @@ export interface SubcontractRecordActions {
   onSend?: () => void
   onOpenReceive?: () => void
   onReceive?: () => void
+  /** B-W2b-176: Receive back opened with a draft (the workshop's announced send-back, ./workshop). */
+  onOpenReceiveWith?: (shape: (draft: ReceiveDraft) => ReceiveDraft) => void
   onCell?: (operationId: string, field: CellField, typed: string) => void
   onOpenSizes?: (operationId: string) => void
   onSaveSizes?: () => void

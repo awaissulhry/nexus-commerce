@@ -7,6 +7,8 @@
  * match them is a `contract` error in the client (api.ts), never half-read.
  */
 
+import type { FileDepthModel } from './files/model'
+
 /** apps/factory-api platform/files/rules.ts FILE_KINDS (B-W2b-96: AUDIO, a voice note of a machine request or job, QHS-189). */
 export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'] as const
 export type FileKind = (typeof FILE_KINDS)[number]
@@ -172,6 +174,11 @@ export interface PanelFile {
   quarantineReason: QuarantineReason | null
   availableAt: string | null
   createdAt: string
+  /** B-W2b-177 (on B-W2b-160): the version in its series, the series' first version, when a later one replaced it; the row's version. */
+  versionNo?: number
+  seriesId?: string | null
+  supersededAt?: string | null
+  version?: number
 }
 
 /** An upload this screen is making, before its file is on the list. */
@@ -274,6 +281,8 @@ export interface RecordPanelsViewModel {
   tasks?: PanelTasks
   /** B-W2a-40: who follows the record (the Follow toggle and Followers (N); absent: none; null while it is read). */
   followers?: PanelFollowers | null
+  /** B-W2b-177: the files in depth (documents and their expiry, what a move needs, versions, markup); absent: W0's panel. */
+  depth?: FileDepthModel
 }
 
 // ── tasks and followers on the record (B-W2a-40; COL-037, COL-011; design shell.panels side panel, popups) ────────────
@@ -713,6 +722,10 @@ export function liveParts(change: LiveChange, record: Pick<PanelRecord, 'type' |
       return ['thread', 'timeline', 'emails']
     case 'file.available':
       return ['files', 'timeline']
+    // B-W2b-177: a markup drawn, a document's expiry reminder: the files (and their documents) are read again.
+    case 'file.marked_up':
+    case 'file.expiry_due':
+      return ['files']
     case 'email.status_changed':
       return ['emails']
     default:

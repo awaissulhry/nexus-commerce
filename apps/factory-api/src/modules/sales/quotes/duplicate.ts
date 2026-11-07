@@ -60,8 +60,9 @@ interface SourceLine {
   readonly sizes: readonly SizeRow[]
 }
 
-interface Source {
-  readonly from: { readonly quoteId: string; readonly versionId: string } | { readonly orderId: string }
+/** What a copy is made from (B-W2b-190: also a portal order request the office accepts as a quote). */
+export interface Source {
+  readonly from: { readonly quoteId: string; readonly versionId: string } | { readonly orderId: string } | { readonly requestId: string }
   readonly companyId: string
   readonly partyId: string
   readonly basis: PriceBasis
@@ -94,8 +95,8 @@ async function activeAddress(db: Reader, partyId: string, addressId: string | nu
   return row && row.partyId === partyId && row.status === 'ACTIVE' ? addressId : null
 }
 
-/** Inside the copy's command: the new quote with its first DRAFT version and the source's lines. */
-async function duplicateInto(tools: CommandTools, source: Source, body: DuplicateBody): Promise<{ quoteId: string; dropped: Dropped[]; warnings: string[] }> {
+/** Inside the copy's command: the new quote with its first DRAFT version and the source's lines (B-W2b-190: exported for a portal request). */
+export async function duplicateInto(tools: CommandTools, source: Source, body: DuplicateBody): Promise<{ quoteId: string; dropped: Dropped[]; warnings: string[] }> {
   const { tx, now } = tools
   const today = businessDate(now)
   const targetPartyId = body.partyId ?? source.partyId

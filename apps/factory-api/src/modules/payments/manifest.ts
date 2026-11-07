@@ -1,4 +1,4 @@
-import { defineManifest } from '../../core/manifest'
+import { defineManifest, PUBLIC } from '../../core/manifest'
 
 /**
  * Payments received (B-W1-28; A2 SCR-082; FIN-121, FIN-066): office only (a floor, portal or link session is refused by
@@ -32,4 +32,19 @@ export const manifest = defineManifest({
   'POST /payments/release-overpayment': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   // B-W2b-21 (Z8:01; deposit-carry.ts): a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice.
   'POST /payments/deposit-requests/:depositRequestId/carry': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
+  // B-W2b-185 (./online; FIN-118, FIN-123): paying online by card or SEPA through the payment provider. The office sends the
+  // page to pay an invoice and reads a record's online payments; a PAYMENT or DEPOSIT_INFO link pays its own record (the
+  // handler checks the purpose); the customer's Finance and Admin see what is open and pay in the portal; the FAKE
+  // provider's own fields are public (the client secret is the key) and answer 404 outside local and test.
+  'POST /payments/invoices/:invoiceId/link': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
+  'GET /payments/intents': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'GET /payments/link/pay': { audiences: ['link'], permission: 'links.open', scope: 'party' },
+  'POST /payments/link/pay/intents': { audiences: ['link'], permission: 'links.open', scope: 'party' },
+  'GET /payments/link/pay/intents/:intentId': { audiences: ['link'], permission: 'links.open', scope: 'party' },
+  'GET /portal/payments/open-items': { audiences: ['partner'], permission: 'portal.payments.view', scope: 'party' },
+  'GET /portal/payments/statement': { audiences: ['partner'], permission: 'portal.payments.view', scope: 'party' },
+  'GET /portal/payments/statement/pdf': { audiences: ['partner'], permission: 'portal.payments.view', scope: 'party' },
+  'POST /portal/payments/intents': { audiences: ['partner'], permission: 'portal.payments.pay', scope: 'party' },
+  'GET /portal/payments/intents/:intentId': { audiences: ['partner'], permission: 'portal.payments.view', scope: 'party' },
+  'POST /payment-fake/confirm': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })
