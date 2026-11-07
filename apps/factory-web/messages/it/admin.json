@@ -1977,6 +1977,9 @@
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
     "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
     "portal_salesOrders_view": "Vedere gli ordini della propria organizzazione: stato e date, data promessa e perché è cambiata, cosa resta da spedire, spedizioni e tracciamento, avanzamento della produzione se condiviso",
+    "portal_customerDocuments_view": "Vedere i documenti della propria organizzazione: documenti di consegna, conferme d'ordine e preventivi (prezzi solo per i ruoli che li vedono), altri file condivisi; aprirli e scaricarli, ogni scaricamento registrato",
+    "portal_customerDocuments_conformity": "Vedere i documenti di conformità: dichiarazioni di conformità, note informative, certificati di conformità, rapporti di ispezione e di prova; per ogni modello ricevuto, la dichiarazione e il certificato validi alla data di spedizione",
+    "portal_customerDocuments_finance": "Vedere fatture e note di credito (PDF e fattura elettronica XML) e gli estratti conto inviati; solo per i ruoli che vedono i prezzi",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }

@@ -4,6 +4,8 @@ import { NOTIFICATION_COUNTS } from './notifications'
 import { TASK_COUNTS } from './tasks'
 // B-W2b-175: a customer's orders (open, in production, shipping this week, on the way).
 import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home'
+// B-W2b-178: a customer's new documents (since the last visit, until opened).
+import { CUSTOMER_DOCUMENT_COUNTS } from '../../../../modules/sales/portal-documents/home'
 
 /**
  * Where a partner's Home counts come from (B-W2b-167; plan W2b-3 "Sources": "Home counts through a sources folder like the
@@ -24,6 +26,8 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   NOTIFICATION_COUNTS,
   // B-W2b-175: a customer's orders.
   SALES_ORDER_COUNTS,
+  // B-W2b-178: a customer's new documents.
+  CUSTOMER_DOCUMENT_COUNTS,
 ])
 
 const problems = homeCountProblems(HOME_SOURCES.flatMap((source) => source.counts))
