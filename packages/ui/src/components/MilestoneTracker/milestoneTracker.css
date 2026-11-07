@@ -1,0 +1,240 @@
+/*
+ * DS — MilestoneTracker (B-W2b-155). A state is never colour alone: a mark (icon) AND a word. Done and partly marks on
+ * `--nds-success-soft` / `--nds-success-text`, the current one on `--nds-primary` (a tenant's primary inside a branded
+ * subtree) with the inverse text, the rest on the sunken surface. The connector between marks is a hairline, solid up to
+ * the current step. `auto` lays the steps across from 40rem of its own width, down below it. Sizes read `--nds-density-*`.
+ */
+.nds-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-milestones / inline-size;
+}
+.nds-milestones-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-milestone {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--nds-space-12);
+  padding-bottom: var(--nds-space-14);
+}
+.nds-milestone:last-child {
+  padding-bottom: 0;
+}
+/* Down: the connector runs from under a mark to the next one. */
+.nds-milestone:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--nds-density-icon) + var(--nds-space-10));
+  bottom: var(--nds-space-2);
+  left: calc((var(--nds-density-icon) + var(--nds-space-10)) / 2 - 1px);
+  width: 2px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-border);
+}
+.nds-milestone[data-state='done']:not(:last-child)::before,
+.nds-milestone[data-state='partly']:not(:last-child)::before {
+  background: var(--nds-success);
+}
+.nds-milestone-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--nds-density-icon) + var(--nds-space-10));
+  height: calc(var(--nds-density-icon) + var(--nds-space-10));
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-milestone[data-state='done'] .nds-milestone-mark,
+.nds-milestone[data-state='partly'] .nds-milestone-mark {
+  border-color: transparent;
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-milestone[data-state='current'] .nds-milestone-mark {
+  border-color: transparent;
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+}
+.nds-milestone-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding-top: var(--nds-space-2);
+}
+.nds-milestone-label {
+  font-weight: var(--nds-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.nds-milestone[data-state='current'] .nds-milestone-label {
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+}
+.nds-milestone[data-state='skipped'] .nds-milestone-label {
+  color: var(--nds-text-2);
+  text-decoration: line-through;
+}
+.nds-milestone-detail,
+.nds-milestone-note {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+/* Across: one column per step, the connector between the marks. */
+.nds-milestones[data-layout='horizontal'] .nds-milestones-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--nds-space-8);
+}
+.nds-milestones[data-layout='horizontal'] .nds-milestone {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--nds-space-8);
+  padding-bottom: 0;
+}
+.nds-milestones[data-layout='horizontal'] .nds-milestone:not(:last-child)::before {
+  top: calc((var(--nds-density-icon) + var(--nds-space-10)) / 2 - 1px);
+  bottom: auto;
+  left: calc(var(--nds-density-icon) + var(--nds-space-10) + var(--nds-space-6));
+  right: calc(var(--nds-space-6) * -1 + var(--nds-space-2));
+  width: auto;
+  height: 2px;
+}
+@container nds-milestones (min-width: 40rem) {
+  .nds-milestones[data-layout='auto'] .nds-milestones-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    column-gap: var(--nds-space-8);
+  }
+  .nds-milestones[data-layout='auto'] .nds-milestone {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--nds-space-8);
+    padding-bottom: 0;
+  }
+  .nds-milestones[data-layout='auto'] .nds-milestone:not(:last-child)::before {
+    top: calc((var(--nds-density-icon) + var(--nds-space-10)) / 2 - 1px);
+    bottom: auto;
+    left: calc(var(--nds-density-icon) + var(--nds-space-10) + var(--nds-space-6));
+    right: calc(var(--nds-space-6) * -1 + var(--nds-space-2));
+    width: auto;
+    height: 2px;
+  }
+}
+
+/* The promise and its history. */
+.nds-milestones-promise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-14);
+}
+.nds-milestones-promised {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.nds-milestones-history > summary {
+  min-height: var(--nds-density-target-min);
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-link);
+  cursor: pointer;
+}
+.nds-milestones-history > summary:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: var(--nds-density-focus-offset);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-milestones-history-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-top: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.nds-milestones-history-h {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-milestones-moves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-milestones-moves > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.nds-milestones-reason {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+/* Compact (a row): one dot per step, the current step's name. No size container: in a row's flex line it takes the
+   width of its content (an inline-size container would shrink to nothing there). */
+.nds-milestones[data-layout='compact'] {
+  container-type: normal;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+}
+.nds-milestones-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-milestones-dot {
+  width: var(--nds-space-8);
+  height: var(--nds-space-8);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface);
+}
+.nds-milestones-dot[data-state='done'],
+.nds-milestones-dot[data-state='partly'] {
+  border-color: var(--nds-success);
+  background: var(--nds-success);
+}
+.nds-milestones-dot[data-state='current'] {
+  width: var(--nds-space-12);
+  height: var(--nds-space-12);
+  border-color: var(--nds-primary);
+  background: var(--nds-primary);
+}
+.nds-milestones-dot[data-state='skipped'] {
+  border-style: dashed;
+}
+.nds-milestones-now {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-milestones-now-label {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-milestones-now-of {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}

@@ -1,0 +1,194 @@
+/*
+ * DS — EndState (B-W2b-155). A centred head (icon in a tinted circle, the headline, the body), then left-aligned blocks
+ * (next steps, receipt, reference, copy, actions, the page's extra) and the contact block last under a rule. Colours are
+ * semantic pairs (`--nds-<tone>-text` on `--nds-<tone>-soft` for the icon); sizes read `--nds-density-*`, so the link
+ * and portal pages (comfortable) get their larger type and targets. It fills its column; the column is the page's.
+ */
+.nds-endstate {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--nds-density-gap) * 1.5);
+  min-width: 0;
+  padding: var(--nds-space-24) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-endstate / inline-size;
+}
+.nds-endstate-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-10);
+  text-align: center;
+}
+.nds-endstate-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--nds-density-icon) * 2.25);
+  height: calc(var(--nds-density-icon) * 2.25);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-endstate-icon > svg {
+  width: calc(var(--nds-density-icon) * 1.25);
+  height: calc(var(--nds-density-icon) * 1.25);
+}
+.nds-endstate[data-tone='info'] .nds-endstate-icon {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-endstate[data-tone='warning'] .nds-endstate-icon {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-endstate[data-tone='danger'] .nds-endstate-icon {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-endstate[data-tone='neutral'] .nds-endstate-icon {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-endstate-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.3;
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+.nds-endstate-title:focus {
+  outline: none;
+}
+.nds-endstate-title:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: var(--nds-density-focus-offset);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-endstate-body {
+  max-width: 60ch;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+.nds-endstate-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-endstate-h {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-endstate-next {
+  margin: 0;
+  line-height: 1.5;
+}
+.nds-endstate-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-inline-start: 1.5em;
+  line-height: 1.5;
+}
+.nds-endstate-steps > li::marker {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-endstate-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+}
+.nds-endstate-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-endstate-fact > dt {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-endstate-fact > dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-medium);
+}
+.nds-endstate-ref {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.nds-endstate-ref-label {
+  color: var(--nds-text-2);
+}
+.nds-endstate-ref-value {
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nds-endstate-copy,
+.nds-endstate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.nds-endstate-extra {
+  min-width: 0;
+}
+.nds-endstate-contact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-top: var(--nds-density-gap);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-endstate-who,
+.nds-endstate-reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-14);
+  margin: 0;
+}
+.nds-endstate-detail {
+  color: var(--nds-text-2);
+}
+.nds-endstate-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: var(--nds-density-target-min);
+  color: var(--nds-text-link);
+  overflow-wrap: anywhere;
+}
+.nds-endstate-link:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: var(--nds-density-focus-offset);
+  border-radius: var(--nds-radius-sm);
+}
+
+/* A narrow column (a phone): the actions take the full width, one under the other. */
+@container nds-endstate (max-width: 30rem) {
+  .nds-endstate-copy > *,
+  .nds-endstate-actions > * {
+    flex: 1 1 100%;
+  }
+  .nds-endstate-copy .nds-btn,
+  .nds-endstate-actions .nds-btn {
+    width: 100%;
+  }
+}

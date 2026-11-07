@@ -1,0 +1,79 @@
+/*
+ * DS — PortalActionBar (B-W2b-155). Under 720 px (the BottomBar's breakpoint) the bar is fixed above the BottomBar: the
+ * bar's foot sits on the BottomBar's top edge (its 56 px tab, its 1 px rule, the safe area). Its spacer, in the page's flow,
+ * takes the bar's measured height so nothing hides behind it. From 720 px both are gone (the action is in the band);
+ * `.inline` draws the bar in the flow at every width. The held reason is a line in the bar, never colour alone.
+ */
+.nds-pab-host {
+  display: none;
+}
+@media (max-width: 719px) {
+  .nds-pab-host {
+    display: block;
+  }
+  .nds-pab-spacer {
+    height: calc(var(--nds-density-control-h-primary) + var(--nds-space-24));
+  }
+  .nds-pab-host > .nds-pab {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--nds-z-actionbar);
+    padding-bottom: calc(var(--nds-space-10) + env(safe-area-inset-bottom));
+    box-shadow: var(--nds-shadow-pop);
+  }
+  .nds-pab-host > .nds-pab[data-above='bottombar'] {
+    bottom: calc(var(--nds-space-48) + var(--nds-space-8) + 1px + env(safe-area-inset-bottom));
+    padding-bottom: var(--nds-space-10);
+  }
+}
+.nds-pab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) max(var(--nds-space-16), env(safe-area-inset-right)) var(--nds-space-10) max(var(--nds-space-16), env(safe-area-inset-left));
+  border-top: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-pab.inline {
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+}
+.nds-pab-note {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-pab-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.nds-pab-secondary {
+  flex: none;
+  display: flex;
+  gap: var(--nds-space-8);
+}
+/* The action takes the rest of the row, a full-width thumb target (its tooltip wrapper too when it is held). */
+.nds-pab-row > .nds-pab-action,
+.nds-pab-row > .nds-tooltip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.nds-pab-row > .nds-tooltip > .nds-pab-action,
+.nds-pab-row > .nds-pab-action {
+  width: 100%;
+  min-height: var(--nds-density-control-h-primary);
+  justify-content: center;
+  white-space: normal;
+}
+.nds-pab-held {
+  margin: 0;
+  padding: var(--nds-space-4) var(--nds-space-10);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}

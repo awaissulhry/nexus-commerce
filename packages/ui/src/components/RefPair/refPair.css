@@ -1,0 +1,59 @@
+/*
+ * DS — RefPair (B-W2b-155). Two references, theirs first: the label in the secondary text tier, the value in the strong
+ * tier with tabular figures; a search match on `--nds-warning-soft` (a highlight, read with its text colour kept).
+ * Sizes read `--nds-density-*` (the console's sizes at standard, the portal's at comfortable).
+ */
+.nds-refpair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--nds-space-8);
+  row-gap: var(--nds-space-2);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+  color: var(--nds-text);
+}
+.nds-refpair[data-layout='stacked'] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.nds-refpair[data-size='sm'] {
+  font-size: var(--nds-density-font-label);
+}
+.nds-ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+.nds-ref-sep {
+  margin-inline-end: var(--nds-space-4);
+  color: var(--nds-text-3);
+}
+.nds-ref-label {
+  flex-shrink: 0;
+  color: var(--nds-text-2);
+}
+.nds-ref-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-strong);
+}
+.nds-ref[data-side='ours'] .nds-ref-value {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+}
+.nds-ref-mark {
+  padding: 0 var(--nds-space-1);
+  border-radius: var(--nds-radius-xs);
+  background: var(--nds-warning-soft);
+  color: inherit;
+}
+.nds-ref-copy {
+  align-self: center;
+  color: var(--nds-text-2);
+}

@@ -1,0 +1,87 @@
+/* The portal and link parts lab (/design/ds-portal-parts, B-W2b-155): cards that fill the main area (no page max-width),
+   at the portal's comfortable density. Semantic tokens only. */
+.fw-dpl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+.fw-dpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: var(--nds-space-24);
+  align-items: start;
+  min-width: 0;
+}
+.fw-dpl-span {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.fw-dpl-card {
+  min-width: 0;
+}
+.fw-dpl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-dpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+}
+.fw-dpl-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-dpl-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+.fw-dpl-ok {
+  margin: 0;
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-dpl-strong {
+  margin: 0;
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-dpl-line {
+  margin: 0;
+  padding: var(--nds-space-12);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.fw-dpl-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+.fw-dpl-fake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+/* The branded line: the brand's decoration colour as a rule, the words in the text colours. */
+.fw-dpl-brand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: var(--nds-space-4) solid var(--nds-brand-accent);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface);
+}
