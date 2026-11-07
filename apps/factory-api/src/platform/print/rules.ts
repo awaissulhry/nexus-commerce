@@ -19,9 +19,10 @@ export const PAYLOAD_KINDS = ['ZPL', 'PDF'] as const
 export type PayloadKind = (typeof PAYLOAD_KINDS)[number]
 /**
  * Labels a module lays out itself (queueModuleLabel), beside factory-domain/labels' scan labels (HIDE, LOT, BUNDLE,
- * CARTON): GARMENT, the PPE garment label (B-W1-19 test labels, B-W1-44 at the final operation).
+ * CARTON): GARMENT, the PPE garment label (B-W1-19 test labels, B-W1-44 at the final operation); MACHINE, a machine's QR tag
+ * (B-W2b-136, factory-domain plant/machines/tag.ts).
  */
-export const MODULE_LABEL_KINDS = ['GARMENT'] as const
+export const MODULE_LABEL_KINDS = ['GARMENT', 'MACHINE'] as const
 export type ModuleLabelKind = (typeof MODULE_LABEL_KINDS)[number]
 
 /** Hand-overs to the relay before a job is FAILED (the handler's tries, with exponential backoff between them). */

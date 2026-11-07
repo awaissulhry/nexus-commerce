@@ -7,6 +7,7 @@ import { machineDraftProblems, normalAssetNumber, OPEN_JOB_STATUSES, OPEN_REQUES
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { assertMay, assertMayWrite, assertVersion, bodyIssue, byOf, may, officeOf, problemsError, refused, scopeOf } from '../access'
+import { endPlansOfMachineInCommand } from '../statutory/plans'
 import { auditedMachine, jobViews, JOB_COLUMNS, lockMachine, machineCard, machineViews, moveMachine, readMachine, REQUEST_COLUMNS, requestViews, MACHINE_COLUMNS, type MachineRow } from '../store'
 
 /**
@@ -263,6 +264,8 @@ export async function retireMachine(caller: CommandCaller, machineId: string, bo
     const refusal = retireRefusal({ assetNumber: machine.assetNumber, status: machine.status as MachineStatus, openRequests, openJobs })
     if (refusal) refused(refusal)
     await moveMachine(tools, machine, 'RETIRED', { reason: `Retired: ${body.reason.trim()}`.slice(0, 500), cause: 'RETIRE', recordType: 'Machine', recordId: machine.id, by: byOf(context) })
+    // B-W2b-136 (design pop:retire "Plans end, kept for history"): its active statutory check plans end in the same command.
+    await endPlansOfMachineInCommand(tools, machine.id, `Machine ${machine.assetNumber} retired: ${body.reason.trim()}`.slice(0, 500))
     const [view] = await machineViews(tx, [(await readMachine(tx, context, machine.id))!], context)
     return { machine: view! }
   })

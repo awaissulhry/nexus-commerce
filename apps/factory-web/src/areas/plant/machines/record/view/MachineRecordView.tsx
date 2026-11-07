@@ -1,8 +1,8 @@
 'use client'
 
-import { type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, MoreHorizontal, Pencil, QrCode as QrIcon, TriangleAlert, Wrench } from 'lucide-react'
+import { AlertTriangle, FileWarning, MoreHorizontal, Pencil, QrCode as QrIcon, TriangleAlert, Wrench } from 'lucide-react'
 import { Card, EmptyState, KeyValue, Menu, SummaryTable, type TabItem } from '@nexus/ui/components'
 import { Button, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -10,6 +10,15 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import type { MachineRecord } from '../../../_shared/api'
 import { ageWords, labelOf, personWords } from '../../../_shared/model'
 import { Cost, JobPill, LiveLine, MachinePill, NoticeBanner, PlantMessages, RecordFrame, SymptomText, useWords } from '../../../_shared/parts'
+import { changeHeld, nextCheckWords } from '../../depth/model'
+import { DepthMessages, useDepthWords } from '../../depth/parts'
+import { tagMachineOf } from '../../depth/use-tags'
+import { DocumentsTab } from '../../depth/view/DocumentsTab'
+import { ReleaseStepUp } from '../../depth/view/ReleaseStepUp'
+import { StatusDialog } from '../../depth/view/StatusDialog'
+import { StatusTab } from '../../depth/view/StatusTab'
+import { TagTab } from '../../depth/view/TagTab'
+import { TagsDialog } from '../../depth/view/TagsDialog'
 import { MachineFields, machineDraftHeld } from '../../view/MachineFields'
 import { RetireDialog } from '../../view/MachineDialogs'
 import { MACHINE_TABS, type MachineRecordActions, type MachineRecordModel } from '../../view-model'
@@ -27,7 +36,9 @@ export type { MachineRecordActions, MachineRecordModel } from '../../view-model'
 export function MachineRecordView({ model, actions }: { model: MachineRecordModel; actions?: MachineRecordActions }) {
   return (
     <PlantMessages>
-      <MachineRecordBody model={model} actions={actions} />
+      <DepthMessages>
+        <MachineRecordBody model={model} actions={actions} />
+      </DepthMessages>
     </PlantMessages>
   )
 }
@@ -40,9 +51,36 @@ function MachineRecordBody({ model, actions }: { model: MachineRecordModel; acti
   const value = model.loaded.status === 'ready' ? model.loaded.value : null
   const machine = value?.card.machine ?? null
   const base = machine ? `${listHref}/${encodeURIComponent(machine.id)}` : listHref
-  const tabs: TabItem[] = MACHINE_TABS.map((tab) => ({ id: tab, href: tab === 'overview' ? base : `${base}?tab=${tab}`, label: t(`machineTab.${tab}`), count: tab === 'history' && value ? value.history.length : null }))
+  const d = useDepthWords()
+  const depth = model.depth
+  const documents = depth?.documents.loaded.status === 'ready' ? depth.documents.loaded.value.documents.length : null
+  const tabs: TabItem[] = MACHINE_TABS.filter((tab) => depth || tab === 'overview' || tab === 'history').map((tab) => ({
+    id: tab,
+    href: tab === 'overview' ? base : `${base}?tab=${tab}`,
+    label: tab === 'overview' || tab === 'history' ? t(`machineTab.${tab}`) : d(`tab.${tab}`),
+    count: tab === 'history' && value ? value.history.length : tab === 'docs' ? documents : null,
+  }))
   const retired = machine?.status === 'RETIRED'
   const manage = model.can.manageMachines && (value?.canManage ?? false)
+  const statusHeldKey = machine ? changeHeld(machine, { manage }) : null
+  // `r` reports a problem for this machine (design kb "Record: r report a problem").
+  const latest = useRef(actions)
+  latest.current = actions
+  const canReport = !!value?.canReport && !retired
+  const quiet = !!(model.retire || depth?.status || depth?.tags || depth?.stepUp.open || depth?.documents.viewer || depth?.documents.remove || model.edit)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.metaKey || event.ctrlKey || event.altKey || quiet || !canReport) return
+      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
+      if (event.key === 'r') {
+        event.preventDefault()
+        latest.current?.depth?.onReport?.()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [quiet, canReport])
 
   let title: ReactNode = null
   let meta: ReactNode = null
@@ -83,7 +121,7 @@ function MachineRecordBody({ model, actions }: { model: MachineRecordModel; acti
         {!retired && (
           <Button size="sm" variant="primary" heldReason={value.canReport ? null : t('held.noReport')} asChild={value.canReport}>
             {value.canReport ? (
-              <Link href={`${model.prefix}/plant/requests?report=1&machine=${encodeURIComponent(machine.id)}`}>
+              <Link href={`${model.prefix}/plant/requests?report=1&machine=${encodeURIComponent(machine.id)}`} aria-keyshortcuts="r">
                 <TriangleAlert size={14} aria-hidden /> {t('requests.report')}
               </Link>
             ) : (
@@ -99,6 +137,7 @@ function MachineRecordBody({ model, actions }: { model: MachineRecordModel; acti
           triggerProps={{ 'aria-label': t('record.more') }}
           items={[
             { id: 'jobs', label: t('record.machineJobs'), href: `${model.prefix}/plant/jobs?machine=${encodeURIComponent(machine.id)}&view=all` },
+            ...(depth ? [{ id: 'status', label: d('status.open'), onSelect: () => actions?.depth?.onOpenStatus?.(), disabled: statusHeldKey !== null, ...(statusHeldKey ? { description: d(statusHeldKey) } : {}) }] : []),
             ...(!retired && manage ? [{ id: 'retire', label: t('machineRecord.retire'), onSelect: () => actions?.onRetire?.() }] : []),
           ]}
         />
@@ -123,6 +162,43 @@ function MachineRecordBody({ model, actions }: { model: MachineRecordModel; acti
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
       {value && model.tab === 'overview' && <Overview model={model} value={value} actions={actions} manage={manage} place={place} />}
       {value && model.tab === 'history' && <History model={model} value={value} place={place} />}
+      {value && depth && model.tab === 'docs' && <DocumentsTab state={depth.documents} canManage={manage} actions={actions?.depth} />}
+      {value && depth && model.tab === 'status' && (
+        <StatusTab loaded={depth.history.loaded} week={depth.history.week} today={depth.today} changeHeld={statusHeldKey} onWeek={actions?.depth?.onWeek} onChange={actions?.depth?.onOpenStatus} onRetry={actions?.depth?.onRetryHistory} />
+      )}
+      {value && depth && model.tab === 'tag' && (
+        <TagTab
+          machine={{ ...tagMachineOf(value.card.machine, locale) }}
+          job={depth.tagJob}
+          canPrint={depth.canPrint}
+          sheetHref={`${listHref}/tags?ids=${encodeURIComponent(value.card.machine.id)}`}
+          onPrint={actions?.depth?.onOpenTags}
+          onRetry={actions?.depth?.onTagRetry}
+        />
+      )}
+      {value && depth?.status && (
+        <StatusDialog
+          machine={value.card.machine}
+          state={depth.status}
+          can={{ manage, signSafe: model.can.signSafe }}
+          onDraft={actions?.depth?.onStatusDraft}
+          onClose={actions?.depth?.onStatusClose}
+          onSubmit={actions?.depth?.onStatusSubmit}
+        />
+      )}
+      {value && depth?.tags && (
+        <TagsDialog
+          state={depth.tags}
+          canPrint={depth.canPrint}
+          sheetHref={`${listHref}/tags?ids=${encodeURIComponent(value.card.machine.id)}`}
+          onPrinter={actions?.depth?.onTagPrinter}
+          onCopies={actions?.depth?.onTagCopies}
+          onPrint={actions?.depth?.onTagPrint}
+          onRetry={actions?.depth?.onTagRetry}
+          onClose={actions?.depth?.onTagsClose}
+        />
+      )}
+      {depth && <ReleaseStepUp state={depth.stepUp} onSubmit={actions?.depth?.onStepUpSubmit} onCancel={actions?.depth?.onStepUpCancel} />}
       {value && model.retire && (
         <RetireDialog machines={[value.card.machine]} reason={model.retire.reason} busy={model.retire.busy} problem={model.retire.problem} refused={[]} t={t} onReason={actions?.onRetireReason} onClose={actions?.onRetireClose} onSubmit={actions?.onRetireSubmit} />
       )}
@@ -132,6 +208,7 @@ function MachineRecordBody({ model, actions }: { model: MachineRecordModel; acti
 
 function Overview({ model, value, actions, manage, place }: { model: MachineRecordModel; value: MachineRecord; actions?: MachineRecordActions; manage: boolean; place: { locale: ReturnType<typeof useLocale>; timeZone: string } }) {
   const t = useWords()
+  const d = useDepthWords()
   const locale = place.locale
   const machine = value.card.machine
   const retired = machine.status === 'RETIRED'
@@ -208,7 +285,8 @@ function Overview({ model, value, actions, manage, place }: { model: MachineReco
             items={[
               { label: t('detail.openJob'), value: value.card.openJob ? <Link className="fw-pl-link" href={`${model.prefix}/plant/jobs/${encodeURIComponent(value.card.openJob.id)}`}>{value.card.openJob.number}</Link> : t('detail.noOpenJob') },
               { label: t('detail.requests30'), value: String(value.card.requestsIn30Days) },
-              { label: t('machineRecord.nextCheck'), value: t('machineRecord.nextCheckLater') },
+              { label: t('machineRecord.nextCheck'), value: model.depth ? <NextCheck model={model} /> : t('machineRecord.nextCheckLater') },
+              ...(model.depth ? [{ label: d('depth.ce'), value: <CeLine model={model} base={`${model.prefix}/plant/machines/${encodeURIComponent(machine.id)}`} /> }] : []),
               { label: t('machineRecord.operators'), value: t('machineRecord.operatorsLater') },
             ]}
           />
@@ -268,5 +346,35 @@ function History({ model, value, place }: { model: MachineRecordModel; value: Ma
       />
       <p className="fw-pl-hint">{t('machineRecord.historyFoot')}</p>
     </div>
+  )
+}
+
+/** The Now panel's next statutory check (B-W2b-124's plan), linking its plan in Preventive & statutory checks. */
+function NextCheck({ model }: { model: MachineRecordModel }) {
+  const d = useDepthWords()
+  const locale = useLocale()
+  const facts = model.depth?.facts ?? null
+  const words = nextCheckWords(d, facts, (day) => formatDate(day, { locale, timeZone: 'UTC' }), (worded) => labelOf(worded, locale))
+  if (!facts?.nextCheck) return <span>{words.text}</span>
+  return (
+    <Link className={words.state === 'OVERDUE' ? 'fw-pl-link fw-pl-danger' : 'fw-pl-link'} href={`${model.prefix}/plant/preventive?plan=${encodeURIComponent(facts.nextCheck.planId)}`}>
+      {words.text}
+    </Link>
+  )
+}
+
+/** The Now panel's CE line: on file, or missing (art. 71) with the way to the Documents & CE tab. */
+function CeLine({ model, base }: { model: MachineRecordModel; base: string }) {
+  const d = useDepthWords()
+  const facts = model.depth?.facts ?? null
+  if (!facts) return <span>—</span>
+  return facts.ceOnFile ? (
+    <Link className="fw-pl-link" href={`${base}?tab=docs`}>
+      {d('depth.ceOnFile')}
+    </Link>
+  ) : (
+    <Link className="fw-pl-link fw-pl-danger" href={`${base}?tab=docs`}>
+      <FileWarning size={12} aria-hidden /> {d('depth.ceMissing')}
+    </Link>
   )
 }

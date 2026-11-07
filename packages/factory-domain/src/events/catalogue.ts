@@ -119,6 +119,8 @@ import { events as supplierPortal } from '../supplier-portal/events'
 import { events as portalReturns } from '../portal-returns/events'
 // B-W2b-184: approval requests to partners (asked, answered, withdrawn, expired).
 import { events as approvalsOut } from '../approvals-out/events'
+// B-W2b-136 (QHS-173): clicking dies (a die registered, changed or retired).
+import { events as plantDies } from '../plant-dies/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -304,7 +306,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-192
   ...portalReturns,
   // B-W2b-184
-  ...approvalsOut] as const satisfies readonly EventDefinition[]
+  ...approvalsOut,
+  // B-W2b-136
+  ...plantDies] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
