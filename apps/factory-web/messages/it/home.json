@@ -104,7 +104,8 @@
       "PORTAL_ORDER_REQUEST": "Richieste d'ordine dal portale da decidere",
       "ORDER_CHANGE_REQUEST": "Richieste di modifica e annullamento dei clienti",
       "SUPPLIER_CHANGE": "Modifiche al profilo dei fornitori",
-      "SUPPLIER_DOCUMENT": "Documenti dei fornitori da verificare"
+      "SUPPLIER_DOCUMENT": "Documenti dei fornitori da verificare",
+      "DELIVERY_ADDRESS": "Indirizzi di consegna aggiunti dai clienti, da verificare"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -431,6 +432,8 @@
       "SUPPLIER_CHANGE.blocks": "Da noi non cambia nulla finché non la approvi; il fornitore la vede in attesa della nostra verifica.",
       "SUPPLIER_DOCUMENT.WAITING": "{supplier} ha inviato {name} per la nostra verifica.",
       "SUPPLIER_DOCUMENT.blocks": "Non viene condiviso né conta per i documenti richiesti finché qualcuno non lo accetta.",
+      "DELIVERY_ADDRESS.WAITING": "{customer} ha aggiunto un indirizzo di consegna da verificare: {address}.",
+      "DELIVERY_ADDRESS.blocks": "Nessun ordine né spedizione va lì finché non lo approvi; accettare una richiesta del cliente che lo nomina lo approva anche.",
       "why.ORDER_PROMISE.orders_manage": "Gestisci gli ordini di questo cliente e le loro date promesse.",
       "why.WORK_ORDER_HELD.workorders_release": "Rilasci gli ordini di lavoro di questo stabilimento.",
       "why.LOT_HOLD.quality_lots_release": "Rilasci i lotti di questo stabilimento.",
@@ -455,6 +458,7 @@
       "why.ORDER_CHANGE_REQUEST.orders_manage": "Gestisci gli ordini di questo cliente.",
       "why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide": "Verifichi le modifiche di indirizzi e contatti dei fornitori.",
       "why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review": "Verifichi certificati, rapporti di prova e dichiarazioni inviati dai fornitori.",
+      "why.DELIVERY_ADDRESS.orders_manage": "Prendi gli ordini di questo cliente.",
       "code": {
         "checks": {
           "REVISION": "revisione",

@@ -148,6 +148,9 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'ORDER_CHANGE_REQUEST.CANCEL_LINES_one': '{customer} asks to cancel {count} line of order {number}.',
   'ORDER_CHANGE_REQUEST.CANCEL_LINES_other': '{customer} asks to cancel {count} lines of order {number}.',
   'ORDER_CHANGE_REQUEST.blocks': 'The customer waits for your answer: accept it (the order is amended or cancelled) or refuse it with a reason.',
+  // B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check.
+  'DELIVERY_ADDRESS.WAITING': '{customer} added a delivery address for our check: {address}.',
+  'DELIVERY_ADDRESS.blocks': 'No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.',
 
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
@@ -173,6 +176,7 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.ORDER_CHANGE_REQUEST.orders_manage': "You manage this customer's orders.",
   'why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide': "You check suppliers' changes of their addresses and contacts.",
   'why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review': "You check the certificates, test reports and declarations suppliers send.",
+  'why.DELIVERY_ADDRESS.orders_manage': "You take this customer's orders.",
 })
 
 /** At most five values, then "and N more". */
@@ -365,4 +369,9 @@ export function orderChangeRequestWords(facts: { readonly number: string; readon
         ? phrase('ORDER_CHANGE_REQUEST.CHANGE_DELIVERY', base)
         : phrase('ORDER_CHANGE_REQUEST.CHANGE', { ...base, count: facts.sizes })
   return { sentence, blocks: phrase('ORDER_CHANGE_REQUEST.blocks') }
+}
+
+/** B-W2b-F13b: a delivery address a customer added in the portal, waiting for our check (`address`: street and city). */
+export function deliveryAddressWords(facts: { readonly customer: string; readonly address: string }): RowWords {
+  return { sentence: phrase('DELIVERY_ADDRESS.WAITING', { customer: facts.customer, address: facts.address }), blocks: phrase('DELIVERY_ADDRESS.blocks') }
 }

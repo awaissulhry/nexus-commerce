@@ -6,6 +6,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
+import { usableForOrders } from '@nexus/factory-domain/parties/address-approval'
 import { viesStanding } from '@nexus/factory-domain/parties/vies'
 import { quoteDocument, quoteDocumentNumber, quoteMail, type CustomerQuote } from '@nexus/factory-domain/sales/quotes/document'
 import { QUOTES_MANAGE, QUOTES_SEND } from '@nexus/factory-domain/sales/quotes/permissions'
@@ -56,7 +57,7 @@ import { freezeProofsInCommand, proofSendChecks } from '../quote-proofs/freeze'
  * row, audit entry or event: only the mail holds it.
  */
 
-const ADDRESS_COLUMNS = { id: true, partyId: true, status: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true } as const
+const ADDRESS_COLUMNS = { id: true, partyId: true, status: true, approvalStatus: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true } as const
 
 const asAddress = (row: { name: string | null; line1: string; line2: string | null; postalCode: string; city: string; province: string | null; country: string; contactName: string | null; phone: string | null }): AddressFacts => ({
   name: row.name,
@@ -78,7 +79,8 @@ const asAddress = (row: { name: string | null; line1: string; line2: string | nu
 export async function partySnapshotsOf(db: Reader, party: QuoteParty, taxMode: string, billToAddressId: string | null, shipToAddressId: string | null, now: Date): Promise<{ billTo: BillToSnapshot | null; shipTo: ShipToSnapshot | null }> {
   const ids = [billToAddressId, shipToAddressId].filter((id): id is string => id !== null)
   const addresses = ids.length > 0 ? await db.partyAddress.findMany({ where: { id: { in: ids } }, select: ADDRESS_COLUMNS }) : []
-  const usable = (id: string | null) => addresses.find((row) => row.id === id && row.partyId === party.row.id && row.status === 'ACTIVE') ?? null
+  // B-W2b-F13b: never an address a customer added that waits for our check, or one we refused.
+  const usable = (id: string | null) => addresses.find((row) => row.id === id && row.partyId === party.row.id && row.status === 'ACTIVE' && usableForOrders(row.approvalStatus)) ?? null
   const billRow = usable(billToAddressId)
   const shipRow = usable(shipToAddressId)
   let billTo: BillToSnapshot | null = null

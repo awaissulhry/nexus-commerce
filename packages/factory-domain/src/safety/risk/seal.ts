@@ -23,7 +23,7 @@ export interface SealSignature {
   /** ISO instant. */
   readonly signedAt: string
   readonly method: DvrSignMethod
-  /** PAPER: who recorded it; OFFICE: who signed in; FLOOR_PIN: null (the worker signed with badge and PIN). */
+  /** PAPER: who recorded it; OFFICE: who signed in; FLOOR_PIN: null (the worker signed with badge and PIN); LINK: null (the outside signer approved our request). */
   readonly recordedBy: string | null
 }
 
@@ -80,7 +80,7 @@ const WORDS = {
     summary: 'Modifiche di questa versione',
     columns: { seq: 'N.', material: 'Ruolo', kind: 'Firmatario', quantity: 'Data', note: 'Modo · registrata da' },
     roles: { EMPLOYER: 'Datore di lavoro', RSPP: 'RSPP', RLS: 'RLS', RLST: 'RLS territoriale', DOCTOR: 'Medico competente' },
-    methods: { OFFICE: 'firma in ufficio', FLOOR_PIN: 'badge e PIN', PAPER: 'firma su carta (scansione in archivio)' },
+    methods: { OFFICE: 'firma in ufficio', FLOOR_PIN: 'badge e PIN', PAPER: 'firma su carta (scansione in archivio)', LINK: 'firmata tramite link (richiesta di approvazione, nome digitato dal firmatario)' },
     missing: 'firma mancante',
     closing: 'Attestazione generata dal registro della valutazione dei rischi; il documento del consulente resta il file congelato, con la sua impronta.',
     page: (page: number, pages: number) => `Pagina ${page} di ${pages}`,
@@ -111,7 +111,7 @@ const WORDS = {
     summary: 'Changes in this version',
     columns: { seq: 'No.', material: 'Role', kind: 'Signer', quantity: 'Date', note: 'How · recorded by' },
     roles: { EMPLOYER: 'Employer', RSPP: 'RSPP', RLS: 'RLS', RLST: 'Territorial RLS', DOCTOR: 'Occupational doctor' },
-    methods: { OFFICE: 'signed in the office', FLOOR_PIN: 'badge and PIN', PAPER: 'signed on paper (scan on file)' },
+    methods: { OFFICE: 'signed in the office', FLOOR_PIN: 'badge and PIN', PAPER: 'signed on paper (scan on file)', LINK: "signed by link (approval request, the name the signer typed)" },
     missing: 'not signed yet',
     closing: "Made from the risk assessment register; the consultant's document stays the frozen file, with its fingerprint.",
     page: (page: number, pages: number) => `Page ${page} of ${pages}`,

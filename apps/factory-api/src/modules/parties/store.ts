@@ -71,6 +71,8 @@ export const ADDRESS_COLUMNS = {
   isDefaultBillTo: true,
   isDefaultShipTo: true,
   status: true,
+  // B-W2b-F13b (wave 23): a delivery address a customer added waits for the office's check (partner-visible; null = ours).
+  approvalStatus: true,
   version: true,
   createdAt: true,
   updatedAt: true,

@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { changeAddress, checkAddress, defaultProblems } from '@nexus/factory-domain/parties/addresses'
 import { changeContact, checkContact } from '@nexus/factory-domain/parties/contacts'
@@ -55,6 +55,15 @@ async function lockWritable(tools: CommandTools, partyId: string): Promise<void>
 // ---- addresses ---------------------------------------------------------------------------------------------------------
 
 /**
+ * B-W2b-F13b (wave 23): an address a customer added in the portal and the office refused never changes again (it is
+ * archived for good); one that waits for the check stays a delivery address (factory-db's guard; these are its words).
+ */
+function checkedAddressProblem(row: { readonly approvalStatus: string | null }, kinds: readonly string[]): void {
+  if (row.approvalStatus === 'REFUSED') throw new InvalidStateError('This address was refused after our check: it never changes again. Add a new one instead.')
+  if (row.approvalStatus === 'WAITING' && !kinds.includes('SHIP_TO')) throw new ValidationError('The address is not valid.', [{ path: 'body/kinds', message: 'This address waits for our check as a delivery address: it keeps SHIP_TO until checked.' }])
+}
+
+/**
  * parties.addAddress: a new address (SAL-003). Marked as a default, or the party's first address with that use, it
  * becomes the default invoice (delivery) address and the old default stops being one.
  */
@@ -95,6 +104,7 @@ export async function updateAddress(caller: CommandCaller, partyId: string, addr
   const preview = changeAddress(addressFieldsOf(seen), patch)
   if (!preview.ok) throw new ValidationError('The address is not valid.', prefixed(preview.issues))
   if (preview.changed.length === 0 && (status === undefined || status === seen.status)) return getParty(caller, partyId)
+  checkedAddressProblem(seen, preview.address.kinds)
 
   const { result } = await command(caller, { name: 'parties.updateAddress', idempotencyKey, input: { partyId, addressId, ...body } }, async (tools) => {
     const { tx } = tools
@@ -103,6 +113,7 @@ export async function updateAddress(caller: CommandCaller, partyId: string, addr
     const row = await tx.partyAddress.findUniqueOrThrow({ where: { id: addressId }, select: ADDRESS_COLUMNS })
     const change = changeAddress(addressFieldsOf(row), patch)
     if (!change.ok) throw new ValidationError('The address is not valid.', prefixed(change.issues))
+    checkedAddressProblem(row, change.address.kinds)
     const next = { ...change.address, status: status ?? row.status }
     const archived = next.status === 'ARCHIVED'
     const flags = {
@@ -144,6 +155,8 @@ export async function setDefaultAddresses(caller: CommandCaller, partyId: string
           const address = addresses.find((row) => row.id === target)
           if (!address || address.status !== 'ACTIVE') return void issues.push({ path, message: 'Expected an active address of this party.' })
           if (!address.kinds.includes(kind)) return void issues.push({ path, message: `The address is not a ${kind} address.` })
+          // B-W2b-F13b: an address the customer added waits for our check: never a default until approved.
+          if (address.approvalStatus === 'WAITING') return void issues.push({ path, message: 'The customer added this address in the portal and it waits for our check: approve it first.' })
         }
         for (const id of await clearDefault(tx, partyId, which, target)) changed.add(id)
         if (target !== null && !addresses.find((row) => row.id === target)![which]) {

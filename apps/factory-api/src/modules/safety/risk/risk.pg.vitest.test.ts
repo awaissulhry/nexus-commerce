@@ -12,12 +12,16 @@ import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/aut
 import { seed as seedRoles } from '../../../../../../packages/factory-db/seed/roles'
 import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files'
 import { seed as seedHealth, type HealthSeed } from '../../../../../../packages/factory-db/seed/health'
+import { seed as seedParties } from '../../../../../../packages/factory-db/seed/parties'
 import { seed as seedSafety, type SafetySeed } from '../../../../../../packages/factory-db/seed/safety'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
+import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { settleRequest } from '../../../platform/approvals-out/settle'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
+import { systemContext } from '../../../platform/outbox/system'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 
 /**
@@ -301,6 +305,72 @@ describe('a version is signed by its four signers; the certain date is the last 
     expect(record.next).toMatchObject({ signers: [{ role: 'EMPLOYER' }, { role: 'RLST' }], sameAs: [{ role: 'RSPP', as: 'EMPLOYER', name: 'Made-up Owner B' }], missingEmployer: false })
     const frozen = (await ok('officer', 'POST', url, { ...base, fileId: pdf.id }, 201)).version
     expect(frozen.signers.map((signer: Json) => signer.role)).toEqual(['EMPLOYER', 'RLST'])
+  })
+})
+
+describe('an outside signer signs by link (B-W2b-F13b on the wave-23 schema; AP1:02, SafetySignMethod LINK)', () => {
+  it('a refused answer writes no signature; an approved one is the LINK signature, and the last makes the version SIGNED', async () => {
+    await seedParties({ db: h.database, namespace: NS })
+    const party = idOf('party:P1')
+    const assessmentId = (await ok('officer', 'GET', '/safety/risk/assessments')).assessments.find((row: Json) => row.name === 'Plant B1 (made-up)').id
+    const version = (await ok('officer', 'GET', `/safety/risk/assessments/${assessmentId}`)).versions[0]
+    expect(version).toMatchObject({ status: 'AWAITING_SIGNATURES', missing: ['EMPLOYER', 'RLST'] })
+    // The territorial RLS is an outside contact of a party (made-up), appointed today: the approval request goes to that party.
+    const rlst = (await ok('officer', 'POST', '/safety/appointments', { companyId: T.companyB, role: 'RLST', outsideName: 'Made-up Territorial RLS', outsidePartyId: party, fromDate: today }, 201)).appointment
+    // An answered SIGNATURE request as platform/approvals-out leaves it (its own flow is tested there): written straight into
+    // the table, its guard set aside for this one insert.
+    const answered = async (status: 'APPROVED' | 'REFUSED', typedName: string): Promise<string> => {
+      const id = newId()
+      await admin(`ALTER TABLE "ApprovalRequest" DISABLE TRIGGER USER`)
+      try {
+        await admin(
+          `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, answer, "typedName", "answeredAt")
+           VALUES ($1, $2, $3, 'RiskAssessmentVersion', $4, $5, 'SIGNATURE', 'Sign the new version (made-up).', now() + interval '5 days', $6::"ApprovalStatus", $7, $8, now())`,
+          [id, T.tenant, T.companyB, version.id, party, status, status === 'REFUSED' ? 'Not this version (made-up).' : null, typedName],
+        )
+      } finally {
+        await admin(`ALTER TABLE "ApprovalRequest" ENABLE TRIGGER USER`)
+      }
+      return id
+    }
+    const system = () => callerFor(h.database, systemContext(T.tenant, newId()))
+    const linkAudits = () => admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'safety.signatureByLink' ORDER BY at, id`, [version.id])
+
+    // REFUSED: a refusal signs nothing; the version's history says why.
+    const refused = await answered('REFUSED', 'Made-up Territorial RLS')
+    expect((await settleRequest(system(), refused, h.clock)).settled).toBe(true)
+    expect(await admin(`SELECT id FROM "RiskAssessmentSignature" WHERE "versionId" = $1`, [version.id])).toEqual([])
+    expect((await linkAudits()).map((row) => row.after)).toEqual([expect.objectContaining({ role: 'RLST', signatureWritten: false, why: 'NOT_APPROVED', approvalRequestId: refused })])
+
+    // The employer signs on paper (its scan filed first); then the RLST's approval by link is the last signature.
+    const employer = version.signers.find((signer: Json) => signer.role === 'EMPLOYER')
+    await fileOf('RiskAssessmentSignature', employer.signatureId, { companyId: T.companyB })
+    await ok('officer', 'POST', `/safety/risk/versions/${version.id}/signatures`, { role: 'EMPLOYER', signerName: 'Made-up Owner B', signedOn: today }, 201)
+    const approved = await answered('APPROVED', '  Made-up Territorial RLS ')
+    expect((await settleRequest(system(), approved, h.clock)).settled).toBe(true)
+    const [row] = await admin(`SELECT method::text AS method, "approvalRequestId", "appointmentId", "signerName", "signedOn"::text AS "signedOn", "signedById", key FROM "RiskAssessmentSignature" WHERE "versionId" = $1 AND role = 'RLST'`, [version.id])
+    expect(row).toEqual({ method: 'LINK', approvalRequestId: approved, appointmentId: rlst.id, signerName: 'Made-up Territorial RLS', signedOn: today, signedById: null, key: `signature:${version.id}:RLST` })
+    const signed = (await ok('officer', 'GET', `/safety/risk/assessments/${assessmentId}`)).versions[0]
+    expect(signed).toMatchObject({ status: 'SIGNED', certainDateOn: today, missing: [] })
+    expect(signed.signers.find((signer: Json) => signer.role === 'RLST').signature).toMatchObject({ method: 'LINK', signerName: 'Made-up Territorial RLS', recordedBy: null, appointmentId: rlst.id })
+    expect(await eventsOf('risk_signature.collected')).toContainEqual({ assessmentId, versionId: version.id, role: 'RLST', method: 'LINK', complete: true })
+    // (The settle runs on the harness clock, the freeze on the real one: their events' order is not the test's.)
+    expect((await eventsOf('risk_assessment_version.changed')).filter((event) => event.versionId === version.id).map((event) => event.change).sort()).toEqual(['FROZEN', 'SIGNED'])
+    expect((await linkAudits()).at(-1)!.after).toMatchObject({ signatureWritten: true, method: 'LINK', role: 'RLST' })
+    // The seal names how it was signed (kept by the office afterwards: no file store in the settle).
+    expect(signed.sealed).toBeNull()
+    const preview = await call('officer', 'GET', `/safety/risk/versions/${version.id}/seal?language=en`)
+    expect(preview.statusCode, preview.body.slice(0, 200)).toBe(200)
+    expect(preview.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    // A settle again replays (its idempotency key): still one signature; a version no longer waiting takes none by link.
+    await settleRequest(system(), approved, h.clock)
+    expect(await admin(`SELECT role::text AS role, method::text AS method FROM "RiskAssessmentSignature" WHERE "versionId" = $1 ORDER BY role`, [version.id])).toEqual([
+      { role: 'EMPLOYER', method: 'PAPER' },
+      { role: 'RLST', method: 'LINK' },
+    ])
+    const late = await answered('APPROVED', 'Made-up Territorial RLS')
+    await settleRequest(system(), late, h.clock)
+    expect((await linkAudits()).at(-1)!.after).toMatchObject({ signatureWritten: false, why: 'VERSION_NOT_WAITING' })
   })
 })
 

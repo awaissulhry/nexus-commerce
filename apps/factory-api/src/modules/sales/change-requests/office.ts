@@ -18,6 +18,7 @@ import { closeLinesInCommand, shortLinesOf } from '../orders/close-lines'
 import { impactView, readCancelFacts } from '../orders/impact'
 import { cancelOrderInCommand } from '../orders/moves'
 import { lockOrder, readLines, readOrder, readOrderFacts, type LineRecord, type OrderRow } from '../orders/store'
+import { approveWaitingInCommand } from '../portal-ordering/address-check'
 import {
   addressesOf,
   dayOrNull,
@@ -286,6 +287,8 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend)).amendmentId
       if (row.shipToAddressId) {
         if (!amend) await lockOrder(tx, order.id, fresh.version)
+        // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting approves it.
+        await approveWaitingInCommand(tools, row.shipToAddressId, { type: 'OrderChangeRequest', id: requestId, number: null })
         await moveShipTo(tools, fresh, row.shipToAddressId, reason)
       }
       if (!amend && !row.shipToAddressId) throw new InvalidStateError('Nothing is left to change: the order already looks like this. Refuse the request with a word to the customer instead.')

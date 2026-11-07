@@ -1,14 +1,15 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { CASE_LIMITS, type OutcomeWanted } from '@nexus/factory-domain/sales/portal-returns/rules'
+import { CASE_LIMITS } from '@nexus/factory-domain/sales/portal-returns/rules'
 import type { CommandTx } from '../../../core/command'
 
 /**
- * The reads of returns and complaints for the people outside (B-W2b-192). The partner role reads none of these tables
- * (ownership/returns.json, complaints.json: the portal's returns were planned without a grant), so every read here runs in
- * the tenant's office-role scope — as the portal person (officeAuth.inTenant) or as the tenant's system for a claim link —
- * and EVERY query names the party and the company the session is bound to. Each select names its columns and never one the
+ * The reads of returns and complaints for the people outside (B-W2b-192). Every read here runs in the tenant's office-role
+ * scope — as the portal person (officeAuth.inTenant) or as the tenant's system for a claim link — and EVERY query names the
+ * party and the company the session is bound to. (Since wave 23 the partner role may read its own party's RMAs, lines and
+ * complaints without their hidden columns, B-W2b-F12; these views stay in the office scope because they also read what the
+ * partner role reads none of: sites, receipts, credit notes, reasons, calendars, CAPAs.) Each select names its columns and never one the
  * customer must not read: no internal note, no owner, no triage (category, severity), no findings or root cause, no price,
  * credit value, cause or office person. One query at a time (one connection runs one query at a time).
  */
@@ -46,6 +47,10 @@ export const CASE_RMA = {
   replacementOrderId: true,
   closedAt: true,
   statusReason: true,
+  // B-W2b-F13b (wave 23): how the request came, what the customer would like and their words (partner-visible columns).
+  channel: true,
+  outcomeWanted: true,
+  customerNote: true,
   version: true,
   updatedAt: true,
   createdById: true,
@@ -129,34 +134,6 @@ export async function openTasksOn(db: Reader, partyId: string, records: readonly
     select: { recordType: true, recordId: true },
   })
   return new Set(rows.map((row) => `${row.recordType}:${row.recordId}`))
-}
-
-/** What the customer said with a request (B-W2b-192 keeps it on the request's audit row: the RMA has no column for it). */
-export interface RequestFacts {
-  readonly via: 'PORTAL' | 'LINK'
-  readonly outcomeWanted: OutcomeWanted | null
-  readonly note: string | null
-  readonly linkId: string | null
-}
-
-/** The audit actions of a request made from outside (this module's commands). */
-export const REQUEST_ACTIONS = ['portalReturns.request', 'portalReturns.claim'] as const
-
-export async function requestFactsOf(db: Reader, returnIds: readonly string[]): Promise<Map<string, RequestFacts>> {
-  if (returnIds.length === 0) return new Map()
-  const rows = await db.auditLog.findMany({ where: { recordType: RETURN_RECORD, recordId: { in: [...returnIds] }, action: { in: [...REQUEST_ACTIONS] } }, select: { recordId: true, after: true } })
-  const facts = new Map<string, RequestFacts>()
-  for (const row of rows) {
-    const after = (row.after ?? {}) as Record<string, unknown>
-    const outcome = after.outcomeWanted
-    facts.set(row.recordId, {
-      via: after.via === 'LINK' ? 'LINK' : 'PORTAL',
-      outcomeWanted: outcome === 'REPLACE' || outcome === 'REPAIR' || outcome === 'CREDIT' ? outcome : null,
-      note: typeof after.note === 'string' ? after.note : null,
-      linkId: typeof after.linkId === 'string' ? after.linkId : null,
-    })
-  }
-  return facts
 }
 
 export const SHARED_FILE = { id: true, recordType: true, recordId: true, kind: true, originalName: true, contentType: true, sizeBytes: true, sourceFileId: true, createdAt: true, visibility: true } as const satisfies Prisma.StoredFileSelect
