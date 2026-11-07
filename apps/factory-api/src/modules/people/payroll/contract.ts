@@ -6,6 +6,7 @@ import { CHECK_PLACES, PAYROLL_CHECKS } from '@nexus/factory-domain/people/payro
 import { CODE_LIMITS, PAYROLL_CODE_KINDS } from '@nexus/factory-domain/people/payroll/codes'
 import { COLUMN_KEYS, LAYOUT_LIMITS, LAYOUT_STARTERS, PAYROLL_FORMATS } from '@nexus/factory-domain/people/payroll/layouts'
 import { MONTH_STATES, PAYROLL_EXPORT_STATUSES, PAYROLL_LIMITS, PAYROLL_LINK_TERMS } from '@nexus/factory-domain/people/payroll/rules'
+import { CONSULTANT_PROBLEMS, PRINTER_PROBLEMS } from '@nexus/factory-domain/people/payroll/settings'
 import { VALUE_UNITS } from '@nexus/factory-domain/people/payroll/values'
 
 /**
@@ -32,10 +33,14 @@ export type MonthQuery = z.infer<typeof monthQuery>
 
 const checkView = output({ code: z.enum(PAYROLL_CHECKS), blocking: z.boolean(), passed: z.boolean(), count, words: z.string(), place: z.enum(CHECK_PLACES) })
 
+/** The company; `payrollCode` is what the file's company column prints (Company.payrollCode; null: the company's code). */
+const companyView = output({ code: z.string(), legalName: z.string(), payrollCode: z.string().nullable() })
+
 const exportRow = output({
   id: id(),
   companyId: id(),
-  company: output({ code: z.string(), legalName: z.string() }),
+  /** `payrollCode`: the code this file printed. */
+  company: companyView,
   month,
   label: z.string(),
   number: z.string().nullable(),
@@ -61,7 +66,7 @@ const exportRow = output({
 
 const monthView = output({
   companyId: id(),
-  company: output({ code: z.string(), legalName: z.string() }),
+  company: companyView,
   month,
   label: z.string(),
   sites: z.array(output({ siteId: id(), code: z.string(), name: z.string(), gateOpen: z.boolean() })),
@@ -189,7 +194,6 @@ const definitionBody = input({
   dateFormat: z.string().max(12).optional(),
   encoding: z.string().max(12).optional(),
   headerRow: z.boolean().optional(),
-  companyCode: z.string().trim().min(1).max(LAYOUT_LIMITS.companyCode).optional(),
 })
 const confirmationBody = input({ on: businessDate(), by: z.string().trim().min(1).max(LAYOUT_LIMITS.confirmedBy) })
 const columnView = output({ key: z.enum(COLUMN_KEYS), header: z.string().optional(), width: z.number().int().optional(), format: z.string().optional(), value: z.string().optional() })
@@ -200,8 +204,6 @@ const definitionView = output({
   dateFormat: z.string().optional(),
   encoding: z.string().optional(),
   headerRow: z.boolean().optional(),
-  companyCode: z.string().optional(),
-  confirmation: output({ on: businessDate(), by: z.string() }).optional(),
 })
 const layoutRow = output({
   id: id(),
@@ -210,6 +212,8 @@ const layoutRow = output({
   format: z.enum(PAYROLL_FORMATS),
   provider: z.string().nullable(),
   definition: definitionView,
+  /** Who confirmed it against the consultant's sample, and when (the layout's columns); null: nobody yet. */
+  confirmation: output({ on: businessDate(), by: z.string() }).nullable(),
   status: z.enum(['ACTIVE', 'ARCHIVED']),
   note: z.string().nullable(),
   confirmed: z.boolean(),
@@ -284,6 +288,8 @@ const exportRecord = exportRow.extend({
   cancelReason: z.string().nullable(),
   note: z.string().nullable(),
   carriesPay: z.boolean(),
+  /** The company's labour consultant (People settings): Send's recipient by default; `words` when the named one no longer serves. */
+  consultant: output({ partyId: id(), name: z.string().nullable(), email: z.string().nullable(), words: z.string().nullable() }).nullable(),
   words: z.string(),
   actions: output({ correct: held, cancel: held, send: held, open: held }),
 })
@@ -344,3 +350,34 @@ export const linkDownloadContract = defineContract({
   params: input({ fileId: id() }),
   response: { 200: output({ fileId: id(), fileName: z.string(), usesLeft: count, download: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }) }) },
 })
+
+// ---- People settings › Payroll and statements (B-W2b-89) ------------------------------------------------------------------
+
+const siteRef = output({ id: id(), code: z.string(), name: z.string() })
+const settingsView = output({
+  companyId: id(),
+  /** The People settings row's version (shared with the other cards of the page); null: the company has none yet. */
+  version: z.number().int().min(1).nullable(),
+  company: output({ code: z.string(), legalName: z.string() }),
+  payrollCode: z.string().nullable(),
+  consultant: output({ partyId: id(), code: z.string().nullable(), name: z.string().nullable(), email: z.string().nullable(), problem: z.enum(CONSULTANT_PROBLEMS).nullable(), words: z.string().nullable() }).nullable(),
+  statementPrinter: output({ id: id(), code: z.string().nullable(), name: z.string().nullable(), site: siteRef.nullable(), problem: z.enum(PRINTER_PROBLEMS).nullable(), words: z.string().nullable() }).nullable(),
+  choices: output({
+    consultants: z.array(output({ id: id(), code: z.string(), name: z.string(), email: z.string().nullable(), companyWide: z.boolean() })),
+    printers: z.array(output({ id: id(), code: z.string(), name: z.string(), site: siteRef })),
+  }),
+  canManage: z.boolean(),
+  words: z.array(z.string()),
+})
+export const payrollSettingsContract = defineContract({ querystring: input({ companyId: id() }), response: { 200: settingsView } })
+export const savePayrollSettingsBody = input({
+  companyId: id(),
+  version: version.nullable(),
+  /** An ACTIVE party with the CONSULTANT role, of the company or tenant-wide; null: none. */
+  consultantPartyId: id().nullable(),
+  /** What the payroll file's company column prints; null or blank: the company's code. */
+  payrollCode: z.string().max(LAYOUT_LIMITS.companyCode).nullable(),
+  /** An ACTIVE A4 printer of the company; null: the site's only A4 printer. */
+  statementPrinterId: id().nullable(),
+})
+export const savePayrollSettingsContract = defineContract({ body: savePayrollSettingsBody, response: { 200: settingsView } })

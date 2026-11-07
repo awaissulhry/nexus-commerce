@@ -9,20 +9,23 @@ import { useOfficeScope } from '../../../shell/scope/scope-context'
 import { useLive } from '../../_shared/buying/hooks'
 import { isStepUpCancelled, liveMatches, useStepUp } from '../../quality/_shared/hooks'
 import { readProblem } from '../_shared/model'
-import { addStandardCodes, archiveLimit, changeLeads, createCode, editCode, getCompanyPrivacy, getLimits, getPrivacy, getRounding, getSitePrivacy, listCodes, saveCompanyPrivacy, saveLimit, saveRounding, setCodeState, switchOff, switchOn, type AbsenceCode, type CompanyPrivacy, type Limits, type RuleKind, type SitePrivacy } from './api'
-import { blankCode, codeDraftOf, codeFieldsOf, codeHeld, gateReasonHeld, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, privacyDirty, privacyDraftOf, privacyHeld, roundingChanges, roundingDraft, roundingHeld, settingsCan, settingsProblem, type CodeDraft, type LimitDraft, type PrivacyDraft } from './model'
+import { addStandardCodes, archiveLimit, changeLeads, createCode, createConsultant, editCode, getCompanyPrivacy, getLimits, getPayrollSettings, getPrivacy, getReviewRule, getRounding, getSitePrivacy, listCodes, saveCompanyPrivacy, saveLimit, savePayrollSettings, saveReviewRule, saveRounding, setCodeState, switchOff, switchOn, type AbsenceCode, type CompanyPrivacy, type Limits, type PayrollSettings, type ReviewRule, type RuleKind, type SitePrivacy } from './api'
+import { blankCode, blankConsultant, codeDraftOf, codeFieldsOf, codeHeld, consultantHeld, gateReasonHeld, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, payrollBodyOf, payrollChanges, payrollDraftOf, payrollHeld, privacyDirty, privacyDraftOf, privacyHeld, reviewChanges, reviewDraftOf, reviewHeld, roundingChanges, roundingDraft, roundingHeld, settingsCan, settingsProblem, type CodeDraft, type LimitDraft, type PayrollDraft, type PrivacyDraft, type ReviewDraft } from './model'
 import { useUnsavedGuard } from './use-unsaved-guard'
 import type { CodesActions } from './view/AbsenceCard'
+import type { PayrollActions, PayrollState, ReviewActions } from './view/PayrollCard'
 import type { GateDialog, PrivacyActions } from './view/PrivacyCard'
 import { SettingsView, type Section, type SettingsModel, type SettingsProblem } from './view/SettingsView'
 
-const LIVE = ['people_settings.attendance_changed', 'people_settings.privacy_changed', 'absence_code.changed', 'working_time_rule.changed', 'legal_gate.changed']
+const LIVE = ['people_settings.attendance_changed', 'people_settings.privacy_changed', 'people_settings.payroll_changed', 'people_settings.review_changed', 'absence_code.changed', 'working_time_rule.changed', 'legal_gate.changed']
 const OWN_MS = 5000
 const failed = (error: unknown) => ({ status: 'error' as const, problem: readProblem(error) })
 
 /**
  * `/w/<company>/people/settings` (SCR-265): each section reads on its own, with what the person may read (rounding and
- * codes: people.attendance.view or .settings; limits: the top bar's site, else the company; privacy: people.privacy.view).
+ * codes: people.attendance.view or .settings; limits: the top bar's site, else the company; privacy: people.privacy.view;
+ * payroll and statements: people.payroll.view; the standard review: people.efficiency.view). The cards of the one People
+ * settings row (rounding, privacy, payroll, review) share its version: each takes the version the others' saves answer.
  * A card's edit stays until saved or discarded, and leaving asks Save · Discard · Stay. Every write is one command with the
  * version read; widening who sees figures and switching a purpose on ask a fresh code when the API answers 403 `stepUp`.
  * Someone else's change → "Changed by someone else · Reload".
@@ -126,7 +129,46 @@ export function PeopleSettingsPage() {
     }
   }, [api, can.privacy, companyId, scope.siteId])
 
+  // ---- payroll and statements, the standard review (B-W2b-89) ------------------------------------------------------------------
+  const [payrollRead, setPayrollRead] = useState<Section<PayrollSettings>>({ status: 'loading' })
+  const [payrollEdit, setPayrollEdit] = useState<PayrollDraft | null>(null)
+  const [payrollBusy, setPayrollBusy] = useState(false)
+  const [payrollProblem, setPayrollProblem] = useState<SettingsProblem | null>(null)
+  const [consultantDialog, setConsultantDialog] = useState<PayrollState['dialog']>(null)
+  const readPayroll = useCallback(async () => {
+    if (!can.payroll || !companyId) return
+    try {
+      setPayrollRead({ status: 'ready', value: await getPayrollSettings(api, companyId) })
+      setAsOf(new Date().toISOString())
+    } catch (error) {
+      setPayrollRead(failed(error))
+    }
+  }, [api, can.payroll, companyId])
+  const [reviewRead, setReviewRead] = useState<Section<ReviewRule>>({ status: 'loading' })
+  const [reviewEdit, setReviewEdit] = useState<ReviewDraft | null>(null)
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewProblem, setReviewProblem] = useState<SettingsProblem | null>(null)
+  const readReview = useCallback(async () => {
+    if (!can.review || !companyId) return
+    try {
+      setReviewRead({ status: 'ready', value: await getReviewRule(api, companyId) })
+      setAsOf(new Date().toISOString())
+    } catch (error) {
+      setReviewRead(failed(error))
+    }
+  }, [api, can.review, companyId])
+
+  /** One People settings row: a card's save answers its new version, which every other card of the row takes. */
+  const takeVersion = (version: number | null) => {
+    setRoundingRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, version } } : current))
+    setCompanyRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, settings: { ...current.value.settings, version } } } : current))
+    setPayrollRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, version } } : current))
+    setReviewRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, version } } : current))
+  }
+
   useEffect(() => void readRounding(), [readRounding])
+  useEffect(() => void readPayroll(), [readPayroll])
+  useEffect(() => void readReview(), [readReview])
   useEffect(() => void readCodes(), [readCodes])
   useEffect(() => void readLimits(), [readLimits])
   useEffect(() => void readPrivacy(), [readPrivacy])
@@ -136,7 +178,7 @@ export function PeopleSettingsPage() {
       if (liveMatches(change, LIVE) && Date.now() > ownUntil.current) setChangedElsewhere(true)
     },
     () => undefined,
-    can.privacy || can.attendance || can.limits,
+    can.privacy || can.attendance || can.limits || can.payroll || can.review,
   )
 
   // ---- saves -----------------------------------------------------------------------------------------------------------------
@@ -147,9 +189,9 @@ export function PeopleSettingsPage() {
     own()
     try {
       const value = await saveRounding(api, { companyId, version: roundingRead.value.version, ...roundingEdit })
+      // Rounding, privacy, payroll and review are cards of ONE PeopleSettings row: each takes the version the others' saves answer.
+      takeVersion(value.version)
       setRoundingRead({ status: 'ready', value: { version: value.version, values: roundingDraft(value) } })
-      // Rounding and privacy are two cards of ONE PeopleSettings row: each takes the version the other's save answers.
-      setCompanyRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, settings: { ...current.value.settings, version: value.version } } } : current))
       setRoundingEdit(null)
       setDone({ key: 'done.rounding' })
       return true
@@ -193,8 +235,8 @@ export function PeopleSettingsPage() {
       const key = keyFor(body)
       const answer = await guard('stepUp.widen', () => saveCompanyPrivacy(api, companyId, body, key))
       attempt.current = null
+      takeVersion(answer.settings.version)
       setCompanyRead({ status: 'ready', value: answer })
-      setRoundingRead((current) => (current.status === 'ready' ? { status: 'ready', value: { ...current.value, version: answer.settings.version } } : current))
       setPrivacyEdit(null)
       setDone({ key: 'done.privacy' })
       return true
@@ -206,9 +248,51 @@ export function PeopleSettingsPage() {
     }
   }
 
+  const savePayrollCard = async (): Promise<boolean> => {
+    if (payrollRead.status !== 'ready' || !payrollEdit || payrollHeld(payrollEdit)) return false
+    setPayrollBusy(true)
+    setPayrollProblem(null)
+    own()
+    try {
+      const value = await savePayrollSettings(api, payrollBodyOf(payrollRead.value, payrollEdit))
+      takeVersion(value.version)
+      setPayrollRead({ status: 'ready', value })
+      setPayrollEdit(null)
+      setDone({ key: 'done.payroll' })
+      return true
+    } catch (error) {
+      setPayrollProblem(settingsProblem(error))
+      return false
+    } finally {
+      setPayrollBusy(false)
+    }
+  }
+
+  const saveReviewCard = async (): Promise<boolean> => {
+    if (reviewRead.status !== 'ready' || !reviewEdit || !companyId || reviewHeld(reviewEdit)) return false
+    setReviewBusy(true)
+    setReviewProblem(null)
+    own()
+    try {
+      const value = await saveReviewRule(api, { companyId, version: reviewRead.value.version, ...reviewEdit })
+      takeVersion(value.version)
+      setReviewRead({ status: 'ready', value })
+      setReviewEdit(null)
+      setDone({ key: 'done.review' })
+      return true
+    } catch (error) {
+      setReviewProblem(settingsProblem(error))
+      return false
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  const payrollDirty = payrollRead.status === 'ready' && payrollEdit !== null && payrollChanges(payrollRead.value, payrollEdit) > 0
+  const reviewDirty = reviewRead.status === 'ready' && reviewEdit !== null && reviewChanges(reviewRead.value, reviewEdit) > 0
   const roundingDirty = roundingRead.status === 'ready' && roundingEdit !== null && roundingChanges(roundingRead.value.values, roundingEdit) > 0
   const privacyIsDirty = companyRead.status === 'ready' && privacyEdit !== null && privacyDirty(companyRead.value, privacyEdit)
-  const unsaved = useUnsavedGuard(roundingDirty || limitsDirty || privacyIsDirty)
+  const unsaved = useUnsavedGuard(roundingDirty || limitsDirty || privacyIsDirty || payrollDirty || reviewDirty)
   const [leaveBusy, setLeaveBusy] = useState(false)
 
   const replaceSite = (next: SitePrivacy) => setSitesRead((current) => (current.status === 'ready' ? { status: 'ready', value: current.value.map((entry) => (entry.site.id === next.site.id ? next : entry)) } : current))
@@ -323,9 +407,47 @@ export function PeopleSettingsPage() {
     onStepUpCancel: cancelStepUp,
   }
 
+  const payroll: PayrollActions = {
+    onDraft: (patch) => setPayrollEdit((current) => ({ ...(current ?? (payrollRead.status === 'ready' ? payrollDraftOf(payrollRead.value) : { consultantPartyId: null, payrollCode: '', statementPrinterId: null })), ...patch })),
+    onSave: () => void savePayrollCard(),
+    onDiscard: () => {
+      setPayrollEdit(null)
+      setPayrollProblem(null)
+    },
+    onRetry: () => void readPayroll(),
+    onNewConsultant: () => setConsultantDialog({ draft: blankConsultant(), busy: false, problem: null }),
+    onConsultantDraft: (patch) => setConsultantDialog((current) => (current ? { ...current, draft: { ...current.draft, ...patch } } : current)),
+    onConsultantClose: () => setConsultantDialog(null),
+    onConsultantSave: () => {
+      if (!consultantDialog || consultantDialog.busy || consultantHeld(consultantDialog.draft) || !companyId) return
+      const { draft } = consultantDialog
+      setConsultantDialog({ ...consultantDialog, busy: true, problem: null })
+      createConsultant(api, { companyId, code: draft.code.trim().toUpperCase(), name: draft.name.trim(), email: draft.email.trim() || null })
+        .then(async (answer) => {
+          setConsultantDialog(null)
+          await readPayroll()
+          // The new party is chosen in the card: the person saves it with the rest.
+          payroll.onDraft?.({ consultantPartyId: answer.party.id })
+        })
+        .catch((error: unknown) => setConsultantDialog((current) => (current ? { ...current, busy: false, problem: settingsProblem(error) } : current)))
+    },
+  }
+
+  const review: ReviewActions = {
+    onDraft: (patch) => setReviewEdit((current) => ({ ...(current ?? (reviewRead.status === 'ready' ? reviewDraftOf(reviewRead.value) : { tolerancePercent: 10, minBundles: 5 })), ...patch })),
+    onSave: () => void saveReviewCard(),
+    onDiscard: () => {
+      setReviewEdit(null)
+      setReviewProblem(null)
+    },
+    onRetry: () => void readReview(),
+  }
+
   const discardAll = () => {
     setRoundingEdit(null)
     setPrivacyEdit(null)
+    setPayrollEdit(null)
+    setReviewEdit(null)
     void readLimits()
   }
 
@@ -343,6 +465,8 @@ export function PeopleSettingsPage() {
         absence: { read: codesRead, showArchived, dialog: codeDialog, busy: codesBusy, problem: codesProblem },
         limits: { read: limitsRead, drafts: limitDrafts, busy: limitsBusy, problem: limitsProblem, scopeName: limitsSite ? (scope.sites.find((site) => site.id === limitsSite)?.name ?? null) : null, waitingScope: limitsSite !== scope.siteId },
         privacy: { company: companyRead, draft: privacyEdit, busy: privacyBusy, problem: privacyProblem, sites: sitesRead, dialog: gateDialog, stepUp },
+        payroll: { read: payrollRead, draft: payrollEdit, busy: payrollBusy, problem: payrollProblem, dialog: consultantDialog },
+        review: { read: reviewRead, draft: reviewEdit, busy: reviewBusy, problem: reviewProblem },
         leaving: unsaved.pending ? { busy: leaveBusy } : null,
       }}
       actions={{
@@ -354,7 +478,7 @@ export function PeopleSettingsPage() {
         },
         onReload: () => {
           setChangedElsewhere(false)
-          void Promise.all([readRounding(), readCodes(), readLimits(), readPrivacy()])
+          void Promise.all([readRounding(), readCodes(), readLimits(), readPrivacy(), readPayroll(), readReview()])
         },
         onDismissDone: () => setDone(null),
         onRounding: (change) => setRoundingEdit((current) => ({ ...(current ?? (roundingRead.status === 'ready' ? roundingRead.value.values : DEFAULT_ATTENDANCE_SETTINGS)), ...change })),
@@ -382,6 +506,8 @@ export function PeopleSettingsPage() {
         },
         codes,
         privacy,
+        payroll,
+        review,
         onLeaveStay: unsaved.stay,
         onLeaveDiscard: () => {
           const to = unsaved.pending
@@ -393,7 +519,7 @@ export function PeopleSettingsPage() {
           const to = unsaved.pending
           setLeaveBusy(true)
           void (async () => {
-            const saved = [roundingDirty ? await saveRoundingCard() : true, limitsDirty ? await saveLimitsCard() : true, privacyIsDirty ? await savePrivacyCard() : true]
+            const saved = [roundingDirty ? await saveRoundingCard() : true, limitsDirty ? await saveLimitsCard() : true, privacyIsDirty ? await savePrivacyCard() : true, payrollDirty ? await savePayrollCard() : true, reviewDirty ? await saveReviewCard() : true]
             setLeaveBusy(false)
             unsaved.stay()
             if (to && saved.every(Boolean)) router.push(to)

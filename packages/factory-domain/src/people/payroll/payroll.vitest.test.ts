@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CARRIED_CODE, blockingLeft, carriedCorrections, parseChecks, payrollChecks, storedChecks, type CheckFacts } from './checks'
+import { blockingLeft, parseChecks, payrollChecks, storedChecks, type CheckFacts } from './checks'
 import { CODE_MEANINGS, codeOrder, EARNING_CODES, HOUR_CODES, mappingKey } from './codes'
 import {
+  confirmationOf,
   confirmationWords,
   dateText,
+  definitionAsUsed,
   definitionProblems,
   delimitedFile,
   fixedWidthFile,
@@ -14,11 +16,13 @@ import {
   printsProviderCode,
   spreadsheetFile,
   STARTERS,
+  storedDefinition,
   type FileContext,
   type LayoutDefinition,
 } from './layouts'
 import { payrollLinkMail } from './mail'
 import { monthStateOf, monthStateWords } from './rules'
+import { consultantProblemOf, payrollCodeOf, payrollCodeProblems, printerProblemOf } from './settings'
 import { amountWords, payrollSummary } from './summary'
 import { carriesPay, changeCounts, codeSums, earningFacts, flatValues, hoursOf, parseValues, personValues, valueChanges, valuesText, type MappedCode, type PayrollValue, type PersonFacts } from './values'
 
@@ -182,13 +186,13 @@ describe('the checks (MES-272)', () => {
     expect(checks.filter((check) => !check.passed).map((check) => check.code)).toEqual(['AGENCY_LEFT_OUT', 'LEAVERS', 'NOT_ON_FILE', 'LAYOUT_NOT_CONFIRMED'])
   })
 
-  it('stores its checks with the corrections the file carried, in the shape the database asks', () => {
-    const stored = storedChecks(payrollChecks(CLEAN), ['c1', 'c2'])
+  it('stores its checks alone, in the shape the database asks; what the file carried is a column (B-W2b-89)', () => {
+    const stored = storedChecks(payrollChecks(CLEAN))
     expect(stored.every((row) => { const check = row as { code?: unknown; blocking?: unknown; passed?: unknown }; return typeof check.code === 'string' && typeof check.blocking === 'boolean' && typeof check.passed === 'boolean' })).toBe(true)
-    expect(carriedCorrections(stored)).toEqual(['c1', 'c2'])
-    expect(parseChecks(stored).map((check) => check.code)).not.toContain(CARRIED_CODE)
+    expect(stored).toHaveLength(payrollChecks(CLEAN).length)
     expect(parseChecks(stored).length).toBe(payrollChecks(CLEAN).length)
-    expect(carriedCorrections([{ code: 'EMPLOYEE_CODES' }])).toEqual([])
+    // A row of an older export (B-W2b-54's CARRIED row) or a code this version does not know is left out.
+    expect(parseChecks([...stored, { code: 'CARRIED', corrections: ['c1'] }]).length).toBe(payrollChecks(CLEAN).length)
   })
 })
 
@@ -260,6 +264,10 @@ describe('the layouts (MES-268, MES-270)', () => {
     expect(layoutConfirmed(confirmed)).toBe(true)
     expect(confirmationWords(confirmed)).toBe('Confirmed by Made-up consultant on 2026-11-20.')
     expect(layoutConfirmed({ provider: null, definition: generic })).toBe(true)
+    // B-W2b-89: a live layout keeps the confirmation in its columns; the export's copy carries it in its definition.
+    expect(confirmationOf({ confirmedOn: null, confirmedByName: 'Made-up consultant' })).toBeNull()
+    expect(confirmationOf({ confirmedOn: '2026-11-20', confirmedByName: 'Made-up consultant' }, 'Office user')).toEqual({ on: '2026-11-20', by: 'Made-up consultant' })
+    expect(confirmationOf({ confirmedOn: '2026-11-20', confirmedByName: null }, 'Office user')).toEqual({ on: '2026-11-20', by: 'Office user' })
     expect(STARTERS.ZUCCHETTI.note).toContain('made-up')
     expect(PAYROLL_TO_CONFIRM.join(' ')).toContain('sample')
   })
@@ -324,5 +332,55 @@ describe('the mail (GDPR art. 32)', () => {
     expect(body).toContain('This version (v2) replaces the one before.')
     expect(body).toContain('Made-up note.')
     expect(body).toContain('still to be confirmed')
+  })
+})
+
+describe('the layout as stored and as used (B-W2b-89)', () => {
+  const generic = STARTERS.GENERIC_CSV.definition
+
+  it('stores a definition without the payroll code and the confirmation, which live in columns', () => {
+    const typed: LayoutDefinition = { ...generic, companyCode: '000123', confirmation: { on: '2026-11-20', by: 'Made-up consultant' } }
+    expect(storedDefinition(typed)).toEqual(generic)
+    expect(storedDefinition(typed)).not.toHaveProperty('companyCode')
+    expect(storedDefinition(typed)).not.toHaveProperty('confirmation')
+  })
+
+  it("puts the company's payroll code and the confirmation in the export's copy, and the file prints the code", () => {
+    const used = definitionAsUsed(generic, { payrollCode: '000777', confirmation: { on: '2026-11-20', by: 'Made-up consultant' } })
+    expect(used.companyCode).toBe('000777')
+    expect(used.confirmation).toEqual({ on: '2026-11-20', by: 'Made-up consultant' })
+    expect(layoutConfirmed({ provider: 'Made-up provider', definition: used })).toBe(true)
+    const columns: LayoutDefinition = { columns: [{ key: 'companyCode' }, { key: 'employeeCode' }], headerRow: false, encoding: 'ISO-8859-1' }
+    expect(delimitedFile(definitionAsUsed(columns, { payrollCode: '000777', confirmation: null }), [value({})], context).text.split(/\r?\n/)[0]).toBe('000777;M1')
+    // None given: the company's own code.
+    const plain = definitionAsUsed(columns, { payrollCode: null, confirmation: null })
+    expect(plain).not.toHaveProperty('companyCode')
+    expect(delimitedFile(plain, [value({})], context).text.split(/\r?\n/)[0]).toBe('ACME;M1')
+  })
+})
+
+describe('People settings › Payroll and statements (B-W2b-89)', () => {
+  it('takes a consultant that is an active party with the Consultant role, of the company or of every company', () => {
+    expect(consultantProblemOf({ companyId: 'c1', roles: ['CONSULTANT'], status: 'ACTIVE' }, 'c1')).toBeNull()
+    expect(consultantProblemOf({ companyId: null, roles: ['SUPPLIER', 'CONSULTANT'], status: 'ACTIVE' }, 'c1')).toBeNull()
+    expect(consultantProblemOf({ companyId: 'c1', roles: ['SUPPLIER'], status: 'ACTIVE' }, 'c1')).toBe('NOT_CONSULTANT')
+    expect(consultantProblemOf({ companyId: 'c1', roles: ['CONSULTANT'], status: 'BLOCKED' }, 'c1')).toBe('NOT_ACTIVE')
+    expect(consultantProblemOf({ companyId: 'c2', roles: ['CONSULTANT'], status: 'ACTIVE' }, 'c1')).toBe('OTHER_COMPANY')
+    expect(consultantProblemOf(null, 'c1')).toBe('GONE')
+  })
+
+  it('takes an active A4 printer for statements', () => {
+    expect(printerProblemOf({ kind: 'A4_PDF', status: 'ACTIVE' })).toBeNull()
+    expect(printerProblemOf({ kind: 'LABEL_ZPL', status: 'ACTIVE' })).toBe('NOT_A4')
+    expect(printerProblemOf({ kind: 'A4_PDF', status: 'ARCHIVED' })).toBe('NOT_ACTIVE')
+    expect(printerProblemOf(null)).toBe('GONE')
+  })
+
+  it('keeps the payroll code trimmed, at most 20 characters', () => {
+    expect(payrollCodeOf('  000777 ')).toBe('000777')
+    expect(payrollCodeOf('   ')).toBeNull()
+    expect(payrollCodeOf(null)).toBeNull()
+    expect(payrollCodeProblems('X'.repeat(21)).map((issue) => issue.path)).toEqual(['body/payrollCode'])
+    expect(payrollCodeProblems('X'.repeat(20))).toEqual([])
   })
 })

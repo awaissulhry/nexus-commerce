@@ -284,15 +284,22 @@ describe('the layouts (MES-268, MES-270)', () => {
     expect(made).toMatchObject({ name: 'Zucchetti import', format: 'FIXED_WIDTH', provider: 'Zucchetti', confirmed: false, status: 'ACTIVE' })
     expect(made.words).toContain('Not confirmed by the labour consultant')
     expect(made.note).toContain('made-up')
-    const edited = await w.ok('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: made.version, definition: { ...made.definition, companyCode: '000777' } })
-    expect(edited.definition.companyCode).toBe('000777')
+    // B-W2b-89: the company's payroll code is People settings' (Company.payrollCode), never a layout's.
+    expect(pathsOf(await w.no('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: made.version, definition: { ...made.definition, companyCode: '000777' } }, 400)).some((path: string) => path.startsWith('body/definition'))).toBe(true)
+    const edited = await w.ok('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: made.version, definition: { ...made.definition, headerRow: false } })
+    expect(edited.confirmation).toBeNull()
     const confirmed = await w.ok('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: edited.version, confirmation: { on: D, by: 'Made-up consultant' } })
-    expect(confirmed).toMatchObject({ confirmed: true, words: `Confirmed by Made-up consultant on ${D}.` })
+    expect(confirmed).toMatchObject({ confirmed: true, words: `Confirmed by Made-up consultant on ${D}.`, confirmation: { on: D, by: 'Made-up consultant' } })
+    // In the layout's columns (B-W2b-89): the day, the name typed, the office user who recorded it; nothing in its definition.
+    const row = (await w.admin(`SELECT to_char("confirmedOn", 'YYYY-MM-DD') AS on, "confirmedByName", "confirmedById", definition FROM "PayrollExportLayout" WHERE id = $1`, [made.id]))[0]!
+    expect(row).toMatchObject({ on: D, confirmedByName: 'Made-up consultant', confirmedById: actorOfPayroll() })
+    expect(keysOf(row.definition)).not.toContain('confirmation')
     const renamed = await w.ok('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: confirmed.version, note: 'Made-up note' })
     expect(renamed.confirmed).toBe(true)
     // A new record is a new layout: its confirmation does not carry over.
     const replaced = await w.ok('payroll', 'PATCH', `/people/payroll/layouts/${made.id}`, { version: renamed.version, definition: { columns: renamed.definition.columns.slice(0, 2), headerRow: false } })
-    expect(replaced.confirmed).toBe(false)
+    expect(replaced).toMatchObject({ confirmed: false, confirmation: null })
+    expect((await w.admin(`SELECT "confirmedOn", "confirmedByName", "confirmedById" FROM "PayrollExportLayout" WHERE id = $1`, [made.id]))[0]).toEqual({ confirmedOn: null, confirmedByName: null, confirmedById: null })
     const archived = await w.ok('payroll', 'POST', `/people/payroll/layouts/${made.id}/archive`, { version: replaced.version })
     expect(archived.status).toBe('ARCHIVED')
     expect(pathsOf(await w.no('payroll', 'POST', `/people/payroll/layouts/${made.id}/archive`, { version: archived.version }, 409))).toContain('refusal/LAYOUT_ARCHIVED')
@@ -641,6 +648,12 @@ describe('the export (MES-267)', () => {
       const values = await w.ok('payroll', 'POST', `/people/payroll/exports/${correctionId}/values`, {})
       expect(values.changes).toMatchObject({ people: 1, values: 1 })
       expect(values.people).toHaveLength(3)
+      // What each file carried is its own column (B-W2b-89), frozen with it; the checks hold the checks alone.
+      const carried = await w.admin(`SELECT id, "correctionsCarried", checks FROM "PayrollExport" WHERE id = ANY($1::uuid[])`, [[exportId, correctionId]])
+      const correction = (await w.admin<{ id: string }>(`SELECT c.id FROM "AttendanceCorrection" c JOIN "AttendanceMonthClose" m ON m.id = c."monthCloseId" WHERE m."companyId" = $1 AND to_char(m.month, 'YYYY-MM') = $2`, [w.T.companyA, M])).map((entry) => entry.id)
+      expect(carried.find((entry) => entry.id === exportId)!.correctionsCarried).toEqual([])
+      expect(carried.find((entry) => entry.id === correctionId)!.correctionsCarried).toEqual(correction)
+      expect(carried.every((entry) => (entry.checks as Json[]).every((check) => check.code !== 'CARRIED'))).toBe(true)
     })
 
     it('clears the pending mark, and sends only the latest file', async () => {
@@ -728,6 +741,75 @@ describe('a leaver (MES-214)', () => {
     expect(made.status).toBe('EXPORTED')
     const step = (await w.admin(`SELECT status, "recordType", "recordId", "doneById" FROM "LeaverStep" WHERE id = $1`, [stepId]))[0]!
     expect(step).toMatchObject({ status: 'DONE', recordType: 'PayrollExport', recordId: made.id, doneById: null })
+  })
+})
+
+describe('People settings › Payroll and statements (B-W2b-89)', () => {
+  const url = () => `/people/payroll/settings?companyId=${w.T.companyA}`
+  const party = async (roles: string[], status = 'ACTIVE', companyId: string | null = w.T.companyA): Promise<string> => {
+    const id = newId()
+    await w.admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles, status, "updatedAt") VALUES ($1, $2, $3, $4, 'ORGANISATION', $5, $6::"PartyRole"[], $7::"PartyStatus", now())`, [id, w.T.tenant, companyId, `C${run}${++keys}`.toUpperCase().slice(0, 20), `Studio made-up ${keys}`, roles, status])
+    return id
+  }
+  const printer = async (kind: 'A4_PDF' | 'LABEL_ZPL', status = 'ACTIVE'): Promise<string> => {
+    const id = newId()
+    const label = kind === 'LABEL_ZPL' ? [203, 100, 50] : [null, null, null]
+    await w.admin(`INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", status, dpi, "labelWidthMm", "labelHeightMm", "updatedAt") VALUES ($1, $2, $3, $4, $5, 'Made-up printer', $6::"PrinterKind", 'FAKE', 'made-up', $7::"PrinterStatus", $8, $9, $10, now())`, [id, w.T.tenant, w.T.companyA, w.T.siteA1, `P${run}${++keys}`.toUpperCase().slice(0, 20), kind, status, ...label])
+    return id
+  }
+  let consultant: string
+  let office: string
+
+  it('reads the three for the view, with what to choose from; changes nothing for it', async () => {
+    consultant = await party(['CONSULTANT'])
+    await w.admin(`INSERT INTO "PartyContact" (id, "tenantId", "partyId", name, email, "updatedAt") VALUES ($1, $2, $3, 'Made-up person', 'payroll.studio@example.com', now())`, [newId(), w.T.tenant, consultant])
+    office = await printer('A4_PDF')
+    const read = await w.ok('reader', 'GET', url())
+    expect(read).toMatchObject({ companyId: w.T.companyA, consultant: null, statementPrinter: null, canManage: false })
+    expect(read.choices.consultants.map((row: Json) => row.id)).toContain(consultant)
+    expect(read.choices.consultants.find((row: Json) => row.id === consultant)).toMatchObject({ email: 'payroll.studio@example.com', companyWide: false })
+    expect(read.choices.printers.map((row: Json) => row.id)).toContain(office)
+    await w.no('reader', 'PUT', '/people/payroll/settings', { companyId: w.T.companyA, version: read.version, consultantPartyId: consultant, payrollCode: null, statementPrinterId: null }, 403)
+    await w.no('oneSite', 'GET', `/people/payroll/settings?companyId=${w.T.companyB}`, undefined, 404)
+  })
+
+  it('refuses a party that is no consultant, a label printer, a code too long and a stale version, in words at the field', async () => {
+    const read = await w.ok('payroll', 'GET', url())
+    const body = { companyId: w.T.companyA, version: read.version, consultantPartyId: null, payrollCode: read.payrollCode, statementPrinterId: null }
+    const supplier = await party(['SUPPLIER'])
+    expect(pathsOf(await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, consultantPartyId: supplier }, 409))).toEqual(expect.arrayContaining(['refusal/NOT_CONSULTANT', 'body/consultantPartyId']))
+    expect(pathsOf(await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, consultantPartyId: await party(['CONSULTANT'], 'BLOCKED') }, 409))).toContain('refusal/NOT_CONSULTANT')
+    expect(pathsOf(await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, statementPrinterId: await printer('LABEL_ZPL') }, 409))).toEqual(expect.arrayContaining(['refusal/PRINTER_NOT_USABLE', 'body/statementPrinterId']))
+    expect(pathsOf(await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, statementPrinterId: await printer('A4_PDF', 'ARCHIVED') }, 409))).toContain('refusal/PRINTER_NOT_USABLE')
+    await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, payrollCode: 'X'.repeat(21) }, 400)
+    await w.no('payroll', 'PUT', '/people/payroll/settings', { ...body, version: (read.version ?? 0) + 7 }, 409)
+    expect((await w.ok('payroll', 'GET', url())).version).toBe(read.version)
+  })
+
+  it('names the consultant, the payroll code and the printer in one command: audit, event, and Send offers the address', async () => {
+    const read = await w.ok('payroll', 'GET', url())
+    const saved = await w.ok('payroll', 'PUT', '/people/payroll/settings', { companyId: w.T.companyA, version: read.version, consultantPartyId: consultant, payrollCode: ' 000777 ', statementPrinterId: office })
+    expect(saved).toMatchObject({ payrollCode: '000777', consultant: { partyId: consultant, email: 'payroll.studio@example.com', problem: null }, statementPrinter: { id: office, problem: null }, canManage: true })
+    expect(saved.version).toBe((read.version ?? 0) + 1)
+    const events = await w.admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'people_settings.payroll_changed' AND payload->>'companyId' = $1`, [w.T.companyA])
+    expect(events.at(-1)!.payload).toMatchObject({ version: saved.version, changed: ['CONSULTANT', 'PAYROLL_CODE', 'STATEMENT_PRINTER'] })
+    expect(await count(`FROM "AuditLog" WHERE "recordType" = 'Company' AND "recordId" = $1 AND after->>'payrollCode' = '000777'`, [w.T.companyA])).toBe(1)
+    const { rows } = await w.ok('reader', 'GET', `/people/payroll/exports?companyId=${w.T.companyA}&year=${M.slice(0, 4)}`)
+    const latest = rows.find((entry: Json) => entry.status === 'EXPORTED' && entry.month === M && entry.correctedById === null)
+    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${latest.id}`)
+    expect(record.consultant).toMatchObject({ partyId: consultant, email: 'payroll.studio@example.com', words: null })
+    // The month says the code the next file prints; a file made before keeps the code it printed.
+    expect((await w.ok('reader', 'GET', monthUrl())).company.payrollCode).toBe('000777')
+    expect(record.company.payrollCode).toBeNull()
+  })
+
+  it('a named consultant blocked later stays named and is said; the other fields still save', async () => {
+    await w.admin(`UPDATE "Party" SET status = 'BLOCKED' WHERE id = $1`, [consultant])
+    const read = await w.ok('payroll', 'GET', url())
+    expect(read.consultant).toMatchObject({ partyId: consultant, problem: 'NOT_ACTIVE', words: expect.stringContaining('not active') })
+    const saved = await w.ok('payroll', 'PUT', '/people/payroll/settings', { companyId: w.T.companyA, version: read.version, consultantPartyId: consultant, payrollCode: null, statementPrinterId: office })
+    expect(saved).toMatchObject({ payrollCode: null, consultant: { problem: 'NOT_ACTIVE' } })
+    await w.admin(`UPDATE "Party" SET status = 'ACTIVE' WHERE id = $1`, [consultant])
   })
 })
 

@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PEOPLE_EFFICIENCY_REVIEW, PEOPLE_EFFICIENCY_VIEW } from '@nexus/factory-domain/people/efficiency/permissions'
-import { decisionProblems, offSinceOf, operationDaysOf, operationFiguresOf, REVIEW_DECISIONS, REVIEW_MOVED, REVIEW_WORDS, reviewPlaceOf, STANDARD_REVIEW, TOO_FEW_PEOPLE, type OperationFigures, type OperationSample, type ReviewDecision, type ReviewMark, type ReviewReason } from '@nexus/factory-domain/people/efficiency/rules'
+import { decisionProblems, offSinceOf, operationDaysOf, operationFiguresOf, REVIEW_DECISIONS, REVIEW_MOVED, REVIEW_WORDS, reviewPlaceOf, reviewRuleWords, TOO_FEW_PEOPLE, type OperationFigures, type OperationSample, type ReviewDecision, type ReviewMark, type ReviewReason, type ReviewRule } from '@nexus/factory-domain/people/efficiency/rules'
 import { groupShown } from '@nexus/factory-domain/people/privacy/groups'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -10,12 +10,14 @@ import { siteFor } from '../attendance/access'
 import { officeOf, refuse } from '../employees/access'
 import { hideSmallGroups, minimumGroupSizeFor } from '../privacy/groups'
 import { reviewWindow } from './access'
+import { reviewRuleFor } from './rule'
 import { decisionsOf, DECIDE_ACTION, operationRefOf, readSamples, siteLines, stepOfSite, stepsById, styleRefOf, stylesById, type Decision, type Place, type Reader, type RoutingStep, type SiteLines } from './store'
 
 /**
  * The standard review queue (B-W2b-44; MES-251; design people.efficiency "Standard review queue", pop-up "Standard review";
  * c.c. art. 2101: rates change only when conditions change): operations off their standard by more than the tolerance, in
- * both directions, over enough bundles, at one site. A person decides, with a reason: keep the standard, change it (a new
+ * both directions, over enough bundles, at one site. The tolerance and the bundles are the company's (People settings,
+ * B-W2b-89: ./rule.ts). A person decides, with a reason: keep the standard, change it (a new
  * routing revision in Products: the decision says what to, the revision does it), or investigate. Rule and decisions:
  * factory-domain people/efficiency/rules.
  *
@@ -47,10 +49,10 @@ const lastOf = (row: Decision | undefined) => {
   return row && decision ? { id: row.id, decision, at: toUtcIso(row.at) } : null
 }
 
-const sinceOf = (reason: ReviewReason, samples: readonly OperationSample[], standardMinutes: string, mark: ReviewMark | null, timeZoneDay: (at: Date) => BusinessDate): BusinessDate | null => {
+const sinceOf = (reason: ReviewReason, samples: readonly OperationSample[], standardMinutes: string, mark: ReviewMark | null, timeZoneDay: (at: Date) => BusinessDate, rule: ReviewRule): BusinessDate | null => {
   if (reason !== 'OFF_STANDARD') return mark ? timeZoneDay(mark.at) : null
   const days = operationDaysOf(samples, standardMinutes)
-  return offSinceOf(days) ?? days[0]?.date ?? null
+  return offSinceOf(days, rule.tolerancePercent) ?? days[0]?.date ?? null
 }
 
 const directionOf = (figures: OperationFigures): 'OVER' | 'UNDER' | null => (figures.differencePercent === null ? null : Number(figures.differencePercent) > 0 ? 'OVER' : Number(figures.differencePercent) < 0 ? 'UNDER' : null)
@@ -65,6 +67,7 @@ export async function reviewQueue(caller: CommandCaller, query: { readonly siteI
     const site = await siteFor(db, context, query.siteId, [PEOPLE_EFFICIENCY_VIEW])
     const setup = await siteLines(db, site)
     const range = reviewWindow(site.timezone, now)
+    const rule = await reviewRuleFor(db, site.companyId)
     const read = await readSamples(db, site, setup.sources, range)
     const last = new Map<string, Decision>()
     for (const row of await decisionsOf(db, site.id)) last.set(row.routingOperationId, row)
@@ -72,9 +75,9 @@ export async function reviewQueue(caller: CommandCaller, query: { readonly siteI
     const steps = await stepsById(db, stillOpen.filter((id) => !read.steps.has(id)))
     const entries = [...[...read.steps.values()], ...[...steps.values()].map((step) => ({ step, samples: [] as OperationSample[] }))].flatMap(({ step, samples }) => {
       const mark = markOf(last.get(step.id))
-      const place = reviewPlaceOf(samples, mark, step.standardMinutes)
+      const place = reviewPlaceOf(samples, mark, step.standardMinutes, rule)
       if (!place.reason) return []
-      return [{ step, mark, reason: place.reason, samples: place.samples, ...operationFiguresOf(place.samples, step.standardMinutes) }]
+      return [{ step, mark, reason: place.reason, samples: place.samples, ...operationFiguresOf(place.samples, step.standardMinutes, rule) }]
     })
     const styles = await stylesById(db, entries.map((entry) => entry.step.styleId))
     const masked = await hideSmallGroups(db, site.companyId, entries)
@@ -92,7 +95,7 @@ export async function reviewQueue(caller: CommandCaller, query: { readonly siteI
         figures: row.figures as OperationFigures,
         direction: directionOf(row.figures as OperationFigures),
         reason: row.reason,
-        since: tooFew ? null : sinceOf(row.reason, row.samples, row.step.standardMinutes, row.mark, dayIn),
+        since: tooFew ? null : sinceOf(row.reason, row.samples, row.step.standardMinutes, row.mark, dayIn, rule),
         lastDecision: lastOf(last.get(row.step.id)),
       }))
       .sort((a, b) => a.style.code.localeCompare(b.style.code) || a.revisionId.localeCompare(b.revisionId) || a.operation.seq - b.operation.seq)
@@ -101,30 +104,30 @@ export async function reviewQueue(caller: CommandCaller, query: { readonly siteI
       siteId: site.id,
       from: range.from,
       to: range.to,
-      rule: { tolerancePercent: STANDARD_REVIEW.tolerancePercent, minBundles: STANDARD_REVIEW.minBundles },
+      rule,
       count: queue.length,
       queue,
       leftOut,
       words: [
-        `Operations more than ${STANDARD_REVIEW.tolerancePercent}% off their standard, in either direction, over at least ${STANDARD_REVIEW.minBundles} bundles of the last ${STANDARD_REVIEW.windowDays} days.`,
+        reviewRuleWords(rule),
         ...(leftOut > 0 ? [`${leftOut} left out: too few people worked on them to show without identifying them.`] : []),
       ],
     }
   })
 }
 
-/** The operation's place on the queue and its decisions, for its detail. */
-export async function reviewFacts(db: Reader, place: Place, setup: SiteLines, step: RoutingStep, now: Date) {
+/** The operation's place on the queue and its decisions, for its detail, by the company's rule. */
+export async function reviewFacts(db: Reader, place: Place, setup: SiteLines, step: RoutingStep, now: Date, rule: ReviewRule) {
   const decisions = await decisionsOf(db, place.id, step.id)
   const last = decisions.at(-1)
   const mark = markOf(last)
   const read = await readSamples(db, place, setup.sources, reviewWindow(place.timezone, now), { step })
-  const position = reviewPlaceOf(read.steps.get(step.id)?.samples ?? [], mark, step.standardMinutes)
+  const position = reviewPlaceOf(read.steps.get(step.id)?.samples ?? [], mark, step.standardMinutes, rule)
   const names = await peopleNames(db, decisions.map((row) => row.actorId))
   const minimum = await minimumGroupSizeFor(db, place.companyId)
-  const shown = groupShown(operationFiguresOf(position.samples, step.standardMinutes).people, minimum)
+  const shown = groupShown(operationFiguresOf(position.samples, step.standardMinutes, rule).people, minimum)
   return {
-    place: { reason: position.reason !== 'OFF_STANDARD' || shown ? position.reason : null, since: position.reason && shown ? sinceOf(position.reason, position.samples, step.standardMinutes, mark, dayIn) : null, lastDecision: lastOf(last) },
+    place: { reason: position.reason !== 'OFF_STANDARD' || shown ? position.reason : null, since: position.reason && shown ? sinceOf(position.reason, position.samples, step.standardMinutes, mark, dayIn, rule) : null, lastDecision: lastOf(last) },
     history: [...decisions].reverse().flatMap((row) => {
       const decision = decisionOf(row)
       const proposed = jsonObject(row.after).proposedMinutes
@@ -167,7 +170,7 @@ export async function decide(caller: CommandCaller, routingOperationId: string, 
     const setup = await siteLines(tools.tx, site)
     const read = await readSamples(tools.tx, site, setup.sources, reviewWindow(site.timezone, tools.now), { step })
     // The group the decision stands on is every bundle of the window, also those older than the last decision.
-    const { people, figures } = operationFiguresOf(read.steps.get(step.id)?.samples ?? [], step.standardMinutes)
+    const { people, figures } = operationFiguresOf(read.steps.get(step.id)?.samples ?? [], step.standardMinutes, await reviewRuleFor(tools.tx, site.companyId))
     const open = mark !== null && OPEN_MARKS.has(mark.decision)
     const shown = groupShown(people, await minimumGroupSizeFor(tools.tx, site.companyId))
     if (!shown && !open) refuse(TOO_FEW_PEOPLE.code, TOO_FEW_PEOPLE.message)

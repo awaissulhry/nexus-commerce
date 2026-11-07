@@ -36,7 +36,8 @@ export function useExportDialogs(api: ApiClient, facts: { companyId: string | nu
   const actions: ExportDialogActions = {
     onOpenSend: (target) => {
       sendKey.current = null
-      setSend({ target, draft: sendDraftOf(locale, target.sentTo[0] ?? ''), busy: false, problem: null, done: null, withdrawing: false, withdrawn: false })
+      // The company's labour consultant first (People settings), else the address the file went to last.
+      setSend({ target, draft: sendDraftOf(locale, target.consultant?.email ?? target.sentTo[0] ?? ''), busy: false, problem: null, done: null, withdrawing: false, withdrawn: false })
     },
     onSendDraft: (patch) => setSend((current) => (current ? { ...current, draft: { ...current.draft, ...patch }, problem: null } : current)),
     onSend: () => {

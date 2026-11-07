@@ -18,7 +18,7 @@ import { gateClosedError } from '../privacy/gate'
 import type { MonthQuery, PreviewBody, ShowBody } from './contract'
 import { exportRows } from './views'
 import { lineDaysOf, monthChecks, monthPeople, type MonthPeople } from './facts'
-import { exportsOfMonth, latestExported, layoutOf, mayDo, requireMonthGates } from './store'
+import { companyPayrollCode, exportsOfMonth, latestExported, layoutOf, mayDo, requireMonthGates } from './store'
 import { correctionsNotCarried } from './pending'
 
 /**
@@ -64,7 +64,7 @@ export async function monthView(caller: CommandCaller, query: MonthQuery) {
     const [row] = latest ? await exportRows(db, [latest]) : []
     return {
       companyId: place.company.id,
-      company: { code: place.company.code, legalName: place.company.legalName },
+      company: { code: place.company.code, legalName: place.company.legalName, payrollCode: await companyPayrollCode(db, place.company.id) },
       month,
       label: monthLabel(month),
       sites: place.sites.map((site) => ({ siteId: site.id, code: site.code, name: site.name, gateOpen: read.gates.open.some((entry) => entry.id === site.id) })),
