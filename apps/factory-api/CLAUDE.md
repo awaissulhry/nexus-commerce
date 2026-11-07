@@ -357,6 +357,19 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   held file again is "Try again" (FAILED → PENDING via files.rescan). Clustered cron `files.scanPending` (5 min) scans
   what is still PENDING after a minute. Modules that act on `status === 'AVAILABLE'` after completeUpload keep working:
   a clean file comes back AVAILABLE from the same call. Tests: `useScanner(fakeScanner())` (`scan/fake.ts`).
+- Files in depth (B-W2b-160; COL-046, COL-047, COL-052, COL-058, PLT-216; `platform/files/{versions,preview,thumbs,multipart}/`,
+  factory-domain `files/{versions,preview,thumbs}`): a NEW VERSION is a new StoredFile (new key: nothing stored is overwritten),
+  `seriesId` = the first version, `versionNo` = max + 1; `POST /files/:fileId/versions` (+ `/versions/uploads` in parts), the
+  usual confirm; when it becomes AVAILABLE (confirm, clean scan, large completion, restore) `versions/supersede.ts` supersedes
+  the earlier ones IN THE SAME command (the DB checks one current version at commit) — call it from any new path that makes a
+  version AVAILABLE. `GET /files/:fileId/versions`, `POST /files/:fileId/restore` (a copy naming its source). Preview:
+  `GET /files/:fileId/preview` (60 s; inline for JPEG/PNG/WebP/PDF, else attachment). A portal or a link gets a PICTURE only as
+  its stripped copy (`thumbnailKey`: EXIF/GPS/XMP/IPTC removed, orientation kept, not resized; `thumbs/outside.ts keyShownTo`,
+  made by the worker handler `files.stripPictures` on `file.available`, or on the first outside look); HEIC is never shown outside.
+  Uploads in parts: `POST /files/uploads`, `…/:sessionId/{parts,sync,complete}`, `DELETE …/:sessionId`; the plain confirm refuses
+  them; cron `files.expireLargeUploads` (hourly). Copies: recordGeneratedFile writes `sourceFileId` from prepareFileCopy (FV1:01).
+  Uploads from outside (portal, link) call `multipart/outside.ts assertOutsideUploadsOpen()` first: closed on staging/production
+  unless FACTORY_VIRUS_SCAN=clamav (FV1:02; GATE-SPEND).
 - Error tracking (B-W2a-42; PLT-218; `src/observability/`): `reportError(error, context)` from the 500 handler
   (core/errors.ts), a job's last failed attempt (outbox/dispatch.ts) and a failed cron tick (core/cron.ts). Every report is
   factory-domain `observability/report` (allow-listed context, scrubbed text: no person, secret or money). Sinks:

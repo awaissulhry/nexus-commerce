@@ -97,6 +97,9 @@ import { incidentHandlers } from './modules/safety/incidents/handlers'
 import { healthDueListCron, healthHandlers } from './modules/safety/health/jobs'
 // B-W2b-159: the dead portal sign-in codes are purged (a day after they expired).
 import { portalCodePurgeCron } from './platform/auth/portal/purge'
+// B-W2b-160: a picture's stripped copy after its scan (file.available); uploads in parts given up after seven days.
+import { stripPicturesHandler } from './platform/files/thumbs/handler'
+import { largeUploadExpiryCron } from './platform/files/multipart/expiry'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -154,6 +157,7 @@ const W2B_118_HANDLERS: readonly EventHandler[] = [alertRulesHandler()]
 const W2B_125_HANDLERS: readonly EventHandler[] = incidentHandlers()
 // B-W2b-135: employee.role_changed → a change-of-task (or before-task) visit; leaver.started/ended → the end-of-employment visit.
 const W2B_135_HANDLERS: readonly EventHandler[] = healthHandlers()
+const W2B_160_HANDLERS: readonly EventHandler[] = [stripPicturesHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -222,7 +226,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -269,6 +273,7 @@ if (mode === 'worker') {
   crons.push(healthDueListCron({ database, log }))
   // B-W2b-159: hourly, the portal sign-in and step-up codes that expired more than a day ago are deleted (PLT-050).
   crons.push(portalCodePurgeCron({ database, log }))
+  crons.push(largeUploadExpiryCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
