@@ -92,16 +92,26 @@ async function newLine(requestId: string, sizes: Record<string, number>, seq = 1
 }
 const send = (requestId: string, number = `RQ-T-${randomUUID().slice(0, 8)}`, scope: FactoryScope = office()) =>
   update(scope, 'PortalOrderRequest', requestId, `status = 'SENT', number = $2, "sentAt" = now(), "sentById" = $3::uuid, version = version + 1`, number, seeded.buyerId)
+/**
+ * The database server's clock, `ms` later, for a test row's createdAt. The guards compare createdAt with a later
+ * statement's now() (answeredAt, withdrawnAt, finishedAt), and the server's clock is not this process's: the local
+ * stack's PostgreSQL runs in a container whose clock drifts some milliseconds from the host's either way, so a createdAt
+ * taken from new Date() can lie after the next statement's now().
+ */
+const serverNow = async (ms = 0): Promise<string> =>
+  ((await admin(`SELECT clock_timestamp() + $1::int * interval '1 millisecond' AS at`, [ms]))[0]!.at as Date).toISOString()
 /** A new OPEN change request of P1 on `orderId`, made by the customer from the seed's OPEN one. */
 async function newChange(changes: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID()
-  await copyRow('OrderChangeRequest', seeded.changes.open, { id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...changes }, partner())
+  const at = await serverNow()
+  await copyRow('OrderChangeRequest', seeded.changes.open, { id, createdAt: at, updatedAt: at, ...changes }, partner())
   return id
 }
 /** A new CREATED payment intent made by the office from the seed's CREATED one, with `changes`. */
 async function newIntent(changes: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID()
-  await copyRow('PaymentIntent', seeded.intents.created, { id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...changes })
+  const at = await serverNow()
+  await copyRow('PaymentIntent', seeded.intents.created, { id, createdAt: at, updatedAt: at, ...changes })
   return id
 }
 
@@ -302,7 +312,7 @@ describe('change and cancel requests', () => {
     // SEED-SO-0001's amendment 1 was made before this request was asked (and answers the seed's own request).
     await expect(update(office(), 'OrderChangeRequest', change, `"amendmentId" = $2::uuid`, seeded.amendmentId)).rejects.toThrow(/an amendment made after it was asked|duplicate key/)
     const amendment = randomUUID()
-    await copyRow('SalesOrderAmendment', seeded.amendmentId, { id: amendment, revision: 77, requestId: 'test-157-amendment', createdAt: new Date(Date.now() + 1000).toISOString() })
+    await copyRow('SalesOrderAmendment', seeded.amendmentId, { id: amendment, revision: 77, requestId: 'test-157-amendment', createdAt: await serverNow(1000) })
     await expect(update(partner(), 'OrderChangeRequest', change, `"amendmentId" = $2::uuid`, amendment)).rejects.toThrow(/never changes again/)
     expect(await update(office(), 'OrderChangeRequest', change, `"amendmentId" = $2::uuid, version = version + 1`, amendment)).toBe(1)
     await expect(update(office(), 'OrderChangeRequest', change, `"amendmentId" = NULL`)).rejects.toThrow(/never changes again/)
@@ -312,7 +322,7 @@ describe('change and cancel requests', () => {
     await expect(update(office(), 'OrderChangeRequest', again, `"amendmentId" = $2::uuid`, amendment)).rejects.toThrow(/OrderChangeRequest_tenantId_amendmentId_key/)
     // An amendment of another order is not a reference of this request (its key names the order).
     const other = randomUUID()
-    await copyRow('SalesOrderAmendment', seeded.amendmentId, { id: other, revision: 78, requestId: 'test-157-amendment-2', createdAt: new Date(Date.now() + 1000).toISOString() })
+    await copyRow('SalesOrderAmendment', seeded.amendmentId, { id: other, revision: 78, requestId: 'test-157-amendment-2', createdAt: await serverNow(1000) })
     const so2Change = await newChange()
     await update(office(), 'OrderChangeRequest', so2Change, `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid`, a.actorId)
     await expect(update(office(), 'OrderChangeRequest', so2Change, `"amendmentId" = $2::uuid`, other)).rejects.toThrow(/foreign key/)
