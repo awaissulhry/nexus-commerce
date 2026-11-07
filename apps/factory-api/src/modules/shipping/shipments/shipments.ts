@@ -4,6 +4,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
+import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
@@ -289,14 +290,17 @@ async function addGarments(tools: CommandTools, shipment: { id: string; siteId: 
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' || tools.context.audience === 'floor' ? tools.context.actorId : null)
 
 /** The ship-to snapshot of a party's delivery address (the shape of SalesOrder.shipTo). */
-const SHIP_TO_SELECT = { partyId: true, kinds: true, status: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true } as const
+const SHIP_TO_SELECT = { partyId: true, kinds: true, status: true, approvalStatus: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true } as const
 
 async function shipToOf(db: CommandTx, partyId: string, addressId: string, path: string): Promise<Record<string, string>> {
   const address = isUuid(addressId) ? await db.partyAddress.findUnique({ where: { id: addressId }, select: SHIP_TO_SELECT }) : null
   if (!address || address.partyId !== partyId || address.status !== 'ACTIVE' || !address.kinds.includes('SHIP_TO')) {
     throw new ValidationError('Not a delivery address of this customer.', [{ path, message: "Expected an active delivery (SHIP_TO) address of the order's party." }])
   }
-  const { partyId: _party, kinds: _kinds, status: _status, ...fields } = address
+  // B-W2b-F13b: an address the customer added in the portal ships once we approved it (the database refuses it too).
+  const unchecked = addressUseProblem(address.approvalStatus)
+  if (unchecked) throw new ValidationError(unchecked, [{ path, message: unchecked }])
+  const { partyId: _party, kinds: _kinds, status: _status, approvalStatus: _approval, ...fields } = address
   return Object.fromEntries(Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''))
 }
 

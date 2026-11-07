@@ -203,7 +203,14 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
   it('takes the change, shows it to both customer roles and in the office’s Approvals, then the amendment applies it', async () => {
     const so1 = await orderOf('SEED-SO-0001')
     const [blk, red] = await linesOf(so1.id)
-    const address = (await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)).addresses[0]
+    // B-W2b-F13b (wave 23): the customer asks to deliver to an address its admin added, which waits for our check.
+    const address = { id: newId() }
+    await admin(
+      `INSERT INTO "PartyAddress" (id, "tenantId", "partyId", kinds, name, line1, "postalCode", city, province, country, "approvalStatus", "requestedAt", "requestedByUserId", "createdAt", "updatedAt", "createdById")
+       VALUES ($1, $2, $3, '{SHIP_TO}', 'Seed waiting dock', 'Via Esempio 7', '40100', 'Bologna', 'BO', 'IT', 'WAITING', now() - interval '1 day', $4, now() - interval '1 day', now() - interval '1 day', $4)`,
+      [address.id, T, P1, partnerIds.buyer],
+    )
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)).addresses.map((row: Json) => row.id)).toContain(address.id)
     const wanted = addDays(TODAY(), 50)
     const asked = await browsers.buyer.post(`/portal/sales-orders/${so1.id}/change-requests`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '52', quantity: 6 }, { lineId: red!.id, size: '54', quantity: 0 }], requestedDate: wanted, shipToAddressId: address.id, note: 'Our season starts earlier.' }, { headers: { 'idempotency-key': 'change-request-so1-1' } })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
@@ -248,7 +255,9 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
     const accepted = await acceptRequest(office(), request.id, { version: 1, answer: 'Done: the new date holds.' }, undefined, h.clock)
     expect(accepted.request).toMatchObject({ status: 'ACCEPTED', answer: 'Done: the new date holds.', answeredBy: 'Otto Office', amendment: { revision: 1 }, mayAnswer: false })
     const order = await one('SELECT "requestedDate"::text AS requested, "reapprovalNeededAt" IS NOT NULL AS reaccept, "shipTo"->>\'name\' AS ship FROM "SalesOrder" WHERE id = $1', [so1.id])
-    expect(order).toEqual({ requested: wanted, reaccept: true, ship: 'Seed Racing workshop' })
+    expect(order).toEqual({ requested: wanted, reaccept: true, ship: 'Seed waiting dock' })
+    // B-W2b-F13b: accepting the request approved the waiting address in the same command (by the office person).
+    expect(await one('SELECT "approvalStatus"::text AS approval, "decidedById" IS NOT NULL AS decided FROM "PartyAddress" WHERE id = $1', [address.id])).toEqual({ approval: 'APPROVED', decided: true })
     expect(await admin('SELECT l.seq, s.size, s.quantity FROM "SalesOrderLineSize" s JOIN "SalesOrderLine" l ON l.id = s."lineId" WHERE l."orderId" = $1 ORDER BY l.seq, s.size', [so1.id])).toEqual([
       { seq: 10, size: '50', quantity: 2 },
       { seq: 10, size: '52', quantity: 6 },

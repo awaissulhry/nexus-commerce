@@ -16,6 +16,8 @@ import { portalOrderRequest } from './portal-order-requests'
 import { portalChangeRequests } from './portal-change-requests'
 // B-W2b-189: what suppliers sent in the portal that waits for a check (profile changes, documents).
 import { supplierChange, supplierDocument } from './supplier-changes'
+// B-W2b-F13b: delivery addresses customers added in the portal, waiting for our check.
+import { deliveryAddress } from './delivery-addresses'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -47,4 +49,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   // B-W2b-189: suppliers' changes of addresses and contacts, and their documents, waiting for a check (the Approvals tile).
   SUPPLIER_CHANGE: supplierChange,
   SUPPLIER_DOCUMENT: supplierDocument,
+  // B-W2b-F13b: delivery addresses customers added in the portal, waiting for our check (the Approvals tile).
+  DELIVERY_ADDRESS: deliveryAddress,
 })

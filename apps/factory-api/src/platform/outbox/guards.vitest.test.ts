@@ -52,7 +52,8 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(587 declared event version\(s\), 840 literal emit/) })
+    // B-W2b-F13b: + 3 literal emits (the address check's party.addresses_changed; the DVR link signature's two).
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(587 declared event version\(s\), 843 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

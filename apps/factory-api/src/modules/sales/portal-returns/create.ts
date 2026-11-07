@@ -23,8 +23,9 @@ import { RETURN_RECORD, type Place, type Reader } from './store'
  *               than was sold less what other live returns take back, under the trigger's own advisory locks); a claim
  *               link keeps to its own shipment or order. The lines, reasons and the customer's words make an RMA REQUESTED
  *               (W2a's guard: authorised nothing, no deadline yet) numbered from the company's RETURN series; the office
- *               authorises or rejects it (./office.ts). What the customer would like and their note are kept on the
- *               request's audit row (no column on the RMA: a schema need, named in the notes).
+ *               authorises or rejects it (./office.ts). How it came (channel PORTAL or LINK), what the customer would like
+ *               (outcomeWanted) and their words (customerNote) are the RMA's own columns, written at the insert and never
+ *               changed (B-W2b-F13b, wave 23; the request's audit row still says them, as history).
  *   a complaint the customer's words and the item (an order line of theirs, its size, the serial or batch on the label) make
  *               a W2a Complaint NEW, channel PORTAL or LINK, numbered from the company's COMPLAINT series; a serial of ours
  *               fills the style, size and batch (W2a's planAbout); quality triages it as today.
@@ -124,6 +125,9 @@ export async function createRequestInCommand(tools: CommandTools, place: Place, 
       salesOrderId: plan!.salesOrderId,
       status: 'REQUESTED',
       requestedAt: now,
+      channel: who.via,
+      outcomeWanted: body.outcomeWanted ?? null,
+      customerNote: blank(body.note),
       ...stamp,
     },
     select: { id: true },

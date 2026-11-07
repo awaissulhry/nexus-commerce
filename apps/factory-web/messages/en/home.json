@@ -104,7 +104,8 @@
       "PORTAL_ORDER_REQUEST": "Order requests from the customer portal to decide",
       "ORDER_CHANGE_REQUEST": "Customers' change and cancel requests",
       "SUPPLIER_CHANGE": "Suppliers' profile changes",
-      "SUPPLIER_DOCUMENT": "Supplier documents to check"
+      "SUPPLIER_DOCUMENT": "Supplier documents to check",
+      "DELIVERY_ADDRESS": "Delivery addresses customers added, to check"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -431,6 +432,8 @@
       "SUPPLIER_CHANGE.blocks": "Nothing changes on our side until you approve it; the supplier sees it waiting for our check.",
       "SUPPLIER_DOCUMENT.WAITING": "{supplier} sent {name} for our check.",
       "SUPPLIER_DOCUMENT.blocks": "It is not shared back and does not count for the required documents until someone accepts it.",
+      "DELIVERY_ADDRESS.WAITING": "{customer} added a delivery address for our check: {address}.",
+      "DELIVERY_ADDRESS.blocks": "No order or shipment goes there until you approve it; accepting a request of the customer that names it approves it too.",
       "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
       "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
       "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
@@ -455,6 +458,7 @@
       "why.ORDER_CHANGE_REQUEST.orders_manage": "You manage this customer's orders.",
       "why.SUPPLIER_CHANGE.purchasing_supplierChanges_decide": "You check suppliers' changes of their addresses and contacts.",
       "why.SUPPLIER_DOCUMENT.purchasing_supplierDocuments_review": "You check the certificates, test reports and declarations suppliers send.",
+      "why.DELIVERY_ADDRESS.orders_manage": "You take this customer's orders.",
       "code": {
         "checks": {
           "REVISION": "revision",

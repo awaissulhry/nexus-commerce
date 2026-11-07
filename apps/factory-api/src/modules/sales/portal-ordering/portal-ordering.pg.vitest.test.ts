@@ -17,6 +17,8 @@ import { startHarness, type Answer, type Browser, type Harness, type TestTenant 
 import { processImporters } from '../../../platform/imports/registry'
 import { SOURCES } from '../../insights/sources'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
+import { approveAddress, listAddressChecks, refuseAddress } from './address-check'
+import { previewManualOrder } from '../orders/manual'
 
 /**
  * Portal ordering on the local stack (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079), through the real app and
@@ -313,22 +315,58 @@ describe('withdraw and discard', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   })
 })
 
-describe('delivery addresses (SAL-079)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('the admin adds, makes default and archives; the office sees who did; a draft names an archived one as a problem', async () => {
+describe('delivery addresses (SAL-079) and our check of them (B-W2b-F13b, wave 23)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const body = { name: 'Seed warehouse two', line1: 'Via Esempio 12', postalCode: '40100', city: 'Bologna', province: 'BO', country: 'IT', contactName: 'Ufficio ricevimento' }
+  const officeViewer = () => {
+    const caller = office()
+    return { caller, viewer: { actor: actorOf(caller.factoryContext!), personId: officeId, today: TODAY, now: h.clock.now() } }
+  }
+
+  it('the admin adds an address that waits for our check: never the default, in Approvals; approved, it may be the default; archived, a draft names it', async () => {
     const seen = await ok(browsers.viewer, 'GET', '/portal/addresses')
     expect(seen.canManage).toBe(false)
-    const body = { name: 'Seed warehouse two', line1: 'Via Esempio 12', postalCode: '40100', city: 'Bologna', province: 'BO', country: 'IT', contactName: 'Ufficio ricevimento' }
     expect((await call(browsers.viewer, 'POST', '/portal/addresses', body)).status).toBe(403)
     expect((await call(browsers.buyer, 'POST', '/portal/addresses', body)).status).toBe(403)
+    // REFUSED: a new address is never the default (it waits for our check).
+    const asDefault = await call(browsers.admin, 'POST', '/portal/addresses', { ...body, isDefault: true })
+    expect(asDefault.status, JSON.stringify(asDefault.body)).toBe(400)
+    expect(asDefault.body.error.issues[0].message).toMatch(/waits for our check/)
     const made = await ok(browsers.admin, 'POST', '/portal/addresses', body, 201)
-    expect(made.address).toMatchObject({ name: 'Seed warehouse two', isDefault: false, status: 'ACTIVE', addedBy: { kind: 'COLLEAGUE', you: true } })
-    expect(await one('SELECT "createdById", kinds::text FROM "PartyAddress" WHERE id = $1', [made.address.id])).toEqual({ createdById: userIds.admin, kinds: '{SHIP_TO}' })
+    expect(made.address).toMatchObject({ name: 'Seed warehouse two', isDefault: false, status: 'ACTIVE', addedBy: { kind: 'COLLEAGUE', you: true }, approval: { status: 'WAITING', refuseReason: null }, requestedAt: expect.any(String), decidedAt: null })
+    const row = await one('SELECT "createdById", "requestedByUserId", "approvalStatus"::text AS approval, kinds::text FROM "PartyAddress" WHERE id = $1', [made.address.id])
+    expect(row).toEqual({ createdById: userIds.admin, requestedByUserId: userIds.admin, approval: 'WAITING', kinds: '{SHIP_TO}' })
     const audit = await admin('SELECT "actorId", after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2', ['Party', P1])
-    expect(audit.some((row) => row.actorId === userIds.admin && row.after?.byPartner === true)).toBe(true)
-    // The buyer asks for the new address on a draft; the admin archives it: the draft names it.
+    expect(audit.some((entry) => entry.actorId === userIds.admin && entry.after?.byPartner === true && entry.after?.address?.approvalStatus === 'WAITING')).toBe(true)
+    // REFUSED: the default before our check (409 in words).
+    const early = await call(browsers.admin, 'POST', `/portal/addresses/${made.address.id}/default`, { version: made.address.version })
+    expect(early.status, JSON.stringify(early.body)).toBe(409)
+    expect(early.body.error.message).toMatch(/waits for our check/)
+    // REFUSED: an order typed by the office with it (the words, before the database's refusal).
+    const preview = await previewManualOrder(office(), { companyId: companyA, partyId: P1, shipToAddressId: made.address.id, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 1 }] }] })
+    expect(preview.problems).toEqual(expect.arrayContaining([{ path: 'body/shipToAddressId', message: expect.stringMatching(/waits for our check: approve it first/) }]))
+    // Home › Approvals: whoever takes the customer's orders sees it; the office's list too.
+    const { caller, viewer } = officeViewer()
+    const approvals = await SOURCES.DELIVERY_ADDRESS({ caller, viewer })
+    const candidate = approvals.candidates.find((entry) => entry.subKey === made.address.id)
+    expect(candidate).toMatchObject({ kind: 'DELIVERY_ADDRESS', record: { type: 'Party', id: P1 }, state: 'WAITING' })
+    const listed = await listAddressChecks(office(), { state: 'WAITING' })
+    const waiting = listed.addresses.find((entry) => entry.id === made.address.id)!
+    expect(waiting).toMatchObject({ party: { id: P1 }, approval: { status: 'WAITING', requestedBy: 'ada.admin' }, may: { decide: true } })
+    // REFUSED: a stale version (409); then approved.
+    await expect(approveAddress(office(), made.address.id, { version: waiting.version + 1 })).rejects.toThrow(/changed since you read it/)
+    const approved = await approveAddress(office(), made.address.id, { version: waiting.version })
+    expect(approved.address).toMatchObject({ approval: { status: 'APPROVED', decidedAt: expect.any(String) }, may: { decide: false } })
+    await expect(approveAddress(office(), made.address.id, { version: approved.address.version })).rejects.toThrow(/approved already/)
+    expect((await SOURCES.DELIVERY_ADDRESS(officeViewer())).candidates.some((entry) => entry.subKey === made.address.id)).toBe(false)
+    // The customer reads it checked (never who decided); now it may be the default and an order may use it.
+    const after = (await ok(browsers.admin, 'GET', '/portal/addresses')).addresses.find((address: Json) => address.id === made.address.id)
+    expect(after).toMatchObject({ approval: { status: 'APPROVED' }, decidedAt: expect.any(String) })
+    expect(JSON.stringify(after)).not.toContain(officeId)
+    expect((await previewManualOrder(office(), { companyId: companyA, partyId: P1, shipToAddressId: made.address.id, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 1 }] }] })).problems.filter((problem: Json) => problem.path === 'body/shipToAddressId')).toEqual([])
+    // The buyer asks for it on a draft; the admin makes it the default, then archives it: the draft names it.
     const draft = await ok(browsers.buyer, 'POST', '/portal/order-requests', { shipToAddressId: made.address.id }, 201)
-    const listed = await ok(browsers.admin, 'POST', `/portal/addresses/${made.address.id}/default`, { version: made.address.version })
-    const fresh = listed.addresses.find((address: Json) => address.id === made.address.id)
+    const defaulted = await ok(browsers.admin, 'POST', `/portal/addresses/${made.address.id}/default`, { version: after.version })
+    const fresh = defaulted.addresses.find((address: Json) => address.id === made.address.id)
     expect(fresh.isDefault).toBe(true)
     const archived = await ok(browsers.admin, 'POST', `/portal/addresses/${made.address.id}/archive`, { version: fresh.version })
     expect(archived.addresses.find((address: Json) => address.id === made.address.id)).toMatchObject({ status: 'ARCHIVED', isDefault: false })
@@ -336,5 +374,41 @@ describe('delivery addresses (SAL-079)', { timeout: SLOW_TEST_TIMEOUT_MS }, () =
     expect(read.request.problems.map((problem: Json) => problem.code)).toEqual(['NO_LINES', 'SHIP_TO_ARCHIVED'])
     // Another customer never sees P1's addresses.
     expect((await ok(browsers.other, 'GET', '/portal/addresses')).addresses.map((address: Json) => address.id)).not.toContain(made.address.id)
+  })
+
+  it('a request naming a waiting address: the office accepting it approves the address in the same command', async () => {
+    const made = await ok(browsers.admin, 'POST', '/portal/addresses', { ...body, name: 'Seed pop-up store', line1: 'Via Esempio 30' }, 201)
+    const draft = await ok(browsers.buyer, 'POST', '/portal/order-requests', { shipToAddressId: made.address.id, customerRef: 'PO-T-ADDR' }, 201)
+    expect(draft.request.problems.map((problem: Json) => problem.code)).toEqual(['NO_LINES'])
+    expect(draft.addresses.find((address: Json) => address.id === made.address.id)).toMatchObject({ approval: { status: 'WAITING' } })
+    const added = await ok(browsers.buyer, 'POST', `/portal/order-requests/${draft.request.id}/lines`, { version: draft.request.version, lines: [{ styleId: jkt02, colourwayId: red02, sizes: [{ size: '52', quantity: 2 }] }] })
+    const sent = await ok(browsers.buyer, 'POST', `/portal/order-requests/${draft.request.id}/send`, { version: added.request.version })
+    const view = await officeRequestView(office(), sent.request.id)
+    expect(view.request.shipTo).toMatchObject({ id: made.address.id, approvalStatus: 'WAITING' })
+    const accepted = await acceptRequest(office(), sent.request.id, { version: view.request.version, as: 'ORDER' })
+    expect(accepted.request.shipTo).toMatchObject({ id: made.address.id, approvalStatus: 'APPROVED' })
+    const address = await one('SELECT "approvalStatus"::text AS approval, "decidedById", "decidedAt" IS NOT NULL AS decided FROM "PartyAddress" WHERE id = $1', [made.address.id])
+    expect(address).toEqual({ approval: 'APPROVED', decidedById: officeId, decided: true })
+    const order = await one<{ shipTo: Json }>('SELECT "shipTo" FROM "SalesOrder" WHERE id = $1', [accepted.made.salesOrderId])
+    expect(order.shipTo).toMatchObject({ line1: 'Via Esempio 30', city: 'Bologna' })
+    const audit = await one('SELECT after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND after->>\'approvalStatus\' = $3', ['PartyAddress', made.address.id, 'APPROVED'])
+    expect(audit.after.with).toMatchObject({ type: 'PortalOrderRequest', id: sent.request.id })
+  })
+
+  it('the office refuses an address with the reason the customer reads: archived for good, never used for an order', async () => {
+    const made = await ok(browsers.admin, 'POST', '/portal/addresses', { ...body, name: 'Seed garage', line1: 'Via Esempio 99' }, 201)
+    const { version } = (await listAddressChecks(office(), { state: 'WAITING', partyId: P1 })).addresses.find((entry) => entry.id === made.address.id)!
+    // REFUSED: a refusal without its reason (words at the field).
+    await expect(refuseAddress(office(), made.address.id, { version, reason: ' ' })).rejects.toThrow(/Say why the address is not accepted/)
+    const refused = await refuseAddress(office(), made.address.id, { version, reason: 'We do not deliver to private garages.' })
+    expect(refused.address).toMatchObject({ status: 'ARCHIVED', approval: { status: 'REFUSED', refuseReason: 'We do not deliver to private garages.' } })
+    const seen = (await ok(browsers.admin, 'GET', '/portal/addresses')).addresses.find((address: Json) => address.id === made.address.id)
+    expect(seen).toMatchObject({ status: 'ARCHIVED', approval: { status: 'REFUSED', refuseReason: 'We do not deliver to private garages.', words: { en: 'Not accepted' } } })
+    expect((await listAddressChecks(office(), { state: 'REFUSED', partyId: P1 })).addresses.map((entry) => entry.id)).toContain(made.address.id)
+    await expect(approveAddress(office(), made.address.id, { version: refused.address.version })).rejects.toThrow(/refused already/)
+    const preview = await previewManualOrder(office(), { companyId: companyA, partyId: P1, shipToAddressId: made.address.id, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 1 }] }] })
+    expect(preview.problems.map((problem: Json) => problem.path)).toContain('body/shipToAddressId')
+    // REFUSED: the database keeps a refused address archived for good (its guard; the API's words came first above).
+    await expect(admin('UPDATE "PartyAddress" SET status = \'ACTIVE\' WHERE id = $1', [made.address.id])).rejects.toThrow(/refused/)
   })
 })

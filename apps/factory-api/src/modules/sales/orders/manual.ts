@@ -5,6 +5,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { fitsDecimal, fromMinorUnits, toMinorUnits, type CurrencyCode, type MinorUnits } from '@nexus/factory-domain/core/money'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
+import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
 import { formatNumber } from '@nexus/factory-domain/numbering/format'
 import { isNumberValue, scopeKeyFor, yearOfScope } from '@nexus/factory-domain/numbering/kinds'
 import { depositRequestFor } from '@nexus/factory-domain/sales/deposits/deposits'
@@ -118,8 +119,10 @@ async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, pic
   const billToAddressId = body.billToAddressId === undefined ? await address('isDefaultBillTo') : body.billToAddressId
   const shipToAddressId = body.shipToAddressId === undefined ? await address('isDefaultShipTo') : body.shipToAddressId
   const snapshots = await partySnapshotsOf(db, party, taxMode, billToAddressId, shipToAddressId, now)
-  if (!snapshots.billTo) issues.push({ path: 'body/billToAddressId', message: billToAddressId ? 'Not an active invoice address of this customer.' : 'The customer has no default invoice address: add one or choose it.' })
-  if (!snapshots.shipTo) issues.push({ path: 'body/shipToAddressId', message: shipToAddressId ? 'Not an active delivery address of this customer.' : 'The customer has no default delivery address: add one or choose it.' })
+  // B-W2b-F13b: an address a customer added in the portal is used once we approved it (the order keeps a snapshot: the API's).
+  const checkWords = async (addressId: string | null) => (addressId ? addressUseProblem((await db.partyAddress.findUnique({ where: { id: addressId }, select: { approvalStatus: true } }))?.approvalStatus) : null)
+  if (!snapshots.billTo) issues.push({ path: 'body/billToAddressId', message: billToAddressId ? ((await checkWords(billToAddressId)) ?? 'Not an active invoice address of this customer.') : 'The customer has no default invoice address: add one or choose it.' })
+  if (!snapshots.shipTo) issues.push({ path: 'body/shipToAddressId', message: shipToAddressId ? ((await checkWords(shipToAddressId)) ?? 'Not an active delivery address of this customer.') : 'The customer has no default delivery address: add one or choose it.' })
   const language = body.language ?? ((contact?.language ?? party.row.language) === 'it' ? 'it' : 'en')
 
   if (body.promiseDate && body.promiseDate < today) issues.push({ path: 'body/promiseDate', message: 'The promise date is today or later.' })

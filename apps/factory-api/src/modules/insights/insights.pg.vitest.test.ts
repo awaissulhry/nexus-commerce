@@ -302,7 +302,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     // (B-W2b-17: an NCR decision waiting for an approval is an approval decided on the NCR's own record.)
     // (B-W2b-190: so is a portal order request, decided on the request's own record.)
     // (B-W2b-189: a supplier's profile change and document too, decided on the supplier's record.)
-    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
+    // (B-W2b-F13b: a delivery address a customer added, decided on the customer's record.)
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
     for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
       const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
@@ -314,7 +315,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     // B-W2b-17: + NCR_DECISION. B-W2b-190: + PORTAL_ORDER_REQUEST (a tile at 0: the owner acts on it, no request waits here).
     // B-W2b-17: + NCR_DECISION; B-W2b-183: + ORDER_CHANGE_REQUEST (the seeded open change request).
     // B-W2b-17: + NCR_DECISION. B-W2b-189: + SUPPLIER_CHANGE, SUPPLIER_DOCUMENT.
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(19)
+    // B-W2b-F13b: + DELIVERY_ADDRESS.
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(20)
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)
@@ -408,7 +410,8 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
     expect(itemOf(answer, ids.quote)).toBeUndefined()
     // B-W2b-190: the portal's order requests are the sales person's to decide (a tile at 0 here).
     // B-W2b-183: + the customers' change and cancel requests the sales role answers (none waits here).
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST'])
+    // B-W2b-F13b: + the delivery addresses customers added (a tile at 0 here).
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'DELIVERY_ADDRESS'])
   })
 
   it('mail to sort: the email-in list of whoever sorts the company’s mail (triage, held, unreadable), opened in its own review', async () => {

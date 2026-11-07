@@ -193,7 +193,8 @@
   "signed": {
     "OFFICE": "Signed here on {date} ({person})",
     "PAPER": "Signed on paper on {date}, recorded by {person}",
-    "FLOOR_PIN": "Signed on a tablet on {date}"
+    "FLOOR_PIN": "Signed on a tablet on {date}",
+    "LINK": "Signed by link on {date} (an approval request we sent)"
   },
   "version": {
     "noneSigned": "No signed version yet",

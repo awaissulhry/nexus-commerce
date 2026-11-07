@@ -9,12 +9,13 @@ import { decisionProblem, refuseReasonProblem, type AcceptAs } from '@nexus/fact
 import { draftTotals, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
-import { command, type CommandCaller } from '../../../core/command'
+import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { serverClock } from '../../../core/time'
+import { serverClock, type Clock } from '../../../core/time'
 import { makeManualOrderInCommand, type ManualOrderBody } from '../orders/manual'
 import { assertMay, officeContextOf } from '../orders/access'
 import { duplicateInto, type Dropped } from '../quotes/duplicate'
+import { approveWaitingInCommand } from './address-check'
 import { factsOf, readCatalogue } from './catalogue'
 import { dayText, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow } from './store'
 
@@ -106,7 +107,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   const lines = await caller.withClient((client) => readLines(client, [row.id]))
   const catalogue = await caller.withClient((client) => readCatalogue(client, { companyId: row.companyId, partyId: row.partyId, day, styleIds: lines.map((line) => line.styleId) }))
   const party = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { id: true, code: true, legalName: true } }))
-  const shipTo = row.shipToAddressId ? await caller.withClient((client) => client.partyAddress.findUnique({ where: { id: row.shipToAddressId! }, select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, status: true } })) : null
+  const shipTo = row.shipToAddressId ? await caller.withClient((client) => client.partyAddress.findUnique({ where: { id: row.shipToAddressId! }, select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, status: true, approvalStatus: true } })) : null
   const names = await namesOf(caller, [row.sentById, row.decidedById, row.createdById])
   const salesOrder = row.salesOrderId ? await caller.withClient((client) => client.salesOrder.findUnique({ where: { id: row.salesOrderId! }, select: { id: true, number: true } })) : null
   const quote = row.quoteId ? await caller.withClient((client) => client.quote.findUnique({ where: { id: row.quoteId! }, select: { id: true, number: true } })) : null
@@ -182,7 +183,8 @@ const linesFor = (lines: readonly LineRow[], prices: AcceptBody['lines']) =>
     note: line.note,
   }))
 
-export async function acceptRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey?: string) {
+/** `clock`: the routes pass the app's (B-W2b-F13b: a waiting ship-to approved here is never decided before it was asked). */
+export async function acceptRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey?: string, clock: Clock = serverClock) {
   const { context, row } = await officeRequest(caller, requestId)
   const scope = { companyId: row.companyId, partyId: row.partyId }
   assertMay(context, ORDERS_MANAGE, scope, 'Order request')
@@ -191,12 +193,15 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   if (problem) throw new InvalidStateError(problem)
   const lines = await caller.withClient((client) => readLines(client, [row.id]))
   for (const [index, entry] of (body.lines ?? []).entries()) if (!lines.some((line) => line.id === entry.lineId)) throw new ValidationError('Not a line of this request.', [{ path: `body/lines/${index}/lineId`, message: 'Not a line of this request.' }])
-  const { result } = await command(caller, { name: 'portalOrdering.accept', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+  const { result } = await runCommand(caller, { name: 'portalOrdering.accept', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const current = await lockRequest(tx, requestId, body.version)
     const again = decisionProblem(current.status as RequestStatus)
     if (again) throw new InvalidStateError(again)
     const fresh = await readLines(tx, [current.id])
+    // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
+    // approves it first, in this command (the order or quote may then use it).
+    if (current.shipToAddressId) await approveWaitingInCommand(tools, current.shipToAddressId, { type: 'PortalOrderRequest', id: current.id, number: current.number })
     let salesOrderId: string | null = null
     let quoteId: string | null = null
     let made: { number: string; dropped: Dropped[]; warnings: string[] }
@@ -253,7 +258,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'SENT' }, after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', body.lines ?? []) } })
     tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
     return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings }
-  })
+  }, { ...COMMAND_SETTINGS, clock })
   return { ...(await officeRequestView(caller, requestId)), made: result }
 }
 
