@@ -16,7 +16,8 @@ import type { Allocation, NumberKind, NumberReset, Series, SeriesProof } from '.
  * rule. Pattern words are this web's (the API's English refusal is never shown).
  */
 
-export const DOCUMENT_VIEWS = ['numbers', 'documents'] as const
+// B-W2b-161: Branding, the W2b section of the page (branding/).
+export const DOCUMENT_VIEWS = ['numbers', 'documents', 'branding'] as const
 export type DocumentsView = (typeof DOCUMENT_VIEWS)[number]
 
 export interface CompanyOption {

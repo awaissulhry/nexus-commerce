@@ -97,6 +97,8 @@ import { events as safetyChemicals } from '../safety-chemicals/events'
 import { events as safetyHealth } from '../safety-health/events'
 // B-W2b-139: training sessions, attendance signed on the floor, training records, the instruction register.
 import { events as safetyRecords } from '../safety-records/events'
+// B-W2b-161: company branding (a company's logo, accent, sender name or portal label changed).
+import { events as branding } from '../branding/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -260,7 +262,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-135
   ...safetyHealth,
   // B-W2b-139
-  ...safetyRecords] as const satisfies readonly EventDefinition[]
+  ...safetyRecords,
+  // B-W2b-161
+  ...branding] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

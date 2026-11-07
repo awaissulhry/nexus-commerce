@@ -51,16 +51,27 @@ const S3 = newId()
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all', parties: Grant['parties'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties })
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants })
 const KEEP: Permission[] = ['purchasing.view', 'purchasing.sources.manage', 'money.cost']
-const SESSIONS: Record<string, () => SessionContext> = {
-  buyer: () => office(A.tenant, [grant([...KEEP, 'purchasing.manage', 'purchasing.send', 'planning.view', 'planning.run'])]),
-  planner: () => office(A.tenant, [grant(['purchasing.view', 'planning.view', 'planning.run'])]),
-  keeperA: () => office(A.tenant, [grant(KEEP, [A.companyA])]),
-  companyB: () => office(A.tenant, [grant(['purchasing.view', 'money.cost'], [A.companyB])]),
-  brandOnly: () => office(A.tenant, [grant(KEEP, 'all', [A.brand])]),
-  otherTenant: () => office(seedUuid(ns.b, 'tenant'), [grant(KEEP)]),
-  floor: () => ({ audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: A.siteA1, deviceId: newId(), grants: [grant(['floor.work', ...KEEP], [A.companyA])] }),
-  partner: () => ({ audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.supplier, grants: [grant(['purchasing.view'], 'all', [A.supplier])] }),
+/**
+ * One person per session name for the whole file: every distinct actor is a scope, and every scope a Prisma client of the
+ * factory-db cache (~90 MB each with the W2b schema, up to 32 kept); a new actor per request filled the cache and ran the
+ * test worker out of its 4 GB heap (B-W2b-158).
+ */
+const once = (make: () => SessionContext): (() => SessionContext) => {
+  let made: SessionContext | undefined
+  return () => (made ??= make())
 }
+const SESSIONS: Record<string, () => SessionContext> = Object.fromEntries(
+  Object.entries({
+    buyer: () => office(A.tenant, [grant([...KEEP, 'purchasing.manage', 'purchasing.send', 'planning.view', 'planning.run'])]),
+    planner: () => office(A.tenant, [grant(['purchasing.view', 'planning.view', 'planning.run'])]),
+    keeperA: () => office(A.tenant, [grant(KEEP, [A.companyA])]),
+    companyB: () => office(A.tenant, [grant(['purchasing.view', 'money.cost'], [A.companyB])]),
+    brandOnly: () => office(A.tenant, [grant(KEEP, 'all', [A.brand])]),
+    otherTenant: () => office(seedUuid(ns.b, 'tenant'), [grant(KEEP)]),
+    floor: () => ({ audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: A.siteA1, deviceId: newId(), grants: [grant(['floor.work', ...KEEP], [A.companyA])] }),
+    partner: () => ({ audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.supplier, grants: [grant(['purchasing.view'], 'all', [A.supplier])] }),
+  } satisfies Record<string, () => SessionContext>).map(([name, make]) => [name, once(make)]),
+)
 
 type Json = Record<string, any>
 type Method = 'GET' | 'POST' | 'PATCH'

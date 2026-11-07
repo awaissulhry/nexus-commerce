@@ -42,9 +42,17 @@ const guard = (root?: string) => {
 const laterMigration = (sql: string) => ({ [`${MIGRATIONS}/209912010000_zz_later/migration.sql`]: sql })
 
 describe('check-append-only', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('passes on the repository and on an untouched copy', () => {
-    expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(61 append-only model\(s\): AlertEvent, AuditLog, IdempotencyReceipt, NotificationDelivery, MessageMention, WorkOrderCostEntry, CutReconciliation, FileMarkup, FloorSyncEvent, GeneratedDocument, ProtectedView, AttentionActionLog, InspectionAmendment, IntegrationCall, StockMove, StockValuation, OperationScanMember, OperationChecklistResult, LabourEdit, HideMeasure, LinkEvidence, SdiNotification, PaymentAllocation, NumberAllocation, NumberBlockUse, RestoreDrill, ViesCheck, RateAcknowledgement, EarningsEntry, RequirementPegging, MachineCheckResult, MachineStatusEvent, StaffNoticeAck, PartnerNoticeAck, CutLog, CutLogPiece, BundleReprint, OperationScan, WorkerNoticeAck, OperationScanDefect, GarmentLabelPrint, QualityRelease, QualityReleaseReversal, LabResult, ReturnReceipt, RepairStageEvent, RiskAssessmentSignature, TrainingRecord, PpeIssue, QuoteAcceptance, SalesOrderAmendment, Ddt, DdtCancellation, TrackingEvent, PurchaseOrderRevision, PurchaseOrderReminder, SubcontractReceipt, SubcontractReceiptLine, Message, ClockEvent, AttendanceCorrection; no update or delete grant, refusing triggers in the migrations, no update or delete in 4561 source file\(s\)\)/) })
-    expect(guard(tree()).status).toBe(0)
+  // The model list is the rule; the number of source files scanned is not: every merge that adds a file moves it.
+  const OK_LINE = /ok \(62 append-only model\(s\): AlertEvent, AuditLog, IdempotencyReceipt, NotificationDelivery, MessageMention, WorkOrderCostEntry, CutReconciliation, FileMarkup, FloorSyncEvent, GeneratedDocument, ProtectedView, AttentionActionLog, InspectionAmendment, IntegrationCall, StockMove, StockValuation, OperationScanMember, OperationChecklistResult, LabourEdit, HideMeasure, LinkEvidence, SdiNotification, PaymentAllocation, NumberAllocation, NumberBlockUse, RestoreDrill, ViesCheck, RateAcknowledgement, EarningsEntry, RequirementPegging, MachineCheckResult, MachineStatusEvent, SubcontractProgressReport, StaffNoticeAck, PartnerNoticeAck, CutLog, CutLogPiece, BundleReprint, OperationScan, WorkerNoticeAck, OperationScanDefect, GarmentLabelPrint, QualityRelease, QualityReleaseReversal, LabResult, ReturnReceipt, RepairStageEvent, RiskAssessmentSignature, TrainingRecord, PpeIssue, QuoteAcceptance, SalesOrderAmendment, Ddt, DdtCancellation, TrackingEvent, PurchaseOrderRevision, PurchaseOrderReminder, SubcontractReceipt, SubcontractReceiptLine, Message, ClockEvent, AttendanceCorrection; no update or delete grant, refusing triggers in the migrations, no update or delete in \d+ source file\(s\)\)/
+  const scanned = (output: string): number => Number(/in (\d+) source file/.exec(output)?.[1])
+
+  it('passes on the repository and on an untouched copy, whatever the number of source files', () => {
+    const repository = guard()
+    expect(repository).toMatchObject({ status: 0, output: expect.stringMatching(OK_LINE) })
+    // The copy holds the factory-db files and one source file of its own: the same ok line, another count.
+    const copy = guard(tree({ 'apps/factory-api/src/modules/x/read.ts': 'await tx.auditLog.findMany({ where })\n' }))
+    expect(copy).toMatchObject({ status: 0, output: expect.stringMatching(OK_LINE) })
+    expect(scanned(copy.output)).not.toBe(scanned(repository.output))
   })
 
   it.each<[string, Record<string, string | ((text: string) => string)>, RegExp]>([

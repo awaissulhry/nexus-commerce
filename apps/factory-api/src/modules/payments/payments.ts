@@ -5,7 +5,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, isBusinessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { markMoney, asMoney } from '@nexus/factory-domain/money/marked'
-import { bankReferenceProblem, normaliseBankReference, openOnDeposit, openOnInvoice, planAllocations, voidProblems, type AllocationAsk, type AllocationTarget } from '@nexus/factory-domain/payments/payments'
+import { bankReferenceProblem, manualMethodRefusal, normaliseBankReference, openOnDeposit, openOnInvoice, PAYMENT_REFUSALS, planAllocations, voidProblems, type AllocationAsk, type AllocationTarget, type PaymentMethod } from '@nexus/factory-domain/payments/payments'
 import { PAYMENTS_RECORD, PAYMENTS_VIEW, PAYMENTS_VOID } from '@nexus/factory-domain/payments/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
@@ -156,6 +156,8 @@ export interface RecordPaymentInput {
   readonly currency?: string | undefined
   readonly receivedOn: string
   readonly externalRef: string
+  /** B-W2b-F7: BANK_TRANSFER (absent: the same) only; CARD and SEPA_DEBIT come from a payment intent, refused here in words. */
+  readonly method?: PaymentMethod | undefined
   readonly internalNote?: string | null | undefined
   readonly allocations?: readonly AllocationInput[] | undefined
   /** B-W2a-F8: the reason a payment dated inside a SOFT-locked month goes in anyway. */
@@ -169,11 +171,19 @@ export interface CheckedPayment {
   readonly currency: string
   readonly receivedOn: string
   readonly externalRef: string
+  readonly method: PaymentMethod
   readonly internalNote: string | null
 }
 
-/** The facts of a payment to record, checked (400 / 404 / 409 for a reference counted already). */
+/**
+ * The facts of a payment to record, checked (400 / 404 / 409 for a reference counted already). B-W2b-F7: the office types
+ * bank transfers only; a card or SEPA debit payment comes only from a succeeded payment intent (B-W2b-185), so typed by
+ * hand it is refused in words before anything else (400, issue `body/method/PROVIDER_ONLY`).
+ */
 export async function checkPayment(caller: CommandCaller, body: Omit<RecordPaymentInput, 'allocations'>): Promise<CheckedPayment> {
+  const method = body.method ?? 'BANK_TRANSFER'
+  const refusal = manualMethodRefusal(method)
+  if (refusal) throw new ValidationError(PAYMENT_REFUSALS[refusal], [{ path: `body/method/${refusal}`, message: PAYMENT_REFUSALS[refusal] }])
   const issues: Issue[] = []
   if (body.amount === undefined) issues.push({ path: 'body/amount', message: 'Send the amount received.' })
   else if (!Number.isSafeInteger(body.amount) || body.amount <= 0) issues.push({ path: 'body/amount', message: 'An amount above 0, in minor units (cents).' })
@@ -191,7 +201,7 @@ export async function checkPayment(caller: CommandCaller, body: Omit<RecordPayme
     const currency = body.currency ?? company.currency
     if (currency !== 'EUR') throw new ValidationError('Payments are recorded in euro (W1).', [{ path: 'body/currency', message: 'Expected EUR.' }])
     await refuseCountedReference(client, company.id, externalRef)
-    return { companyId: company.id, partyId: party.id, amount: body.amount!, currency, receivedOn: body.receivedOn, externalRef, internalNote: blankToNull(body.internalNote) }
+    return { companyId: company.id, partyId: party.id, amount: body.amount!, currency, receivedOn: body.receivedOn, externalRef, method, internalNote: blankToNull(body.internalNote) }
   })
 }
 
@@ -212,11 +222,11 @@ export async function insertPayment(tools: CommandTools, payment: CheckedPayment
     { companyId: payment.companyId, day: payment.receivedOn, refused: `the payment received on ${dayWords(payment.receivedOn)} (bank reference ${payment.externalRef}) is not recorded`, path: 'body/receivedOn', record: { type: 'Payment', id } },
   ], periodLockOverride)
   await tools.tx.payment.create({
-    data: { id, companyId: payment.companyId, partyId: payment.partyId, method: 'BANK_TRANSFER', amount: payment.amount, currency: payment.currency, receivedOn: dateValue(payment.receivedOn), externalRef: payment.externalRef, internalNote: payment.internalNote, createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
+    data: { id, companyId: payment.companyId, partyId: payment.partyId, method: payment.method, amount: payment.amount, currency: payment.currency, receivedOn: dateValue(payment.receivedOn), externalRef: payment.externalRef, internalNote: payment.internalNote, createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
     select: { id: true },
   })
-  tools.audit({ action: 'payments.record', recordType: 'Payment', recordId: id, companyId: payment.companyId, after: { partyId: payment.partyId, method: 'BANK_TRANSFER', amount: markMoney('price', payment.amount), currency: payment.currency, receivedOn: payment.receivedOn, externalRef: payment.externalRef } })
-  tools.emit({ type: 'payment.recorded', subject: id, companyId: payment.companyId, payload: { paymentId: id, partyId: payment.partyId, method: 'BANK_TRANSFER' } })
+  tools.audit({ action: 'payments.record', recordType: 'Payment', recordId: id, companyId: payment.companyId, after: { partyId: payment.partyId, method: payment.method, amount: markMoney('price', payment.amount), currency: payment.currency, receivedOn: payment.receivedOn, externalRef: payment.externalRef } })
+  tools.emit({ type: 'payment.recorded', subject: id, companyId: payment.companyId, payload: { paymentId: id, partyId: payment.partyId, method: payment.method } })
   return (await readPayment(tools.tx, id))!
 }
 
@@ -256,6 +266,8 @@ export interface ListPaymentsQuery {
   readonly companyId?: string | undefined
   readonly partyId?: string | undefined
   readonly status?: 'RECEIVED' | 'VOIDED' | undefined
+  /** B-W2b-F7: one method. */
+  readonly method?: PaymentMethod | undefined
   readonly from?: string | undefined
   readonly to?: string | undefined
   readonly cursor?: string | undefined
@@ -271,6 +283,7 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
       query.companyId ? { companyId: query.companyId } : {},
       query.partyId ? { partyId: query.partyId } : {},
       query.status ? { status: query.status } : {},
+      query.method ? { method: query.method } : {},
       query.from ? { receivedOn: { gte: dateValue(query.from) } } : {},
       query.to ? { receivedOn: { lte: dateValue(query.to) } } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},

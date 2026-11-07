@@ -9,7 +9,8 @@ import { invoiceView } from '../invoicing/contract'
 /**
  * The payments routes' contracts (B-W1-28; FIN-121, FIN-066; A2 SCR-082 "Payments", "Record a payment"): record a bank
  * transfer (and allocate it), allocate more, reverse an allocation, void; "deposit received" (record + allocate + PAID +
- * the TD02 when the rule requires one). Every amount is marked money.price.
+ * the TD02 when the rule requires one). Every amount is marked money.price. B-W2b-F7: a payment's method is a bank
+ * transfer, a card or a SEPA debit (read and filtered); only a bank transfer is typed by hand.
  */
 
 const version = z.number().int().min(1).optional()
@@ -17,6 +18,13 @@ const status = z.enum(PAYMENT_STATUSES)
 const target = z.enum(ALLOCATION_TARGETS)
 
 const allocationInput = input({ depositRequestId: id().optional(), invoiceId: id().optional(), amount: money.price(amountMinor()) })
+
+/**
+ * B-W2b-F7: the method of a payment typed by the office: BANK_TRANSFER (the default) only. A CARD or SEPA_DEBIT payment is
+ * recorded only from a succeeded payment intent (B-W2b-185): typed by hand it is refused in words (400, issue
+ * `body/method/PROVIDER_ONLY`).
+ */
+const manualMethod = z.enum(PAYMENT_METHODS)
 
 /** What a target is called: an invoice's number and type (and its order), a deposit request's order number. */
 const targetLabel = output({ number: z.string().nullable(), docType: z.string().nullable(), orderNumber: z.string().nullable() })
@@ -78,6 +86,8 @@ export const listPaymentsContract = defineContract({
     companyId: id().optional(),
     partyId: id().optional(),
     status: status.optional(),
+    /** B-W2b-F7: one method (a bank transfer, a card or a SEPA debit payment). */
+    method: z.enum(PAYMENT_METHODS).optional(),
     from: businessDate().optional(),
     to: businessDate().optional(),
     cursor: id().optional(),
@@ -119,6 +129,7 @@ export const recordPaymentContract = defineContract({
     currency: currency().optional(),
     receivedOn: businessDate(),
     externalRef: reference,
+    method: manualMethod.optional(),
     internalNote: z.string().trim().max(2000).nullish(),
     allocations: z.array(allocationInput).max(MAX_ALLOCATIONS_PER_REQUEST).optional(),
     periodLockOverride: periodLockOverride.optional(),
@@ -146,6 +157,7 @@ export const depositReceivedContract = defineContract({
     amount: money.price(amountMinor()),
     receivedOn: businessDate(),
     externalRef: reference,
+    method: manualMethod.optional(),
     internalNote: z.string().trim().max(2000).nullish(),
     /** Default true: issue the TD02 now when the rule requires one (needs invoices.issue and a fresh step-up). */
     issueDepositInvoice: z.boolean().optional(),

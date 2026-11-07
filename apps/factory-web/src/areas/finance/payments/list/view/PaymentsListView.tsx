@@ -78,7 +78,7 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
           <Link className="fw-fin-link" href={href(data)}>
             {day(data.receivedOn)}
           </Link>
-          <span className="fw-fin-cell-sub">{t('payments.method.BANK_TRANSFER')}</span>
+          <span className="fw-fin-cell-sub">{t(`payments.method.${data.method}`)}</span>
         </span>
       ) : null
     const CustomerCell = ({ data }: ICellRendererParams<PaymentRow>) => (data ? <span className="fw-fin-ellipsis">{data.partyName}</span> : null)
