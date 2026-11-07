@@ -37,7 +37,7 @@ export type Check = z.infer<typeof check>
 const exportRow = z.object({
   id: z.string(),
   companyId: z.string(),
-  company: z.object({ code: z.string(), legalName: z.string() }),
+  company: z.object({ code: z.string(), legalName: z.string(), payrollCode: z.string().nullable() }),
   month: z.string(),
   number: z.string().nullable(),
   revision: z.number(),
@@ -58,7 +58,7 @@ export type ExportRow = z.infer<typeof exportRow>
 
 const monthSchema = z.object({
   companyId: z.string(),
-  company: z.object({ code: z.string(), legalName: z.string() }),
+  company: z.object({ code: z.string(), legalName: z.string(), payrollCode: z.string().nullable() }),
   month: z.string(),
   sites: z.array(z.object({ siteId: z.string(), code: z.string(), name: z.string(), gateOpen: z.boolean() })),
   state: z.enum(MONTH_STATES),
@@ -150,18 +150,18 @@ const definition = z.object({
   dateFormat: z.string().optional(),
   encoding: z.string().optional(),
   headerRow: z.boolean().optional(),
-  companyCode: z.string().optional(),
-  confirmation: z.object({ on: z.string(), by: z.string() }).optional(),
 })
 export type LayoutDefinition = z.infer<typeof definition>
-const layoutRow = z.object({ id: z.string(), companyId: z.string(), name: z.string(), format: z.enum(PAYROLL_FORMATS), provider: z.string().nullable(), definition, status: z.enum(['ACTIVE', 'ARCHIVED']), note: z.string().nullable(), confirmed: z.boolean(), updatedAt: z.string(), version: z.number() })
+/** Who confirmed a provider layout against the consultant's sample, and when (the layout's columns, B-W2b-89). */
+const confirmation = z.object({ on: z.string(), by: z.string() })
+const layoutRow = z.object({ id: z.string(), companyId: z.string(), name: z.string(), format: z.enum(PAYROLL_FORMATS), provider: z.string().nullable(), definition, confirmation: confirmation.nullable(), status: z.enum(['ACTIVE', 'ARCHIVED']), note: z.string().nullable(), confirmed: z.boolean(), updatedAt: z.string(), version: z.number() })
 export type Layout = z.infer<typeof layoutRow>
 const layoutsSchema = z.object({ companyId: z.string(), layouts: z.array(layoutRow), starters: z.array(z.object({ key: z.enum(LAYOUT_STARTERS), name: z.string(), format: z.enum(PAYROLL_FORMATS), provider: z.string().nullable() })) })
 export type LayoutsAnswer = z.infer<typeof layoutsSchema>
 
 export const getLayouts = (api: ApiClient, companyId: string) => api.get('/people/payroll/layouts', { query: { companyId }, schema: layoutsSchema })
 export const createLayout = (api: ApiClient, body: { companyId: string; starter: LayoutStarter; name?: string }) => api.request('POST', '/people/payroll/layouts', { body, schema: layoutRow, idempotencyKey: newIdempotencyKey() })
-export type DefinitionBody = Omit<LayoutDefinition, 'confirmation'>
+export type DefinitionBody = LayoutDefinition
 export interface PatchLayout {
   version: number
   name?: string
@@ -200,6 +200,8 @@ const exportRecord = exportRow.extend({
   cancelReason: z.string().nullable(),
   note: z.string().nullable(),
   carriesPay: z.boolean(),
+  /** The company's labour consultant (People settings, B-W2b-89): Send's address by default. */
+  consultant: z.object({ partyId: z.string(), name: z.string().nullable(), email: z.string().nullable() }).nullable(),
   actions: z.object({ correct: held, cancel: held, send: held, open: held }),
 })
 export type ExportRecord = z.infer<typeof exportRecord>

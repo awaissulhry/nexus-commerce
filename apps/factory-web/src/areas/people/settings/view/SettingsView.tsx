@@ -15,6 +15,7 @@ import { KeysModal, LiveLine, NoPeopleAccess, useWords } from '../../_shared/par
 import type { Limits, RuleAction, RuleKind, RuleSource } from '../api'
 import { exampleOf, isChecked, lawHours, LIMIT_ORDER, limitHeld, limitsChanged, ROUNDING_CHOICES, roundingChanges, roundingHeld, SETTINGS_NAMESPACES, type LimitDraft, type SettingsCan } from '../model'
 import { AbsenceCard, CodeDialog, type AbsenceState, type CodesActions } from './AbsenceCard'
+import { ConsultantDialog, PayrollCard, ReviewCard, type PayrollActions, type PayrollState, type ReviewActions, type ReviewState } from './PayrollCard'
 import { GateDialogs, PrivacyCard, type PrivacyActions, type PrivacyState } from './PrivacyCard'
 import '../settings.css'
 
@@ -37,6 +38,10 @@ export interface SettingsModel {
   absence: AbsenceState
   limits: { read: Section<Limits>; drafts: Record<string, LimitDraft>; busy: boolean; problem: SettingsProblem | null; scopeName: string | null; waitingScope: boolean }
   privacy: PrivacyState
+  /** B-W2b-89: the labour consultant, the payroll code, the printer of statements. */
+  payroll: PayrollState
+  /** B-W2b-89: the standard review's two numbers. */
+  review: ReviewState
   leaving: { busy: boolean } | null
 }
 
@@ -53,6 +58,8 @@ export interface SettingsActions {
   onLimitArchive?: (kind: RuleKind) => void
   codes?: CodesActions
   privacy?: PrivacyActions
+  payroll?: PayrollActions
+  review?: ReviewActions
   onLeaveSave?: () => void
   onLeaveDiscard?: () => void
   onLeaveStay?: () => void
@@ -122,8 +129,9 @@ export function CardHead({ title, purpose, side }: { title: string; purpose: str
 
 /**
  * SCR-265 — People › People settings: rounding, tolerance and grace with its worked example; absence codes on the shared
- * list frame with the Absence code dialog; working-time limits with the law beside each; the privacy of people data with
- * the legal gates. Each section reads and fails on its own, and is absent without its right. One model, nothing fetched.
+ * list frame with the Absence code dialog; working-time limits with the law beside each; payroll and statements and the
+ * standard review limits (B-W2b-89); the privacy of people data with the legal gates. Each section reads and fails on its
+ * own, and is absent without its right. One model, nothing fetched.
  */
 export function SettingsView({ model, actions }: { model: SettingsModel; actions?: SettingsActions }) {
   return (
@@ -137,7 +145,7 @@ function Page({ model, actions }: { model: SettingsModel; actions?: SettingsActi
   const t = useSettingsWords()
   const { can } = model
   const [help, setHelp] = useState(false)
-  if (!can.privacy && !can.attendance && !can.limits) return <NoPeopleAccess permission="people.privacy.view" />
+  if (!can.privacy && !can.attendance && !can.limits && !can.payroll && !can.review) return <NoPeopleAccess permission="people.privacy.view" />
   const history = `${model.prefix}/people/settings/history`
   return (
     <div className="fw-pp">
@@ -179,10 +187,17 @@ function Page({ model, actions }: { model: SettingsModel; actions?: SettingsActi
         {can.attendance && <RoundingCard model={model} actions={actions} />}
         {can.limits && <LimitsCard model={model} actions={actions} />}
       </div>
+      {(can.payroll || can.review) && (
+        <div className="fw-ps-grid">
+          {can.payroll && <PayrollCard model={model} {...(actions?.payroll ? { actions: actions.payroll } : {})} />}
+          {can.review && <ReviewCard model={model} {...(actions?.review ? { actions: actions.review } : {})} />}
+        </div>
+      )}
       {can.attendance && <AbsenceCard model={model} {...(actions?.codes ? { actions: actions.codes } : {})} onRetry={() => actions?.onRetry?.('absence')} />}
       {can.privacy && <PrivacyCard model={model} {...(actions?.privacy ? { actions: actions.privacy } : {})} onRetry={() => actions?.onRetry?.('privacy')} />}
       <CodeDialog model={model} {...(actions?.codes ? { actions: actions.codes } : {})} />
       <GateDialogs model={model} {...(actions?.privacy ? { actions: actions.privacy } : {})} />
+      <ConsultantDialog model={model} {...(actions?.payroll ? { actions: actions.payroll } : {})} />
       {help && <KeysModal own={[{ keys: ['⌘', 'S'], does: t('keys.save') }]} onClose={() => setHelp(false)} />}
       {model.leaving && (
         <Modal

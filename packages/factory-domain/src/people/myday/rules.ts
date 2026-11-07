@@ -93,10 +93,26 @@ export function monthPays(windows: readonly PayWindow[], month: string): boolean
 // ---- the office printer ---------------------------------------------------------------------------------------------
 
 /**
- * The printer a statement goes to "in your name" (design floor.myday): the site's ONE active A4 printer. With several the
- * tablet cannot know which one stands in the office, and one person's pay must not come out at the dock: held, in words,
- * until a setting names it.
+ * Without a printer named in People settings: the site's ONE active A4 printer. With several the tablet cannot know which one
+ * stands in the office, and one person's pay must not come out at the dock: held, in words, until the office names one.
  */
 export function officePrinterOf<Printer>(printers: readonly Printer[]): Printer | null {
   return printers.length === 1 ? printers[0]! : null
+}
+
+/** A printer as the statement's choice reads it. */
+export interface StatementPrinterFacts {
+  readonly kind: string
+  readonly status: string
+}
+
+/**
+ * The printer a statement goes to "in your name" (design floor.myday; B-W2b-89 PeopleSettings.statementPrinterId): the one the
+ * office named for the company's statements, wherever it stands, while it is an ACTIVE A4 printer. Named and archived (or
+ * gone): held, never another printer in its place, because the office chose where pay comes out. Named nothing: the site's
+ * only active A4 printer (`officePrinterOf`).
+ */
+export function statementPrinterOf<Printer extends StatementPrinterFacts>(named: { readonly id: string | null; readonly printer: Printer | null }, sitePrinters: readonly Printer[]): Printer | null {
+  if (named.id === null) return officePrinterOf(sitePrinters)
+  return named.printer && named.printer.kind === 'A4_PDF' && named.printer.status === 'ACTIVE' ? named.printer : null
 }

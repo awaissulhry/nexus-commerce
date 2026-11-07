@@ -109,12 +109,9 @@ export function payrollChecks(facts: CheckFacts): PayrollCheck[] {
 
 export const blockingLeft = (checks: readonly PayrollCheck[]): PayrollCheck[] => checks.filter((check) => check.blocking && !check.passed)
 
-/** The code of the record kept inside PayrollExport.checks of what the export carried (see `storedChecks`). */
-export const CARRIED_CODE = 'CARRIED'
-
-/** Stored on the export: the checks as they stood, and which corrections of closed days it carried (no column for them: a schema need). */
-export function storedChecks(checks: readonly PayrollCheck[], carried: readonly string[]): unknown[] {
-  return [...checks.map(({ code, blocking, passed, count, words }) => ({ code, blocking, passed, count, words })), { code: CARRIED_CODE, blocking: false, passed: true, count: carried.length, corrections: [...carried] }]
+/** Stored on the export: the checks as they stood (what it carried is PayrollExport.correctionsCarried, B-W2b-89). */
+export function storedChecks(checks: readonly PayrollCheck[]): unknown[] {
+  return checks.map(({ code, blocking, passed, count, words }) => ({ code, blocking, passed, count, words }))
 }
 
 export interface StoredCheck {
@@ -127,18 +124,11 @@ export interface StoredCheck {
 
 const isCheck = (code: unknown): code is PayrollCheckCode => (PAYROLL_CHECKS as readonly unknown[]).includes(code)
 
-/** The checks as stored (the record kept beside them left out, and a code this version does not know). */
+/** The checks as stored (a code this version does not know left out). */
 export function parseChecks(stored: unknown): StoredCheck[] {
   if (!Array.isArray(stored)) return []
   return stored.flatMap((entry): StoredCheck[] => {
     const row = entry as { code?: unknown; blocking?: unknown; passed?: unknown; count?: unknown; words?: unknown } | null
     return row && isCheck(row.code) ? [{ code: row.code, blocking: row.blocking === true, passed: row.passed === true, count: typeof row.count === 'number' ? row.count : 0, words: typeof row.words === 'string' ? row.words : '' }] : []
   })
-}
-
-/** The corrections of closed days an export carried. */
-export function carriedCorrections(stored: unknown): string[] {
-  if (!Array.isArray(stored)) return []
-  const row = stored.find((entry) => (entry as { code?: unknown } | null)?.code === CARRIED_CODE) as { corrections?: unknown } | undefined
-  return Array.isArray(row?.corrections) ? row.corrections.filter((id): id is string => typeof id === 'string') : []
 }
