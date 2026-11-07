@@ -27,6 +27,8 @@ import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 // B-W2b-24: the controlled override of a migrated document's number (PLT-125).
 import { NUMBERING_OVERRIDE_DEFINITIONS, NUMBERING_OVERRIDE_PERMISSIONS } from '../../numbering/permissions'
 import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
+// B-W2b-162: partner organisations (partners.*, the office's) and the portal's own (portal.*, partner roles only).
+import { PARTNERS_DEFINITIONS, PARTNERS_PERMISSIONS, PORTAL_DEFINITIONS, PORTAL_PERMISSIONS } from '../partners/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -661,6 +663,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_RECORDS_DEFINITIONS,
   // B-W2b-161: company branding.
   BRANDING_DEFINITIONS,
+  // B-W2b-162: partner organisations (the office's) and the portal's own (partner roles only).
+  PARTNERS_DEFINITIONS,
+  PORTAL_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -855,6 +860,9 @@ for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of SAFETY_RECORDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-161: company branding.
 for (const name of BRANDING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-162: partner organisations and the portal's own (each portal one flagged partner: never in an office or floor role).
+for (const name of PARTNERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

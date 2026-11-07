@@ -94,6 +94,8 @@ export async function createAssignment(
   const problems = at(path, scopeProblems(scope))
   const role = await tx.role.findUnique({ where: { id: input.roleId }, select: { key: true, system: true, audience: true } })
   if (!role) problems.push({ path: `${path}roleId`, message: 'No role of the tenant has this id.' })
+  // B-W2b-162: a partner role goes to a partner's people from its Portal access (platform/auth/partners), never here.
+  else if (role.audience === 'PARTNER') problems.push({ path: `${path}roleId`, message: "A portal role is given to a customer's or supplier's people in its Portal access, not to office people." })
   else if (role.audience !== 'OFFICE') problems.push({ path: `${path}roleId`, message: 'A floor role is given to floor workers (Floor → Workers), not to people.' })
   else if (role.system && !templateOf(role.key)) problems.push({ path: `${path}roleId`, message: 'This system role was retired; it gives nothing.' })
   if (!scope.allCompanies && scope.companyIds.length > 0) {
