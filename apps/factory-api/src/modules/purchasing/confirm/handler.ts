@@ -1,6 +1,5 @@
 import { purchaseOrderDocumentNumber } from '@nexus/factory-domain/purchasing/document'
-import { answerSummary, countsOf, lineAnswerText } from '@nexus/factory-domain/purchasing/confirm/answer'
-import { proposedLineOf } from '@nexus/factory-domain/purchasing/confirm/proposal'
+import { answerSummary } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { buyerNote, type BuyerNoteFacts } from '@nexus/factory-domain/purchasing/confirm/notes'
 import { events as purchasingEvents } from '@nexus/factory-domain/purchasing/events'
 import { cleanBody } from '@nexus/factory-domain/threads/rules'
@@ -8,7 +7,8 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { ensureThread, mentionProblems, writeMessage } from '../../../platform/threads/threads'
 import { readLines, readOrder, type Reader } from '../store'
-import { PROPOSAL_ORDER_COLUMNS, proposalLinesOf } from './decide'
+import { PROPOSAL_ORDER_COLUMNS } from './decide'
+import { PORTAL_ANSWER_COMMANDS, proposalWordsOf } from '../portal-orders/words'
 
 /**
  * The worker's handler that tells the buyer (B-W1-31; design plan-buy-pay "the answer lands on the PO at once"): a link
@@ -29,7 +29,7 @@ export const TELL_BUYER_HANDLER = 'purchasing.tellBuyer'
 const payloadOf = (type: string) => purchasingEvents.find((event) => event.type === type)!.payload
 
 /** The note's facts from the order as it is kept, or null when there is nothing to tell. */
-async function noteFacts(db: Reader, type: string, orderId: string, linkId: string | null): Promise<BuyerNoteFacts | null> {
+async function noteFacts(db: Reader, type: string, orderId: string, linkId: string | null, via: 'LINK' | 'PORTAL' = 'LINK'): Promise<BuyerNoteFacts | null> {
   const order = await readOrder(db, orderId)
   if (!order) return null
   const documentNumber = purchaseOrderDocumentNumber(order.number, order.revision)
@@ -37,29 +37,28 @@ async function noteFacts(db: Reader, type: string, orderId: string, linkId: stri
     if (!order.confirmedAt) return null
     // B-W2a-52: the open lines (a cancelled one was not answered).
     const lines = (await readLines(db, order.id)).filter((line) => line.cancelledAt === null && line.closedShortAt === null).length
-    return { documentNumber, outcome: 'CONFIRMED', byName: order.confirmedByName, supplierRef: order.supplierRef, note: order.confirmNote, summary: answerSummary({ lines, asAsked: lines, laterDate: 0, earlierDate: 0, otherQuantity: 0, split: 0, cannotDeliver: 0 }) }
+    return { documentNumber, outcome: 'CONFIRMED', byName: order.confirmedByName, supplierRef: order.supplierRef, note: order.confirmNote, summary: answerSummary({ lines, asAsked: lines, laterDate: 0, earlierDate: 0, otherQuantity: 0, split: 0, cannotDeliver: 0 }), via }
   }
   if (type === 'purchase_order.changes_proposed') {
     const proposal = await db.purchaseOrder.findUnique({ where: { id: orderId }, select: PROPOSAL_ORDER_COLUMNS })
     if (!proposal?.proposedAt) return null
-    const lines = (await proposalLinesOf(db, orderId)).flatMap((line) => {
-      const proposed = proposedLineOf(line)
-      return proposed ? [proposed] : []
-    })
+    // B-W2b-174: the lines in words with a substitute or a change in words (a link's proposal reads as before).
+    const words = await proposalWordsOf(db, orderId)
     return {
       documentNumber,
       outcome: 'PROPOSED',
       byName: proposal.proposedByName,
       supplierRef: proposal.proposalSupplierRef,
       note: proposal.proposalNote,
-      summary: answerSummary(countsOf(lines)),
-      lines: lines.filter((line) => line.kind !== 'AS_ASKED').map(lineAnswerText),
+      summary: words.summary,
+      lines: words.lines,
+      via,
     }
   }
   if (type === 'purchase_order.declined') {
     if (!order.declinedAt) return null
     const evidence = linkId ? await db.linkEvidence.findFirst({ where: { linkId, action: 'DECLINED' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { typedName: true } }) : null
-    return { documentNumber, outcome: 'DECLINED', byName: evidence?.typedName ?? null, supplierRef: null, note: null, summary: null, declineReason: order.declineReason }
+    return { documentNumber, outcome: 'DECLINED', byName: evidence?.typedName ?? null, supplierRef: null, note: null, summary: null, declineReason: order.declineReason, via }
   }
   return null
 }
@@ -74,10 +73,12 @@ export async function writeBuyerNote(tools: CommandTools, orderId: string, text:
 }
 
 /** The note for one event (also called by tests with the system caller). */
-export async function tellBuyer(caller: CommandCaller, event: { readonly eventId: string; readonly type: string; readonly payload: unknown }): Promise<void> {
+export async function tellBuyer(caller: CommandCaller, event: { readonly eventId: string; readonly type: string; readonly payload: unknown; readonly source?: string }): Promise<void> {
   const payload = payloadOf(event.type).parse(event.payload) as { purchaseOrderId: string; channel?: string; linkId: string | null; proposalAccepted?: boolean }
   if (event.type === 'purchase_order.confirmed' && (payload.channel !== 'LINK' || payload.proposalAccepted)) return
-  const facts = await caller.withClient((client) => noteFacts(client, event.type, payload.purchaseOrderId, payload.linkId ?? null))
+  // B-W2b-174: an answer given in the supplier's portal (its command emitted the event) says so.
+  const via = event.source !== undefined && PORTAL_ANSWER_COMMANDS.includes(event.source) ? 'PORTAL' : 'LINK'
+  const facts = await caller.withClient((client) => noteFacts(client, event.type, payload.purchaseOrderId, payload.linkId ?? null, via))
   if (!facts) return
   await command(caller, { name: 'purchasing.tellBuyer', idempotencyKey: `tell-buyer-${event.eventId}`, input: { eventId: event.eventId, purchaseOrderId: payload.purchaseOrderId } }, (tools) => writeBuyerNote(tools, payload.purchaseOrderId, buyerNote(facts)))
 }

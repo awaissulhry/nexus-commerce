@@ -20,6 +20,10 @@ import { KIT_COLUMNS, officeOrder, readLocationRow, readOrder, sizesOf, type Ord
 import type { OrderDetailView } from './views'
 import { recordBundlesSentInCommand } from './receive-back'
 
+// B-W2b-176: the workshop's requests on its job, and its kit check (../portal-jobs).
+import { assertNotReceivedInCommand } from '../portal-jobs/acts'
+import { openJobTasksInCommand, settleJobInCommand } from '../portal-jobs/tasks'
+
 /**
  * Kit out (B-W2a-25; SCM-140; design purchasing.subcontracting "Kit sent", floor.kits "Send a kit"): our material goes
  * to the workshop and stays ours (SCM-141: the workshop's stock location is one of our site's), the pieces go out, and
@@ -249,6 +253,8 @@ export async function sendKitAs(
         const issued = await issueSourceDdtInCommand(tools, company, { type: 'SubcontractOrder', id: orderId }, { ...input.ddt, lineIds: lines.map(({ row }) => row.id), otherGoods })
         ddt = { id: issued.ddtId, number: issued.number }
       }
+      // B-W2b-176 hook (../portal-jobs/tasks.ts): the workshop's requests: confirm this kit, and (once) report progress.
+      await openJobTasksInCommand(tools, order, lines.map(({ row }) => row.id))
       tools.emit({
         type: 'subcontract_order.kit_sent',
         subject: orderId,
@@ -275,6 +281,8 @@ export async function returnKitLine(caller: CommandCaller, orderId: string, line
       const line = isUuid(lineId) ? await tools.tx.subcontractKitLine.findUnique({ where: { id: lineId }, select: KIT_COLUMNS }) : null
       if (!line || line.subcontractOrderId !== orderId) throw new NotFoundError('Kit line not found on this order.')
       if (line.status !== 'SENT' || !line.moveId) throw new InvalidStateError(`Kit line ${line.seq} is ${line.status.toLowerCase()}; only a sent line comes back unsent.`)
+      // B-W2b-176 hook (../portal-jobs/acts.ts): a line the workshop confirmed it received has left.
+      await assertNotReceivedInCommand(tools, line)
       if (line.ddtId) {
         const ddt = await tools.tx.ddt.findUnique({ where: { id: line.ddtId }, select: { number: true, cancellations: { select: { id: true }, take: 1 } } })
         if (ddt && ddt.cancellations.length === 0) throw new InvalidStateError(`DDT ${ddt.number} is live for kit line ${line.seq}: the goods travelled with it. Cancel the DDT first when they never left.`)
@@ -317,6 +325,8 @@ export async function returnKitLine(caller: CommandCaller, orderId: string, line
         before: { status: 'SENT', moveId: line.moveId, ddtId: line.ddtId, orderStatus: order.status },
         after: { status: 'PLANNED', reversalMoveId: reversal!.id, orderStatus: to },
       })
+      // B-W2b-176 hook (../portal-jobs/tasks.ts): withdraw the workshop's requests that no longer apply.
+      await settleJobInCommand(tools, orderId)
       tools.emit({ type: 'subcontract_order.kit_returned', subject: orderId, companyId: order.companyId, siteId: order.siteId, payload: { subcontractOrderId: orderId, number: order.number, status: to, kitLineId: lineId, moveId: reversal!.id } })
       return { order: await detailInCommand(tools, orderId) }
     },

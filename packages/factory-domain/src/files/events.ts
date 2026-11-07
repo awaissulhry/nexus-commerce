@@ -20,4 +20,37 @@ export const events = [
     }),
     live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
   }),
+  // B-W2b-177 (COL-049): the scheduler's reminder that a document of a record stops being valid soon (30, then 7 days
+  // before): the record's owner is told (platform/files/expiry/notices.ts), the record's Files panel shows it at once.
+  defineEvent({
+    type: 'file.expiry_due',
+    context: 'files',
+    description: 'A document of a record stops being valid soon: 30 days, then 7 days before its expiry date.',
+    payload: z.strictObject({
+      fileId: z.uuid(),
+      recordType: z.string(),
+      recordId: z.uuid(),
+      expiresOn: z.iso.date(),
+      daysLeft: z.number().int().min(0),
+      window: z.union([z.literal(30), z.literal(7)]),
+      /** The partner asked for a new version (its open request), or null when the file is not a partner's. */
+      partnerTaskId: z.uuid().nullable(),
+    }),
+    live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
+  }),
+  // B-W2b-177 (COL-055): a picture or a PDF page was marked up (a picture: its marked version follows as file.available).
+  defineEvent({
+    type: 'file.marked_up',
+    context: 'files',
+    description: 'Someone drew arrows or circles on a picture or a PDF page of a record.',
+    payload: z.strictObject({
+      markupId: z.uuid(),
+      fileId: z.uuid(),
+      recordType: z.string(),
+      recordId: z.uuid(),
+      page: z.number().int().min(1).nullable(),
+      resultFileId: z.uuid().nullable(),
+    }),
+    live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
+  }),
 ] as const

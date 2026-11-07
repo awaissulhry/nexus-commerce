@@ -15,6 +15,9 @@ import type { OutsideReport } from '../../production/scans/outside'
 import { lockForOutsideReports, recordReceiptInCommand, reportReceiptInCommand } from './receive-back'
 // B-W2b-111: goods back go to incoming inspection first when a rule asks (before stock and before the workshop is paid).
 import { heldReports, openForReceiptInCommand, type OpenedForReceipt } from './inspection'
+// B-W2b-176: the workshop's send-back named by the receipt, and its requests (../portal-jobs).
+import { receiveNoticeInCommand } from '../portal-jobs/acts'
+import { settleJobInCommand } from '../portal-jobs/tasks'
 
 /**
  * Receive back (B-W2a-25; SCM-142; design purchasing.subcontracting "Received back", floor.kits "Receive back"): what
@@ -57,6 +60,8 @@ export interface ReceiveInput {
   readonly note?: string | null | undefined
   /** B-W2a-F8: the reason goods back inside a SOFT-locked month are posted anyway. */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** B-W2b-176: the workshop's send-back this receipt was written from (it becomes RECEIVED with the receipt). */
+  readonly returnNoticeId?: string | undefined
 }
 
 export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] }; outside: OutsideReport[]; inspection: OpenedForReceipt | null }
@@ -188,6 +193,9 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         note: blankToNull(input.note),
         deviceId: floor?.deviceId ?? null,
       })
+      // B-W2b-176 hook (../portal-jobs): the send-back it was written from is RECEIVED; the requests that no longer apply end.
+      await receiveNoticeInCommand(tools, order, input.returnNoticeId, receiptId)
+      await settleJobInCommand(tools, orderId)
       const totals = [...perOperation.values()].reduce((sum, back) => ({ good: sum.good + back.good, defective: sum.defective + back.defective, scrapped: sum.scrapped + back.scrapped }), { good: 0, defective: 0, scrapped: 0 })
       // B-W2b-111 hook (inspection.ts): the incoming inspection a rule asks for, opened now; then the bundles wait for it.
       const inspection = totals.good + totals.defective > 0 ? await openForReceiptInCommand(tools, order, receiptId, totals.good + totals.defective) : null

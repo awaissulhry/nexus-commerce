@@ -33,6 +33,8 @@ import { PARTNERS_DEFINITIONS, PARTNERS_PERMISSIONS, PORTAL_DEFINITIONS, PORTAL_
 import { PARTNER_TASKS_DEFINITIONS, PARTNER_TASKS_PERMISSIONS, PORTAL_HOME_DEFINITIONS, PORTAL_HOME_PERMISSIONS } from '../../portal/tasks/permissions'
 // B-W2b-175: customer orders in the portal (portal.salesOrders.view; partner roles only).
 import { PORTAL_SALES_ORDERS_DEFINITIONS, PORTAL_SALES_ORDERS_PERMISSIONS } from '../../sales/portal-orders/permissions'
+// B-W2b-174: supplier orders in the portal (portal.purchaseOrders.view; partner roles only).
+import { PORTAL_PURCHASE_ORDERS_DEFINITIONS, PORTAL_PURCHASE_ORDERS_PERMISSIONS } from '../../purchasing/portal-orders/permissions'
 // B-W2b-178: customer documents in the portal (portal.customerDocuments.*; partner roles only).
 import { PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS, PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS } from '../../sales/portal-documents/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
@@ -97,6 +99,10 @@ import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
 import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions'
 // B-W2b-168: portal search (partner roles only).
 import { PORTAL_SEARCH_DEFINITIONS, PORTAL_SEARCH_PERMISSIONS } from '../../search/partner/permissions'
+// B-W2b-185: paying in the customer portal (partner roles only: open items, statement, pay by card or SEPA).
+import { PORTAL_PAYMENTS_DEFINITIONS, PORTAL_PAYMENTS_PERMISSIONS } from '../../payments/online/permissions'
+// B-W2b-176: subcontractor jobs in the portal (portal.jobs.view; partner roles only).
+import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasing/portal-jobs/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -202,6 +208,8 @@ import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safe
 import { SAFETY_RECORDS_DEFINITIONS, SAFETY_RECORDS_PERMISSIONS } from '../../safety/records/permissions'
 // B-W2b-161: company branding (documents.branding.manage: logo, accent, sender name, portal label; step-up).
 import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permissions'
+// B-W2b-177: required documents per record type before a status move (documents.required.manage).
+import { REQUIRED_DOCUMENTS_DEFINITIONS, REQUIRED_DOCUMENTS_PERMISSIONS } from '../../files/required/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -689,11 +697,19 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PARTNER_TASKS_DEFINITIONS,
   // B-W2b-175: customer orders in the portal (partner roles only).
   PORTAL_SALES_ORDERS_DEFINITIONS,
+  // B-W2b-174: supplier orders in the portal.
+  PORTAL_PURCHASE_ORDERS_DEFINITIONS,
+  // B-W2b-177: required documents.
+  REQUIRED_DOCUMENTS_DEFINITIONS,
   // B-W2b-178: customer documents in the portal (partner roles only).
   PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS,
   MONEY_PERMISSIONS,
   // B-W2b-168: portal search (partner roles only; its area `portal` is declared above, so the area order stays).
   PORTAL_SEARCH_DEFINITIONS,
+  // B-W2b-185: paying in the customer portal (partner roles only).
+  PORTAL_PAYMENTS_DEFINITIONS,
+  // B-W2b-176: subcontractor jobs in the portal (partner roles only; area `portal`, declared above).
+  PORTAL_JOBS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -776,6 +792,8 @@ for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-168: portal search, flagged partner (never in an office or floor role).
 for (const name of PORTAL_SEARCH_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-176: subcontractor jobs in the portal, flagged partner (never in an office or floor role).
+for (const name of PORTAL_JOBS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2a-35: the plant.
 for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-33: exception rules and stored alerts.
@@ -897,6 +915,12 @@ for (const name of PORTAL_HOME_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.p
 for (const name of PARTNER_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-175: customer orders in the portal (partner roles only).
 for (const name of PORTAL_SALES_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-174: supplier orders in the portal (partner roles only).
+for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-177: required documents.
+for (const name of REQUIRED_DOCUMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-185: paying in the customer portal, flagged partner.
+for (const name of PORTAL_PAYMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-178: customer documents in the portal (partner roles only).
 for (const name of PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
