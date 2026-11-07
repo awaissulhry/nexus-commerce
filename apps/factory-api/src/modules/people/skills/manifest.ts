@@ -21,6 +21,9 @@ export const manifest = defineManifest({
   'POST /people/skills/authorisations': { audiences: ['office'], permission: 'people.authorisations.manage', scope: 'record' },
   'POST /people/skills/authorisations/:authorisationId/valid-until': { audiences: ['office'], permission: 'people.authorisations.manage', scope: 'record' },
   'POST /people/skills/authorisations/:authorisationId/revoke': { audiences: ['office'], permission: 'people.authorisations.manage', scope: 'record' },
+  // B-W2b-139: the modal's prerequisites (the courses a type of machine asks), and whether a type asks an authorisation.
+  'GET /people/skills/authorisations/prerequisites': { audiences: ['office'], permission: 'people.skills.view', scope: 'record' },
+  'PUT /people/skills/machine-classes/:machineClassId/authorisation-rule': { audiences: ['office'], permission: 'people.authorisations.manage', scope: 'record' },
   'GET /people/skills/check': { audiences: ['office'], permission: 'people.skills.view', scope: 'record' },
   'GET /people/skills/line-check': { audiences: ['office'], permission: 'people.skills.view', scope: 'record' },
   'GET /people/skills/floor/check': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },

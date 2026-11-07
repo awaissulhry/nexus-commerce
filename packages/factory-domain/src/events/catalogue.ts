@@ -95,6 +95,8 @@ import { events as safetyPpe } from '../safety-ppe/events'
 import { events as safetyChemicals } from '../safety-chemicals/events'
 // B-W2b-135: health surveillance (a plan, a visit, a judgement changed: ids and states only).
 import { events as safetyHealth } from '../safety-health/events'
+// B-W2b-139: training sessions, attendance signed on the floor, training records, the instruction register.
+import { events as safetyRecords } from '../safety-records/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -256,7 +258,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-143
   ...safetyChemicals,
   // B-W2b-135
-  ...safetyHealth] as const satisfies readonly EventDefinition[]
+  ...safetyHealth,
+  // B-W2b-139
+  ...safetyRecords] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
