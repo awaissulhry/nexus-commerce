@@ -75,7 +75,7 @@ export const ORDER_TILES: readonly { id: string; view: OrderView; count: (summar
   { id: 'deliveryLate', view: 'deliveryLate', count: (summary) => summary.late ?? null },
 ])
 
-/** The confirmation column in words: sent n days ago, confirmed by link by a name, changes proposed, declined. */
+/** The confirmation column in words: sent n days ago, confirmed by link or in the portal by a name, changes proposed, declined. */
 export function confirmationPhrase(row: Pick<OrderRow, 'status' | 'sentAt' | 'confirmedAt' | 'confirmedVia' | 'confirmedByName' | 'declinedAt'>, now: Date = new Date()): Phrase {
   switch (row.status) {
     case 'DRAFT':
@@ -93,6 +93,7 @@ export function confirmationPhrase(row: Pick<OrderRow, 'status' | 'sentAt' | 'co
     default:
       if (!row.confirmedAt) return phrase('po.confirm.none')
       if (row.confirmedVia === 'LINK') return row.confirmedByName ? phrase('po.confirm.byLinkName', { name: row.confirmedByName }) : phrase('po.confirm.byLink')
+      if (row.confirmedVia === 'PORTAL') return row.confirmedByName ? phrase('po.confirm.byPortalName', { name: row.confirmedByName }) : phrase('po.confirm.byPortal')
       return phrase('po.confirm.byOffice')
   }
 }

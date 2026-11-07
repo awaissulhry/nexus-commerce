@@ -134,4 +134,26 @@ describe('a supplier profile change (SCM-097)', () => {
     const moved: CurrentProfile = { ...PROFILE, contacts: PROFILE.contacts.map((row) => (row.id === C1 ? { ...row, version: 3 } : row)) }
     expect(staleProblems(plan.changes, moved)).toEqual(['the contact Anna Rossi changed after the supplier sent this'])
   })
+
+  it('W2b wave 23: changes the company website, checked against the website the supplier saw', () => {
+    const P = '00000000-0000-7000-8000-0000000000f1'
+    const withCompany: CurrentProfile = { ...PROFILE, company: { id: P, website: 'https://old.tannery.example' } }
+    const plan = planProfileChange({ company: { website: ' https://www.tannery.example ' }, contacts: [{ op: 'REMOVE', contactId: C2, version: 1 }] }, withCompany)
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.changes[1]).toEqual({ target: 'COMPANY', op: 'CHANGE', id: P, version: null, before: { website: 'https://old.tannery.example' }, after: { website: 'https://www.tannery.example' }, changed: ['website'] })
+    expect(touchedKeysOf(plan.changes)).toEqual([`contact:${C2}`, `company:${P}`])
+    expect(changeSummary(plan.changes)).toBe('the website and 1 contact')
+    expect(changeSentence(plan.changes[1]!)).toBe('Website https://old.tannery.example → https://www.tannery.example.')
+    expect(staleProblems(plan.changes, withCompany)).toEqual([])
+    expect(staleProblems(plan.changes, { ...withCompany, company: { id: P, website: null } })).toEqual(['the website changed after the supplier sent this'])
+    const paths = (input: Parameters<typeof planProfileChange>[0], current: CurrentProfile = withCompany) => {
+      const outcome = planProfileChange(input, current)
+      return outcome.ok ? [] : outcome.issues.map((issue) => issue.path)
+    }
+    expect(paths({ company: { website: 'www.tannery.example' } })).toEqual(['body/company/website'])
+    expect(paths({ company: { website: 'https://old.tannery.example' } })).toEqual(['body/company/website'])
+    expect(paths({ company: { website: null } })).toEqual([])
+    expect(paths({ company: { website: 'https://x.example' } }, PROFILE)).toEqual(['body/company'])
+  })
 })

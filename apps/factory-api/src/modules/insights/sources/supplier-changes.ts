@@ -17,7 +17,8 @@ import { capped, partyNames, SOURCE_LIMIT, type Source } from './common'
  *   SUPPLIER_DOCUMENT  a document it sent that arrived and is not decided (purchasing.supplierDocuments.review); accepted or
  *                      refused on the supplier's record (review.ts)
  *
- * Both read the supplier's audit rows of the last year (the schema has no table for either: the step's notes), oldest first.
+ * Both read their own tables (W2b schema wave 23: PartyChangeRequest, SupplierDocumentUpload; purchasing/portal-profile
+ * store.ts): every request still OPEN and every upload still WAITING, whatever its age, oldest first.
  */
 
 const DAY_MS = 86_400_000

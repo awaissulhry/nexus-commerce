@@ -118,6 +118,8 @@ const partyShape = {
   language: language(),
   paymentTerms: optionalText(500),
   internalNote: optionalText(4000),
+  /** W2b schema wave 23: an http or https address (./rules.ts websiteProblem). */
+  website: optionalText(200),
 }
 
 export const createPartyBody = input({
@@ -306,6 +308,7 @@ export const partyView = output({
   ...partyRow.shape,
   paymentTerms: z.string().nullable(),
   internalNote: z.string().nullable(),
+  website: z.string().nullable(),
   /** BLOCKED: why and since when (from the block's audit row). */
   blocked: output({ reason: z.string().nullable(), at: instant() }).nullable(),
   /** Active addresses first. */

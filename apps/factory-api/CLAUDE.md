@@ -363,8 +363,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   …/:id/revisions`, `GET …/:id/copy` (the price-free PDF, painted on request, never stored), `POST …/:id/confirm`
   (ALL_AS_ASKED or BY_LINE with SUBSTITUTE and CHANGE besides W1's four) and `POST …/:id/decline` (PRICE besides W1's
   reasons). Answers also need the person's `portal.approve` (403 in words; never a preview) and run in the partner scope
-  with the order's version; lines as asked are confirmed at once, changes wait for the buyer (CHANGES_PROPOSED). The DB
-  has no PORTAL channel: a portal answer names the order's newest PO_CONFIRM link (confirmedVia LINK); audit `via: PORTAL`.
+  with the order's version; lines as asked are confirmed at once, changes wait for the buyer (CHANGES_PROPOSED). Since wave
+  23 (B-W2b-F13a) a portal answer is stored as what it is: confirmedVia PORTAL + confirmedByUserId, a proposal
+  proposedByUserId with proposalLinkId cleared (a link proposal clears proposedByUserId); the buyer's accept confirms a
+  portal proposal PORTAL by its person; a change back to DRAFT clears confirmedByUserId too (the guard refuses it otherwise).
 - Only orders of the portal's company that we sent; a DRAFT of revision ≥ 2 shows the revision the supplier holds (its
   revision row), never the draft. Item, colour, company, site, sender, receipts and substitute choices (the party's
   approved sources) are read in the system scope for that order only.
@@ -426,10 +428,13 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   `SupplierDocument`, due in 14 days) — `purchasing.supplierDocuments.review`; `GET /purchasing/supplier-changes`, `POST
   …/:requestId/approve|refuse` — `purchasing.supplierChanges.decide` (applies with the parties module's inserts and version
   bumps; a row changed since stops it, 409). Today kinds SUPPLIER_DOCUMENT and SUPPLIER_CHANGE (Approvals).
-- NO TABLE (schema need): uploads and change requests are AUDIT ROWS on the supplier's record (recordType Party:
-  `supplierDocuments.upload|received|accept|refuse`, `supplierProfile.requestChange|withdrawChange|approveChange|
-  refuseChange`; `store.ts`), written with the party row locked, read in the office/system scope only. `parties.ts`
-  moveParty calls `assertRequiredDocuments` for a move to ACTIVE. PG tests: `portal-profile.pg.vitest.test.ts`.
+- Since wave 23 (B-W2b-F13a) uploads and change requests are rows of SupplierDocumentUpload / PartyChangeRequest
+  (`store.ts` the only reader): announce = INSERT WAITING (party row locked: one upload per file), complete =
+  `receivedAt`, accept/refuse = the decision columns by the row's compare-and-set; a request = INSERT OPEN (party row locked:
+  one open request per address, contact or website), withdraw / approve / refuse = `version = read + 1` (409 on 0 rows).
+  Each act still writes its audit row on the party (the actions above; the older ones are kept as history). A request may
+  change the website (COMPANY change; Party.website, also in the parties contract). `parties.ts` moveParty calls
+  `assertRequiredDocuments` for a move to ACTIVE. PG tests: `portal-profile.pg.vitest.test.ts`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

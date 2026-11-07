@@ -103,7 +103,7 @@ export const orderSchema = z.object({
   /** B-W2a-52 (SCM-087): when the supplier is asked to answer by (set at the send; the office may move it). */
   confirmBy: z.string().nullable().optional(),
   confirmedAt: z.string().nullable(),
-  confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+  confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
   confirmedByName: z.string().nullable(),
   supplierRef: z.string().nullable(),
   confirmNote: z.string().nullable(),
@@ -140,7 +140,7 @@ export const orderRowSchema = z.object({
   netAmount: z.number().optional(),
   sentAt: z.string().nullable(),
   confirmedAt: z.string().nullable(),
-  confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+  confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
   confirmedByName: z.string().nullable(),
   declinedAt: z.string().nullable(),
   /** B-W2a-52: the confirm-by time, the next open line's expected day and where the deliveries stand. */
@@ -378,11 +378,13 @@ const answerSchema = z.object({
   number: z.string(),
   status,
   answer: z.enum(['NOT_SENT', 'WAITING', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'CLOSED']),
-  confirmation: z.object({ at: z.string(), via: z.enum(['LINK', 'OFFICE']), linkId: z.string().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
+  confirmation: z.object({ at: z.string(), via: z.enum(['LINK', 'OFFICE', 'PORTAL']), linkId: z.string().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
   decline: z.object({ at: z.string(), reason: z.string().nullable() }).nullable(),
   proposal: z
     .object({
       at: z.string(),
+      /** B-W2b-F13a: through the link, or by a person of the supplier in the portal. */
+      via: z.enum(['LINK', 'PORTAL']).optional(),
       linkId: z.string().nullable(),
       byName: z.string().nullable(),
       supplierRef: z.string().nullable(),

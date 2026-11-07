@@ -14,6 +14,8 @@ import { isCountryCode, isLanguageCode } from './geo'
  *               and warned about, ./warnings.ts)
  *   roles       one or more of CUSTOMER, BRAND, SUPPLIER, SUBCONTRACTOR, CARRIER, CONSULTANT, each once
  *   country     ISO 3166-1 alpha-2; currency ISO 4217; language ISO 639-1 (its documents and mail)
+ *   website     optional; an http or https address without spaces, up to 200 characters (W2b schema wave 23, B-W2b-F13a;
+ *               the database holds the same rule: Party_website_check)
  *
  * Status (`partyMachine`): PROSPECT → ACTIVE ⇄ BLOCKED; PROSPECT and ACTIVE → ARCHIVED → ACTIVE. A blocked party is
  * unblocked before it is archived, so a block (a decision of its own, parties.block) is never lost by an archive and a
@@ -51,7 +53,18 @@ export const partyMachine = defineMachine({
 export const PARTY_CODE = /^[A-Z0-9](?:[A-Z0-9._-]{0,22}[A-Z0-9])?$/
 export const PARTY_CODE_RULE = '1 to 24 capital letters or digits, with . _ - inside'
 
-export const LIMITS = Object.freeze({ legalName: 200, tradeName: 200, paymentTerms: 500, internalNote: 4000, reason: 500 })
+export const LIMITS = Object.freeze({ legalName: 200, tradeName: 200, website: 200, paymentTerms: 500, internalNote: 4000, reason: 500 })
+
+/** A party's website: http or https, no spaces (the database's Party_website_check). */
+export const WEBSITE = /^https?:\/\/\S+$/i
+
+/** The website's rule in words, or null when it holds (null and empty are no website). */
+export function websiteProblem(value: string | null): string | null {
+  if (value === null) return null
+  if (value.length > LIMITS.website) return `At most ${LIMITS.website} characters.`
+  if (!WEBSITE.test(value)) return 'Expected a web address starting with http:// or https://, without spaces.'
+  return null
+}
 
 /** The fields of a party a person types (its company and status have their own rules). */
 export interface PartyFields {
@@ -65,9 +78,11 @@ export interface PartyFields {
   readonly language: string
   readonly paymentTerms: string | null
   readonly internalNote: string | null
+  /** W2b schema wave 23: its website (the supplier's own word through a portal change request, or the office's). */
+  readonly website: string | null
 }
 export type PartyField = keyof PartyFields
-export const PARTY_FIELDS: readonly PartyField[] = Object.freeze(['code', 'kind', 'legalName', 'tradeName', 'roles', 'country', 'currency', 'language', 'paymentTerms', 'internalNote'])
+export const PARTY_FIELDS: readonly PartyField[] = Object.freeze(['code', 'kind', 'legalName', 'tradeName', 'roles', 'country', 'currency', 'language', 'paymentTerms', 'internalNote', 'website'])
 
 /** A new party as typed: what is left out takes its default (ORGANISATION, IT, EUR, it). */
 export interface PartyInput {
@@ -81,6 +96,7 @@ export interface PartyInput {
   readonly language?: string | undefined
   readonly paymentTerms?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  readonly website?: string | null | undefined
 }
 export type PartyPatch = { readonly [Field in PartyField]?: PartyFields[Field] | undefined }
 
@@ -114,6 +130,7 @@ function normalised(fields: PartyFields): PartyFields {
     language: fields.language.trim().toLowerCase(),
     paymentTerms: cleanNote(fields.paymentTerms),
     internalNote: cleanNote(fields.internalNote),
+    website: cleanText(fields.website),
   }
 }
 
@@ -132,6 +149,8 @@ export function partyProblems(fields: PartyFields): Issue[] {
   if (!isLanguageCode(fields.language)) issues.push({ path: 'language', message: 'Expected an ISO 639-1 language code (it, en, de…).' })
   if (fields.paymentTerms !== null && fields.paymentTerms.length > LIMITS.paymentTerms) issues.push({ path: 'paymentTerms', message: `At most ${LIMITS.paymentTerms} characters.` })
   if (fields.internalNote !== null && fields.internalNote.length > LIMITS.internalNote) issues.push({ path: 'internalNote', message: `At most ${LIMITS.internalNote} characters.` })
+  const website = websiteProblem(fields.website)
+  if (website !== null) issues.push({ path: 'website', message: website })
   return issues
 }
 
@@ -149,6 +168,7 @@ export function newParty(input: PartyInput): PartyOutcome {
     language: input.language ?? 'it',
     paymentTerms: input.paymentTerms ?? null,
     internalNote: input.internalNote ?? null,
+    website: input.website ?? null,
   })
   const issues = partyProblems(party)
   return issues.length > 0 ? { ok: false, issues } : { ok: true, party }

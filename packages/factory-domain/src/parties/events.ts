@@ -23,7 +23,7 @@ export const events = [
   defineEvent({
     type: 'party.updated',
     context: 'parties',
-    description: 'A party changed: its code, names, roles, country, currency, language, payment terms or note.',
+    description: 'A party changed: its code, names, roles, country, currency, language, payment terms, note or website.',
     payload: z.strictObject({ partyId: z.uuid(), code: z.string(), fields: z.array(z.string()) }),
     live,
   }),

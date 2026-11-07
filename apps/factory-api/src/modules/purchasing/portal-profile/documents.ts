@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { dayOf } from '@nexus/factory-domain/files/expiry/rules'
@@ -54,7 +54,8 @@ import { refusedFileOf } from './task-source'
  * Reading needs portal.supplierDocuments.view (the route's); sending also the person's capability portal.upload (403 in
  * words), never an office preview. Uploads from outside wait for the virus scanner in a live environment (GATE-SPEND,
  * B-W2b-160 assertOutsideUploadsOpen). The file stays unshared — the supplier sees its upload only as "waiting" — until a
- * buyer or quality person accepts it (./review.ts). Never a price: nothing here has one.
+ * buyer or quality person accepts it (./review.ts). Never a price: nothing here has one. Each upload is a
+ * SupplierDocumentUpload row (./store.ts; W2b schema wave 23): announced WAITING, `receivedAt` when the file arrived.
  */
 
 const RECORDS_MAX = 50
@@ -100,6 +101,8 @@ function movesAhead(record: SupplierRecord): string[] {
 }
 
 const dayOrNull = (value: Date | null): BusinessDate | null => (value === null ? null : dayOf(value))
+/** A calendar day as a DATE column's value. */
+const dayValue = (day: BusinessDate): Date => new Date(`${day}T00:00:00.000Z`)
 
 /** The supplier's own record and its open records of the portal's company (system scope, filtered to the party). */
 async function supplierRecords(client: FactoryClient, session: PortalSession): Promise<SupplierRecord[]> {
@@ -490,15 +493,45 @@ export async function announceDocument(app: FastifyInstance, request: FastifyReq
   const { p, context } = asPerson(app, request, session)
   const details = checked.details
   await p.auth.command(context, { name: 'supplierDocuments.upload', idempotencyKey: keyFor(idempotencyKey, 'document'), input: { fileId: answer.file.id, ...details, taskId: target.taskId, replacesFileId: target.replacesFileId } }, async (tools) => {
+    // One upload per file (the party's row locked first: two announces of one file never both insert).
     await lockSupplier(tools.tx, session.partyId)
-    const known = await tools.tx.auditLog.findFirst({ where: { recordType: 'Party', recordId: session.partyId, action: ACTIONS.upload, after: { path: ['fileId'], equals: answer.file.id } }, select: { id: true } })
+    const known = await tools.tx.supplierDocumentUpload.findFirst({ where: { fileId: answer.file.id }, select: { id: true } })
     if (known) return { recorded: false }
+    const uploadId = newId()
+    await tools.tx.supplierDocumentUpload.create({
+      data: {
+        id: uploadId,
+        companyId: session.company.id,
+        partyId: session.partyId,
+        fileId: answer.file.id,
+        recordType: target.type,
+        recordId: target.id,
+        recordLabel: target.label,
+        category: details.category,
+        issuer: details.issuer,
+        documentNumber: details.number,
+        issuedOn: details.issuedOn === null ? null : dayValue(details.issuedOn),
+        expiresOn: details.expiresOn === null ? null : dayValue(details.expiresOn),
+        articleCodes: [...details.articles],
+        lotCodes: [...details.lots],
+        note: details.note,
+        replacesFileId: target.replacesFileId,
+        taskId: target.taskId,
+        uploadedById: session.userId,
+        uploadedByName: session.person.displayName,
+        createdAt: tools.now,
+        updatedAt: tools.now,
+        createdById: session.userId,
+      },
+      select: { id: true },
+    })
     tools.audit({
       action: ACTIONS.upload,
       recordType: 'Party',
       recordId: session.partyId,
       companyId: session.company.id,
       after: {
+        uploadId,
         fileId: answer.file.id,
         recordType: target.type,
         recordId: target.id,
@@ -518,11 +551,11 @@ export async function announceDocument(app: FastifyInstance, request: FastifyReq
   return { file: { id: answer.file.id, status: answer.file.status }, record: { type: target.type, id: target.id, label: target.label }, upload: answer.upload }
 }
 
-/** Inside the confirm's command: the request it answered closes (DONE by the person), the office learns of it. */
+/** Inside the confirm's command: the file arrived (once), the request it answered closes (DONE by the person), the office learns of it. */
 async function received(tools: CommandTools, session: PortalSession, upload: UploadRecord): Promise<boolean> {
-  await lockSupplier(tools.tx, session.partyId)
-  const done = await tools.tx.auditLog.findFirst({ where: { recordType: 'Party', recordId: session.partyId, action: ACTIONS.received, after: { path: ['fileId'], equals: upload.fileId } }, select: { id: true } })
-  if (done) return false
+  // Once, while it waits: the row's own compare-and-set (a second confirm finds it received and writes nothing).
+  const marked = await tools.tx.supplierDocumentUpload.updateMany({ where: { id: upload.id, partyId: session.partyId, status: 'WAITING', receivedAt: null }, data: { receivedAt: tools.now, version: { increment: 1 } } })
+  if (marked.count === 0) return false
   let closed: TaskRow | null = null
   if (upload.taskId) {
     const task = await tools.tx.partnerTask.findFirst({ where: { id: upload.taskId, partyId: session.partyId, status: 'OPEN' }, select: TASK_COLUMNS })
@@ -531,7 +564,7 @@ async function received(tools: CommandTools, session: PortalSession, upload: Upl
       closed = task
     }
   }
-  tools.audit({ action: ACTIONS.received, recordType: 'Party', recordId: session.partyId, companyId: session.company.id, after: { fileId: upload.fileId, taskId: closed?.id ?? null, byPartner: true, personId: session.userId } })
+  tools.audit({ action: ACTIONS.received, recordType: 'Party', recordId: session.partyId, companyId: session.company.id, after: { uploadId: upload.id, fileId: upload.fileId, taskId: closed?.id ?? null, byPartner: true, personId: session.userId } })
   tools.emit({
     type: 'supplier_document.uploaded',
     subject: upload.fileId,

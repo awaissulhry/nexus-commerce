@@ -12,7 +12,8 @@ import { PROPOSAL_ORDER_COLUMNS, proposalLinesOf } from './decide'
 /**
  * The office's "Supplier's answer" panel of a purchase order (B-W1-31; design plan-buy-pay, record › Confirmations &
  * changes; purchasing.view over the order's company, site and supplier): where the answer stands in words, the
- * confirmation (who typed which name on the link, their reference and note) or the decline with its reasons, the
+ * confirmation (who typed which name on the link, or which person of the supplier confirmed it in the portal (`via`
+ * PORTAL, B-W2b-F13a); their reference and note) or the decline with its reasons, the
  * supplier's latest proposal with the buyer's decision, per line what was asked against what the supplier proposed and
  * confirmed, the evidence rows of the order's links (the name typed, the server time,
  * the hashed client address, the browser) and the links' states. No price: this panel is about quantities and dates.
@@ -85,6 +86,8 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
     proposal: proposal.proposedAt
       ? {
           at: toUtcIso(proposal.proposedAt),
+          // A proposal names exactly one of its link and its portal person (the …_portal_followups_w2b guard).
+          via: proposal.proposalLinkId ? ('LINK' as const) : ('PORTAL' as const),
           linkId: proposal.proposalLinkId,
           byName: proposal.proposedByName,
           supplierRef: proposal.proposalSupplierRef,

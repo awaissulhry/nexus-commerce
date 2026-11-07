@@ -7,7 +7,7 @@ import { partyWarnings } from './warnings'
 
 const IT_VAT = '12345670009'
 const party = (extra: Partial<ImportedParty> = {}): ImportedParty => ({
-  fields: { code: 'C-1', kind: 'ORGANISATION', legalName: 'Cliente Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null },
+  fields: { code: 'C-1', kind: 'ORGANISATION', legalName: 'Cliente Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null, website: null },
   status: 'ACTIVE',
   foreign: false,
   identity: { country: 'IT', taxMode: 'IT_B2B', vatNumber: `IT${IT_VAT}`, fiscalCode: null, sdiRecipientCode: 'ABC1234', pec: null },
