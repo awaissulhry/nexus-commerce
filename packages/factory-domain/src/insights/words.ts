@@ -132,6 +132,10 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'NCR_DECISION.WAITING_APPROVAL': 'NCR {number} waits for the approval of its decision {code} for {quantity}.',
   'NCR_DECISION.blocks': 'It is not carried out, and the NCR is not decided, until another person approves it.',
 
+  // B-W2b-190: an order request a customer sent from the portal.
+  'PORTAL_ORDER_REQUEST.SENT': 'Order request {number} from {customer} waits for your decision: {pieces} pieces on {lines} lines.',
+  'PORTAL_ORDER_REQUEST.blocks': 'It is not an order until you make the order or a quote from it; the customer waits for the answer.',
+
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
   'why.LOT_HOLD.quality_lots_release': 'You release lots at this site.',
@@ -152,6 +156,7 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.STYLE_COMPLIANCE.product_bom_release': 'You release style revisions.',
   'why.MAIL_TO_SORT.email_triage': "You sort this company's received mail.",
   'why.NCR_DECISION.quality_ncr_approve': "You approve NCR decisions at this site, and someone else decided it.",
+  'why.PORTAL_ORDER_REQUEST.orders_manage': "You take this customer's orders.",
 })
 
 /** At most five values, then "and N more". */
@@ -312,4 +317,9 @@ export function quoteAnswerWords(facts: { readonly number: string; readonly revi
 /** B-W2b-17: an NCR decision waiting for an approval (`quantity`: "12 PCS", the decision's quantity and unit). */
 export function ncrDecisionWords(facts: { readonly number: string; readonly code: string; readonly quantity: string }): RowWords {
   return { sentence: phrase('NCR_DECISION.WAITING_APPROVAL', { number: facts.number, code: facts.code, quantity: facts.quantity }), blocks: phrase('NCR_DECISION.blocks') }
+}
+
+/** B-W2b-190: a portal order request waiting for the office. */
+export function portalOrderRequestWords(facts: { readonly number: string; readonly customer: string; readonly lines: number; readonly pieces: number }): RowWords {
+  return { sentence: phrase('PORTAL_ORDER_REQUEST.SENT', { number: facts.number, customer: facts.customer, lines: String(facts.lines), pieces: String(facts.pieces) }), blocks: phrase('PORTAL_ORDER_REQUEST.blocks') }
 }

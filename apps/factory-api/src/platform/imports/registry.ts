@@ -18,6 +18,8 @@ import { machinesImportAdapter } from '../../modules/plant/machines/import'
 import { itemParametersImportAdapter } from '../../modules/planning/settings/importer'
 // W2b (B-W2b-26): the employees, from the payroll provider's export or a CSV (People › Employees › Import).
 import { employeesImportAdapter } from './importers/employees'
+// W2b (B-W2b-190): a customer's order sheet, read by the portal's dry run (never an office import job).
+import { portalOrderLinesImportAdapter } from '../../modules/sales/portal-ordering/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -112,6 +114,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   itemParametersImportAdapter,
   // B-W2b-26
   employeesImportAdapter,
+  // B-W2b-190
+  portalOrderLinesImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

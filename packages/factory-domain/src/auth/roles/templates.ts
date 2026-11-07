@@ -5,6 +5,8 @@ import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../pe
 import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
 // B-W2b-175: customer orders in the portal.
 import { PORTAL_SALES_ORDERS_VIEW, SALES_ORDER_READER_TEMPLATES } from '../../sales/portal-orders/permissions'
+// B-W2b-190: portal ordering.
+import { PORTAL_ORDERING_ADDS } from '../../sales/portal-ordering/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1354,6 +1356,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
   // B-W2b-175: the customer roles that see the orders (status, progress when shared, shipments, tracking); not the Designer.
   Object.fromEntries(SALES_ORDER_READER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_VIEW]])),
+  // B-W2b-190: the catalogue and the delivery addresses to every customer role, order requests to the Buyer, address changes to the Admin.
+  PORTAL_ORDERING_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

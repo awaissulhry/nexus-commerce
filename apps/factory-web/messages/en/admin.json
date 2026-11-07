@@ -1977,6 +1977,10 @@
     "portal_approve": "Approve, accept or sign on the records the role shows",
     "portal_home_view": "See your Home: what waits for you, your notifications and your organisation's counts",
     "portal_salesOrders_view": "See your organisation's orders: status and dates, the promised date and why it moved, what is still to ship, shipments and tracking, production progress when shared",
+    "portal_catalogue_view": "See the styles you can buy: colours, sizes, certificate class and, for roles that show prices, your price",
+    "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
+    "portal_addresses_view": "See your organisation's delivery addresses",
+    "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }

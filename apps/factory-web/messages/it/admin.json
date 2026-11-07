@@ -1977,6 +1977,10 @@
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
     "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
     "portal_salesOrders_view": "Vedere gli ordini della propria organizzazione: stato e date, data promessa e perché è cambiata, cosa resta da spedire, spedizioni e tracciamento, avanzamento della produzione se condiviso",
+    "portal_catalogue_view": "Vedere gli articoli che potete acquistare: colori, taglie, classe di certificazione e, per i ruoli che vedono i prezzi, il vostro prezzo",
+    "portal_orderRequests_manage": "Fare richieste d'ordine: scegliere articoli, riordinare un ordine passato ai prezzi di oggi o caricare un foglio, poi inviare la richiesta",
+    "portal_addresses_view": "Vedere gli indirizzi di consegna della vostra organizzazione",
+    "portal_addresses_manage": "Aggiungere o archiviare gli indirizzi di consegna della vostra organizzazione e scegliere quello predefinito",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }
