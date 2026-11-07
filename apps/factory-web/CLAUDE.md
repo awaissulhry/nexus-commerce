@@ -304,6 +304,18 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   StepUpModal), Statutory check types (list frame `plant.settings.checks`, the type dialog; no interval offered), Incidents (read
   only, the API's law numbers), the band (site, SaveStatus, ⋯ History → `/plant/settings/history`). Each card's `c` is its own
   while the focus is in it; on the page `c` stays New symptom. `?rule=` / `?type=` open the dialogs (RECORD_PAGES).
+- `src/areas/plant/health/` — Plant › Health & safety › Health surveillance (B-W2b-148 on B-W2b-135's API; catalogue `plant-health`,
+  CSS prefix `fw-hv-`): SCR-212 `/plant/health?tile=&status=&type=&jstate=&judge=1|<visit>&planVisits=1&visit=&judgement=&plan=` — the
+  protected page reads its note FIRST (`GET /safety/health`: privacy words, live use, tiles as counts) and nothing naming a person
+  before it is on screen; the due list (`POST …/visits/list`, every read a recorded LIST: live changes wait behind "N updates · Show"),
+  the judgements ANONYMISED until Show (the chosen rows or the page's, said first: one OPEN view per row; values in the container's
+  state only), the plans per role (no person; Edit for safety.health.plans). Mark booked, Record a judgement (`j`; medical words held
+  with factory-domain `clinicalWordsIn`), Plan visits (`p`; proposals are a recorded read; by hand for HR only: the staff list is
+  safety.organisation.manage), a visit's and a judgement's window (each a recorded read), Who looked (DS DetailPopover, HR and the
+  DPO). New tabs SCR-212-visits `/plant/health/print?visits=` (the doctor's list, a recorded PRINT) and SCR-212-copy
+  `/plant/health/copy?judgement=&file=` (a COPY view, the bytes in the tab's memory; generic title). The safety officer and a
+  views-only DPO open the page through `alsoOpens` without its person sections. Names and values never in the address (ids only),
+  browser storage, a saved view (`listKey={null}`), an export or a search index. `RECORD_PAGES.HealthVisit|FitnessJudgement|HealthPlan`.
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

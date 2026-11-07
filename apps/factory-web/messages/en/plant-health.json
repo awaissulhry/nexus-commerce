@@ -1,0 +1,580 @@
+{
+  "access": {
+    "body": "Health surveillance is protected: HR and the occupational doctor see it (safety.health.view); the safety officer keeps the plans per role. Ask your administrator if you need it.",
+    "title": "No access to health surveillance"
+  },
+  "band": {
+    "export": "Export due list",
+    "exportHeld": "Not offered: health data never leaves in a file. Print the visit list for the doctor instead.",
+    "judge": "Record a judgement",
+    "label": "Health surveillance",
+    "more": "More",
+    "planVisits": "Plan visits",
+    "print": "Visit list for the doctor",
+    "printHint": "Print, no judgements: names, roles, visit type, risks. Opening it is recorded."
+  },
+  "book": {
+    "body_one": "{count} visit: the day of the visit and where it takes place.",
+    "body_other": "{count} visits: the day of the visits and where they take place.",
+    "day": "Day of the visit",
+    "place": "Place",
+    "placeHint": "The doctor’s practice or the room, at most {most} characters. Never a reason.",
+    "refused": "Not booked",
+    "saveOn_one": "Mark {count} booked for {day}",
+    "saveOn_other": "Mark {count} booked for {day}",
+    "save_one": "Mark {count} booked",
+    "save_other": "Mark {count} booked",
+    "title": "Mark booked"
+  },
+  "bulk": {
+    "book_one": "Mark {count} booked",
+    "book_other": "Mark {count} booked",
+    "print_one": "Print {count} for the doctor",
+    "print_other": "Print {count} for the doctor",
+    "show_one": "Show {count}",
+    "show_other": "Show {count}"
+  },
+  "cancelReason": {
+    "LEFT": "The person left",
+    "MISTAKE": "Entered by mistake",
+    "NOT_NEEDED": "Not needed",
+    "REPLACED": "Replaced by another visit"
+  },
+  "col": {
+    "booked": "Booked",
+    "copy": "Copy",
+    "doctor": "Doctor",
+    "due": "Due",
+    "edit": "Change",
+    "endOfEmployment": "End of employment",
+    "expiry": "Expiry",
+    "frequency": "How often",
+    "fromVisit": "From a visit",
+    "judgedOn": "Date",
+    "limits": "Task limits",
+    "needed": "Needed",
+    "outcome": "Outcome",
+    "people": "People",
+    "person": "Person",
+    "risks": "Risks",
+    "role": "Role",
+    "site": "Site",
+    "state": "State",
+    "status": "Status",
+    "type": "Visit type",
+    "who": "Who looked"
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "no": "No",
+    "reading": "Reading…",
+    "retry": "Try again",
+    "stillLoading": "Still loading…",
+    "yes": "Yes"
+  },
+  "copy": {
+    "do": "Add the copy",
+    "title": "Add the copy"
+  },
+  "copyTab": {
+    "failed": "The copy could not be read",
+    "fileName": "judgement-copy.pdf",
+    "imageAlt": "The doctor’s paper judgement",
+    "note": "Opening the doctor’s copy is recorded",
+    "recorded": "Opened at {time}: this view was recorded",
+    "title": "Judgement copy",
+    "unknown": "This copy is neither a PDF nor a picture: it cannot be shown here."
+  },
+  "due": {
+    "allTypes": "Every visit type",
+    "clear": "Clear filters",
+    "count_one": "{count} visit",
+    "count_other": "{count} visits",
+    "dueOn": "Due {date}",
+    "empty": "Nothing to book now. Plan visits proposes what the plans per role ask.",
+    "emptyTitle": "No visits due",
+    "failed": "The due list could not be read",
+    "label": "Visits to book",
+    "more": "Show more",
+    "noneMatch": "No visit matches these filters.",
+    "noneMatchTitle": "Nothing matches",
+    "note": "Visits to book (D.Lgs. 81/2008 art. 41)",
+    "recorded": "Names shown: this reading was recorded at {time}",
+    "statusLabel": "Status",
+    "title": "Due list",
+    "typeLabel": "Visit type",
+    "waiting": "Read after the note above is on screen"
+  },
+  "dueStatus": {
+    "all": "All",
+    "cancelled": "Cancelled",
+    "done": "Done",
+    "open": "Open (due or booked)"
+  },
+  "held": {
+    "book": {
+      "day": "Choose the day of the visit.",
+      "none": "Choose the open visits first.",
+      "place": "The place takes at most {most} characters.",
+      "tooMany": "At most {most} visits at once."
+    },
+    "cancel": {
+      "reason": "Choose a reason."
+    },
+    "copy": {
+      "file": "Choose the copy’s file."
+    },
+    "done": {
+      "day": "Choose the day it took place.",
+      "future": "A visit is done today at the latest."
+    },
+    "judgement": {
+      "clinical": "These words name a medical reason ({words}): write the task limit only.",
+      "day": "Choose the day of the judgement.",
+      "expiresAfter": "It expires after the judgement’s day.",
+      "future": "The judgement’s day is today at the latest.",
+      "limits": "Fit with limits says the limits for the task.",
+      "limitsLong": "The task limits take at most {most} characters.",
+      "outcome": "Choose the outcome.",
+      "person": "Choose the person.",
+      "unfitAfter": "Unfit until a day after the judgement’s.",
+      "unfitUntil": "Temporarily unfit says until which day.",
+      "visit": "Choose the visit."
+    },
+    "manage": "Visits and judgements are kept by HR and the occupational doctor.",
+    "move": {
+      "day": "Choose the new due day.",
+      "same": "That is the due day already."
+    },
+    "pickPeople": "Choosing any person is HR’s (the staff list): choose a visit of the due list.",
+    "plan": {
+      "absence": "A return visit says the days of absence: {least} to {most}.",
+      "day": "Choose the due day of each visit by hand.",
+      "frequency": "How often: {least} to {most} months.",
+      "noRight": "The plans are kept by the safety officer and the occupational doctor.",
+      "none": "Choose at least one visit.",
+      "person": "Choose the person of each visit by hand.",
+      "setOn": "Choose the day the doctor set it.",
+      "setOnFuture": "The doctor set it today at the latest.",
+      "tooMany": "At most {most} visits at once.",
+      "unchanged": "Nothing changed."
+    },
+    "reading": "Wait until the page is read.",
+    "saving": "Saving…",
+    "select": {
+      "closed": "A done or cancelled visit is not booked or printed again."
+    },
+    "show": {
+      "none": "Choose the rows to show first."
+    },
+    "void": {
+      "reason": "Choose a reason."
+    }
+  },
+  "judge": {
+    "change": "Change",
+    "chooseVisit": "Choose the visit",
+    "copy": "The doctor’s copy",
+    "copyHint": "A PDF or a picture of the paper judgement, office only; each opening is recorded.",
+    "day": "Day of the judgement",
+    "expires": "Expires on",
+    "expiresHint": "Optional: the day the doctor wrote.",
+    "from": "From",
+    "fromPerson": "A person by hand",
+    "fromVisit": "A visit of the due list",
+    "hint": "Write the task limit only, e.g. no lifting over 15 kg. Never the medical reason.",
+    "limits": "Task limits",
+    "noOpenVisit": "No open visit on the due list: a person by hand (HR).",
+    "nobody": "Nobody found.",
+    "openSaved": "Open the judgement",
+    "outcome": "Outcome",
+    "person": "Person",
+    "personHint": "A judgement already on paper, without a visit here.",
+    "privacy": "Only the judgement is kept, never a diagnosis or a clinical note",
+    "recordedNote": "Saving writes no outcome in the history: only that a judgement was recorded.",
+    "refused": "Not saved",
+    "removeCopy": "Remove the copy",
+    "save": "Save judgement",
+    "savedWithoutCopy": "The judgement is saved, but its copy was not taken",
+    "search": "Search a person by name or code",
+    "title": "Record a judgement",
+    "unfitUntil": "Unfit until",
+    "visit": "Visit",
+    "visitDone": "The visit will be marked done on {day}.",
+    "visitHint": "The visit becomes done on the judgement’s day.",
+    "visitOption": "{person} · {type} · {day}"
+  },
+  "judgement": {
+    "copies": "The doctor’s copy",
+    "copyN": "Copy {n} · {day} (opens in a new tab, recorded)",
+    "copyWaiting": "Copy {n}: still being received",
+    "day": "Day of the judgement",
+    "doctor": "Doctor",
+    "expires": "Expiry",
+    "failed": "The judgement could not be read",
+    "limits": "Task limits",
+    "noDoctor": "Not recorded",
+    "noVisit": "None (a judgement on file)",
+    "outcome": "Outcome",
+    "person": "Person",
+    "reading": "Judgement",
+    "recorded": "Opened at {time}: this view was recorded",
+    "recordedAt": "Recorded at",
+    "refused": "Not saved",
+    "state": "State",
+    "title": "Judgement of {day}",
+    "unfitUntil": "Unfit until",
+    "visit": "Visit",
+    "visitOf": "{type} visit, done {day}",
+    "voided": "Voided: {reason} — by {by}, {at}"
+  },
+  "judgementFilter": {
+    "EXPIRED": "Expired",
+    "EXPIRING": "Expiring",
+    "IN_FORCE": "In force",
+    "SUPERSEDED": "Superseded",
+    "VOIDED": "Voided",
+    "all": "All",
+    "current": "Current (in force, expiring, expired)"
+  },
+  "judgementState": {
+    "EXPIRED": "Expired",
+    "EXPIRING": "Expiring",
+    "IN_FORCE": "In force",
+    "SUPERSEDED": "Superseded",
+    "VOIDED": "Voided"
+  },
+  "judgements": {
+    "copyOnFile": "On file",
+    "count_one": "{count} judgement",
+    "count_other": "{count} judgements",
+    "empty": "Record a judgement once the doctor gives it.",
+    "emptyTitle": "No judgements recorded",
+    "failed": "The judgements could not be read",
+    "hidden": "Restricted",
+    "hide": "Hide",
+    "label": "Fitness judgements",
+    "more": "Show more",
+    "noCopy": "None",
+    "noExpiry": "No expiry",
+    "noneMatch": "No judgement in this state.",
+    "noneMatchTitle": "Nothing matches",
+    "note": "Only the outcome, never clinical data (art. 41 c.6). Anonymised until Show.",
+    "open": "Judgement of {day}",
+    "showFailed": "The judgements could not be shown",
+    "showPage_one": "Show {count} row",
+    "showPage_other": "Show {count} rows",
+    "shownNote_one": "Person and outcome of {count} judgement shown: each view recorded at {time}",
+    "shownNote_other": "Person and outcome of {count} judgements shown: each view recorded at {time}",
+    "stateLabel": "State",
+    "title": "Judgements",
+    "unfitUntil": "Unfit until {day}",
+    "validUntil": "Valid until {date}"
+  },
+  "keys": {
+    "close": "Close the dialog",
+    "judge": "Record a judgement",
+    "plan": "Plan visits",
+    "title": "Keyboard shortcuts"
+  },
+  "law": {
+    "healthPlain": "The employer has workers visited by the occupational doctor before the task, periodically, on request, after a change of task, on return after more than 60 days of health absence and where required at the end of employment.",
+    "judgementPlain": "The doctor writes the judgement: fit, fit with limits, temporarily unfit, unfit. The employer keeps the judgement, never the clinical record.",
+    "protectedPlain": "Health data is a special category: only who needs it sees it, and every access is accounted for."
+  },
+  "limited": {
+    "body": "Person-level health data — the due list, the visits and the judgements — is seen by HR and the occupational doctor only. Here: the plans per role and, for the data protection officer, who looked."
+  },
+  "move": {
+    "book": {
+      "again": "Book again",
+      "body": "The day of the visit (today or later) and where.",
+      "day": "Day of the visit",
+      "do": "Mark booked",
+      "title": "Book"
+    },
+    "cancel": {
+      "body": "A cancelled visit no longer changes; the reason comes from the list.",
+      "choose": "Choose a reason",
+      "day": "Day",
+      "do": "Cancel the visit",
+      "reason": "Reason",
+      "title": "Cancel visit"
+    },
+    "done": {
+      "body": "The visit took place; its judgement may come later from the doctor’s paper.",
+      "day": "Done on",
+      "do": "Mark done",
+      "title": "Mark done"
+    },
+    "move": {
+      "body": "A new due day; the visit stays open.",
+      "day": "New due day",
+      "do": "Move the visit",
+      "title": "Move"
+    },
+    "unbook": {
+      "body": "The booking is cleared; the visit is due again.",
+      "day": "Day",
+      "do": "Unbook the visit",
+      "title": "Unbook"
+    }
+  },
+  "notice": {
+    "booked_one": "{count} visit booked for {day}.",
+    "booked_other": "{count} visits booked for {day}.",
+    "copied": "The copy is added.",
+    "judged": "Judgement recorded.",
+    "judgedNoCopy": "Judgement recorded without its copy: open it to add the copy.",
+    "judgedVisit": "Judgement recorded; its visit is done.",
+    "moreFailed": "More rows could not be read: try again.",
+    "planSaved": "The plan of {role} is saved.",
+    "planned_one": "{count} visit planned: it is on the due list.",
+    "planned_other": "{count} visits planned: they are on the due list.",
+    "visit": {
+      "book": "The visit is booked.",
+      "cancel": "The visit is cancelled.",
+      "done": "The visit is marked done.",
+      "move": "The visit is moved.",
+      "unbook": "The booking is cleared."
+    },
+    "voided": "Judgement voided; it is kept."
+  },
+  "outcome": {
+    "FIT": "Fit",
+    "FIT_WITH_LIMITS": "Fit with limits",
+    "TEMPORARILY_UNFIT": "Temporarily unfit",
+    "UNFIT": "Unfit"
+  },
+  "outcomeHint": {
+    "FIT": "Fit for the task.",
+    "FIT_WITH_LIMITS": "Fit, with limits for the task the doctor wrote.",
+    "TEMPORARILY_UNFIT": "Not for the task until a day.",
+    "UNFIT": "Not fit for the task."
+  },
+  "planDialog": {
+    "doctor": "Occupational doctor",
+    "doctorHint": "With the doctor recorded, visits plan themselves from this plan.",
+    "doctorLater": "{name} (from a later day)",
+    "doctorsFailed": "The safety organisation could not be read: the doctor stays as it is.",
+    "endOfEmployment": "A visit at the end of employment (where the doctor asks for it)",
+    "frequency": "How often (months)",
+    "frequencyHint": "{least} to {most} months, as the doctor sets.",
+    "needed": "The role sheet says this role needs health surveillance visits.",
+    "noDoctor": "Not recorded (proposes only)",
+    "notNeeded": "The role sheet says this role needs no visits: change it on the role sheet first. The doctor can still be named.",
+    "refused": "Not saved",
+    "risks": "Risks driving it (from the role sheet): {risks}",
+    "save": "Save plan",
+    "setOn": "Set by the doctor on",
+    "setOnHint": "Today at the latest.",
+    "title": "Plan for {role}"
+  },
+  "planVisits": {
+    "absence": "Days of absence",
+    "absenceHint": "At least {least} continuous days: the length only.",
+    "add": "Add a visit by hand",
+    "all": "Choose all",
+    "byHand": "Visits by hand",
+    "byHandHint": "On request of the worker, or the return after more than 60 days away — its length only, never its reason.",
+    "doctorNotSet": "proposed: the doctor has not set this plan",
+    "doctorSet": "the doctor set this plan",
+    "due": "Due on",
+    "dueOn": "due {day}",
+    "failed": "The proposals could not be read",
+    "none": "Every visit the plans ask in the next 60 days is planned.",
+    "noneChosen": "Choose none",
+    "noneTitle": "Nothing to propose",
+    "person": "Person",
+    "pick": "Choose a person",
+    "privacy": "The people who need a visit: this reading was recorded",
+    "proposed": "What the plans ask and nobody planned yet",
+    "refused": "Not planned",
+    "remove": "Remove visit {n}",
+    "removeShort": "Remove",
+    "save_one": "Plan {count} visit",
+    "save_other": "Plan {count} visits",
+    "title": "Plan visits",
+    "type": "Visit type"
+  },
+  "plans": {
+    "edit": "Change",
+    "editOf": "Change the plan of {role}",
+    "empty": "A plan per role comes with each role sheet of the risk assessment.",
+    "emptyTitle": "No plans yet",
+    "every_one": "Every month",
+    "every_other": "Every {count} months",
+    "failed": "The plans could not be read",
+    "noDoctor": "Not set: proposes only",
+    "notNeeded": "Not needed",
+    "note": "Which roles need visits and how often, as the doctor sets. “Needed” comes from the role sheet.",
+    "readOnly": "Read only",
+    "setOn": "set on {day}",
+    "title": "Plans per role"
+  },
+  "print": {
+    "allOpen": "Every open visit (due or booked)",
+    "allSites": "All sites",
+    "chosen_one": "{count} chosen visit",
+    "chosen_other": "{count} chosen visits",
+    "empty": "No open visit to print.",
+    "failed": "The visit list could not be read",
+    "note": "Names, roles, visit types and risks; no judgements. Opening this list was recorded ({law}).",
+    "title": "Visit list for the doctor",
+    "which": "Visits"
+  },
+  "privacy": {
+    "failed": "The protected page could not be read",
+    "liveUseTitle": "Before live use",
+    "pill": "Protected · health data",
+    "title": "Protected page",
+    "whoMore": "Names and judgements: HR and the occupational doctor only",
+    "words": "Protected · HR and the occupational doctor · every view recorded"
+  },
+  "problem": {
+    "conflict": "It changed meanwhile: read it again.",
+    "contract": "This page and the server do not agree: reload the page.",
+    "field": "A field is not valid.",
+    "forbidden": "You may not do this here.",
+    "internal": "Something went wrong on our side: try again.",
+    "invalid": "Something in it is not valid.",
+    "noAnswer": "No answer: check the connection and try again.",
+    "notFound": "It is no longer there, or not in your reach.",
+    "rateLimited": "Too many tries: wait a moment.",
+    "read": "It could not be read just now: try again.",
+    "signedOut": "Your session ended: sign in again.",
+    "taskLimits": "The task limits name a medical reason: write the task limit only.",
+    "unavailable": "The server did not answer: try again."
+  },
+  "refusal": {
+    "BOOKED_IN_PAST": "A visit is booked for today or a later day.",
+    "EXIT_VISIT_NOT_DONE": "Name the person’s end-of-employment visit once it took place.",
+    "JUDGEMENT_VOIDED": "This judgement is voided already.",
+    "NOT_A_DOCTOR": "Name the occupational doctor of the person’s company (Safety organisation).",
+    "NOT_EXIT_STEP": "This step is not the end-of-employment visit.",
+    "NO_ROLE": "This person has no role sheet: say the role the visit is for.",
+    "OPEN_VISIT_EXISTS": "This person already has a visit of this type planned or booked: book or move that one.",
+    "PERSON_LEFT": "This person has left: no visit is planned for them now.",
+    "PLAN_ARCHIVED": "This plan is archived (its role sheet was archived).",
+    "PLAN_NOT_NEEDED": "The role’s plan says it needs no visits: plan a visit on request, or change the role sheet first.",
+    "ROLE_OTHER_SITE": "The role sheet is of another site than the person’s.",
+    "VISIT_CANCELLED": "A judgement comes from a visit that took place, not a cancelled one.",
+    "VISIT_CLOSED": "This visit is done or cancelled: it no longer changes.",
+    "VISIT_JUDGED": "That visit already has its judgement: void the wrong one first.",
+    "VISIT_NOT_BOOKED": "This visit is not booked.",
+    "VISIT_OTHER_PERSON": "That visit is another person’s."
+  },
+  "show": {
+    "body_one": "{count} row: one view recorded. The names and outcomes stay on this page only and go with Hide.",
+    "body_other": "{count} rows: one view recorded per row. The names and outcomes stay on this page only and go with Hide.",
+    "confirm_one": "Show {count}",
+    "confirm_other": "Show {count}",
+    "note": "Opening health data is recorded: who, when, whose record",
+    "title": "Show person and outcome"
+  },
+  "tile": {
+    "beforeTask": {
+      "hint": "Starters and role changes, planned or not yet: Plan visits proposes the rest.",
+      "label": "Before-task visits needed"
+    },
+    "dueIn30": {
+      "hint": "Due or booked within 30 days. Shows them in the due list.",
+      "label": "Due in 30 days"
+    },
+    "failed": "The counts could not be read: try again from the note above.",
+    "overdue": {
+      "hint": "Due or booked before today. Shows them in the due list.",
+      "label": "Visits overdue"
+    },
+    "returnVisits": {
+      "hint": "After more than 60 days of absence for health reasons (its length only).",
+      "label": "Return visits"
+    },
+    "title": "What is due",
+    "unfitEnding": {
+      "hint": "Judgements: Show them in the judgements below to see whose.",
+      "label": "Temporary unfit ending in 14 days"
+    }
+  },
+  "visit": {
+    "absence": "Absence",
+    "absenceDays_one": "{count} day (its length only)",
+    "absenceDays_other": "{count} days (its length only)",
+    "booked": "Booked",
+    "bookedBy": "{day} · {place} — by {by}, {at}",
+    "cancelled": "Cancelled",
+    "cancelledBy": "{reason} — by {by}, {at}",
+    "done": "Done on",
+    "due": "Due",
+    "failed": "The visit could not be read",
+    "judgement": "Judgement",
+    "judgementLater": "Recorded once the doctor gives it",
+    "noJudgement": "None recorded from this visit",
+    "noPlace": "no place given",
+    "noRole": "No role sheet",
+    "openJudgement": "Open the judgement (recorded)",
+    "person": "Person",
+    "reading": "Visit",
+    "recorded": "Opened at {time}: this view was recorded",
+    "refused": "Not saved",
+    "risks": "Risks of the role",
+    "role": "Role",
+    "status": "Status",
+    "title": "{type} visit",
+    "type": "Visit type"
+  },
+  "visitState": {
+    "BOOKED": "Booked",
+    "CANCELLED": "Cancelled",
+    "DONE": "Done",
+    "DUE_SOON": "Due soon",
+    "OVERDUE": "Overdue",
+    "PLANNED": "Planned"
+  },
+  "visitType": {
+    "CHANGE_OF_TASK": "Change of task",
+    "END_OF_EMPLOYMENT": "End of employment",
+    "ON_REQUEST": "On request",
+    "PERIODIC": "Periodic",
+    "PREVENTIVE": "Before the task",
+    "RETURN_AFTER_ABSENCE": "Return after over 60 days away"
+  },
+  "void": {
+    "body": "A voided judgement is kept, never changed; the person’s earlier judgement is in force again.",
+    "do": "Void the judgement",
+    "reason": "Reason",
+    "title": "Void"
+  },
+  "voidReason": {
+    "DUPLICATE": "Recorded twice",
+    "WRONG_DETAILS": "Wrong details",
+    "WRONG_PERSON": "Recorded for the wrong person"
+  },
+  "who": {
+    "button": "Who looked",
+    "fitCheck": "Asked fit yes or no (machine authorisation)",
+    "judgement": "Who looked at the judgement of {day}",
+    "lists": "Who looked at the due list and its print",
+    "none": "Nobody yet.",
+    "note": "Every view of health data: who, when, what. Reading this log records nothing.",
+    "someone": "Someone",
+    "title": "Who looked",
+    "visit": "Who looked at the visit of {name}",
+    "what": {
+      "COPY": "opened the copy",
+      "LIST": "listed",
+      "OPEN": "opened",
+      "PRINT": "printed"
+    }
+  },
+  "why": {
+    "JUDGEMENT_EXPIRES": "The judgement expires",
+    "NOTHING_ON_FILE": "Nothing on file",
+    "PERIODIC": "Periodic, by the plan",
+    "ROLE_CHANGED": "The role changed",
+    "STARTER": "A starter: before the task",
+    "UNFIT_ENDS": "A temporary unfitness ends"
+  }
+}
