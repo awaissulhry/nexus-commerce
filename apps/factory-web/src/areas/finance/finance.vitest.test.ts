@@ -236,6 +236,10 @@ describe('the API’s errors in this app’s words; the step-up', () => {
     expect(writeProblem(new ApiError('step_up', 403, 'forbidden', 'x')).key).toBe('problem.write.step_up')
     expect(writeProblem(new Error('x')).key).toBe('problem.write.internal')
   })
+  it('B-W2b-F7: a card or SEPA debit payment typed by hand is refused in its own words', () => {
+    expect(writeProblem(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/method/PROVIDER_ONLY' }]))).toEqual({ key: 'problem.write.providerOnly', reload: false })
+    expect(writeProblem(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/method' }])).key).toBe('problem.write.invalid')
+  })
   it('a 403 step-up waits for the code, then runs once more', async () => {
     let calls = 0
     const work = async () => {

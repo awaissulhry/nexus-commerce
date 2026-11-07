@@ -31,7 +31,8 @@ export type SdiFix = (typeof SDI_FIXES)[number]
 export const CREDIT_REASONS = ['RETURN', 'PRICE_REDUCTION', 'DEFECT', 'BILLING_ERROR', 'DEPOSIT_REFUND', 'OTHER'] as const
 export type CreditReason = (typeof CREDIT_REASONS)[number]
 export const PAYMENT_STATUSES = ['RECEIVED', 'VOIDED'] as const
-export const PAYMENT_METHODS = ['BANK_TRANSFER'] as const
+/** B-W2b-F7: a card or SEPA debit payment comes from a payment intent; the office types bank transfers only. */
+export const PAYMENT_METHODS = ['BANK_TRANSFER', 'CARD', 'SEPA_DEBIT'] as const
 export const ALLOCATION_TARGETS = ['DEPOSIT_REQUEST', 'INVOICE'] as const
 export type AllocationTarget = (typeof ALLOCATION_TARGETS)[number]
 export const DEADLINE_STATES = ['OPEN', 'DUE_SOON', 'LATE'] as const
