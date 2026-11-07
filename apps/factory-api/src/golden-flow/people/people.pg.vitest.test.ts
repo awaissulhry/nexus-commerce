@@ -10,7 +10,7 @@ import type { EventHandler } from '../../platform/outbox/dispatch'
 import { standardReasonsForNewTenants } from '../../platform/reasons/standard'
 import type { SearchIndexer } from '../../platform/search/indexer'
 import { indexNewTenants } from '../../platform/search/indexing'
-import { admin, call, floorWorker, linkBrowser, linkTokenSentTo, ok, person, QUIET, sha256, signOn, startWorld, stepped, tablet, type FloorWorker, type Person, type World } from '../testing/world'
+import { admin, call, floorWorker, linkTokenSentTo, ok, person, QUIET, sha256, signOn, startWorld, stepped, tablet, type FloorWorker, type Person, type World } from '../testing/world'
 import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../daily/testing/day'
 
 /**
@@ -32,7 +32,8 @@ import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../da
  *      C  the day after: HR approves the days, a person decides the overtime, the line's day closes
  *      D  the month: the timesheets (lead then HR), the close with its phrase, the sealed LUL calendar
  *      E  the pay period: run, review, one statement each, locked with its phrase
- *      F  the payroll file: codes, checks, preview, sealed, sent by a link to a made-up consultant (FAKE mail)
+ *      F  the payroll file: codes, checks, preview, sealed; it carries amounts, so it never goes by link (Owner 11-02, B-W2b-163):
+ *         Send is refused in words and nothing is sent; HR opens the file (recorded) and hands it over another way
  *      G  a closed day corrected
  *
  *   2. The gate really closes (H, Statuto dei Lavoratori art. 4 c.1-2; Owner answer W1). The raw JSON of every read B-W2b-F3 and
@@ -736,7 +737,7 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     await settle()
   })
 
-  it('F02 the file is sealed and numbered, holds the same figures and no name, and goes to the consultant by a link (FAKE mail); the download is counted', async () => {
+  it('F02 the file is sealed and numbered, holds the same figures and no name; it carries amounts, so Send by link is refused in words and nothing is sent or written (Owner 11-02)', async () => {
     const exported = await ok(P.hr, 'POST', '/people/payroll/exports', { companyId: companyA(), month: DAYS.month, layoutId: G.layoutId }, 201)
     expect(exported).toMatchObject({ revision: 1, status: 'EXPORTED', payPeriodId: G.periodId })
     expect(exported.number).toMatch(new RegExp(`^PAY-${DAYS.close.slice(0, 4)}-\\d{4}$`))
@@ -755,17 +756,18 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     expect(text).toContain(`${AGREED.one.code};POT_DA;2,00;`)
     expect(text).not.toContain(`${AGREED.two.code};POT_DA`)
     for (const name of ['Alba', 'Bruno', 'Carla']) expect(text).not.toContain(name)
-    const sent = await ok(P.hr, 'POST', `/people/payroll/exports/${exported.id}/send`, { email: 'studio.made-up@example.com' }, 201)
-    expect(sent).toMatchObject({ delivery: 'SENT', withdrawn: [] })
+    // B-W2b-163: pay figures never go by link (Owner, 11-02). The month pays by the piece, so its file carries amounts: the
+    // Send is refused in words and writes nothing; HR hands over the file it opened above (that opening is recorded).
+    const refused = await ok(P.hr, 'POST', `/people/payroll/exports/${exported.id}/send`, { email: 'studio.made-up@example.com' }, 409)
+    expect(pathsOf(refused.error)).toContain('refusal/PAY_FIGURES')
+    expect(refused.error.message).toContain('pay figures never go by link')
     await settle()
-    const consultant = linkBrowser(w, linkTokenSentTo(w, 'studio.made-up@example.com'))
-    const page = await consultant.send('GET', '/people/payroll/link/files')
-    expect(page).toMatchObject({ month: DAYS.month, number: exported.number, revision: 1, link: { usesLeft: 10 } })
-    const fetched = await consultant.send('POST', `/people/payroll/link/files/${data.id}/download`, {})
-    expect(fetched.usesLeft).toBe(9)
-    expect(sha256((await bytesOf(fetched.download.url)).raw)).toBe(exported.seal)
-    G.consultant = consultant
-    await settle()
+    expect(() => linkTokenSentTo(w, 'studio.made-up@example.com')).toThrow('no link mail')
+    expect(await admin(w, 'SELECT count(*)::int AS n FROM "OneOffLink" WHERE "recordId" = $1', [exported.id])).toEqual([{ n: 0 }])
+    expect(await admin(w, 'SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordId" = $1', [exported.id])).toEqual([{ n: 0 }])
+    expect(await admin(w, `SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'payroll_export.sent' AND payload->>'exportId' = $1`, [exported.id])).toEqual([{ n: 0 }])
+    expect((await ok(P.hr, 'GET', `/people/payroll/exports/${exported.id}`)).links).toEqual([])
+    expect(await admin(w, `SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'people.openPayrollFile' AND "recordId" = $1`, [exported.id])).toEqual([{ n: 1 }])
   })
 
   // ---- G: a closed day corrected -----------------------------------------------------------------------------------------------------
@@ -795,7 +797,7 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     expect(month).toMatchObject({ state: 'CORRECTION_PENDING', correction: { people: 1, values: 1 } })
   })
 
-  it('G02 v2 replaces v1: the corrected figure and nothing else moves, pay stands as locked, v1 is kept and its link stops', async () => {
+  it('G02 v2 replaces v1: the corrected figure and nothing else moves, pay stands as locked, v1 is kept; v2 carries amounts too and never goes by link', async () => {
     const preview = await ok(P.hr, 'POST', '/people/payroll/preview', { companyId: companyA(), month: DAYS.month })
     expect(preview.changes).toMatchObject({ people: 1, values: 1 })
     const v2 = await ok(P.hr, 'POST', '/people/payroll/exports', { companyId: companyA(), month: DAYS.month, correctionOfId: G.export.id }, 201)
@@ -808,7 +810,9 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     expect(text).toContain(`${AGREED.three.code};EMAKE_;7,75;${money(AGREED.three.makeUp)}`)
     expect((await ok(P.hr, 'GET', `/people/payroll/month?companyId=${companyA()}&month=${DAYS.month}&layoutId=${G.layoutId}`)).state).toBe('EXPORTED')
     expect((await ok(P.hr, 'GET', `/people/payroll/exports/${G.export.id}`)).status).toBe('EXPORTED')
-    await G.consultant.send('GET', '/people/payroll/link/files', undefined, 404)
+    expect(pathsOf((await ok(P.hr, 'POST', `/people/payroll/exports/${G.export.id}/send`, { email: 'studio.made-up@example.com' }, 409)).error)).toContain('refusal/REPLACED')
+    expect(pathsOf((await ok(P.hr, 'POST', `/people/payroll/exports/${v2.id}/send`, { email: 'studio.made-up@example.com' }, 409)).error)).toContain('refusal/PAY_FIGURES')
+    expect(await admin(w, 'SELECT count(*)::int AS n FROM "OneOffLink" WHERE "recordType" = $1 AND "recordId" = ANY($2::uuid[])', ['PayrollExport', [G.export.id, v2.id]])).toEqual([{ n: 0 }])
     await settle()
   })
 
@@ -906,9 +910,11 @@ describe('the W2b-1 golden flow: a shift on the floor and a month in People thro
     const audited = new Set((await admin<{ recordId: string }>(w, 'SELECT DISTINCT "recordId"::text AS "recordId" FROM "AuditLog" WHERE "recordId" = ANY($1::uuid[])', [ids])).map((row) => row.recordId))
     expect(ids.filter((recordId) => !audited.has(recordId))).toEqual([])
     const events = new Set((await admin<{ type: string }>(w, 'SELECT DISTINCT type FROM "OutboxEvent" WHERE "tenantId" = $1', [w.tenant.id])).map((row) => row.type))
-    for (const type of ['attendance.clock_event', 'clock.out', 'attendance.day_changed', 'overtime_entry.changed', 'timesheet.prepared', 'timesheet.changed', 'attendance.month_closed', 'attendance.lul_sealed', 'attendance.day_corrected', 'earnings.recorded', 'pay_period.changed', 'worker_statement.changed', 'payroll_export.exported', 'payroll_export.sent', 'payroll_export.downloaded', 'production.operation_timed', 'piece_pay.switched']) {
+    for (const type of ['attendance.clock_event', 'clock.out', 'attendance.day_changed', 'overtime_entry.changed', 'timesheet.prepared', 'timesheet.changed', 'attendance.month_closed', 'attendance.lul_sealed', 'attendance.day_corrected', 'earnings.recorded', 'pay_period.changed', 'worker_statement.changed', 'payroll_export.exported', 'production.operation_timed', 'piece_pay.switched']) {
       expect(events.has(type), type).toBe(true)
     }
+    // B-W2b-163: the month's files carry amounts, so none went by link (F02, G02).
+    for (const type of ['payroll_export.sent', 'payroll_export.downloaded']) expect(events.has(type), type).toBe(false)
     expect(w.retried).toEqual([])
     expect(unexpected.map((report) => `${report.context.method} ${report.context.route}: ${report.name}: ${report.message} ${report.stack.slice(0, 3).join(' | ')}`)).toEqual([])
     expect(await admin(w, `SELECT type, status::text AS status FROM "OutboxEvent" WHERE "tenantId" = $1 AND status <> 'PUBLISHED'`, [w.tenant.id])).toEqual([])

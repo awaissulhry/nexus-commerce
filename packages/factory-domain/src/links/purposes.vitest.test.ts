@@ -50,7 +50,8 @@ describe('the purposes', () => {
       expect(grains.every((grain) => grain === 'price'), purpose).toBe(true)
       expect(linkPermissions(purpose).filter((permission) => permission.startsWith('money.'))).toEqual(grains.map((grain) => `money.${grain}`))
     }
-    expect(LINK_PURPOSES.filter((purpose) => PURPOSE_RULES[purpose].grains.includes('price'))).toEqual(['QUOTE_ACCEPT', 'DOCUMENT_VIEW', 'DEPOSIT_INFO'])
+    // B-W2b-163: of W2b-3's nine, PAYMENT alone (the deposit or invoice the party pays: its own document).
+    expect(LINK_PURPOSES.filter((purpose) => PURPOSE_RULES[purpose].grains.includes('price'))).toEqual(['QUOTE_ACCEPT', 'DOCUMENT_VIEW', 'DEPOSIT_INFO', 'PAYMENT'])
   })
 
   it('declare every permission they give, as link-session permissions no role can hold', () => {
@@ -70,10 +71,12 @@ describe('the purposes', () => {
     expect(ROLE_TEMPLATES.find((template) => template.key === 'read_only')?.permissions).not.toContain(LINKS_MANAGE)
   })
 
-  it('let only DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file, a shipment, or a payroll export through its own module', () => {
-    expect(linkPermissions('DOCUMENT_VIEW')).toEqual(['files.read', 'links.open', 'money.price'])
+  it('let DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file, a shipment, or a payroll export through its own module; and W2b-3\'s APPROVAL and RECORD_INVITE their record\'s', () => {
+    expect(linkPermissions('DOCUMENT_VIEW')).toEqual(['files.read', 'links.download', 'links.open', 'money.price'])
     expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment', 'PayrollExport'])
-    for (const purpose of LINK_PURPOSES.filter((name) => name !== 'DOCUMENT_VIEW')) expect(linkPermissions(purpose), purpose).not.toContain('files.read')
+    expect(LINK_PURPOSES.filter((purpose) => linkPermissions(purpose).includes('files.read'))).toEqual(['DOCUMENT_VIEW', 'APPROVAL', 'RECORD_INVITE'])
+    // A secure file is served by platform/links from its set only: the generic file routes never see it.
+    expect(linkPermissions('SECURE_FILE')).toEqual(['links.download', 'links.open', 'links.receive'])
   })
 
   it('count the answers of the answer purposes and every open of the view purposes', () => {

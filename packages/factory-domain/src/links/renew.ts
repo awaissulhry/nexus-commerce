@@ -1,0 +1,96 @@
+import { linkTerms, PURPOSE_RULES, type LinkPurpose, type LinkState } from './purposes'
+
+/**
+ * "Ask for a new link" on every dead link (design links.frame "Ask for a new link": "A dead link is not a dead end";
+ * B-W1-49's renew made general, plan B-W2b-163). The page of any link that no longer opens sends the dead link's token to
+ * ONE public route; it answers the same words at once, whatever the token (none, garbage, another tenant's, live, dead),
+ * and the work runs after the answer, so neither the words nor the time tell anything about a link. The route is held by
+ * the abuse guard (policy links.renew: per token and per network; a challenge after suspicious traffic).
+ *
+ * The work, as the tenant's system: the token must be the link's (its hash, its party). Then
+ *   - a purpose whose module renews its own links (links/purposes `renewal: 'module'`: the module knows whether the
+ *     record still waits for its answer) goes to that module's renewer (W1: the shipment's documents, the purchase order's
+ *     confirm link); none registered: nothing happens (NO_RENEWER);
+ *   - a set of files (`renewal: 'files'`: DOCUMENT_VIEW, SECURE_FILE of a StoredFile) is renewed here, by these rules,
+ *     else nothing happens (the reason is logged by its code only, never the token, the link or the address):
+ *
+ *   NOT_A_FILE_LINK        not a set of files (another record type, or no file in the set)
+ *   WITHDRAWN              the link was revoked: the sender stopped it on purpose
+ *   STILL_LIVE             it still opens (a password hold passes by itself)
+ *   NO_ADDRESS             the link was sent to no address
+ *   ADDRESS_NOT_ON_FILE    its address is no longer an ACTIVE contact's of the party (its own contact's, when it names
+ *                          one): a new link never goes to an address typed on the page, nor to one that left
+ *   NEWER_LINK             a live link of the same set of files (same record, purpose and files) went to that address
+ *                          already, or a renewal of this link still opens (an earlier request, the office)
+ *   ASKED_RECENTLY         this link was renewed in the last ten minutes
+ *   NOTHING_TO_SHARE       none of its files is available any more
+ *   PAY_FIGURES            one of its files now holds pay figures (links/pay)
+ *
+ * The new link: the same company, party, contact, address, purpose, record and password (the one sent apart still opens
+ * it), the files of the set that are still available (in their order), the old link's span and use limit within the
+ * purpose's maximum, made by the system, naming the link it renews (OneOffLink.renewalOfId); sent by mail to the address
+ * on file only. The old link stays as it is (dead already).
+ */
+
+/** The one answer, whatever the token (links.frame). */
+export const LINK_RENEW_ANSWER = 'We passed this on. If the link was ours, the sender will write to the address it was sent to.'
+
+/** Two requests within this window make one new link. */
+export const LINK_RENEW_COALESCE_MS = 10 * 60 * 1000
+
+export const FILE_RENEW_REFUSALS = [
+  'NOT_A_FILE_LINK',
+  'WITHDRAWN',
+  'STILL_LIVE',
+  'NO_ADDRESS',
+  'ADDRESS_NOT_ON_FILE',
+  'NEWER_LINK',
+  'ASKED_RECENTLY',
+  'NOTHING_TO_SHARE',
+  'PAY_FIGURES',
+] as const
+export type FileRenewRefusal = (typeof FILE_RENEW_REFUSALS)[number]
+
+export interface FileRenewalFacts {
+  readonly purpose: string
+  readonly recordType: string
+  readonly state: LinkState
+  readonly email: string | null
+  /** The address is an ACTIVE contact's of the link's party now (its own contact's, when the link names one). */
+  readonly addressOnFile: boolean
+  /** Files in the set, and how many of them are still available. */
+  readonly files: number
+  readonly filesAvailable: number
+  /** A live link of the same set of files went to that address, or a renewal of this link still opens. */
+  readonly liveSibling: boolean
+  /** This link was renewed within LINK_RENEW_COALESCE_MS. */
+  readonly askedRecently: boolean
+  /** links/pay's words for a file of the set, or null. */
+  readonly payProblem: string | null
+}
+
+const isFilePurpose = (purpose: string): boolean => purpose in PURPOSE_RULES && PURPOSE_RULES[purpose as LinkPurpose].renewal === 'files'
+
+/** Why no new link goes out for a dead set of files, or null when one does (the order of the table above). */
+export function fileRenewalRefusal(facts: FileRenewalFacts): FileRenewRefusal | null {
+  if (!isFilePurpose(facts.purpose) || facts.recordType !== 'StoredFile' || facts.files === 0) return 'NOT_A_FILE_LINK'
+  if (facts.state === 'REVOKED') return 'WITHDRAWN'
+  if (facts.state === 'LIVE') return 'STILL_LIVE'
+  if (!facts.email) return 'NO_ADDRESS'
+  if (!facts.addressOnFile) return 'ADDRESS_NOT_ON_FILE'
+  if (facts.liveSibling) return 'NEWER_LINK'
+  if (facts.askedRecently) return 'ASKED_RECENTLY'
+  if (facts.filesAvailable === 0) return 'NOTHING_TO_SHARE'
+  if (facts.payProblem) return 'PAY_FIGURES'
+  return null
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** The renewal's terms: the old link's span (whole days, at least 1) and use limit, within the purpose's maximum. */
+export function renewalTerms(purpose: LinkPurpose, old: { readonly createdAt: Date; readonly expiresAt: Date; readonly maxUses: number }, now: Date) {
+  const rule = PURPOSE_RULES[purpose]
+  const days = Math.min(rule.expiryDays.max, Math.max(1, Math.round((old.expiresAt.getTime() - old.createdAt.getTime()) / DAY_MS)))
+  const uses = Math.min(rule.uses.max, Math.max(1, old.maxUses))
+  return linkTerms(purpose, { expiresInDays: days, maxUses: uses }, now)
+}
