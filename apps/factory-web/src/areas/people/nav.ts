@@ -13,7 +13,11 @@ export const officeArea: OfficeAreaNav = {
   order: 11,
   // B-W2b-73: Attendance opens for whoever `seesThePage` lets in (attendance/model.ts): a floor supervisor has the roll call, an
   // emergency tool, and their teams' timesheets, without people.attendance.view; the row gives them nothing more than those.
-  alsoOpens: { 'people-attendance': ['people.attendance.rollcall', 'people.timesheets.team', 'people.timesheets.lead', 'people.timesheets.hr'] },
+  alsoOpens: {
+    'people-attendance': ['people.attendance.rollcall', 'people.timesheets.team', 'people.timesheets.lead', 'people.timesheets.hr'],
+    // B-W2b-146: the safety readers (the safety officer: no people.skills.view) open Skills & training for its training lenses.
+    'people-skills': ['safety.view'],
+  },
   area: {
     id: 'people',
     label: 'shell:nav.people.area',

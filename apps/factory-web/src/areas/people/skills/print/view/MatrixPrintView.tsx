@@ -4,12 +4,13 @@ import { Fragment } from 'react'
 import { Printer } from 'lucide-react'
 import { Banner } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
-import { formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { useWords } from '../../../_shared/parts'
 import type { Matrix } from '../../api'
-import { authorisationOf, className, groupOf, levelOf, matrixColumns, SKILLS_NAMESPACES, skillName, TIME_ZONE, type SkillsAddress } from '../../model'
+import { authorisationOf, className, groupOf, levelOf, matrixColumns, SKILLS_NAMESPACES, skillName, TIME_ZONE, trainingOf, type SkillsAddress } from '../../model'
+import { courseName } from '../../training/model'
 import '../../skills.css'
 
 /** SCR-160-print — the matrix on paper: one view model, nothing fetched. */
@@ -38,8 +39,10 @@ const A3 = '@page { size: A3 landscape; margin: 10mm; }'
 
 function Sheet({ model }: { model: MatrixPrintModel }) {
   const t = useT('people-skills')
+  const training = useT('people-training')
   const people = useWords()
   const locale = useLocale()
+  const day = (value: string) => formatDate(`${value}T12:00:00Z`, { locale, timeZone: TIME_ZONE })
   const value = model.matrix.value
   const columns = value ? matrixColumns(value, model.address.show) : []
   const filters = [
@@ -80,7 +83,7 @@ function Sheet({ model }: { model: MatrixPrintModel }) {
                 <th scope="col">{t('list.person')}</th>
                 {columns.map((column) => (
                   <th key={column.id} scope="col" data-kind={column.kind}>
-                    {column.kind === 'skill' ? skillName(column.skill, locale) : className(column.entry, locale)}
+                    {column.kind === 'skill' ? skillName(column.skill, locale) : column.kind === 'course' ? courseName(column.course, locale) : className(column.entry, locale)}
                   </th>
                 ))}
               </tr>
@@ -105,6 +108,11 @@ function Sheet({ model }: { model: MatrixPrintModel }) {
                         if (column.kind === 'skill') {
                           const cell = levelOf(row, column.id)
                           return <td key={column.id}>{cell ? `${t(`level.${cell.level}`)}${cell.trainee === 'TRAINEE' || cell.trainee === 'OVERDUE' ? ` (${t('cell.traineeShort')})` : ''}` : '—'}</td>
+                        }
+                        if (column.kind === 'course') {
+                          // B-W2b-146: a safety course in words (the print has no health data and no colour alone).
+                          const due = trainingOf(row, column.id)
+                          return <td key={column.id}>{due ? `${training(`due.${due.state}`)}${due.record?.validUntil ? ` · ${day(due.record.validUntil)}` : ''}${due.required ? ' *' : ''}` : '—'}</td>
                         }
                         const cell = authorisationOf(row, column.id)
                         return <td key={column.id}>{cell ? t(`machine.${cell.state}`) : '—'}</td>

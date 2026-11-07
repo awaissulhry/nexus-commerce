@@ -18,13 +18,22 @@
   },
   "tile": {
     "TRAINEES": "Trainees not signed off",
-    "AUTHORISATIONS_ENDING": "Machine authorisations ending"
+    "AUTHORISATIONS_ENDING": "Machine authorisations ending",
+    "TRAINING_OVERDUE": "Training overdue (person × course)",
+    "TRAINING_DUE_SOON": "Training due in 60 days",
+    "AUTHORISATIONS_HELD": "Machine authorisations with expired training",
+    "LANGUAGE_NOT_CHECKED": "Language not checked"
   },
   "tileHint": {
     "TRAINEES": "Person × skill, still in training",
     "AUTHORISATIONS_ENDING": "In the next 60 days",
     "overdue_one": "{count} past its date",
-    "overdue_other": "{count} past their date"
+    "overdue_other": "{count} past their date",
+    "TRAINING_OVERDUE": "Needed or expired, past its day",
+    "TRAINING_DUE_SOON": "Valid until within 60 days",
+    "AUTHORISATIONS_HELD": "Held until the course is valid",
+    "LANGUAGE_NOT_CHECKED": "Understanding not checked (art. 37 c.13)",
+    "noSafety": "Shown to the safety readers (safety.view)"
   },
   "list": {
     "title": "Skills matrix",
@@ -61,7 +70,8 @@
   "show": {
     "ALL": "All",
     "SKILLS": "Skills",
-    "MACHINES": "Machines"
+    "MACHINES": "Machines",
+    "SAFETY": "Safety"
   },
   "sort": {
     "TEAM": "By team",

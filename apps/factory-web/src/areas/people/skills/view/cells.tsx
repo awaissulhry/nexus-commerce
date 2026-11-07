@@ -1,10 +1,10 @@
 'use client'
 
-import { Check, Clock, GraduationCap, Minus, X } from 'lucide-react'
+import { Check, Clock, GraduationCap, Lock, Minus, X } from 'lucide-react'
 import { Pill, Tag } from '@nexus/ui/primitives'
 import type { ReactNode } from 'react'
 import { formatDate } from '../../../../lib/i18n/format'
-import { useLocale } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { AuthorisationState, SkillLevel, TraineeState } from '../api'
 import { isTrainee, SKILL_LEVELS, TIME_ZONE } from '../model'
 import { useSkillWords } from './SkillDialogs'
@@ -42,11 +42,22 @@ const STATE: Readonly<Record<AuthorisationState, { tone: 'success' | 'info' | 'w
   REVOKED: { tone: 'neutral', icon: <X size={12} aria-hidden /> },
 }
 
-export function MachineMark({ state, until, ending }: { state: AuthorisationState | null; until?: string | null; ending?: boolean }) {
+/** B-W2b-146: `held` = authorised, but held by expired or missing training (design "Machines (Authorised / Held / —)"). */
+export function MachineMark({ state, until, ending, held = false }: { state: AuthorisationState | null; until?: string | null; ending?: boolean; held?: boolean }) {
   const t = useSkillWords()
+  const training = useT('people-training')
   const locale = useLocale()
   if (!state) return <span className="fw-sk-none" aria-label={t('cell.noAuthorisation')}><Minus size={12} aria-hidden /></span>
   const entry = STATE[state]
+  if (held && state === 'AUTHORISED') {
+    return (
+      <span className="fw-sk-level">
+        <Pill tone="danger">
+          <Lock size={12} aria-hidden /> {training('cell.held')}
+        </Pill>
+      </span>
+    )
+  }
   return (
     <span className="fw-sk-level">
       <Pill tone={ending ? 'warning' : entry.tone}>
