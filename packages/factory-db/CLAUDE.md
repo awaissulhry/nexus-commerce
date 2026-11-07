@@ -7,10 +7,18 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 ## What it offers
 - `@nexus/factory-db`: `openFactoryDatabase({ connectionString })` → `withScope(scope, client => …)`. One audited pg
   pool for the runtime login `factory_app` (db-kit's `AuditedPool`; the first connection is audited at open, so an
-  unsafe login stops the boot), and one Prisma client per scope behind db-kit's `TenantPg`, kept in a cache (32, least
-  recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor` (+ siteId), `partner` (+ partyId),
-  `platform` (none). Ids are UUIDs; a missing value throws before any query. Use a client only inside its callback.
-  Also the model types and enums. Never the PrismaClient class.
+  unsafe login stops the boot), and one Prisma client per scope behind db-kit's `TenantPg`, kept in a cache
+  (`clientCapacity`, default 16, least recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor`
+  (+ siteId), `partner` (+ partyId), `platform` (none). Ids are UUIDs; a missing value throws before any query. Use a
+  client only inside its callback. Also the model types and enums. Never the PrismaClient class.
+- The client cache and memory (B-W2b-F9): a Prisma 7.10 client takes about 86 MB of heap and 95 ms the moment it is
+  made (its engine decodes the generated parameterization graph into objects of its own; Prisma offers no supported
+  way to share them) and 10-25 MB of query-compiler memory at its first query. So a client is chosen by the role and
+  the settings the walls read (tenant; site; party), never by the actor: the actor is required in every office, floor
+  and partner scope but is not a database setting, and every actor of a tenant, site or party shares one client.
+  `client.vitest.test.ts` fails when a migration reads a setting no scope sets (a guard on `factory.actor_id` would
+  put the actor back into `SCOPE_DEFINITIONS` and the cache back to one client per person) and when one more client
+  costs more than 130 MB of heap.
 - `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database built from the migrations.
 - `@nexus/factory-db/test-database`: the test-database guard.
 - The walls (`src/roles.ts`, plan A1 §2.2): NOLOGIN roles `factory_runtime`, `factory_floor_runtime`,
