@@ -134,6 +134,9 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-189: a supplier's profile change and a supplier's document, each waiting for a check.
   'SUPPLIER_CHANGE.WAITING': '{supplier} sent changes of its profile for our check (addresses: {addresses}, contacts: {contacts}).',
   'SUPPLIER_CHANGE.blocks': 'Nothing changes on our side until you approve it; the supplier sees it waiting for our check.',
+  // B-W2b-F15: a change of the supplier's website (B-W2b-F13a), alone or with addresses and contacts.
+  'SUPPLIER_CHANGE.WAITING_WEBSITE': '{supplier} sent a change of its website for our check.',
+  'SUPPLIER_CHANGE.WAITING_WITH_WEBSITE': '{supplier} sent changes of its profile for our check (website, addresses: {addresses}, contacts: {contacts}).',
   'SUPPLIER_DOCUMENT.WAITING': '{supplier} sent {name} for our check.',
   'SUPPLIER_DOCUMENT.blocks': 'It is not shared back and does not count for the required documents until someone accepts it.',
 
@@ -335,8 +338,11 @@ export function quoteAnswerWords(facts: { readonly number: string; readonly revi
 }
 
 /** B-W2b-189: a supplier's change of its profile waiting for the buyer (how many addresses and contacts it changes). */
-export function supplierChangeWords(facts: { readonly supplier: string; readonly addresses: number; readonly contacts: number }): RowWords {
-  return { sentence: phrase('SUPPLIER_CHANGE.WAITING', { supplier: facts.supplier, addresses: facts.addresses, contacts: facts.contacts }), blocks: phrase('SUPPLIER_CHANGE.blocks') }
+export function supplierChangeWords(facts: { readonly supplier: string; readonly addresses: number; readonly contacts: number; readonly website?: boolean }): RowWords {
+  // B-W2b-F15: a change of the website says so (a website-only change read "addresses: 0, contacts: 0").
+  const key = facts.website !== true ? 'SUPPLIER_CHANGE.WAITING' : facts.addresses + facts.contacts === 0 ? 'SUPPLIER_CHANGE.WAITING_WEBSITE' : 'SUPPLIER_CHANGE.WAITING_WITH_WEBSITE'
+  const params: WordParams = key === 'SUPPLIER_CHANGE.WAITING_WEBSITE' ? { supplier: facts.supplier } : { supplier: facts.supplier, addresses: facts.addresses, contacts: facts.contacts }
+  return { sentence: phrase(key, params), blocks: phrase('SUPPLIER_CHANGE.blocks') }
 }
 
 /** B-W2b-189: a supplier's document waiting for our check (`name`: the file's name as sent). */

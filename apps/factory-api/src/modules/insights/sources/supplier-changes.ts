@@ -11,7 +11,7 @@ import { capped, partyNames, SOURCE_LIMIT, type Source } from './common'
  * my yes"; portal.supplier.profile "a change goes to the buyer in Home › Approvals and applies only on their yes";
  * portal.supplier.documents "a buyer or quality person accepts it"):
  *
- *   SUPPLIER_CHANGE    a change of its addresses and contacts, still OPEN (purchasing.supplierChanges.decide over the
+ *   SUPPLIER_CHANGE    a change of its addresses, contacts and website, still OPEN (purchasing.supplierChanges.decide over the
  *                      request's company and the supplier); decided on the supplier's record (modules/purchasing/portal-profile
  *                      decide.ts)
  *   SUPPLIER_DOCUMENT  a document it sent that arrived and is not decided (purchasing.supplierDocuments.review); accepted or
@@ -37,7 +37,13 @@ export const supplierChange: Source = async ({ caller, viewer }) =>
       severity: 'MEDIUM',
       record: { type: 'Party', id: row.partyId, label: codes.get(row.partyId) ?? '' },
       scope: { companyId: row.companyId, siteId: null, partyId: row.partyId },
-      ...supplierChangeWords({ supplier: names.get(row.partyId) ?? 'A supplier', addresses: row.changes.filter((change) => change.target === 'ADDRESS').length, contacts: row.changes.filter((change) => change.target === 'CONTACT').length }),
+      ...supplierChangeWords({
+        supplier: names.get(row.partyId) ?? 'A supplier',
+        addresses: row.changes.filter((change) => change.target === 'ADDRESS').length,
+        contacts: row.changes.filter((change) => change.target === 'CONTACT').length,
+        // B-W2b-F15: a change of the website (B-W2b-F13a's COMPANY target) is named, not read as "addresses: 0, contacts: 0".
+        website: row.changes.some((change) => change.target === 'COMPANY'),
+      }),
       due: null,
       since: row.at,
       // One row per request (a supplier may wait for two).
