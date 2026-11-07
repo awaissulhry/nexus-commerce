@@ -146,6 +146,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   RiskAssessment: '/plant/risk/[id]',
   RiskMeasure: '/plant/risk?measure=[id]',
   RoleSheet: '/plant/risk?sheet=[id]',
+  // B-W2b-147 Plant › PPE for workers (SCR-211): a PPE issue (any line id names its receipt) opens its receipt tab, an item its dialog.
+  PpeIssue: '/plant/ppe/receipt?receipt=[id]',
+  PpeItem: '/plant/ppe?view=catalogue&item=[id]',
 })
 
 /**

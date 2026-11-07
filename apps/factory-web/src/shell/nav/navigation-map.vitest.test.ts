@@ -178,6 +178,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
       '/plant/incidents': 'safety.incidents.view', // GET /safety/incidents (B-W2b-149)
       '/plant/risk': 'safety.view', // GET /safety/risk/assessments (B-W2b-144)
+      '/plant/ppe': 'safety.view', // GET /safety/ppe/gaps (B-W2b-147)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.

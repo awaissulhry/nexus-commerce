@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, ShieldAlert, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, ShieldAlert, Shirt, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -41,6 +41,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'plant-risk', label: 'shell:nav.plant.risk', href: '/plant/risk', icon: FileCheck2, permission: 'safety.view' },
           // B-W2b-149: Incidents (SCR-210), injuries, near misses and hazards with the INAIL deadline (GET /safety/incidents, safety.incidents.view).
           { id: 'plant-incidents', label: 'shell:nav.plant.incidents', href: '/plant/incidents', icon: ShieldAlert, permission: 'safety.incidents.view' },
+          // B-W2b-147: PPE for workers — who lacks what, issues and receipts, kits per role, the catalogue (GET /safety/ppe/gaps, safety.view).
+          { id: 'plant-ppe', label: 'shell:nav.plant.ppe', href: '/plant/ppe', icon: Shirt, permission: 'safety.view' },
           // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
           { id: 'plant-chemicals', label: 'shell:nav.plant.chemicals', href: '/plant/chemicals', icon: FlaskConical, permission: 'safety.view' },
           { id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' },
