@@ -1,0 +1,580 @@
+{
+  "access": {
+    "body": "La sorveglianza sanitaria è protetta: la vedono l’HR e il medico competente (safety.health.view); il responsabile della sicurezza tiene i piani per mansione. Chiedi al tuo amministratore se ti serve.",
+    "title": "Nessun accesso alla sorveglianza sanitaria"
+  },
+  "band": {
+    "export": "Esporta scadenzario",
+    "exportHeld": "Non disponibile: i dati sanitari non escono in un file. Stampa invece l’elenco visite per il medico.",
+    "judge": "Registra un giudizio",
+    "label": "Sorveglianza sanitaria",
+    "more": "Altro",
+    "planVisits": "Pianifica visite",
+    "print": "Elenco visite per il medico",
+    "printHint": "Da stampare, senza giudizi: nomi, mansioni, tipo di visita, rischi. L’apertura viene registrata."
+  },
+  "book": {
+    "body_one": "{count} visita: il giorno della visita e dove si svolge.",
+    "body_other": "{count} visite: il giorno delle visite e dove si svolgono.",
+    "day": "Giorno della visita",
+    "place": "Luogo",
+    "placeHint": "Ambulatorio del medico o la stanza, al massimo {most} caratteri. Mai un motivo.",
+    "refused": "Non prenotate",
+    "saveOn_one": "Segna {count} prenotata per il {day}",
+    "saveOn_other": "Segna {count} prenotate per il {day}",
+    "save_one": "Segna {count} prenotata",
+    "save_other": "Segna {count} prenotate",
+    "title": "Segna come prenotate"
+  },
+  "bulk": {
+    "book_one": "Segna {count} prenotata",
+    "book_other": "Segna {count} prenotate",
+    "print_one": "Stampa {count} per il medico",
+    "print_other": "Stampa {count} per il medico",
+    "show_one": "Mostra {count}",
+    "show_other": "Mostra {count}"
+  },
+  "cancelReason": {
+    "LEFT": "Il lavoratore è uscito",
+    "MISTAKE": "Inserita per errore",
+    "NOT_NEEDED": "Non più necessaria",
+    "REPLACED": "Sostituita da un’altra visita"
+  },
+  "col": {
+    "booked": "Prenotata",
+    "copy": "Copia",
+    "doctor": "Medico",
+    "due": "Scadenza",
+    "edit": "Modifica",
+    "endOfEmployment": "Fine rapporto",
+    "expiry": "Scadenza",
+    "frequency": "Periodicità",
+    "fromVisit": "Da una visita",
+    "judgedOn": "Data",
+    "limits": "Limitazioni",
+    "needed": "Necessaria",
+    "outcome": "Esito",
+    "people": "Persone",
+    "person": "Persona",
+    "risks": "Rischi",
+    "role": "Mansione",
+    "site": "Sede",
+    "state": "Stato",
+    "status": "Stato",
+    "type": "Tipo di visita",
+    "who": "Chi ha visto"
+  },
+  "common": {
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "no": "No",
+    "reading": "Lettura in corso…",
+    "retry": "Riprova",
+    "stillLoading": "Ancora in caricamento…",
+    "yes": "Sì"
+  },
+  "copy": {
+    "do": "Aggiungi la copia",
+    "title": "Aggiungi la copia"
+  },
+  "copyTab": {
+    "failed": "Non è stato possibile leggere la copia",
+    "fileName": "copia-giudizio.pdf",
+    "imageAlt": "Il giudizio su carta del medico",
+    "note": "L’apertura della copia del medico viene registrata",
+    "recorded": "Aperta alle {time}: questa consultazione è stata registrata",
+    "title": "Copia del giudizio",
+    "unknown": "Questa copia non è né un PDF né un’immagine: non si può mostrare qui."
+  },
+  "due": {
+    "allTypes": "Tutti i tipi di visita",
+    "clear": "Togli i filtri",
+    "count_one": "{count} visita",
+    "count_other": "{count} visite",
+    "dueOn": "Entro il {date}",
+    "empty": "Niente da prenotare ora. Pianifica visite propone ciò che chiedono i piani per mansione.",
+    "emptyTitle": "Nessuna visita da fare",
+    "failed": "Non è stato possibile leggere lo scadenzario",
+    "label": "Visite da prenotare",
+    "more": "Mostra altre",
+    "noneMatch": "Nessuna visita corrisponde a questi filtri.",
+    "noneMatchTitle": "Nessun risultato",
+    "note": "Visite da prenotare (D.Lgs. 81/2008 art. 41)",
+    "recorded": "Nomi a schermo: questa lettura è stata registrata alle {time}",
+    "statusLabel": "Stato",
+    "title": "Scadenzario visite",
+    "typeLabel": "Tipo di visita",
+    "waiting": "Letto dopo che la nota qui sopra è a schermo"
+  },
+  "dueStatus": {
+    "all": "Tutte",
+    "cancelled": "Annullate",
+    "done": "Eseguite",
+    "open": "Aperte (da fare o prenotate)"
+  },
+  "held": {
+    "book": {
+      "day": "Scegli il giorno della visita.",
+      "none": "Scegli prima le visite aperte.",
+      "place": "Il luogo ha al massimo {most} caratteri.",
+      "tooMany": "Al massimo {most} visite per volta."
+    },
+    "cancel": {
+      "reason": "Scegli un motivo."
+    },
+    "copy": {
+      "file": "Scegli il file della copia."
+    },
+    "done": {
+      "day": "Scegli il giorno in cui si è svolta.",
+      "future": "Una visita è eseguita al più tardi oggi."
+    },
+    "judgement": {
+      "clinical": "Queste parole indicano un motivo medico ({words}): scrivi solo la limitazione per la mansione.",
+      "day": "Scegli la data del giudizio.",
+      "expiresAfter": "Scade dopo la data del giudizio.",
+      "future": "La data del giudizio è al più tardi oggi.",
+      "limits": "Idoneo con limitazioni indica le limitazioni per la mansione.",
+      "limitsLong": "Le limitazioni hanno al massimo {most} caratteri.",
+      "outcome": "Scegli l’esito.",
+      "person": "Scegli la persona.",
+      "unfitAfter": "Non idoneo fino a un giorno dopo la data del giudizio.",
+      "unfitUntil": "Temporaneamente non idoneo indica fino a quale giorno.",
+      "visit": "Scegli la visita."
+    },
+    "manage": "Visite e giudizi li tengono l’HR e il medico competente.",
+    "move": {
+      "day": "Scegli la nuova scadenza.",
+      "same": "È già la scadenza."
+    },
+    "pickPeople": "Scegliere una persona qualsiasi spetta all’HR (elenco del personale): scegli una visita dello scadenzario.",
+    "plan": {
+      "absence": "Una visita di rientro indica i giorni di assenza: da {least} a {most}.",
+      "day": "Scegli la scadenza di ogni visita a mano.",
+      "frequency": "Periodicità: da {least} a {most} mesi.",
+      "noRight": "I piani li tengono il responsabile della sicurezza e il medico competente.",
+      "none": "Scegli almeno una visita.",
+      "person": "Scegli la persona di ogni visita a mano.",
+      "setOn": "Scegli il giorno in cui il medico l’ha fissato.",
+      "setOnFuture": "Il medico l’ha fissato al più tardi oggi.",
+      "tooMany": "Al massimo {most} visite per volta.",
+      "unchanged": "Nulla è cambiato."
+    },
+    "reading": "Attendi che la pagina sia letta.",
+    "saving": "Salvataggio in corso…",
+    "select": {
+      "closed": "Una visita eseguita o annullata non si prenota né si stampa di nuovo."
+    },
+    "show": {
+      "none": "Scegli prima le righe da mostrare."
+    },
+    "void": {
+      "reason": "Scegli un motivo."
+    }
+  },
+  "judge": {
+    "change": "Cambia",
+    "chooseVisit": "Scegli la visita",
+    "copy": "Copia del medico",
+    "copyHint": "Un PDF o una foto del giudizio su carta, solo ufficio; ogni apertura viene registrata.",
+    "day": "Data del giudizio",
+    "expires": "Scade il",
+    "expiresHint": "Facoltativo: il giorno scritto dal medico.",
+    "from": "Da",
+    "fromPerson": "Una persona a mano",
+    "fromVisit": "Una visita dello scadenzario",
+    "hint": "Scrivi solo la limitazione per la mansione, ad es. niente sollevamento oltre 15 kg. Mai il motivo medico.",
+    "limits": "Limitazioni per la mansione",
+    "noOpenVisit": "Nessuna visita aperta nello scadenzario: una persona a mano (HR).",
+    "nobody": "Nessuno trovato.",
+    "openSaved": "Apri il giudizio",
+    "outcome": "Esito",
+    "person": "Persona",
+    "personHint": "Un giudizio già su carta, senza una visita qui.",
+    "privacy": "Si conserva solo il giudizio, mai una diagnosi o una nota clinica",
+    "recordedNote": "Il salvataggio non scrive l’esito nello storico: solo che un giudizio è stato registrato.",
+    "refused": "Non salvato",
+    "removeCopy": "Togli la copia",
+    "save": "Salva giudizio",
+    "savedWithoutCopy": "Il giudizio è salvato, ma la copia non è stata acquisita",
+    "search": "Cerca una persona per nome o codice",
+    "title": "Registra un giudizio",
+    "unfitUntil": "Non idoneo fino al",
+    "visit": "Visita",
+    "visitDone": "La visita sarà segnata eseguita il {day}.",
+    "visitHint": "La visita risulta eseguita nel giorno del giudizio.",
+    "visitOption": "{person} · {type} · {day}"
+  },
+  "judgement": {
+    "copies": "Copia del medico",
+    "copyN": "Copia {n} · {day} (si apre in una nuova scheda, registrata)",
+    "copyWaiting": "Copia {n}: ancora in arrivo",
+    "day": "Data del giudizio",
+    "doctor": "Medico",
+    "expires": "Scadenza",
+    "failed": "Non è stato possibile leggere il giudizio",
+    "limits": "Limitazioni per la mansione",
+    "noDoctor": "Non indicato",
+    "noVisit": "Nessuna (giudizio già in archivio)",
+    "outcome": "Esito",
+    "person": "Persona",
+    "reading": "Giudizio",
+    "recorded": "Aperto alle {time}: questa consultazione è stata registrata",
+    "recordedAt": "Registrato il",
+    "refused": "Non salvato",
+    "state": "Stato",
+    "title": "Giudizio del {day}",
+    "unfitUntil": "Non idoneo fino al",
+    "visit": "Visita",
+    "visitOf": "Visita {type}, eseguita il {day}",
+    "voided": "Annullato: {reason} — da {by}, {at}"
+  },
+  "judgementFilter": {
+    "EXPIRED": "Scaduti",
+    "EXPIRING": "In scadenza",
+    "IN_FORCE": "In vigore",
+    "SUPERSEDED": "Superati",
+    "VOIDED": "Annullati",
+    "all": "Tutti",
+    "current": "Correnti (in vigore, in scadenza, scaduti)"
+  },
+  "judgementState": {
+    "EXPIRED": "Scaduto",
+    "EXPIRING": "In scadenza",
+    "IN_FORCE": "In vigore",
+    "SUPERSEDED": "Superato",
+    "VOIDED": "Annullato"
+  },
+  "judgements": {
+    "copyOnFile": "Presente",
+    "count_one": "{count} giudizio",
+    "count_other": "{count} giudizi",
+    "empty": "Registra un giudizio quando il medico lo rilascia.",
+    "emptyTitle": "Nessun giudizio registrato",
+    "failed": "Non è stato possibile leggere i giudizi",
+    "hidden": "Riservato",
+    "hide": "Nascondi",
+    "label": "Giudizi di idoneità",
+    "more": "Mostra altri",
+    "noCopy": "Nessuna",
+    "noExpiry": "Senza scadenza",
+    "noneMatch": "Nessun giudizio in questo stato.",
+    "noneMatchTitle": "Nessun risultato",
+    "note": "Solo l’esito, mai dati clinici (art. 41 c.6). Anonimi fino a Mostra.",
+    "open": "Giudizio del {day}",
+    "showFailed": "Non è stato possibile mostrare i giudizi",
+    "showPage_one": "Mostra {count} riga",
+    "showPage_other": "Mostra {count} righe",
+    "shownNote_one": "Persona ed esito di {count} giudizio a schermo: ogni consultazione registrata alle {time}",
+    "shownNote_other": "Persona ed esito di {count} giudizi a schermo: ogni consultazione registrata alle {time}",
+    "stateLabel": "Stato",
+    "title": "Giudizi di idoneità",
+    "unfitUntil": "Non idoneo fino al {day}",
+    "validUntil": "Valido fino al {date}"
+  },
+  "keys": {
+    "close": "Chiudi la finestra",
+    "judge": "Registra un giudizio",
+    "plan": "Pianifica visite",
+    "title": "Scorciatoie da tastiera"
+  },
+  "law": {
+    "healthPlain": "Il datore di lavoro fa visitare i lavoratori dal medico competente prima della mansione, periodicamente, su richiesta, al cambio mansione, al rientro dopo oltre 60 giorni di assenza per salute e, se previsto, alla cessazione.",
+    "judgementPlain": "Il medico scrive il giudizio: idoneo, idoneo con limitazioni, temporaneamente non idoneo, non idoneo. Il datore conserva il giudizio, mai la cartella clinica.",
+    "protectedPlain": "I dati sanitari sono una categoria particolare: li vede solo chi ne ha bisogno, e ogni accesso è tracciato."
+  },
+  "limited": {
+    "body": "I dati sanitari delle persone — scadenzario, visite e giudizi — li vedono solo l’HR e il medico competente. Qui: i piani per mansione e, per il responsabile della protezione dei dati, chi ha consultato."
+  },
+  "move": {
+    "book": {
+      "again": "Prenota di nuovo",
+      "body": "Il giorno della visita (oggi o dopo) e dove.",
+      "day": "Giorno della visita",
+      "do": "Segna prenotata",
+      "title": "Prenota"
+    },
+    "cancel": {
+      "body": "Una visita annullata non cambia più; il motivo si sceglie dall’elenco.",
+      "choose": "Scegli un motivo",
+      "day": "Giorno",
+      "do": "Annulla la visita",
+      "reason": "Motivo",
+      "title": "Annulla visita"
+    },
+    "done": {
+      "body": "La visita si è svolta; il giudizio può arrivare dopo dalla carta del medico.",
+      "day": "Eseguita il",
+      "do": "Segna eseguita",
+      "title": "Segna eseguita"
+    },
+    "move": {
+      "body": "Una nuova scadenza; la visita resta aperta.",
+      "day": "Nuova scadenza",
+      "do": "Sposta la visita",
+      "title": "Sposta"
+    },
+    "unbook": {
+      "body": "La prenotazione viene tolta; la visita torna da fare.",
+      "day": "Giorno",
+      "do": "Togli la prenotazione",
+      "title": "Togli prenotazione"
+    }
+  },
+  "notice": {
+    "booked_one": "{count} visita prenotata per il {day}.",
+    "booked_other": "{count} visite prenotate per il {day}.",
+    "copied": "La copia è stata aggiunta.",
+    "judged": "Giudizio registrato.",
+    "judgedNoCopy": "Giudizio registrato senza la copia: aprilo per aggiungerla.",
+    "judgedVisit": "Giudizio registrato; la sua visita risulta eseguita.",
+    "moreFailed": "Non è stato possibile leggere altre righe: riprova.",
+    "planSaved": "Il piano di {role} è salvato.",
+    "planned_one": "{count} visita pianificata: è nello scadenzario.",
+    "planned_other": "{count} visite pianificate: sono nello scadenzario.",
+    "visit": {
+      "book": "La visita è prenotata.",
+      "cancel": "La visita è stata annullata.",
+      "done": "La visita è segnata eseguita.",
+      "move": "La visita è stata spostata.",
+      "unbook": "La prenotazione è stata tolta."
+    },
+    "voided": "Giudizio annullato; resta conservato."
+  },
+  "outcome": {
+    "FIT": "Idoneo",
+    "FIT_WITH_LIMITS": "Idoneo con limitazioni",
+    "TEMPORARILY_UNFIT": "Temporaneamente non idoneo",
+    "UNFIT": "Non idoneo"
+  },
+  "outcomeHint": {
+    "FIT": "Idoneo alla mansione.",
+    "FIT_WITH_LIMITS": "Idoneo, con limitazioni per la mansione scritte dal medico.",
+    "TEMPORARILY_UNFIT": "Non adatto alla mansione fino a un giorno.",
+    "UNFIT": "Non idoneo alla mansione."
+  },
+  "planDialog": {
+    "doctor": "Medico competente",
+    "doctorHint": "Con il medico indicato, le visite si pianificano da sole da questo piano.",
+    "doctorLater": "{name} (da un giorno successivo)",
+    "doctorsFailed": "Non è stato possibile leggere l’organigramma della sicurezza: il medico resta com’è.",
+    "endOfEmployment": "Visita alla cessazione del rapporto (se il medico la richiede)",
+    "frequency": "Periodicità (mesi)",
+    "frequencyHint": "Da {least} a {most} mesi, come fissa il medico.",
+    "needed": "La scheda mansione dice che questa mansione richiede visite di sorveglianza sanitaria.",
+    "noDoctor": "Non indicato (solo proposte)",
+    "notNeeded": "La scheda mansione dice che questa mansione non richiede visite: cambiala prima sulla scheda. Il medico si può comunque indicare.",
+    "refused": "Non salvato",
+    "risks": "Rischi che la richiedono (dalla scheda mansione): {risks}",
+    "save": "Salva piano",
+    "setOn": "Fissato dal medico il",
+    "setOnHint": "Al più tardi oggi.",
+    "title": "Piano per {role}"
+  },
+  "planVisits": {
+    "absence": "Giorni di assenza",
+    "absenceHint": "Almeno {least} giorni continuativi: solo la durata.",
+    "add": "Aggiungi una visita a mano",
+    "all": "Scegli tutte",
+    "byHand": "Visite a mano",
+    "byHandHint": "Su richiesta del lavoratore, o il rientro dopo oltre 60 giorni di assenza — solo la durata, mai il motivo.",
+    "doctorNotSet": "proposta: il medico non ha fissato questo piano",
+    "doctorSet": "piano fissato dal medico",
+    "due": "Entro il",
+    "dueOn": "entro il {day}",
+    "failed": "Non è stato possibile leggere le proposte",
+    "none": "Ogni visita chiesta dai piani nei prossimi 60 giorni è pianificata.",
+    "noneChosen": "Nessuna",
+    "noneTitle": "Niente da proporre",
+    "person": "Persona",
+    "pick": "Scegli una persona",
+    "privacy": "Le persone che devono fare una visita: questa lettura è stata registrata",
+    "proposed": "Ciò che chiedono i piani e nessuno ha ancora pianificato",
+    "refused": "Non pianificate",
+    "remove": "Togli la visita {n}",
+    "removeShort": "Togli",
+    "save_one": "Pianifica {count} visita",
+    "save_other": "Pianifica {count} visite",
+    "title": "Pianifica visite",
+    "type": "Tipo di visita"
+  },
+  "plans": {
+    "edit": "Modifica",
+    "editOf": "Modifica il piano di {role}",
+    "empty": "Un piano per mansione nasce con ogni scheda mansione della valutazione dei rischi.",
+    "emptyTitle": "Nessun piano",
+    "every_one": "Ogni mese",
+    "every_other": "Ogni {count} mesi",
+    "failed": "Non è stato possibile leggere i piani",
+    "noDoctor": "Non fissato: solo proposte",
+    "notNeeded": "Non necessaria",
+    "note": "Quali mansioni richiedono visite e ogni quanto, come fissa il medico. «Necessaria» viene dalla scheda mansione.",
+    "readOnly": "Sola lettura",
+    "setOn": "fissato il {day}",
+    "title": "Piani per mansione"
+  },
+  "print": {
+    "allOpen": "Tutte le visite aperte (da fare o prenotate)",
+    "allSites": "Tutte le sedi",
+    "chosen_one": "{count} visita scelta",
+    "chosen_other": "{count} visite scelte",
+    "empty": "Nessuna visita aperta da stampare.",
+    "failed": "Non è stato possibile leggere l’elenco visite",
+    "note": "Nomi, mansioni, tipi di visita e rischi; nessun giudizio. L’apertura di questo elenco è stata registrata ({law}).",
+    "title": "Elenco visite per il medico",
+    "which": "Visite"
+  },
+  "privacy": {
+    "failed": "Non è stato possibile leggere la pagina protetta",
+    "liveUseTitle": "Prima dell’uso reale",
+    "pill": "Protetto · dati sanitari",
+    "title": "Pagina protetta",
+    "whoMore": "Nomi e giudizi: solo HR e medico competente",
+    "words": "Protetto · HR e medico competente · ogni consultazione è registrata"
+  },
+  "problem": {
+    "conflict": "È cambiato nel frattempo: rileggilo.",
+    "contract": "Questa pagina e il server non concordano: ricarica la pagina.",
+    "field": "Un campo non è valido.",
+    "forbidden": "Qui non puoi farlo.",
+    "internal": "Qualcosa è andato storto da noi: riprova.",
+    "invalid": "Qualcosa non è valido.",
+    "noAnswer": "Nessuna risposta: controlla la connessione e riprova.",
+    "notFound": "Non c’è più, o non è nella tua portata.",
+    "rateLimited": "Troppi tentativi: attendi un momento.",
+    "read": "Non è stato possibile leggerlo ora: riprova.",
+    "signedOut": "La sessione è scaduta: accedi di nuovo.",
+    "taskLimits": "Le limitazioni indicano un motivo medico: scrivi solo la limitazione per la mansione.",
+    "unavailable": "Il server non ha risposto: riprova."
+  },
+  "refusal": {
+    "BOOKED_IN_PAST": "Una visita si prenota per oggi o un giorno successivo.",
+    "EXIT_VISIT_NOT_DONE": "Indica la visita di fine rapporto della persona una volta svolta.",
+    "JUDGEMENT_VOIDED": "Questo giudizio è già annullato.",
+    "NOT_A_DOCTOR": "Indica il medico competente dell’azienda della persona (organigramma della sicurezza).",
+    "NOT_EXIT_STEP": "Questo passo non è la visita di fine rapporto.",
+    "NO_ROLE": "Questa persona non ha una scheda mansione: indica la mansione della visita.",
+    "OPEN_VISIT_EXISTS": "Questa persona ha già una visita di questo tipo pianificata o prenotata: prenota o sposta quella.",
+    "PERSON_LEFT": "Questa persona è uscita: ora non si pianifica alcuna visita per lei.",
+    "PLAN_ARCHIVED": "Questo piano è archiviato (la sua scheda mansione è archiviata).",
+    "PLAN_NOT_NEEDED": "Il piano della mansione dice che non servono visite: pianifica una visita su richiesta, o cambia prima la scheda mansione.",
+    "ROLE_OTHER_SITE": "La scheda mansione è di un’altra sede rispetto alla persona.",
+    "VISIT_CANCELLED": "Un giudizio viene da una visita svolta, non da una annullata.",
+    "VISIT_CLOSED": "Questa visita è eseguita o annullata: non cambia più.",
+    "VISIT_JUDGED": "Quella visita ha già il suo giudizio: annulla prima quello sbagliato.",
+    "VISIT_NOT_BOOKED": "Questa visita non è prenotata.",
+    "VISIT_OTHER_PERSON": "Quella visita è di un’altra persona."
+  },
+  "show": {
+    "body_one": "{count} riga: una consultazione registrata. Nomi ed esiti restano solo in questa pagina e spariscono con Nascondi.",
+    "body_other": "{count} righe: una consultazione registrata per riga. Nomi ed esiti restano solo in questa pagina e spariscono con Nascondi.",
+    "confirm_one": "Mostra {count}",
+    "confirm_other": "Mostra {count}",
+    "note": "L’apertura di dati sanitari viene registrata: chi, quando, di chi",
+    "title": "Mostra persona ed esito"
+  },
+  "tile": {
+    "beforeTask": {
+      "hint": "Nuovi assunti e cambi mansione, pianificati o non ancora: Pianifica visite propone il resto.",
+      "label": "Visite preventive necessarie"
+    },
+    "dueIn30": {
+      "hint": "Da fare o prenotate entro 30 giorni. Le mostra nello scadenzario.",
+      "label": "In scadenza entro 30 giorni"
+    },
+    "failed": "Non è stato possibile leggere i conteggi: riprova dalla nota qui sopra.",
+    "overdue": {
+      "hint": "Da fare o prenotate prima di oggi. Le mostra nello scadenzario.",
+      "label": "Visite scadute"
+    },
+    "returnVisits": {
+      "hint": "Dopo oltre 60 giorni di assenza per motivi di salute (solo la durata).",
+      "label": "Visite di rientro"
+    },
+    "title": "Cosa scade",
+    "unfitEnding": {
+      "hint": "Giudizi: usa Mostra nei giudizi qui sotto per vedere di chi.",
+      "label": "Inidoneità temporanee in scadenza entro 14 giorni"
+    }
+  },
+  "visit": {
+    "absence": "Assenza",
+    "absenceDays_one": "{count} giorno (solo la durata)",
+    "absenceDays_other": "{count} giorni (solo la durata)",
+    "booked": "Prenotata",
+    "bookedBy": "{day} · {place} — da {by}, {at}",
+    "cancelled": "Annullata",
+    "cancelledBy": "{reason} — da {by}, {at}",
+    "done": "Eseguita il",
+    "due": "Scadenza",
+    "failed": "Non è stato possibile leggere la visita",
+    "judgement": "Giudizio",
+    "judgementLater": "Si registra quando il medico lo rilascia",
+    "noJudgement": "Nessuno registrato da questa visita",
+    "noPlace": "luogo non indicato",
+    "noRole": "Nessuna scheda mansione",
+    "openJudgement": "Apri il giudizio (registrato)",
+    "person": "Persona",
+    "reading": "Visita",
+    "recorded": "Aperta alle {time}: questa consultazione è stata registrata",
+    "refused": "Non salvato",
+    "risks": "Rischi della mansione",
+    "role": "Mansione",
+    "status": "Stato",
+    "title": "Visita: {type}",
+    "type": "Tipo di visita"
+  },
+  "visitState": {
+    "BOOKED": "Prenotata",
+    "CANCELLED": "Annullata",
+    "DONE": "Eseguita",
+    "DUE_SOON": "In scadenza",
+    "OVERDUE": "Scaduta",
+    "PLANNED": "Pianificata"
+  },
+  "visitType": {
+    "CHANGE_OF_TASK": "Cambio mansione",
+    "END_OF_EMPLOYMENT": "Cessazione del rapporto",
+    "ON_REQUEST": "Su richiesta del lavoratore",
+    "PERIODIC": "Periodica",
+    "PREVENTIVE": "Preventiva (prima della mansione)",
+    "RETURN_AFTER_ABSENCE": "Rientro dopo oltre 60 giorni di assenza"
+  },
+  "void": {
+    "body": "Un giudizio annullato resta conservato, mai modificato; torna in vigore il giudizio precedente della persona.",
+    "do": "Annulla il giudizio",
+    "reason": "Motivo",
+    "title": "Annulla giudizio"
+  },
+  "voidReason": {
+    "DUPLICATE": "Registrato due volte",
+    "WRONG_DETAILS": "Dati errati",
+    "WRONG_PERSON": "Registrato per la persona sbagliata"
+  },
+  "who": {
+    "button": "Chi ha consultato",
+    "fitCheck": "Ha chiesto idoneo sì o no (autorizzazione macchina)",
+    "judgement": "Chi ha consultato il giudizio del {day}",
+    "lists": "Chi ha consultato lo scadenzario e la sua stampa",
+    "none": "Ancora nessuno.",
+    "note": "Ogni consultazione di dati sanitari: chi, quando, cosa. Leggere questo registro non registra nulla.",
+    "someone": "Qualcuno",
+    "title": "Chi ha consultato",
+    "visit": "Chi ha consultato la visita di {name}",
+    "what": {
+      "COPY": "ha aperto la copia",
+      "LIST": "ha elencato",
+      "OPEN": "ha aperto",
+      "PRINT": "ha stampato"
+    }
+  },
+  "why": {
+    "JUDGEMENT_EXPIRES": "Il giudizio scade",
+    "NOTHING_ON_FILE": "Nessun giudizio in archivio",
+    "PERIODIC": "Periodica, secondo il piano",
+    "ROLE_CHANGED": "La mansione è cambiata",
+    "STARTER": "Nuovo assunto: prima della mansione",
+    "UNFIT_ENDS": "Una inidoneità temporanea finisce"
+  }
+}
