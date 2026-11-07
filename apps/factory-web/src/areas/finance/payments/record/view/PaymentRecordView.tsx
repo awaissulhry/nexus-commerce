@@ -132,7 +132,7 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
         <div className="fw-fin-meta-row">
           <span className="fw-fin-meta">
             {state ? <Pill tone={PLACED_TONE[state]}>{t(`placed.${state}`)}</Pill> : <Pill tone="neutral">{t(`paymentStatus.${payment.status}`)}</Pill>}
-            <span className="fw-fin-hint">{t('payment.meta', { date: formatDate(dayInstant(payment.receivedOn), { locale }), method: t('payments.method.BANK_TRANSFER') })}</span>
+            <span className="fw-fin-hint">{t('payment.meta', { date: formatDate(dayInstant(payment.receivedOn), { locale }), method: t(`payments.method.${payment.method}`) })}</span>
           </span>
           <span className="fw-fin-status" role="status">
             {t(`live.${model.live}`)}
@@ -167,7 +167,7 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
               items={[
                 ...(model.can.price ? [{ label: t('recordPay.amount'), value: m(payment.amount) }] : []),
                 { label: t('recordPay.receivedOn'), value: formatDate(dayInstant(payment.receivedOn), { locale }) },
-                { label: t('recordPay.method'), value: t('payments.method.BANK_TRANSFER') },
+                { label: t('recordPay.method'), value: t(`payments.method.${payment.method}`) },
                 { label: t('recordPay.reference'), value: <span className="fw-fin-code">{payment.externalRef}</span> },
                 ...(model.can.price ? [{ label: t('payment.placed'), value: m(payment.allocated) }, { label: t('payment.left'), value: m(payment.unallocated), hint: (payment.unallocated ?? 0) > 0 && !voided ? d('balance.hint') : undefined }] : []),
                 ...(model.can.price && (payment.refunded ?? 0) > 0 ? [{ label: d('balance.refunded'), value: m(payment.refunded) }] : []),

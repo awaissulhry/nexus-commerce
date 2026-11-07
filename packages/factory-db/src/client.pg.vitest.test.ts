@@ -4,7 +4,7 @@ import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { openFactoryDatabase, scopedClients, type FactoryDatabase, type FactoryScope } from './client'
-import { OFFICE_ROLE, RUNTIME_LOGIN, RUNTIME_ROLES } from './roles'
+import { FLOOR_ROLE, OFFICE_ROLE, RUNTIME_LOGIN, RUNTIME_ROLES } from './roles'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 
 /**
@@ -204,6 +204,58 @@ describe('the per-scope client cache', () => {
     await clients.close()
     await expect(clients.withScope(scope(a.tenantId), async () => 1)).rejects.toThrow(TenantScopeError)
   })
+
+  it('lends one client to every actor of a scope, and its statements carry the role and walls but no actor', async () => {
+    const clients = scopedClients(pool(), 4)
+    const anna = await clients.withScope({ audience: 'office', tenantId: a.tenantId, actorId: 'anna' }, async (client) => client)
+    expect(await clients.withScope({ audience: 'office', tenantId: a.tenantId, actorId: 'bruno' }, async (client) => client)).toBe(anna)
+    const site = a.sites[0]!.id
+    const [row] = await clients.withScope({ audience: 'floor', tenantId: a.tenantId, siteId: site, actorId: 'carla' }, (client) =>
+      client.$queryRaw<{ role: string; tenant: string | null; site: string | null; actor: string | null }[]>`
+        SELECT current_user AS role, current_setting('factory.tenant_id', true) AS tenant,
+               current_setting('factory.site_id', true) AS site, current_setting('factory.actor_id', true) AS actor`,
+    )
+    expect(row).toMatchObject({ role: FLOOR_ROLE, tenant: a.tenantId, site })
+    expect([null, '']).toContain(row!.actor)
+    await clients.close()
+  })
+
+  it('serves more scopes than it keeps, each read seeing only its own rows, also when one tick batches its reads', async () => {
+    const lines = (
+      await db.admin.query<{ id: string; tenantId: string; siteId: string }>('SELECT id, "tenantId", "siteId" FROM "Line" WHERE "tenantId" = ANY($1::uuid[])', [
+        [a.tenantId, b.tenantId],
+      ])
+    ).rows
+    const idsWhere = (keep: (line: (typeof lines)[number]) => boolean): string[] => lines.filter(keep).map((line) => line.id).sort()
+    // Six scopes (two tenants' offices, four sites' floors) through two places; a new actor on every round.
+    const cases = [a, b].flatMap((seeded) => [
+      { scope: (round: number): FactoryScope => ({ audience: 'office', tenantId: seeded.tenantId, actorId: `office-${round}` }), sees: idsWhere((line) => line.tenantId === seeded.tenantId) },
+      ...seeded.sites.map((site) => ({
+        scope: (round: number): FactoryScope => ({ audience: 'floor', tenantId: seeded.tenantId, siteId: site.id, actorId: `floor-${round}` }),
+        sees: idsWhere((line) => line.siteId === site.id),
+      })),
+    ])
+    expect(cases).toHaveLength(6)
+    for (const { sees } of cases) expect(sees.length).toBeGreaterThan(0)
+    const clients = scopedClients(pool(RUNTIME_LOGIN, 4), 2)
+    for (let round = 0; round < 3; round++) {
+      const seen = await Promise.all(
+        cases.map(({ scope }) =>
+          clients.withScope(scope(round), async (client) => {
+            // Every line id of both tenants in one tick: Prisma batches these findUnique calls into one statement.
+            const found = await Promise.all(lines.map(({ id }) => client.line.findUnique({ where: { id }, select: { id: true } })))
+            const listed = await client.line.findMany({ select: { id: true } })
+            return { found: found.flatMap((line) => (line ? [line.id] : [])).sort(), listed: listed.map((line) => line.id).sort() }
+          }),
+        ),
+      )
+      seen.forEach(({ found, listed }, index) => {
+        expect(found).toEqual(cases[index]!.sees)
+        expect(listed).toEqual(cases[index]!.sees)
+      })
+    }
+    await clients.close()
+  }, 60_000)
 })
 
 describe('the seed', () => {

@@ -17,6 +17,8 @@ import { alertRulesHandler } from '../../../modules/quality/rules/firing'
 // B-W2b-125
 import { incidentHandlers } from '../../../modules/safety/incidents/handlers'
 import { healthHandlers } from '../../../modules/safety/health/jobs'
+// B-W2b-160: a picture's stripped copy after file.available.
+import { stripPicturesHandler } from '../../../platform/files/thumbs/handler'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
 import { alertsRecheckHandler } from '../../../platform/alerts/engine'
 import { notificationsHandler } from '../../../platform/notifications/fan-out'
@@ -53,6 +55,7 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_118_HANDLERS', ['alertRulesHandler']],
   ['W2B_125_HANDLERS', ['incidentHandlers']],
   ['W2B_135_HANDLERS', ['healthHandlers']],
+  ['W2B_160_HANDLERS', ['stripPicturesHandler']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -62,7 +65,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

@@ -17,8 +17,25 @@ import { amountText } from '../invoicing/invoices'
 
 export const PAYMENT_STATUSES = ['RECEIVED', 'VOIDED'] as const
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
-export const PAYMENT_METHODS = ['BANK_TRANSFER'] as const
+/**
+ * How a payment was made (money.prisma PaymentMethod). B-W2b-F7: CARD and SEPA_DEBIT, named as PaymentIntent's methods
+ * (portal-sales.prisma PaymentIntentMethod), so one word means one thing.
+ */
+export const PAYMENT_METHODS = ['BANK_TRANSFER', 'CARD', 'SEPA_DEBIT'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
+/** What the office records by hand (POST /payments, "deposit received"): a bank transfer, from the bank statement. */
+export const OFFICE_PAYMENT_METHODS = ['BANK_TRANSFER'] as const satisfies readonly PaymentMethod[]
+/** What only a succeeded payment intent at a provider records (B-W2b-185): never typed by hand. */
+export const PROVIDER_PAYMENT_METHODS = ['CARD', 'SEPA_DEBIT'] as const satisfies readonly PaymentMethod[]
+
+/** The refusals of a payment recorded by hand, by code (the API's issue `body/method/<CODE>`; the screens word the code). */
+export const PAYMENT_REFUSALS = {
+  PROVIDER_ONLY: "A card or SEPA debit payment is recorded only from the customer's payment at the provider (a payment intent), never by hand: record the bank transfer, or wait for the provider's payment.",
+} as const
+export type PaymentRefusal = keyof typeof PAYMENT_REFUSALS
+
+/** Why the office may not record a payment of this method by hand, or null when it may. */
+export const manualMethodRefusal = (method: PaymentMethod): PaymentRefusal | null => ((OFFICE_PAYMENT_METHODS as readonly PaymentMethod[]).includes(method) ? null : 'PROVIDER_ONLY')
 export const ALLOCATION_TARGETS = ['DEPOSIT_REQUEST', 'INVOICE'] as const
 export type AllocationTarget = (typeof ALLOCATION_TARGETS)[number]
 
