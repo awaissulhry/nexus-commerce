@@ -99,6 +99,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
   a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
   parts several areas share (`document-send`, SCR-037: the send dialog any document uses; the host passes its words).
+- B-W2b-165 (SAL-199) proofs signed with the quote: SCR-099's Proofs section (`links/quote-accept/view/ProofsSection.tsx`: tiles, the end state's list; the accept sends `proofFileIds`), the quote record's Documents › Proofs (`areas/sales/quotes/record/proofs/`, SCR-035-proofs, mounted through `QuoteRecordView`'s `proofs` slot), both on `src/lib/proofs/ProofViewer.tsx` (the DS Modal with a picture or the PdfViewer, Previous / Next, ← →; the DS Lightbox speaks English only) and `lib/proofs/address.ts`. Catalogue `quote-proofs`.
 - `src/list-frame/` — the ONE list frame of every Office list with actions over many rows (Owner rule 2026-10-29):
   `<ListFrame rows rowId columns count search tools right selection updates more keys onHelp onOpen state />` — the DS
   grid (NexusGrid in GridCard), toolbar count/search ⇄ bulk actions while rows are selected, the header select-all box

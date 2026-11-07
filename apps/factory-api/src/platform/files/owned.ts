@@ -63,6 +63,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-161: a company's logos (platform/branding; record id = the company's id): PHOTO files only, PNG or JPEG of at most
   // 1 MiB checked by their first bytes; the public logo route serves only the one the branding names.
   CompanyBranding: { kinds: ['PHOTO'], route: 'POST /branding/:companyId/logo, then POST …/logo/:fileId/complete' },
+  // B-W2b-165 (SAL-199): a quote version's proofs (modules/sales/quote-proofs): every kind; added, given a new version and
+  // removed only while the version is unsent, shared with the customer and kept by the send.
+  QuoteVersion: { route: 'POST /sales/quotes/:quoteId/proofs (or …/proofs/:fileId/versions), then POST …/proofs/:fileId/complete' },
 })
 
 /**

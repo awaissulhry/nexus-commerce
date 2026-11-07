@@ -10,6 +10,10 @@ import { newIdempotencyKey, type ApiClient } from '../../lib/api/client'
 
 const postal = z.object({ line1: z.string(), line2: z.string().optional(), postalCode: z.string(), city: z.string(), province: z.string().optional(), country: z.string() })
 
+/** One proof the customer accepts with the quote: a PDF or a picture, its SHA-256 and its version. */
+export const linkProofSchema = z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), shape: z.enum(['PDF', 'PICTURE']), sizeBytes: z.number(), sha256: z.string(), versionNo: z.number() })
+export type LinkProof = z.infer<typeof linkProofSchema>
+
 export const linkQuoteSchema = z.object({
   quote: z.object({
     number: z.string(),
@@ -49,6 +53,8 @@ export const linkQuoteSchema = z.object({
     noWithdrawal: z.boolean(),
     terms: z.object({ termsVersion: z.string(), clauses: z.array(z.object({ code: z.string(), text: z.string() })) }),
     document: z.object({ fileId: z.string(), name: z.string(), sha256: z.string(), sizeBytes: z.number() }).nullable(),
+    /** B-W2b-165 (SAL-199): the proofs accepted with it, frozen with the version. */
+    proofs: z.array(linkProofSchema),
   }),
   state: z.enum(['OPEN', 'EXPIRED', 'REVISING', 'SUPERSEDED', 'ACCEPTED', 'DECLINED', 'CANCELLED']),
   message: z.string(),
@@ -84,7 +90,8 @@ export function readLinkQuote(api: ApiClient, signal?: AbortSignal): Promise<Lin
   return api.get('/link/quote', { schema: linkQuoteSchema, signal })
 }
 
-export function acceptLinkQuote(api: ApiClient, body: { versionId: string; typedName: string; email?: string | null; noWithdrawalAccepted?: boolean; note?: string | null }): Promise<LinkQuote> {
+/** `proofFileIds`: the proofs the page showed — a set that changed meanwhile is refused (409), so nothing unseen is accepted. */
+export function acceptLinkQuote(api: ApiClient, body: { versionId: string; typedName: string; email?: string | null; noWithdrawalAccepted?: boolean; note?: string | null; proofFileIds: string[] }): Promise<LinkQuote> {
   return api.post('/link/quote/accept', { body, schema: linkQuoteSchema, idempotencyKey: newIdempotencyKey() })
 }
 
@@ -99,4 +106,9 @@ export function askNewLink(api: ApiClient, note: string | null): Promise<{ asked
 /** The version's PDF as it was sent (`GET /link/quote/document`, through the link only): its bytes, for the viewer. */
 export function documentBytes(api: ApiClient, signal?: AbortSignal): Promise<Uint8Array> {
   return api.bytes('/link/quote/document', { signal })
+}
+
+/** One proof's bytes as the link may see them (`GET /link/quote/proofs/:fileId`; a picture without its camera and position data). */
+export function proofBytes(api: ApiClient, fileId: string, signal?: AbortSignal): Promise<Uint8Array> {
+  return api.bytes(`/link/quote/proofs/${encodeURIComponent(fileId)}`, { signal })
 }

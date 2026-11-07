@@ -28,6 +28,8 @@ const FIX_TAB: Readonly<Record<string, QuoteTab>> = {
   NO_COST_REVISION: 'price',
   CERTIFICATE: 'lines',
   VAT_CHANGED: 'lines',
+  // B-W2b-165: a proof still uploading, being checked or refused (Documents › Proofs).
+  PROOF_NOT_READY: 'documents',
 }
 
 /** The checks that pass when none of their codes is in the answer (one line each). */

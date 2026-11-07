@@ -14,6 +14,8 @@ import {
   QUOTE_VERSION_STATUSES,
   SALES_LINE_KINDS,
 } from '@nexus/factory-domain/sales/quotes/quotes'
+// B-W2b-165 (SAL-199): the proofs on the accept link.
+import { linkProofView, shownProofsField } from '../quote-proofs/contract'
 
 /**
  * The quotes routes' contracts (B-W1-21; A2 SCR-030 "Quotes", SCR-034 "Quote record", SCR-035 the line and the approval
@@ -614,6 +616,8 @@ export const linkQuoteView = output({
     terms: output({ termsVersion: z.string(), clauses: z.array(output({ code: z.string(), text: z.string() })) }),
     /** The PDF (its SHA-256 is what an acceptance records); the link downloads it through /files/:fileId/download. */
     document: output({ fileId: id(), name: z.string(), sha256: z.string(), sizeBytes: z.number().int() }).nullable(),
+    /** B-W2b-165 (SAL-199): the proofs accepted with it (GET /link/quote/proofs/:fileId shows each). */
+    proofs: z.array(linkProofView),
   }),
   state: z.enum(['OPEN', 'EXPIRED', 'REVISING', 'SUPERSEDED', 'ACCEPTED', 'DECLINED', 'CANCELLED']),
   message: z.string(),
@@ -653,7 +657,8 @@ const answerFields = {
 }
 
 export const acceptLinkQuoteContract = defineContract({
-  body: input({ ...answerFields, noWithdrawalAccepted: z.boolean().optional() }),
+  // B-W2b-165: the proofs the page showed; a set that changed meanwhile is refused.
+  body: input({ ...answerFields, noWithdrawalAccepted: z.boolean().optional(), proofFileIds: shownProofsField }),
   response: { 200: linkQuoteView },
 })
 

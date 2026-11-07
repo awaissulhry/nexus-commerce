@@ -1,0 +1,28 @@
+/*
+ * The proof viewer (B-W2b-165): a picture shown whole inside the DS Modal, a PDF in the DS PdfViewer. Semantic tokens only.
+ */
+.fw-pv-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pv-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+}
+
+.fw-pv-picture {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 760px);
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
