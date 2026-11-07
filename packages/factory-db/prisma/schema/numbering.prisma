@@ -134,6 +134,9 @@ enum NumberKind {
   INCIDENT
   /// W2b wave 6: a payroll export's number (PAY-…; pay.prisma PayrollExport.number).
   PAYROLL_EXPORT
+  /// W2b wave 21/22: an order request's number from the portal (RQ-…; portal-sales.prisma PortalOrderRequest.number), given
+  /// when the customer sends it. An office document kind: the API numbers it in the tenant's system context.
+  PORTAL_REQUEST
   /// W2b wave 22/22: a ship notice's number (ASN-…; portal-supply.prisma ShipNotice.number), given when it is sent. An
   /// office document kind: the API numbers it in the tenant's system context (the partner role has no numbering grant).
   ASN

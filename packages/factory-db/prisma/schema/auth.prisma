@@ -110,6 +110,9 @@ model User {
   assignedAlerts      Alert[]
   // W2b links-depth.prisma (wave 19/22): as a partner user, the approval requests they answered in the portal.
   approvalAnswers     ApprovalRequest[] @relation("ApprovalRequestAnsweredBy")
+  // W2b portal-frame.prisma (wave 20/22): as a partner user, the tasks they did in the portal and their e-mail settings.
+  partnerTasksDone    PartnerTask[]     @relation("PartnerTaskDoneBy")
+  partnerEmailPreferences PartnerEmailPreference[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

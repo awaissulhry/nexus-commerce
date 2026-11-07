@@ -187,6 +187,10 @@ model StoredFile {
   purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
   // W2b gendocs.prisma (B-W2b-01): the generated document versions it is the file of.
   generatedDocuments     GeneratedDocument[]
+  // W2b parties.prisma (wave 21/22): the measurement revisions whose front, side or back photo it is.
+  measurementPhotosFront MeasurementProfile[] @relation("MeasurementProfilePhotoFront")
+  measurementPhotosSide  MeasurementProfile[] @relation("MeasurementProfilePhotoSide")
+  measurementPhotosBack  MeasurementProfile[] @relation("MeasurementProfilePhotoBack")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

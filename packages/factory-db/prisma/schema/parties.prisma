@@ -8,7 +8,9 @@
 // note or who in the office wrote a row; the floor reads none of it. Master data in use is archived (status
 // ARCHIVED), never deleted: no role deletes a row of this file. ViesCheck is the art. 41 DL 331/1993 proof and is
 // append-only (the hand-written …_parties_guards migration's triggers hold it for every login). A measurement profile
-// is never edited in place: a change is a new revision (no update grant).
+// is never edited in place: a change is a new revision (W2b, wave 21/22: the office's update grant moves only when its
+// photos are deleted, and a MEASUREMENTS link session inserts the revision the rider sent; the …_portal_sales_w2b_guards
+// triggers hold both).
 //
 // The partyId columns of the W0 modules (OneOffLink, LinkEvidence, Thread, Message, StoredFile, OutboxEvent,
 // AuditLog, IdempotencyReceipt) stay plain ids: the ledgers keep the scope a row was written in, and the others' seeds
@@ -97,10 +99,15 @@ model Party {
   // W2b links-depth.prisma (wave 19/22): the records shared with it, the approvals asked of it.
   recordShares        RecordShare[]
   approvalRequests    ApprovalRequest[]
+  // W2b portal-frame.prisma (wave 20/22): what we asked of it (its tasks).
+  partnerTasks        PartnerTask[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]
   depositRequests     DepositRequest[]
+  // W2b portal-sales.prisma (wave 21/22): its order requests from the portal, its card and SEPA payment intents.
+  portalOrderRequests PortalOrderRequest[]
+  paymentIntents      PaymentIntent[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
   materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
@@ -251,6 +258,9 @@ model PartyAddress {
   quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
   // shipping.prisma: the shipments sent to it.
   shipments           Shipment[]
+  // W2b portal-sales.prisma (wave 21/22): the portal order requests and the change requests that ask to deliver there.
+  portalOrderRequestsShipTo PortalOrderRequest[] @relation("PortalOrderRequestShipTo")
+  orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
 
   @@unique([tenantId, partyId, id])
 }
@@ -467,11 +477,36 @@ model MeasurementProfile {
   /// when it was given.
   privacyNoticeRef String
   privacyNoticeAt  DateTime @db.Timestamptz(3)
+  /// W2b (wave 21/22; SAL-096, SAL-286; design links.measure): a revision the rider sent through a MEASUREMENTS link
+  /// (B-W2b-171): the link (of the same party) and when; both or neither. A link session (the partner role) adds a
+  /// revision only this way, while the link opens, and names the privacy notice version it showed before the first field
+  /// (a published notice of the link's company for people outside it, GDPR art. 13), its privacyNoticeAt no later than
+  /// the send.
+  submittedViaLinkId String?   @db.Uuid
+  submittedAt        DateTime? @db.Timestamptz(3)
+  noticeVersionId    String?   @db.Uuid
+  /// W2b (wave 21/22; SAL-286): front, side and back in a base layer, for the pattern maker: PHOTO files of category
+  /// BODY_PHOTO, three different files. Personal data: the office reads them on the record only.
+  photoFrontFileId   String?   @db.Uuid
+  photoSideFileId    String?   @db.Uuid
+  photoBackFileId    String?   @db.Uuid
+  /// W2b (wave 21/22; Owner question 3, recommended 90 days after the garment ships): from when the photos are deleted
+  /// (the purge job deletes the photo files, the numbers stay). Set by the office or the system once known (the garment
+  /// shipped, the rider asked), moved, never cleared; only on a revision with a photo. The one column of a profile that
+  /// changes after it is written.
+  photosDeleteAfter  DateTime? @db.Timestamptz(3)
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   /// The office user who recorded it.
   createdById      String?  @db.Uuid
 
   party        Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 21/22): the MEASUREMENTS link it came through, the notice shown, its three photos. Restrict, not Prisma's
+  // SetNull default for an optional relation: that would also clear tenantId and partyId.
+  submittedVia OneOffLink?          @relation("MeasurementProfileSubmittedVia", fields: [tenantId, partyId, submittedViaLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  noticeVersion PrivacyNotice?      @relation("MeasurementProfileNotice", fields: [tenantId, noticeVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  photoFront   StoredFile?          @relation("MeasurementProfilePhotoFront", fields: [tenantId, photoFrontFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  photoSide    StoredFile?          @relation("MeasurementProfilePhotoSide", fields: [tenantId, photoSideFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  photoBack    StoredFile?          @relation("MeasurementProfilePhotoBack", fields: [tenantId, photoBackFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   contact      PartyContact?        @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersedes   MeasurementProfile?  @relation("MeasurementProfileRevisions", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersededBy MeasurementProfile[] @relation("MeasurementProfileRevisions")
@@ -484,4 +519,6 @@ model MeasurementProfile {
   @@unique([tenantId, partyId, riderName, garmentType, revision])
   // The target of the revisions' reference: a revision supersedes one of its own party.
   @@unique([tenantId, partyId, id])
+  // W2b (wave 21/22): the photo purge job.
+  @@index([tenantId, photosDeleteAfter])
 }

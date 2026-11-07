@@ -1,0 +1,158 @@
+// The portal frame (W2b schema wave 20/22, B-W2b-156; features COL-043, COL-063, PLT-148; design portal.frame "What
+// waits for you", portal.signin first visit, portal.customer.account and portal.supplier.profile "E-mail settings"):
+// what every portal page reads besides its own record, next to the partner notifications (collab.prisma
+// Notification.partyId) and the portal posts in a record's thread (threads.prisma Message, channel PORTAL).
+//
+//   PartnerTask             one request we make of a partner (COL-043: one model for every request, wherever it shows):
+//                           what to do, on which record, by when, who at the company asked. Home, the rail badges and the
+//                           reminder mails read the same list. It opens and closes in the command that makes and answers
+//                           its request (B-W2b-167's sources), so it never says more than the request.
+//   PartnerEmailPreference  how often one partner person gets the mail of one topic (COL-063, PLT-148: as it happens, a
+//                           daily or a weekly summary, or not at all). The API keeps the transactional topics (orders,
+//                           deliveries, invoices) on, whatever is stored.
+//
+// Who sees what (ownership/portal-frame.json): the office (and the worker and scheduler, in the tenant's system scope)
+// makes, reminds, closes and cancels tasks and reads every setting; a portal or link session (factory_partner_runtime)
+// reads its own party's tasks and marks an open one done in the command that answers it (the portal names its person, a
+// link names none), and a portal session reads and saves its people's e-mail settings (the …_portal_frame_w2b_guards
+// triggers hold each to that). No money column: a task names its record, never an amount. Nothing here is deleted: a
+// task is cancelled, a setting changed.
+
+/// One request we make of a partner (COL-043; design portal.frame action-needed): confirm a PO, accept a quote, approve a
+/// sample, send measurements, upload a document, answer a message, pay an invoice, confirm a kit, report progress, answer
+/// the questionnaire, re-confirm a revised order. One task per record, kind and source (the request that made it: an
+/// approval request, a PO version, a required document rule), so a source made twice makes one task. OPEN → DONE (the
+/// partner did it: in the portal by one of its people, or by a link or a mail) | CANCELLED (the request was withdrawn or is
+/// no longer needed); the office may reopen either. A partner session only closes an OPEN task as DONE. Cancelled, never
+/// deleted.
+model PartnerTask {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that asks: whose portal shows it. Never changes.
+  companyId   String            @db.Uuid
+  /// The customer, supplier or workshop asked (the partner policy key). Never changes.
+  partyId     String            @db.Uuid
+  kind        PartnerTaskKind
+  /// The record it is on (its model name and id: `PurchaseOrder`, `Quote`, `ApprovalRequest`, `Invoice` …) and its label
+  /// when the task was made (`PO-2026-0101`). Never change.
+  recordType  String
+  recordId    String            @db.Uuid
+  recordLabel String
+  /// The request that made it, as its source names it (`ApprovalRequest:<id>`, `PurchaseOrder:<id>:v3`,
+  /// `RequiredDocumentRule:<id>`): one task per record, kind and source. Never changes.
+  sourceKey   String
+  /// Answer by then (the Countdown); null: no due time.
+  dueAt       DateTime?         @db.Timestamptz(3)
+  /// Who at the company asked (an office user) and their name as the partner sees it ("Paolo Neri"): both or neither
+  /// (the system asked). The partner role never reads the id. Never change.
+  askedById   String?           @db.Uuid
+  askedByName String?
+  status      PartnerTaskStatus @default(OPEN)
+  /// DONE or CANCELLED: when. Null exactly while OPEN.
+  closedAt    DateTime?         @db.Timestamptz(3)
+  /// DONE in the portal: the partner user who did it (a person of this party). Null when the partner did it by a link
+  /// or a mail, and on every OPEN or CANCELLED task.
+  doneById    String?           @db.Uuid
+  /// The last reminder mail about it (the reminder job's mark): only moves later.
+  remindedAt  DateTime?         @db.Timestamptz(3)
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  doneBy  User?   @relation("PartnerTaskDoneBy", fields: [tenantId, doneById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, recordType, recordId, kind, sourceKey])
+  // What waits for a party, due first (Home, the rail badges).
+  @@index([tenantId, partyId, status, dueAt])
+  // The reminder job: open tasks by due time, every party.
+  @@index([tenantId, status, dueAt])
+}
+
+/// What a task asks the partner to do (design portal.frame action-needed "Kinds"; the verb in the row).
+enum PartnerTaskKind {
+  /// A purchase order to confirm (or answer line by line).
+  CONFIRM_PO
+  /// A quote to accept.
+  ACCEPT_QUOTE
+  /// A sample, colour, leather, artwork or proof to approve (an ApprovalRequest).
+  APPROVE
+  /// Measurements missing for a made-to-measure unit.
+  SEND_MEASUREMENTS
+  /// A document we need (a certificate, a declaration, a test report), or one about to expire.
+  UPLOAD_DOCUMENT
+  /// A message of ours that waits for their answer.
+  ANSWER_MESSAGE
+  /// An invoice due.
+  PAY_INVOICE
+  /// A workshop's kit to confirm as received.
+  CONFIRM_KIT
+  /// A workshop's progress to report on a job.
+  REPORT_PROGRESS
+  /// The supplier questionnaire to answer.
+  ANSWER_QUESTIONNAIRE
+  /// A revised order to re-confirm (SAL-222).
+  RECONFIRM_ORDER
+}
+
+/// OPEN → DONE | CANCELLED; the office may reopen either (OPEN again).
+enum PartnerTaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// How often one partner person gets the mail of one topic (COL-063; design portal.signin first visit "E-mail summaries",
+/// portal.customer.account › E-mail settings). One row per person and topic, kept by the API (no unique key: the
+/// generated isolation copies insert a second one); a topic without a row has the API's default. The transactional topics
+/// (orders, deliveries, invoices) stay on whatever is stored: the API locks them, and says so on the page. Changed, never
+/// deleted. Personal data (the person's own choice; purpose: the portal account, and the consent to non-essential mail).
+model PartnerEmailPreference {
+  id        String                @id @db.Uuid
+  tenantId  String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's party (the partner policy key): always the person's own. Never changes.
+  partyId   String                @db.Uuid
+  /// The partner user (audience PARTNER) whose setting it is. Never changes.
+  userId    String                @db.Uuid
+  /// Never changes.
+  topic     PartnerEmailTopic
+  frequency PartnerEmailFrequency
+  version   Int                   @default(1)
+  createdAt DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A person's settings.
+  @@index([tenantId, userId])
+}
+
+/// The topics of partner mail (design E-mail settings "Topics").
+enum PartnerEmailTopic {
+  /// Orders: confirmed, changed, cancelled.
+  ORDERS
+  /// Dates: a delivery date moved, a date we need from them.
+  DATES
+  /// Shipped: a delivery left, its tracking.
+  SHIPPED
+  /// Invoices and payments.
+  INVOICES
+  /// Returns and claims.
+  CLAIMS
+  /// Documents shared or asked for.
+  DOCUMENTS
+  /// Messages in a record's thread.
+  MESSAGES
+  /// Reminders of what waits for them (the tasks).
+  REMINDERS
+}
+
+/// How often (design: "As it happens" / "Once a day" / "Once a week" / Off).
+enum PartnerEmailFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+  OFF
+}

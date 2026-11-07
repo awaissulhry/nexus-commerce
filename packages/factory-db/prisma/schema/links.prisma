@@ -89,6 +89,10 @@ model OneOffLink {
   // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM), and those it proposed changes to.
   purchaseOrderConfirmations PurchaseOrder[] @relation("PurchaseOrderConfirmLink")
   purchaseOrderProposals     PurchaseOrder[] @relation("PurchaseOrderProposalLink")
+  // W2b portal-sales.prisma, parties.prisma (wave 21/22): the payment intents started through it (PAYMENT, DEPOSIT_INFO),
+  // the measurement revisions sent through it (MEASUREMENTS).
+  paymentIntents             PaymentIntent[]
+  measurementSubmissions     MeasurementProfile[] @relation("MeasurementProfileSubmittedVia")
   // W2b portal-supply.prisma (wave 22/22): the supplier questionnaire answers sent through it (SUPPLIER_ONBOARD).
   questionnaireResponses     SupplierQuestionnaireResponse[]
 
