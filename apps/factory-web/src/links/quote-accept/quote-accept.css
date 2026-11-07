@@ -104,3 +104,90 @@ p.fw-qa-hint[role='status'] {
   font-family: var(--nds-font-mono);
   overflow-wrap: anywhere;
 }
+
+/* B-W2b-165 (SAL-199): the proofs accepted with the quote — tiles that open the viewer, then the list in the end state. */
+.fw-qa-proofs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-qa-proof {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-qa-proof-open {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-8);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  cursor: pointer;
+}
+
+.fw-qa-proof-open:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-qa-proof-open:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+
+.fw-qa-proof-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-qa-proof-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.fw-qa-proof-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-qa-proof-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-qa-proof-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-qa-proof-list li {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--nds-space-8);
+  overflow-wrap: anywhere;
+}

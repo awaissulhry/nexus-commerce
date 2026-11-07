@@ -23,6 +23,7 @@ import { processEmail, type EmailRuntime } from '../../../platform/email-out/ser
 import { downloadFile, systemCallerOf } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { linkSessionOf, linkUnavailable, type LinkSession } from '../../../platform/links/authenticator'
+import { assertNoPayByLink } from '../../../platform/links/pay'
 import { linkCommand, useLink } from '../../../platform/links/use'
 import { placeOf } from '../close/store'
 import type { SendBody, WithdrawBody } from './contract'
@@ -87,6 +88,8 @@ export async function sendExport(request: FastifyRequest, exportId: string, body
     const current = await exportById(tx, exportId)
     if (!current) throw new NotFoundError('Payroll export not found.')
     assertLatest(current)
+    // B-W2b-163: pay figures never go by link (Owner, 11-02): a file with amounts is refused (409 refusal/PAY_FIGURES).
+    await assertNoPayByLink(tx, { recordType: RECORD, recordId: exportId })
     if ((await suppressedAmong(tx, [address])).size > 0) refusePayroll('SUPPRESSED', 'This address bounced or complained: correct it first.', 'email')
     const older = await tx.oneOffLink.findMany({ where: { recordType: RECORD, recordId: exportId, email: address, revokedAt: null }, select: { id: true, expiresAt: true, revokedAt: true, uses: true, maxUses: true } })
     const withdrawn: string[] = []

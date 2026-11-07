@@ -64,6 +64,8 @@ let connection: Redis
 let filesRoot: string
 let M: string
 let D: string
+/** B-W2b-163: the month of hours only whose file the link tests send (a file with amounts never goes by link). */
+let hoursMonth: string
 const ses = new FakeSes()
 
 const NS = 'w2b54-payroll'
@@ -83,8 +85,8 @@ const tokenOf = (mail: FakeMail): string => decodeURIComponent(/#token=(\S+)/.ex
 const asLink = (token: string | undefined, method: 'GET' | 'POST', url: string, payload?: unknown) =>
   linkApp.inject({ method, url, headers: { ...(token === undefined ? {} : { [LINK_HEADER]: token }), ...(method === 'POST' ? { 'idempotency-key': `link-${run}-${++keys}` } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
 
-async function freeMonth(): Promise<string> {
-  let day = plusDays(`${businessDate(new Date(), ROME).slice(0, 7)}-01`, -1)
+async function freeMonth(before?: string): Promise<string> {
+  let day = plusDays(`${before ?? businessDate(new Date(), ROME).slice(0, 7)}-01`, -1)
   for (;;) {
     const month = day.slice(0, 7)
     const taken = await count(`FROM (SELECT "companyId", date FROM "AttendanceDay" UNION ALL SELECT "companyId", date FROM "RosterEntry" UNION ALL SELECT "companyId", month FROM "AttendanceMonthClose" UNION ALL SELECT "companyId", "periodStart" AS date FROM "PayPeriod") r WHERE to_char(date, 'YYYY-MM') = $1`, [month])
@@ -407,6 +409,9 @@ describe('the export (MES-267)', () => {
   let token: string
   let linkId: string
   let latestId: string
+  // B-W2b-163: a file with amounts never goes by link (Owner, 11-02): the link part runs on a month of hours only.
+  let sentId: string
+  let sentData: Json
   const exportKey = `export-${run}`
   const makeWithKey = (payload: Json) => w.app.inject({ method: 'POST', url: '/people/payroll/exports', headers: { 'x-test-session': 'payroll', 'idempotency-key': exportKey }, payload })
 
@@ -501,9 +506,18 @@ describe('the export (MES-267)', () => {
     expect(await count(`FROM "NumberAllocation" WHERE "recordType" = 'PayrollExport' AND "recordId" = $1`, [exportId])).toBe(1)
   })
 
-  it('sends by a secure link: no attachment, no token in any answer or row, a mail on the FAKE provider', async () => {
-    await w.no('reader', 'POST', `/people/payroll/exports/${exportId}/send`, { email: CONSULTANT }, 403)
-    const answer = await sendAs(exportId)
+  it('refuses to send a file with amounts: pay figures never go by link (Owner, 11-02; B-W2b-163), and writes nothing', async () => {
+    const refused = await w.no('payroll', 'POST', `/people/payroll/exports/${exportId}/send`, { email: CONSULTANT }, 409)
+    expect(pathsOf(refused)).toContain('refusal/PAY_FIGURES')
+    expect(refused.message).toContain('pay figures never go by link')
+    expect(await count(`FROM "OneOffLink" WHERE "recordId" = $1`, [exportId])).toBe(0)
+    expect(mailsTo(CONSULTANT)).toHaveLength(0)
+  })
+
+  it('sends a file of hours only by a secure link: no attachment, no token in any answer or row, a mail on the FAKE provider', async () => {
+    ;({ id: sentId, data: sentData, month: hoursMonth } = await hoursOnlyExport(layoutId))
+    await w.no('reader', 'POST', `/people/payroll/exports/${sentId}/send`, { email: CONSULTANT }, 403)
+    const answer = await sendAs(sentId)
     expect(answer).toMatchObject({ link: { email: CONSULTANT, maxUses: 10 }, withdrawn: [], delivery: 'SENT' })
     linkId = answer.link.id
     const mail = mailsTo(CONSULTANT).at(-1)!
@@ -511,69 +525,79 @@ describe('the export (MES-267)', () => {
     token = tokenOf(mail)
     expect(textOf(mail.raw)).toContain('Ogni scaricamento viene registrato')
     expect(textOf(mail.raw)).not.toContain('123,45')
-    const text = JSON.stringify(answer) + JSON.stringify(await w.admin(`SELECT * FROM "OneOffLink" WHERE id = $1`, [linkId])) + JSON.stringify(await w.admin(`SELECT after FROM "AuditLog" WHERE "recordId" IN ($1, $2)`, [linkId, exportId])) + JSON.stringify(await w.admin(`SELECT payload FROM "OutboxEvent" WHERE type LIKE 'payroll_export.%'`)) + JSON.stringify(await w.admin(`SELECT * FROM "EmailOutbound" WHERE "recordType" = 'PayrollExport'`))
+    const text = JSON.stringify(answer) + JSON.stringify(await w.admin(`SELECT * FROM "OneOffLink" WHERE id = $1`, [linkId])) + JSON.stringify(await w.admin(`SELECT after FROM "AuditLog" WHERE "recordId" IN ($1, $2)`, [linkId, sentId])) + JSON.stringify(await w.admin(`SELECT payload FROM "OutboxEvent" WHERE type LIKE 'payroll_export.%'`)) + JSON.stringify(await w.admin(`SELECT * FROM "EmailOutbound" WHERE "recordType" = 'PayrollExport'`))
     expect(text).not.toContain(token)
     const link = (await w.admin(`SELECT * FROM "OneOffLink" WHERE id = $1`, [linkId]))[0]!
-    expect(link).toMatchObject({ purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', recordId: exportId, partyId: exportId, email: CONSULTANT, maxUses: 10 })
+    expect(link).toMatchObject({ purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', recordId: sentId, partyId: sentId, email: CONSULTANT, maxUses: 10 })
     const days = Math.round((new Date(link.expiresAt).getTime() - Date.now()) / 86_400_000)
     expect(days).toBe(7)
-    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${exportId}`)
+    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)
     expect(record.sentTo).toEqual([CONSULTANT])
     expect(record.links[0]).toMatchObject({ id: linkId, state: 'LIVE', uses: 0, downloads: [] })
   })
 
   it('refuses terms past its limits and an address that bounced', async () => {
-    await w.no('payroll', 'POST', `/people/payroll/exports/${exportId}/send`, { email: CONSULTANT, expiresInDays: 90 }, 400)
-    await w.no('payroll', 'POST', `/people/payroll/exports/${exportId}/send`, { email: CONSULTANT, maxUses: 21 }, 400)
+    await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/send`, { email: CONSULTANT, expiresInDays: 90 }, 400)
+    await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/send`, { email: CONSULTANT, maxUses: 21 }, 400)
     const { address } = (await w.admin<{ address: string }>(`SELECT address FROM "Suppression" WHERE "tenantId" = $1 AND "liftedAt" IS NULL LIMIT 1`, [w.T.tenant]))[0]!
-    expect(pathsOf(await w.no('payroll', 'POST', `/people/payroll/exports/${exportId}/send`, { email: address }, 409))).toContain('refusal/SUPPRESSED')
+    expect(pathsOf(await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/send`, { email: address }, 409))).toContain('refusal/SUPPRESSED')
   })
 
   it('lets the consultant read the list and download: each download a counted use, logged, on the record', async () => {
     const page = await asLink(token, 'GET', '/people/payroll/link/files')
     expect(page.statusCode, page.body).toBe(200)
-    expect(page.json()).toMatchObject({ month: M, revision: 1, link: { usesLeft: 10 } })
+    expect(page.json()).toMatchObject({ month: hoursMonth, revision: 1, link: { usesLeft: 10 } })
     expect(page.json().files.map((file: Json) => file.kind)).toEqual(['DATA', 'SUMMARY'])
-    const got = await asLink(token, 'POST', `/people/payroll/link/files/${dataFile.id}/download`, {})
+    const got = await asLink(token, 'POST', `/people/payroll/link/files/${sentData.id}/download`, {})
     expect(got.statusCode, got.body).toBe(200)
-    expect(got.json()).toMatchObject({ fileId: dataFile.id, usesLeft: 9 })
+    expect(got.json()).toMatchObject({ fileId: sentData.id, usesLeft: 9 })
     expect(got.json().download.url).toBeTruthy()
     const link = (await w.admin(`SELECT uses FROM "OneOffLink" WHERE id = $1`, [linkId]))[0]!
     expect(link.uses).toBe(1)
     expect(await count(`FROM "LinkEvidence" WHERE "linkId" = $1 AND action = 'OPENED' AND "useNumber" = 1`, [linkId])).toBe(1)
-    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${exportId}`)
+    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)
     expect(record.downloadedAt).not.toBeNull()
-    expect(record.links[0]).toMatchObject({ uses: 1, downloads: [{ fileId: dataFile.id }] })
-    expect((await w.admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'payroll_export.downloaded' AND payload->>'exportId' = $1`, [exportId]))[0]!.n).toBe(1)
+    expect(record.links[0]).toMatchObject({ uses: 1, downloads: [{ fileId: sentData.id }] })
+    expect((await w.admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'payroll_export.downloaded' AND payload->>'exportId' = $1`, [sentId]))[0]!.n).toBe(1)
   })
 
   it('opens nothing else for that link: not another file, not the generic routes, not an office read', async () => {
     const other = newId()
     expect((await asLink(token, 'POST', `/people/payroll/link/files/${other}/download`, {})).statusCode).toBe(404)
-    expect((await asLink(token, 'GET', `/files/${dataFile.id}`)).statusCode).toBe(404)
-    expect((await asLink(token, 'GET', `/people/payroll/exports/${exportId}`)).statusCode).toBe(403)
+    expect((await asLink(token, 'GET', `/files/${sentData.id}`)).statusCode).toBe(404)
+    expect((await asLink(token, 'GET', `/people/payroll/exports/${sentId}`)).statusCode).toBe(403)
   })
 
   it('withdraws a link: it opens nothing from then on, with the one answer of every dead link', async () => {
-    const second = await sendAs(exportId, 'other.studio@example.com')
+    const second = await sendAs(sentId, 'other.studio@example.com')
     const mail = mailsTo('other.studio@example.com').at(-1)!
     const secondToken = tokenOf(mail)
-    await w.no('reader', 'POST', `/people/payroll/exports/${exportId}/links/${second.link.id}/withdraw`, {}, 403)
-    const withdrawn = await w.ok('payroll', 'POST', `/people/payroll/exports/${exportId}/links/${second.link.id}/withdraw`, { reason: 'Sent to the wrong studio' })
+    await w.no('reader', 'POST', `/people/payroll/exports/${sentId}/links/${second.link.id}/withdraw`, {}, 403)
+    const withdrawn = await w.ok('payroll', 'POST', `/people/payroll/exports/${sentId}/links/${second.link.id}/withdraw`, { reason: 'Sent to the wrong studio' })
     expect(withdrawn).toMatchObject({ id: second.link.id, state: 'REVOKED' })
     const dead = await asLink(secondToken, 'GET', '/people/payroll/link/files')
     expect(dead.statusCode).toBe(404)
     expect(dead.json().error.message).toBe(LINK_UNAVAILABLE)
-    expect(pathsOf(await w.no('payroll', 'POST', `/people/payroll/exports/${exportId}/links/${second.link.id}/withdraw`, {}, 409))).toContain('refusal/LINK_NOT_LIVE')
+    expect(pathsOf(await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/links/${second.link.id}/withdraw`, {}, 409))).toContain('refusal/LINK_NOT_LIVE')
   })
 
   it('replaces the older live link when it sends to the same address again', async () => {
-    const again = await sendAs(exportId)
+    const again = await sendAs(sentId)
     expect(again.withdrawn).toEqual([linkId])
     expect((await asLink(token, 'GET', '/people/payroll/link/files')).statusCode).toBe(404)
     linkId = again.link.id
     token = tokenOf(mailsTo(CONSULTANT).at(-1)!)
     expect((await asLink(token, 'GET', '/people/payroll/link/files')).statusCode).toBe(200)
+  })
+
+  it('stops the link of a file that a correction replaces', async () => {
+    const day = await w.day(w.P.P2!, `${hoursMonth}-10`)
+    await w.ok('payroll', 'POST', `/people/attendance/days/${day.id}/corrections`, { kind: 'ORDINARY', minutesBefore: day.ordinaryMinutes, minutesAfter: day.ordinaryMinutes - 15, reason: 'Made-up correction of the hours month' }, 201)
+    const v2 = await w.ok('payroll', 'POST', '/people/payroll/exports', { companyId: w.T.companyA, month: hoursMonth, correctionOfId: sentId }, 201)
+    expect(v2).toMatchObject({ revision: 2, correctionOfId: sentId, carriesPay: false })
+    expect((await asLink(token, 'GET', '/people/payroll/link/files')).statusCode).toBe(404)
+    expect((await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)).links.every((link: Json) => link.state !== 'LIVE')).toBe(true)
+    sentId = v2.id
   })
 
   describe('a closed day corrected afterwards (MES-273)', () => {
@@ -610,10 +634,10 @@ describe('the export (MES-267)', () => {
       expect(made).toMatchObject({ status: 'EXPORTED', revision: 2, correctionOfId: exportId, changed: { people: 1, values: 1 }, layout: { name: 'Generic CSV' } })
       expect(made.number).not.toBe(v1.number)
       expect(made.words).toContain('replaces')
-      expect((await asLink(token, 'GET', '/people/payroll/link/files')).statusCode).toBe(404)
       const kept = await w.ok('reader', 'GET', `/people/payroll/exports/${exportId}`)
       expect(kept).toMatchObject({ status: 'EXPORTED', correctedById: correctionId, seal: v1.seal })
-      expect(kept.links.every((link: Json) => link.state !== 'LIVE')).toBe(true)
+      // It carries amounts: it never went by link (B-W2b-163); the hours month shows a correction stopping a link.
+      expect(kept.links).toEqual([])
       const values = await w.ok('payroll', 'POST', `/people/payroll/exports/${correctionId}/values`, {})
       expect(values.changes).toMatchObject({ people: 1, values: 1 })
       expect(values.people).toHaveLength(3)
@@ -709,8 +733,9 @@ describe('a leaver (MES-214)', () => {
 
 describe('the legal gate closed afterwards (Statuto dei Lavoratori art. 4 c.2)', () => {
   it('opens no value, no file and no link any more', async () => {
-    const { rows } = await w.ok('reader', 'GET', `/people/payroll/exports?companyId=${w.T.companyA}&year=${M.slice(0, 4)}`)
-    const row = rows.find((entry: Json) => entry.status === 'EXPORTED' && entry.month === M && entry.correctedById === null)
+    // The latest file of the hours month (a file with amounts never goes by link: B-W2b-163).
+    const { rows } = await w.ok('reader', 'GET', `/people/payroll/exports?companyId=${w.T.companyA}&year=${hoursMonth.slice(0, 4)}`)
+    const row = rows.find((entry: Json) => entry.status === 'EXPORTED' && entry.month === hoursMonth && entry.correctedById === null)
     const { files } = await w.ok('reader', 'GET', `/people/payroll/exports/${row.id}`)
     const sent = await sendAs(row.id, 'last.studio@example.com')
     const token = tokenOf(mailsTo('last.studio@example.com').at(-1)!)
@@ -737,6 +762,20 @@ async function sendAs(exportId: string, email = CONSULTANT): Promise<Json> {
   const answer = await linkApp.inject({ method: 'POST', url: `/people/payroll/exports/${exportId}/send`, headers: { 'x-test-session': 'payroll', 'idempotency-key': `send-${run}-${++keys}` }, payload: { email } })
   expect(answer.statusCode, answer.body).toBe(201)
   return answer.json()
+}
+
+/**
+ * A month of hours only (B-W2b-163: pay figures never go by link, so the link tests send this one): the free month before
+ * the leaver's, P2 works one clean day, the month is closed and exported (no pay period: no amount).
+ */
+async function hoursOnlyExport(layoutId: string): Promise<{ id: string; data: Json; month: string }> {
+  const leaverMonth = plusDays(`${M}-01`, -1).slice(0, 7)
+  const month = await freeMonth(leaverMonth)
+  await restLeaverMonth(`${month}-10`)
+  await w.ok('payroll', 'POST', '/people/month-close', { companyId: w.T.companyA, month, phrase: closePhrases(month).en })
+  const made = await w.ok('payroll', 'POST', '/people/payroll/exports', { companyId: w.T.companyA, month, layoutId }, 201)
+  expect(made.carriesPay).toBe(false)
+  return { id: made.id, data: made.files[0], month }
 }
 
 /** The leaver's month: P2 works one clean day; nobody else has a day. */

@@ -26,6 +26,16 @@ export interface QuoteAcceptViewModel {
   newLinkAsked: boolean
   /** The site's zone. */
   timeZone?: string
+  /** B-W2b-165 (SAL-199): each proof's bytes as the page shows them (by file id; absent: still loading). */
+  proofs?: Readonly<Record<string, ProofShown>>
+  /** The proof open full size (a picture in the lightbox, a PDF in the viewer); null: none. */
+  proofOpen?: string | null
+}
+
+/** A proof as the page holds it: a picture as a data address, a PDF as its bytes; `problem` when it could not be read. */
+export interface ProofShown {
+  src: string | Uint8Array | null
+  problem: boolean
 }
 
 export interface QuoteAcceptActions {
@@ -34,6 +44,10 @@ export interface QuoteAcceptActions {
   onDeclineSend?: (input: { reason: DeclineReason; note: string; name: string }) => void
   onNewLink?: () => void
   onCopy?: (text: string) => void
+  /** Open a proof full size (null closes it). */
+  onProof?: (fileId: string | null) => void
+  /** Read a proof that could not be read again. */
+  onProofRetry?: (fileId: string) => void
 }
 
 /** The privacy notice's company, from the address the API gives (`…/privacy/<company id>`). */
@@ -62,3 +76,6 @@ export function declineNote(reason: string, note: string): string {
   const trimmed = note.trim()
   return trimmed ? `${reason} — ${trimmed}` : reason
 }
+
+/** A proof's document code: the first twelve characters of its SHA-256, as the quote PDF's. */
+export const proofCode = (sha256: string): string => sha256.slice(0, 12)

@@ -1,0 +1,118 @@
+{
+  "link": {
+    "title": "Proofs you accept with it",
+    "hint_one": "You accept this proof too: the artwork, size chart or sheet you agreed with {seller}.",
+    "hint_other": "You accept these {count} proofs too: the artwork, size chart and sheets you agreed with {seller}.",
+    "open": "Open {name}",
+    "version": "version {n}",
+    "code": "code {code}",
+    "kind": {
+      "PDF": "PDF",
+      "PICTURE": "Picture"
+    },
+    "loading": "Still loading…",
+    "problem": "This proof can't be shown right now.",
+    "retry": "Try again",
+    "signLine_one": "With it you accept the proof shown above.",
+    "signLine_other": "With it you accept the {count} proofs shown above.",
+    "accepted": "Proofs you accepted with it"
+  },
+  "office": {
+    "title": "Proofs the customer accepts with the quote",
+    "hint": "An artwork proof, a size chart, a measurement sheet: the customer sees them on the accept link and accepts them with the quote. Sending freezes them with the version.",
+    "add": "Add proof",
+    "drop": "Drop a PDF or a picture (JPEG, PNG or WebP) here, or choose one",
+    "dropShort": "PDF or picture",
+    "loading": "Loading the proofs…",
+    "problem": "Couldn't load the proofs.",
+    "retry": "Try again",
+    "none": "No proofs yet.",
+    "noneSent": "No proof was sent with this version.",
+    "versionHead": "Version {revision}",
+    "versionStatus": {
+      "DRAFT": "Draft",
+      "PENDING_APPROVAL": "Waiting for approval",
+      "APPROVED": "Approved",
+      "SENT": "Sent",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "EXPIRED": "Expired",
+      "SUPERSEDED": "Replaced",
+      "CANCELLED": "Withdrawn"
+    },
+    "fileVersion": "version {n}",
+    "copied": "carried over",
+    "state": {
+      "READY": "Ready",
+      "UPLOADING": "Uploading",
+      "CHECKING": "Being checked",
+      "REFUSED": "Refused"
+    },
+    "stateHint": {
+      "UPLOADING": "The upload has not finished: finish it or remove the proof.",
+      "CHECKING": "The virus check is still running.",
+      "REFUSED": "What arrived did not match what was sent, or the check found a problem: remove it and upload it again."
+    },
+    "shared": "Shared with the customer",
+    "notShared": "Goes to the customer when you send the quote",
+    "addedBy": "Added {at} by {name}",
+    "addedAt": "Added {at}",
+    "code": "Code {code}…",
+    "open": "Open",
+    "newVersion": "New version",
+    "remove": "Remove",
+    "carry_one": "Carry over {count} proof from version {revision}",
+    "carry_other": "Carry over {count} proofs from version {revision}",
+    "held": {
+      "right": "Your role can't change the proofs of this quote.",
+      "frozen": "Version {revision} was sent: its proofs went with it. Make a new version to change them.",
+      "closed": "Version {revision} is closed: its proofs stay as they were.",
+      "busy": "Wait for the upload in progress.",
+      "full": "A version takes at most {max} proofs: remove one first."
+    },
+    "removeConfirm": {
+      "title": "Remove {name}?",
+      "body": "The proof and every earlier version of it are removed from this draft. The customer never saw it.",
+      "go": "Remove proof",
+      "back": "Keep it"
+    },
+    "upload": {
+      "reading": "Reading {name}…",
+      "sending": "Sending {name}…",
+      "type": "{name} is not a PDF or a picture (JPEG, PNG or WebP): the customer could not see it in the browser.",
+      "kind": "A new version keeps its kind: a PDF's next version is a PDF, a picture's a picture.",
+      "size": "{name} is too large for a proof ({max} at most).",
+      "failed": "{name} couldn't be uploaded. Try again."
+    },
+    "accepted": {
+      "title": "Accepted with version {revision}",
+      "by": "By {name}, {at}",
+      "none": "The acceptance named no proof.",
+      "name": "Proof",
+      "version": "Version",
+      "code": "SHA-256",
+      "size": "Size"
+    },
+    "openProblem": "This proof couldn't be opened. Try again.",
+    "notice": {
+      "added": "{name} added.",
+      "removed": "{name} removed.",
+      "carried_one": "{count} proof carried over.",
+      "carried_other": "{count} proofs carried over.",
+      "conflict": "The quote changed meanwhile: the proofs were read again."
+    }
+  },
+  "viewer": {
+    "title": "{name} · version {n}",
+    "previous": "Previous proof",
+    "next": "Next proof",
+    "first": "This is the first proof.",
+    "last": "This is the last proof.",
+    "only": "This is the only proof.",
+    "count": "{n} of {count}",
+    "loading": "Still loading…",
+    "problem": "This proof can't be shown right now.",
+    "retry": "Try again",
+    "picture": "{name}, version {n}"
+  }
+}

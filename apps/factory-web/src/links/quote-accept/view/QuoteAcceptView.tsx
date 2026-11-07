@@ -14,6 +14,7 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { LinkQuote } from '../api'
 import { answerOf, DECLINE_REASONS, groupedIban, privacyCompany, type DeclineReason, type QuoteAcceptActions, type QuoteAcceptViewModel } from '../model'
+import { AcceptedProofs, ProofsSection } from './ProofsSection'
 import '../quote-accept.css'
 
 export type { QuoteAcceptViewModel, QuoteAcceptActions } from '../model'
@@ -28,7 +29,7 @@ export type { QuoteAcceptViewModel, QuoteAcceptActions } from '../model'
  */
 export function QuoteAcceptView({ model, actions }: { model: QuoteAcceptViewModel; actions?: QuoteAcceptActions }) {
   return (
-    <WithMessages namespaces={['quote-link']}>
+    <WithMessages namespaces={['quote-link', 'quote-proofs']}>
       <QuoteAccept model={model} actions={actions} />
     </WithMessages>
   )
@@ -70,6 +71,7 @@ function QuoteBody({ quote, model, actions }: { quote: LinkQuote; model: QuoteAc
   const decline = answerOf(quote, 'decline')
   const deposit = q.deposit
   const state = quote.state
+  const proofWords = useT('quote-proofs')
 
   return (
     <>
@@ -147,6 +149,8 @@ function QuoteBody({ quote, model, actions }: { quote: LinkQuote; model: QuoteAc
         )}
       </Card>
 
+      <ProofsSection proofs={q.proofs} seller={seller} model={model} actions={actions} />
+
       <Disclosure summary={t('terms.title', { version: q.terms.termsVersion })}>
         <ol className="fw-qa-terms" lang={q.language}>
           {q.terms.clauses.map((clause) => (
@@ -158,7 +162,12 @@ function QuoteBody({ quote, model, actions }: { quote: LinkQuote; model: QuoteAc
       {state === 'OPEN' && accept && model.answer !== 'done' && (
         <SignBlock
           title={t('sign.title', { number: q.quoteNumber, revision: q.revision })}
-          summary={<p className="fw-qa-sign-summary">{deposit ? t('sign.summaryDeposit', { number: q.quoteNumber, revision: q.revision, total: money(q.totals?.gross), deposit: money(deposit.amount) }) : t('sign.summary', { number: q.quoteNumber, revision: q.revision, total: money(q.totals?.gross) })}</p>}
+          summary={
+            <>
+              <p className="fw-qa-sign-summary">{deposit ? t('sign.summaryDeposit', { number: q.quoteNumber, revision: q.revision, total: money(q.totals?.gross), deposit: money(deposit.amount) }) : t('sign.summary', { number: q.quoteNumber, revision: q.revision, total: money(q.totals?.gross) })}</p>
+              {q.proofs.length > 0 && <p className="fw-qa-sign-summary">{proofWords('link.signLine', { count: q.proofs.length })}</p>}
+            </>
+          }
           legal={
             <p className="fw-qa-hint">
               {t('sign.legal', { seller, version: q.terms.termsVersion })} {t('sign.retention')}
@@ -258,6 +267,7 @@ function Accepted({ quote, model, actions }: { quote: LinkQuote; model: QuoteAcc
           { label: t('done.terms'), value: acceptance.termsVersion ?? '—' },
         ]}
       />
+      <AcceptedProofs proofs={quote.quote.proofs} />
       <h3 className="fw-qa-h3">{t('done.next')}</h3>
       <ol className="fw-qa-steps">
         {deposit && instructions && <li>{t('done.stepDeposit', { amount: money(instructions.amount, instructions.currency), date: day(instructions.dueDate, locale, model.timeZone) })}</li>}
