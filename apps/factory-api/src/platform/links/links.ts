@@ -5,13 +5,14 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { LINKS_MANAGE, LINKS_VIEW } from '@nexus/factory-domain/links/permissions'
-import { isLinkPurpose, linkState, linkTerms, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
+import { linkState, linkTerms, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
 import { mintLinkToken, linkTokenHash } from '@nexus/factory-domain/links/token'
 import type { CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { emailOrThrow } from '../auth/users/email'
 import type { LinkView } from './contract'
+import { assertNoPayByLink } from './pay'
 import { linkRecordSource } from './records'
 import { linkCommand } from './use'
 
@@ -20,7 +21,8 @@ import { linkCommand } from './use'
  * links with their evidence, revoke one. Writes go through command() with their audit rows.
  *
  *   make     links.manage over the record's company and party. The record comes from its module's source (records.ts),
- *            read inside the command: it names the company, the party and the default address. The purpose decides
+ *            read inside the command: it names the company, the party and the default address. A record (or a stored
+ *            file of one) with pay figures never goes by link (pay.ts; Owner 11-02). The purpose decides
  *            the default expiry and use limit and their maxima (factory-domain links/purposes). The token is minted
  *            OUTSIDE the command and only its hash goes in: the command's result (which an Idempotency-Key receipt
  *            stores) never holds it. The answer shows the URL this once; a repeated request answers url null.
@@ -49,19 +51,22 @@ const SELECT = {
     select: { id: true, action: true, useNumber: true, typedName: true, emailCheck: true, at: true },
     orderBy: [{ at: 'asc' }, { id: 'asc' }],
   },
+  // W2b-3 (B-W2b-163): its files, its password (whether one is set: the office role reads the hash, never answers it),
+  // the receipt, the contact and the link it renews.
+  files: { select: { fileId: true, position: true, file: { select: { originalName: true } } }, orderBy: { position: 'asc' } },
+  passwordHash: true,
+  passwordHeldUntil: true,
+  receivedAt: true,
+  receivedName: true,
+  contactId: true,
+  renewalOfId: true,
 } as const satisfies Prisma.OneOffLinkSelect
 
 type LinkRow = Prisma.OneOffLinkGetPayload<{ select: typeof SELECT }>
-/**
- * A link of a purpose these routes serve (factory-domain's LINK_PURPOSES). The schema holds W2b-3's purposes since B-W2b-154;
- * until B-W2b-163 brings them to factory-domain, the generic routes neither list nor read back such a link (fail closed).
- */
-type ServedLinkRow = LinkRow & { readonly purpose: LinkPurpose }
-const served = (row: LinkRow): row is ServedLinkRow => isLinkPurpose(row.purpose)
 
 const iso = (date: Date | null): string | null => (date === null ? null : toUtcIso(date))
 
-export function linkViewOf(row: ServedLinkRow, now: Date): LinkView {
+export function linkViewOf(row: LinkRow, now: Date): LinkView {
   return {
     id: row.id,
     companyId: row.companyId,
@@ -88,12 +93,17 @@ export function linkViewOf(row: ServedLinkRow, now: Date): LinkView {
       emailCheck: entry.emailCheck,
       at: toUtcIso(entry.at),
     })),
+    files: row.files.map((entry) => ({ fileId: entry.fileId, position: entry.position, name: entry.file.originalName })),
+    password: { set: row.passwordHash !== null, heldUntil: row.passwordHeldUntil && row.passwordHeldUntil.getTime() > now.getTime() ? toUtcIso(row.passwordHeldUntil) : null },
+    receipt: row.receivedAt ? { at: toUtcIso(row.receivedAt), name: row.receivedName } : null,
+    contactId: row.contactId,
+    renewalOfId: row.renewalOfId,
   }
 }
 
-const loadLink = async (client: CommandTx | FactoryClient, id: string): Promise<ServedLinkRow> => {
+export const loadLink = async (client: CommandTx | FactoryClient, id: string): Promise<LinkRow> => {
   const row = await client.oneOffLink.findUnique({ where: { id }, select: SELECT })
-  if (!row || !served(row)) throw new NotFoundError('Link not found.')
+  if (!row) throw new NotFoundError('Link not found.')
   return row
 }
 
@@ -129,6 +139,8 @@ export async function createLink(request: FastifyRequest, body: CreateLinkInput,
     const record = await source.read(tx, body.recordId)
     if (!record) throw new NotFoundError(`${body.recordType} not found.`)
     if (!can(actorOf(context), LINKS_MANAGE, { companyId: record.companyId, partyId: record.partyId })) throw new ForbiddenError()
+    // B-W2b-163: pay figures never go by link (Owner, 11-02), whatever the purpose.
+    await assertNoPayByLink(tx, { recordType: body.recordType, recordId: body.recordId })
     const terms = linkTerms(body.purpose, body, now)
     const to = email !== undefined ? email : record.email ? emailOrThrow(record.email) : null
     const token = mintLinkToken({ tenantId: context.tenantId, partyId: record.partyId, linkId })
@@ -182,7 +194,7 @@ export async function listLinks(client: FactoryClient, actor: Actor, filter: { r
     take: 200,
     select: SELECT,
   })
-  return rows.filter(served).map((row) => linkViewOf(row, now))
+  return rows.map((row) => linkViewOf(row, now))
 }
 
 /** links.revoke: the link opens nothing from now on. Final; its evidence stays. */

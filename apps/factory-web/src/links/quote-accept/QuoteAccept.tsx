@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ApiClient } from '../../lib/api/client'
 import { isApiError } from '../../lib/api/errors'
 import { useT } from '../../lib/i18n/provider'
 import { WithMessages } from '../../record-panels/i18n'
-import { acceptLinkQuote, askNewLink, declineLinkQuote, documentBytes, readLinkQuote } from './api'
+import { acceptLinkQuote, askNewLink, declineLinkQuote, documentBytes, proofBytes, readLinkQuote, type LinkProof } from './api'
+import { pictureAddress } from '../../lib/proofs/address'
 import { declineNote, type QuoteAcceptViewModel } from './model'
 import { QuoteAcceptView } from './view/QuoteAcceptView'
 
@@ -29,7 +30,7 @@ function answerProblem(error: unknown): { key: string; link?: QuoteAcceptViewMod
  */
 export function QuoteAccept({ api }: { api: ApiClient }) {
   return (
-    <WithMessages namespaces={['quote-link']}>
+    <WithMessages namespaces={['quote-link', 'quote-proofs']}>
       <QuoteAcceptContainer api={api} />
     </WithMessages>
   )
@@ -37,12 +38,29 @@ export function QuoteAccept({ api }: { api: ApiClient }) {
 
 function QuoteAcceptContainer({ api }: { api: ApiClient }) {
   const t = useT('quote-link')
-  const [model, setModel] = useState<QuoteAcceptViewModel>({ link: 'loading', quote: null, pdf: { src: null, problem: false }, answer: 'idle', problem: null, declineOpen: false, newLinkAsked: false })
+  const [model, setModel] = useState<QuoteAcceptViewModel>({ link: 'loading', quote: null, pdf: { src: null, problem: false }, answer: 'idle', problem: null, declineOpen: false, newLinkAsked: false, proofs: {}, proofOpen: null })
+  // B-W2b-165 (SAL-199): the proofs' bytes through the link (a picture without its camera and position data), each read once.
+  const proofsRead = useRef(new Set<string>())
+  const readProof = useCallback(
+    (proof: Pick<LinkProof, 'fileId' | 'contentType' | 'shape'>) => {
+      if (proofsRead.current.has(proof.fileId)) return
+      proofsRead.current.add(proof.fileId)
+      proofBytes(api, proof.fileId)
+        .then((bytes) => setModel((current) => ({ ...current, proofs: { ...current.proofs, [proof.fileId]: { src: proof.shape === 'PICTURE' ? pictureAddress(bytes, proof.contentType) : bytes, problem: false } } })))
+        .catch(() => {
+          proofsRead.current.delete(proof.fileId)
+          setModel((current) => ({ ...current, proofs: { ...current.proofs, [proof.fileId]: { src: null, problem: true } } }))
+        })
+    },
+    [api],
+  )
 
   const load = useCallback(async () => {
     try {
       const quote = await readLinkQuote(api)
       setModel((current) => ({ ...current, link: 'valid', quote }))
+      // The pictures now (their thumbnails show), a PDF when it is opened.
+      for (const proof of quote.quote.proofs) if (proof.shape === 'PICTURE') readProof(proof)
       if (quote.quote.document) {
         documentBytes(api)
           .then((bytes) => setModel((current) => ({ ...current, pdf: { src: bytes, problem: false } })))
@@ -51,11 +69,13 @@ function QuoteAcceptContainer({ api }: { api: ApiClient }) {
     } catch (error) {
       setModel((current) => ({ ...current, link: isApiError(error) && error.kind === 'not_found' ? 'unavailable' : isApiError(error) && error.kind === 'forbidden' ? 'wrong_person' : 'error' }))
     }
-  }, [api])
+  }, [api, readProof])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  const proofOf = (fileId: string) => model.quote?.quote.proofs.find((proof) => proof.fileId === fileId) ?? null
 
   const answered = (quote: Awaited<ReturnType<typeof readLinkQuote>>) => setModel((current) => ({ ...current, quote, answer: 'done', declineOpen: false, problem: null }))
   const refused = (error: unknown) => {
@@ -72,7 +92,7 @@ function QuoteAcceptContainer({ api }: { api: ApiClient }) {
           const quote = model.quote
           if (!quote) return
           setModel((current) => ({ ...current, answer: 'busy', problem: null }))
-          acceptLinkQuote(api, { versionId: quote.quote.versionId, typedName: name, email: email ?? null, noWithdrawalAccepted: noWithdrawal })
+          acceptLinkQuote(api, { versionId: quote.quote.versionId, typedName: name, email: email ?? null, noWithdrawalAccepted: noWithdrawal, proofFileIds: quote.quote.proofs.map((proof) => proof.fileId) })
             .then(answered)
             .catch(refused)
         },
@@ -92,6 +112,21 @@ function QuoteAcceptContainer({ api }: { api: ApiClient }) {
         },
         onCopy: (text) => {
           void navigator.clipboard?.writeText(text).catch(() => undefined)
+        },
+        onProof: (fileId) => {
+          setModel((current) => ({ ...current, proofOpen: fileId }))
+          const proof = fileId ? proofOf(fileId) : null
+          if (proof) readProof(proof)
+        },
+        onProofRetry: (fileId) => {
+          const proof = proofOf(fileId)
+          if (!proof) return
+          setModel((current) => {
+            const proofs = { ...current.proofs }
+            delete proofs[fileId]
+            return { ...current, proofs }
+          })
+          readProof(proof)
         },
       }}
     />

@@ -499,6 +499,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.incidents', title: 'Incidents', titleIt: 'Infortuni e quasi incidenti', wave: 'W2b', href: '/plant/incidents' },
           // B-W2b-147: PPE for workers (SCR-211), before chemicals as the design orders them.
           { id: 'plant.ppe', title: 'PPE for workers', titleIt: 'DPI ai lavoratori', wave: 'W2b', href: '/plant/ppe' },
+          // B-W2b-148: Health surveillance (SCR-212), after PPE for workers and before Chemicals & waste (the design's order).
+          { id: 'plant.health', title: 'Health surveillance', titleIt: 'Sorveglianza sanitaria', wave: 'W2b', href: '/plant/health' },
           // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
           { id: 'plant.chemicals', title: 'Chemicals & waste', titleIt: 'Sostanze e rifiuti', wave: 'W2b', href: '/plant/chemicals' },
           { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },

@@ -35,15 +35,15 @@ export type { QuoteRecordViewModel, QuoteRecordActions } from '../record-model'
  * beside any tab on a wide screen with ⌘J). Money follows the person's grains: cost and margin columns are absent, never
  * zero. It draws one view model and fetches nothing (QuoteRecord.tsx loads it).
  */
-export function QuoteRecordView({ model, actions, sendActions, panels }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode }) {
+export function QuoteRecordView({ model, actions, sendActions, panels, proofs }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; /** B-W2b-165: Documents › Proofs (the container mounts it). */ proofs?: ReactNode }) {
   return (
     <WithMessages namespaces={['sales', 'records']}>
-      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} />
+      <QuoteRecord model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} />
     </WithMessages>
   )
 }
 
-function QuoteRecord({ model, actions, sendActions, panels }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode }) {
+function QuoteRecord({ model, actions, sendActions, panels, proofs }: { model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode }) {
   const t = useT('sales')
   const listHref = `${model.prefix}/sales/quotes`
   const loaded = model.quote
@@ -88,10 +88,10 @@ function QuoteRecord({ model, actions, sendActions, panels }: { model: QuoteReco
       </div>
     )
   }
-  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} />
+  return <ReadyRecord quote={loaded.value} model={model} actions={actions} sendActions={sendActions} panels={panels} proofs={proofs} />
 }
 
-function ReadyRecord({ quote, model, actions, sendActions, panels }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode }) {
+function ReadyRecord({ quote, model, actions, sendActions, panels, proofs }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions; sendActions?: DocumentSendActions; panels?: ReactNode; proofs?: ReactNode }) {
   const t = useT('sales')
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/quotes/${quote.id}`
@@ -319,7 +319,7 @@ function ReadyRecord({ quote, model, actions, sendActions, panels }: { quote: Qu
           {model.tab === 'terms' && <TermsTab quote={quote} model={model} actions={actions} />}
           {model.tab === 'versions' && <VersionsTab quote={quote} model={model} actions={actions} />}
           {model.tab === 'approval' && <ApprovalTab quote={quote} model={model} actions={actions} />}
-          {model.tab === 'documents' && <DocumentsTab quote={quote} model={model} actions={actions} />}
+          {model.tab === 'documents' && <DocumentsTab quote={quote} model={model} actions={actions} proofs={proofs} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-q-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (

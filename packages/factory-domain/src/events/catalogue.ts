@@ -38,6 +38,8 @@ import { depthEvents as plantDepth } from '../plant/events'
 // B-W2a-33: the stored alerts and the date timers.
 import { events as alerts } from '../alerts/events'
 import { events as timers } from '../timers/events'
+// B-W2b-167: tasks and notifications for partners.
+import { events as portal } from '../portal/events'
 // B-W2a-39: the accounting exports and the period locks.
 import { events as accounting } from '../accounting/events'
 // B-W2a-36: Security & health (restore drills, two-factor per role).
@@ -268,7 +270,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-161
   ...branding,
   // B-W2b-162
-  ...partners] as const satisfies readonly EventDefinition[]
+  ...partners,
+  // B-W2b-167
+  ...portal] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

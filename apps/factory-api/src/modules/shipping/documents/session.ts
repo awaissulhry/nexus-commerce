@@ -5,6 +5,7 @@ import { linkDocuments } from '@nexus/factory-domain/shipping/documents/document
 import { downloadFile, getFile, systemCallerOf } from '../../../platform/files/files'
 import type { FilesRuntime } from '../../../platform/files/service'
 import { linkSessionOf, linkUnavailable, type LinkSession } from '../../../platform/links/authenticator'
+import { useLink } from '../../../platform/links/use'
 import { readShipment } from '../store'
 import { documentsCommand, readDocuments, sharedFilesOf } from './read'
 
@@ -17,7 +18,8 @@ import { documentsCommand, readDocuments, sharedFilesOf } from './read'
  *              party's links: exactly what the link lists. Then, in the tenant's system scope, what each of them is (the
  *              office's documents, matched by SHA-256): DDT, DoC, leaflet, or OTHER. A carrier label (a Parcel's file),
  *              the packing list and every office file are never shared with the party, so never listed.
- *   download   one of those files only: an audit row (who: the link; what: the file), then platform/files' own download
+ *   download   one of those files only: its evidence on the link (DOWNLOADED, not a use; B-W2b-163) and an audit row (who:
+ *              the link; what: the file), then platform/files' own download
  *              (the link's files.read, its audience rule: shared with its party's links, of its record), presigned 60 s.
  */
 
@@ -65,7 +67,9 @@ export async function downloadLinkDocument(files: FilesRuntime, request: Fastify
   if (!seen) throw linkUnavailable()
   if (!seen.shared.some((file) => file.id === fileId)) throw new NotFoundError('File not found.')
   await documentsCommand(request, { name: 'shipping.downloadDocument', idempotencyKey, input: { fileId } }, async (tools) => {
-    tools.audit({ recordType: 'StoredFile', recordId: fileId, companyId: link.companyId, after: { linkId: link.id, shipmentId: link.record.id } })
+    // B-W2b-163 (the B-W1-49 gap): a download is evidence on the link too (DOWNLOADED; a DOCUMENT_VIEW download uses nothing).
+    const use = await useLink(tools, request, { action: 'download' })
+    tools.audit({ recordType: 'StoredFile', recordId: fileId, companyId: link.companyId, after: { linkId: link.id, shipmentId: link.record.id, evidenceId: use.evidenceId } })
     return { fileId }
   })
   const callers = { caller: request, system: systemCallerOf(request) }

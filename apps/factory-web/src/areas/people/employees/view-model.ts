@@ -169,7 +169,8 @@ export interface DialogActions {
 
 // ---- the record ----------------------------------------------------------------------------------------------------------------
 
-export const EMPLOYEE_TABS = ['profile', 'job', 'attendance', 'skills', 'pay', 'documents', 'activity'] as const
+// B-W2b-146: `safety` (role sheet, PPE, fitness, incidents) before Documents, as the design's tab order.
+export const EMPLOYEE_TABS = ['profile', 'job', 'attendance', 'skills', 'pay', 'safety', 'documents', 'activity'] as const
 export type EmployeeTab = (typeof EMPLOYEE_TABS)[number]
 
 /** The record's explicit edit (Profile › Identity, Job & team › Job), as typed. */

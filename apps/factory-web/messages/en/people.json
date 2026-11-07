@@ -555,7 +555,8 @@
     "register": "HR register: names, job and team — never pay, attendance, health or a figure about one person's work",
     "unread": "The site's rules could not be read: no individual figure is shown",
     "workerHr": "One person's figures are seen only by the worker and HR",
-    "workerHrLead": "One person's figures are seen only by the worker, HR and the team lead"
+    "workerHrLead": "One person's figures are seen only by the worker, HR and the team lead",
+    "recordSafety": "One person's safety: role sheet, PPE, training; the fitness outcome only to HR and the doctor, each view recorded; no clinical data"
   },
   "problem": {
     "conflict": "Someone changed it meanwhile: read it again and retry.",
@@ -729,7 +730,8 @@
     "job": "Job & team",
     "pay": "Pay & piece rates",
     "profile": "Profile",
-    "skills": "Skills & training"
+    "skills": "Skills & training",
+    "safety": "Safety"
   },
   "team": {
     "isLead": "Lead",

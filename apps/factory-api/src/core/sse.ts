@@ -5,6 +5,8 @@ import { Redis } from 'ioredis'
 import { EVENT_CATALOGUE, type EventCatalogue } from '@nexus/factory-domain/events/catalogue'
 import { liveMessage, type LiveMessage } from '@nexus/factory-domain/events/envelope'
 import { liveViewFor } from '@nexus/factory-domain/events/live'
+// B-W2b-167: the partner audience (one live channel per portal session, its own party's events only).
+import { partnerLiveViewFor } from '@nexus/factory-domain/portal/notifications/live'
 import { loadFactoryEnv } from '../env'
 import { actorOf, requireContext } from './context'
 import { ApiError } from './errors'
@@ -188,15 +190,30 @@ export interface LiveStreamOptions {
   readonly heartbeatMs?: number
   /** Called with the stream's closer; the route ends every open stream when the app closes. */
   readonly track?: (close: () => void) => () => void
+  /**
+   * B-W2b-167: a partner session's id. A partner session keeps ONE live channel: a new stream of the same session ends the one
+   * before (a second tab, a reconnect that overtook the old socket). Office and floor streams pass none.
+   */
+  readonly session?: string
 }
+
+/** B-W2b-167: the open partner stream of each portal session (its closer). */
+const partnerStreams = new Map<string, () => void>()
 
 /** A stream that falls this far behind (a stalled screen) is ended; the screen reconnects and refetches. */
 const MAX_BUFFERED_BYTES = 1_048_576
 
-/** Answers a request with the viewer's live stream. The route's manifest admits only office and floor sessions. */
+/**
+ * Answers a request with the viewer's live stream. The routes' manifests admit office and floor sessions (`GET /live`) and,
+ * B-W2b-167, partner sessions (`GET /portal/live`): a partner viewer receives only what partnerLiveViewFor lets through (its
+ * own party's events of the portal's list), one stream per portal session (`options.session`).
+ */
 export async function serveLiveStream(request: FastifyRequest, reply: FastifyReply, options: LiveStreamOptions): Promise<FastifyReply> {
   const context = requireContext(request)
-  if (context.audience !== 'office' && context.audience !== 'floor') throw new ApiError('internal_error', 'Live updates serve office and floor screens only.')
+  const partner = context.audience === 'partner'
+  if (context.audience !== 'office' && context.audience !== 'floor' && !partner) throw new ApiError('internal_error', 'Live updates serve office, floor and portal screens only.')
+  if (partner && !options.session) throw new ApiError('internal_error', 'A portal live stream names its session.')
+  const viewFor = partner ? partnerLiveViewFor : liveViewFor
   const actor = actorOf(context)
   const catalogue = options.catalogue ?? EVENT_CATALOGUE
   const stream = new PassThrough()
@@ -210,6 +227,7 @@ export async function serveLiveStream(request: FastifyRequest, reply: FastifyRep
     if (!open) return
     open = false
     clearInterval(heartbeat)
+    if (options.session && partnerStreams.get(options.session) === close) partnerStreams.delete(options.session)
     untrack?.()
     void unlisten?.()
     stream.end()
@@ -224,7 +242,7 @@ export async function serveLiveStream(request: FastifyRequest, reply: FastifyRep
 
   reply.raw.once('close', close)
   const stop = await options.feed.listen(context.tenantId, (message) => {
-    const view = liveViewFor(message, actor, catalogue)
+    const view = viewFor(message, actor, catalogue)
     if (view) send(`id: ${view.eventId}\nevent: change\ndata: ${JSON.stringify(view)}\n\n`)
   })
   if (!open) {
@@ -232,6 +250,11 @@ export async function serveLiveStream(request: FastifyRequest, reply: FastifyRep
     void stop()
   } else {
     unlisten = stop
+    if (options.session) {
+      // One live channel per portal session: the one before ends (its screen reconnects only if it is still there).
+      partnerStreams.get(options.session)?.()
+      partnerStreams.set(options.session, close)
+    }
     untrack = options.track?.(close)
     heartbeat = setInterval(() => send(': ping\n\n'), options.heartbeatMs ?? 20_000)
     heartbeat.unref()

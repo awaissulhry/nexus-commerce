@@ -1,0 +1,118 @@
+{
+  "link": {
+    "title": "Prove che accetti con il preventivo",
+    "hint_one": "Accetti anche questa prova: la grafica, la tabella taglie o la scheda concordata con {seller}.",
+    "hint_other": "Accetti anche queste {count} prove: la grafica, la tabella taglie e le schede concordate con {seller}.",
+    "open": "Apri {name}",
+    "version": "versione {n}",
+    "code": "codice {code}",
+    "kind": {
+      "PDF": "PDF",
+      "PICTURE": "Immagine"
+    },
+    "loading": "Caricamento in corso…",
+    "problem": "Questa prova non si può mostrare in questo momento.",
+    "retry": "Riprova",
+    "signLine_one": "Con il preventivo accetti la prova qui sopra.",
+    "signLine_other": "Con il preventivo accetti le {count} prove qui sopra.",
+    "accepted": "Prove accettate con il preventivo"
+  },
+  "office": {
+    "title": "Prove che il cliente accetta con il preventivo",
+    "hint": "Una prova grafica, una tabella taglie, una scheda misure: il cliente le vede nel link di accettazione e le accetta con il preventivo. L'invio le blocca con la versione.",
+    "add": "Aggiungi prova",
+    "drop": "Trascina qui un PDF o un'immagine (JPEG, PNG o WebP), oppure sceglila",
+    "dropShort": "PDF o immagine",
+    "loading": "Caricamento delle prove…",
+    "problem": "Non è stato possibile caricare le prove.",
+    "retry": "Riprova",
+    "none": "Ancora nessuna prova.",
+    "noneSent": "Nessuna prova è stata inviata con questa versione.",
+    "versionHead": "Versione {revision}",
+    "versionStatus": {
+      "DRAFT": "Bozza",
+      "PENDING_APPROVAL": "In attesa di approvazione",
+      "APPROVED": "Approvata",
+      "SENT": "Inviata",
+      "ACCEPTED": "Accettata",
+      "DECLINED": "Rifiutata",
+      "EXPIRED": "Scaduta",
+      "SUPERSEDED": "Sostituita",
+      "CANCELLED": "Ritirata"
+    },
+    "fileVersion": "versione {n}",
+    "copied": "riportata",
+    "state": {
+      "READY": "Pronta",
+      "UPLOADING": "In caricamento",
+      "CHECKING": "In verifica",
+      "REFUSED": "Rifiutata"
+    },
+    "stateHint": {
+      "UPLOADING": "Il caricamento non è finito: completalo o togli la prova.",
+      "CHECKING": "Il controllo antivirus è ancora in corso.",
+      "REFUSED": "Quello che è arrivato non corrisponde a quello inviato, oppure il controllo ha trovato un problema: toglila e caricala di nuovo."
+    },
+    "shared": "Condivisa con il cliente",
+    "notShared": "Va al cliente quando invii il preventivo",
+    "addedBy": "Aggiunta {at} da {name}",
+    "addedAt": "Aggiunta {at}",
+    "code": "Codice {code}…",
+    "open": "Apri",
+    "newVersion": "Nuova versione",
+    "remove": "Togli",
+    "carry_one": "Riporta {count} prova dalla versione {revision}",
+    "carry_other": "Riporta {count} prove dalla versione {revision}",
+    "held": {
+      "right": "Il tuo ruolo non può cambiare le prove di questo preventivo.",
+      "frozen": "La versione {revision} è stata inviata: le sue prove sono partite con lei. Crea una nuova versione per cambiarle.",
+      "closed": "La versione {revision} è chiusa: le sue prove restano come erano.",
+      "busy": "Attendi il caricamento in corso.",
+      "full": "Una versione prende al massimo {max} prove: togline una prima."
+    },
+    "removeConfirm": {
+      "title": "Togliere {name}?",
+      "body": "La prova e tutte le sue versioni precedenti vengono tolte da questa bozza. Il cliente non l'ha mai vista.",
+      "go": "Togli prova",
+      "back": "Tienila"
+    },
+    "upload": {
+      "reading": "Lettura di {name}…",
+      "sending": "Invio di {name}…",
+      "type": "{name} non è un PDF né un'immagine (JPEG, PNG o WebP): il cliente non potrebbe vederlo nel browser.",
+      "kind": "Una nuova versione resta dello stesso tipo: dopo un PDF un PDF, dopo un'immagine un'immagine.",
+      "size": "{name} è troppo grande per una prova (al massimo {max}).",
+      "failed": "Non è stato possibile caricare {name}. Riprova."
+    },
+    "accepted": {
+      "title": "Accettate con la versione {revision}",
+      "by": "Da {name}, {at}",
+      "none": "L'accettazione non nomina alcuna prova.",
+      "name": "Prova",
+      "version": "Versione",
+      "code": "SHA-256",
+      "size": "Dimensione"
+    },
+    "openProblem": "Non è stato possibile aprire questa prova. Riprova.",
+    "notice": {
+      "added": "{name} aggiunta.",
+      "removed": "{name} tolta.",
+      "carried_one": "{count} prova riportata.",
+      "carried_other": "{count} prove riportate.",
+      "conflict": "Il preventivo è cambiato nel frattempo: le prove sono state rilette."
+    }
+  },
+  "viewer": {
+    "title": "{name} · versione {n}",
+    "previous": "Prova precedente",
+    "next": "Prova successiva",
+    "first": "Questa è la prima prova.",
+    "last": "Questa è l'ultima prova.",
+    "only": "Questa è l'unica prova.",
+    "count": "{n} di {count}",
+    "loading": "Caricamento in corso…",
+    "problem": "Questa prova non si può mostrare in questo momento.",
+    "retry": "Riprova",
+    "picture": "{name}, versione {n}"
+  }
+}

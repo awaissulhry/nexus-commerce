@@ -2,6 +2,7 @@ import { SKILL_LEVELS, SKILL_REFUSALS, type SkillLevel } from '@nexus/factory-do
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { fieldOf, problemOf, type Words } from '../_shared/model'
 import type { AuthorisationCell, CellHistory, LevelBody, LevelCell, Matrix, MatrixClass, MatrixRow, Skill, TraineeState } from './api'
+import type { CourseRef, DueCellValue } from './training/api'
 
 /**
  * The pure rules of People › Skills & training (SCR-160; B-W2b-65): who may do what, the page's address (tiles = saved
@@ -11,7 +12,7 @@ import type { AuthorisationCell, CellHistory, LevelBody, LevelCell, Matrix, Matr
  * level is a person's judgement, never computed.
  */
 
-export const SKILLS_NAMESPACES = ['people-skills', 'people', 'lists'] as const
+export const SKILLS_NAMESPACES = ['people-skills', 'people-training', 'people', 'lists'] as const
 export const TIME_ZONE = 'Europe/Rome'
 export { SKILL_LEVELS }
 
@@ -35,9 +36,10 @@ export function skillsCan(permissions: readonly string[]): SkillsCan {
 
 // ---- the page's address ------------------------------------------------------------------------------------------------------
 
-export const SKILL_TILES = ['TRAINEES', 'AUTHORISATIONS_ENDING'] as const
+// B-W2b-146: the design's tiles about training (person × course; the held authorisations), after W2b-1's two.
+export const SKILL_TILES = ['TRAINING_OVERDUE', 'TRAINING_DUE_SOON', 'TRAINEES', 'AUTHORISATIONS_HELD', 'LANGUAGE_NOT_CHECKED', 'AUTHORISATIONS_ENDING'] as const
 export type SkillTile = (typeof SKILL_TILES)[number]
-export const SHOWS = ['ALL', 'SKILLS', 'MACHINES'] as const
+export const SHOWS = ['ALL', 'SKILLS', 'MACHINES', 'SAFETY'] as const
 export type Show = (typeof SHOWS)[number]
 export const SORTS = ['TEAM', 'NAME'] as const
 export type Sort = (typeof SORTS)[number]
@@ -89,6 +91,26 @@ export const className = (entry: { labelIt: string; labelEn: string }, locale: s
 
 export const levelOf = (row: MatrixRow, skillId: string): LevelCell | null => row.levels.find((cell) => cell.skillId === skillId) ?? null
 export const authorisationOf = (row: MatrixRow, classId: string): AuthorisationCell | null => row.authorisations.find((cell) => cell.machineClassId === classId) ?? null
+/** B-W2b-146: a person's DueCell of a safety course; null when nothing is asked or held (or the caller reads no safety record). */
+export const trainingOf = (row: MatrixRow, courseId: string): DueCellValue | null => row.trainings?.find((cell) => cell.courseId === courseId) ?? null
+
+/** A tile's figure: null when the caller reads no one's safety records (said "—" with why). */
+export function tileValue(tiles: Matrix['tiles'], tile: SkillTile): number | null {
+  switch (tile) {
+    case 'TRAINEES':
+      return tiles.trainees
+    case 'AUTHORISATIONS_ENDING':
+      return tiles.authorisationsEnding
+    case 'TRAINING_OVERDUE':
+      return tiles.trainingOverdue
+    case 'TRAINING_DUE_SOON':
+      return tiles.trainingDueSoon
+    case 'AUTHORISATIONS_HELD':
+      return tiles.authorisationsHeld
+    case 'LANGUAGE_NOT_CHECKED':
+      return tiles.languageNotChecked
+  }
+}
 
 /** The lines and teams of the rows read, for the toolbar's choices. */
 export function placesOf(rows: readonly MatrixRow[]): { lines: { id: string; label: string }[]; teams: { id: string; label: string }[] } {
@@ -111,9 +133,9 @@ export const groupOf = (row: Pick<MatrixRow, 'line' | 'team'>): string => [row.l
 
 // ---- cells -------------------------------------------------------------------------------------------------------------------
 
-export type CellRef = { employeeId: string; kind: 'skill'; skillId: string } | { employeeId: string; kind: 'machine'; classId: string }
+export type CellRef = { employeeId: string; kind: 'skill'; skillId: string } | { employeeId: string; kind: 'machine'; classId: string } | { employeeId: string; kind: 'course'; courseId: string }
 
-export const cellKey = (cell: CellRef): string => `${cell.employeeId}:${cell.kind === 'skill' ? cell.skillId : cell.classId}`
+export const cellKey = (cell: CellRef): string => `${cell.employeeId}:${cell.kind === 'skill' ? cell.skillId : cell.kind === 'machine' ? cell.classId : cell.courseId}`
 
 /** 1–4 on a skill cell: the level asked, or null for another key. */
 export function levelOfKey(key: string): SkillLevel | null {
@@ -244,11 +266,12 @@ export function printAddress(prefix: string, address: SkillsAddress, ids: readon
 export const printIdsOf = (params: URLSearchParams | null): string[] => (params?.get('ids') ?? '').split(',').filter(Boolean).slice(0, 500)
 
 /** A column of the matrix (print and screen read the same list). */
-export type MatrixColumn = { kind: 'skill'; id: string; skill: Skill } | { kind: 'machine'; id: string; entry: Matrix['machineClasses'][number] }
+export type MatrixColumn = { kind: 'skill'; id: string; skill: Skill } | { kind: 'machine'; id: string; entry: Matrix['machineClasses'][number] } | { kind: 'course'; id: string; course: CourseRef }
 
-/** The matrix's columns in the design's order: operations, machines' skills and general ones, then the machine classes. */
-export function matrixColumns(matrix: Pick<Matrix, 'skills' | 'machineClasses'>, show: Show): MatrixColumn[] {
-  const skills = show === 'MACHINES' ? [] : matrix.skills.map((skill) => ({ kind: 'skill' as const, id: skill.id, skill }))
-  const machines = show === 'SKILLS' ? [] : matrix.machineClasses.map((entry) => ({ kind: 'machine' as const, id: entry.id, entry }))
-  return [...skills, ...machines]
+/** The matrix's columns in the design's order: operations (skills), machines, then the safety courses (B-W2b-146). */
+export function matrixColumns(matrix: Pick<Matrix, 'skills' | 'machineClasses'> & { courses?: Matrix['courses'] }, show: Show): MatrixColumn[] {
+  const skills = show === 'ALL' || show === 'SKILLS' ? matrix.skills.map((skill) => ({ kind: 'skill' as const, id: skill.id, skill })) : []
+  const machines = show === 'ALL' || show === 'MACHINES' ? matrix.machineClasses.map((entry) => ({ kind: 'machine' as const, id: entry.id, entry })) : []
+  const courses = show === 'ALL' || show === 'SAFETY' ? (matrix.courses ?? []).map((course) => ({ kind: 'course' as const, id: course.id, course })) : []
+  return [...skills, ...machines, ...courses]
 }
