@@ -95,6 +95,12 @@ import { events as safetyPpe } from '../safety-ppe/events'
 import { events as safetyChemicals } from '../safety-chemicals/events'
 // B-W2b-135: health surveillance (a plan, a visit, a judgement changed: ids and states only).
 import { events as safetyHealth } from '../safety-health/events'
+// B-W2b-139: training sessions, attendance signed on the floor, training records, the instruction register.
+import { events as safetyRecords } from '../safety-records/events'
+// B-W2b-161: company branding (a company's logo, accent, sender name or portal label changed).
+import { events as branding } from '../branding/events'
+// B-W2b-162: partner organisations and their people (portal settings, invitations, changes, access ending soon).
+import { events as partners } from '../partners/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -256,7 +262,13 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-143
   ...safetyChemicals,
   // B-W2b-135
-  ...safetyHealth] as const satisfies readonly EventDefinition[]
+  ...safetyHealth,
+  // B-W2b-139
+  ...safetyRecords,
+  // B-W2b-161
+  ...branding,
+  // B-W2b-162
+  ...partners] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -19,6 +19,13 @@ import { completeUpload, deleteFile, downloadFile, getFile, listFiles, requestUp
 import { manifest } from './manifest'
 import { MAX_FILE_BYTES } from './rules'
 import { processFiles } from './service'
+// B-W2b-160: versions, the preview, large uploads in parts.
+import { abortLargeUploadContract, completeLargeUploadContract, getLargeUploadContract, presignPartsContract, startLargeUploadContract, startLargeVersionContract, syncLargeUploadContract } from './multipart/contract'
+import { abortLargeUpload, completeLargeUpload, getLargeUpload, presignParts, startLargeUpload, startLargeVersion, syncLargeUpload } from './multipart/large'
+import { previewContract } from './preview/contract'
+import { previewFile } from './preview/preview'
+import { listVersionsContract, requestVersionContract, restoreVersionContract } from './versions/contract'
+import { listVersions, requestNewVersion, restoreVersion } from './versions/versions'
 
 /**
  * Files on R2 (platform part; plan A1 §3.6, features COL-045, COL-050): announce an upload, confirm it, list a record's
@@ -78,6 +85,33 @@ export default defineRoutes('files', manifest, async (app) => {
   app.delete('/files/:fileId', { schema: deleteFileContract }, async (request) => {
     return { file: await deleteFile(processFiles(), request, request.params.fileId, request.query, idempotencyKeyFrom(request)) }
   })
+
+  // B-W2b-160 (COL-046, PLT-216): a new version of a file's series, its versions, an earlier one restored.
+  app.post('/files/:fileId/versions', { schema: requestVersionContract }, async (request, reply) => {
+    return reply.code(201).send(await requestNewVersion(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  })
+  app.get('/files/:fileId/versions', { schema: listVersionsContract }, async (request) => ({ versions: await listVersions(request, request.params.fileId) }))
+  app.post('/files/:fileId/restore', { schema: restoreVersionContract }, async (request, reply) => {
+    return reply.code(201).send({ file: await restoreVersion(processFiles(), request, request.params.fileId, idempotencyKeyFrom(request)) })
+  })
+
+  // B-W2b-160 (COL-047): open in the browser (a picture or a PDF), else a download; 60 seconds.
+  app.get('/files/:fileId/preview', { schema: previewContract }, async (request) => ({
+    preview: await previewFile(processFiles(), { caller: request, system: systemCallerOf(request) }, request.params.fileId),
+  }))
+
+  // B-W2b-160 (COL-052): large uploads in parts that resume after a dropped line.
+  app.post('/files/uploads', { schema: startLargeUploadContract }, async (request, reply) => {
+    return reply.code(201).send(await startLargeUpload(processFiles(), request, request.body, idempotencyKeyFrom(request)))
+  })
+  app.post('/files/:fileId/versions/uploads', { schema: startLargeVersionContract }, async (request, reply) => {
+    return reply.code(201).send(await startLargeVersion(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  })
+  app.get('/files/uploads/:sessionId', { schema: getLargeUploadContract }, async (request) => getLargeUpload(request, request.params.sessionId))
+  app.post('/files/uploads/:sessionId/parts', { schema: presignPartsContract }, async (request) => presignParts(processFiles(), request, request.params.sessionId, request.body.parts))
+  app.post('/files/uploads/:sessionId/sync', { schema: syncLargeUploadContract }, async (request) => syncLargeUpload(processFiles(), request, request.params.sessionId))
+  app.post('/files/uploads/:sessionId/complete', { schema: completeLargeUploadContract }, async (request) => completeLargeUpload(processFiles(), request, request.params.sessionId, idempotencyKeyFrom(request)))
+  app.delete('/files/uploads/:sessionId', { schema: abortLargeUploadContract }, async (request) => abortLargeUpload(processFiles(), request, request.params.sessionId, idempotencyKeyFrom(request)))
 
   // The local store's presigned requests: raw bytes of any type, up to the largest file, in this scope only.
   await app.register(async (instance) => {

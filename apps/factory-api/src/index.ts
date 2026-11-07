@@ -12,7 +12,7 @@ const env = loadFactoryEnv()
 // The runtime login, audited at open (factory-db): an unsafe login (superuser, BYPASSRLS, an owner …) stops the boot.
 let database: FactoryDatabase
 try {
-  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL })
+  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, clientCapacity: env.FACTORY_DATABASE_CLIENTS })
 } catch (error) {
   console.error(`factory-api: the database refused the boot: ${(error as Error).message}`)
   process.exit(1)
@@ -40,8 +40,8 @@ redis.on('error', () => {
 })
 
 // Office sign-in: the authenticator (a one-off link's token in x-factory-link, platform/links; else a floor session
-// cookie, platform/auth/floor; else the office session cookie) and the auth, floor and link routes' services. Portal
-// sessions come with their step; until then those requests have no session (401).
+// cookie, platform/auth/floor; else the office session cookie; a partner route reads the portal cookie,
+// platform/auth/portal) and the auth, floor, portal and link routes' services.
 const officeAuth = createOfficeAuth({
   database,
   environment: env.FACTORY_ENV,

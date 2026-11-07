@@ -493,8 +493,12 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
         pages: [
+          // B-W2b-144: Risk assessment (SCR-209), first of Health & safety as the design orders them.
+          { id: 'plant.risk', title: 'Risk assessment', titleIt: 'Valutazione dei rischi (DVR)', wave: 'W2b', href: '/plant/risk' },
           // B-W2b-149: Incidents (SCR-210).
           { id: 'plant.incidents', title: 'Incidents', titleIt: 'Infortuni e quasi incidenti', wave: 'W2b', href: '/plant/incidents' },
+          // B-W2b-147: PPE for workers (SCR-211), before chemicals as the design orders them.
+          { id: 'plant.ppe', title: 'PPE for workers', titleIt: 'DPI ai lavoratori', wave: 'W2b', href: '/plant/ppe' },
           // B-W2b-148: Health surveillance (SCR-212), after PPE for workers and before Chemicals & waste (the design's order).
           { id: 'plant.health', title: 'Health surveillance', titleIt: 'Sorveglianza sanitaria', wave: 'W2b', href: '/plant/health' },
           // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
@@ -622,6 +626,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.clock', title: 'Clock in & out', titleIt: 'Timbratura', tile: 'clock', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'phone'] },
   // W2b: B-W2b-68 My day (SCR-171).
   { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
+  // W2b: B-W2b-145 Training & PPE sign-off (SCR-231), tile family Me; supervisor = a team leader's line tablet.
+  { id: 'floor.training', title: 'Training & PPE sign-off', titleIt: 'Firma formazione e DPI', tile: 'training', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   // W2b: B-W2b-137 Report an incident (SCR-230), tile family Maintenance & safety; kept on the first page of every Home.
   { id: 'floor.incident', title: 'Report an incident', titleIt: 'Segnala un incidente', tile: 'incident', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'] },

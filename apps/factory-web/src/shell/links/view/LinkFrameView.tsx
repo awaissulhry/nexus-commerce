@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { Clock3, Link2Off, Loader2, MailQuestion, ShieldAlert, UserX } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
@@ -47,6 +47,26 @@ export type LinkFrameBody =
   /** A module's task page (accept a quote, SCR-099): the frame, and the task as the children; the page says its own states. */
   | { kind: 'task' }
 
+/**
+ * B-W2b-161: the link's sender as its company's branding gives it (LinkLanding reads `GET /link/branding` once the link
+ * opened); null: none read (no link, a dead one, or the read failed: the sender's name in text, the standard colours).
+ */
+export const LinkBrandingContext = createContext<LinkSender | null>(null)
+
+/** The sender the frame shows: what the page gave, each field missing there from the branding. */
+export function senderOf(given: LinkSender | null, branding: LinkSender | null): LinkSender | null {
+  if (!branding) return given
+  if (!given) return branding
+  return {
+    ...given,
+    name: given.name || branding.name,
+    companyId: given.companyId ?? branding.companyId,
+    logoUrl: given.logoUrl ?? branding.logoUrl,
+    logoDarkUrl: given.logoDarkUrl ?? branding.logoDarkUrl,
+    accent: given.accent ?? branding.accent,
+  }
+}
+
 export interface LinkFrameViewModel {
   /** Who sent the link; null when the page cannot know (no token, or the link opened nothing). */
   sender: LinkSender | null
@@ -79,7 +99,7 @@ export function LinkFrameView({ model, children }: LinkFrameViewProps) {
   const t = useT('shell')
   const locale = useLocale()
   const switchLocale = useLocaleSwitch()
-  const sender = model.sender
+  const sender = senderOf(model.sender, useContext(LinkBrandingContext))
   const brand = sender ? checkBranding(sender) : null
   // Unknown (no token, or the link opened nothing): the text then speaks of "whoever sent it" in its own words.
   const senderName = brand?.name || null

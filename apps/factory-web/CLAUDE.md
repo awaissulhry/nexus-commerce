@@ -264,6 +264,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   report's time, so a try and a queued retry of one id would be refused as a reused id). Without the name (a near miss or a
   hazard naming nobody): online only, one key kept until answered, held in the page with the network gone, never stored.
   "Seen by safety" from live `incident.seen` + a beat; photos (≤ 4, 30 minutes) after the office names the incident.
+  B-W2b-145: `floor/tasks/training/` (SCR-231, `/floor/training`, tile `training` on every station mode and a lead's line tablet;
+  catalogue `floor-training`; on the APIs of B-W2b-139 and B-W2b-134): two tiles, then one job per screen. Training attendance = the
+  site's open sessions (one opens at once) → a badge (its owner named first by `POST /safety/floor/training/instruction/pending`) or
+  a name from the tablet's list → the person's own PIN signs (DS PinSignBlock) → the list fills; the trainer answers each person's
+  language check, then countersigns with their PIN. Receive PPE = badge or name → the kit's missing items prefilled → item (tile or
+  its code) → size (a tap finishes the item) → how many → the person's PIN signs the receipt. ONLINE only (a PIN is never queued);
+  a 401 on a signature is the badge or PIN unless `GET /floor/me` says the session ended (`api.ts signedOrWrong`). Closed or
+  cancelled in the office: signing stops with the reason (live hints + a 30 s beat).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up

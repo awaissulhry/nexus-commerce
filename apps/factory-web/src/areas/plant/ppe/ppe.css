@@ -1,0 +1,313 @@
+/*
+ * Plant › Health & safety › PPE for workers (SCR-211, B-W2b-147) LAYOUT: the band, the tiles, the lens switch, the four lenses,
+ * the dialogs' forms (the issue lines, the signature choice), and the two new tabs (the receipt PDF, the PPE card print). The
+ * page fills the shell's main area (no max-width: Owner rule 2026-10-29); the controls are the design system's; semantic
+ * tokens only.
+ */
+.fw-ppe,
+.fw-ppe-section,
+.fw-ppe-form,
+.fw-ppe-loading,
+.fw-ppe-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ppe {
+  gap: var(--nds-space-20);
+}
+
+.fw-ppe-section,
+.fw-ppe-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-ppe-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-ppe-band,
+.fw-ppe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ppe-status,
+.fw-ppe-actions,
+.fw-ppe-tools,
+.fw-ppe-row,
+.fw-ppe-head-title,
+.fw-ppe-lenses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ppe-grow {
+  flex: 1 1 auto;
+}
+
+.fw-ppe-nowrap {
+  flex-wrap: nowrap;
+}
+
+.fw-ppe-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-ppe-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-ppe-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-ppe-muted,
+.fw-ppe-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ppe-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ppe-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-ppe-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-ppe-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-ppe-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-ppe-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-ppe-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-ppe-code {
+  font-family: var(--nds-font-mono);
+}
+
+.fw-ppe-struck {
+  text-decoration: line-through;
+  color: var(--nds-text-2);
+}
+
+.fw-ppe-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-primary);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+}
+
+.fw-ppe-link:hover {
+  text-decoration: underline;
+}
+
+.fw-ppe-link:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}
+
+/* Forms */
+.fw-ppe-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ppe-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-ppe-field-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: 32px;
+}
+
+/* An issue line: item, size, quantity, why, remove — one row on a wide dialog, stacked on a phone. */
+.fw-ppe-line {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(140px, 1fr) minmax(120px, auto) minmax(0, 1.1fr) auto;
+  gap: var(--nds-space-8);
+  align-items: end;
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-ppe-line-note {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .fw-ppe-line {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fw-ppe-line > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-ppe-methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-ppe-quote {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: 3px solid var(--nds-border-strong);
+  color: var(--nds-text);
+  font-style: italic;
+}
+
+.fw-ppe-kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ppe-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-ppe-chip {
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ppe-chip.is-missing {
+  border-color: var(--nds-warning);
+}
+
+/* The new tabs: the receipt (PDF) and the PPE card (print). */
+.fw-ppe-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ppe-tab-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ppe-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-ppe-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-ppe-facts dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ppe-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ppe-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-ppe-card + .fw-ppe-card {
+  margin-top: var(--nds-space-8);
+}
+
+@media print {
+  .fw-ppe-noprint {
+    display: none;
+  }
+  .fw-ppe-card {
+    break-after: page;
+    border: 0;
+    padding: 0;
+  }
+  .fw-ppe-card:last-child {
+    break-after: auto;
+  }
+}

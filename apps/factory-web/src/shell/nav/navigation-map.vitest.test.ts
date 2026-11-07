@@ -177,6 +177,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/preventive': 'plant.view', // GET /plant/checks/plans (B-W2b-142)
       '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
       '/plant/incidents': 'safety.incidents.view', // GET /safety/incidents (B-W2b-149)
+      '/plant/risk': 'safety.view', // GET /safety/risk/assessments (B-W2b-144)
+      '/plant/ppe': 'safety.view', // GET /safety/ppe/gaps (B-W2b-147)
       '/plant/health': 'safety.health.view', // GET /safety/health (B-W2b-148)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees
@@ -403,6 +405,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
       myday: 'floor.work', // GET /people/myday (B-W2b-68)
+      training: 'floor.work', // GET /safety/floor/training/sessions, /safety/floor/ppe/items (B-W2b-145)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       incident: 'floor.work', // GET /safety/floor/incidents/start (B-W2b-137)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
@@ -416,11 +419,12 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
       // B-W2b-70: the Line view and Scan anything stay on the first page; B-W2b-73: the rest of a full home on the More tile's page.
       // B-W2b-137: Report an incident stays on the first page too, before the Line view (it must never fall off a full Home).
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'help', 'incident', 'lineview', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-145: Training & PPE sign-off at every station mode (tile family Me, after My day).
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
       const first = tilePage(homeTiles(mode, everything, false), 0)
@@ -431,7 +435,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     // line tablet (the lead's own, B-W2b-67); the Line view on a lead's phone (wherever they sign in, B-W2b-70); no My work on
     // a phone (its rows open jobs that need a station). A subcontract station: Scan only.
     const onDevice = (device: string) => homeTiles(null, everything, false, device).map((tile) => tile.key)
-    expect(onDevice('LINE')).toEqual(['clock', 'incident', 'lineview', 'scan'])
+    expect(onDevice('LINE')).toEqual(['clock', 'training', 'incident', 'lineview', 'scan'])
     expect(onDevice('PHONE')).toEqual(['clock', 'myday', 'incident', 'lineview', 'scan'])
     expect(onDevice('STATION')).toEqual(['scan'])
     for (const locale of LOCALES) {

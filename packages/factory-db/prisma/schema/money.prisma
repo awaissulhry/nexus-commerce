@@ -148,6 +148,8 @@ model Invoice {
   // receivables.prisma (W2a): the refunds of what this credit note credits on a paid invoice.
   refunds        Refund[]        @relation("RefundCreditNote")
   allocations    PaymentAllocation[]
+  // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
+  paymentIntents PaymentIntent[]
 
   // Never the same number twice in a series period (a draft has none).
   @@unique([tenantId, numberSeriesId, number])
@@ -458,6 +460,8 @@ model Payment {
   // receivables.prisma (W2a): what is paid back of its unplaced part (a credit balance).
   refunds     Refund[]
   allocations PaymentAllocation[]
+  // W2b portal-sales.prisma (wave 21/22): the card or SEPA payment intent it was recorded for.
+  paymentIntents PaymentIntent[]
 
   @@unique([tenantId, companyId, externalRef])
   // The target of its allocations' reference: the same company and party.
@@ -465,9 +469,15 @@ model Payment {
   @@index([tenantId, partyId, receivedOn])
 }
 
-/// How a payment was made. W1: bank transfers only (Q12); card and SEPA debit come later (W2b), as new values.
+/// How a payment was made. W1: bank transfers only (Q12). B-W2b-F7: card and SEPA debit, named as PaymentIntentMethod's
+/// values (portal-sales.prisma), so one word means one thing.
 enum PaymentMethod {
+  /// Typed by the office from the bank statement (the only method recorded by hand).
   BANK_TRANSFER
+  /// A card payment of a succeeded PaymentIntent (B-W2b-185); never recorded by hand.
+  CARD
+  /// A SEPA Direct Debit of a succeeded PaymentIntent (B-W2b-185); never recorded by hand.
+  SEPA_DEBIT
 }
 
 enum PaymentStatus {

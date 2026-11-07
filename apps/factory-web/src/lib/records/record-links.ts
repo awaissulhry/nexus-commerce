@@ -145,6 +145,14 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-141 Plant settings (SCR-241): a routing rule and a statutory check type open in their dialog.
   RequestRoutingRule: '/plant/settings?rule=[id]',
   MachineCheckType: '/plant/settings?type=[id]',
+  // B-W2b-144 Plant › Risk assessment (SCR-209): an assessment opens its page; a measure its assessment's plan tab (the page
+  // finds it); a role sheet its window.
+  RiskAssessment: '/plant/risk/[id]',
+  RiskMeasure: '/plant/risk?measure=[id]',
+  RoleSheet: '/plant/risk?sheet=[id]',
+  // B-W2b-147 Plant › PPE for workers (SCR-211): a PPE issue (any line id names its receipt) opens its receipt tab, an item its dialog.
+  PpeIssue: '/plant/ppe/receipt?receipt=[id]',
+  PpeItem: '/plant/ppe?view=catalogue&item=[id]',
 })
 
 /**
@@ -276,6 +284,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-141: the routing rules and the statutory check types are sections of Plant settings (SCR-241).
   '/plant/settings/routing': '/plant/settings',
   '/plant/checks/types': '/plant/settings',
+  // B-W2b-144: the assessments, the improvement plan (`?view=`) and the role sheets (`?q=`) of SCR-209.
+  '/safety/risk/assessments': '/plant/risk',
+  '/safety/risk/measures': '/plant/risk',
+  '/safety/rolesheets': '/plant/risk',
 })
 
 export interface RecordRef {

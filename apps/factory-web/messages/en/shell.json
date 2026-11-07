@@ -75,7 +75,9 @@
       "incidents": "Incidents",
       "health": "Health surveillance",
       "calendar": "Safety calendar",
+      "ppe": "PPE for workers",
       "chemicals": "Chemicals & waste",
+      "risk": "Risk assessment",
       "settingsGroup": "Settings",
       "settings": "Plant settings"
     },

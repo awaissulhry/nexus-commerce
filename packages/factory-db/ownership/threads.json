@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/threads.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the email steps) writes threads and messages through apps/factory-api's platform/threads, always through command(). The partner role only reads, and only what is shared with its party: a thread whose record is its party's, and the messages shared with it (Message.partyId is set exactly when the message's audience is PARTNER, so an internal note never matches a party). The floor's role reads neither: a tablet is served a work order's notes marked forFloor by the API, in the tenant's system view after the floor's checks (B-W2b-71, B-W2b-F5). Message is an append-only ledger: no role updates or deletes it, and the triggers of the …_threads_guards migration refuse UPDATE, DELETE and TRUNCATE for every login; a thread is never deleted either. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/threads.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the email steps) writes threads and messages through apps/factory-api's platform/threads, always through command(). The partner role reads only what is shared with its party: a thread whose record is its party's, and the messages shared with it (Message.partyId is set exactly when the message's audience is PARTNER, so an internal note never matches a party). W2b (B-W2b-156, COL-060): a portal session also posts in its own party's record threads: a Message INBOUND, audience PARTNER, channel PORTAL, author PARTY with the person's name, attaching only files of the record shared with its party (the W0 rule), never an author id, a mention or a floor note (no column grant; the …_portal_frame_w2b_guards trigger holds the rest). The floor's role reads neither: a tablet is served a work order's notes marked forFloor by the API, in the tenant's system view after the floor's checks (B-W2b-71, B-W2b-F5). Message is an append-only ledger: no role updates or deletes it, and the triggers of the …_threads_guards migration refuse UPDATE, DELETE and TRUNCATE for every login; a thread is never deleted either. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Thread": {
       "about": "The office makes a record's thread with its first message, keeps its last-activity time and closes or reopens it. A portal or link session reads the threads of its party's records (the API also needs the link's own record for a link); it never sees the reply token, the last-activity time (internal notes move it) or who opened the thread.",
@@ -11,12 +11,12 @@
       }
     },
     "Message": {
-      "about": "The office writes internal notes (and, in the email steps, the mail sent and received); it reads every message of the tenant (the API scopes it by the thread's company and site). A portal or link session reads only the messages shared with its party, never who in the office wrote them (it has the author's name), whom a note mentioned, or whether a note went to the floor.",
+      "about": "The office writes internal notes (and, in the email steps, the mail sent and received); it reads every message of the tenant (the API scopes it by the thread's company and site). A portal or link session reads only the messages shared with its party, never who in the office wrote them (it has the author's name), whom a note mentioned, or whether a note went to the floor. W2b: a portal session posts in its party's record threads (INBOUND, PARTNER, PORTAL, PARTY; the guard), with the same columns hidden, so a post has no author id, no mention and no floor note.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["authorId", "mentionedUserIds", "forFloor"] }
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["authorId", "mentionedUserIds", "forFloor"] }
       }
     }
   }

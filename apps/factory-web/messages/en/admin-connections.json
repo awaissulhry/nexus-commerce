@@ -54,6 +54,16 @@
         "name": "Error tracking (EU)",
         "for": "Tells Nexus support about unexpected errors, with personal data and amounts removed first.",
         "how": "One for every company. Not running yet: it waits for the Owner's yes with its cost and the processor agreement."
+      },
+      "PAYMENT_FAKE": {
+        "name": "Card payments (test)",
+        "for": "Nexus's own stand-in for a card payment provider: customers can try paying a deposit or an invoice by card, and no money moves.",
+        "how": "For local and test runs only; it never takes a real payment."
+      },
+      "STRIPE": {
+        "name": "Card payments (Stripe)",
+        "for": "Lets customers pay deposits and invoices by card or SEPA debit; the card is typed in Stripe's own fields, never in Nexus.",
+        "how": "One per company: each company receives its own payments. Not running yet: it waits for the Owner's yes with its exact fees; bank transfer stays the default."
       }
     },
     "laterService": {

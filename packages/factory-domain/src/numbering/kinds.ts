@@ -37,6 +37,8 @@ export const NUMBER_KINDS = [
   // W2a wave 3 (factory-db numbering.prisma): supplier claims (CLM-…) and subcontract orders (SC-…).
   'CLAIM',
   'SUBCONTRACT',
+  // W2b wave 22/22 (factory-db numbering.prisma): a supplier's ship notice (ASN-…), numbered when it is sent.
+  'ASN',
   // W2a wave 4 (factory-db numbering.prisma): stock counts and the year-end inventory (CNT-…).
   'COUNT',
   // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
@@ -54,6 +56,8 @@ export const NUMBER_KINDS = [
   'INCIDENT',
   // W2b wave 6 (factory-db numbering.prisma): payroll exports for the labour consultant (PAY-…).
   'PAYROLL_EXPORT',
+  // W2b wave 21/22 (factory-db numbering.prisma): a customer's order request sent from the portal (RQ-…).
+  'PORTAL_REQUEST',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -199,6 +203,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   COMPLAINT: 'CMP',
   CLAIM: 'CLM',
   SUBCONTRACT: 'SC',
+  ASN: 'ASN',
   COUNT: 'CNT',
   NCR: 'NCR',
   MAINTENANCE_JOB: 'MJ',
@@ -208,6 +213,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   INCOMING_INSPECTION: 'IIN',
   INCIDENT: 'INC',
   PAYROLL_EXPORT: 'PAY',
+  PORTAL_REQUEST: 'RQ',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

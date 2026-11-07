@@ -131,6 +131,10 @@ model GoodsReceipt {
   supplierId        String             @db.Uuid
   /// The purchase order it receives against, delivered to this site; null for goods without an order.
   purchaseOrderId   String?            @db.Uuid
+  /// W2b (wave 22/22, B-W2b-158; SCM-106, B-W2b-182): the supplier's ship notice it was prefilled from: of the receipt's
+  /// site, supplier and purchase order, SENT (or RECEIVED by an earlier receipt); set while the receipt is OPEN. It posts
+  /// nothing by itself: the receipt's lines, lots and hides are what the dock counted and measured.
+  shipNoticeId      String?            @db.Uuid
   /// The supplier's transport document (DDT, DPR 472/1996) the goods came with. W2b: still corrected once the receipt
   /// is POSTED (a number typed wrong at the dock), with the correction below.
   supplierDdtNumber String?
@@ -160,6 +164,9 @@ model GoodsReceipt {
   site          Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier      Party              @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?     @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 22/22): its ship notice. Restrict, not Prisma's SetNull default for an optional relation: that would also
+  // clear tenantId, siteId and supplierId.
+  shipNotice    ShipNotice?        @relation(fields: [tenantId, siteId, supplierId, shipNoticeId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         GoodsReceiptLine[]
   // W2a claims.prisma: what was wrong with the delivery, and the claims about its goods.
   discrepancies  ReceiptDiscrepancy[]
@@ -168,6 +175,8 @@ model GoodsReceipt {
   @@unique([tenantId, companyId, number])
   // The target of the lines' reference: on the receipt's own site.
   @@unique([tenantId, siteId, id])
+  // W2b (wave 22/22): the receipts of a ship notice.
+  @@index([tenantId, shipNoticeId])
 }
 
 /// OPEN → POSTED → REVERSED; OPEN → CANCELLED.
