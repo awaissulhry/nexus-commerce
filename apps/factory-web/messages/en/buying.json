@@ -642,6 +642,8 @@
       "none": "No confirmation on record",
       "byLink": "Confirmed by link",
       "byLinkName": "Confirmed by link by {name}",
+      "byPortal": "Confirmed in the supplier portal",
+      "byPortalName": "Confirmed in the supplier portal by {name}",
       "byOffice": "Confirmed, recorded in the office"
     },
     "bulk": {
@@ -830,6 +832,7 @@
       "confirmedByName": "Confirmed as asked by {name} on the link, {date}.",
       "confirmedLink": "Confirmed as asked on the link, {date}.",
       "confirmedOffice": "Confirmed, recorded in the office, {date}.",
+      "confirmedPortal": "Confirmed by {name} in the supplier portal, {date}.",
       "declined": "Declined by the supplier, {date}.",
       "declinedNext": "Talk to them, then send a new link — or cancel the order.",
       "proposed": "{name} proposed changes on {date}.",
@@ -841,6 +844,8 @@
       "how": "How",
       "viaLink": "On the confirm link",
       "viaOffice": "Recorded in the office",
+      "viaPortal": "In the supplier portal",
+      "person": "Who",
       "theirNote": "Their note:",
       "decision": {
         "ACCEPTED": "You accepted the changes on {date}: they are the confirmation now.",

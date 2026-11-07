@@ -28,6 +28,8 @@ let buyer: Browser
 let anna: Browser
 let vito: Browser
 let otto: Browser
+let annaId: string
+let buyerId: string
 const NS = 'sup-docs'
 const seedId = (key: string): string => seedUuid(NS, key)
 const tenant = seedId('tenant')
@@ -101,6 +103,10 @@ async function sendDocument(browser: Browser, body: Buffer, fields: Json): Promi
   return { ...announced, ...done }
 }
 
+/** B-W2b-F13a: the upload's and the request's own rows (W2b schema wave 23). */
+const uploadRow = (fileId: string) =>
+  one('SELECT status, "uploadedById", "uploadedByName", "documentNumber", "issuedOn"::text AS "issuedOn", "expiresOn"::text AS "expiresOn", "lotCodes", "receivedAt" IS NOT NULL AS received, "decidedById", "decidedByName", "acceptedCategory", "acceptedExpiresOn"::text AS "acceptedExpiresOn", "documentFileId", "refuseReason", "taskId", "replacesFileId", version FROM "SupplierDocumentUpload" WHERE "fileId" = $1', [fileId])
+const requestRow = (id: string) => one('SELECT status, "requestedById", "requestedByName", summary, "decidedAt" IS NOT NULL AS decided, "decidedById", "decidedByName", "refuseReason", version FROM "PartyChangeRequest" WHERE id = $1', [id])
 const fileRow = (id: string) => one('SELECT id, status, visibility::text[] AS visibility, "partyId", category, "expiresOn", "seriesId", "versionNo", "supersededAt", "sourceFileId", version FROM "StoredFile" WHERE id = $1', [id])
 const outbox = (type: string) => admin<{ subject: string; payload: Json }>('SELECT subject, payload FROM "OutboxEvent" WHERE type = $1 ORDER BY "occurredAt", id', [type])
 const leaks = (body: unknown): string[] => [/price"\s*:/i, /unitPrice/i, /amount/i, /internalNote/, /createdById/, /reviewNote/].filter((pattern) => pattern.test(JSON.stringify(body))).map(String)
@@ -133,10 +139,11 @@ beforeAll(async () => {
     await client.party.create({ data: { id: P3, code: `P${P3.slice(-6)}`, kind: 'ORGANISATION', legalName: 'Prospect Supplier S.r.l.', roles: ['SUPPLIER'], status: 'PROSPECT', companyId: companyA }, select: { id: true } })
   })
   // Anna is P2's admin and may upload; Vito handles quality without the upload capability; Otto is another supplier's admin.
-  await partnerPerson(people.anna, P2, ['supplier-admin', 'partner-upload'])
+  annaId = await partnerPerson(people.anna, P2, ['supplier-admin', 'partner-upload'])
   await partnerPerson(people.vito, P2, ['supplier-quality'])
   await partnerPerson(people.otto, P9, ['supplier-admin', 'partner-upload'])
   const buyerUser = await addUser(h, seedTenant, { email: 'bianca.buyer@seed-a.example.com', role: 'buyer' })
+  buyerId = (await one<{ id: string }>('SELECT id FROM "User" WHERE email = $1', [buyerUser.email])).id
   buyer = new Browser(h.app)
   expect((await buyer.signIn(NS, buyerUser.email, buyerUser.password)).status).toBe(200)
   await enrolTotp(h, buyer)
@@ -206,6 +213,9 @@ describe('documents we ask for, and what the supplier sends (SCM-096)', () => {
     const documents = await as(buyer, 'GET', `/files/documents?recordType=PurchaseOrder&recordId=${order.id}`)
     expect(documents.moves.find((move: Json) => move.toStatus === 'CONFIRMED').requirements[0]).toMatchObject({ category: 'SUPPLIER_CERTIFICATE', reason: 'MISSING' })
     expect((await outbox('supplier_document.uploaded')).map((row) => row.payload)).toContainEqual(expect.objectContaining({ fileId: certificate.file.id, partyId: P2, category: 'SUPPLIER_CERTIFICATE' }))
+    // B-W2b-F13a: a row of its own, WAITING, the file arrived (announce at version 1, received + 1); the audit rows stay as history.
+    expect(await uploadRow(certificate.file.id)).toMatchObject({ status: 'WAITING', uploadedById: annaId, uploadedByName: 'anna admin', documentNumber: 'ISO-0001', issuedOn: addDays(today(), -10), expiresOn: addDays(today(), 400), received: true, decidedById: null, version: 2 })
+    expect((await admin(`SELECT action FROM "AuditLog" WHERE "recordType" = 'Party' AND "recordId" = $1 AND action LIKE 'supplierDocuments.%' ORDER BY at, id`, [P2])).map((row) => row.action)).toEqual(['supplierDocuments.upload', 'supplierDocuments.received'])
   })
 
   it('shows the buyer what waits (the list and Home › Approvals)', async () => {
@@ -229,6 +239,8 @@ describe('documents we ask for, and what the supplier sends (SCM-096)', () => {
     expect(page.requested.find((row: Json) => row.category === 'SUPPLIER_CERTIFICATE')).toBeUndefined()
     expect((await call(anna, 'GET', `/files/${certificate.file.id}/download`)).status).toBe(200)
     expect((await outbox('supplier_document.accepted')).map((row) => row.payload)).toContainEqual(expect.objectContaining({ fileId: certificate.file.id, documentFileId: certificate.file.id }))
+    // B-W2b-F13a: the decision on the upload's row, once.
+    expect(await uploadRow(certificate.file.id)).toMatchObject({ status: 'ACCEPTED', decidedById: buyerId, decidedByName: expect.any(String), acceptedCategory: 'SUPPLIER_CERTIFICATE', acceptedExpiresOn: addDays(today(), 400), documentFileId: certificate.file.id, refuseReason: null, version: 3 })
   })
 
   it('refuses a test report with the reason; the supplier is asked again and its next upload answers it', async () => {
@@ -236,6 +248,7 @@ describe('documents we ask for, and what the supplier sends (SCM-096)', () => {
     const version = (await fileRow(report.file.id)).version
     expect((await call(buyer, 'POST', `/purchasing/supplier-documents/${report.file.id}/refuse`, { reason: ' ', version })).status).toBe(400)
     const refused = await as(buyer, 'POST', `/purchasing/supplier-documents/${report.file.id}/refuse`, { reason: 'The report is for dye batch 2230, not 2231.', version })
+    expect(await uploadRow(report.file.id)).toMatchObject({ status: 'REFUSED', decidedById: buyerId, refuseReason: 'The report is for dye batch 2230, not 2231.', acceptedCategory: null, documentFileId: null, lotCodes: ['2231'] })
     const task = await one('SELECT status, "sourceKey", "recordId", "askedByName" FROM "PartnerTask" WHERE id = $1', [refused.taskId])
     expect(task).toMatchObject({ status: 'OPEN', sourceKey: `SupplierDocument:${report.file.id}`, recordId: order.id })
     expect(await fileRow(report.file.id)).toMatchObject({ visibility: ['OFFICE'], partyId: null })
@@ -245,6 +258,7 @@ describe('documents we ask for, and what the supplier sends (SCM-096)', () => {
     const again = await sendDocument(anna, pdf('cr vi 2231'), { category: 'TEST_REPORT', taskId: refused.taskId, lots: ['2231'] })
     expect(again.record).toMatchObject({ type: 'PurchaseOrder', id: order.id })
     expect(await one('SELECT status, "doneById" IS NOT NULL AS done FROM "PartnerTask" WHERE id = $1', [refused.taskId])).toMatchObject({ status: 'DONE', done: true })
+    expect(await uploadRow(again.file.id)).toMatchObject({ status: 'WAITING', taskId: refused.taskId, received: true })
   })
 
   it('a replacement becomes the next version of the accepted document once accepted (the old one kept)', async () => {
@@ -252,6 +266,7 @@ describe('documents we ask for, and what the supplier sends (SCM-096)', () => {
     expect((await as(buyer, 'GET', `/purchasing/supplier-documents?partyId=${P2}`)).rows.find((row: Json) => row.fileId === next.file.id).replaces).toMatchObject({ fileId: certificate.file.id, current: true })
     const accepted = await as(buyer, 'POST', `/purchasing/supplier-documents/${next.file.id}/accept`, { category: 'SUPPLIER_CERTIFICATE', expiresOn: addDays(today(), 800), version: (await fileRow(next.file.id)).version })
     expect(accepted.documentFileId).not.toBe(next.file.id)
+    expect(await uploadRow(next.file.id)).toMatchObject({ status: 'ACCEPTED', replacesFileId: certificate.file.id, documentFileId: accepted.documentFileId })
     expect(await fileRow(accepted.documentFileId)).toMatchObject({ seriesId: certificate.file.id, versionNo: 2, sourceFileId: next.file.id, partyId: P2, category: 'SUPPLIER_CERTIFICATE', supersededAt: null })
     expect((await fileRow(certificate.file.id)).supersededAt).not.toBeNull()
     const page = await as(anna, 'GET', '/portal/supplier-documents')
@@ -299,6 +314,7 @@ describe('the supplier profile: changes the buyer checks (SCM-097)', () => {
       201,
     )
     expect(sent.request).toMatchObject({ state: 'OPEN', summary: '1 address and 1 contact' })
+    expect(await requestRow(sent.request.requestId)).toMatchObject({ status: 'OPEN', requestedById: annaId, requestedByName: 'anna admin', summary: '1 address and 1 contact', decided: false, version: 1 })
     expect(sent.request.changes.map((change: Json) => change.sentence)).toContain('Contact Gina Ordini: phone — → +39 0444 000111.')
     expect((await one('SELECT phone FROM "PartyContact" WHERE id = $1', [contactId])).phone).toBe(contact.phone)
     expect((await call(anna, 'POST', '/portal/supplier-profile/changes', { contacts: [{ op: 'REMOVE', contactId, version: contact.version }] })).status).toBe(409)
@@ -313,6 +329,7 @@ describe('the supplier profile: changes the buyer checks (SCM-097)', () => {
     // The yes applies it; a second yes is refused.
     const approved = await as(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/approve`)
     expect(approved.request).toMatchObject({ state: 'APPROVED', decidedBy: expect.any(String) })
+    expect(await requestRow(sent.request.requestId)).toMatchObject({ status: 'APPROVED', decided: true, decidedById: buyerId, refuseReason: null, version: 2 })
     expect((await one('SELECT phone, version FROM "PartyContact" WHERE id = $1', [contactId])).phone).toBe('+39 0444 000111')
     expect(await admin('SELECT kinds::text[] AS kinds FROM "PartyAddress" WHERE "partyId" = $1 AND line1 = $2 AND status = $3', [P2, 'Via delle Concerie 7', 'ACTIVE'])).toEqual([{ kinds: ['PICKUP'] }])
     expect((await call(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/approve`)).status).toBe(409)
@@ -326,17 +343,52 @@ describe('the supplier profile: changes the buyer checks (SCM-097)', () => {
     const stale = await call(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/approve`)
     expect(stale.status).toBe(409)
     expect(stale.body.error.message).toMatch(/changed after the supplier sent this/)
+    // The stopped approval changed nothing: the request still OPEN at version 1.
+    expect(await requestRow(sent.request.requestId)).toMatchObject({ status: 'OPEN', version: 1 })
     expect((await call(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/refuse`, { reason: 'x' })).status).toBe(400)
     const refused = await as(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/refuse`, { reason: 'We changed the phone meanwhile: send it again.' })
     expect(refused.request).toMatchObject({ state: 'REFUSED', reason: 'We changed the phone meanwhile: send it again.' })
+    expect(await requestRow(sent.request.requestId)).toMatchObject({ status: 'REFUSED', decidedById: buyerId, refuseReason: 'We changed the phone meanwhile: send it again.', version: 2 })
     expect((await as(anna, 'GET', '/portal/supplier-profile')).decided[0]).toMatchObject({ requestId: sent.request.requestId, state: 'REFUSED' })
     const fresh = await one('SELECT version FROM "PartyContact" WHERE id = $1', [contactId])
     const third = await as(anna, 'POST', '/portal/supplier-profile/changes', { contacts: [{ op: 'REMOVE', contactId, version: fresh.version }] }, 201)
     expect((await as(anna, 'POST', `/portal/supplier-profile/changes/${third.request.requestId}/withdraw`)).request.state).toBe('WITHDRAWN')
+    expect(await requestRow(third.request.requestId)).toMatchObject({ status: 'WITHDRAWN', decided: true, decidedById: null, decidedByName: null, version: 2 })
     expect((await call(anna, 'POST', `/portal/supplier-profile/changes/${third.request.requestId}/withdraw`)).status).toBe(409)
     expect((await call(buyer, 'POST', `/purchasing/supplier-changes/${third.request.requestId}/approve`)).status).toBe(409)
     // Another supplier never reaches P2's requests.
     expect((await call(otto, 'POST', `/portal/supplier-profile/changes/${sent.request.requestId}/withdraw`)).status).toBe(404)
     expect((await one('SELECT status FROM "PartyContact" WHERE id = $1', [contactId])).status).toBe('ACTIVE')
+  })
+
+  it('W2b wave 23: the website — the office sets it in words, the supplier asks to change it, the buyer approves it', async () => {
+    // The office's party record (parties contract): an address without http(s) is refused in words; a good one is kept.
+    const record = (await as(buyer, 'GET', `/parties/${P2}`)).party
+    expect(record.website).toBeNull()
+    const bad = await call(buyer, 'PATCH', `/parties/${P2}`, { version: record.version, website: 'www.tannery-p2.example' })
+    expect(bad.status).toBe(400)
+    expect(JSON.stringify(bad.body)).toMatch(/starting with http/)
+    expect((await as(buyer, 'PATCH', `/parties/${P2}`, { version: record.version, website: 'https://old.tannery-p2.example' })).party.website).toBe('https://old.tannery-p2.example')
+    // The supplier reads it and asks for a new one: nothing changes until the yes; a second request for it is refused.
+    let profile = await as(anna, 'GET', '/portal/supplier-profile')
+    expect(profile.company).toMatchObject({ website: 'https://old.tannery-p2.example', waiting: false })
+    expect((await call(anna, 'POST', '/portal/supplier-profile/changes', { company: { website: 'tannery-p2' } })).status).toBe(400)
+    const sent = await as(anna, 'POST', '/portal/supplier-profile/changes', { company: { website: 'https://www.tannery-p2.example' } }, 201)
+    expect(sent.request).toMatchObject({ state: 'OPEN', summary: 'the website', changes: [{ target: 'COMPANY', op: 'CHANGE', sentence: 'Website https://old.tannery-p2.example → https://www.tannery-p2.example.' }] })
+    expect((await call(anna, 'POST', '/portal/supplier-profile/changes', { company: { website: 'https://other.tannery-p2.example' } })).status).toBe(409)
+    profile = await as(anna, 'GET', '/portal/supplier-profile')
+    expect(profile.company).toMatchObject({ website: 'https://old.tannery-p2.example', waiting: true })
+    // The office changed it meanwhile: the approval stops in words (the request stays OPEN); set back, it applies.
+    const moved = (await one('SELECT version FROM "Party" WHERE id = $1', [P2])).version
+    await as(buyer, 'PATCH', `/parties/${P2}`, { version: moved, website: 'https://meanwhile.tannery-p2.example' })
+    const stale = await call(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/approve`)
+    expect(stale.status).toBe(409)
+    expect(stale.body.error.message).toMatch(/the website changed after the supplier sent this/)
+    await as(buyer, 'PATCH', `/parties/${P2}`, { version: moved + 1, website: 'https://old.tannery-p2.example' })
+    const approved = await as(buyer, 'POST', `/purchasing/supplier-changes/${sent.request.requestId}/approve`)
+    expect(approved.request).toMatchObject({ state: 'APPROVED' })
+    expect((await one('SELECT website FROM "Party" WHERE id = $1', [P2])).website).toBe('https://www.tannery-p2.example')
+    expect((await outbox('party.updated')).map((row) => row.payload)).toContainEqual(expect.objectContaining({ partyId: P2, fields: ['website'] }))
+    expect((await as(anna, 'GET', '/portal/supplier-profile')).company).toMatchObject({ website: 'https://www.tannery-p2.example', waiting: false })
   })
 })

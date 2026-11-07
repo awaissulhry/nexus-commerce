@@ -15,7 +15,7 @@ import { PORTAL_ANSWER_COMMANDS, proposalWordsOf } from '../portal-orders/words'
  * session writes no thread message (the partner role reads threads only), so the supplier's answer reaches the order's
  * thread here, as an internal note of the system that mentions the person who sent the order (when they still read it):
  *
- *   purchase_order.confirmed (through the link)   who confirmed, their reference, "all 3 lines as asked", their note
+ *   purchase_order.confirmed (link or portal)     who confirmed, their reference, "all 3 lines as asked", their note
  *   purchase_order.declined                       the reasons in words, and what to do next
  *   purchase_order.changes_proposed               the summary, every changed line in words (asked → proposed, the
  *                                                 reason), their note, and that the buyer accepts or refuses them
@@ -75,9 +75,9 @@ export async function writeBuyerNote(tools: CommandTools, orderId: string, text:
 /** The note for one event (also called by tests with the system caller). */
 export async function tellBuyer(caller: CommandCaller, event: { readonly eventId: string; readonly type: string; readonly payload: unknown; readonly source?: string }): Promise<void> {
   const payload = payloadOf(event.type).parse(event.payload) as { purchaseOrderId: string; channel?: string; linkId: string | null; proposalAccepted?: boolean }
-  if (event.type === 'purchase_order.confirmed' && (payload.channel !== 'LINK' || payload.proposalAccepted)) return
-  // B-W2b-174: an answer given in the supplier's portal (its command emitted the event) says so.
-  const via = event.source !== undefined && PORTAL_ANSWER_COMMANDS.includes(event.source) ? 'PORTAL' : 'LINK'
+  if (event.type === 'purchase_order.confirmed' && (payload.channel === 'OFFICE' || payload.proposalAccepted)) return
+  // B-W2b-174: an answer given in the supplier's portal (its channel, or the command that emitted the event) says so.
+  const via = payload.channel === 'PORTAL' || (event.source !== undefined && PORTAL_ANSWER_COMMANDS.includes(event.source)) ? 'PORTAL' : 'LINK'
   const facts = await caller.withClient((client) => noteFacts(client, event.type, payload.purchaseOrderId, payload.linkId ?? null, via))
   if (!facts) return
   await command(caller, { name: 'purchasing.tellBuyer', idempotencyKey: `tell-buyer-${event.eventId}`, input: { eventId: event.eventId, purchaseOrderId: payload.purchaseOrderId } }, (tools) => writeBuyerNote(tools, payload.purchaseOrderId, buyerNote(facts)))

@@ -1,15 +1,17 @@
-import type { FactoryClient } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { SUPPLIER_CHANGES_DECIDE } from '@nexus/factory-domain/purchasing/portal-profile/permissions'
 import { profileRefuseProblems, staleProblems, type PlannedChange } from '@nexus/factory-domain/purchasing/portal-profile/profile'
-import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import type { FastifyInstance } from 'fastify'
+import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf } from '../../../platform/files/files'
+import { commandOn } from '../../../platform/portal/tasks/clock'
 import { bumpVersion, insertAddress, insertContact } from '../../parties/store'
 import { currentProfileOf, requestView } from './profile'
-import { ACTIONS, LOOK_BACK_DAYS, lockSupplier, partyOfRequest, partyRequests, recentRequests, type ChangeRequest } from './store'
+import { ACTIONS, LOOK_BACK_DAYS, recentRequests, requestById, type ChangeRequest } from './store'
 
 /**
  * The buyer's check of a supplier's change of its addresses and contacts (B-W2b-189; SCM-097; design portal.supplier.profile
@@ -24,9 +26,12 @@ import { ACTIONS, LOOK_BACK_DAYS, lockSupplier, partyOfRequest, partyRequests, r
  *                                                                sends it again)
  *   POST /purchasing/supplier-changes/:requestId/refuse {reason}  nothing changes; the supplier reads why
  *
- * purchasing.supplierChanges.decide over the request's company and party (administrator, buyer). Each decision is ONE command
- * with the supplier's row locked (the request is decided once); Home › Approvals lists the open ones
- * (modules/insights/sources/supplier-changes.ts).
+ * purchasing.supplierChanges.decide over the request's company and party (administrator, buyer). Each decision is ONE command;
+ * the request's row (PartyChangeRequest, W2b schema wave 23) leaves OPEN by its own compare-and-set first — the version read
+ * before the command, + 1 — so it is decided once (a second decision, or a withdrawal that committed meanwhile: 409 in
+ * words). A website change (W2b wave 23) applies to the party's row if the website is still the one the supplier saw. The
+ * commands run on the app's clock (the supplier's request was written on it: never decided before it was sent). Home ›
+ * Approvals lists the open ones (modules/insights/sources/supplier-changes.ts).
  */
 
 const DAY_MS = 86_400_000
@@ -66,10 +71,7 @@ export async function listSupplierChanges(caller: CommandCaller, query: { readon
 async function decidable(caller: CommandCaller, requestId: string): Promise<ChangeRequest> {
   const { actor } = viewer(caller)
   if (!isUuid(requestId)) throw new NotFoundError('Request not found.')
-  const found = await caller.withClient(async (client) => {
-    const partyId = await partyOfRequest(client, requestId)
-    return partyId ? (await partyRequests(client, partyId)).find((entry) => entry.requestId === requestId) : undefined
-  })
+  const found = await caller.withClient((client) => requestById(client, requestId))
   if (!found || !can(actor, SUPPLIER_CHANGES_DECIDE, { companyId: found.companyId, partyId: found.partyId })) throw new NotFoundError('Request not found.')
   return found
 }
@@ -80,14 +82,17 @@ function refusalOf(state: ChangeRequest['state']): string {
   return 'The supplier withdrew this request.'
 }
 
-/** Inside a decision: the supplier's row locked, then the request as it is now (still open). */
-async function stillOpen(tools: CommandTools, found: ChangeRequest): Promise<ChangeRequest> {
-  const party = await lockSupplier(tools.tx, found.partyId)
-  if (party.status === 'ARCHIVED') throw new InvalidStateError('This supplier is archived: restore it before changing its addresses or contacts.')
-  const now = (await partyRequests(tools.tx, found.partyId)).find((entry) => entry.requestId === found.requestId)
+/**
+ * Inside a decision, first: the request OPEN → the decision by its row's compare-and-set (the version read before the
+ * command, + 1). 0 rows: decided, withdrawn or changed meanwhile — refused in words.
+ */
+async function leaveOpen(tools: CommandTools, found: ChangeRequest, data: Prisma.PartyChangeRequestUncheckedUpdateManyInput): Promise<void> {
+  const moved = await tools.tx.partyChangeRequest.updateMany({ where: { id: found.requestId, status: 'OPEN', version: found.version }, data: { ...data, decidedAt: tools.now, version: found.version + 1 } })
+  if (moved.count === 1) return
+  const now = await requestById(tools.tx, found.requestId)
   if (!now) throw new NotFoundError('Request not found.')
   if (now.state !== 'OPEN') throw new InvalidStateError(refusalOf(now.state))
-  return now
+  throw new ConflictError('This request changed since it was read: read it again.')
 }
 
 /** One change written as the parties module writes it (its own audit rows on the row and on the party). */
@@ -95,6 +100,13 @@ async function apply(tools: CommandTools, party: { readonly id: string; readonly
   const { tx } = tools
   const onParty = (what: 'address' | 'contact', before: unknown, after: unknown) =>
     tools.audit({ action: APPLY, recordType: 'Party', recordId: party.id, companyId: party.companyId, ...(before === null ? {} : { before: { [what]: before } }), after: { [what]: after, bySupplierRequest: true } })
+  if (change.target === 'COMPANY') {
+    // W2b wave 23: the website, if it is still the one the supplier saw (else the request stops: refuse it, it is sent again).
+    const moved = await tx.party.updateMany({ where: { id: party.id, website: change.before.website }, data: { website: change.after.website, version: { increment: 1 } } })
+    if (moved.count !== 1) throw new ConflictError('This request cannot apply as sent: the website changed after the supplier sent this. Refuse it, and the supplier sends it again.')
+    tools.audit({ action: APPLY, recordType: 'Party', recordId: party.id, companyId: party.companyId, before: { website: change.before.website }, after: { website: change.after.website, bySupplierRequest: true } })
+    return party.id
+  }
   if (change.target === 'ADDRESS') {
     if (change.op === 'ADD') {
       const id = await insertAddress(tools, party, change.after, { isDefaultBillTo: false, isDefaultShipTo: false }, APPLY)
@@ -133,42 +145,50 @@ async function apply(tools: CommandTools, party: { readonly id: string; readonly
 }
 
 /** POST /purchasing/supplier-changes/:requestId/approve. */
-export async function approveSupplierChange(caller: CommandCaller, requestId: string, idempotencyKey?: string) {
+export async function approveSupplierChange(app: FastifyInstance, caller: CommandCaller, requestId: string, idempotencyKey?: string) {
   const { context } = viewer(caller)
   const found = await decidable(caller, requestId)
   if (found.state !== 'OPEN') throw new InvalidStateError(refusalOf(found.state))
-  await command(caller, { name: 'supplierProfile.approveChange', idempotencyKey, input: { requestId } }, async (tools) => {
-    const open = await stillOpen(tools, found)
-    const party = await tools.tx.party.findUniqueOrThrow({ where: { id: open.partyId }, select: { id: true, companyId: true, code: true } })
-    const stale = staleProblems(open.changes, await currentProfileOf(tools.tx, open.partyId))
+  await commandOn(app, caller, { name: 'supplierProfile.approveChange', idempotencyKey, input: { requestId } }, async (tools) => {
+    const party = await tools.tx.party.findUniqueOrThrow({ where: { id: found.partyId }, select: { id: true, companyId: true, code: true, status: true } })
+    if (party.status === 'ARCHIVED') throw new InvalidStateError('This supplier is archived: restore it before changing its addresses or contacts.')
+    const byName = await personName(tools.tx, context.actorId)
+    await leaveOpen(tools, found, { status: 'APPROVED', decidedById: context.actorId, decidedByName: byName })
+    const stale = staleProblems(found.changes, await currentProfileOf(tools.tx, found.partyId))
     if (stale.length > 0) throw new ConflictError(`This request cannot apply as sent: ${stale.join('; ')}. Refuse it, and the supplier sends it again.`)
     const addressIds: string[] = []
     const contactIds: string[] = []
-    for (const change of open.changes) (change.target === 'ADDRESS' ? addressIds : contactIds).push(await apply(tools, party, change))
-    const byName = await personName(tools.tx, context.actorId)
-    tools.audit({ action: ACTIONS.approve, recordType: 'Party', recordId: open.partyId, companyId: open.companyId, after: { requestId, byName, addressIds, contactIds } })
+    let website = false
+    for (const change of found.changes) {
+      const id = await apply(tools, party, change)
+      if (change.target === 'ADDRESS') addressIds.push(id)
+      else if (change.target === 'CONTACT') contactIds.push(id)
+      else website = true
+    }
+    tools.audit({ action: ACTIONS.approve, recordType: 'Party', recordId: found.partyId, companyId: found.companyId, after: { requestId, byName, addressIds, contactIds, website } })
+    if (website) tools.emit({ type: 'party.updated', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, code: party.code, fields: ['website'] } })
     if (addressIds.length > 0) tools.emit({ type: 'party.addresses_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, code: party.code, addressIds } })
     if (contactIds.length > 0) tools.emit({ type: 'party.contacts_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, code: party.code, contactIds } })
-    tools.emit({ type: 'supplier_profile.change_decided', subject: requestId, companyId: open.companyId, payload: { requestId, partyId: open.partyId, outcome: 'APPROVED' } })
+    tools.emit({ type: 'supplier_profile.change_decided', subject: requestId, companyId: found.companyId, payload: { requestId, partyId: found.partyId, outcome: 'APPROVED' } })
     return { requestId }
   })
-  return { request: requestView((await caller.withClient((client) => partyRequests(client, found.partyId))).find((entry) => entry.requestId === requestId)!) }
+  return { request: requestView((await caller.withClient((client) => requestById(client, requestId)))!) }
 }
 
 /** POST /purchasing/supplier-changes/:requestId/refuse. */
-export async function refuseSupplierChange(caller: CommandCaller, requestId: string, body: { readonly reason: string }, idempotencyKey?: string) {
+export async function refuseSupplierChange(app: FastifyInstance, caller: CommandCaller, requestId: string, body: { readonly reason: string }, idempotencyKey?: string) {
   const { context } = viewer(caller)
   const problems = profileRefuseProblems(body.reason)
   if (problems.length > 0) throw new ValidationError('The refusal is not valid.', problems)
   const found = await decidable(caller, requestId)
   if (found.state !== 'OPEN') throw new InvalidStateError(refusalOf(found.state))
   const reason = body.reason.trim()
-  await command(caller, { name: 'supplierProfile.refuseChange', idempotencyKey, input: { requestId, reason } }, async (tools) => {
-    const open = await stillOpen(tools, found)
+  await commandOn(app, caller, { name: 'supplierProfile.refuseChange', idempotencyKey, input: { requestId, reason } }, async (tools) => {
     const byName = await personName(tools.tx, context.actorId)
-    tools.audit({ action: ACTIONS.refuseChange, recordType: 'Party', recordId: open.partyId, companyId: open.companyId, reason, after: { requestId, byName } })
-    tools.emit({ type: 'supplier_profile.change_decided', subject: requestId, companyId: open.companyId, payload: { requestId, partyId: open.partyId, outcome: 'REFUSED' } })
+    await leaveOpen(tools, found, { status: 'REFUSED', decidedById: context.actorId, decidedByName: byName, refuseReason: reason })
+    tools.audit({ action: ACTIONS.refuseChange, recordType: 'Party', recordId: found.partyId, companyId: found.companyId, reason, after: { requestId, byName } })
+    tools.emit({ type: 'supplier_profile.change_decided', subject: requestId, companyId: found.companyId, payload: { requestId, partyId: found.partyId, outcome: 'REFUSED' } })
     return { requestId }
   })
-  return { request: requestView((await caller.withClient((client) => partyRequests(client, found.partyId))).find((entry) => entry.requestId === requestId)!) }
+  return { request: requestView((await caller.withClient((client) => requestById(client, requestId)))!) }
 }

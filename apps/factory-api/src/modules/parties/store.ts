@@ -45,6 +45,8 @@ export const PARTY_COLUMNS = {
   language: true,
   paymentTerms: true,
   internalNote: true,
+  // W2b schema wave 23 (B-W2b-F13a).
+  website: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -147,7 +149,7 @@ export const isUniqueViolation = (error: unknown): boolean => (error as { code?:
 
 // ---- rows as domain fields ---------------------------------------------------------------------------------------------
 
-export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalName' | 'tradeName' | 'roles' | 'country' | 'currency' | 'language' | 'paymentTerms' | 'internalNote'>): PartyFields {
+export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalName' | 'tradeName' | 'roles' | 'country' | 'currency' | 'language' | 'paymentTerms' | 'internalNote' | 'website'>): PartyFields {
   return {
     code: row.code,
     kind: row.kind,
@@ -159,6 +161,7 @@ export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalNa
     language: row.language,
     paymentTerms: row.paymentTerms,
     internalNote: row.internalNote,
+    website: row.website,
   }
 }
 
@@ -328,6 +331,7 @@ export async function readRecord(client: Reader, partyId: string, now: Date): Pr
     ...partyRowOf(party, current, standing, addresses, warnings),
     paymentTerms: party.paymentTerms,
     internalNote: party.internalNote,
+    website: party.website,
     blocked: blocked ? { reason: blocked.reason, at: toUtcIso(blocked.at) } : null,
     addresses: [...addresses].sort(byUse).map(addressViewOf),
     contacts: [...contacts].sort((a, b) => (a.status === b.status ? 0 : a.status === 'ACTIVE' ? -1 : 1)).map(contactViewOf),
