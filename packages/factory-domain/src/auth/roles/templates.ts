@@ -1334,7 +1334,10 @@ if (problems.length > 0) throw new Error(`Role templates are not valid: ${proble
  * to them HERE: one map per step (partner template key → permissions) in PARTNER_ADDS, one line each; the Admin of a kind
  * follows its kind's other roles by itself.
  */
-const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = []
+const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] = [
+  // B-W2b-168: every main partner role searches its portal (SAL-084); each Admin follows.
+  Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
+]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
 if (partnerProblems.length > 0) throw new Error(`Partner role templates are not valid: ${partnerProblems.join('; ')}`)
