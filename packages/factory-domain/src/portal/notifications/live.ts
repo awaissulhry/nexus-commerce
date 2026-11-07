@@ -5,6 +5,8 @@ import type { LiveMessage, LiveView } from '../../events/envelope'
 import { PORTAL_HOME_VIEW } from '../tasks/permissions'
 // B-W2b-176: the workshop's jobs.
 import { PORTAL_JOBS_VIEW } from '../../purchasing/portal-jobs/permissions'
+// B-W2b-182: the supplier's ship notices.
+import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -42,6 +44,10 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
       `subcontract_order.${event}`,
       { permission: PORTAL_JOBS_VIEW, party: 'partyId', fields: ['subcontractOrderId', 'number', 'status', 'partyId'] },
     ]),
+  ),
+  // B-W2b-182: a supplier's ship notices (sent, changed, cancelled, received by our warehouse, reopened): its list updates.
+  ...Object.fromEntries(
+    ['sent', 'changed', 'cancelled', 'received', 'reopened'].map((event) => [`ship_notice.${event}`, { permission: PORTAL_SHIP_NOTICES_VIEW, party: 'partyId', fields: ['shipNoticeId', 'number', 'purchaseOrderId', 'status', 'partyId'] }]),
   ),
 })
 

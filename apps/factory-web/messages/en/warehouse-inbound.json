@@ -1,0 +1,80 @@
+{
+  "title": "Inbound board",
+  "subtitle": "What comes in over the next {days} days, by day and site",
+  "asOf": "Updated {time}",
+  "loading": "Reading the deliveries…",
+  "menu": {
+    "label": "More actions",
+    "hide": "Hide the inbound board",
+    "show": "Show the inbound board"
+  },
+  "receive": "Receive",
+  "receiveCard": "Receive {label}",
+  "noteAdd": "Note for the dock",
+  "noteEdit": "Change the dock note",
+  "noteCard": "Note for the dock on {label}",
+  "held": {
+    "noReceive": "Receiving goods needs the right to receive at this site (inventory.receive)."
+  },
+  "forbidden": {
+    "title": "You cannot see the inbound board",
+    "body": "It needs the right to see stock at the site (inventory.stock.view): ask your administrator."
+  },
+  "failed": "The deliveries could not be read",
+  "retry": "Try again",
+  "boardLabel": "Inbound board {site}",
+  "siteLabel": "Deliveries to {site}",
+  "siteEmpty": "Nothing is expected here in the next {days} days.",
+  "empty": {
+    "title": "Nothing is expected in the next {days} days",
+    "body": "Ship notices from suppliers and the confirmed orders' lines show here on the day they are due."
+  },
+  "incomplete": "There are more deliveries than the board shows: narrow it to one site in the top bar.",
+  "note": {
+    "title": "Dock note for {number}",
+    "subtitle": "{supplier} · {order}",
+    "label": "Note",
+    "hint": "Our own note for the dock: the supplier never reads it.",
+    "cancel": "Cancel",
+    "save": "Save note",
+    "saving": "Saving…"
+  },
+  "lane": {
+    "today": "Today · {day}",
+    "late_one": "{count} late, not received yet",
+    "late_other": "{count} late, not received yet"
+  },
+  "card": {
+    "lines": "Lines",
+    "linesMore_one": "{lines} and {count} more",
+    "linesMore_other": "{lines} and {count} more",
+    "linesCount_one": "{count} line",
+    "linesCount_other": "{count} lines",
+    "tracking": "Delivery",
+    "hides": "Packing list",
+    "hidesCount_one": "{count} hide",
+    "hidesCount_other": "{count} hides",
+    "supplierNote": "Supplier's note",
+    "noNotice": "Confirmed order, no ship notice yet",
+    "dockNote": "Dock note"
+  },
+  "mark": {
+    "late": "Late",
+    "confirmed": "Confirmed order"
+  },
+  "verdict": {
+    "OK": "List as ordered",
+    "CHECK": "List to check",
+    "NOT_AS_ORDERED": "Not as ordered"
+  },
+  "state": {
+    "DRAFT": "Draft",
+    "ANNOUNCED": "Announced",
+    "IN_TRANSIT": "In transit",
+    "RECEIVED": "Received",
+    "RECEIVED_WITH_DIFFERENCES": "Received with differences",
+    "CANCELLED": "Cancelled"
+  },
+  "readOnly": "The days come from the suppliers' ship notices and the confirmed orders: a card does not move here.",
+  "laneEmpty": "No delivery"
+}

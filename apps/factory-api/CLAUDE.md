@@ -393,6 +393,25 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   `subcontract-jobs/events.ts`). Tasks CONFIRM_KIT and REPORT_PROGRESS (source `SubcontractJob`) open at the kit send;
   W2a's commands call `tasks.ts settleJobInCommand` after they move an order. PG tests: `portal-jobs.pg.vitest.test.ts`.
 
+## Ship notices and the inbound board (`src/modules/purchasing/ship-notices/`, `modules/inventory/receiving/from-ship-notice.ts`, B-W2b-182; SCM-106, SCM-107, SCM-110)
+- Partner routes (purchasing's routes.ts/manifest.ts; `portal.shipNotices.view`, scope party, no grain): `GET /portal/ship-notices` (state
+  Announced / In transit / Received / Received with differences), `…/shippable` (open lines of CONFIRMED / PARTLY_RECEIVED orders),
+  `…/template` (the packing list's CSV/XLSX), `…/:id` (lines, packing list, a verdict per hide and line, what holds the send), `POST` (a DRAFT
+  from a confirmed order), `PATCH …/:id` (terms, lines; until received), `PUT …/:id/packing-list` (by hand), `POST …/:id/packing-list/sheet`
+  (the tannery's sheet read in the request with the registry's importer `purchasing.packingList`, verdicts per row; `apply` keeps it; the
+  file is never stored), `POST …/:id/send`, `POST …/:id/cancel` (a SENT one with a reason; a DRAFT is removed). Writes also need the
+  person's `portal.upload` (403 in words; never a preview). Drafts, lines and hides in the partner scope (no createdById: no grant);
+  the SEND as the tenant's system: `assertRequiredDocuments` ('ShipNotice' → SENT), the ASN number, SENT; NOT AS ORDERED needs a note.
+- Checks (factory-domain purchasing/ship-notices/rules.ts `checkShipNotice`): grade, thickness, one dye batch (also across earlier
+  deliveries), area vs the line and the order's tolerance (with what was received and is on other sent notices), hide count, Cr VI test
+  report on file (the notice's or the supplier's TEST_REPORT). CHECK never holds anything.
+- Office: `GET /inventory/receiving/inbound?from&days&siteId` (inventory.stock.view; SENT notices + CONFIRMED/PARTLY_RECEIVED orders'
+  expected lines not on a sent notice), `GET /inventory/receiving/ship-notices/:id` (the receipt prefilled: a lot per dye batch, each hide's
+  declared area), `PATCH …/:id` (dock note, inventory.receive). `POST /inventory/receipts` takes `shipNoticeId` (office only): the receipt
+  names it and, POSTED, the notice is RECEIVED in the same command with each line's received quantity; a reversal puts it back to SENT.
+  Events `ship_notice.sent|changed|cancelled|received|reopened` (module folder `factory-domain/src/ship-notices/`), partner live too.
+  Home counts `deliveries.to_announce|on_the_way`. PG tests: `ship-notices/ship-notices.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

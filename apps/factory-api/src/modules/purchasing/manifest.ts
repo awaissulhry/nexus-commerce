@@ -161,4 +161,16 @@ export const manifest = defineManifest({
   'GET /portal/purchase-orders/:purchaseOrderId/copy': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
   'POST /portal/purchase-orders/:purchaseOrderId/confirm': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
   'POST /portal/purchase-orders/:purchaseOrderId/decline': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },
+  // B-W2b-182 (SCM-106, SCM-107): the supplier's ship notices, the session's party, no grain. Announcing, the packing list,
+  // sending and cancelling also need the person's capability portal.upload (checked in the handler; an office preview never).
+  'GET /portal/ship-notices': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/shippable': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/template': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'GET /portal/ship-notices/:shipNoticeId': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'PATCH /portal/ship-notices/:shipNoticeId': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'PUT /portal/ship-notices/:shipNoticeId/packing-list': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/packing-list/sheet': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/send': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
+  'POST /portal/ship-notices/:shipNoticeId/cancel': { audiences: ['partner'], permission: 'portal.shipNotices.view', scope: 'party' },
 })

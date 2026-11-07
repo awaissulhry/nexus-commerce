@@ -1381,6 +1381,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PORTAL_ORDERING_ADDS,
   // B-W2b-183: the customer roles that ask for a change or a cancel of an order (the Buyer; the Admin follows).
   Object.fromEntries(ORDER_CHANGE_ASKER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_ASK]])),
+  // B-W2b-182: the supplier's Orders role sees and announces its deliveries (never a price, C2); announcing takes portal.upload.
+  { 'supplier-orders': ['portal.shipNotices.view' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

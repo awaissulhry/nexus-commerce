@@ -1190,6 +1190,7 @@
       "openLines_other": "{count} righe aperte",
       "pickOrder": "Ricevi a fronte di {number}",
       "nothingOpen": "Questo ordine non ha righe ancora da ricevere.",
+      "noticeHeld": "Questo avviso di spedizione non compila più il ricevimento (ricevuto, annullato o non di tua competenza): sono mostrate le righe aperte dell'ordine.",
       "delivery": "La consegna",
       "ddtNumber": "Numero DDT del fornitore",
       "ddtHint": "Dal documento di trasporto del fornitore.",

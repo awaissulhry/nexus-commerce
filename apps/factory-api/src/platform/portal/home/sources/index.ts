@@ -10,6 +10,8 @@ import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home
 import { PAYMENT_COUNTS } from '../../../../modules/payments/online/home'
 // B-W2b-178: a customer's new documents (since the last visit, until opened).
 import { CUSTOMER_DOCUMENT_COUNTS } from '../../../../modules/sales/portal-documents/home'
+// B-W2b-182: a supplier's deliveries (to announce, on their way).
+import { SHIP_NOTICE_COUNTS } from '../../../../modules/purchasing/ship-notices/home'
 
 /**
  * Where a partner's Home counts come from (B-W2b-167; plan W2b-3 "Sources": "Home counts through a sources folder like the
@@ -38,6 +40,8 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   SUBCONTRACT_JOB_COUNTS,
   // B-W2b-178: a customer's new documents.
   CUSTOMER_DOCUMENT_COUNTS,
+  // B-W2b-182: the supplier's deliveries to announce and on their way.
+  SHIP_NOTICE_COUNTS,
 ])
 
 const problems = homeCountProblems(HOME_SOURCES.flatMap((source) => source.counts))

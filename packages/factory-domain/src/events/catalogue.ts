@@ -111,6 +111,8 @@ import { events as subcontractJobs } from '../subcontract-jobs/events'
 import { events as portalOrdering } from '../portal-ordering/events'
 // B-W2b-183: change and cancel requests from the portal (asked, withdrawn, answered).
 import { events as salesChangeRequests } from '../sales-change-requests/events'
+// B-W2b-182: ship notices (sent, changed, cancelled, received, reopened).
+import { events as shipNotices } from '../ship-notices/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -288,7 +290,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-190
   ...portalOrdering,
   // B-W2b-183
-  ...salesChangeRequests] as const satisfies readonly EventDefinition[]
+  ...salesChangeRequests,
+  // B-W2b-182
+  ...shipNotices] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

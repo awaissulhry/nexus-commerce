@@ -41,6 +41,8 @@ import { PORTAL_CUSTOMER_DOCUMENTS_DEFINITIONS, PORTAL_CUSTOMER_DOCUMENTS_PERMIS
 import { PORTAL_ORDERING_DEFINITIONS, PORTAL_ORDERING_PERMISSIONS } from '../../sales/portal-ordering/permissions'
 // B-W2b-183: change and cancel requests from the portal (partner roles only).
 import { PORTAL_ORDER_CHANGES_DEFINITIONS, PORTAL_ORDER_CHANGES_PERMISSIONS } from '../../sales/change-requests/permissions'
+// B-W2b-182: ship notices in the portal (portal.shipNotices.view; partner roles only).
+import { PORTAL_SHIP_NOTICES_DEFINITIONS, PORTAL_SHIP_NOTICES_PERMISSIONS } from '../../purchasing/ship-notices/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -718,6 +720,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_PAYMENTS_DEFINITIONS,
   // B-W2b-176: subcontractor jobs in the portal (partner roles only; area `portal`, declared above).
   PORTAL_JOBS_DEFINITIONS,
+  // B-W2b-182: ship notices in the portal (partner roles only; area `portal`, declared above).
+  PORTAL_SHIP_NOTICES_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -925,6 +929,8 @@ for (const name of PARTNER_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PORTAL_SALES_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-174: supplier orders in the portal (partner roles only).
 for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-182: ship notices in the portal (partner roles only).
+for (const name of PORTAL_SHIP_NOTICES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-177: required documents.
 for (const name of REQUIRED_DOCUMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-185: paying in the customer portal, flagged partner.
