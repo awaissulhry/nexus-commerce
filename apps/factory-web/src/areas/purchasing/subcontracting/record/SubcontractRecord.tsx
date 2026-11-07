@@ -59,11 +59,14 @@ import {
   type CellField,
   type DdtPdf,
   type Loaded,
+  type ReceiveDraft,
   type RecordDialog,
   type SaveMark,
   type SubcontractRecordModel,
 } from './record-model'
 import { RECORD_NAMESPACES, SubcontractRecordView } from './view/SubcontractRecordView'
+// B-W2b-176: what the workshop said (its answer, the job link, the kit it checked, progress, send-backs).
+import { WorkshopPanel } from './workshop/WorkshopPanel'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -390,11 +393,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   // ---- goods back --------------------------------------------------------------------------------------------------------------------
 
-  const openReceive = useCallback(() => {
+  const openReceive = useCallback((shape?: (draft: ReceiveDraft) => ReceiveDraft) => {
     const value = current.current
     if (!value) return
     setDialogProblem(null)
-    setDialog({ kind: 'receive', draft: receiveDraftOf(value, todayIn(TIME_ZONE), can) })
+    const fresh = receiveDraftOf(value, todayIn(TIME_ZONE), can)
+    // B-W2b-176: prefilled from the workshop's announced send-back (./workshop).
+    setDialog({ kind: 'receive', draft: typeof shape === 'function' ? shape(fresh) : fresh })
     workshopStock(api, { locationId: value.location.id })
       .then((stock) => patchDialog('receive', (open) => ({ ...open, draft: { ...open.draft, stock: ready(stock.rows) } })))
       .catch((error: unknown) => patchDialog('receive', (open) => ({ ...open, draft: { ...open.draft, stock: { value: null, problem: readWords(error) } } })))
@@ -505,7 +510,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
     )
   }, [api, orderId, write])
 
-  const model: SubcontractRecordModel = { prefix, can, tab, order, live, dockOpen, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today }
+  // B-W2b-176: what the workshop said, under the Kit tab (./workshop), with Receive back prefilled from its send-back.
+  const workshop =
+    order.status === 'ready' && tab === 'kit' ? <WorkshopPanel order={order.value} timeZone={TIME_ZONE} onReceiveWith={(shape) => openReceive(shape)} onChanged={() => void load()} /> : null
+  const model: SubcontractRecordModel = { prefix, can, tab, order, live, dockOpen, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop }
 
   const panels =
     order.status === 'ready' && (tab === 'activity' || dockOpen) ? (
@@ -530,7 +538,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onClose: close,
         onOpenSend: openSend,
         onSend: () => void send(),
-        onOpenReceive: openReceive,
+        onOpenReceive: () => openReceive(),
+        onOpenReceiveWith: (shape) => openReceive(shape),
         onReceive: () => void receive(),
         onCell: (operationId, field, typed) => void saveCell(operationId, field, typed),
         onOpenSizes: openSizes,

@@ -1,5 +1,6 @@
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { OFFICE_SOURCE } from './office'
+import { SUBCONTRACT_JOBS_SOURCE } from './subcontract-jobs'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -25,6 +26,8 @@ export interface TaskSource {
 export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   // B-W2b-167: what an office person asks a partner for by hand (a document, an answer, measurements, progress).
   OFFICE_SOURCE,
+  // B-W2b-176: the workshop's requests on a job: confirm the kit we sent, report progress.
+  SUBCONTRACT_JOBS_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

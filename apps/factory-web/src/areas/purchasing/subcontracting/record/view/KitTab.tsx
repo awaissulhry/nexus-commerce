@@ -208,6 +208,8 @@ export function KitTab({ order, model, actions }: { order: SubcontractOrder; mod
           )}
         </div>
       </Card>
+      {/* B-W2b-176: what the workshop said (its answer, the kit it checked, progress, send-backs): the record's slot. */}
+      {model.workshop ?? null}
     </div>
   )
 }

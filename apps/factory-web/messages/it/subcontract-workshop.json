@@ -1,0 +1,339 @@
+{
+  "title": "Cosa dice il terzista",
+  "common": {
+    "cancel": "Annulla",
+    "retry": "Riprova"
+  },
+  "state": {
+    "loading": "Caricamento di cosa dice il terzista…",
+    "slow": "Ancora in caricamento…",
+    "failed": "Impossibile caricare cosa dice il terzista"
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un'altra azienda.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno ha cambiato l'ordine nel frattempo: è stato riletto. Controlla e riprova.",
+    "state": "L'ordine è andato avanti nel frattempo: è stato riletto. Controlla cosa consente ora.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "slowDown": "Troppi tentativi insieme. Aspetta un momento e riprova."
+  },
+  "held": {
+    "busy": "In corso…",
+    "manage": "Il tuo ruolo non può agire per il terzista: serve il permesso di gestire gli ordini di conto lavoro.",
+    "receive": "Il tuo ruolo non può ricevere merce di ritorno dal terzista.",
+    "ended": "Questa lavorazione è conclusa.",
+    "declined": "Il terzista ha rifiutato questa lavorazione.",
+    "answered": "Il terzista ha già risposto a questa lavorazione.",
+    "declinePartly": "Parte del lavoro è già rientrata: non si può più rifiutare.",
+    "notSent": "L'ordine non è ancora stato inviato al terzista.",
+    "acceptFirst": "Il terzista non ha ancora accettato: registra prima la sua risposta.",
+    "kitNone": "Nessuna riga del kit aspetta la verifica del terzista.",
+    "noKitYet": "Il kit non è ancora partito: non può rientrare niente.",
+    "nothingToAnnounce": "Tutto ciò che è dal terzista è già annunciato o rientrato.",
+    "generic": "Non è possibile su questo ordine ora.",
+    "link": {
+      "accepted": "Il terzista ha già accettato: il link non serve.",
+      "draft": "Invia prima l'ordine al terzista."
+    },
+    "date": {
+      "none": "Il terzista non ha proposto un'altra data.",
+      "answered": "Abbiamo già risposto alla data proposta."
+    }
+  },
+  "jobState": {
+    "TO_ANSWER": "Aspetta la risposta",
+    "DECLINED": "Rifiutata",
+    "WAITING_KIT": "Accettata · kit da inviare",
+    "IN_WORK": "In lavorazione",
+    "PARTLY_BACK": "In parte rientrata",
+    "BACK": "Tutto rientrato",
+    "CLOSED": "Chiusa",
+    "CANCELLED": "Annullata"
+  },
+  "answer": {
+    "title": "La lavorazione",
+    "waiting": "Inviata al terzista: aspetta la sua risposta (accetta, un'altra data o rifiuta).",
+    "notSent": "Non ancora inviata al terzista.",
+    "accepted": "Accettata il {when} da {by}.",
+    "declined": "Rifiutata il {when} da {by}: {reason}",
+    "someone": "il terzista",
+    "proposed": "Propone il {day} invece del {asked}: {reason}",
+    "ourDay": "il nostro giorno",
+    "dateAccepted": "Abbiamo accettato quel giorno il {when}: è il giorno di rientro previsto.",
+    "dateRefused": "Abbiamo rifiutato quel giorno il {when}: resta il nostro giorno.",
+    "acceptDate": "Accetta la data",
+    "refuseDate": "Rifiuta",
+    "dueBack": "Rientro previsto",
+    "noDay": "Nessun giorno",
+    "kitOut": "Kit inviato il",
+    "kitNotYet": "Non ancora",
+    "record": "Registra la sua risposta…",
+    "held": {
+      "date": "Scegli il giorno che propone.",
+      "past": "Il giorno proposto è oggi o dopo.",
+      "same": "È il nostro giorno: registrala come accettata come richiesto.",
+      "reason": "Indica perché serve un altro giorno.",
+      "declineReason": "Scegli il motivo.",
+      "note": "Indica il perché in poche parole."
+    }
+  },
+  "reach": {
+    "title": "Come risponde il terzista",
+    "none": {
+      "title": "Nessuna e-mail e nessun portale per questo terzista",
+      "body": "Registra qui le sue risposte quando te le dà al telefono o su carta: restano come date dall'ufficio per suo conto."
+    },
+    "portal": "Il suo portale è attivo: {count} persona/e possono rispondere lì."
+  },
+  "link": {
+    "send": "Invia il link della lavorazione…",
+    "sendAgain": "Invia un nuovo link…",
+    "list": "I link della lavorazione",
+    "col": {
+      "to": "Inviato a",
+      "state": "Stato",
+      "until": "Vale fino al"
+    },
+    "handedOut": "Consegnato da noi",
+    "state": {
+      "LIVE": "Aperto",
+      "USED_UP": "Risposto",
+      "EXPIRED": "Scaduto",
+      "REVOKED": "Fermato",
+      "OTHER": "Chiuso"
+    },
+    "handed": {
+      "title": "Il link della lavorazione, da passare ora",
+      "once": "È mostrato solo ora e non viene conservato: copialo adesso (per un messaggio al terzista)."
+    },
+    "copy": "Copia il link",
+    "title": "Invia la lavorazione {number} al terzista",
+    "what": "Una pagina sul telefono, senza installare niente e senza prezzi: la lavorazione, le taglie, il giorno del kit e del rientro; il terzista accetta, propone un'altra data o rifiuta.",
+    "how": "Come parte il link",
+    "mail": "Per e-mail",
+    "mailHint": "Lo inviamo al terzista da questo ordine.",
+    "hand": "Prendi il link da passare",
+    "handHint": "Per un terzista senza e-mail: lo mandi tu (un messaggio sul telefono).",
+    "contact": "A",
+    "typed": "Un altro indirizzo…",
+    "email": "Indirizzo e-mail",
+    "language": "Lingua della pagina e della mail",
+    "languageDefault": "Quella del terzista",
+    "languageIt": "Italiano",
+    "languageEn": "Inglese",
+    "replaces": "Il link aperto smette di funzionare: il nuovo lo sostituisce.",
+    "confirmMail": "Invia il link",
+    "confirmHand": "Mostra il link",
+    "held": {
+      "address": "Indica l'indirizzo a cui va il link."
+    }
+  },
+  "date": {
+    "acceptTitle": "Accetta il {day} come giorno di rientro",
+    "refuseTitle": "Rifiuta il {day}",
+    "reason": "Il motivo del terzista: {reason}",
+    "acceptWhat": "Il giorno di rientro previsto dell'ordine diventa il {day} (era il {asked}).",
+    "refuseWhat": "Resta il nostro giorno {asked}; il terzista legge che abbiamo rifiutato il {day}.",
+    "once": "Si risponde una volta sola.",
+    "accept": "Accetta la data",
+    "refuse": "Rifiuta la data"
+  },
+  "dialog": {
+    "forWorkshop": "Lo scrivi per il terzista (non ha e-mail o te l'ha detto al telefono): resta come dato dall'ufficio.",
+    "name": "Chi del terzista l'ha detto",
+    "nameHint": "Facoltativo: altrimenti resta il tuo nome."
+  },
+  "answerDialog": {
+    "title": "La risposta del terzista sulla lavorazione {number}",
+    "how": "La sua risposta",
+    "accept": "Accetta come richiesto",
+    "acceptHint": "I pezzi, le taglie e il nostro giorno di rientro.",
+    "move": "Accetta con un altro giorno",
+    "moveHint": "Rispondiamo al giorno che propone.",
+    "decline": "Rifiuta",
+    "declineHint": "Con il suo motivo.",
+    "day": "Il giorno che propone",
+    "why": "Perché",
+    "declineReason": "Motivo",
+    "pick": "Scegli…",
+    "note": "Le sue parole",
+    "confirmAccept": "Registra l'accettazione",
+    "confirmDecline": "Registra il rifiuto"
+  },
+  "declineReason": {
+    "NO_CAPACITY": "Nessuna capacità",
+    "DATES": "Le date non vanno bene",
+    "OTHER": "Altro"
+  },
+  "kit": {
+    "title": "Kit ricevuto dal terzista",
+    "record": "Registra la verifica del kit…",
+    "noneSent": "Nessuna riga del kit è ancora partita.",
+    "col": {
+      "line": "Riga",
+      "component": "Componente",
+      "sent": "Inviato",
+      "counted": "Ha contato",
+      "said": "Cosa ha detto"
+    },
+    "planned": "Non ancora inviata",
+    "notChecked": "Non ancora confermata",
+    "short": "Meno dell'inviato",
+    "asListed": "Come elencato",
+    "photos": "{count} foto: {names}",
+    "held": {
+      "count": "Riga {line}: conta cosa è arrivato (0 o più).",
+      "more": "Riga {line}: abbiamo inviato {sent}; conta di nuovo.",
+      "note": "Riga {line}: indica cosa manca o è danneggiato."
+    }
+  },
+  "kitDialog": {
+    "title": "Il kit ricevuto dal terzista per la lavorazione {number}",
+    "all": "Tutto ricevuto come elencato ({count} righe)",
+    "counted": "Riga {line} {code}: contato (inviato {sent})",
+    "note": "Mancante o danneggiato",
+    "noteHint": "Serve se è arrivato meno.",
+    "photos": "La foto di un danno arriva dal portale del terzista; qui restano le parole.",
+    "confirm": "Registra la verifica"
+  },
+  "progress": {
+    "title": "Avanzamento dal terzista",
+    "record": "Registra i pezzi finiti…",
+    "finishBy": "Prevede di finire entro il {day}.",
+    "line": "Riga {line} {code} {name}",
+    "finished": "{finished} di {pieces} finiti",
+    "bar": "Pezzi finiti della riga {line}",
+    "size": "{cell}: {finished}/{pieces}",
+    "counts": "Inviati {sent} · rientrati {back} · annunciati {announced}",
+    "none": "Nessun avanzamento ancora.",
+    "reports": "Avanzamenti finora",
+    "report": "{finished} finiti sulla riga {line} ({what})",
+    "bundle": "mazzetto {code}",
+    "whole": "la riga nel complesso",
+    "by": "da {name}",
+    "byOffice": "inserito da noi per {name}",
+    "reportFinishBy": "fine entro il {day}",
+    "held": {
+      "whole": "Indica pezzi interi.",
+      "cell": "Riga {line}, {size}: al massimo altri {left}.",
+      "operation": "Riga {line}: al massimo altri {left}.",
+      "nothing": "Indica i pezzi finiti di almeno una taglia.",
+      "finishBy": "Il giorno di fine è dopo il giorno dell'ordine."
+    }
+  },
+  "progressDialog": {
+    "title": "Pezzi finiti della lavorazione {number}",
+    "whole": "Finiti dall'ultimo avanzamento",
+    "size": "{cell} (finiti {finished}/{pieces})",
+    "finishBy": "Finirà entro",
+    "finishByHint": "Facoltativo.",
+    "note": "Nota",
+    "confirm": "Registra l'avanzamento"
+  },
+  "returns": {
+    "title": "Rientri annunciati",
+    "record": "Registra un rientro…",
+    "none": "Niente annunciato ancora.",
+    "col": {
+      "which": "Rientro",
+      "comes": "Cosa arriva",
+      "ddt": "Il suo DDT",
+      "state": "Stato",
+      "act": "Ricevi"
+    },
+    "which": "N. {seq} · previsto il {day}",
+    "by": "annunciato da {name}",
+    "byOffice": "inserito da noi per {name}",
+    "pieces": "{pieces} pezzi · {parcels} colli",
+    "scrapped": "riga {line}: {scrapped} scartati ({reason})",
+    "weCollect": "Ritiriamo noi",
+    "theyDeliver": "Consegna il terzista",
+    "noDdt": "Nessun DDT indicato",
+    "state": {
+      "ANNOUNCED": "Annunciato",
+      "RECEIVED": "Ricevuto",
+      "CANCELLED": "Annullato"
+    },
+    "receive": "Ricevi da questo",
+    "cancel": "Annulla…",
+    "held": {
+      "whole": "Riga {line}: pezzi interi, 0 o più.",
+      "reason": "Riga {line}: indica perché i pezzi sono scartati.",
+      "more": "Riga {line}: al massimo {left} sono dal terzista e non annunciati.",
+      "nothing": "Indica cosa rientra: almeno un pezzo.",
+      "material": "Riga kit {line}: una quantità sopra 0.",
+      "materialMore": "Riga kit {line}: abbiamo inviato {sent}.",
+      "parcels": "Da 1 a 9999 colli.",
+      "day": "La merce arriva oggi o dopo.",
+      "ddtNumber": "Una data DDT richiede il numero.",
+      "ddtDate": "Il DDT ha data uguale o precedente al giorno di arrivo."
+    }
+  },
+  "returnsDialog": {
+    "title": "Cosa rientra dalla lavorazione {number}",
+    "nothingMoves": "Niente si muove a magazzino finché la merce non viene ricevuta.",
+    "left": "Dal terzista e non annunciati: {left} · finiti e pronti: {ready}",
+    "finished": "Finiti",
+    "scrapped": "Scartati",
+    "scrapReason": "Perché scartati",
+    "material": "Materiale non usato che rientra",
+    "materialLine": "Riga kit {line} {code} (inviato {sent})",
+    "parcels": "Colli",
+    "day": "Arriva il",
+    "ddtNumber": "Numero DDT del terzista",
+    "ddtHint": "Come stampato sul suo documento di trasporto.",
+    "ddtDate": "Data del DDT",
+    "weCollect": "Ritiriamo noi la merce (altrimenti consegna il terzista)",
+    "note": "Nota",
+    "confirm": "Registra il rientro"
+  },
+  "cancelReturn": {
+    "title": "Annulla il rientro n. {seq}",
+    "what": "I {pieces} pezzi annunciati non arriveranno come annunciato; niente si muove a magazzino.",
+    "final": "Un rientro annullato resta in elenco; il terzista annuncia di nuovo.",
+    "reason": "Perché",
+    "held": {
+      "reason": "Indica perché viene annullato."
+    },
+    "confirm": "Annulla il rientro"
+  },
+  "refused": {
+    "proposedDate": "Il giorno proposto non è accettato: da oggi in poi, non il nostro giorno.",
+    "address": "Quell'indirizzo non può ricevere il link: controllalo.",
+    "scrapReason": "Scegli perché i pezzi sono scartati.",
+    "note": "Aggiungi le parole che servono.",
+    "reason": "Indica il motivo.",
+    "kit": "Una riga del kit non è accettata: conta di nuovo.",
+    "progress": "Un conteggio supera i pezzi rimasti: controlla le taglie.",
+    "material": "Una riga di materiale non è accettata: controlla le quantità.",
+    "returns": "Più pezzi di quelli dal terzista: controlla le righe.",
+    "parcels": "Da 1 a 9999 colli.",
+    "day": "La merce arriva oggi o dopo.",
+    "ddt": "Il DDT non è accettato: il numero, e la data non dopo l'arrivo."
+  },
+  "notice": {
+    "linkSent": "Il link della lavorazione è stato inviato al terzista.",
+    "linkHanded": "Il link della lavorazione è pronto da passare: copialo ora.",
+    "linkCopied": "Link copiato.",
+    "dateAccepted": "Data accettata: il giorno di rientro è cambiato.",
+    "dateRefused": "Data rifiutata: resta il nostro giorno.",
+    "accepted": "L'accettazione del terzista è registrata.",
+    "declined": "Il rifiuto del terzista è registrato.",
+    "kit": "La verifica del kit del terzista è registrata.",
+    "progress": "I pezzi finiti sono registrati: l'ordine di lavoro li vede.",
+    "returns": "Il rientro è registrato: ricevilo quando arriva la merce.",
+    "returnCancelled": "Il rientro è annullato."
+  },
+  "scrap": {
+    "LEATHER_FLAW": "Difetto della pelle",
+    "CUT_WRONG": "Taglio sbagliato",
+    "STITCHING": "Cucitura irrecuperabile",
+    "STAIN": "Macchia",
+    "TEAR": "Strappo o foro",
+    "MACHINE": "Danno della macchina",
+    "OTHER": "Altro"
+  }
+}

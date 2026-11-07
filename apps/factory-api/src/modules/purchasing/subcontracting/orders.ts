@@ -60,6 +60,9 @@ import { orderDetailOf, orderSummaries, type OrderDetailView, type OrderSummaryV
 // B-W2b-111: an order is not closed while goods back on it wait for their incoming inspection.
 import { openInspectionsOfOrder } from './held'
 
+// B-W2b-176: the job's links and requests follow the order (../portal-jobs).
+import { settleJobInCommand } from '../portal-jobs/tasks'
+
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
  * "Operations & quantities"): work of one work order sent to an outside workshop. Office only; each write is ONE command
@@ -1023,6 +1026,8 @@ export async function reopenOrder(caller: CommandCaller, orderId: string, input:
       if (problems.length > 0) throw inWords(problems)
       await tools.tx.subcontractOrder.update({ where: { id: orderId }, data: { status: 'DRAFT', issuedAt: null, issuedById: null }, select: { id: true } })
       tools.audit({ recordType: 'SubcontractOrder', recordId: orderId, companyId: order.companyId, siteId: order.siteId, before: { status: 'ISSUED', issuedAt: order.issuedAt?.toISOString() ?? null }, after: { status: 'DRAFT' } })
+      // B-W2b-176 hook (../portal-jobs/tasks.ts): the job's live links stop, its requests end.
+      await settleJobInCommand(tools, orderId)
       tools.emit({ type: 'subcontract_order.reopened', subject: orderId, companyId: order.companyId, siteId: order.siteId, payload: { subcontractOrderId: orderId, number: order.number, status: 'DRAFT' } })
       return { order: await detailInCommand(tools, orderId) }
     },
@@ -1045,6 +1050,8 @@ export async function cancelOrder(caller: CommandCaller, orderId: string, input:
       for (const line of planned) await tools.tx.subcontractKitLine.update({ where: { id: line.id }, data: { status: 'CANCELLED', version: { increment: 1 } }, select: { id: true } })
       await tools.tx.subcontractOrder.update({ where: { id: orderId }, data: { status: 'CANCELLED', cancelledAt: tools.now, cancelReason: input.reason.trim() }, select: { id: true } })
       tools.audit({ recordType: 'SubcontractOrder', recordId: orderId, companyId: order.companyId, siteId: order.siteId, reason: input.reason.trim(), before: { status: order.status }, after: { status: 'CANCELLED', kitLinesCancelled: planned.map((line) => line.id) } })
+      // B-W2b-176 hook (../portal-jobs/tasks.ts): the job's live links stop, its requests end.
+      await settleJobInCommand(tools, orderId)
       tools.emit({ type: 'subcontract_order.cancelled', subject: orderId, companyId: order.companyId, siteId: order.siteId, payload: { subcontractOrderId: orderId, number: order.number, status: 'CANCELLED', from: order.status } })
       return { order: await detailInCommand(tools, orderId) }
     },
