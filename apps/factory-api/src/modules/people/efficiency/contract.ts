@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { OPERATION_STATES, REVIEW_DECISIONS, REVIEW_REASONS, EFFICIENCY_LIMITS } from '@nexus/factory-domain/people/efficiency/rules'
+import { OPERATION_STATES, REVIEW_DECISIONS, REVIEW_REASONS, REVIEW_RULE_LIMITS, EFFICIENCY_LIMITS } from '@nexus/factory-domain/people/efficiency/rules'
 import { OPEN_REASONS, OPEN_NOTE_MAX } from '@nexus/factory-domain/people/privacy/figures'
 
 /**
@@ -225,4 +225,20 @@ export const personFiguresContract = defineContract({
       words: z.array(z.string()),
     }),
   },
+})
+
+/** People settings › Standard review (B-W2b-89): the company's two numbers; the version is the People settings row's. */
+const reviewRuleOut = output({ companyId: id(), version: z.number().int().min(1).nullable(), tolerancePercent: z.number().int(), minBundles: z.number().int(), windowDays: z.number().int(), canManage: z.boolean(), words: z.array(z.string()) })
+
+export const reviewRuleContract = defineContract({ querystring: input({ companyId: id() }), response: { 200: reviewRuleOut } })
+
+export const saveReviewRuleContract = defineContract({
+  body: input({
+    companyId: id(),
+    /** The People settings row's version read; null: the company has none yet. */
+    version: z.number().int().min(1).nullable(),
+    tolerancePercent: z.number().int().min(REVIEW_RULE_LIMITS.percentMin).max(REVIEW_RULE_LIMITS.percentMax),
+    minBundles: z.number().int().min(REVIEW_RULE_LIMITS.bundlesMin).max(REVIEW_RULE_LIMITS.bundlesMax),
+  }),
+  response: { 200: reviewRuleOut },
 })

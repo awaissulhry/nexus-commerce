@@ -160,8 +160,7 @@
   "columns": {
     "add": "Aggiungi una colonna",
     "comma": "Virgola",
-    "companyCode": "Codice ditta paghe",
-    "companyCodeHint": "Vuoto: il codice della società.",
+    "companyCodeMoved": "Il codice ditta riportato nel file si imposta una volta per l'azienda, in Impostazioni persone › Paghe e cedolini.",
     "date": "Formato data",
     "decimal": "Separatore decimale",
     "delimiter": {
@@ -426,7 +425,7 @@
     "closed": "{month} è chiuso",
     "company": "Società",
     "companyCode": "Codice ditta paghe",
-    "companyCodeHint": "Come il fornitore conosce la società. Si cambia nelle colonne del formato.",
+    "companyCodeHint": "Come il programma del consulente conosce la società. Si cambia in Impostazioni persone › Paghe e cedolini.",
     "correction": "{month} ha già un file (v{version}): uno nuovo è una correzione e lo sostituisce per il consulente.",
     "first": "Il primo file di {month}.",
     "gateOff": "Presenze spente",

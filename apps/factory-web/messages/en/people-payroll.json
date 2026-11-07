@@ -160,8 +160,7 @@
   "columns": {
     "add": "Add a column",
     "comma": "Comma",
-    "companyCode": "Payroll company code",
-    "companyCodeHint": "Empty: the company's code.",
+    "companyCodeMoved": "The company code the file prints is set once for the company, in People settings › Payroll and statements.",
     "date": "Date format",
     "decimal": "Decimal separator",
     "delimiter": {
@@ -426,7 +425,7 @@
     "closed": "{month} is closed",
     "company": "Company",
     "companyCode": "Payroll company code",
-    "companyCodeHint": "As the provider knows the company. Change it in the format's columns.",
+    "companyCodeHint": "As the consultant's software knows the company. Change it in People settings › Payroll and statements.",
     "correction": "{month} has a file (v{version}): a new one is a correction, and replaces it for the consultant.",
     "first": "The first file of {month}.",
     "gateOff": "Attendance off",

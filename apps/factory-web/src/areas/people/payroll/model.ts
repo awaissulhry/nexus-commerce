@@ -275,7 +275,6 @@ export interface ColumnsDraft {
   dateFormat: string
   encoding: string
   headerRow: boolean
-  companyCode: string
 }
 
 const columnDraft = (column: LayoutColumn, index: number): ColumnDraft => ({ id: `c${index + 1}`, key: column.key, header: column.header ?? '', width: column.width === undefined ? '' : String(column.width), format: column.format ?? '', value: column.value ?? '' })
@@ -291,7 +290,6 @@ export function columnsDraftOf(layout: Layout): ColumnsDraft {
     dateFormat: definition.dateFormat ?? 'DD/MM/YYYY',
     encoding: definition.encoding ?? 'UTF-8',
     headerRow: definition.headerRow !== false,
-    companyCode: definition.companyCode ?? '',
   }
 }
 
@@ -306,7 +304,6 @@ export function newColumn(columns: readonly ColumnDraft[], key: ColumnKey): Colu
 export function columnsBody(draft: ColumnsDraft): DefinitionBody {
   const fixed = draft.format === 'FIXED_WIDTH'
   const spreadsheet = draft.format === 'SPREADSHEET'
-  const company = draft.companyCode.trim()
   return {
     columns: draft.columns.map((column): LayoutColumn => {
       const header = column.header.trim()
@@ -324,7 +321,6 @@ export function columnsBody(draft: ColumnsDraft): DefinitionBody {
     dateFormat: draft.dateFormat,
     ...(spreadsheet ? {} : { encoding: draft.encoding }),
     headerRow: fixed ? false : draft.headerRow,
-    ...(company ? { companyCode: company } : {}),
   }
 }
 

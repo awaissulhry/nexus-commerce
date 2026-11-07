@@ -27,6 +27,9 @@ export const HISTORY_ACTIONS = [
   'restoreAbsenceCode',
   'saveWorkingTimeLimit',
   'archiveWorkingTimeLimit',
+  // B-W2b-89
+  'changePayrollSettings',
+  'changeStandardReviewRule',
 ] as const
 
 export const historyWords = (action: string): string => {

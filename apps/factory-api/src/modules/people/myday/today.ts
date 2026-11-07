@@ -1,7 +1,7 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { monthOf, paysOn, windowsOf } from '@nexus/factory-domain/people/earnings/rules'
-import { MYDAY_ANSWER_DAYS, MYDAY_ANSWER_ROWS, monthPays, myPaceOf, officePrinterOf, targetHours } from '@nexus/factory-domain/people/myday/rules'
+import { MYDAY_ANSWER_DAYS, MYDAY_ANSWER_ROWS, monthPays, myPaceOf, targetHours } from '@nexus/factory-domain/people/myday/rules'
 import { PACE_LOOK } from '@nexus/factory-domain/production/boards/hourly'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -15,6 +15,7 @@ import { personDaysAt } from '../efficiency/person'
 import { readWork, siteLines, type Reader, type SiteLines, type WorkRecord } from '../efficiency/store'
 import { legalGateFor } from '../privacy/gate'
 import type { MyDayQuery } from './contract'
+import { statementPrinterFor } from './printer'
 
 /**
  * My day's one read (B-W2b-68; MES-111, MES-112; design floor.myday "Today"; c.c. art. 2101; GDPR art. 15). floor.work with the
@@ -65,8 +66,8 @@ export async function myDay(caller: CommandCaller, query: MyDayQuery) {
 
     const switched = await db.piecePaySwitch.findFirst({ where: { siteId: site.id }, select: { onFrom: true, offFrom: true, earlierWindows: true } })
     const windows = switched ? windowsOf({ onFrom: dayOrNull(switched.onFrom), offFrom: dayOrNull(switched.offFrom), earlierWindows: switched.earlierWindows }) : []
-    const printers = await db.printer.findMany({ where: { siteId: site.id, kind: 'A4_PDF', status: 'ACTIVE' }, select: { id: true }, take: 2 })
-    const base = { subject: 'WORKER' as const, linked: true, today, month, work, paysToday: paysOn(windows, today), paysMonth: monthPays(windows, month), printer: officePrinterOf(printers) !== null }
+    const printer = await statementPrinterFor(db, { companyId: site.companyId, siteId: site.id })
+    const base = { subject: 'WORKER' as const, linked: true, today, month, work, paysToday: paysOn(windows, today), paysMonth: monthPays(windows, month), printer: printer !== null }
 
     // The gate first: closed, none of one person's work figures is even computed.
     if (!(await legalGateFor(db, site.id, 'PERFORMANCE', now)).open) return { ...base, performance: null }

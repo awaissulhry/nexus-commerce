@@ -14,6 +14,7 @@ import type { Place } from '../close/store'
 import { userNames } from '../employees/employees'
 import { seesPay } from '../piecerates/access'
 import { EXPORT_SELECT, layoutUsedOf, mayDo, monthOfRow, type ExportRow } from './store'
+import { consultantOf } from './settings'
 
 /**
  * The exports as the screens read them (B-W2b-54; design people.payroll "Exports": period, company, format, version, made by and
@@ -59,7 +60,7 @@ function rowOf(row: ExportRow, extras: { readonly names: ReadonlyMap<string, str
   return {
     id: row.id,
     companyId: row.companyId,
-    company: { code: row.company.code, legalName: row.company.legalName },
+    company: { code: row.company.code, legalName: row.company.legalName, payrollCode: used.definition.companyCode ?? null },
     month,
     label: monthLabel(month),
     number: row.number,
@@ -101,6 +102,7 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
   const now = serverClock.now()
   const latest = row.status === 'EXPORTED' && row.correctedBy.length === 0
   const payWords = 'This file carries amounts: it asks the pay grain.'
+  const consultant = await consultantOf(db, place.company.id)
   return {
     ...view,
     payPeriodId: row.payPeriodId,
@@ -121,6 +123,7 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
     cancelReason: row.cancelReason,
     note: row.note,
     carriesPay: pay,
+    consultant: consultant ? { partyId: consultant.partyId, name: consultant.name, email: consultant.problem ? null : consultant.email, words: consultant.words } : null,
     words: row.correctionOfId ? CORRECTION_WORDS : 'The first file of the month.',
     actions: {
       correct: held(mayManage && latest && (!pay || seesPay(context)), !mayManage ? 'Making a correction needs people.payroll.manage.' : !latest ? 'Only the latest exported file of the month is corrected.' : payWords),

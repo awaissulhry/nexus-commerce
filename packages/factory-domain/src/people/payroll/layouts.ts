@@ -73,9 +73,33 @@ export interface LayoutDefinition {
   readonly dateFormat?: string
   readonly encoding?: string
   readonly headerRow?: boolean
-  /** The company as the provider knows it; default the company's code. */
+  /**
+   * The company as the provider knows it, as an export used it (Company.payrollCode, B-W2b-89; none: the company's code).
+   * A live layout keeps none: `definitionAsUsed` puts it in the export's copy.
+   */
   readonly companyCode?: string
+  /**
+   * Who confirmed a provider layout, as an export kept it. A live layout keeps it in its columns (confirmedOn, confirmedByName,
+   * confirmedById; B-W2b-89): `definitionAsUsed` puts it in the export's copy.
+   */
   readonly confirmation?: LayoutConfirmation
+}
+
+/** The definition a live layout stores: its columns and file options, never the two facts kept elsewhere. */
+export function storedDefinition(definition: LayoutDefinition): LayoutDefinition {
+  const { companyCode: _company, confirmation: _confirmation, ...stored } = definition
+  return stored
+}
+
+/** A live layout's confirmation from its columns: the day and the name the consultant goes by (else who recorded it). */
+export function confirmationOf(row: { readonly confirmedOn: BusinessDate | null; readonly confirmedByName: string | null }, recordedBy: string | null = null): LayoutConfirmation | null {
+  const by = row.confirmedByName ?? recordedBy
+  return row.confirmedOn && by ? { on: row.confirmedOn, by } : null
+}
+
+/** The layout as an export uses and keeps it: the stored definition, the company's payroll code, the confirmation. */
+export function definitionAsUsed(stored: LayoutDefinition, facts: { readonly payrollCode: string | null; readonly confirmation: LayoutConfirmation | null }): LayoutDefinition {
+  return { ...storedDefinition(stored), ...(facts.payrollCode ? { companyCode: facts.payrollCode } : {}), ...(facts.confirmation ? { confirmation: facts.confirmation } : {}) }
 }
 
 const FORMAT = /^(number|implied):(\d)$/
