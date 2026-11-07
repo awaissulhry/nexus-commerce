@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit'
+import { imageSizeOf } from '@nexus/factory-domain/branding/rules'
 import { pageLabel, type ComposedBlock, type ComposedDocument, type ComposedFact } from '@nexus/factory-domain/documents/compose'
 
 /**
@@ -72,7 +73,7 @@ export async function renderDocumentPdf(document: ComposedDocument): Promise<Buf
     pdf.on('end', () => resolve())
     pdf.on('error', reject)
   })
-  paint(pdf, document)
+  paint(pdf, document, await logoOf(document))
   pdf.end()
   await ended
   return Buffer.concat(chunks)
@@ -80,7 +81,41 @@ export async function renderDocumentPdf(document: ComposedDocument): Promise<Buf
 
 type Pdf = PDFKit.PDFDocument
 
-function paint(pdf: Pdf, document: ComposedDocument): void {
+/** B-W2b-161: the logo's box above the company's name (points): wide logos keep their width, tall ones their height. */
+export const LOGO_BOX = { width: 150, height: 42 } as const
+
+/**
+ * B-W2b-161 (PLT-228): the company's logo, when its branding has one (compose's issuer.logo): its bytes, read now (every
+ * PDF is painted outside a command's transaction). A logo that cannot be read or drawn is left out: the document is printed
+ * with the name alone, never refused for its logo.
+ */
+async function logoOf(document: ComposedDocument): Promise<Buffer | null> {
+  const logo = document.issuer.logo
+  if (!logo) return null
+  try {
+    const bytes = await logo.load()
+    return bytes ? Buffer.from(bytes) : null
+  } catch {
+    return null
+  }
+}
+
+/** Draws the logo at the top left inside LOGO_BOX, its proportions kept; returns the y under it (or `y` when none was drawn). */
+function paintLogo(pdf: Pdf, logo: Buffer | null, x: number, y: number): number {
+  if (!logo) return y
+  const size = imageSizeOf(logo)
+  if (!size) return y
+  try {
+    const scale = Math.min(LOGO_BOX.width / size.width, LOGO_BOX.height / size.height, 1)
+    const height = size.height * scale
+    pdf.image(logo, x, y, { width: size.width * scale, height })
+    return y + height + 6
+  } catch {
+    return y
+  }
+}
+
+function paint(pdf: Pdf, document: ComposedDocument, logo: Buffer | null = null): void {
   const left = MARGIN.left
   const right = pdf.page.width - MARGIN.right
   const width = right - left
@@ -94,7 +129,7 @@ function paint(pdf: Pdf, document: ComposedDocument): void {
 
   // Header: the company on the left, the title and identity on the right.
   const companyWidth = Math.round(width * 0.58)
-  let y: number = MARGIN.top
+  let y: number = paintLogo(pdf, logo, left, MARGIN.top)
   y = text(document.issuer.heading.toUpperCase(), left, y, { font: BOLD, size: 6.5, color: MUTED, width: companyWidth })
   y = text(document.issuer.name, left, y + 1, { font: BOLD, size: 13, width: companyWidth })
   for (const line of document.issuer.lines) y = text(line, left, y + 0.5, { size: 7.5, color: MUTED, width: companyWidth })

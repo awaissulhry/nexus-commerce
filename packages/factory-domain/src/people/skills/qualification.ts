@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../../core/time'
+import { addDays } from '../employees/rules'
 import { authorisationStateOf, isTrainee, traineeStateOf, type SkillLevel } from './rules'
 
 /**
@@ -20,6 +21,13 @@ import { authorisationStateOf, isTrainee, traineeStateOf, type SkillLevel } from
  * site's rule (FREE: not checked; WARN: it goes on, a reason is asked in dispatch and the team leader is told on the floor;
  * STRICT: held, a team leader may override it with their PIN and a reason). A missing, ended or not-yet-valid
  * authorisation always holds and is never overridden (D.Lgs. 81/2008 art. 71 c.7; MES-246).
+ *
+ * B-W2b-139: expired training holds a machine authorisation. A type of machine that asks an authorisation may ask safety
+ * courses of who is authorised on it (TrainingRequirement MACHINE_CLASS, B-W2b-133: before starting, or within so many days
+ * of the authorisation). With the authorisation in force, a course the person does not hold today (no PASSED record still
+ * valid) that is due — before starting, or its days passed — is a finding of kind AUTHORISATION, always STRICT and never
+ * overridden: TRAINING_EXPIRED (the record lapsed) or TRAINING_MISSING (never passed). A course still within its days is
+ * listed as DUE and holds nothing. Every caller (dispatch, the tablet's start, the office and floor checks) gets it here.
  *
  * Nothing here is a figure about one person's work: the check reads levels (a person's judgement, MES-281) and
  * authorisations, never output, speed or a score; it decides nothing about the person (a person assigns, a team leader
@@ -64,17 +72,34 @@ export interface HeldAuthorisation {
   readonly validUntil: BusinessDate | null
 }
 
+/** B-W2b-139: one safety course the class asks of who is authorised on it, and what the person holds of it today. */
+export interface CourseNeed {
+  readonly courseId: string
+  readonly code: string
+  readonly name: string
+  /** Days after the authorisation starts (null: before starting). */
+  readonly withinDays: number | null
+  /** The person holds it today: a PASSED record no correction names, valid until null or not past. */
+  readonly met: boolean
+  /** The newest standing PASSED record's valid until (null: none, or no expiry). */
+  readonly validUntil: BusinessDate | null
+  /** A PASSED record ever stood (so a course not met lapsed rather than never was done). */
+  readonly everPassed: boolean
+}
+
 export interface MachineNeed {
   readonly machineClassId: string
   readonly code: string
   readonly label: string
   /** The machines of the class concerned (asset numbers), for the words. */
   readonly assetNumbers: readonly string[]
-  /** The class is kept under authorisation (see the API's rule). */
+  /** The class asks an authorisation (MachineClass.authorisationRequired, read by the API). */
   readonly kept: boolean
   /** The person's authorisation not revoked (in force, ended or starting later); null: none. */
   readonly authorisation: HeldAuthorisation | null
   readonly skills: readonly SkillNeed[]
+  /** B-W2b-139: the safety courses the class asks (none: none asked, or not read). */
+  readonly courses?: readonly CourseNeed[] | undefined
 }
 
 export interface QualificationFacts {
@@ -90,6 +115,9 @@ export const SKILL_STATES = ['QUALIFIED', 'TRAINEE', 'LEARNING', 'NONE', 'NOT_KE
 export type SkillState = (typeof SKILL_STATES)[number]
 export const AUTHORISATION_NEED_STATES = ['AUTHORISED', 'NOT_YET', 'EXPIRED', 'NONE', 'NOT_KEPT'] as const
 export type AuthorisationNeedState = (typeof AUTHORISATION_NEED_STATES)[number]
+/** B-W2b-139: a course a class asks: held today, due later (within its days), lapsed or never passed past its due day. */
+export const TRAINING_NEED_STATES = ['MET', 'DUE', 'EXPIRED', 'MISSING'] as const
+export type TrainingNeedState = (typeof TRAINING_NEED_STATES)[number]
 
 export interface SkillRequirement {
   readonly kind: 'OPERATION' | 'MACHINE_SKILL'
@@ -115,9 +143,23 @@ export interface AuthorisationRequirement {
   readonly validUntil: BusinessDate | null
 }
 
-export type Requirement = SkillRequirement | AuthorisationRequirement
+export interface TrainingRequirement {
+  readonly kind: 'TRAINING'
+  /** The course's code and name. */
+  readonly code: string
+  readonly label: string
+  readonly state: TrainingNeedState
+  readonly courseId: string
+  /** The class that asks it (its code). */
+  readonly machineClass: string
+  readonly validUntil: BusinessDate | null
+  /** The day it is due: the authorisation's first day (before starting) or that day + its days. */
+  readonly dueOn: BusinessDate
+}
 
-export const QUALIFICATION_FINDINGS = ['PERSON_LEFT', 'NO_SKILL', 'LEARNING_ONLY', 'NOT_AUTHORISED', 'AUTHORISATION_EXPIRED', 'AUTHORISATION_NOT_YET'] as const
+export type Requirement = SkillRequirement | AuthorisationRequirement | TrainingRequirement
+
+export const QUALIFICATION_FINDINGS = ['PERSON_LEFT', 'NO_SKILL', 'LEARNING_ONLY', 'NOT_AUTHORISED', 'AUTHORISATION_EXPIRED', 'AUTHORISATION_NOT_YET', 'TRAINING_EXPIRED', 'TRAINING_MISSING'] as const
 export type QualificationFindingCode = (typeof QUALIFICATION_FINDINGS)[number]
 
 export interface QualificationFinding {
@@ -191,6 +233,14 @@ function authorisationRequirement(machine: MachineNeed, today: BusinessDate): Au
 
 const machinesOf = (machine: MachineNeed): string => (machine.assetNumbers.length > 0 ? ` (${machine.assetNumbers.join(', ')})` : '')
 
+/** B-W2b-139: a course the class asks, against the authorisation's first day: held, due later, lapsed or missing past due. */
+export function trainingRequirement(machine: Pick<MachineNeed, 'code'>, course: CourseNeed, authorisedOn: BusinessDate, today: BusinessDate): TrainingRequirement {
+  const dueOn = course.withinDays === null ? authorisedOn : addDays(authorisedOn, course.withinDays)
+  const due = course.withinDays === null || dueOn < today
+  const state: TrainingNeedState = course.met ? 'MET' : !due ? 'DUE' : course.everPassed ? 'EXPIRED' : 'MISSING'
+  return { kind: 'TRAINING', code: course.code, label: course.name, state, courseId: course.courseId, machineClass: machine.code, validUntil: course.validUntil, dueOn }
+}
+
 /** The check of one person for one operation and the machines it runs on. */
 export function qualificationOf(facts: QualificationFacts): QualificationResult {
   const { today, mode, person } = facts
@@ -229,11 +279,24 @@ export function qualificationOf(facts: QualificationFacts): QualificationResult 
       findings.push({ code: 'AUTHORISATION_EXPIRED', kind: 'AUTHORISATION', mode: 'STRICT', overridable: false, requirement: machine.code, message: `${person.name}'s authorisation on ${machine.label} machines ended on ${authorisation.validUntil}.`, fix })
     } else if (authorisation.state === 'NOT_YET') {
       findings.push({ code: 'AUTHORISATION_NOT_YET', kind: 'AUTHORISATION', mode: 'STRICT', overridable: false, requirement: machine.code, message: `${person.name}'s authorisation on ${machine.label} machines starts on ${authorisation.authorisedOn}.`, fix })
+    } else if (authorisation.state === 'AUTHORISED' && authorisation.authorisedOn !== null) {
+      // B-W2b-139: the courses the class asks of who is authorised on it.
+      for (const course of machine.courses ?? []) {
+        const requirement = trainingRequirement(machine, course, authorisation.authorisedOn, today)
+        requirements.push(requirement)
+        const trainingFix = 'Only a person trained for it works on it: record the training in People › Skills & training (a session signed on the floor, or Record training); meanwhile another person takes the work.'
+        if (requirement.state === 'EXPIRED') {
+          findings.push({ code: 'TRAINING_EXPIRED', kind: 'AUTHORISATION', mode: 'STRICT', overridable: false, requirement: machine.code, message: `${person.name}'s ${course.name}, which ${machine.label} machines ask, expired on ${course.validUntil}: the authorisation is held.`, fix: trainingFix })
+        } else if (requirement.state === 'MISSING') {
+          const when = course.withinDays === null ? 'before starting' : `within ${course.withinDays} days of the authorisation (by ${requirement.dueOn})`
+          findings.push({ code: 'TRAINING_MISSING', kind: 'AUTHORISATION', mode: 'STRICT', overridable: false, requirement: machine.code, message: `${person.name} has not done ${course.name}, which ${machine.label} machines ask ${when}: the authorisation is held.`, fix: trainingFix })
+        }
+      }
     }
   }
 
   const kept = requirements.filter((requirement) => requirement.state !== 'NOT_KEPT')
-  const short = !person.active || kept.some((requirement) => requirement.state === 'NONE' || requirement.state === 'LEARNING' || requirement.state === 'EXPIRED' || requirement.state === 'NOT_YET')
+  const short = !person.active || kept.some((requirement) => requirement.state === 'NONE' || requirement.state === 'LEARNING' || requirement.state === 'EXPIRED' || requirement.state === 'NOT_YET' || requirement.state === 'MISSING')
   const trainee = kept.some((requirement) => requirement.state === 'TRAINEE')
   const outcome: QualificationOutcome = short ? 'NOT_QUALIFIED' : kept.length === 0 ? 'NOT_CHECKED' : trainee ? 'TRAINEE' : 'QUALIFIED'
   const strict = findings.filter((finding) => finding.mode === 'STRICT')
@@ -249,7 +312,7 @@ function messageOf(facts: QualificationFacts, outcome: QualificationOutcome, dec
   if (outcome === 'NOT_CHECKED') return `No skill or authorisation is kept for ${what}: nothing to check.`
   if (outcome === 'NOT_QUALIFIED') return `${facts.person.name} holds no level for ${what}; this site does not check skills.`
   if (outcome === 'TRAINEE') {
-    const until = kept.find((requirement): requirement is SkillRequirement => requirement.kind !== 'AUTHORISATION' && requirement.state === 'TRAINEE')?.traineeUntil
+    const until = kept.find((requirement): requirement is SkillRequirement => (requirement.kind === 'OPERATION' || requirement.kind === 'MACHINE_SKILL') && requirement.state === 'TRAINEE')?.traineeUntil
     return `${facts.person.name} works on ${what} as a trainee${until ? ` (until ${until})` : ''}: the work carries the trainee mark.`
   }
   return `${facts.person.name} is qualified for ${what}.`

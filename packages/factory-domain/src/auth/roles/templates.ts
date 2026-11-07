@@ -601,6 +601,20 @@ const HEALTH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
   company_doctor: ['safety.health.view', 'safety.health.manage', 'safety.health.plans'],
   safety_officer: ['safety.health.plans'],
 })
+/**
+ * B-W2b-139 (training records, due lists, the instruction register, attendance signed on the floor; QHS-243, QHS-244, QHS-246,
+ * QHS-247, QHS-248; design people.skills "Record training", "Instruction register"): the safety officer and HR keep the
+ * training records (sessions, paper sheets, countersignatures in the office, records typed, corrections); the instruction
+ * register also by the production manager and the floor supervisor (the preposti give hands-on instruction). The workers and
+ * the trainer sign on the floor with floor.work: no floor template changes. Office only; owner from every(); read_only gets
+ * none (writes; reading is safety.view).
+ */
+const RECORDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.training.record', 'safety.instruction.record'],
+  hr: ['safety.training.record', 'safety.instruction.record'],
+  production_manager: ['safety.instruction.record'],
+  floor_supervisor: ['safety.instruction.record'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -689,7 +703,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-143
   ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : []),
   // B-W2b-135
-  ...(audience === 'office' ? (HEALTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (HEALTH_ADDS[key] ?? []) : []),
+  // B-W2b-139
+  ...(audience === 'office' ? (RECORDS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -860,6 +876,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'security.view', 'security.drills.record',
       // B-W2a-41: the mail delivery log; unblock an address.
       'email.delivery.view', 'email.delivery.unblock',
+      // B-W2b-161: company branding (logo, accent, sender name, portal label; step-up).
+      'documents.branding.manage',
     ],
     grains: [],
   }),

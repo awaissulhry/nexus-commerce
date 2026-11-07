@@ -7,19 +7,21 @@
     "keys": {
       "numbers": "Mostra le serie di numerazione",
       "documents": "Mostra i modelli dei documenti",
+      "branding": "Mostra il marchio",
       "newSeries": "Nuova serie"
     },
     "preview": "Anteprima di un documento",
     "views": {
       "label": "Quale elenco",
       "numbers": "Numerazioni",
-      "documents": "Documenti"
+      "documents": "Documenti",
+      "branding": "Marchio"
     },
     "company": {
       "label": "Società",
       "all": "Tutte le società"
     },
-    "later": "Modelli di e-mail ed etichette, marchio e documenti obbligatori per i record arrivano nei prossimi passi.",
+    "later": "Modelli di e-mail ed etichette e documenti obbligatori per i record arrivano nei prossimi passi.",
     "pattern": {
       "aria": "Schema {pattern}",
       "year4": "anno (2026)",
@@ -261,6 +263,7 @@
       "COMPLAINT": "Reclamo del cliente",
       "CLAIM": "Reclamo al fornitore",
       "SUBCONTRACT": "Ordine al terzista",
+      "ASN": "Avviso di spedizione",
       "COUNT": "Inventario",
       "NCR": "Non conformità",
       "MAINTENANCE_JOB": "Intervento di manutenzione",

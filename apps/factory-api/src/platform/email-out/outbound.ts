@@ -33,6 +33,7 @@ import { COMMAND_SETTINGS, command, runCommand, type CommandCaller, type Command
 import { actorOf } from '../../core/context'
 import { companyLegalOf } from '../documents/documents'
 import type { Clock } from '../../core/time'
+import { brandedIdentity } from '../branding/sender'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import {
@@ -161,7 +162,8 @@ export async function sendingIdentity(tx: CommandTx, companyId: string | null, i
     ])
   }
   if (!identityReady(identity)) throw new InvalidStateError('This sending address is not verified in SES yet (domain and DKIM), or it is disabled.')
-  return identity
+  // B-W2b-161: the company's branding names the mail it sends to partners (platform/branding sender.ts).
+  return brandedIdentity(tx, identity)
 }
 
 /** The suppressed addresses among these (PLT-149). */
@@ -428,7 +430,11 @@ export async function deliverOutbound(runtime: EmailRuntime, caller: CommandCall
   })
   if (claim !== 'claimed') return claim
   // Claimed by this call (SENDING until the claim lapses): read as it is now, outside the claim's transaction.
-  const row = await caller.withClient((client) => client.emailOutbound.findUniqueOrThrow({ where: { id: outboundId }, select: OUTBOUND_SEND }))
+  const row = await caller.withClient(async (client) => {
+    const found = await client.emailOutbound.findUniqueOrThrow({ where: { id: outboundId }, select: OUTBOUND_SEND })
+    // B-W2b-161: the company's name under the signature is its branding's sender name (platform/branding sender.ts).
+    return { ...found, identity: await brandedIdentity(client, found.identity) }
+  })
 
   let failure: { readonly message: string; readonly retryable: boolean }
   try {
