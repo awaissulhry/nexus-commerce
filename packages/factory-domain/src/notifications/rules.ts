@@ -84,6 +84,9 @@ export const MESSAGE_TEMPLATES = {
   'notifications.safety.incidentReported': { en: 'New report {record}: {title}', it: 'Nuova segnalazione {record}: {title}' },
   'notifications.safety.inailDue': { en: 'INAIL report for {record} due by {title}', it: 'Comunicazione INAIL per {record} da inviare entro {title}' },
   'notifications.safety.inailLate': { en: 'INAIL report for {record} is late: it was due by {title}', it: 'Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}' },
+  // B-W2b-177 (platform/files/expiry/notices.ts): a document of a record stops being valid soon, 30 then 7 days before
+  // ({kind}: the file's name; {title}: the expiry date, Europe/Rome), to the record's owner and its followers.
+  'notifications.files.expiryDue': { en: '{kind} on {record} expires on {title}', it: '{kind} su {record} scade il {title}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES

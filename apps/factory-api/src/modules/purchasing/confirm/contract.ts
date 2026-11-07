@@ -5,6 +5,7 @@ import { ANSWER_MODES, ANSWER_OUTCOMES, DECLINE_REASONS, LINE_ANSWERS, LINE_CHAN
 import { MAX_LINES, MAX_TEXT, PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { getOrderContract, supplierViewContract } from '../contract'
+import { PORTAL_LINE_ANSWERS } from '@nexus/factory-domain/purchasing/portal-orders/answer'
 
 /**
  * The confirm link's contracts (B-W1-31; design links.po, SCR-100) and the office's view of the supplier's answer. The
@@ -140,7 +141,19 @@ export const orderAnswerContract = defineContract({
           item: output({ code: z.string(), name: z.string() }),
           colour: z.string().nullable(),
           asked: output({ quantity: z.string(), uom: z.enum(UOMS), needDate: z.string() }),
-          proposed: output({ kind: z.enum(LINE_ANSWERS), quantity: z.string(), date: z.string().nullable(), deliveries: z.array(delivery), reason: z.string().nullable(), changes: z.array(z.enum(LINE_CHANGES)) }).nullable(),
+          proposed: output({
+            kind: z.enum(LINE_ANSWERS),
+            quantity: z.string(),
+            date: z.string().nullable(),
+            deliveries: z.array(delivery),
+            reason: z.string().nullable(),
+            changes: z.array(z.enum(LINE_CHANGES)),
+            // B-W2b-174 (SCM-086): the answer in the portal's words (SUBSTITUTE, CHANGE too), the article offered instead, and
+            // whether the line waits for the buyer's yes. A substitute is taken by a new version (accept refuses it in words).
+            portalKind: z.enum(PORTAL_LINE_ANSWERS),
+            substitute: output({ itemId: id().nullable(), code: z.string().nullable(), name: z.string().nullable(), note: z.string().nullable() }).nullable(),
+            needsBuyer: z.boolean(),
+          }).nullable(),
           confirmed: delivery.nullable(),
           changes: z.array(z.enum(LINE_CHANGES)),
         }),

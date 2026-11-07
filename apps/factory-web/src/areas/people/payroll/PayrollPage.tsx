@@ -449,7 +449,7 @@ function Page() {
         .catch((error: unknown) => setColumns((current) => (current ? { ...current, busy: false, problem: payrollProblem(error) } : current)))
     },
     onCloseColumns: () => setColumns(null),
-    onOpenConfirm: (target) => setConfirm({ layout: target, draft: { by: target.definition.confirmation?.by ?? '', on: target.definition.confirmation?.on ?? today }, busy: false, problem: null }),
+    onOpenConfirm: (target) => setConfirm({ layout: target, draft: { by: target.confirmation?.by ?? '', on: target.confirmation?.on ?? today }, busy: false, problem: null }),
     onConfirmDraft: (patch) => setConfirm((current) => (current ? { ...current, draft: { ...current.draft, ...patch }, problem: null } : current)),
     onSaveConfirm: () => {
       if (!confirm || confirmHeld(confirm.draft, can, confirm.busy)) return

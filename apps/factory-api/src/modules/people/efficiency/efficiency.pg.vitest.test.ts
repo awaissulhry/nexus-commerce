@@ -78,7 +78,7 @@ const SESSIONS: Record<string, SessionContext> = {
 }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST'
+type Method = 'GET' | 'POST' | 'PUT'
 const admin = async <Row = Json>(sql: string, values: unknown[] = []): Promise<Row[]> => (await h.db.admin.query(sql, values)).rows as Row[]
 const run = randomBytes(4).toString('hex')
 let serial = 0
@@ -468,6 +468,33 @@ describe('the standard review (MES-251; c.c. art. 2101)', () => {
     expect(answer.queue.some((row: Json) => row.routingOperationId === ops.cut!.routing)).toBe(false)
     expect(answer.leftOut).toBe(1)
     expect(answer.count).toBe(answer.queue.length)
+  })
+
+  it("B-W2b-89: the company's limits decide the queue; reading and changing them ask their rights", async () => {
+    const ruleUrl = `/people/efficiency/review/rule?companyId=${companyA}`
+    const read = await ok('viewer', 'GET', ruleUrl)
+    expect(read).toMatchObject({ companyId: companyA, tolerancePercent: 10, minBundles: 5, windowDays: 60, canManage: false })
+    const body = { companyId: companyA, version: read.version, tolerancePercent: 40, minBundles: 5 }
+    await no('viewer', 'PUT', '/people/efficiency/review/rule', body, 403)
+    await no('companyB', 'PUT', '/people/efficiency/review/rule', body, 404)
+    await no('noRight', 'GET', ruleUrl, undefined, 403)
+    expect(pathOf(await no('reviewer', 'PUT', '/people/efficiency/review/rule', { ...body, tolerancePercent: 0 }, 400))).toBe('body/tolerancePercent')
+    // Sewing is 30 % over its standard: a 40 % tolerance takes it off the queue.
+    const loose = await ok('reviewer', 'PUT', '/people/efficiency/review/rule', body)
+    expect(loose).toMatchObject({ tolerancePercent: 40, minBundles: 5, canManage: true })
+    const queue = await ok('viewer', 'GET', queueUrl)
+    expect(queue.rule).toEqual({ tolerancePercent: 40, minBundles: 5 })
+    expect(queue.words[0]).toContain('more than 40% off')
+    expect(queue.queue.some((row: Json) => row.routingOperationId === ops.sew!.routing)).toBe(false)
+    expect((await ok('viewer', 'GET', `/people/efficiency/operations?${scope}`)).rule).toEqual({ tolerancePercent: 40, minBundles: 5 })
+    // A read from before the change does not overwrite it unseen; back to 10 % it is on again.
+    await no('reviewer', 'PUT', '/people/efficiency/review/rule', { ...body, tolerancePercent: 10 }, 409)
+    await ok('reviewer', 'PUT', '/people/efficiency/review/rule', { ...body, version: loose.version, tolerancePercent: 10 })
+    expect((await ok('viewer', 'GET', queueUrl)).queue.find((row: Json) => row.routingOperationId === ops.sew!.routing)).toMatchObject({ reason: 'OFF_STANDARD' })
+    const events = await admin('SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2', [T, 'people_settings.review_changed'])
+    expect(events.map((event) => event.payload)).toEqual([{ companyId: companyA, version: loose.version }, { companyId: companyA, version: loose.version + 1 }])
+    const rows = await admin(`SELECT before, after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'PeopleSettings' AND "recordId" = $2 AND after ? 'standardReview' ORDER BY at, id`, [T, companyA])
+    expect(rows.map((row) => row.after.standardReview)).toEqual([{ tolerancePercent: 40, minBundles: 5 }, { tolerancePercent: 10, minBundles: 5 }])
   })
 
   it('a decision is a person\'s, with a reason, and is refused to whoever only reads', async () => {

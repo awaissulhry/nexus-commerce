@@ -1,6 +1,6 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { PEOPLE_EFFICIENCY_VIEW } from '@nexus/factory-domain/people/efficiency/permissions'
-import { cycleFiguresOf, operationDaysOf, operationFiguresOf, STANDARD_REVIEW, type OperationFigures, type OperationSample } from '@nexus/factory-domain/people/efficiency/rules'
+import { cycleFiguresOf, operationDaysOf, operationFiguresOf, type OperationFigures, type OperationSample } from '@nexus/factory-domain/people/efficiency/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { rangeOf, siteFor } from '../attendance/access'
@@ -8,6 +8,7 @@ import { officeOf } from '../employees/access'
 import { hideSmallGroups } from '../privacy/groups'
 import { refuseAnyPerson, requireLine, reviewWindow, type PersonKeys } from './access'
 import { reviewFacts } from './review'
+import { reviewRuleFor } from './rule'
 import { operationRefOf, readSamples, siteLines, stepOfSite, styleRefOf, stylesById, type Reader, type RoutingStep, type StepSamples } from './store'
 
 /**
@@ -49,15 +50,16 @@ export async function listOperations(caller: CommandCaller, query: Query) {
     requireLine(setup, query.lineId)
     const range = rangeOf(query, site.timezone, now)
     const read = await readSamples(db, site, setup.sources, range, { lineId: query.lineId, styleId: query.styleId })
+    const rule = await reviewRuleFor(db, site.companyId)
     const styles = await stylesById(db, [...read.steps.values()].map((entry) => entry.step.styleId))
     const entries = [...read.steps.values()].sort((a, b) => byPlace(a, b, styles))
-    const masked = await hideSmallGroups(db, site.companyId, entries.map((entry) => ({ entry, ...operationFiguresOf(entry.samples, entry.step.standardMinutes) })))
+    const masked = await hideSmallGroups(db, site.companyId, entries.map((entry) => ({ entry, ...operationFiguresOf(entry.samples, entry.step.standardMinutes, rule) })))
     const days = await maskedDays(db, site.companyId, masked.rows.filter((row) => !row.tooFew).map((row) => row.row.entry))
     return {
       siteId: site.id,
       from: range.from,
       to: range.to,
-      rule: { tolerancePercent: STANDARD_REVIEW.tolerancePercent, minBundles: STANDARD_REVIEW.minBundles },
+      rule,
       operations: masked.rows.map(({ row, tooFew, words }) => ({
         routingOperationId: row.entry.step.id,
         style: styleRefOf(styles, row.entry.step),
@@ -91,10 +93,11 @@ export async function operationDetail(caller: CommandCaller, routingOperationId:
     const range = query.from !== undefined || query.to !== undefined ? rangeOf(query, site.timezone, now) : reviewWindow(site.timezone, now)
     const read = await readSamples(db, site, setup.sources, range, { step })
     const samples = read.steps.get(step.id)?.samples ?? []
-    const masked = await hideSmallGroups(db, site.companyId, [operationFiguresOf(samples, step.standardMinutes)])
+    const rule = await reviewRuleFor(db, site.companyId)
+    const masked = await hideSmallGroups(db, site.companyId, [operationFiguresOf(samples, step.standardMinutes, rule)])
     const { row, tooFew, words } = masked.rows[0]!
     const days = tooFew ? [] : ((await maskedDays(db, site.companyId, [{ step, samples }])).get(step.id) ?? [])
-    const review = await reviewFacts(db, site, setup, step, now)
+    const review = await reviewFacts(db, site, setup, step, now, rule)
     return {
       siteId: site.id,
       from: range.from,
@@ -110,7 +113,7 @@ export async function operationDetail(caller: CommandCaller, routingOperationId:
       days,
       review: review.place,
       history: review.history,
-      rule: { tolerancePercent: STANDARD_REVIEW.tolerancePercent, minBundles: STANDARD_REVIEW.minBundles },
+      rule,
       words: [...(words ? [words] : []), NO_PERSON],
     }
   })

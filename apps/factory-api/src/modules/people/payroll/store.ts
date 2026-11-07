@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { confirmationWords, layoutConfirmed, parseDefinition, type FileContext, type LayoutDefinition, type PayrollFormat } from '@nexus/factory-domain/people/payroll/layouts'
+import { confirmationOf, confirmationWords, definitionAsUsed, layoutConfirmed, parseDefinition, type FileContext, type LayoutConfirmation, type LayoutDefinition, type PayrollFormat } from '@nexus/factory-domain/people/payroll/layouts'
 import { monthPeriod } from '@nexus/factory-domain/people/overtime/timesheets'
 import type { Issue } from '@nexus/factory-domain/core/errors'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
@@ -20,7 +20,7 @@ import { dateOf, dayOf, refuse } from '../employees/access'
 /** A payroll rule's refusal: a 409 with `refusal/<CODE>`, in words (the codes are factory-domain people/payroll/rules). */
 export const refusePayroll = (code: PayrollRefusal, message: string, field?: string, more: readonly Issue[] = []): never => refuse(code, message, field, more)
 
-export const LAYOUT_SELECT = { id: true, companyId: true, name: true, format: true, provider: true, definition: true, status: true, note: true, updatedAt: true, version: true } as const satisfies Prisma.PayrollExportLayoutSelect
+export const LAYOUT_SELECT = { id: true, companyId: true, name: true, format: true, provider: true, definition: true, confirmedOn: true, confirmedByName: true, status: true, note: true, updatedAt: true, version: true } as const satisfies Prisma.PayrollExportLayoutSelect
 export type LayoutRow = Prisma.PayrollExportLayoutGetPayload<{ select: typeof LAYOUT_SELECT }>
 
 export const EXPORT_SELECT = {
@@ -36,6 +36,7 @@ export const EXPORT_SELECT = {
   number: true,
   status: true,
   checks: true,
+  correctionsCarried: true,
   values: true,
   exportedAt: true,
   exportedById: true,
@@ -66,12 +67,30 @@ export const layoutUsedOf = (snapshot: unknown): LayoutUsed => {
   return { format: row.format ?? 'DELIMITED', definition: parseDefinition(row.definition) }
 }
 
-export const layoutParts = (row: Pick<LayoutRow, 'provider' | 'definition'>): { readonly provider: string | null; readonly definition: LayoutDefinition } => ({ provider: row.provider, definition: parseDefinition(row.definition) })
+type LayoutFacts = Pick<LayoutRow, 'format' | 'provider' | 'definition' | 'confirmedOn' | 'confirmedByName'>
+
+/** A live layout's confirmation, from its columns (B-W2b-89). */
+export const confirmationOfRow = (row: Pick<LayoutRow, 'confirmedOn' | 'confirmedByName'>): LayoutConfirmation | null => confirmationOf({ confirmedOn: row.confirmedOn ? dayOf(row.confirmedOn) : null, confirmedByName: row.confirmedByName }, 'the office')
+
+/**
+ * The layout as an export uses and keeps it (its `layoutSnapshot`): the stored columns and options, the company's payroll code
+ * (Company.payrollCode; none: the file prints the company's code) and the confirmation of its columns.
+ */
+export const layoutAsUsed = (row: LayoutFacts, payrollCode: string | null): LayoutUsed & { readonly provider: string | null } => ({
+  format: row.format as PayrollFormat,
+  provider: row.provider,
+  definition: definitionAsUsed(parseDefinition(row.definition), { payrollCode, confirmation: confirmationOfRow(row) }),
+})
 
 /** Confirmed and its words, for a layout row. */
-export function layoutState(row: Pick<LayoutRow, 'provider' | 'definition'>): { readonly confirmed: boolean; readonly words: string | null } {
-  const parts = layoutParts(row)
+export function layoutState(row: LayoutFacts): { readonly confirmed: boolean; readonly words: string | null } {
+  const parts = layoutAsUsed(row, null)
   return { confirmed: layoutConfirmed(parts), words: confirmationWords(parts) }
+}
+
+/** The payroll code the consultant's software knows the company by (Company.payrollCode); null: none given. */
+export async function companyPayrollCode(db: Client, companyId: string): Promise<string | null> {
+  return (await db.company.findUnique({ where: { id: companyId }, select: { payrollCode: true } }))?.payrollCode ?? null
 }
 
 export async function layoutOf(db: Client, companyId: string, layoutId: string): Promise<LayoutRow> {

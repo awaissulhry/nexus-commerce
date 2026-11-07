@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { homeCountProblems, type HomeCountDefinition } from '@nexus/factory-domain/portal/home/counts'
 import { NOTIFICATION_COUNTS } from './notifications'
+import { PURCHASE_ORDER_COUNTS } from './purchase-orders'
 import { TASK_COUNTS } from './tasks'
+// B-W2b-175: a customer's orders (open, in production, shipping this week, on the way).
+import { SALES_ORDER_COUNTS } from '../../../../modules/sales/portal-orders/home'
 // B-W2b-185: the customer's open and late invoices (Finance and Admin).
 import { PAYMENT_COUNTS } from '../../../../modules/payments/online/home'
 
@@ -22,6 +25,10 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   // B-W2b-167: what waits for the person (the one task list) and their unread notifications.
   TASK_COUNTS,
   NOTIFICATION_COUNTS,
+  // B-W2b-175: a customer's orders.
+  SALES_ORDER_COUNTS,
+  // B-W2b-174: the supplier's purchase orders to confirm and late.
+  PURCHASE_ORDER_COUNTS,
   // B-W2b-185: invoices to pay and overdue (customers' Finance and Admin; null for everyone else).
   PAYMENT_COUNTS,
 ])

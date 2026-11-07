@@ -3,6 +3,8 @@ import { PORTAL_APPROVE, PORTAL_COMMENT, PORTAL_UPLOAD } from '../../auth/partne
 import type { Permission } from '../../core/permissions'
 import type { PartnerEmailTopic } from '../notifications/topics'
 import { PORTAL_HOME_VIEW } from './permissions'
+// B-W2b-174: a PO to confirm is for the people who see the supplier's purchase orders.
+import { PORTAL_PURCHASE_ORDERS_VIEW } from '../../purchasing/portal-orders/permissions'
 // B-W2b-185: paying is the customer's Finance and Admin (portal.payments.pay).
 import { PORTAL_PAYMENTS_PAY } from '../../payments/online/permissions'
 
@@ -67,7 +69,7 @@ const rule = (verb: Words, what: Words, needs: readonly Permission[], area: Port
   Object.freeze({ verb: Object.freeze(verb), what: Object.freeze(what), needs: Object.freeze<Permission[]>([PORTAL_HOME_VIEW, ...needs]), grain, area, badge: Object.freeze(badge), topic })
 
 export const KIND_RULES: Readonly<Record<PartnerTaskKind, KindRule>> = Object.freeze({
-  CONFIRM_PO: rule({ it: 'Conferma', en: 'Confirm' }, { it: "Conferma l'ordine {label}", en: 'Confirm order {label}' }, [PORTAL_APPROVE], 'orders', { it: 'da confermare', en: 'to confirm' }, 'ORDERS'),
+  CONFIRM_PO: rule({ it: 'Conferma', en: 'Confirm' }, { it: "Conferma l'ordine {label}", en: 'Confirm order {label}' }, [PORTAL_APPROVE, PORTAL_PURCHASE_ORDERS_VIEW], 'orders', { it: 'da confermare', en: 'to confirm' }, 'ORDERS'),
   ACCEPT_QUOTE: rule({ it: 'Accetta', en: 'Accept' }, { it: "Accetta l'offerta {label}", en: 'Accept quote {label}' }, [PORTAL_APPROVE], 'quotes', { it: 'da accettare', en: 'to accept' }, 'ORDERS', 'price'),
   APPROVE: rule({ it: 'Approva', en: 'Approve' }, { it: 'Approva {label}', en: 'Approve {label}' }, [PORTAL_APPROVE], 'quotes', { it: 'da approvare', en: 'to approve' }, 'DOCUMENTS'),
   SEND_MEASUREMENTS: rule({ it: 'Invia le misure', en: 'Send measurements' }, { it: 'Invia le misure per {label}', en: 'Send the measurements for {label}' }, [PORTAL_UPLOAD], 'orders', { it: 'misure da inviare', en: 'measurements to send' }, 'ORDERS'),

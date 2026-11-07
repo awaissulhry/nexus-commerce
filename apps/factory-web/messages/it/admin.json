@@ -1644,6 +1644,7 @@
     "imports_apply": "Applicare il piano di un'importazione",
     "documents_view": "Vedere in anteprima i modelli dei documenti di una società",
     "documents_branding_manage": "Cambiare l'immagine di una società: logo, colore di accento, nome mittente delle e-mail, nome del portale",
+    "documents_required_manage": "Indicare quali documenti un tipo di record deve avere prima di un cambio di stato e se la loro mancanza lo blocca",
     "print_view": "Vedere stampanti e lavori di stampa di uno stabilimento",
     "print_labels": "Stampare etichette",
     "print_documents": "Stampare documenti",
@@ -1976,6 +1977,9 @@
     "portal_upload": "Inviare file sui documenti che il ruolo mostra",
     "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra",
     "portal_home_view": "Vedere la propria Home: cosa ti aspetta, le notifiche e i conteggi della propria organizzazione",
+    "portal_salesOrders_view": "Vedere gli ordini della propria organizzazione: stato e date, data promessa e perché è cambiata, cosa resta da spedire, spedizioni e tracciamento, avanzamento della produzione se condiviso",
+    "portal_purchaseOrders_view": "Vedere i nostri ordini di acquisto: righe, date, versioni e cosa è cambiato, una copia senza prezzi; rispondere se si può approvare",
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "portal_payments_view": "Vedere cosa deve pagare la propria organizzazione: fatture e acconti aperti, scadenze ed estratto conto",
     "portal_payments_pay": "Pagare online una fattura o un acconto aperto, con carta o addebito diretto SEPA"

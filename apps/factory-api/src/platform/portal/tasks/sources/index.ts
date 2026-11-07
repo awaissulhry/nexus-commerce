@@ -1,5 +1,8 @@
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { OFFICE_SOURCE } from './office'
+import { PURCHASE_ORDERS_SOURCE } from './purchase-orders'
+// B-W2b-177: a partner's document about to expire (UPLOAD_DOCUMENT, by the expiry reminder).
+import { EXPIRY_SOURCE } from '../../../files/expiry/source'
 // B-W2b-185: the request to pay each open invoice.
 import { PAY_INVOICE_SOURCE } from '../../../../modules/payments/online/task-source'
 
@@ -27,6 +30,10 @@ export interface TaskSource {
 export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   // B-W2b-167: what an office person asks a partner for by hand (a document, an answer, measurements, progress).
   OFFICE_SOURCE,
+  // B-W2b-174: the supplier's request to confirm a purchase order we sent (one per revision).
+  PURCHASE_ORDERS_SOURCE,
+  // B-W2b-177: a document shared with the partner expires within 30 days: a new version, please.
+  EXPIRY_SOURCE,
   // B-W2b-185: a PAY_INVOICE request per issued invoice while something is open on it (closed by the payment itself).
   PAY_INVOICE_SOURCE,
 ])

@@ -110,6 +110,8 @@ import { partnerNotificationsHandler } from './platform/portal/notifications/fan
 import { onlinePaymentHandlers } from './modules/payments/online/follow-up'
 import { partnerDigestCron } from './platform/portal/notifications/digest'
 import { partnerTaskRemindersCron } from './platform/portal/tasks/reminders'
+// B-W2b-177: document expiry reminders (30 and 7 days before; the partner asked for a new version).
+import { expiryRemindersCron } from './platform/files/expiry/remind'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -294,6 +296,8 @@ if (mode === 'worker') {
   crons.push(accessEndingCron({ database, log }))
   // B-W2b-167: the partner summaries (every 15 minutes, from 08:00 on working days) and the reminders of partner requests (hourly).
   crons.push(partnerDigestCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }), partnerTaskRemindersCron({ database, log }))
+  // B-W2b-177: document expiry reminders (daily 06:40 Europe/Rome).
+  crons.push(expiryRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

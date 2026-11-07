@@ -119,7 +119,8 @@ function StepPeriod({ model, month, actions }: { model: PayrollModel; month: Pay
   const closed = month.close.state === 'CLOSED'
   const attendance = placeOf('ATTENDANCE', model.prefix, month.month, model.pages)
   const label = monthWords(month.month, locale)
-  const code = model.layout?.definition.companyCode ?? month.company.code
+  // The company's payroll code (People settings › Payroll and statements); none: the company's own code.
+  const code = month.company.payrollCode ?? month.company.code
   return (
     <Card padded className="fw-pay-card">
       <h3 className="fw-pp-h3">{t('step.period.title')}</h3>

@@ -184,10 +184,8 @@ export function ColumnsModal({ model, dialog, actions }: { model: PayrollModel; 
           <Field label={t('columns.name')}>
             <Input value={draft.name} maxLength={LAYOUT_LIMITS.name} onChange={(event) => set({ name: event.target.value })} />
           </Field>
-          <Field label={t('columns.companyCode')} hint={t('columns.companyCodeHint')}>
-            <Input value={draft.companyCode} maxLength={LAYOUT_LIMITS.companyCode} onChange={(event) => set({ companyCode: event.target.value })} />
-          </Field>
         </div>
+        <p className="fw-pp-hint">{t('columns.companyCodeMoved')}</p>
         <LayoutWarning layout={layout} />
         {layout.confirmed && layout.provider && <Banner tone="info" title={t('columns.dropsConfirmation')} />}
         <div className="fw-pay-section-head">
@@ -264,7 +262,7 @@ export function ConfirmModal({ model, dialog, actions }: { model: PayrollModel; 
   const t = usePayrollWords()
   const said = useSaid()
   const held = confirmHeld(dialog.draft, model.can, dialog.busy)
-  const confirmed = dialog.layout.definition.confirmation
+  const confirmed = dialog.layout.confirmation
   return (
     <Modal
       open

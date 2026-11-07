@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { monthLabel } from '@nexus/factory-domain/accounting/periods'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { PAYROLL_EXPORT, payByLinkProblem } from '@nexus/factory-domain/links/pay'
 import { linkState } from '@nexus/factory-domain/links/purposes'
 import { parseChecks } from '@nexus/factory-domain/people/payroll/checks'
 import { CORRECTION_WORDS } from '@nexus/factory-domain/people/payroll/rules'
@@ -14,6 +15,7 @@ import type { Place } from '../close/store'
 import { userNames } from '../employees/employees'
 import { seesPay } from '../piecerates/access'
 import { EXPORT_SELECT, layoutUsedOf, mayDo, monthOfRow, type ExportRow } from './store'
+import { consultantOf } from './settings'
 
 /**
  * The exports as the screens read them (B-W2b-54; design people.payroll "Exports": period, company, format, version, made by and
@@ -59,7 +61,7 @@ function rowOf(row: ExportRow, extras: { readonly names: ReadonlyMap<string, str
   return {
     id: row.id,
     companyId: row.companyId,
-    company: { code: row.company.code, legalName: row.company.legalName },
+    company: { code: row.company.code, legalName: row.company.legalName, payrollCode: used.definition.companyCode ?? null },
     month,
     label: monthLabel(month),
     number: row.number,
@@ -101,6 +103,9 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
   const now = serverClock.now()
   const latest = row.status === 'EXPORTED' && row.correctedBy.length === 0
   const payWords = 'This file carries amounts: it asks the pay grain.'
+  const consultant = await consultantOf(db, place.company.id)
+  // B-W2b-163's rule, read here to hold the button with why (the Send itself refuses with 409 refusal/PAY_FIGURES).
+  const byLink = payByLinkProblem({ recordType: PAYROLL_EXPORT, payrollCarriesPay: pay })
   return {
     ...view,
     payPeriodId: row.payPeriodId,
@@ -121,11 +126,12 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
     cancelReason: row.cancelReason,
     note: row.note,
     carriesPay: pay,
+    consultant: consultant ? { partyId: consultant.partyId, name: consultant.name, email: consultant.problem ? null : consultant.email, words: consultant.words } : null,
     words: row.correctionOfId ? CORRECTION_WORDS : 'The first file of the month.',
     actions: {
       correct: held(mayManage && latest && (!pay || seesPay(context)), !mayManage ? 'Making a correction needs people.payroll.manage.' : !latest ? 'Only the latest exported file of the month is corrected.' : payWords),
       cancel: held(mayManage && row.status === 'DRAFT', !mayManage ? 'Cancelling needs people.payroll.manage.' : 'Only a draft is cancelled.'),
-      send: held(mayManage && latest, !mayManage ? 'Sending needs people.payroll.manage.' : 'Only the latest exported file of the month is sent.'),
+      send: held(mayManage && latest && byLink === null, !mayManage ? 'Sending needs people.payroll.manage.' : !latest ? 'Only the latest exported file of the month is sent.' : byLink),
       open: held(mayOpen && row.status === 'EXPORTED' && (!pay || seesPay(context)), !mayOpen ? 'Opening the file needs people.payroll.records.' : row.status !== 'EXPORTED' ? 'Only an exported file is opened.' : payWords),
     },
   }

@@ -8,20 +8,22 @@
       "numbers": "Mostra le serie di numerazione",
       "documents": "Mostra i modelli dei documenti",
       "branding": "Mostra il marchio",
-      "newSeries": "Nuova serie"
+      "newSeries": "Nuova serie",
+      "required": "Mostra i documenti richiesti"
     },
     "preview": "Anteprima di un documento",
     "views": {
       "label": "Quale elenco",
       "numbers": "Numerazioni",
       "documents": "Documenti",
-      "branding": "Marchio"
+      "branding": "Marchio",
+      "required": "Documenti richiesti"
     },
     "company": {
       "label": "Società",
       "all": "Tutte le società"
     },
-    "later": "Modelli di e-mail ed etichette e documenti obbligatori per i record arrivano nei prossimi passi.",
+    "later": "Modelli di e-mail ed etichette arrivano nei prossimi passi.",
     "pattern": {
       "aria": "Schema {pattern}",
       "year4": "anno (2026)",

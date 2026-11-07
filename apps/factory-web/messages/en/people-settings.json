@@ -303,7 +303,9 @@
     "switchedOn": "Switched on at this site.",
     "switchedOff": "Switched off at this site.",
     "widened": "Team leads see figures at this site.",
-    "narrowed": "Team leads no longer see figures at this site."
+    "narrowed": "Team leads no longer see figures at this site.",
+    "payroll": "Payroll settings saved.",
+    "review": "Standard review limits saved: the queue counts with them now."
   },
   "held": {
     "noAudit": "Your role does not read the audit log.",
@@ -311,7 +313,10 @@
     "noLimits": "Your role reads these limits and does not change them.",
     "noPrivacy": "Only the Owner changes these.",
     "allArchived": "Every chosen code is archived.",
-    "noneArchived": "No chosen code is archived."
+    "noneArchived": "No chosen code is archived.",
+    "noPayroll": "Your role reads these settings and does not change them.",
+    "noReview": "Your role reads these limits and does not change them.",
+    "noParties": "Adding a party needs the right to manage parties."
   },
   "field": {
     "code": "Check the code.",
@@ -327,7 +332,10 @@
     "basisCoversLeads": "The basis recorded does not cover leads.",
     "leadsSeeFigures": "Leads see figures only where the recorded basis covers them.",
     "minimumGroupSize": "The group size goes from 3 to 50.",
-    "figureRoleKeys": "Check the roles chosen."
+    "figureRoleKeys": "Check the roles chosen.",
+    "payrollCode": "The payroll code has at most 20 characters.",
+    "tolerancePercent": "A whole percent from 1 to 100.",
+    "minBundles": "A whole number of bundles from 1 to 1000."
   },
   "leave": {
     "title": "Unsaved changes",
@@ -356,7 +364,73 @@
       "restoreAbsenceCode": "Absence code restored",
       "saveWorkingTimeLimit": "Working-time limit saved",
       "archiveWorkingTimeLimit": "Working-time limit removed",
+      "changePayrollSettings": "Payroll settings changed",
+      "changeStandardReviewRule": "Standard review limits changed",
       "other": "Changed"
     }
+  },
+  "payroll": {
+    "title": "Payroll and statements",
+    "purpose": "Who makes the payroll, the code their software knows the company by, and where workers' statements print.",
+    "consultant": "Labour consultant",
+    "consultantHint": "The payroll file is sent to them; their address is offered in Send.",
+    "consultantMail": "The file goes to {email}.",
+    "consultantNoMail": "No address on file: Send asks for one.",
+    "consultantNone": "None named",
+    "consultantGroup": "{name} (every company)",
+    "namedNoLonger": "{name} (no longer available)",
+    "newConsultant": "New consultant",
+    "code": "Company code for payroll",
+    "codeHint": "The code the consultant's software knows the company by (codice ditta). Empty: the file prints {code}.",
+    "printer": "Printer of statements",
+    "printerHint": "A worker's statement prints here, in the worker's name, wherever the tablet stands.",
+    "printerNone": "None named: a statement prints on the site's only A4 printer, and waits where a site has several.",
+    "printerSite": "The site's only A4 printer",
+    "printerAt": "{name} · {site}",
+    "noPrinters": "This company has no active A4 printer: add one in Admin › Devices & printers.",
+    "consultantProblem": {
+      "NOT_CONSULTANT": "{name} no longer has the Consultant role: choose the consultant again.",
+      "NOT_ACTIVE": "{name} is not active any more: choose the consultant again.",
+      "OTHER_COMPANY": "{name} belongs to another company: choose the consultant again.",
+      "GONE": "The labour consultant named here is not found: choose one again."
+    },
+    "printerProblem": {
+      "NOT_A4": "{name} is not an A4 printer: statements wait until another is named.",
+      "NOT_ACTIVE": "{name} is archived: statements wait until another printer is named.",
+      "GONE": "The printer named here is not found: statements wait until another is named."
+    },
+    "problem": {
+      "payrollCode": "At most {max} characters.",
+      "name": "Give the consultant's name.",
+      "code": "A party code: capital letters, digits, dots and dashes, up to 24.",
+      "email": "Check the address."
+    },
+    "dialog": {
+      "title": "New labour consultant",
+      "body": "A party of this company with the Consultant role only. It is chosen in the card; save the card to name it.",
+      "save": "Add consultant",
+      "name": "Name",
+      "code": "Party code",
+      "codeHint": "How the consultant is listed among the parties.",
+      "email": "Address for the payroll file",
+      "emailHint": "Optional. The file travels by a link sent here, never as an attachment."
+    }
+  },
+  "review": {
+    "title": "Standard review",
+    "purpose": "When an operation goes on the standard review queue in Efficiency.",
+    "percent": "Off its standard by more than",
+    "bundles": "Over at least",
+    "bundlesUnit": "bundles",
+    "example": "The rule",
+    "rule": "An operation goes on the queue when it runs more than {percent}% faster or slower than its standard, over at least {bundles} bundles of the last {days} days.",
+    "problem": {
+      "tolerancePercent": "A whole percent from 1 to 100.",
+      "minBundles": "A whole number of bundles from 1 to 1000."
+    }
+  },
+  "refusal": {
+    "NOT_CONSULTANT": "Choose an active party with the Consultant role, of this company or of every company.",
+    "PRINTER_NOT_USABLE": "Statements print on an active A4 printer of this company."
   }
 }

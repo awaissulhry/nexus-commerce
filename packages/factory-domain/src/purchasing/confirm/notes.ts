@@ -35,23 +35,26 @@ export interface BuyerNoteFacts {
   readonly lines?: readonly string[]
   /** A decline's words (the order's declineReason). */
   readonly declineReason?: string | null
+  /** B-W2b-174: where the supplier answered (its confirm link by default, or its portal). */
+  readonly via?: 'LINK' | 'PORTAL'
 }
 
 export function buyerNote(facts: BuyerNoteFacts): string {
+  const through = facts.via === 'PORTAL' ? 'in the portal' : 'through its link'
   const by = facts.byName ? ` by ${facts.byName}` : ''
   const ref = facts.supplierRef ? ` (their reference ${facts.supplierRef})` : ''
   const note = facts.note ? [`Their note: ${facts.note}`] : []
   switch (facts.outcome) {
     case 'CONFIRMED':
-      return [`The supplier confirmed ${facts.documentNumber} through its link${by}${ref}: ${facts.summary ?? 'as asked'}.`, ...note].join('\n')
+      return [`The supplier confirmed ${facts.documentNumber} ${through}${by}${ref}: ${facts.summary ?? 'as asked'}.`, ...note].join('\n')
     case 'PROPOSED':
       return [
-        `The supplier proposed changes to ${facts.documentNumber} through its link${by}${ref}: ${facts.summary ?? 'see the lines'}.`,
+        `The supplier proposed changes to ${facts.documentNumber} ${through}${by}${ref}: ${facts.summary ?? 'see the lines'}.`,
         ...(facts.lines ?? []),
         ...note,
         'Accept or refuse them on the order: until then nothing is confirmed and the plan keeps the dates asked.',
       ].join('\n')
     case 'DECLINED':
-      return [`The supplier declined ${facts.documentNumber} through its link${by}.`, facts.declineReason ?? '', 'Change the order and send it again, or cancel it.'].filter((line) => line !== '').join('\n')
+      return [`The supplier declined ${facts.documentNumber} ${through}${by}.`, facts.declineReason ?? '', 'Change the order and send it again, or cancel it.'].filter((line) => line !== '').join('\n')
   }
 }
