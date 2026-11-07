@@ -12,7 +12,7 @@ const env = loadFactoryEnv()
 // The runtime login, audited at open (factory-db): an unsafe login (superuser, BYPASSRLS, an owner …) stops the boot.
 let database: FactoryDatabase
 try {
-  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL })
+  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, clientCapacity: env.FACTORY_DATABASE_CLIENTS })
 } catch (error) {
   console.error(`factory-api: the database refused the boot: ${(error as Error).message}`)
   process.exit(1)

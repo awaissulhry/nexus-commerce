@@ -92,6 +92,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - `context.ts`: the request context per audience (office, floor, partner, link, platform; system for jobs), its
   factory-db scope (`scopeForContext`) and its actor for `can()` (`actorOf`). A route reaches the database only
   through `request.withClient(work)` (= `withContextClient`): no context → 401 before any query.
+- Database clients (B-W2b-F9): factory-db keeps one Prisma client (about 90 MB of heap) per tenant (office, system),
+  floor site and partner party, shared by every person and link of it, at most `FACTORY_DATABASE_CLIENTS` (1-64,
+  default 16) per process (API, worker, scheduler each). A new user, worker or link costs no client; a new tenant,
+  site or party does. PG tests may mint a new actor per request again: it no longer opens a client.
 - `manifest.ts` + `autoload.ts`: every route has a manifest entry `{ audiences, permission, scope }`. Routes live
   ONLY in `src/platform/<name>/routes.ts` (auth, admin, outbox, numbering, …) and `src/modules/<name>/routes.ts`
   (sales, product, …), each with `manifest.ts` beside it: `routes.ts` default-exports
