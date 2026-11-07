@@ -7,19 +7,21 @@
     "keys": {
       "numbers": "Show the number series",
       "documents": "Show the document layouts",
+      "branding": "Show the branding",
       "newSeries": "New series"
     },
     "preview": "Preview a document",
     "views": {
       "label": "Which list",
       "numbers": "Numbers",
-      "documents": "Documents"
+      "documents": "Documents",
+      "branding": "Branding"
     },
     "company": {
       "label": "Company",
       "all": "All companies"
     },
-    "later": "E-mail and label templates, branding and the documents a record must have come in later steps.",
+    "later": "E-mail and label templates and the documents a record must have come in later steps.",
     "pattern": {
       "aria": "Pattern {pattern}",
       "year4": "year (2026)",
@@ -261,6 +263,7 @@
       "COMPLAINT": "Customer complaint",
       "CLAIM": "Supplier claim",
       "SUBCONTRACT": "Subcontract order",
+      "ASN": "Ship notice",
       "COUNT": "Stock count",
       "NCR": "Nonconformance",
       "MAINTENANCE_JOB": "Maintenance job",

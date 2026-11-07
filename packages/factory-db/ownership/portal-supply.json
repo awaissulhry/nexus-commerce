@@ -1,0 +1,70 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/portal-supply.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b schema wave 22/22 (B-W2b-158): what suppliers and workshops send. The office (factory_runtime; the worker and the API in the tenant's system context) reads and writes through apps/factory-api, always with command(): it also acts for a supplier or workshop without e-mail (Owner answer C3), numbers and sends a ship notice (the partner role has no numbering grant), marks it received from the posted goods receipt, receives or cancels a return notice, keeps the questionnaire versions and reviews the answers. Portal and link sessions run as factory_partner_runtime behind their party's wall (scopedBy party): they read their own party's rows and insert their own ship notices (with lines and hides, changed until received, a draft deleted), progress reports, return notices and questionnaire answers; never an internal note or which office user wrote, sent or reviewed a row (hiddenColumns), never a price or cost (none here: Owner answer C2). The floor of the delivery site (scopedBy site) reads the ship notices coming to it (the inbound board at the dock, SCM-110). The …_portal_supply_w2b_guards triggers hold the states and the partner's columns for every login. SubcontractProgressReport is append-only. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ShipNotice": {
+      "about": "A supplier (portal session) or the office for it makes a ship notice of one of the party's purchase orders as a DRAFT, changes it until it is received, deletes a draft, and cancels a sent one with its reason. The office (or the API in the system context) numbers and sends it from the company's ASN series and marks it received once a posted goods receipt names it. The delivery site's floor reads it (the inbound board). The partner never reads the office's dock note or who made it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
+      }
+    },
+    "ShipNoticeLine": {
+      "about": "The supplier (or the office for it) adds, changes and removes the lines of its ship notice while it is DRAFT or SENT: a line of the notice's purchase order, the quantity in its unit, lot and dye batch. The office writes what the posted receipt took of it; the partner never does. The delivery site's floor reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "ShipNoticeHide": {
+      "about": "The tannery (or the office for it) writes the packing list of a ship notice line hide by hide (number, area, grade, thickness, dye batch), by hand or by sheet, while the notice is DRAFT or SENT. The delivery site's floor reads it at receipt (the declared area beside the measured one).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SubcontractProgressReport": {
+      "about": "A workshop (portal or JOB_ACCEPT link session) or the office for it reports finished pieces of an operation of the party's subcontract order, per bundle or size. Append-only: nobody changes or removes one (the triggers). The office reads every report (the work order's progress); the workshop reads its own, never who in the office wrote one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SubcontractReturnNotice": {
+      "about": "A workshop (portal or link session) or the office for it announces what comes back of the party's subcontract order: finished and scrapped by bundle or size, unused material, parcels, the day, its DDT. The office marks it received when the receive back is written from it, or cancels it with its reason; what was announced never changes. The workshop reads its own, never who in the office wrote one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SupplierQuestionnaire": {
+      "about": "The office keeps each company's supplier questionnaire in versions: changes and deletes a version until it is published, then it is fixed and kept. Office only: a SUPPLIER_ONBOARD link session reads the questions through the API in the tenant's system context (the table has no party key).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SupplierQuestionnaireResponse": {
+      "about": "A supplier sends its signed answer to a published questionnaire version once (SUPPLIER_ONBOARD link or portal session; the office for a supplier without e-mail); answering again is a new answer. The office reviews it once (ACCEPTED or QUESTIONS, with when and who). The supplier reads its own answers and the decision, never who reviewed or the buyer's note.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["reviewedById", "reviewNote", "createdById"] }
+      }
+    }
+  }
+}

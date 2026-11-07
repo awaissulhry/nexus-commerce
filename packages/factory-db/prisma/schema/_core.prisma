@@ -228,6 +228,8 @@ model Company {
   generatedDocuments   GeneratedDocument[]
   // W2a sourcing.prisma: the approved sources held for the company only.
   supplierItems        SupplierItem[]
+  // W2b portal-supply.prisma (wave 22/22): its supplier questionnaire versions.
+  supplierQuestionnaires SupplierQuestionnaire[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -293,6 +295,8 @@ model Site {
   // supply.prisma: the purchase orders delivered to it and its planning runs.
   purchaseOrders  PurchaseOrder[]
   planningRuns    PlanningRun[]
+  // W2b portal-supply.prisma (wave 22/22): the ship notices of deliveries to it.
+  shipNotices     ShipNotice[]
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations and stock counts; its planning settings,
   // item parameters, line and work-centre capacity and planning exceptions; the item parameters of other sites it makes for.
   reservations         Reservation[]

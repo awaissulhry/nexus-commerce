@@ -699,6 +699,8 @@ export function writeProblem(error: unknown): WriteProblem {
     return { key: 'problem.write.state', reload: true }
   }
   if (error.kind === 'invalid') {
+    // B-W2b-F7: a card or SEPA debit payment comes only from a payment intent, never typed by hand (refusal PROVIDER_ONLY).
+    if (paths.some((path) => /(^|[/.])method[/.]PROVIDER_ONLY$/.test(path))) return { key: 'problem.write.providerOnly', reload: false }
     if (paths.some((path) => path.includes('externalRef'))) return { key: 'problem.write.reference', reload: false }
     if (paths.some((path) => path.includes('iban'))) return { key: 'problem.write.iban', reload: false }
     return { key: 'problem.write.invalid', reload: false }

@@ -9,6 +9,7 @@ import { viewOf } from '../files'
 import type { FilesRuntime } from '../service'
 import { ScannerUnavailableError, type ScanVerdict, type VirusScanner } from './port'
 import { retryChange, verdictChange, waitsForScan, type ScanStatus } from './rules'
+import { supersedeEarlierVersions } from '../versions/supersede'
 
 /**
  * The virus scan of a confirmed upload (PLT-245; B-W2a-42), OUTSIDE any transaction like every store call:
@@ -53,6 +54,11 @@ const SELECT = {
   version: true,
   createdAt: true,
   updatedAt: true,
+  // B-W2b-160 (COL-046): the version, so a scanned file's view says which version it is.
+  versionNo: true,
+  supersededAt: true,
+  seriesId: true,
+  sourceFileId: true,
 } as const satisfies Prisma.StoredFileSelect
 
 type ScanRow = Prisma.StoredFileGetPayload<{ select: typeof SELECT }>
@@ -105,6 +111,8 @@ async function record(caller: CommandCaller, row: ScanRow, verdict: Awaited<Retu
         })
         if (after.status === 'AVAILABLE' && current.status !== 'AVAILABLE') {
           emit({ type: 'file.available', subject: row.id, companyId: after.companyId, payload: { fileId: row.id, recordType: after.recordType, recordId: after.recordId, kind: after.kind } })
+          // B-W2b-160 (COL-046): a later version made AVAILABLE by its clean scan supersedes the earlier ones in this transaction.
+          await supersedeEarlierVersions({ tx, audit, now }, row.id)
         }
         return viewOf(after)
       },
