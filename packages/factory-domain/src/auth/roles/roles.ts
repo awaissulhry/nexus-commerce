@@ -55,6 +55,8 @@ export function roleProblems(
     }
     // Custom roles are office roles: the floor's permissions come only with the floor templates.
     else if (definition.area === FLOOR_AREA) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by floor roles.` })
+    // B-W2b-162: and the portal's only with the partner templates.
+    else if (definition.partner === true) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by partner roles (a portal's people).` })
   })
   content.grains.forEach((grain, index) => {
     if (!isGrain(grain)) issues.push({ path: `grains/${index}`, message: `${String(grain)} is not a money grain (${GRAINS.join(', ')}).` })

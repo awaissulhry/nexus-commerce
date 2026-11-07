@@ -1600,7 +1600,9 @@
     "receivables": "Crediti e solleciti",
     "payables": "Fatture fornitori",
     "people": "Persone",
-    "safety": "Sicurezza sul lavoro"
+    "safety": "Sicurezza sul lavoro",
+    "partners": "Portali dei partner",
+    "portal": "Portale (partner)"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1641,6 +1643,7 @@
     "imports_run": "Caricare un foglio e vederne la prova",
     "imports_apply": "Applicare il piano di un'importazione",
     "documents_view": "Vedere in anteprima i modelli dei documenti di una società",
+    "documents_branding_manage": "Cambiare l'immagine di una società: logo, colore di accento, nome mittente delle e-mail, nome del portale",
     "print_view": "Vedere stampanti e lavori di stampa di uno stabilimento",
     "print_labels": "Stampare etichette",
     "print_documents": "Stampare documenti",
@@ -1961,6 +1964,15 @@
     "safety_health_plans": "Gestire i piani di sorveglianza sanitaria per mansione come li ha fissati il medico: periodicità, medico, visita a fine rapporto",
     "safety_health_views": "Vedere chi ha consultato i dati sanitari e chi ha verificato l’idoneità sì o no di una persona (per HR e il responsabile della protezione dei dati)",
     "safety_training_record": "Tenere le registrazioni della formazione: aprire una sessione che i lavoratori firmano in reparto con badge e PIN, registrare il foglio firme cartaceo, controfirmare o annullare una presenza, chiudere o annullare la sessione; registrare la formazione svolta altrove con l'esito e la verifica della lingua di ciascuno; correggere una registrazione con il motivo",
-    "safety_instruction_record": "Tenere il registro dell'addestramento: chi è stato addestrato su quale compito o macchina, da chi, per quanto tempo e in quale lingua, da firmare in reparto; registrare il foglio firmato; annullare una voce errata con il motivo"
+    "safety_instruction_record": "Tenere il registro dell'addestramento: chi è stato addestrato su quale compito o macchina, da chi, per quanto tempo e in quale lingua, da firmare in reparto; registrare il foglio firmato; annullare una voce errata con il motivo",
+    "partners_view": "Vedere l'accesso al portale di un cliente o fornitore: attivazione, limiti, persone e ruoli",
+    "partners_invite": "Invitare le persone dei partner al loro portale, inviare di nuovo l’invito, revocarlo",
+    "partners_manage": "Cambiare ruolo e fine accesso delle persone del portale, sospenderle o disattivarle; attivare un portale, i suoi limiti e l’avanzamento produzione",
+    "partners_preview": "Aprire il portale di un partner come lo vede lui, in sola lettura",
+    "portal_colleagues_view": "Vedere gli utenti del portale della propria organizzazione e i loro ruoli",
+    "portal_colleagues_manage": "Amministratore del portale della propria organizzazione: invitare colleghi, cambiare ruoli, disattivare",
+    "portal_comment": "Scrivere messaggi sui documenti che il ruolo mostra",
+    "portal_upload": "Inviare file sui documenti che il ruolo mostra",
+    "portal_approve": "Approvare, accettare o firmare sui documenti che il ruolo mostra"
   }
 }

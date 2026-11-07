@@ -60,6 +60,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // file (its judgement's copy is the judgement's).
   FitnessJudgement: { route: 'POST /safety/health/judgements/:judgementId/copy, then POST …/copy/:fileId/complete' },
   HealthVisit: { route: 'none: a visit keeps no file (the doctor’s copy is its judgement’s: POST /safety/health/judgements/:judgementId/copy)' },
+  // B-W2b-161: a company's logos (platform/branding; record id = the company's id): PHOTO files only, PNG or JPEG of at most
+  // 1 MiB checked by their first bytes; the public logo route serves only the one the branding names.
+  CompanyBranding: { kinds: ['PHOTO'], route: 'POST /branding/:companyId/logo, then POST …/logo/:fileId/complete' },
 })
 
 /**

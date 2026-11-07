@@ -265,6 +265,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   report's time, so a try and a queued retry of one id would be refused as a reused id). Without the name (a near miss or a
   hazard naming nobody): online only, one key kept until answered, held in the page with the network gone, never stored.
   "Seen by safety" from live `incident.seen` + a beat; photos (≤ 4, 30 minutes) after the office names the incident.
+  B-W2b-145: `floor/tasks/training/` (SCR-231, `/floor/training`, tile `training` on every station mode and a lead's line tablet;
+  catalogue `floor-training`; on the APIs of B-W2b-139 and B-W2b-134): two tiles, then one job per screen. Training attendance = the
+  site's open sessions (one opens at once) → a badge (its owner named first by `POST /safety/floor/training/instruction/pending`) or
+  a name from the tablet's list → the person's own PIN signs (DS PinSignBlock) → the list fills; the trainer answers each person's
+  language check, then countersigns with their PIN. Receive PPE = badge or name → the kit's missing items prefilled → item (tile or
+  its code) → size (a tap finishes the item) → how many → the person's PIN signs the receipt. ONLINE only (a PIN is never queued);
+  a 401 on a signature is the badge or PIN unless `GET /floor/me` says the session ended (`api.ts signedOrWrong`). Closed or
+  cancelled in the office: signing stops with the reason (live hints + a 30 s beat).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
@@ -297,6 +305,18 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   StepUpModal), Statutory check types (list frame `plant.settings.checks`, the type dialog; no interval offered), Incidents (read
   only, the API's law numbers), the band (site, SaveStatus, ⋯ History → `/plant/settings/history`). Each card's `c` is its own
   while the focus is in it; on the page `c` stays New symptom. `?rule=` / `?type=` open the dialogs (RECORD_PAGES).
+- `src/areas/plant/health/` — Plant › Health & safety › Health surveillance (B-W2b-148 on B-W2b-135's API; catalogue `plant-health`,
+  CSS prefix `fw-hv-`): SCR-212 `/plant/health?tile=&status=&type=&jstate=&judge=1|<visit>&planVisits=1&visit=&judgement=&plan=` — the
+  protected page reads its note FIRST (`GET /safety/health`: privacy words, live use, tiles as counts) and nothing naming a person
+  before it is on screen; the due list (`POST …/visits/list`, every read a recorded LIST: live changes wait behind "N updates · Show"),
+  the judgements ANONYMISED until Show (the chosen rows or the page's, said first: one OPEN view per row; values in the container's
+  state only), the plans per role (no person; Edit for safety.health.plans). Mark booked, Record a judgement (`j`; medical words held
+  with factory-domain `clinicalWordsIn`), Plan visits (`p`; proposals are a recorded read; by hand for HR only: the staff list is
+  safety.organisation.manage), a visit's and a judgement's window (each a recorded read), Who looked (DS DetailPopover, HR and the
+  DPO). New tabs SCR-212-visits `/plant/health/print?visits=` (the doctor's list, a recorded PRINT) and SCR-212-copy
+  `/plant/health/copy?judgement=&file=` (a COPY view, the bytes in the tab's memory; generic title). The safety officer and a
+  views-only DPO open the page through `alsoOpens` without its person sections. Names and values never in the address (ids only),
+  browser storage, a saved view (`listKey={null}`), an export or a search index. `RECORD_PAGES.HealthVisit|FitnessJudgement|HealthPlan`.
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

@@ -155,6 +155,14 @@ describe('refusals', () => {
     expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
   })
 
+  it('refuses a database client count outside 1-64, and leaves it to factory-db when unset', () => {
+    for (const clients of ['0', '65', '2.5', 'many']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_DATABASE_CLIENTS: clients }, undefined), clients).toThrow(/FACTORY_DATABASE_CLIENTS/)
+    }
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_DATABASE_CLIENTS: '8' }, undefined).FACTORY_DATABASE_CLIENTS).toBe(8)
+    expect(parseFactoryEnv(LOCAL, undefined).FACTORY_DATABASE_CLIENTS).toBeUndefined()
+  })
+
   it.each(['production', 'staging'])('refuses a local master key with FACTORY_ENV=%s, and needs the KMS key and its AWS keys', (name) => {
     expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, 'production')).toThrow(
       /FACTORY_SECRETS_MASTER_KEY \(a local master key\) is refused/,

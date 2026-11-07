@@ -1,4 +1,8 @@
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client, S3ServiceException, type S3ClientConfig } from '@aws-sdk/client-s3'
+// B-W2b-160 (COL-052): large uploads in parts.
+import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, ListPartsCommand, UploadPartCommand } from '@aws-sdk/client-s3'
+import { createHash } from 'node:crypto'
+import type { MultipartStoreAdapter, ObjectDigest, PartTarget, StoredPart } from '../../platform/files/multipart/port'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { z } from 'zod'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
@@ -26,6 +30,14 @@ import { isLegalKey } from '../../platform/files/rules'
  *
  * Presigning signs locally and sends nothing. The client makes one attempt per call (the gateway retries) and gets the
  * gateway's abort signal. Tests give `clientFor` an S3Client with a fake request handler: no network.
+ *
+ * B-W2b-160 (COL-052), large uploads in parts (platform/files/multipart/port.ts):
+ *   start         CreateMultipartUpload with the type and SHA-256 part checksums (ChecksumAlgorithm SHA256)
+ *   presign part  UploadPart: its length and `x-amz-checksum-sha256` signed, so R2 refuses a part with other bytes
+ *   list parts    ListParts (every page): number, ETag, size and checksum of each part R2 holds; NoSuchUpload → null
+ *   complete      CompleteMultipartUpload with each part's ETag and checksum, in number order
+ *   abort         AbortMultipartUpload; NoSuchUpload is not an error
+ *   digest        GetObject streamed through SHA-256 (the joined object's own checksum is the parts', not the file's)
  */
 
 const settingsSchema = z.object({
@@ -52,7 +64,7 @@ function asProviderError(error: unknown, operation: string): never {
   throw error
 }
 
-export function r2FileStore(options: R2Options = {}): FileStoreAdapter {
+export function r2FileStore(options: R2Options = {}): FileStoreAdapter & MultipartStoreAdapter {
   const clientFor = options.clientFor ?? ((config: S3ClientConfig) => new S3Client(config))
 
   async function open(call: GatewayCall): Promise<{ client: S3Client; bucketOf: (key: string) => string }> {
@@ -178,6 +190,121 @@ export function r2FileStore(options: R2Options = {}): FileStoreAdapter {
       if (body.length > maxBytes) throw new TooLargeObjectError(`The object holds more than ${maxBytes} bytes.`)
       call.answer({ httpStatus: 200, response: { sizeBytes: body.length } })
       return body
+    },
+
+    // ---- B-W2b-160 (COL-052): large uploads in parts ------------------------------------------------------------------
+    async startMultipart(call: GatewayCall, target: { readonly key: string; readonly contentType: string }): Promise<string> {
+      const { client, bucketOf } = await open(call)
+      try {
+        const started = await client.send(new CreateMultipartUploadCommand({ Bucket: bucketOf(target.key), Key: target.key, ContentType: target.contentType, ChecksumAlgorithm: 'SHA256' }), {
+          abortSignal: call.signal,
+        })
+        if (!started.UploadId) throw new ProviderError('R2 CreateMultipartUpload: no upload id in the answer.', { retryable: false })
+        call.answer({ httpStatus: 200 })
+        return started.UploadId
+      } catch (error) {
+        if (error instanceof ProviderError) throw error
+        return asProviderError(error, 'CreateMultipartUpload')
+      }
+    },
+
+    async presignPart(call: GatewayCall, target: PartTarget): Promise<PresignedRequest> {
+      const { client, bucketOf } = await open(call)
+      const checksum = hexToBase64(target.sha256)
+      const url = await getSignedUrl(
+        client,
+        new UploadPartCommand({ Bucket: bucketOf(target.key), Key: target.key, UploadId: target.uploadId, PartNumber: target.partNumber, ContentLength: target.sizeBytes, ChecksumSHA256: checksum }),
+        {
+          expiresIn: target.expiresInSeconds,
+          signingDate: target.now,
+          signableHeaders: new Set(['content-length', 'x-amz-checksum-sha256']),
+          unhoistableHeaders: new Set(['x-amz-checksum-sha256']),
+        },
+      )
+      return { method: 'PUT', url, headers: { 'x-amz-checksum-sha256': checksum }, expiresAt: new Date(target.now.getTime() + target.expiresInSeconds * 1000) }
+    },
+
+    async listParts(call: GatewayCall, key: string, uploadId: string): Promise<StoredPart[] | null> {
+      const { client, bucketOf } = await open(call)
+      const parts: StoredPart[] = []
+      let marker: string | undefined
+      try {
+        for (let page = 0; page < 20; page++) {
+          const listed = await client.send(new ListPartsCommand({ Bucket: bucketOf(key), Key: key, UploadId: uploadId, ...(marker ? { PartNumberMarker: marker } : {}) }), { abortSignal: call.signal })
+          for (const part of listed.Parts ?? []) {
+            if (part.PartNumber === undefined || !part.ETag) continue
+            parts.push({ partNumber: part.PartNumber, etag: part.ETag, sizeBytes: part.Size ?? 0, sha256: part.ChecksumSHA256 ? base64ToHex(part.ChecksumSHA256) : null })
+          }
+          if (!listed.IsTruncated || !listed.NextPartNumberMarker) break
+          marker = listed.NextPartNumberMarker
+        }
+      } catch (error) {
+        if (error instanceof S3ServiceException && (error.name === 'NoSuchUpload' || error.$metadata?.httpStatusCode === 404)) {
+          call.answer({ httpStatus: 404, response: { found: false } })
+          return null
+        }
+        return asProviderError(error, 'ListParts')
+      }
+      call.answer({ httpStatus: 200, response: { parts: parts.length } })
+      return parts.sort((a, b) => a.partNumber - b.partNumber)
+    },
+
+    async completeMultipart(call: GatewayCall, key: string, uploadId: string, parts: readonly StoredPart[]): Promise<void> {
+      const { client, bucketOf } = await open(call)
+      try {
+        await client.send(
+          new CompleteMultipartUploadCommand({
+            Bucket: bucketOf(key),
+            Key: key,
+            UploadId: uploadId,
+            MultipartUpload: {
+              Parts: [...parts]
+                .sort((a, b) => a.partNumber - b.partNumber)
+                .map((part) => ({ PartNumber: part.partNumber, ETag: part.etag, ...(part.sha256 ? { ChecksumSHA256: hexToBase64(part.sha256) } : {}) })),
+            },
+          }),
+          { abortSignal: call.signal },
+        )
+        call.answer({ httpStatus: 200, response: { parts: parts.length } })
+      } catch (error) {
+        asProviderError(error, 'CompleteMultipartUpload')
+      }
+    },
+
+    async abortMultipart(call: GatewayCall, key: string, uploadId: string): Promise<void> {
+      const { client, bucketOf } = await open(call)
+      try {
+        await client.send(new AbortMultipartUploadCommand({ Bucket: bucketOf(key), Key: key, UploadId: uploadId }), { abortSignal: call.signal })
+        call.answer({ httpStatus: 204 })
+      } catch (error) {
+        if (error instanceof S3ServiceException && (error.name === 'NoSuchUpload' || error.$metadata?.httpStatusCode === 404)) {
+          call.answer({ httpStatus: 404, response: { found: false } })
+          return
+        }
+        asProviderError(error, 'AbortMultipartUpload')
+      }
+    },
+
+    async digest(call: GatewayCall, key: string): Promise<ObjectDigest | null> {
+      const { client, bucketOf } = await open(call)
+      let found
+      try {
+        found = await client.send(new GetObjectCommand({ Bucket: bucketOf(key), Key: key }), { abortSignal: call.signal })
+      } catch (error) {
+        if (error instanceof S3ServiceException && (error.$metadata?.httpStatusCode === 404 || error.name === 'NoSuchKey')) {
+          call.answer({ httpStatus: 404, response: { found: false } })
+          return null
+        }
+        return asProviderError(error, 'GetObject')
+      }
+      const hash = createHash('sha256')
+      let sizeBytes = 0
+      for await (const chunk of (found.Body ?? []) as AsyncIterable<Uint8Array>) {
+        hash.update(chunk)
+        sizeBytes += chunk.length
+      }
+      call.answer({ httpStatus: 200, response: { sizeBytes } })
+      return { sizeBytes, contentType: found.ContentType ?? null, sha256: hash.digest('hex') }
     },
   }
 }

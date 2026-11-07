@@ -1,4 +1,12 @@
-import { AuditedPool, TenantPg, TenantScopeError, type RuntimeRoleAudit, type ScopeValues } from '@nexus/db-kit'
+import {
+  AuditedPool,
+  makeScope,
+  TenantPg,
+  TenantScopeError,
+  type RuntimeRoleAudit,
+  type ScopeDefinition,
+  type ScopeValues,
+} from '@nexus/db-kit'
 import type { Pool, PoolConfig } from 'pg'
 import { PrismaClient } from './generated/prisma/client'
 import { RUNTIME_ROLES, SCOPE_DEFINITIONS, type Audience } from './roles'
@@ -12,11 +20,22 @@ import { RUNTIME_ROLES, SCOPE_DEFINITIONS, type Audience } from './roles'
  * is used and kept; at most `clientCapacity` clients live at once, and the least recently used idle one is closed to
  * make room (a busy one never is: a lease waits instead).
  *
+ * What a client costs (B-W2b-F9, measured with Prisma 7.10): about 86 MB of heap and 95 ms the moment it is made,
+ * before any query — Prisma's engine decodes the generated parameterization graph into objects of its own for every
+ * client, with no supported way to share them — plus 10-25 MB of query-compiler memory at its first query. So the
+ * cache is keyed by exactly what the database walls read, the role and its settings (tenant; site; party), and never
+ * by the actor: every actor of one tenant (site, party) shares one client, which is safe because their statements run
+ * with the same role and settings. Two tenants, sites or parties never share one.
+ *
  * Use a client only inside the `withScope` callback that lent it.
  */
 
 export type FactoryClient = PrismaClient
 
+/**
+ * A database scope. `actorId` names who acts and is required wherever a person or a link acts, but it is not sent to
+ * the database and does not choose the client (no policy or guard reads it, see roles.ts).
+ */
 export type FactoryScope =
   | { readonly audience: 'office'; readonly tenantId: string; readonly actorId: string }
   | { readonly audience: 'floor'; readonly tenantId: string; readonly actorId: string; readonly siteId: string }
@@ -31,9 +50,15 @@ export interface FactoryDatabaseOptions {
   readonly connectionString: string
   /** Other pg pool settings (size, timeouts). */
   readonly pool?: Omit<PoolConfig, 'connectionString'>
-  /** Most Prisma clients kept at once, one per scope. Default 32. */
+  /** Most Prisma clients kept at once, one per role and settings. Default DEFAULT_CLIENT_CAPACITY. */
   readonly clientCapacity?: number
 }
+
+/**
+ * The default number of clients kept: 16 × about 90 MB of heap (plus 10-25 MB each outside it) stays well under the
+ * default ~4 GB heap. One tenant with a few sites and the parties signed in to the portal needs fewer.
+ */
+export const DEFAULT_CLIENT_CAPACITY = 16
 
 export interface FactoryDatabase {
   /** Runs `work` with the client of this scope. The scope is checked first; a missing tenant, site or party throws. */
@@ -44,13 +69,25 @@ export interface FactoryDatabase {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const UUID_KEYS = new Set(['tenantId', 'siteId', 'partyId'])
+/** The audiences whose scope names an actor; the platform scope names none. */
+const ACTOR_AUDIENCES: ReadonlySet<Audience> = new Set(['office', 'floor', 'partner'])
 
-/** The scope as db-kit values, checked: only the audience's keys, ids are UUIDs (the policies cast them). */
+/**
+ * The scope as db-kit values, checked: only the audience's keys, ids are UUIDs (the policies cast them), an actor
+ * wherever one acts. The actor is checked and then left out: it is not a database setting.
+ */
 function scopeValues(scope: FactoryScope): { audience: Audience; values: ScopeValues } {
   if (scope === null || typeof scope !== 'object' || !Object.hasOwn(SCOPE_DEFINITIONS, scope.audience)) {
     throw new TenantScopeError('scope_required', 'A database scope with an audience (office, floor, partner, platform) is required.')
   }
-  const { audience, ...values } = scope as FactoryScope & Record<string, unknown>
+  const { audience, ...rest } = scope as FactoryScope & Record<string, unknown>
+  let values: Record<string, unknown> = rest
+  if (ACTOR_AUDIENCES.has(audience)) {
+    const { actorId, ...settings } = rest
+    if (actorId === undefined || actorId === null || actorId === '') throw new TenantScopeError('scope_required', 'The database scope needs actorId.')
+    if (typeof actorId !== 'string') throw new TenantScopeError('scope_invalid', 'Scope value actorId must be a string.')
+    values = settings
+  }
   for (const [key, value] of Object.entries(values)) {
     if (UUID_KEYS.has(key) && typeof value === 'string' && value !== '' && !UUID.test(value)) {
       throw new TenantScopeError('scope_invalid', `Scope value ${key} must be a UUID.`)
@@ -59,6 +96,17 @@ function scopeValues(scope: FactoryScope): { audience: Audience; values: ScopeVa
   return { audience, values: values as ScopeValues }
 }
 
+/** A scope's definition, values and cache key, checked by makeScope (required values, unknown keys) before anything else. */
+function resolveScope(scope: FactoryScope): { definition: ScopeDefinition; values: ScopeValues; key: string } {
+  const { audience, values } = scopeValues(scope)
+  const definition = SCOPE_DEFINITIONS[audience]
+  // The role and every setting its statements carry (TenantPg makes the same scope): exactly what the SQL can read.
+  return { definition, values, key: JSON.stringify(makeScope(definition, values)) }
+}
+
+/** The key that chooses a scope's client: its role and settings, never the actor. Exported for tests. */
+export const clientKey = (scope: FactoryScope): string => resolveScope(scope).key
+
 interface Entry {
   readonly client: FactoryClient
   active: number
@@ -66,7 +114,7 @@ interface Entry {
 }
 
 /** The per-scope cache over an existing pool (the pool's owner closes it). Exported for tests; use openFactoryDatabase. */
-export function scopedClients(pool: Pool, clientCapacity = 32): FactoryDatabase {
+export function scopedClients(pool: Pool, clientCapacity = DEFAULT_CLIENT_CAPACITY): FactoryDatabase {
   if (!Number.isInteger(clientCapacity) || clientCapacity < 1) throw new Error('clientCapacity must be a positive integer.')
   const entries = new Map<string, Entry>()
   const waiting = new Set<() => void>()
@@ -81,11 +129,7 @@ export function scopedClients(pool: Pool, clientCapacity = 32): FactoryDatabase 
   }
 
   async function acquire(scope: FactoryScope): Promise<Entry> {
-    const { audience, values } = scopeValues(scope)
-    const definition = SCOPE_DEFINITIONS[audience]
-    // TenantPg checks the values against the definition (required, unknown keys) before anything else.
-    const adapter = new TenantPg(pool, definition, values)
-    const key = JSON.stringify(adapter.scope)
+    const { definition, values, key } = resolveScope(scope)
     for (;;) {
       if (closed) throw new TenantScopeError('scope_closed', 'The factory database is closed.')
       const found = entries.get(key)
@@ -95,7 +139,7 @@ export function scopedClients(pool: Pool, clientCapacity = 32): FactoryDatabase 
         return found
       }
       if (entries.size < clientCapacity) {
-        const entry: Entry = { client: new PrismaClient({ adapter }), active: 1, used: Date.now() }
+        const entry: Entry = { client: new PrismaClient({ adapter: new TenantPg(pool, definition, values) }), active: 1, used: Date.now() }
         entries.set(key, entry)
         return entry
       }

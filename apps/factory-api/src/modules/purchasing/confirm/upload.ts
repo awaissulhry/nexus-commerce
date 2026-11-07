@@ -7,6 +7,7 @@ import { answerProblem } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { idempotencyKeyFrom, type CommandCaller, type CommandTx } from '../../../core/command'
 import { SYSTEM_ACTOR_ID, type SystemContext } from '../../../core/context'
 import { completeUpload, requestUpload } from '../../../platform/files/files'
+import { assertOutsideUploadsOpen } from '../../../platform/files/multipart/outside'
 import { normaliseContentType } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { linkUnavailable } from '../../../platform/links/authenticator'
@@ -66,6 +67,8 @@ const fileOf = (file: { id: string; originalName: string; sizeBytes: number; sta
 
 /** POST /link/purchase-order/confirmation. */
 export async function announceConfirmation(request: FastifyRequest, body: ConfirmationUpload) {
+  // B-W2b-160 (FV1:02): an upload from outside waits for the virus scanner in a live environment (GATE-SPEND).
+  assertOutsideUploadsOpen()
   const { link, order } = await answerableOrder(request)
   const problems = [
     ...(normaliseContentType(body.contentType) === PDF ? [] : [{ path: 'body/contentType', message: 'Your confirmation is a PDF (application/pdf).' }]),

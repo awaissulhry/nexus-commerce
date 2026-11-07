@@ -686,7 +686,9 @@
     "failed": "Impossibile caricare gli incassi",
     "keyRecord": "Registra incasso",
     "method": {
-      "BANK_TRANSFER": "Bonifico bancario"
+      "BANK_TRANSFER": "Bonifico bancario",
+      "CARD": "Carta",
+      "SEPA_DEBIT": "Addebito diretto SEPA"
     },
     "nothingPlaced": "Non ancora collocato",
     "rowMenu": "Altro per {reference}",
@@ -719,6 +721,7 @@
       "invalid": "Qualcosa che hai scritto non è accettato: controlla i campi.",
       "moved": "Qualcuno l’ha modificato nel frattempo: viene riletto, controlla e riprova.",
       "not_found": "Non c’è più.",
+      "providerOnly": "Un pagamento con carta o con addebito SEPA si registra solo dal pagamento del cliente presso il fornitore, mai a mano: registra il bonifico, oppure attendi il pagamento del fornitore.",
       "rate_limited": "Troppi tentativi: attendi un momento.",
       "reference": "Questo riferimento bancario è già registrato: un bonifico conta una volta sola.",
       "signed_out": "La sessione è scaduta: accedi di nuovo.",
