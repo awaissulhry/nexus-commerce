@@ -1,0 +1,262 @@
+{
+  "title": "Training & PPE sign-off",
+  "mode": {
+    "title": "Training or PPE?",
+    "training": "Training attendance",
+    "trainingHint": "Each person signs with badge and PIN; the trainer countersigns",
+    "ppe": "Receive PPE",
+    "ppeHint": "Items handed to a person, who signs the receipt with their PIN",
+    "offline": "Signing needs the network: each PIN is checked by the office at once and never kept on this tablet.",
+    "paper": "Signed here instead of on paper: each person signs with their own PIN, and the office keeps the register."
+  },
+  "sessions": {
+    "title": "Training attendance",
+    "loading": "Reading the open sessions…",
+    "empty": "No training session is open at this site",
+    "emptyHint": "The trainer opens the session in the office (People › Skills & training); it shows here at once.",
+    "hint": "Pick the session you are attending.",
+    "signed_one": "{count} signed",
+    "signed_other": "{count} signed",
+    "count_one": "{count} open session",
+    "count_other": "{count} open sessions"
+  },
+  "keys": {
+    "tab": "Move between the sessions",
+    "open": "Open the session with the focus",
+    "back": "Back"
+  },
+  "fact": {
+    "day": "Day",
+    "hours": "Length",
+    "hoursValue": "{hours} h",
+    "language": "Language",
+    "trainer": "Trainer",
+    "where": "Where"
+  },
+  "session": {
+    "type": "Training session",
+    "loading": "Reading the session…",
+    "signTitle": "Sign your attendance",
+    "scan": "Scan your badge",
+    "scanHint": "Then type your PIN. The office checks it at once; it is never kept on this tablet.",
+    "pickName": "Pick your name",
+    "counts": "{signed} signed · {waiting} to countersign"
+  },
+  "who": {
+    "read": "Badge read",
+    "reading": "Reading the badge…",
+    "unknown": "This badge is not known here, or the person no longer works here. Ask your team leader.",
+    "byName": "Pick a name instead",
+    "useBadge": "Scan a badge instead",
+    "noRoster": "This tablet has no list of names: scan the badge."
+  },
+  "stopped": {
+    "title": "Signing has stopped",
+    "closed": "This session was closed in the office: nobody signs it any more.",
+    "cancelled": "This session was cancelled in the office: nobody signs it any more.",
+    "cancelledWhy": "This session was cancelled in the office: {reason}"
+  },
+  "done": {
+    "signed": "{name} signed at {time}. Next person: scan your badge.",
+    "countersigned_one": "The trainer countersigned {count} person at {time}.",
+    "countersigned_other": "The trainer countersigned {count} people at {time}."
+  },
+  "attendance": {
+    "title_one": "{count} signed",
+    "title_other": "{count} signed",
+    "empty": "Nobody has signed yet.",
+    "unnamed": "A person of this site",
+    "tablet": "Signed at {time} on the tablet",
+    "paper": "Signed on paper, recorded at {time}",
+    "waiting": "Waiting for the trainer",
+    "countersigned": "Countersigned",
+    "notUnderstood": "Language not understood"
+  },
+  "trainer": {
+    "title": "The trainer: {name}",
+    "hint": "When everyone has signed, the trainer checks each person's language and countersigns with their own PIN.",
+    "outside": "{name} has no sign-in at this site: the office countersigns from the paper sheet."
+  },
+  "sign": {
+    "title": "Sign your attendance",
+    "summary": "{day} · {hours} h · trainer {trainer}",
+    "badgeOwner": "The badge's owner",
+    "byBadge": "By badge",
+    "byName": "By name"
+  },
+  "pin": {
+    "wrong": "The badge or PIN is wrong, or this person is locked for a few minutes after too many wrong PINs.",
+    "rateLimited": "Too many tries on this tablet: wait a moment, then try again.",
+    "offline": "No network: signing waits for it. Nothing was signed.",
+    "unavailable": "The office did not answer. Try again: nothing is signed twice."
+  },
+  "check": {
+    "title": "Did each person understand the session in {language}?",
+    "law": "The trainer checks that each person understood the language the session was held in (D.Lgs. 81/2008 art. 37 c.13). Answer for each person.",
+    "all": "Everyone understood",
+    "list_one": "{count} person to countersign",
+    "list_other": "{count} people to countersign",
+    "how": "Did {name} understand?",
+    "understood": "Understood",
+    "notUnderstood": "Did not understand",
+    "notUnderstoodMeans": "Someone who did not understand does not pass this training: it is repeated in a language they understand.",
+    "answered": "{answered} of {total} answered"
+  },
+  "countersign": {
+    "title": "Countersign as the trainer",
+    "summary_one": "You countersign {count} person's attendance.",
+    "summary_other": "You countersign the attendance of {count} people.",
+    "checks": "Understood: {understood} · did not understand: {notUnderstood}",
+    "trainer": "Trainer"
+  },
+  "ppe": {
+    "title": "Receive PPE",
+    "law": "The person who receives signs the receipt with their own PIN (D.Lgs. 81/2008 art. 77 c.4).",
+    "scan": "Scan the badge of the person who receives",
+    "scanHint": "Their kit's missing items come up by themselves.",
+    "pickName": "Who receives?",
+    "tileMissing_one": "{count} missing from the kit",
+    "tileMissing_other": "{count} missing from the kit"
+  },
+  "person": {
+    "type": "Receives",
+    "role": "Role: {role}",
+    "noRole": "No role sheet: nothing is prefilled.",
+    "missing_one": "Kit: {count} item missing",
+    "missing_other": "Kit: {count} items missing",
+    "complete": "Kit: nothing missing"
+  },
+  "lines": {
+    "title": "To hand over",
+    "empty": "Nothing yet: pick an item below or scan its code.",
+    "units_one": "{count} piece",
+    "units_other": "{count} pieces"
+  },
+  "add": {
+    "title": "Add an item",
+    "scan": "Scan an item's code",
+    "scanHint": "Scan the item's code, or pick its tile.",
+    "read": "Read {code}",
+    "unknown": "No item with the code {code} here: pick its tile.",
+    "loading": "Reading the items…",
+    "none": "This company has no PPE items yet: the office adds them to the PPE catalogue."
+  },
+  "line": {
+    "type": "For {name}",
+    "quantity": "How many",
+    "less": "One less",
+    "more": "One more",
+    "atLeastOne": "At least one",
+    "atMost": "At most {count}",
+    "why": "Why",
+    "size": "Size",
+    "oneSize": "One size: no size to pick.",
+    "sizeHint": "Pick the size: it adds the item.",
+    "oneSizeShort": "One size",
+    "sizeValue": "Size {size}",
+    "sizeMissing": "No size yet",
+    "pickSize": "Pick a size",
+    "fromKit": "from the kit",
+    "unknownItem": "An item no longer in the catalogue",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "times": "× {count}"
+  },
+  "reason": {
+    "NEW": "New",
+    "REPLACEMENT": "Replacement",
+    "LOST": "Lost"
+  },
+  "receipt": {
+    "title": "Sign the receipt",
+    "lines_one": "{count} item on the receipt",
+    "lines_other": "{count} items on the receipt",
+    "done": "Receipt signed by {name}",
+    "doneAt_one": "{count} piece, signed at {time}.",
+    "doneAt_other": "{count} pieces, signed at {time}.",
+    "signed": "Signed: “{statement}”",
+    "office": "The office sees the receipt at once, with the items and how it was signed."
+  },
+  "held": {
+    "offline": "Needs the network: a signature is checked by the office at once",
+    "busy": "Checking the PIN…",
+    "check": "Answer for each person first",
+    "size": "Pick a size first",
+    "countersign": {
+      "offline": "Needs the network",
+      "stopped": "Signing has stopped",
+      "outsideTrainer": "The trainer has no sign-in here: the office countersigns",
+      "nobody": "Nobody waits for the trainer's countersignature"
+    },
+    "receive": {
+      "offline": "Needs the network",
+      "empty": "Add at least one item",
+      "size": "An item still needs its size",
+      "tooMany": "At most 20 items on one receipt"
+    }
+  },
+  "action": {
+    "back": "Back",
+    "retry": "Try again",
+    "backToSession": "Back to the session",
+    "countersign": "Countersign",
+    "toPin": "Countersign with PIN",
+    "otherPerson": "Another person",
+    "sign": "Sign with PIN",
+    "remove": "Remove",
+    "lineDone": "Done",
+    "changeItems": "Change items",
+    "home": "Home",
+    "nextPerson": "Next person"
+  },
+  "refusal": {
+    "SESSION_STOPPED": {
+      "message": "This session was closed or cancelled in the office: signing has stopped.",
+      "fix": "Ask the trainer which session is open now."
+    },
+    "ATTENDED_ALREADY": {
+      "message": "You signed this session already.",
+      "fix": "Nothing more to do: the next person scans their badge."
+    },
+    "PERSON_NOT_ACTIVE": {
+      "message": "This person no longer works for the company.",
+      "fix": "Ask the office to check the person's record."
+    },
+    "PERSON_OTHER_COMPANY": {
+      "message": "This person works for another company than the session's.",
+      "fix": "Ask the trainer: they sign a session of their own company."
+    },
+    "NO_EMPLOYEE": {
+      "message": "This sign-in is not linked to a person's record yet.",
+      "fix": "Ask the office to link it first; meanwhile sign on paper."
+    },
+    "NOT_THE_TRAINER": {
+      "message": "Only the session's trainer countersigns, with their own PIN.",
+      "fix": "Ask the trainer to countersign."
+    },
+    "NO_TRAINER_WORKER": {
+      "message": "The trainer has no sign-in at this site.",
+      "fix": "The office countersigns from the paper sheet."
+    },
+    "COUNTERSIGNED_ALREADY": {
+      "message": "Someone's attendance was countersigned meanwhile.",
+      "fix": "The list was read again: check it and countersign once more."
+    },
+    "ATTENDANCE_VOIDED": {
+      "message": "The office voided an attendance meanwhile.",
+      "fix": "The list was read again: check it and countersign once more."
+    },
+    "NOT_OF_SESSION": {
+      "message": "An attendance is not of this session.",
+      "fix": "The list was read again: check it and countersign once more."
+    },
+    "NOT_ACTIVE": {
+      "message": "This person no longer works here: PPE is handed only to people who work for the company.",
+      "fix": "Ask the office to check the person's record."
+    },
+    "OTHER_COMPANY": {
+      "message": "This person works for another company than this site's.",
+      "fix": "PPE is handed over at a site of their own company."
+    }
+  }
+}
