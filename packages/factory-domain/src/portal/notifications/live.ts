@@ -5,6 +5,8 @@ import type { LiveMessage, LiveView } from '../../events/envelope'
 import { PORTAL_HOME_VIEW } from '../tasks/permissions'
 // B-W2b-176: the workshop's jobs.
 import { PORTAL_JOBS_VIEW } from '../../purchasing/portal-jobs/permissions'
+// B-W2b-182: the supplier's ship notices.
+import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissions'
 import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
 
 /**
@@ -43,6 +45,10 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
       `subcontract_order.${event}`,
       { permission: PORTAL_JOBS_VIEW, party: 'partyId', fields: ['subcontractOrderId', 'number', 'status', 'partyId'] },
     ]),
+  ),
+  // B-W2b-182: a supplier's ship notices (sent, changed, cancelled, received by our warehouse, reopened): its list updates.
+  ...Object.fromEntries(
+    ['sent', 'changed', 'cancelled', 'received', 'reopened'].map((event) => [`ship_notice.${event}`, { permission: PORTAL_SHIP_NOTICES_VIEW, party: 'partyId', fields: ['shipNoticeId', 'number', 'purchaseOrderId', 'status', 'partyId'] }]),
   ),
   // B-W2b-189: our check of a supplier's document, and of its profile change (the page's status and values update).
   'supplier_document.uploaded': { permission: PORTAL_SUPPLIER_DOCUMENTS_VIEW, party: 'partyId', fields: ['fileId', 'partyId', 'recordType', 'recordId', 'category'] },

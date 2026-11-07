@@ -144,6 +144,20 @@ import { portalConfirmContract, portalCopyContract, portalDeclineContract, porta
 import { portalOrderCopy } from './portal-orders/copy'
 import { listPortalOrders, portalOrder, portalRevisions } from './portal-orders/read'
 import { appClock } from '../../platform/portal/tasks/clock'
+// B-W2b-182: the supplier's ship notices in the portal (./ship-notices).
+import {
+  cancelNoticeContract,
+  createNoticeContract,
+  listNoticesContract,
+  noticeTemplateContract,
+  packingListContract,
+  packingSheetContract,
+  portalNoticeContract,
+  sendNoticeContract,
+  shippableContract,
+  updateNoticeContract,
+} from './ship-notices/contract'
+import { cancelNotice, createNotice, listNotices, packingTemplate, portalNotice, readPackingSheet, sendNotice, setPackingList, shippableLines, updateNotice } from './ship-notices/portal'
 // B-W2b-189: supplier documents and profile in the portal, and the office's check (./portal-profile).
 import {
   acceptDocumentContract,
@@ -435,6 +449,31 @@ export default defineRoutes('purchasing', manifest, async (app) => {
 
   app.post('/portal/purchase-orders/:purchaseOrderId/decline', { schema: portalDeclineContract }, async (request) => declineInPortal(app, request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
+  // B-W2b-182 (SCM-106, SCM-107): the supplier's ship notices (./ship-notices): the list, the lines it may ship, the packing
+  // list's template, one notice with its checks, a new one from a confirmed order, its terms and lines, the packing list by
+  // hand or from the tannery's sheet (a verdict per row first), the send (numbered as the system) and the cancel.
+  app.get('/portal/ship-notices', { schema: listNoticesContract }, async (request) => listNotices(request, request.query, appClock(app).now()))
+
+  app.get('/portal/ship-notices/shippable', { schema: shippableContract }, async (request) => shippableLines(request, request.query))
+
+  app.get('/portal/ship-notices/template', { schema: noticeTemplateContract }, async (request, reply) => {
+    const file = await packingTemplate(request, request.query)
+    return reply.type(file.contentType).header('content-disposition', `attachment; filename="${file.name}"`).header('cache-control', 'no-store').send(file.body)
+  })
+
+  app.get('/portal/ship-notices/:shipNoticeId', { schema: portalNoticeContract }, async (request) => portalNotice(request, request.params.shipNoticeId, appClock(app).now()))
+
+  app.post('/portal/ship-notices', { schema: createNoticeContract }, async (request, reply) => reply.code(201).send(await createNotice(app, request, request.body, idempotencyKeyFrom(request), appClock(app).now())))
+
+  app.patch('/portal/ship-notices/:shipNoticeId', { schema: updateNoticeContract }, async (request) => updateNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.put('/portal/ship-notices/:shipNoticeId/packing-list', { schema: packingListContract }, async (request) => setPackingList(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/packing-list/sheet', { schema: packingSheetContract }, async (request) => readPackingSheet(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/send', { schema: sendNoticeContract }, async (request) => sendNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
+
+  app.post('/portal/ship-notices/:shipNoticeId/cancel', { schema: cancelNoticeContract }, async (request) => cancelNotice(app, request, request.params.shipNoticeId, request.body, idempotencyKeyFrom(request), appClock(app).now()))
   // B-W2b-189 (SCM-096, SCM-097): the supplier's documents and profile in the portal (./portal-profile): what we ask for and
   // its documents, the upload (unshared until our check), its addresses and contacts with the changes it sends for our check;
   // and the office's check of both (accept or refuse a document; approve or refuse a change, Home › Approvals).

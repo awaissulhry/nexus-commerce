@@ -20,6 +20,8 @@ import { itemParametersImportAdapter } from '../../modules/planning/settings/imp
 import { employeesImportAdapter } from './importers/employees'
 // W2b (B-W2b-190): a customer's order sheet, read by the portal's dry run (never an office import job).
 import { portalOrderLinesImportAdapter } from '../../modules/sales/portal-ordering/importer'
+// W2b (B-W2b-182): a tannery's packing list mailed instead of sent in the portal, onto its sent ship notice.
+import { packingListImportAdapter } from '../../modules/purchasing/ship-notices/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -116,6 +118,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   employeesImportAdapter,
   // B-W2b-190
   portalOrderLinesImportAdapter,
+  // B-W2b-182
+  packingListImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined
