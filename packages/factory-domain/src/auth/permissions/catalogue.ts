@@ -105,6 +105,8 @@ import { PORTAL_SEARCH_DEFINITIONS, PORTAL_SEARCH_PERMISSIONS } from '../../sear
 import { PORTAL_PAYMENTS_DEFINITIONS, PORTAL_PAYMENTS_PERMISSIONS } from '../../payments/online/permissions'
 // B-W2b-176: subcontractor jobs in the portal (portal.jobs.view; partner roles only).
 import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasing/portal-jobs/permissions'
+// B-W2b-184: approval requests to partners (partners.approvals.*, the office's; portal.approvals.view, partner roles only).
+import { PARTNERS_APPROVALS_DEFINITIONS, PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_DEFINITIONS, PORTAL_APPROVALS_PERMISSIONS } from '../../approvals-out/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -714,6 +716,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_PAYMENTS_DEFINITIONS,
   // B-W2b-176: subcontractor jobs in the portal (partner roles only; area `portal`, declared above).
   PORTAL_JOBS_DEFINITIONS,
+  // B-W2b-184: approval requests to partners (the office's in area `partners`, the partner's in `portal`, both declared above).
+  PARTNERS_APPROVALS_DEFINITIONS,
+  PORTAL_APPROVALS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -929,6 +934,9 @@ for (const name of PORTAL_PAYMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name
 for (const name of PORTAL_CUSTOMER_DOCUMENTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-190: portal ordering (partner roles only).
 for (const name of PORTAL_ORDERING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-184: approval requests to partners (the office's; the portal's flagged partner).
+for (const name of PARTNERS_APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_APPROVALS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

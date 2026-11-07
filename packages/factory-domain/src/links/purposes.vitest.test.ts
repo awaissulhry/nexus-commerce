@@ -51,7 +51,7 @@ describe('the purposes', () => {
       expect(linkPermissions(purpose).filter((permission) => permission.startsWith('money.'))).toEqual(grains.map((grain) => `money.${grain}`))
     }
     // B-W2b-163: of W2b-3's nine, PAYMENT alone (the deposit or invoice the party pays: its own document).
-    expect(LINK_PURPOSES.filter((purpose) => PURPOSE_RULES[purpose].grains.includes('price'))).toEqual(['QUOTE_ACCEPT', 'DOCUMENT_VIEW', 'DEPOSIT_INFO', 'PAYMENT'])
+    expect(LINK_PURPOSES.filter((purpose) => PURPOSE_RULES[purpose].grains.includes('price'))).toEqual(['QUOTE_ACCEPT', 'DOCUMENT_VIEW', 'DEPOSIT_INFO', 'PAYMENT', 'APPROVAL'])
   })
 
   it('declare every permission they give, as link-session permissions no role can hold', () => {

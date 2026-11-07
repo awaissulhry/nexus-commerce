@@ -1991,6 +1991,9 @@
     "portal_orderRequests_manage": "Fare richieste d'ordine: scegliere articoli, riordinare un ordine passato ai prezzi di oggi o caricare un foglio, poi inviare la richiesta",
     "portal_addresses_view": "Vedere gli indirizzi di consegna della vostra organizzazione",
     "portal_addresses_manage": "Aggiungere o archiviare gli indirizzi di consegna della vostra organizzazione e scegliere quello predefinito",
+    "partners_approvals_view": "Vedere le approvazioni chieste a clienti, fornitori e firmatari esterni su un documento: cosa abbiamo chiesto, entro quando, e la risposta firmata con le sue prove",
+    "partners_approvals_ask": "Chiedere a un cliente, fornitore o firmatario esterno di approvare una concessione, un campione, un colore, un pellame, una grafica, una bozza del design, un ordine modificato o una firma; ritirare una richiesta aperta",
+    "portal_approvals_view": "Vedere cosa chiediamo di approvare alla propria organizzazione (campioni, colori, pellami, grafiche, bozze del design, concessioni, ordini modificati) e le risposte date; rispondere richiede il diritto di approvare",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
   }
 }

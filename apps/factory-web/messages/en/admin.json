@@ -1991,6 +1991,9 @@
     "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
+    "partners_approvals_view": "See the approvals asked of customers, suppliers and outside signers on a record: what we asked, by when, and the signed answer with its evidence",
+    "partners_approvals_ask": "Ask a customer, supplier or outside signer to approve a concession, a sample, a colour, a leather, an artwork, a design proof, a revised order or a signature; withdraw an open request",
+    "portal_approvals_view": "See what we ask your organisation to approve (samples, colours, leathers, artworks, design proofs, concessions, revised orders) and the answers given; answering takes the right to approve",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
   }
 }
