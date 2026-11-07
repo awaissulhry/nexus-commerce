@@ -31,6 +31,8 @@ import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissi
 import { PARTNERS_DEFINITIONS, PARTNERS_PERMISSIONS, PORTAL_DEFINITIONS, PORTAL_PERMISSIONS } from '../partners/permissions'
 // B-W2b-167: the partner's Home (tasks, notifications, live; partner roles only) and the office's requests to partners.
 import { PARTNER_TASKS_DEFINITIONS, PARTNER_TASKS_PERMISSIONS, PORTAL_HOME_DEFINITIONS, PORTAL_HOME_PERMISSIONS } from '../../portal/tasks/permissions'
+// B-W2b-174: supplier orders in the portal (portal.purchaseOrders.view; partner roles only).
+import { PORTAL_PURCHASE_ORDERS_DEFINITIONS, PORTAL_PURCHASE_ORDERS_PERMISSIONS } from '../../purchasing/portal-orders/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -681,6 +683,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-167: the partner's Home and the office's requests to partners.
   PORTAL_HOME_DEFINITIONS,
   PARTNER_TASKS_DEFINITIONS,
+  // B-W2b-174: supplier orders in the portal.
+  PORTAL_PURCHASE_ORDERS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -881,6 +885,8 @@ for (const name of PORTAL_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partne
 // B-W2b-167: the partner's Home (partner roles only) and the office's requests to partners.
 for (const name of PORTAL_HOME_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of PARTNER_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-174: supplier orders in the portal (partner roles only).
+for (const name of PORTAL_PURCHASE_ORDERS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

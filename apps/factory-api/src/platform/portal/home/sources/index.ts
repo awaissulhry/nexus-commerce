@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { homeCountProblems, type HomeCountDefinition } from '@nexus/factory-domain/portal/home/counts'
 import { NOTIFICATION_COUNTS } from './notifications'
+import { PURCHASE_ORDER_COUNTS } from './purchase-orders'
 import { TASK_COUNTS } from './tasks'
 
 /**
@@ -20,6 +21,8 @@ export const HOME_SOURCES: readonly HomeSource[] = Object.freeze([
   // B-W2b-167: what waits for the person (the one task list) and their unread notifications.
   TASK_COUNTS,
   NOTIFICATION_COUNTS,
+  // B-W2b-174: the supplier's purchase orders to confirm and late.
+  PURCHASE_ORDER_COUNTS,
 ])
 
 const problems = homeCountProblems(HOME_SOURCES.flatMap((source) => source.counts))

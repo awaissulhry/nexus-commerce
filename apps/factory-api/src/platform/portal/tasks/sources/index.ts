@@ -1,5 +1,6 @@
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { OFFICE_SOURCE } from './office'
+import { PURCHASE_ORDERS_SOURCE } from './purchase-orders'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -25,6 +26,8 @@ export interface TaskSource {
 export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   // B-W2b-167: what an office person asks a partner for by hand (a document, an answer, measurements, progress).
   OFFICE_SOURCE,
+  // B-W2b-174: the supplier's request to confirm a purchase order we sent (one per revision).
+  PURCHASE_ORDERS_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

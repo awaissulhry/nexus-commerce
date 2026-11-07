@@ -40,6 +40,7 @@ import {
   type PartyRow,
 } from './store'
 import { orderDetail, type OrderDetail } from './views'
+import { closeConfirmTasks } from './portal-orders/tasks'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053; A2 SCR-058 "Purchase orders", SCR-059 the record): the list, the record, a
@@ -525,6 +526,8 @@ export async function cancelOrder(caller: CommandCaller, orderId: string, body: 
     const revoked = told ? await revokeConfirmLinks(tools, current, context.actorId) : []
     const reopened = await reopenPlanLines(tools, current.id)
     await tx.purchaseOrder.update({ where: { id: current.id }, data: { status: 'CANCELLED', cancelledAt: now, cancelReason: reason }, select: { id: true } })
+    // B-W2b-174: nothing is left for the supplier to confirm.
+    await closeConfirmTasks(tools, current.id, 'CANCELLED')
     let outboundId: string | null = null
     if (told) {
       const contact = current.contactId ? await tx.partyContact.findUnique({ where: { id: current.contactId }, select: { name: true, email: true, language: true, status: true } }) : null
