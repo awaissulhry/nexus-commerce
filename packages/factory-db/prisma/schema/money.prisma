@@ -148,6 +148,8 @@ model Invoice {
   // receivables.prisma (W2a): the refunds of what this credit note credits on a paid invoice.
   refunds        Refund[]        @relation("RefundCreditNote")
   allocations    PaymentAllocation[]
+  // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
+  paymentIntents PaymentIntent[]
 
   // Never the same number twice in a series period (a draft has none).
   @@unique([tenantId, numberSeriesId, number])
@@ -458,6 +460,8 @@ model Payment {
   // receivables.prisma (W2a): what is paid back of its unplaced part (a credit balance).
   refunds     Refund[]
   allocations PaymentAllocation[]
+  // W2b portal-sales.prisma (wave 21/22): the card or SEPA payment intent it was recorded for.
+  paymentIntents PaymentIntent[]
 
   @@unique([tenantId, companyId, externalRef])
   // The target of its allocations' reference: the same company and party.
