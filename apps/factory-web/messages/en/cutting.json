@@ -53,7 +53,8 @@
     "HELD": "On hold"
   },
   "kind": {
-    "LEATHER": "Leather"
+    "LEATHER": "Leather",
+    "FABRIC": "Fabric"
   },
   "view": {
     "open": "Open cuts",
@@ -70,15 +71,9 @@
     "lot": "Shade lot",
     "state": "Status",
     "pieces": "Pieces cut / planned",
-    "hides": "Hides",
     "yield": "Yield vs plan",
     "table": "Table",
-    "date": "Last cut",
-    "more": "More",
-    "workOrder": "Work order",
-    "style": "Style",
-    "garments": "Garments",
-    "piecesPlanned": "Pieces planned"
+    "more": "More"
   },
   "list": {
     "tableLabel": "Cuts",
@@ -105,30 +100,14 @@
     },
     "empty": {
       "title": "No cut orders yet",
-      "body": "A released work order with leather parts appears here. Start with New cut order."
+      "body": "A released work order with leather parts, and every cut order, appears here. Start with New cut order."
     },
     "loadingSlow": "Still loading…",
-    "hint": "One cut is one work order’s leather, cut hide by hide at the cutting table. Fabric lays, markers and cut orders of several work orders come later (W2b)."
+    "hint": "Cut orders group work orders of one material and colour (fabric in lays from one marker); a work order’s leather is cut hide by hide at the cutting table, each one a cut of its own."
   },
   "bulk": {
     "export_one": "Export {count} (CSV)",
     "export_other": "Export {count} (CSV)"
-  },
-  "csv": {
-    "cut": "Cut",
-    "kind": "Kind",
-    "style": "Style",
-    "material": "Material and colour",
-    "lot": "Shade lot",
-    "state": "Status",
-    "piecesPlanned": "Pieces planned",
-    "piecesCut": "Pieces cut",
-    "hides": "Hides",
-    "area": "Area used",
-    "yieldPct": "Yield %",
-    "plannedPct": "Planned %",
-    "table": "Table",
-    "lastCut": "Last cut"
   },
   "held": {
     "permission": "This needs the permission {permission}.",
@@ -146,29 +125,6 @@
       "voided": "This bundle is void.",
       "scanned_one": "Scanned once already: a bundle is voided only before its first scan.",
       "scanned_other": "Scanned {count} times already: a bundle is voided only before its first scan."
-    }
-  },
-  "newCut": {
-    "title": "New cut order",
-    "body": "Pick the work order to cut. Each released work order is one cut of one leather and colour; its hides are allocated next.",
-    "tableLabel": "Work orders waiting to cut",
-    "count_one": "{count} work order waiting, no hide allocated",
-    "count_other": "{count} work orders waiting, no hide allocated",
-    "picked_one": "{count} work order picked",
-    "picked_other": "{count} work orders picked",
-    "go": "Create cut order",
-    "table": "The table is the cutting tablet’s station: every cut records the table it was cut at.",
-    "fabric": "Fabric cut orders that group several work orders by lay come later (W2b).",
-    "empty": {
-      "title": "Nothing waits to be cut",
-      "body": "Every released work order with leather parts has hides allocated or is being cut."
-    },
-    "why": {
-      "material": "Another leather: this cut order cuts {material}."
-    },
-    "held": {
-      "none": "Pick a work order first.",
-      "many": "One work order per cut today: cut orders of several work orders come with fabric lays (W2b)."
     }
   },
   "alloc": {
@@ -303,9 +259,7 @@
     },
     "allocated": "Allocated, not cut yet",
     "noAllocated": "No hide is allocated and waiting.",
-    "allocatedHint": "Allocated hides are reserved whole for this work order; the same-shade check of a lay comes later (W2b).",
-    "lays": "Lays (fabric)",
-    "laysLater": "Markers, plies, rolls by shade and width come with fabric cutting (W2b). Leather is cut hide by hide."
+    "allocatedHint": "Allocated hides are reserved whole for this work order; the shade lot check above counts them."
   },
   "hideState": {
     "FULL": "Whole",
@@ -373,7 +327,7 @@
       "pattern": "Pattern",
       "yield": "Yield"
     },
-    "hint": "Per hide, lot and supplier; never by cutter. The reconciliation of issued, used and returned comes later (W2b)."
+    "hint": "Per hide, lot and supplier; never by cutter."
   },
   "tickets": {
     "title": "Bundle tickets",

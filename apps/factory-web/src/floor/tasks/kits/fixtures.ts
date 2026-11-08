@@ -148,6 +148,9 @@ export const designScreen = defineDesignScreen<KitsViewModel>({
     { id: 'back-offline', label: 'Offline: Finish receipt waits', model: backBase({ back: rejected, online: false, frame: frame({ online: false }) }) },
     { id: 'refused-not-out', label: 'Refused: bundle did not go out', model: backBase({ back: scanned, problem: refused('NOT_OUT', 'BN-DEMO-0099') }) },
     { id: 'received', label: 'Receipt recorded', model: backBase({ stage: 'received', received: { good: 3, defective: 1, scrapped: 0, returned: 1 } }) },
+    // B-W2b-115 (design floor.kits receive-back#1, QHS-036): a rule opened the incoming inspection with the receipt.
+    { id: 'received-inspection', label: 'W2b: goods back go to incoming inspection first', model: backBase({ stage: 'received', received: { good: 3, defective: 1, scrapped: 0, returned: 0, inspection: { id: 'iin-7', number: 'IIN-DEMO-0007' } } }), note: 'Before stock and before the workshop is paid; the person with the incoming right opens it from here (Incoming inspection, SCR-175).' },
+    { id: 'received-inspection-inspector', label: 'W2b: … and the receiver may inspect it', model: backBase({ stage: 'received', may: { send: true, receive: true, inspect: true }, received: { good: 3, defective: 1, scrapped: 0, returned: 0, inspection: { id: 'iin-7', number: 'IIN-DEMO-0007' } } }) },
     { id: 'error', label: 'Server not answering', model: { frame: frame(), online: true, stage: 'pick', may, mode: 'send', orders: [], problem: { problem: { kind: 'unavailable' }, code: null } } },
     { id: 'no-permission', label: 'No permission', model: { frame: frame(), online: true, stage: 'noPermission', may: { send: false, receive: false } }, note: 'Without the kit permission the tile is not shown either: fail closed.' },
     { id: 'notice-held', label: 'Scans held by the worker notice', model: { frame: frame(), online: true, stage: 'pick', may, mode: 'send', orders: rows, held: true } },

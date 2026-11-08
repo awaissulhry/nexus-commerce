@@ -26,10 +26,8 @@
   overflow-wrap: anywhere;
 }
 
-/* ── the roving light, a choice, a verdict: buttons side by side, wrapping to full rows on a phone ─────────────────────── */
-.fw-in-colours,
-.fw-in-choices,
-.fw-in-verdict {
+/* ── the roving light: buttons side by side, wrapping to full rows on a phone (a choice and a verdict: shared, tasks.css) ── */
+.fw-in-colours {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--nds-density-target-gap, var(--nds-space-12));

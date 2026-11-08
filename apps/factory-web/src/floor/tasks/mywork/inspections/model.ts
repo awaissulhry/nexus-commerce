@@ -61,8 +61,8 @@ export const mayQueue = (permissions: readonly string[]): boolean => QUEUE_VIEW_
 /** At an inspection bench the queue IS My work (design "Variants: … inspector queue"); elsewhere a For your work tile opens it. */
 export const queueFirst = (mode: FloorMode | null, permissions: readonly string[]): boolean => mode === 'inspection' && mayQueue(permissions)
 
-/** The floor screen that records a row's kind: the final bench, the in-line screen; an incoming inspection has no floor screen yet. */
-export function taskOfKind(kind: QueueKind): Extract<TileKey, 'final' | 'inline'> | null {
+/** The floor screen that records a row's kind: the final bench, the in-line screen, the incoming inspection (B-W2b-115). */
+export function taskOfKind(kind: QueueKind): Extract<TileKey, 'final' | 'inline' | 'incoming'> {
   switch (kind) {
     case 'FINAL':
     case 'FINAL_DUE':
@@ -73,33 +73,33 @@ export function taskOfKind(kind: QueueKind): Extract<TileKey, 'final' | 'inline'
     case 'END_OF_LINE':
       return 'inline'
     case 'INCOMING':
-      return null
+      return 'incoming'
   }
 }
 
 /** The code the bench is opened with: an inspection's number, the work order that waits, the bundle of an in-line check. */
-export function codeOfRow(row: Pick<InspectorRow, 'kind' | 'number' | 'start' | 'workOrder' | 'bundle'>): string | null {
+export function codeOfRow(row: Pick<InspectorRow, 'kind' | 'number' | 'start' | 'workOrder' | 'bundle' | 'lot'>): string | null {
   switch (row.kind) {
     case 'FINAL':
       return row.number ?? row.workOrder?.number ?? null
     case 'FINAL_DUE':
       return row.start?.code ?? row.workOrder?.number ?? null
     case 'INCOMING':
-      return null
+      // B-W2b-115: its number opens it on Incoming inspection (the lot's code, when a row has no number).
+      return row.number ?? row.lot?.code ?? null
     default:
       return row.bundle?.code ?? null
   }
 }
 
 /**
- * Why "Inspect" cannot open the row here: no floor screen records it yet (an incoming inspection: the office records it until the
- * floor's incoming screen lands), the person has no such tile at this station, or it is not theirs to record. Null: it opens.
+ * Why "Inspect" cannot open the row here: no floor screen records it, the person has no such tile at this station, or it is not
+ * theirs to record. Null: it opens. (B-W2b-115: an incoming inspection opens on the floor's Incoming inspection.)
  */
-export type OpenHeld = 'noFloorScreen' | 'noTile' | 'notYours' | null
+export type OpenHeld = 'noTile' | 'notYours' | null
 
 export function openHeld(row: Pick<InspectorRow, 'kind' | 'may'>, tiles: readonly { readonly key: TileKey; readonly held: string | null }[]): OpenHeld {
   const task = taskOfKind(row.kind)
-  if (task === null) return 'noFloorScreen'
   if (!tiles.some((tile) => tile.key === task && tile.held === null)) return 'noTile'
   if (!row.may.record && !row.may.start) return 'notYours'
   return null

@@ -77,8 +77,9 @@ export const designScreen = defineDesignScreen<SupplierCaseBuilder>({
     { id: 'proposed', label: 'Change proposed, waiting for the buyer', model: recordCase(proposedPage(), 'confirm'), note: 'What was proposed, read only; Answers so far.' },
     { id: 'proposed-refused', label: 'The buyer refused the changes', model: recordCase(proposedPage('REFUSED'), 'confirm') },
     { id: 'confirmed', label: 'A confirmed order', model: recordCase(confirmedPage(), 'confirm'), note: 'The lines are locked: to ask for a change, write in Messages (the API takes no new proposal on a confirmed order: named in the notes).' },
-    { id: 'asn', label: 'Ship notices', model: recordCase(confirmedPage(), 'asn') },
-    { id: 'asn-empty', label: 'No delivery announced yet', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'ready', items: [] } })) },
+    // B-W2b-186: "Announce delivery" opens the new ship notice from this order.
+    { id: 'asn', label: 'Ship notices', model: recordCase(confirmedPage(), 'asn', () => ({ announce: { href: `${PREFIX}/deliveries/new?po=${confirmedPage().order.id}`, heldReason: null } })) },
+    { id: 'asn-empty', label: 'No delivery announced yet', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'ready', items: [] }, announce: { href: `${PREFIX}/deliveries/new?po=${confirmedPage().order.id}`, heldReason: null } })) },
     { id: 'asn-no-access', label: 'Ship notices not part of the access', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'noAccess', items: [] } })) },
     { id: 'asn-error', label: 'Ship notices could not be read', model: recordCase(confirmedPage(), 'asn', () => ({ notices: { state: 'error', items: [] } })) },
     { id: 'documents', label: 'Documents', model: recordCase(confirmedPage(), 'documents', (locale) => ({ requests: [{ id: 's3', title: locale === 'it' ? 'Carica il rapporto Cr VI del bagno 2231' : 'Upload the Cr VI report of batch 2231', verb: locale === 'it' ? 'Carica' : 'Upload', href: `${PREFIX}/open/PurchaseOrder/x#task:s3` }] })), note: 'The order as sent, price-free (a new tab); your DDTs; what we ask for. The mailed PDF with prices is only in Messages (C2).' },

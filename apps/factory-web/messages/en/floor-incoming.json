@@ -1,0 +1,504 @@
+{
+  "title": "Incoming inspection",
+  "loading": "Reading {code}…",
+  "busy": "Saving…",
+  "online": "Needs the network: it is recorded at once.",
+  "notYours": "This inspection is recorded and signed by the inspector who took it.",
+  "notOpen": "This inspection is signed or cancelled: it no longer changes.",
+  "noPermission": {
+    "title": "Not yours to inspect",
+    "body": "Incoming inspection needs the incoming inspector's right. Ask your team leader or quality."
+  },
+  "unit": {
+    "hide_one": "hide",
+    "hide_other": "hides",
+    "piece_one": "piece",
+    "piece_other": "pieces"
+  },
+  "scan": {
+    "lot": {
+      "label": "Scan the lot",
+      "hint": "The lot's label, the supplier's lot, the dye batch, a hide's tag or an inspection number"
+    },
+    "read": "Read: {code}",
+    "type": "Type the code",
+    "camera": {
+      "start": "Scan with the camera",
+      "stop": "Stop the camera",
+      "error": "The camera does not start: type the code."
+    },
+    "offline": "Offline: an inspection this tablet read in this visit opens from it; a new one opens when the network is back.",
+    "wrong": {
+      "notFound": "Nothing at this site has the code {code}.",
+      "otherFactory": "{code} is another factory's label.",
+      "typo": "{code} was misread: scan it again or type it.",
+      "notOnTablet": "{code} is not on this tablet: it opens when the network is back.",
+      "otherBench": "{code} belongs to another bench: scan a lot, a hide or an incoming inspection.",
+      "nothing": "Nothing to inspect for {code}: no incoming plan applies, or the lot is decided. The office names the plan or opens it.",
+      "label": "{code} is a label this bench does not take: scan the lot's label.",
+      "notOfLot": "{code} is not a hide of this lot.",
+      "notWhole": "{code} is cut already: the sample takes whole hides only.",
+      "sampleFull": "The sample is full: take a hide out before {code} goes in.",
+      "rollFull": "The sample's rolls are all recorded: {code} does not go in.",
+      "notRollLot": "{code} is a roll's tag: scan its lot's label first."
+    }
+  },
+  "open": {
+    "title": "Open at this site",
+    "loading": "Reading the open inspections…",
+    "none": "No incoming inspection is open at this site.",
+    "workshop": "goods back from a workshop",
+    "since": "opened {time}",
+    "underWay": "Under way",
+    "toStart": "To start",
+    "countLabel": "{done} of {sample} in the sample",
+    "count_one": "1 open inspection",
+    "count_other": "{count} open inspections",
+    "failed": "The open inspections could not be read: scan the lot all the same."
+  },
+  "keys": {
+    "scan": "Scan",
+    "scanDoes": "a label opens its inspection",
+    "home": "Home",
+    "hideDoes": "a hide's tag opens it",
+    "accept": "accepts the hide on screen",
+    "back": "Back"
+  },
+  "choose": {
+    "title": "{code} leads to more than one inspection",
+    "incoming": "Incoming inspection",
+    "otherBench": "Another bench's inspection",
+    "held": "Not this bench's: open it where it is inspected."
+  },
+  "head": {
+    "lot": "Lot",
+    "goodsBack": "Goods back",
+    "workshop": "Work order {workOrder} · from a workshop",
+    "plan": "Plan",
+    "noPlan": "No plan",
+    "sample": "Sample",
+    "how": "Drawn",
+    "done": "Done",
+    "decided": "Signed",
+    "cancelled": "Cancelled",
+    "progress": "{done} of {of} in the sample",
+    "dye": "dye batch {dye}"
+  },
+  "result": {
+    "PASS": "Passing so far",
+    "FAIL": "Fails",
+    "passing": "Accepts up to {major} with a major defect and {minor} with a minor one; a critical defect is never accepted.",
+    "over": {
+      "CRITICAL_one": "1 with a critical defect: a critical defect is never accepted.",
+      "CRITICAL_other": "{count} with a critical defect: a critical defect is never accepted.",
+      "MAJOR_one": "1 with a major defect: the plan accepts {accept}.",
+      "MAJOR_other": "{count} with a major defect: the plan accepts {accept}.",
+      "MINOR_one": "1 with a minor defect: the plan accepts {accept}.",
+      "MINOR_other": "{count} with a minor defect: the plan accepts {accept}."
+    }
+  },
+  "sample": {
+    "method": {
+      "AQL": "AQL",
+      "FIXED": "Fixed by the plan",
+      "WHOLE": "The whole lot"
+    },
+    "short": "{sample} of {lot} {unit}",
+    "allShort": "all {lot} {unit}",
+    "rollsShort_one": "1 roll of {lot} {uom}",
+    "rollsShort_other": "{count} rolls of {lot} {uom}",
+    "aqlShort": "AQL {level} · letter {letter}"
+  },
+  "sections": {
+    "label": "Parts of the inspection",
+    "of": "{done} of {of}",
+    "state": {
+      "todo": "To do",
+      "partly": "Under way",
+      "done": "Done",
+      "failed": "Failed"
+    }
+  },
+  "section": {
+    "hides": "Hides",
+    "rolls": "Fabric rolls",
+    "components": "Armour, zips, hardware",
+    "counter": "Defects",
+    "checks": "Checks",
+    "decision": "Decision"
+  },
+  "hides": {
+    "scan": "Scan the next hide",
+    "scanHint": "A hide's tag (or the tannery's number typed)",
+    "lotArea_one": "Area of the hide measured: {percent} against the tannery's (tolerance {tolerance} %).",
+    "lotArea_other": "Area of the {count} hides measured: {percent} against the tannery's (tolerance {tolerance} %).",
+    "claim": "The office opens the claim for the area.",
+    "none": "No hide in the sample yet: scan the first one.",
+    "sample": "The sample's hides",
+    "shade": "shade {shade}",
+    "noShade": "no shade yet",
+    "grade": "grade {grade}",
+    "marks_one": "1 mark",
+    "marks_other": "{count} marks",
+    "count": "{count} of {sample} hides inspected",
+    "candidates_one": "1 whole hide of the lot not inspected",
+    "candidates_other": "{count} whole hides of the lot not inspected"
+  },
+  "area": {
+    "WITHIN": "Within tolerance",
+    "SHORT": "Short",
+    "OVER": "Over",
+    "percentLabel": "difference from the tannery's area"
+  },
+  "areaUom": {
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²"
+  },
+  "klass": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor"
+  },
+  "decision": {
+    "word": {
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "TO_SORT": "To sort",
+      "none": "To decide"
+    },
+    "go": "To the decision",
+    "sign": "Sign the decision",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "toSort": "To sort",
+    "rest": "The rest",
+    "digits": "Type it",
+    "closeDigits": "Close the keys",
+    "hint": "Accepted, rejected and to sort add up to the lot of {lot} {unit}.",
+    "sum": "Together {sum} of {lot} {unit}",
+    "reset": "As the sample says",
+    "heldTitle": "What holds the signature",
+    "ready": "Ready to sign: your PIN signs it.",
+    "workshopHint": "Goods back from a workshop are decided bundle by bundle: tap a bundle to reject it. Its pieces are rejected; the others go on.",
+    "bundles": "The receipt's bundles",
+    "line": "Line {seq}",
+    "lineHint": "Op {op} · {good} good, {defective} defective",
+    "lineKept": "Goes on",
+    "lineRejected": "Rejected"
+  },
+  "hide": {
+    "kind": "Hide",
+    "inSample": "In the sample",
+    "newInSample": "Goes into the sample",
+    "fact": {
+      "area": "Area received",
+      "sample": "Sample"
+    },
+    "shade": "Shade against the master swatch",
+    "outOfShade": "Out of shade",
+    "grade": "Grade",
+    "gradeName": "{code} · {name}",
+    "more": "Area and marks",
+    "areaRow": "Area against the tannery's",
+    "area": {
+      "notMeasured": "Not measured: the area received stands",
+      "measured": "Measured {area} {uom}",
+      "title": "Area of {code}",
+      "declared": "The tannery's area: {area} {uom}",
+      "use": "Use this area",
+      "typeIt": "Type the area measured"
+    },
+    "mapRow": "Defects and zones on the hide map",
+    "mapMeta": "Defects: {defects} · zones: {zones}",
+    "mapCount_one": "1 mark",
+    "mapCount_other": "{count} marks",
+    "accept": "Accept the hide",
+    "reject": "Reject the hide",
+    "remove": "Take it out of the sample",
+    "offline": "Offline: a hide is saved on this tablet and sent when the network is back."
+  },
+  "map": {
+    "title": "Hide map of {code}",
+    "done": "Done",
+    "tool": "What a tap places",
+    "defects": "Defects",
+    "zones": "Grade zones",
+    "noGrades": "No leather grades are set: quality sets them.",
+    "noDefects": "No hide defect in the library: quality sets them.",
+    "whichDefect": "Which defect?",
+    "whichZone": "Which grade?",
+    "zoneName": "Zone {zone}",
+    "close": "Close the zone",
+    "closeHeld_one": "Tap at least 3 points of the outline: 1 so far.",
+    "closeHeld_other": "Tap at least 3 points of the outline: {count} so far.",
+    "usable": "usable {share} %",
+    "tapDefect": "A tap places {defect}.",
+    "tapZone_one": "Tap the outline of zone {zone}: 1 point so far.",
+    "tapZone_other": "Tap the outline of zone {zone}: {count} points so far.",
+    "held": {
+      "pickDefect": "Pick the defect first, then tap where it is.",
+      "pickZone": "Pick the grade first, then tap its outline.",
+      "full": "At most 60 marks on one hide.",
+      "outlineFull": "At most 60 points in a zone: close it."
+    },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomTop": "Zoomed in all the way",
+    "zoomBottom": "The whole hide is on screen",
+    "zoom": "{percent} %",
+    "undo": "Take back",
+    "nothingToUndo": "Nothing to take back",
+    "remove": "Remove {what}",
+    "removeShort": "Remove",
+    "marks": "Marks on this hide",
+    "noMarks": "No mark yet: a hide with no defect is accepted as it is.",
+    "where": "{across} % across, {down} % down",
+    "keysTitle": "Keys of the hide map",
+    "keysTrigger": "Keys",
+    "key": {
+      "arrows": "move the cross",
+      "enter": "places at the cross",
+      "zoom": "zoom in and out",
+      "undo": "takes back the last mark"
+    }
+  },
+  "roll": {
+    "kindTag": "Roll (tag)",
+    "kindSupplier": "Roll (supplier's number)",
+    "width": "Width",
+    "length": "Length",
+    "points": "Points",
+    "unknown": "Not known: measure it",
+    "counters": "Defects by length (4-point system)",
+    "class": {
+      "1": "1 point",
+      "2": "2 points",
+      "3": "3 points",
+      "4": "4 points"
+    },
+    "classHint": {
+      "1": "up to 7.5 cm (3\")",
+      "2": "7.5 to 15 cm (3\"–6\")",
+      "3": "15 to 23 cm (6\"–9\")",
+      "4": "over 23 cm (9\"), or a hole"
+    },
+    "per100Unknown": "points per 100 sq yd: measure width and length",
+    "per100Within": "points per 100 sq yd · within the limit of {limit}",
+    "per100Over": "points per 100 sq yd · over the limit of {limit}: reject suggested",
+    "size": "Width and length",
+    "use": "Use it",
+    "accept": "Accept the roll",
+    "reject": "Reject the roll",
+    "held": {
+      "width": "Measure the width first.",
+      "length": "Measure the length first."
+    },
+    "acceptAnyway": "Accept it all the same"
+  },
+  "counter": {
+    "less": "One less: {what}",
+    "more": "One more: {what}",
+    "zero": "Already at zero",
+    "hint": "Units of the sample of {sample} with a defect, by class (a unit counts once, under its worst defect).",
+    "criticalHint": "A critical defect is never accepted",
+    "acceptHint": "Accept up to {accept} · reject from {reject}"
+  },
+  "rolls": {
+    "scan": "Scan the roll's tag",
+    "scanHint": "Or type the supplier's roll number",
+    "summary_one": "1 roll · {length} m · {per100} points per 100 sq yd (limit {limit}).",
+    "summary_other": "{count} rolls · {length} m · {per100} points per 100 sq yd (limit {limit}).",
+    "over_one": "1 over the limit.",
+    "over_other": "{count} over the limit.",
+    "none": "No roll inspected yet.",
+    "sample": "The sample's rolls",
+    "meta": "{width} cm × {length} m · {points} points · {per100} per 100 sq yd",
+    "suggestAccept": "Accept suggested",
+    "suggestReject": "Reject suggested",
+    "candidates_one": "1 tagged roll of the lot not inspected",
+    "candidates_other": "{count} tagged rolls of the lot not inspected"
+  },
+  "components": {
+    "hint": "Each line: what it is, a protector's type and certificate, the pieces looked at and those not right.",
+    "none": "No line yet.",
+    "line": "Line {seq} · {kind}",
+    "pieces": "{checked} looked at · {defective} not right",
+    "add": "Add a line"
+  },
+  "componentKind": {
+    "PROTECTOR": "Protector",
+    "ZIP": "Zip",
+    "REFLECTIVE": "Reflective",
+    "HARDWARE": "Hardware",
+    "OTHER": "Other"
+  },
+  "certificate": {
+    "VALID": "in force",
+    "NOT_IN_FORCE": "not in force",
+    "NOT_EN_1621": "not EN 1621",
+    "MISSING": "no EN 1621 certificate",
+    "NOT_NEEDED": "no certificate needed"
+  },
+  "component": {
+    "title": "Line {seq}",
+    "kind": "What is it?",
+    "type": "Type as marked (EN 1621-1)",
+    "typeName": "Type {type}",
+    "certificate": "Its EN 1621 certificate",
+    "covers": "covers this lot",
+    "noCertificate": "No certificate",
+    "marking": "The marking on the piece",
+    "markingOk": "Reads as the certificate",
+    "markingNo": "Missing or different",
+    "markingHeld": "Pick its certificate first.",
+    "checked": "Pieces looked at",
+    "defective": "Pieces not right",
+    "suggested": {
+      "ACCEPTED": "Accept suggested.",
+      "REJECTED": "Reject suggested."
+    },
+    "reason": {
+      "defective": "{defective} of {checked} not right.",
+      "noCertificate": "Without an EN 1621 certificate a protector goes into no PPE garment.",
+      "marking": "Read the marking: standard, level, type.",
+      "noType": "Say the type, A or B, as marked."
+    },
+    "accept": "Accept the line",
+    "rejectMain": "Reject the line",
+    "reject": "Reject the line",
+    "acceptAnyway": "Accept it all the same",
+    "held": {
+      "kind": "Say what it is first.",
+      "checked": "Say how many pieces were looked at."
+    }
+  },
+  "checks": {
+    "left_one": "1 required check left",
+    "left_other": "{count} required checks left",
+    "taps": "The plan's checks",
+    "values": "Values to measure or choose",
+    "optional": "optional",
+    "toDo": "to do",
+    "nominal": "{nominal} ± {tolerance} {uom}",
+    "choice_one": "one of 1 choice",
+    "choice_other": "one of {count} choices",
+    "result": {
+      "PASS": "passes {value}",
+      "FAIL": "fails {value}",
+      "NOT_APPLICABLE": "not applicable"
+    },
+    "office": "{check}: answered in the office (no typing on the floor)."
+  },
+  "checkClass": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor",
+    "OTHER": "Other checks"
+  },
+  "measure": {
+    "savePass": "Save · within tolerance",
+    "saveFail": "Save · out of tolerance",
+    "pass": "Passes",
+    "fail": "Fails",
+    "held": "Enter a value first."
+  },
+  "held": {
+    "offline": "Signing needs the network.",
+    "waiting_one": "1 write of this inspection is still on this tablet: it is sent first.",
+    "waiting_other": "{count} writes of this inspection are still on this tablet: they are sent first.",
+    "empty": "Fill the three quantities.",
+    "whole": "The lot is counted in whole units: whole numbers.",
+    "sum": "They add up to {sum}; the lot is {lot}.",
+    "hidesUndecided_one": "Decide hide {codes} first.",
+    "hidesUndecided_other": "Decide every hide of the sample first: {codes}.",
+    "rollsUndecided_one": "Decide the roll with no decision first.",
+    "rollsUndecided_other": "Decide every roll first: {count} have no decision.",
+    "componentsUndecided_one": "Decide the component line with no decision first.",
+    "componentsUndecided_other": "Decide every component line first: {count} have no decision.",
+    "below": {
+      "accepted": "The sample accepted more: at least {min}.",
+      "rejected": "The sample rejected more: at least {min}.",
+      "toSort": "The sample left more to sort: at least {min}."
+    },
+    "outsideBeforeWhole": "Inspect the whole sample first ({done} of {sample}) before accepting hides outside it; reject or sort the rest now.",
+    "outsideBeforeWholeRolls": "Inspect every roll of the sample first ({done} of {sample}) before accepting more than the rolls accepted; reject or sort the rest.",
+    "failedSplit": "The sample fails: accept only the {accepted} inspected and accepted; reject or sort the rest.",
+    "hard": "Never the whole lot: a critical defect or a failed critical check.",
+    "mandatory_one": "Answer the required check before accepting the whole lot.",
+    "mandatory_other": "Answer the {count} required checks before accepting the whole lot.",
+    "override": {
+      "FAIL": "The rules say it fails: accepting the whole lot over them needs written reasons, so the office does it.",
+      "PASS": "The rules say it passes: rejecting the whole lot over them needs written reasons, so the office does it."
+    },
+    "workshopSort": "Goods back from a workshop leave nothing to sort.",
+    "notYours": "Only the inspector who took it signs it.",
+    "notOpen": "It is signed or cancelled."
+  },
+  "sign": {
+    "title": "Sign the decision",
+    "summary": "Accepted {accepted} · rejected {rejected} · to sort {toSort} ({unit}).",
+    "summaryWorkshop": "Accepted {accepted} · rejected {rejected} ({unit}).",
+    "meaning": "I sign incoming inspection {number} of {lot}: accepted {accepted}, rejected {rejected}, to sort {toSort}.",
+    "detail": "Your PIN signs the decision."
+  },
+  "done": {
+    "title": "{number} signed",
+    "again": "Scan the next lot",
+    "quantities": "Accepted {accepted} · rejected {rejected} · to sort {toSort} ({unit}).",
+    "next": {
+      "RELEASE": "Lot {lot} stays in quarantine until a person with the quality role types its code and releases it.",
+      "REJECT": "Lot {lot} stays in quarantine: a person with the quality role rejects it, and purchasing returns it to the supplier.",
+      "SORT": "What is to sort is inspected unit by unit in a new inspection of lot {lot} before it is released.",
+      "RELEASE_PART": "The office holds or returns the rejected units; then a person with the quality role releases lot {lot}."
+    },
+    "workshop_one": "1 bundle rejected ({bundles}): not reported at the operation. Rework it or send it back to the workshop; the others go on and into the workshop's fee.",
+    "workshop_other": "{count} bundles rejected ({bundles}): not reported at the operation. Rework them or send them back to the workshop; the others go on and into the workshop's fee.",
+    "workshopAll": "Every bundle goes on to the next operation and into the workshop's fee.",
+    "rejectedHides": "Rejected hides: {codes}.",
+    "rejectedRolls": "Rejected rolls: {codes}.",
+    "signed": "Signed · {fingerprint}…"
+  },
+  "doneLine": {
+    "hide": "Hide {code}: {decision}.",
+    "hideRemoved": "Hide {code} is out of the sample.",
+    "roll": "Roll {code}: {decision}.",
+    "component": "Line {code}: {decision}.",
+    "checks": "The checks of {code} are saved.",
+    "counter": "The counts are saved."
+  },
+  "refusal": {
+    "OTHER_BENCH": {
+      "message": "This code belongs to another bench.",
+      "fix": "Scan a lot, a hide or an incoming inspection here."
+    },
+    "NOTHING_TO_INSPECT": {
+      "message": "Nothing to inspect for this code.",
+      "fix": "No incoming plan applies, or the lot is decided: the office names the plan or opens it."
+    },
+    "CHOOSE": {
+      "message": "This code leads to more than one inspection.",
+      "fix": "Open the one you inspect from the list."
+    },
+    "LABEL": {
+      "message": "This label is not one this bench takes.",
+      "fix": "Scan the lot's label."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "This tablet is not ready for inspections.",
+      "fix": "Ask the office to set it up."
+    },
+    "other": {
+      "message": "The office did not take it.",
+      "fix": "Read the inspection again; ask quality if it stays."
+    }
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
+  }
+}

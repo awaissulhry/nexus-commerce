@@ -53,7 +53,8 @@
     "HELD": "Bloccato"
   },
   "kind": {
-    "LEATHER": "Pelle"
+    "LEATHER": "Pelle",
+    "FABRIC": "Tessuto"
   },
   "view": {
     "open": "Tagli aperti",
@@ -70,15 +71,9 @@
     "lot": "Lotto di tonalità",
     "state": "Stato",
     "pieces": "Pezzi tagliati / previsti",
-    "hides": "Pelli",
     "yield": "Resa rispetto al piano",
     "table": "Tavolo",
-    "date": "Ultimo taglio",
-    "more": "Altro",
-    "workOrder": "Ordine di produzione",
-    "style": "Modello",
-    "garments": "Capi",
-    "piecesPlanned": "Pezzi previsti"
+    "more": "Altro"
   },
   "list": {
     "tableLabel": "Tagli",
@@ -105,30 +100,14 @@
     },
     "empty": {
       "title": "Ancora nessun ordine di taglio",
-      "body": "Un ordine di produzione rilasciato con parti in pelle compare qui. Inizia con Nuovo ordine di taglio."
+      "body": "Qui compaiono gli ordini di lavoro rilasciati con parti in pelle e ogni ordine di taglio. Inizia con Nuovo ordine di taglio."
     },
     "loadingSlow": "Ancora in caricamento…",
-    "hint": "Un taglio è la pelle di un ordine di produzione, tagliata pelle per pelle al tavolo di taglio. Stese di tessuto, piazzamenti e ordini di taglio di più ordini arrivano più avanti (W2b)."
+    "hint": "Gli ordini di taglio raggruppano ordini di lavoro di un materiale e colore (tessuto a materassi da un piazzamento); la pelle di un ordine di lavoro si taglia pelle per pelle al tavolo di taglio, ognuna un taglio a sé."
   },
   "bulk": {
     "export_one": "Esporta {count} (CSV)",
     "export_other": "Esporta {count} (CSV)"
-  },
-  "csv": {
-    "cut": "Taglio",
-    "kind": "Tipo",
-    "style": "Modello",
-    "material": "Materiale e colore",
-    "lot": "Lotto di tonalità",
-    "state": "Stato",
-    "piecesPlanned": "Pezzi previsti",
-    "piecesCut": "Pezzi tagliati",
-    "hides": "Pelli",
-    "area": "Area usata",
-    "yieldPct": "Resa %",
-    "plannedPct": "Piano %",
-    "table": "Tavolo",
-    "lastCut": "Ultimo taglio"
   },
   "held": {
     "permission": "Serve il permesso {permission}.",
@@ -146,29 +125,6 @@
       "voided": "Questo fascio è annullato.",
       "scanned_one": "Già scansionato una volta: un fascio si annulla solo prima della prima scansione.",
       "scanned_other": "Già scansionato {count} volte: un fascio si annulla solo prima della prima scansione."
-    }
-  },
-  "newCut": {
-    "title": "Nuovo ordine di taglio",
-    "body": "Scegli l’ordine di produzione da tagliare. Ogni ordine rilasciato è un taglio di una pelle e un colore; dopo si assegnano le pelli.",
-    "tableLabel": "Ordini di produzione da tagliare",
-    "count_one": "{count} ordine da tagliare, senza pelli assegnate",
-    "count_other": "{count} ordini da tagliare, senza pelli assegnate",
-    "picked_one": "{count} ordine scelto",
-    "picked_other": "{count} ordini scelti",
-    "go": "Crea l’ordine di taglio",
-    "table": "Il tavolo è la postazione del tablet di taglio: ogni taglio registra il tavolo dove è stato fatto.",
-    "fabric": "Gli ordini di taglio del tessuto che raggruppano più ordini per stesa arrivano più avanti (W2b).",
-    "empty": {
-      "title": "Niente da tagliare",
-      "body": "Ogni ordine rilasciato con parti in pelle ha già pelli assegnate o è in taglio."
-    },
-    "why": {
-      "material": "Altra pelle: questo ordine di taglio taglia {material}."
-    },
-    "held": {
-      "none": "Scegli prima un ordine di produzione.",
-      "many": "Per ora un ordine di produzione per taglio: gli ordini di taglio di più ordini arrivano con le stese di tessuto (W2b)."
     }
   },
   "alloc": {
@@ -303,9 +259,7 @@
     },
     "allocated": "Assegnate, non ancora tagliate",
     "noAllocated": "Nessuna pelle assegnata in attesa.",
-    "allocatedHint": "Le pelli assegnate sono riservate intere a questo ordine; il controllo della stessa tonalità in una stesa arriva più avanti (W2b).",
-    "lays": "Stese (tessuto)",
-    "laysLater": "Piazzamenti, strati, rotoli per tonalità e altezza arrivano con il taglio del tessuto (W2b). La pelle si taglia pelle per pelle."
+    "allocatedHint": "Le pelli assegnate sono riservate intere per questo ordine di lavoro; il controllo del lotto di tonalità qui sopra le conta."
   },
   "hideState": {
     "FULL": "Intera",
@@ -373,7 +327,7 @@
       "pattern": "Modello",
       "yield": "Resa"
     },
-    "hint": "Per pelle, lotto e fornitore; mai per tagliatore. La riconciliazione di prelevato, usato e reso arriva più avanti (W2b)."
+    "hint": "Per pelle, lotto e fornitore; mai per tagliatore."
   },
   "tickets": {
     "title": "Cartellini dei fasci",

@@ -243,7 +243,9 @@
     "body": "{good} good, {rejected} rejected, {scrapped} scrapped at the workshop.",
     "material_one": "{count} material line back into our places.",
     "material_other": "{count} material lines back into our places.",
-    "office": "The office sees the receipt on the order now."
+    "office": "The office sees the receipt on the order now.",
+    "inspection": "The goods go to incoming inspection {number} first: not into stock, and the workshop is not paid, until it is decided.",
+    "inspect": "Inspect {number} now"
   },
   "refusal": {
     "NOT_FOUND": {

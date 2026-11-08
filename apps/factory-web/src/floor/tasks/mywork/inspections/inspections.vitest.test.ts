@@ -21,11 +21,11 @@ describe('who sees the inspector queue, and where it is My work\'s list', () => 
 })
 
 describe('a row opens the bench that records it', () => {
-  it('final and garments that wait open the final bench; in-line kinds the in-line screen; incoming has no floor screen yet', () => {
+  it('final and garments that wait open the final bench; in-line kinds the in-line screen; incoming the incoming inspection (B-W2b-115)', () => {
     expect(taskOfKind('FINAL')).toBe('final')
     expect(taskOfKind('FINAL_DUE')).toBe('final')
     expect(taskOfKind('FIRST_PIECE')).toBe('inline')
-    expect(taskOfKind('INCOMING')).toBeNull()
+    expect(taskOfKind('INCOMING')).toBe('incoming')
   })
 
   it('with the inspection\'s number, the work order that waits, or the bundle', () => {
@@ -33,15 +33,18 @@ describe('a row opens the bench that records it', () => {
     expect(codeOfRow(final!)).toBe('INS-D-2026-0011')
     expect(codeOfRow(due!)).toBe('WO-DEMO-0044')
     expect(codeOfRow(firstPiece!)).toBe('B-DEMO-0131')
-    expect(codeOfRow(incoming!)).toBeNull()
+    expect(codeOfRow(incoming!)).toBe('IIN-D-2026-0004')
+    expect(codeOfRow({ ...incoming!, number: null })).toBe('LOT-DEMO-LEA-07')
   })
 
-  it('Inspect is held with the reason: no floor screen, no such tile here, not mine to record', () => {
+  it('Inspect is held with the reason: no such tile here, not mine to record', () => {
     const bench = homeTiles('inspection', INSPECTOR, false)
     const sewing = homeTiles('sewing', INSPECTOR, false)
     const [firstPiece, incoming, final] = ROWS
     expect(openHeld(final!, bench)).toBeNull()
-    expect(openHeld(incoming!, bench)).toBe('noFloorScreen')
+    // B-W2b-115: the Incoming inspection tile asks quality.incoming.record (this inspector only views incoming inspections).
+    expect(openHeld(incoming!, bench)).toBe('noTile')
+    expect(openHeld(incoming!, homeTiles('inspection', [...INSPECTOR, 'quality.incoming.record'], false))).toBeNull()
     expect(openHeld(final!, sewing)).toBe('noTile')
     expect(openHeld(firstPiece!, bench)).toBeNull()
     expect(openHeld({ ...final!, may: { record: false, start: false } }, bench)).toBe('notYours')

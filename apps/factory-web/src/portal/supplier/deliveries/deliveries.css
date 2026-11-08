@@ -1,0 +1,223 @@
+/*
+ * SCR-227 — the supplier's Ship notices (B-W2b-186): layout only, semantic tokens only. The pages fill the portal's main area
+ * (no page max-width: Owner rule 2026-10-29), use the width on wide screens (the lines and the fields in columns) and stack
+ * on a phone.
+ */
+
+.fw-psn,
+.fw-psn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-psn-stack {
+  gap: var(--nds-space-12);
+}
+
+.fw-psn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-psn-chip-count {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-psn-rowlink {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-psn-rowlink:hover,
+.fw-psn-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-psn-two,
+.fw-psn-check {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-psn-check {
+  padding-block: var(--nds-space-4);
+  white-space: normal;
+}
+
+.fw-psn-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psn-warn {
+  color: var(--nds-warning-text);
+}
+
+.fw-psn-bad {
+  color: var(--nds-danger-text);
+}
+
+.fw-psn-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-psn-card {
+  min-width: 0;
+}
+
+.fw-psn-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-psn-h2 {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psn-h3 {
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psn-list,
+.fw-psn-reasons {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  line-height: 1.45;
+}
+
+.fw-psn-reasons {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psn-trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.fw-psn-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 420px;
+  padding: var(--nds-space-12);
+}
+
+.fw-psn-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-psn-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-psn-stepper {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-psn-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-psn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-psn-picks,
+.fw-psn-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-psn-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-psn-pick:hover,
+.fw-psn-pick:focus-visible {
+  background: var(--nds-surface-hover);
+}
+
+.fw-psn-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-psn-line.is-on {
+  border-color: var(--nds-border-strong);
+}
+
+.fw-psn-line-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin-top: var(--nds-space-4);
+}
+
+.fw-psn-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  margin-block: var(--nds-space-16);
+}
+
+.fw-psn-end {
+  align-items: stretch;
+}
+
+@media (max-width: 760px) {
+  .fw-psn-line-fields,
+  .fw-psn-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -370,6 +370,7 @@
     "mywork": "My work",
     "operation": "Operation",
     "cut": "Cut a hide",
+    "fabriccut": "Fabric cutting",
     "bundles": "Bundles",
     "receive": "Receive",
     "pick": "Pick & issue",
@@ -379,6 +380,7 @@
     "pack": "Pack",
     "final": "Final inspection",
     "inline": "In-line inspection",
+    "incoming": "Incoming inspection",
     "scan": "Scan anything",
     "sds": "Safety data sheets",
     "hint": {
@@ -386,6 +388,7 @@
       "scan": "Any label of the factory",
       "operation": "Report a bundle at your operation",
       "cut": "Check a hide and log what you cut",
+      "fabriccut": "Cut ticket, lay, count, cut, stickers, recuts, to sewing",
       "bundles": "Make bundles and print their tickets",
       "receive": "Receive goods and print the hide tags",
       "pick": "Issue materials to a work order",
@@ -393,6 +396,7 @@
       "kits": "Send a kit with its DDT, receive goods back",
       "final": "Check, sign and release garments",
       "inline": "First piece, cutting, roving, end of line",
+      "incoming": "Hide by hide, rolls, components; sign the decision",
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
@@ -726,7 +730,15 @@
       "onBehalf_other": "Entry on behalf: {code} · {count} good",
       "progress": "A machine report's progress",
       "repair": "Repair scan of {code}",
-      "incident": "Incident report"
+      "incident": "Incident report",
+      "layRoll": "Roll {code} on a lay",
+      "layUndo": "Last roll of a lay taken back",
+      "layCount": "A lay counted at both ends",
+      "trolleyLoad": "Bundle {code} onto a trolley",
+      "trolleyUnload": "Bundle {code} off a trolley",
+      "trolleySend": "A trolley sent to sewing",
+      "trolleyReceive": "A trolley received at the line",
+      "incomingRecord": "Incoming inspection: a hide or the checks"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

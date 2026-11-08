@@ -6,6 +6,7 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { readFromStore } from '../../../record-panels/store'
 import { zxingCamera } from '../../camera'
 import { useFloor, useFloorRouter } from '../../FloorApp'
+import { TASK_ROUTES } from '../routes'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { listBeforeRead, readListReasons } from '../reasons/api'
@@ -57,7 +58,12 @@ export function FloorKits() {
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.kits', { showHome: true })
   const { me, api, online, sessionEnded } = store
-  const may = { send: Boolean(me?.permissions.includes('purchasing.subcontract.kit')), receive: Boolean(me?.permissions.includes('purchasing.subcontract.receive')) }
+  const may = {
+    send: Boolean(me?.permissions.includes('purchasing.subcontract.kit')),
+    receive: Boolean(me?.permissions.includes('purchasing.subcontract.receive')),
+    // B-W2b-115: the goods back go to incoming inspection first; whoever holds it may open it from here.
+    inspect: Boolean(me?.permissions.includes('quality.incoming.record') && me?.permissions.includes('quality.incoming.view')),
+  }
 
   const [stage, setStage] = useState<KitsStage>('mode')
   const [mode, setMode] = useState<KitMode | null>(null)
@@ -70,7 +76,7 @@ export function FloorKits() {
   const [reject, setReject] = useState<{ bundleId: string; kind: RejectKind; count: number | null; reason: string | null } | null>(null)
   const [material, setMaterial] = useState<{ lineId: string; quantity: number | null; toLocationId: string | null } | null>(null)
   const [reasons, setReasons] = useState<PickerList | null>(null)
-  const [received, setReceived] = useState<{ good: number; defective: number; scrapped: number; returned: number } | null>(null)
+  const [received, setReceived] = useState<{ good: number; defective: number; scrapped: number; returned: number; inspection: { id: string; number: string } | null } | null>(null)
   const [busy, setBusy] = useState<'read' | 'send' | 'receive' | null>(null)
   const [problem, setProblem] = useState<{ problem: TaskProblem; code: string | null } | null>(null)
   const started = useRef(false)
@@ -230,7 +236,7 @@ export function FloorKits() {
     writeKey.current = null
     setOrder(answer.value.order)
     setBack(emptyBack())
-    setReceived({ good: answer.value.receipt.good, defective: answer.value.receipt.defective, scrapped: answer.value.receipt.scrapped, returned: answer.value.receipt.returned })
+    setReceived({ good: answer.value.receipt.good, defective: answer.value.receipt.defective, scrapped: answer.value.receipt.scrapped, returned: answer.value.receipt.returned, inspection: answer.value.inspection ?? null })
     setStage('received')
   }, [api, back, busy, fail, feedback, order, reasons, refuse, reread])
 
@@ -421,6 +427,9 @@ export function FloorKits() {
         return void doReceive()
       case 'next':
         return next()
+      // B-W2b-115: the inspection the receipt opened, on the floor's Incoming inspection (its number is scanned there).
+      case 'inspect':
+        return received?.inspection && may.inspect ? store.openWith(TASK_ROUTES.incoming, received.inspection.number) : undefined
       case 'dismiss':
         return setProblem(null)
       case 'retry':
