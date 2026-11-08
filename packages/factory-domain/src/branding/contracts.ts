@@ -77,3 +77,21 @@ export const logoUploadBody = input({
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 })
 export type LogoUploadBody = z.infer<typeof logoUploadBody>
+
+/** The company's legal block as its documents print it (c.c. art. 2250): the name and the lines under it. */
+const legalBlock = output({ name: z.string(), lines: z.array(z.string()) })
+
+/**
+ * B-W2b-164 (design portal.signin): GET /branding/portal-sign-in — the portal's sign-in page by its address (the tenant's
+ * slug and the company's code, as the invitation mail names them) or by the company's id (the mailed link's token names
+ * it): whose portal it is (`tenant` + `company.code` are what POST /portal/signin/start takes), its branding, whom to ask
+ * (the company's default conversation address) and the legal block of the help foot. Public facts only.
+ */
+export const portalSignInHead = output({
+  tenant: z.string(),
+  company: output({ id: id(), code: z.string(), name: z.string() }),
+  branding: publicBranding,
+  contact: output({ email: z.string().nullable() }),
+  legal: output({ it: legalBlock, en: legalBlock }),
+})
+export type PortalSignInHead = z.infer<typeof portalSignInHead>
