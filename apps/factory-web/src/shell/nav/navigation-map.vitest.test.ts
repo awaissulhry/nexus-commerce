@@ -154,6 +154,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/quality/settings': 'quality.rules.view', // GET /quality/rules (B-W2b-118)
       '/quality/plans': 'quality.plans.view', // GET /quality/plans (B-W2b-104)
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
+      '/quality/capa': 'quality.capa.view', // GET /quality/capa (B-W2b-119)
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
       '/quality/reports': 'quality.reports.view', // GET /quality/reports/kpis (B-W2b-138)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
@@ -240,10 +241,11 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/import',
     ])
     // The sales role: all of Sales, Home's approvals and mail; of Quality only Nonconformances (B-W2a-68: sales raise NCRs
-    // from what a customer reports) and Complaints (B-W2a-65: sales logs them); no Compliance or Planning.
+    // from what a customer reports), Corrective actions (B-W2b-119: sales read the 8Ds of their customers) and Complaints
+    // (B-W2a-65: sales logs them); no Compliance or Planning.
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
     expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
-    expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/complaints'])
+    expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/capa', '/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',
       '/home/approvals',
@@ -489,7 +491,8 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     const frame = linkKinds().filter((kind) => linkTaskOf({ purpose: kind.purpose, record: { type: kind.recordType } }) === null)
     expect(frame.slice(0, 2)).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }, { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport' }])
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
-    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'JOB_ACCEPT', 'APPROVAL', 'RECORD_INVITE', 'SECURE_FILE']
+    // B-W2b-188: APPROVAL has its page (links/approve).
+    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'JOB_ACCEPT', 'RECORD_INVITE', 'SECURE_FILE']
     expect(frame.slice(2)).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     expect(LINK_TASK_RULES.map((rule) => rule.task).sort()).toEqual([...LINK_TASKS].sort())

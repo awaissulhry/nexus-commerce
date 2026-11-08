@@ -20,6 +20,12 @@ import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from 
 import { fetchRepairQueue, keptRepairQueue, scanOrKeep, type RepairScan } from './repair/api'
 import { doneStill, outCounts, repairHeld, rowOfCode, withDone, type RepairDone, type RepairQueue } from './repair/model'
 import type { RepairLineModel } from './repair/view/RepairViews'
+// B-W2b-109: the inspector queue (QHS-068).
+import { fetchInspectorQueue, fetchOfflinePack, keptInspectorQueue } from './inspections/api'
+import { changedCount, codeOfRow, mayQueue, movesQueue, openHeld, queueChanged, queueFirst, taskOfKind, type InspectorQueue, type OpenHeld } from './inspections/model'
+
+/** B-W2b-109: the offline pack is read once a visit (my open final inspections kept on the tablet, QHS-062). */
+let packRead = false
 
 /**
  * The live SCR-089 (`/floor/mywork`): the list to work from (the person's, else the station's queue: `fetchWorkList`) read on view, again when
@@ -85,7 +91,10 @@ export function FloorMyWork() {
   const { frame, onFrame } = store.frame('tile.mywork', { showHome: true })
   const { me, api, online, sessionEnded, queue, queueSnapshot } = store
   const allowed = Boolean(me?.permissions.includes('floor.work'))
-  const [step, setStep] = useState<MyWorkStep>(allowed ? { kind: 'loading' } : { kind: 'noPermission' })
+  // B-W2b-109: at an inspection bench the inspector queue is My work's list (design "Variants: … inspector queue").
+  const inspector = allowed && mayQueue(me?.permissions ?? [])
+  const inspectorFirst = inspector && queueFirst(me ? modeOf(me.device.station, me.device.mode) : null, me?.permissions ?? [])
+  const [step, setStep] = useState<MyWorkStep>(allowed ? (inspectorFirst ? { kind: 'inspections' } : { kind: 'loading' }) : { kind: 'noPermission' })
   const [shown, setShown] = useState<DispatchList | null>(null)
   const [fresh, setFresh] = useState<DispatchList | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -111,11 +120,51 @@ export function FloorMyWork() {
   const [repairSaid, setRepairSaid] = useState<(Omit<RepairLineModel, 'ticks'> & { clientEventId: string | null; ticks: RepairLineModel['ticks'] }) | null>(null)
   const [repairBusy, setRepairBusy] = useState(false)
   const deviceId = store.device?.device.id ?? null
+  // B-W2b-109: my inspections — the queue on screen, a fresher one behind "List changed · Show", as of when, why not read.
+  const [inspections, setInspections] = useState<InspectorQueue | null>(null)
+  const [inspectionsFresh, setInspectionsFresh] = useState<InspectorQueue | null>(null)
+  const [inspectionsAsOf, setInspectionsAsOf] = useState<string | null>(null)
+  const [inspectionsProblem, setInspectionsProblem] = useState<'offline' | 'error' | null>(null)
+  const inspectionsRef = useRef<InspectorQueue | null>(null)
+  inspectionsRef.current = inspections
 
   useEffect(() => {
     setPutLast(loadPutLast())
     setSeen(loadSeen())
   }, [])
+
+  /** My inspections: the first answer goes on screen; a later one that differs waits behind "List changed · Show". */
+  const readInspections = useCallback(
+    async (show: boolean) => {
+      if (!inspector) return
+      if (!packRead && online) {
+        packRead = true
+        void fetchOfflinePack(api)
+      }
+      const answer = await fetchInspectorQueue(api)
+      if (answer.ok) {
+        setInspectionsProblem(null)
+        setInspectionsAsOf(null)
+        if (show || inspectionsRef.current === null) {
+          setInspections(answer.value)
+          setInspectionsFresh(null)
+        } else setInspectionsFresh(queueChanged(inspectionsRef.current, answer.value) ? answer.value : null)
+        return
+      }
+      if (answer.problem.kind === 'signedOut') return void sessionEnded()
+      const kept = keptInspectorQueue()
+      if (kept && inspectionsRef.current === null) {
+        setInspections(kept.value)
+        setInspectionsAsOf(kept.asOf)
+      } else if (inspectionsRef.current) setInspectionsAsOf((current) => current ?? inspectionsRef.current!.asOf)
+      setInspectionsProblem(answer.problem.kind === 'offline' ? 'offline' : 'error')
+    },
+    [inspector, online, api, sessionEnded],
+  )
+
+  useEffect(() => {
+    void readInspections(true)
+  }, [readInspections])
 
   /** The open messages: a failed read keeps what this tablet read, with its time. */
   const readMessages = useCallback(async () => {
@@ -207,12 +256,18 @@ export function FloorMyWork() {
   useEffect(() => {
     if (online && asOf) void read(false)
   }, [online, asOf, read])
+  useEffect(() => {
+    if (online && inspectionsAsOf) void readInspections(false)
+  }, [online, inspectionsAsOf, readInspections])
 
   // In view: read again on the beat, and when the tablet comes back to this screen.
   useEffect(() => {
     if (!allowed || !online) return
     const again = () => {
-      if (document.visibilityState === 'visible') void read(false)
+      if (document.visibilityState === 'visible') {
+        void read(false)
+        void readInspections(false)
+      }
     }
     const timer = window.setInterval(again, REREAD_MS)
     document.addEventListener('visibilitychange', again)
@@ -220,15 +275,19 @@ export function FloorMyWork() {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', again)
     }
-  }, [allowed, online, read])
+  }, [allowed, online, read, readInspections])
 
   useLiveChanges(
     {
       onChange: (change) => {
         if (MOVES.has(change.type)) void read(false)
         else if (REPAIR_MOVES.has(change.type)) void readRepair()
+        else if (movesQueue(change.type)) void readInspections(false)
       },
-      onReconnect: () => void read(false),
+      onReconnect: () => {
+        void read(false)
+        void readInspections(false)
+      },
     },
     allowed && online,
   )
@@ -353,6 +412,10 @@ export function FloorMyWork() {
     void scanRepair({ reworkId: row.reworkId, step: 'OUT', ...(step.code ? { code: step.code } : {}), good: counts.good, scrap: counts.scrap }, row.bundle?.code ?? row.workOrder.number)
   }
 
+  /** B-W2b-109: why "Inspect" cannot open each row here (no floor screen for it yet, no such tile, not mine to record). */
+  const inspectionTiles = me ? homeTiles(modeOf(me.device.station, me.device.mode), me.permissions, me.notice.blocksScans, me.device.mode) : []
+  const inspectionHeld: Record<string, OpenHeld> = Object.fromEntries((inspections?.rows ?? []).map((row) => [row.key, openHeld(row, inspectionTiles)]))
+
   const reasonDone = () => {
     if (step.kind !== 'reason') return
     const picked = step.picker.reasons.find((reason) => reason.id === step.picker.value)
@@ -379,7 +442,10 @@ export function FloorMyWork() {
     if (step.kind === 'repair' || step.kind === 'repairItem' || step.kind === 'repairOut') return onRepairScan(code)
     const read = readScan(code, me.scanTag)
     const mode = modeOf(me.device.station, me.device.mode)
-    const task = taskForScan(mode, read, homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode))
+    const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode)
+    // B-W2b-109 (QHS-065): on my inspections a code opens the final bench with it (a lot, a bundle, a serial, a carton …).
+    if ((step.kind === 'inspections' || step.kind === 'inspection') && read.kind !== 'badge' && tiles.some((tile) => tile.key === 'final' && tile.held === null)) return store.openWith(TASK_ROUTES.final, read.code)
+    const task = taskForScan(mode, read, tiles)
     if (task) return store.openWith(TASK_ROUTES[task], read.code)
     if (read.kind !== 'badge') return store.openScan(code)
     if (await store.switchTo(read.code)) feedback('error')
@@ -390,6 +456,7 @@ export function FloorMyWork() {
     if (step.kind === 'repairOut') return setStep({ kind: 'repairItem', reworkId: step.reworkId })
     if (step.kind === 'repairItem') return setStep({ kind: 'repair' })
     if (step.kind === 'repair') setRepairSaid(null)
+    if (step.kind === 'inspection') return setStep({ kind: 'inspections' })
     setStep(step.kind === 'message' ? { kind: 'messages' } : allowed ? { kind: 'list' } : { kind: 'noPermission' })
   }
 
@@ -460,12 +527,39 @@ export function FloorMyWork() {
         return step.kind === 'repairOut' ? repairOutWith(step.good) : undefined
       case 'repairRetry':
         return void readRepair()
+      // B-W2b-109: my inspections.
+      case 'inspections':
+        setPutLastDone(null)
+        void readInspections(false)
+        return setStep({ kind: 'inspections' })
+      case 'inspectionOpen':
+        return setStep({ kind: 'inspection', key: action.key })
+      case 'inspectionGo': {
+        const row = inspections?.rows.find((entry) => entry.key === action.key)
+        if (!row || !me) return
+        if (inspectionHeld[row.key]) return feedback('warning')
+        const task = taskOfKind(row.kind)
+        const code = codeOfRow(row)
+        if (!task) return feedback('warning')
+        return code ? store.openWith(TASK_ROUTES[task], code) : router.push(TASK_ROUTES[task])
+      }
+      case 'inspectionsShow':
+        if (inspectionsFresh) {
+          setInspections(inspectionsFresh)
+          setInspectionsFresh(null)
+          setInspectionsAsOf(null)
+        }
+        return
+      case 'inspectionsRetry':
+        return void readInspections(true)
+      case 'stationQueue':
+        return setStep(shown ? { kind: 'list' } : { kind: 'loading' })
     }
   }
 
   useFloorKeys({
     enter: step.kind === 'reason' ? reasonDone : null,
-    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' || step.kind === 'messages' || step.kind === 'message' || step.kind === 'repair' || step.kind === 'repairItem' || step.kind === 'repairOut' ? back : () => router.push('/floor'),
+    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' || step.kind === 'messages' || step.kind === 'message' || step.kind === 'repair' || step.kind === 'repairItem' || step.kind === 'repairOut' || step.kind === 'inspection' || (step.kind === 'inspections' && !inspectorFirst) ? back : () => router.push('/floor'),
   })
 
   if (!me) return null
@@ -496,6 +590,17 @@ export function FloorMyWork() {
         repairProblem: repairShown ? null : repairProblem,
         repairLine,
         repairBusy,
+        inspections: inspector
+          ? {
+              queue: inspections,
+              asOf: inspectionsAsOf ?? (!online && inspections ? inspections.asOf : null),
+              problem: inspections ? null : inspectionsProblem,
+              changed: inspectionsFresh !== null,
+              pending: inspectionsFresh && inspections ? changedCount(inspections, inspectionsFresh) : 0,
+              first: inspectorFirst,
+              held: inspectionHeld,
+            }
+          : null,
       }}
       onFrame={onFrame}
       onAction={onAction}

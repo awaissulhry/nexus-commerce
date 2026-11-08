@@ -1,0 +1,347 @@
+{
+  "nav": {
+    "home": "Home",
+    "orders": "Orders",
+    "ordersTracking": "Orders & tracking",
+    "newOrder": "New order & reorder",
+    "quotesSamples": "Quotes & samples",
+    "quotes": "Quotes & requests",
+    "catalogue": "Catalogue",
+    "documents": "Documents",
+    "returns": "Returns & claims",
+    "account": "Account",
+    "ordersJobs": "Orders & jobs",
+    "purchaseOrders": "Purchase orders",
+    "jobs": "Jobs",
+    "deliveries": "Deliveries",
+    "profile": "Profile",
+    "accounting": "Accounting",
+    "auditRoom": "Audit room"
+  },
+  "rail": {
+    "label": "Portal areas",
+    "withBadge": "{area}, {badge}"
+  },
+  "top": {
+    "home": "{name} portal: Home"
+  },
+  "search": {
+    "label": "Search orders, documents and more",
+    "placeholder": "Search orders, documents… (your PO number works)",
+    "title": "Search",
+    "tooShort": "Type a little more to search.",
+    "searching": "Searching…",
+    "found_one": "{count} found",
+    "found_other": "{count} found",
+    "none": "Nothing found for “{query}”. Try your own reference or ours.",
+    "failed": "Search is not answering. Try again.",
+    "capped": "Many records match: type more of the reference to narrow it down.",
+    "group": {
+      "orders": "Orders",
+      "documents": "Documents",
+      "returns": "Returns",
+      "jobs": "Jobs",
+      "pos": "Purchase orders"
+    }
+  },
+  "bell": {
+    "label": "Notifications",
+    "open": "Open your notifications",
+    "unread_one": "Notifications: {count} unread",
+    "unread_other": "Notifications: {count} unread",
+    "unreadMore_one": "Notifications: more than {count} unread",
+    "unreadMore_other": "Notifications: more than {count} unread",
+    "none": "Notifications: nothing unread",
+    "title": "Notifications",
+    "markAll": "Mark all as read",
+    "marking": "Marking them as read…",
+    "failed": "The notifications could not be read.",
+    "emptyTitle": "Nothing new",
+    "empty": "We tell you here when something changes on your orders and documents.",
+    "unreadMark": "New:",
+    "alsoMore_one": "and {count} more like it",
+    "alsoMore_other": "and {count} more like it"
+  },
+  "menu": {
+    "label": "Menu of {name}",
+    "access": "My access",
+    "email": "E-mail settings",
+    "display": "Language and theme",
+    "shortcuts": "Keyboard shortcuts",
+    "signOut": "Sign out"
+  },
+  "band": {
+    "portal": "Portal",
+    "ask": "Ask a question",
+    "more": "More actions",
+    "pages": "Pages",
+    "pagesOf": "Pages of {area}"
+  },
+  "live": {
+    "offline": "Offline"
+  },
+  "notice": {
+    "dismiss": "Hide",
+    "preview": {
+      "title": "Preview",
+      "body": "{name} from {company} is previewing this portal as {party}: read-only. Every preview is recorded."
+    },
+    "offline": {
+      "title": "No connection",
+      "body": "Showing what was loaded at {time}. What you send waits until the connection is back; what you typed stays."
+    },
+    "accessEnds": {
+      "title": "Your access ends soon",
+      "body": "Your access to this portal ends on {date}. Ask your admin if you need it longer."
+    },
+    "readOnly": {
+      "title": "Read-only",
+      "body": "This record is closed: you can read it, not change it."
+    }
+  },
+  "foot": {
+    "label": "Legal",
+    "privacy": "Privacy notice",
+    "terms": "Portal terms",
+    "free": "Free for suppliers: no fees, no document limits."
+  },
+  "bottomBar": {
+    "navigation": "Portal areas",
+    "more": "More",
+    "count_one": "{count} waiting for you",
+    "count_other": "{count} waiting for you",
+    "currentInside": "the current page is here"
+  },
+  "state": {
+    "loading": "Still loading…",
+    "retry": "Try again"
+  },
+  "preview": {
+    "held": "This is a preview: it is read-only."
+  },
+  "tasks": {
+    "title": "What waits for you",
+    "failed": "What waits for you could not be read.",
+    "empty": "Nothing waits for you. We e-mail you when something does.",
+    "askedBy": "Asked by {name}",
+    "askedBySystem": "Asked by the system",
+    "done": "Done. We are told.",
+    "undoing": "Undoing…",
+    "kind": {
+      "CONFIRM_PO": "Orders to confirm",
+      "ACCEPT_QUOTE": "Quotes to accept",
+      "APPROVE": "To approve",
+      "SEND_MEASUREMENTS": "Measurements to send",
+      "UPLOAD_DOCUMENT": "Documents we asked for",
+      "ANSWER_MESSAGE": "Messages to answer",
+      "PAY_INVOICE": "Invoices to pay",
+      "CONFIRM_KIT": "Kits to confirm",
+      "REPORT_PROGRESS": "Progress to report",
+      "ANSWER_QUESTIONNAIRE": "Questionnaires to fill in",
+      "RECONFIRM_ORDER": "Changed orders to re-confirm"
+    }
+  },
+  "thread": {
+    "title": "Messages",
+    "accountTitle": "Ask us a question",
+    "accountHeading": "About your account",
+    "empty": "No messages yet. Ask us anything about this record.",
+    "emptyAccount": "No messages yet. Ask us anything.",
+    "hint": "You can also answer our e-mails: the reply lands here.",
+    "whoCan": "Your access lets you read this conversation. Ask your admin ({names}) to let you write here.",
+    "whoCanNoAdmin": "Your access lets you read this conversation. Ask us to let you write here.",
+    "held": {
+      "PREVIEW": "This is a preview: nothing can be sent from it.",
+      "NO_COMMENT": "Your access lets you read this conversation, not write in it.",
+      "CLOSED": "We closed this conversation. Write to us on the record if something is still open.",
+      "other": "You cannot write here."
+    },
+    "failed": {
+      "conflict": "We closed this conversation meanwhile: your message was not sent. Your text is still here.",
+      "forbidden": "Your access does not let you write here. Your text is still here.",
+      "invalid": "The message could not be sent as it is. Check it and send it again.",
+      "unavailable": "No connection: your message was not sent. Your text is still here; send it again.",
+      "other": "Your message was not sent. Your text is still here; send it again.",
+      "more": "The earlier messages could not be read."
+    }
+  },
+  "record": {
+    "tabs": "Sections of the record",
+    "messages": "Messages",
+    "missingTitle": "Record not found",
+    "missing": "This record is not one of yours, or it no longer exists.",
+    "toHome": "Go to Home",
+    "type": {
+      "SalesOrder": "Order",
+      "Quote": "Quote",
+      "Shipment": "Shipment",
+      "Invoice": "Invoice",
+      "Ddt": "Delivery note",
+      "PurchaseOrder": "Purchase order",
+      "SubcontractOrder": "Job",
+      "ShipNotice": "Ship notice",
+      "Party": "Account",
+      "other": "Record"
+    }
+  },
+  "terms": {
+    "title": "Portal terms",
+    "failed": "The portal terms could not be read. Try again.",
+    "noneTitle": "No portal terms",
+    "none": "The company has not published portal terms yet.",
+    "version": "Version {label}",
+    "published": "published on {date}",
+    "accepted": "Accepted",
+    "notAccepted": "Not accepted yet",
+    "otherLanguage": "Shown in the language the company published them in."
+  },
+  "email": {
+    "title": "E-mail settings",
+    "subtitle": "How we e-mail you about each topic. Everything stays in the portal's notifications whatever you choose.",
+    "frequency": {
+      "INSTANT": "As it happens",
+      "DAILY": "Daily summary",
+      "WEEKLY": "Weekly summary",
+      "OFF": "Off"
+    },
+    "frequencyOf": "E-mails about {topic}",
+    "allOff": "No non-essential e-mail",
+    "allOffHint": "Turns off every topic you may turn off. Order, delivery and invoice e-mails keep coming.",
+    "save": "Save",
+    "saving": "Saving…",
+    "failed": "The e-mail settings could not be read.",
+    "refused": "These settings could not be saved: order, delivery and invoice e-mails always come as they happen.",
+    "saveFailed": "The settings were not saved. Try again."
+  },
+  "still": {
+    "title": "Still there?",
+    "body": "For your security we sign you out after 30 minutes without use.",
+    "left": "You are signed out in {left}.",
+    "ended": "You were signed out.",
+    "stay": "Stay signed in",
+    "staying": "Keeping you signed in…",
+    "cannotStay": "Your session reached its 12 hours: sign in again to go on.",
+    "signOut": "Sign out now",
+    "failed": "We could not keep you signed in. Try again."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "close": "Close",
+    "then": "then",
+    "global": "Everywhere in the portal",
+    "page": "On this page",
+    "search": "Search",
+    "go": "Go to {area}",
+    "help": "These shortcuts",
+    "escape": "Close any pop-up"
+  },
+  "unsaved": {
+    "title": "Leave without sending?",
+    "message": "Your message to us is not sent yet.",
+    "email_one": "{count} change to your e-mail settings is not saved.",
+    "email_other": "{count} changes to your e-mail settings are not saved.",
+    "save": "Send it and go",
+    "saving": "Sending…",
+    "discard": "Leave without it",
+    "stay": "Stay"
+  },
+  "access": {
+    "title": "My access",
+    "close": "Close",
+    "failed": "Your access could not be read.",
+    "role": "Your role",
+    "preview": "Office preview (read-only)",
+    "noRole": "No role yet",
+    "prices": "Prices",
+    "pricesYes": "Shown",
+    "pricesNo": "Not shown",
+    "capabilities": "You may also",
+    "readOnly": "Read only",
+    "until": "Access until",
+    "noEnd": "No end date",
+    "allowsTitle": "What your access allows",
+    "allowsNone": "Nothing yet: accept the portal terms first.",
+    "admins": "Your admin: {names}. Ask them to change your access.",
+    "noAdmin": "Your organisation has no admin in the portal: ask us to change your access.",
+    "capability": {
+      "comment": "comment",
+      "upload": "send files",
+      "approve": "approve"
+    },
+    "permission": {
+      "files_read": "Open the files we share with you",
+      "threads_read": "Read the conversations about your records",
+      "portal_colleagues_view": "See your organisation's portal users and their roles",
+      "portal_colleagues_manage": "Invite colleagues, change their role, deactivate them",
+      "portal_comment": "Write messages on your records",
+      "portal_upload": "Send files on your records",
+      "portal_approve": "Approve, accept or sign on your records",
+      "portal_home_view": "See your Home: what waits for you and your notifications",
+      "portal_salesOrders_view": "See your orders, their dates, shipments and tracking",
+      "portal_salesOrders_ask": "Ask us to change or cancel an order",
+      "portal_purchaseOrders_view": "See our purchase orders and answer them",
+      "portal_customerDocuments_view": "See your documents: delivery papers, confirmations, quotes",
+      "portal_customerDocuments_conformity": "See the conformity documents and certificates",
+      "portal_customerDocuments_finance": "See the invoices, credit notes and statements",
+      "portal_catalogue_view": "See the styles you can buy",
+      "portal_orderRequests_manage": "Make order requests and reorder",
+      "portal_addresses_view": "See your delivery addresses",
+      "portal_addresses_manage": "Add, archive and choose your delivery addresses",
+      "portal_search": "Search your records by your references and ours",
+      "portal_payments_view": "See what your organisation has to pay",
+      "portal_payments_pay": "Pay open invoices and deposits online",
+      "portal_jobs_view": "See our jobs for your workshop",
+      "portal_shipNotices_view": "See and announce your deliveries",
+      "portal_supplierDocuments_view": "See the documents we ask for and send them",
+      "portal_supplierProfile_view": "See your company data, addresses and contacts",
+      "portal_supplierProfile_change": "Send changes of your addresses and contacts",
+      "portal_returns_view": "See your returns and complaints",
+      "portal_returns_request": "Ask for a return or report a quality problem",
+      "portal_complaints_view": "Follow your quality complaints",
+      "portal_approvals_view": "See what we ask you to approve"
+    }
+  },
+  "display": {
+    "title": "Language and theme",
+    "close": "Close",
+    "language": "Language",
+    "languageHint": "The portal and our e-mails speak it.",
+    "previewLanguage": "A preview speaks your office language.",
+    "saving": "Saving…",
+    "failed": "The language was not saved. Try again.",
+    "theme": "Theme",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "themeHint": "On this device."
+  },
+  "gate": {
+    "signIn": "Sign in to the portal",
+    "otherTitle": "This address is for another organisation",
+    "other": "You are signed in for a different organisation than the one this address names.",
+    "ownHome": "Go to my portal",
+    "switch": "Sign in as someone else",
+    "apiTitle": "The portal cannot open right now",
+    "api": "The portal did not answer. Try again in a moment. (Code {code})"
+  },
+  "role": {
+    "customer-buyer": "Buyer",
+    "customer-finance": "Finance",
+    "customer-quality": "Quality",
+    "customer-designer": "Designer",
+    "customer-viewer": "Viewer",
+    "customer-admin": "Admin",
+    "supplier-orders": "Orders",
+    "supplier-invoices": "Invoices",
+    "supplier-quality": "Quality",
+    "supplier-admin": "Admin",
+    "subcontractor-jobs": "Jobs",
+    "subcontractor-admin": "Admin",
+    "guest-accountant": "Accountant",
+    "partner-comment": "Can comment",
+    "partner-upload": "Can send files",
+    "partner-approve": "Can approve"
+  }
+}

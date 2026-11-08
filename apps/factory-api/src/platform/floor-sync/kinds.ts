@@ -63,6 +63,14 @@ import { scanRepair } from '../../modules/production/repair/station'
 import { IncidentRefusedError } from '../../modules/safety/incidents/access'
 import { floorReportBody } from '../../modules/safety/incidents/contract'
 import { reportFromFloor } from '../../modules/safety/incidents/report'
+// B-W2b-116: a lay at the cutting table from the floor's queue.
+import { LayRefusedError } from '../../modules/production/lays/access'
+import { addRollContract, countLayContract, undoRollContract } from '../../modules/production/lays/contract'
+import { addRoll, countLay, undoRoll } from '../../modules/production/lays/spread'
+// B-W2b-117: a trolley to sewing kept offline (load, unload, send, the line's receipt), each by the trolley's label.
+import { CutIssueRefusedError } from '../../modules/production/cutissue/access'
+import { loadTrolleyBody, receiveTrolleyBody, sendTrolleyBody, unloadTrolleyBody } from '../../modules/production/cutissue/contract'
+import { loadTrolley, receiveTrolley, sendTrolley, unloadTrolley } from '../../modules/production/cutissue/trolleys'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -110,6 +118,12 @@ import { reportFromFloor } from '../../modules/safety/incidents/report'
  *   safety.incident.report                modules/safety/incidents reportFromFloor (B-W2b-125: a report with the worker's name,
  *                                         the tablet's time of the tap as when it happened; one without a name is refused
  *                                         here: the queue's ledger names the tablet, so the tablet sends that one online)
+ *   production.lay.roll / undo / count    modules/production/lays addRoll / undoRoll / countLay (B-W2b-116: a roll spread on a
+ *                                         lay, the last one undone, both ends counted; applied to the lay as it stands)
+ *   production.trolley.load / unload / send / receive
+ *                                         modules/production/cutissue loadTrolley, unloadTrolley, sendTrolley, receiveTrolley
+ *                                         (B-W2b-117: by the trolley's label; applied as the trolley and the bundle stand
+ *                                         when it arrives — a bundle voided or given a process since is refused in words)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -151,6 +165,10 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof RepairRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, ...(error.refusal.fix ? { fix: error.refusal.fix } : {}) })
   // B-W2b-125
   if (error instanceof IncidentRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
+  // B-W2b-116
+  if (error instanceof LayRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
+  // B-W2b-117
+  if (error instanceof CutIssueRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -339,6 +357,54 @@ async function applyIncidentReport(caller: CommandCaller, event: QueuedEvent, ke
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Incident', id: result.incident.id } }
 }
 
+/** B-W2b-116: a queued roll, undo or count of a lay, through the lays' own commands (the key: `<device>.<client event id>`). */
+async function applyLay(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const onLay = <Shape extends z.ZodRawShape>(body: z.ZodObject<Shape>) => body.extend({ layId: id() })
+  const done = (replayed: boolean, layId: string): Applied => ({ status: replayed ? 'duplicate' : 'accepted', result: { type: 'Lay', id: layId } })
+  if (event.kind === 'production.lay.roll') {
+    const body = parsed(onLay(addRollContract.body), event.payload)
+    if (!body.ok) return refusedBy(body.refusal)
+    const { layId, ...input } = body.value
+    return done((await addRoll(caller, layId, input, key)).replayed, layId)
+  }
+  if (event.kind === 'production.lay.undo') {
+    const body = parsed(onLay(undoRollContract.body), event.payload)
+    if (!body.ok) return refusedBy(body.refusal)
+    const { layId, ...input } = body.value
+    return done((await undoRoll(caller, layId, input, key)).replayed, layId)
+  }
+  const body = parsed(onLay(countLayContract.body), event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  const { layId, ...input } = body.value
+  return done((await countLay(caller, layId, input, key)).replayed, layId)
+}
+
+/** B-W2b-117: a queued trolley step, through the trolleys' own commands (the key: `<device>.<client event id>`). */
+async function applyTrolley(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  if (event.kind === 'production.trolley.load') {
+    const body = parsed(loadTrolleyBody, event.payload)
+    if (!body.ok) return refusedBy(body.refusal)
+    const result = await loadTrolley(caller, body.value, key)
+    return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'CutIssue', id: result.trolley.id } }
+  }
+  if (event.kind === 'production.trolley.unload') {
+    const body = parsed(unloadTrolleyBody, event.payload)
+    if (!body.ok) return refusedBy(body.refusal)
+    const result = await unloadTrolley(caller, body.value, key)
+    return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'CutIssue', id: result.trolley.id } }
+  }
+  if (event.kind === 'production.trolley.send') {
+    const body = parsed(sendTrolleyBody, event.payload)
+    if (!body.ok) return refusedBy(body.refusal)
+    const result = await sendTrolley(caller, body.value, key)
+    return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'CutIssue', id: result.trolley.id } }
+  }
+  const body = parsed(receiveTrolleyBody, event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await receiveTrolley(caller, body.value, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'CutIssue', id: result.trolley.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -391,6 +457,17 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyRepairScan(caller, event, context.key)
       case 'safety.incident.report':
         return await applyIncidentReport(caller, event, context.key)
+      // B-W2b-116
+      case 'production.lay.roll':
+      case 'production.lay.undo':
+      case 'production.lay.count':
+        return await applyLay(caller, event, context.key)
+      // B-W2b-117
+      case 'production.trolley.load':
+      case 'production.trolley.unload':
+      case 'production.trolley.send':
+      case 'production.trolley.receive':
+        return await applyTrolley(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

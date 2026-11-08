@@ -15,6 +15,12 @@ import { HeldLine, ListFooter, PinSign, ProblemState, ReasonGrid, TaskCard, Task
 import type { PickerList } from '../../reasons/model'
 import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import { assigneeKey, CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type BenchAssignee, type Check, type ChecklistGroup, type HoldHeld, type Plan, type PlanField, type ReleaseHeld } from '../model'
+// B-W2b-109: the bench on its plan (AQL sample, checks, measurements, serial or batch check, photo set) and scan to start.
+import { PinSignBlock } from '@nexus/ui/components/PinSignBlock/index'
+import { useDsWords } from '../../../../lib/i18n/ds-parts'
+import type { Sheet } from '../plan/api'
+import { isScanRefusal, signHeld } from '../plan/model'
+import { BenchBody, BenchHead, BenchSummary, ChooseBody, measureSave, PlanOpenBody, SectionStrip, type BenchAction, type BenchModel, type ChoiceModel, type PlanOpenModel } from '../plan/view/PlanBench'
 import '../final.css'
 
 /**
@@ -142,6 +148,11 @@ export type FinalStep =
   | { kind: 'done'; order: OrderModel; cell: string; quantity: number; releaseNumber: string | null; secondPerson: boolean }
   | { kind: 'problem'; problem: TaskProblem; code?: string | null }
   | { kind: 'noPermission' }
+  // B-W2b-109: open on the plan that applies; the bench on its plan; its signature with the PIN; a code that leads to several.
+  | { kind: 'planOpen'; order: OrderModel; open: PlanOpenModel }
+  | { kind: 'bench'; order: OrderModel; bench: BenchModel }
+  | { kind: 'benchSign'; order: OrderModel; sheet: Sheet; decision: 'PASS' | 'FAIL'; statementNeeded: boolean; statement: boolean; signer: string }
+  | { kind: 'choose'; code: string; choices: ChoiceModel[] }
 
 export interface FinalViewModel {
   frame: FrameModel
@@ -193,6 +204,13 @@ export type FinalAction =
   | { type: 'print' }
   | { type: 'retry-job'; jobId: string }
   | { type: 'next' }
+  // B-W2b-109
+  | { type: 'bench'; action: BenchAction }
+  | { type: 'plan-lot'; value: number }
+  | { type: 'plan-edit'; editing: boolean }
+  | { type: 'open-on-plan' }
+  | { type: 'bench-sign' }
+  | { type: 'choose'; id: string }
 
 export interface FinalViewProps {
   model: FinalViewModel
@@ -241,6 +259,8 @@ function OrderStrip({ order, t, extra }: { order: OrderModel; t: Translate; extr
 export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) {
   const t = useT('floor-final')
   const tt = useT('floor-tasks')
+  const tp = useT('floor-final-plan')
+  const ds = useDsWords()
   const locale = useLocale()
   const send = (action: FinalAction) => onAction?.(action)
   const { step } = model
@@ -276,7 +296,7 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
       break
 
     case 'problem':
-      body = <ProblemState problem={step.problem} code={step.code ?? null} words={(code) => refusalWords(t, code)} />
+      body = <ProblemState problem={step.problem} code={step.code ?? null} words={(code) => refusalWords(t, code) ?? scanRefusalWords(tp, code)} />
       bar = [back, { label: tt('action.retry'), icon: <RotateCcw />, onPress: () => send({ type: 'retry' }) }]
       break
 
@@ -683,6 +703,98 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
       break
     }
 
+    // ---- B-W2b-109: the bench on its plan -------------------------------------------------------------------------------
+    case 'planOpen': {
+      body = (
+        <>
+          <OrderStrip order={step.order} t={t} />
+          <PlanOpenBody open={step.open} onLot={(value) => send({ type: 'plan-lot', value })} onEdit={(editing) => send({ type: 'plan-edit', editing })} />
+          {offlineHeld ? <HeldLine text={offlineHeld} /> : null}
+        </>
+      )
+      bar = actions([back, { label: tp('open.action'), icon: <ClipboardCheck />, onPress: () => send({ type: 'open-on-plan' }), heldReason: offlineHeld ?? (model.busy ? t('busy') : step.open.sample ? null : tp('open.held')) }])
+      break
+    }
+
+    case 'bench': {
+      const { bench } = step
+      const decision = bench.sheet.result.resultNow
+      const held = signHeld(bench.sheet, decision)
+      const sub = bench.pick !== null || bench.value !== null || bench.measure !== null || bench.photo !== null
+      const signHeldReason = offlineHeld ?? (model.busy || bench.busy ? t('busy') : bench.sheet.inspection.status !== 'OPEN' ? tp('sign.held.decided') : !bench.sheet.may.record ? tp('held.noRecord') : bench.waiting > 0 ? tp('sign.held.waiting', { count: bench.waiting }) : held.length > 0 ? held.map((word) => tp(word.key, word.params)).join(' ') : null)
+      body = (
+        <>
+          <OrderStrip order={step.order} t={t} />
+          <HoldLines order={step.order} t={t} time={time} />
+          {/* One job per screen: a defect to pick, a value, a point of measure or a photo takes the screen (Back returns). */}
+          {sub ? null : <BenchHead sheet={bench.sheet} />}
+          {sub ? null : <SectionStrip sheet={bench.sheet} section={bench.section} onSection={(section) => send({ type: 'bench', action: { type: 'section', section } })} />}
+          <BenchBody bench={bench} online={model.online} send={(action) => send({ type: 'bench', action })} camera={camera} timeZone={model.timeZone} />
+        </>
+      )
+      const save = measureSave(bench)
+      bar = save
+        ? // One point of measure: Save is the main action, always in view (in or out in its words and tone).
+          actions([
+            { ...back, onPress: () => send({ type: 'bench', action: { type: 'close' } }) },
+            {
+              label: save.verdict ? tp(save.verdict === 'PASS' ? 'measure.savePass' : 'measure.saveFail') : tp('measure.save'),
+              icon: <CheckIcon />,
+              variant: save.verdict === 'FAIL' ? 'danger' : save.verdict === 'PASS' ? 'success' : 'primary',
+              onPress: () => send({ type: 'bench', action: { type: 'measureSave' } }),
+              heldReason: !bench.sheet.may.record ? tp('held.noRecord') : bench.busy ? t('busy') : save.waits ? tp(`measure.held.${save.waits}`) : null,
+            },
+          ])
+        : actions([
+            sub ? { ...back, onPress: () => send({ type: 'bench', action: { type: 'close' } }) } : back,
+            holdOf(step.order),
+            { label: tp(decision === 'PASS' ? 'sign.actionPass' : 'sign.actionFail'), icon: <Lock />, variant: decision === 'PASS' ? 'primary' : 'danger', onPress: () => send({ type: 'bench-sign' }), heldReason: signHeldReason },
+          ])
+      break
+    }
+
+    case 'benchSign': {
+      const needsTick = step.statementNeeded && !step.statement
+      body = (
+        <div className="fw-fp-sign">
+          <section className="fw-floor-stack" aria-labelledby="fw-fp-sign-title">
+            <h2 id="fw-fp-sign-title" className="fw-floor-section-title">
+              {tp(step.decision === 'PASS' ? 'sign.titlePass' : 'sign.titleFail')}
+            </h2>
+            <OrderStrip order={step.order} t={t} />
+            <BenchSummary sheet={step.sheet} />
+            {step.statementNeeded ? (
+              <FloorButton size="lg" block variant={step.statement ? 'success' : 'secondary'} icon={step.statement ? <CheckIcon /> : <CircleMinus />} aria-pressed={step.statement} onClick={() => send({ type: 'statement', value: !step.statement })}>
+                {t('sign.statement')}
+              </FloorButton>
+            ) : null}
+            {notice}
+          </section>
+          <div className="fw-fp-sign-pin">
+            <PinSignBlock
+              meaning={step.decision === 'PASS' ? tp('sign.meaningPass') : tp('sign.meaningFail')}
+              signer={{ name: step.signer, detail: tp('sign.detail') }}
+              onSign={(pin) => send({ type: 'pin', pin })}
+              onCancel={() => send({ type: 'back' })}
+              state={model.busy ? 'busy' : 'idle'}
+              heldReason={offlineHeld ?? (needsTick ? t('sign.tickFirst') : null)}
+              message={model.pin ? tt(`pin.problem.${model.pin}`) : undefined}
+              messageTone={model.pin === 'wrong' || model.pin === 'locked' ? 'danger' : 'warning'}
+              autoFocus
+              labels={ds.pinSignBlock}
+            />
+          </div>
+        </div>
+      )
+      bar = null
+      break
+    }
+
+    case 'choose':
+      body = <ChooseBody code={step.code} choices={step.choices} onPick={(id) => send({ type: 'choose', id })} />
+      bar = [back]
+      break
+
     case 'done':
       body = (
         <FloorState tone="success" icon={<CircleCheck />} title={t('done.title', { batch: step.order.batchNumber ?? step.order.number, count: step.quantity })} text={t('done.body')}>
@@ -702,7 +814,7 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
       <div className="fw-floor-stack">
         {asOf}
         {body}
-        {step.kind !== 'sign' && step.kind !== 'release' && step.kind !== 'labels' ? notice : null}
+        {step.kind !== 'sign' && step.kind !== 'release' && step.kind !== 'labels' && step.kind !== 'benchSign' ? notice : null}
       </div>
       <Modal
         open={Boolean(dialog)}
@@ -873,6 +985,11 @@ function refusalWords(t: Translate, code: string): { message: string; fix: strin
   const message = t(`check.${code}`)
   if (message === `check.${code}`) return null
   return { message: t('refusedCheck', { check: message }), fix: t(`fix.${code}`) }
+}
+
+/** B-W2b-109: the screen's words for a refused scan at the bench (B-W2b-106's codes), else null (the API's words show). */
+function scanRefusalWords(tp: Translate, code: string): { message: string; fix: string | null } | null {
+  return isScanRefusal(code) ? { message: tp(`refusal.${code}.message`), fix: tp(`refusal.${code}.fix`) } : null
 }
 
 /** A work order status word, else the value as sent. */

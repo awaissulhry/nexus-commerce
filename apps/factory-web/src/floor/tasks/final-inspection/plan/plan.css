@@ -1,0 +1,145 @@
+/*
+ * SCR-097's W2b sections (B-W2b-109): the bench on its plan — layout only, inside the DS FloorFrame. Sizes read the floor
+ * tier's `--nds-density-*` tokens (glove-sized targets, 48 px apart); colours are semantic `--nds-*` roles, always with an
+ * icon and a word. No raw colour.
+ */
+
+.fw-fp-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ── the sections strip: one big button per section, its state as icon and word ───────────────────────────────────────── */
+.fw-fp-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11.5em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-fp-section {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.2;
+}
+.fw-fp-section > span:first-child {
+  white-space: nowrap;
+}
+.fw-fp-section-state {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+/* ── the defects found: a minus and a plus per defect, big ─────────────────────────────────────────────────────────────── */
+.fw-fp-lines,
+.fw-fp-values,
+.fw-fp-codes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-target-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fp-line,
+.fw-fp-value,
+.fw-fp-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  font-size: var(--nds-density-font-body);
+}
+.fw-fp-line {
+  border-inline-start-width: 6px;
+}
+.fw-fp-line[data-class='CRITICAL'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-fp-line[data-class='MAJOR'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.fw-fp-line-text,
+.fw-fp-value-text {
+  display: flex;
+  flex: 1 1 14em;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-fp-line-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-density-target-gap);
+}
+.fw-fp-line-number {
+  min-width: 2ch;
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.fw-fp-value .fw-floor-inline-icon[data-tone='success'] {
+  color: var(--nds-success-text);
+}
+.fw-fp-value .fw-floor-inline-icon[data-tone='danger'] {
+  color: var(--nds-danger-text);
+}
+
+/* ── choices, sizes, the nominal / tolerance / value switch, pass and fail ─────────────────────────────────────────────── */
+.fw-fp-choices,
+.fw-fp-verdict {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--nds-density-target-gap);
+  min-width: 0;
+}
+
+/* ── the serial check: a tick per garment ─────────────────────────────────────────────────────────────────────────────── */
+.fw-fp-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-fp-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75em;
+  height: 1.75em;
+  border: 2px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-success-text);
+}
+.fw-fp-tick[data-done='true'] {
+  border-color: var(--nds-success);
+  background: var(--nds-success-soft);
+}
+.fw-fp-tick svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* ── the signature: what is signed beside the PIN pad on a tablet, one column when narrow ──────────────────────────────── */
+.fw-fp-sign,
+.fw-fp-sign-pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+@media (min-width: 900px) {
+  .fw-fp-sign {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: calc(var(--nds-density-gap) * 2);
+  }
+}

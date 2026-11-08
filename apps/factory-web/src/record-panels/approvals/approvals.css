@@ -1,0 +1,148 @@
+/*
+ * The record panels' Approvals tab (B-W2b-188) and the "approve from e-mail" switch (PLT-089): layout only, semantic
+ * tokens only; controls are the design system's.
+ */
+.fw-ra,
+.fw-ra-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ra-head,
+.fw-ra-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ra-head {
+  justify-content: space-between;
+}
+
+.fw-ra-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+p.fw-ra-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ra-spacer {
+  flex: 1 1 auto;
+}
+
+.fw-ra-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ra-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-ra-question {
+  margin: 0;
+  color: var(--nds-text-strong);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-ra-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: 3px solid var(--nds-border);
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-ra-words {
+  font-style: italic;
+}
+
+.fw-ra-inline,
+.fw-ra-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ra-url {
+  display: block;
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-ra-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ra-legend {
+  padding: 0;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ra-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-6);
+}
+
+.fw-ra-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-ra-error {
+  margin: 0;
+  color: var(--nds-danger);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ra-mailme {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-2);
+}
+
+.fw-ra-mailme-label {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+}

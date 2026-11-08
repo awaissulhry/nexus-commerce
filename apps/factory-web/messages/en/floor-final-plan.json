@@ -1,0 +1,291 @@
+{
+  "head": {
+    "plan": "Plan {code} v{number} · {name}",
+    "sample": "Sample {sample} of a lot of {lot}",
+    "sampleLetter": "Sample {sample} of a lot of {lot} · code letter {letter}"
+  },
+  "result": {
+    "pass": "The result as it stands: PASS.",
+    "fail": "The result as it stands: FAIL.",
+    "failedChecks": "Failed: {names}.",
+    "outOfTolerance_one": "{count} value out of tolerance.",
+    "outOfTolerance_other": "{count} values out of tolerance.",
+    "identity": "The serial or batch check failed.",
+    "class": {
+      "CRITICAL": "A critical defect is never accepted ({found} found).",
+      "MAJOR": "Major defects {found}, accept up to {accept}.",
+      "MINOR": "Minor defects {found}, accept up to {accept}."
+    }
+  },
+  "sections": "Sections of the inspection",
+  "section": {
+    "aql": "AQL sample",
+    "checks": "Checks",
+    "measure": "Measurements",
+    "serial": "Serial or batch",
+    "photos": "Photos"
+  },
+  "state": {
+    "open": "To do",
+    "partly": "Under way",
+    "done": "Done",
+    "failed": "Failed"
+  },
+  "held": {
+    "noRecord": "Only the inspector who opened it records this inspection."
+  },
+  "busy": "Sending to the office…",
+  "asOf": "From this tablet, as of {time}: what you record is saved here and sent when the network is back.",
+  "kept": {
+    "saved": "Saved on this tablet: it goes to the office when the network is back.",
+    "recorded": "Recorded by the office.",
+    "refused": "The office refused what this tablet kept: see Waiting to send."
+  },
+  "class": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor",
+    "OTHER": "Other checks"
+  },
+  "defect": {
+    "which": "Which {klass} defect?",
+    "whichBack": "Which {klass} defect do you take back?",
+    "otherOf": "Another {klass} defect",
+    "count_one": "{count} found",
+    "count_other": "{count} found",
+    "list": {
+      "loading": "Reading the defects…",
+      "offline": "This tablet has not read the defects yet: only the general tile is offered.",
+      "error": "The office did not send the defects: only the general tile is offered."
+    },
+    "cancel": "Cancel",
+    "found": "Defects found",
+    "less": "One {defect} less",
+    "more": "One {defect} more"
+  },
+  "aql": {
+    "label": "AQL {major} major · {minor} minor · sample {sample}",
+    "inspected": "Inspected",
+    "of": "{inspected} of {sample} inspected",
+    "threshold": "Accept up to {accept} · reject at {reject}",
+    "verdict": {
+      "open": "Under way",
+      "accept": "Accepted",
+      "reject": "Rejected"
+    },
+    "classState": {
+      "ok": "Within",
+      "limit": "One more rejects",
+      "reject": "Rejects the lot"
+    },
+    "add": "+ one piece",
+    "remove": "One piece less",
+    "addDefect": "One more {klass} defect",
+    "removeDefect": "One {klass} defect less",
+    "sampleDone": "The whole sample is inspected.",
+    "nothing": "Already at zero.",
+    "criticalCheck": "A critical check failed: the lot is rejected.",
+    "stop": {
+      "on": "The inspection may stop as soon as a class reaches its reject number.",
+      "off": "The whole sample is inspected, even after a class rejects.",
+      "source": {
+        "PLAN": "(the plan's rule)",
+        "COMPANY": "(the company's rule)",
+        "TENANT": "(the factory's rule)",
+        "DEFAULT": "(the default rule)"
+      }
+    },
+    "keys": "On a keyboard, + counts one piece."
+  },
+  "checks": {
+    "title": "The plan's checks",
+    "optional": "optional",
+    "photoNeeded": "a photo goes with it",
+    "photoLater": "its photo is taken once the network is back",
+    "values": "Counts and choices",
+    "answer": {
+      "PASS": "passed {value}",
+      "FAIL": "failed {value}",
+      "NOT_APPLICABLE": "not applicable"
+    },
+    "outcome": {
+      "PASS": "Passed",
+      "FAIL": "Failed",
+      "NOT_APPLICABLE": "Not applicable"
+    },
+    "toAnswer": "to answer",
+    "notYet": "Not yet",
+    "office": "{check}: answered in the office (no typing on the floor).",
+    "failNote": "Not as it should be",
+    "failValue": "Value {value} not as it should be"
+  },
+  "value": {
+    "held": "Type the number or pick a choice first.",
+    "pass": "Passes",
+    "fail": "Fails"
+  },
+  "photo": {
+    "ofFail": "Photo of what is wrong: {check}",
+    "offline": "Photos are sent at once: they wait for the network.",
+    "added": "Photo added: {slot}.",
+    "forResult": "Its result waits for this photo",
+    "state": {
+      "TAKEN": "Taken",
+      "MISSING": "Missing",
+      "NOT_APPLICABLE": "Not applicable",
+      "OPEN": "Optional"
+    },
+    "count_one": "{count} photo",
+    "count_other": "{count} photos",
+    "notApplicable": "The office marked it not applicable."
+  },
+  "uom": {
+    "CM": "cm",
+    "MM": "mm",
+    "M": "m"
+  },
+  "measure": {
+    "spec": {
+      "plan": "{nominal} ± {tolerance} {unit}",
+      "profile": "{nominal} {unit} from the rider's profile · type the tolerance",
+      "chart": "From the size chart · type the nominal and the tolerance"
+    },
+    "mtm": "Made to measure: checked against the rider's measurement profile (revision {revision}, size {size}).",
+    "mtmWithout_one": "{count} point of the template has no value in the profile.",
+    "mtmWithout_other": "{count} points of the template have no value in the profile.",
+    "size": "size {size}",
+    "out_one": "{count} out",
+    "out_other": "{count} out",
+    "in": "Within",
+    "notYet": "Not yet",
+    "measured_one": "{count} of {sample} garments measured",
+    "measured_other": "{count} of {sample} garments measured",
+    "summary_one": "{out} of {count} value out of tolerance",
+    "summary_other": "{out} of {count} values out of tolerance",
+    "unit": "garment {unit} of {sample}",
+    "whichSize": "Which size?",
+    "fields": "What you type",
+    "field": {
+      "nominal": "Nominal {value}",
+      "tolerance": "Tolerance ± {value}",
+      "value": "Measured {value}"
+    },
+    "held": {
+      "size": "Pick the size of the garment first.",
+      "nominal": "Type the nominal from the size chart first.",
+      "tolerance": "Type the tolerance first.",
+      "value": "Type the measured value first."
+    },
+    "save": "Save",
+    "savePass": "Save · within",
+    "saveFail": "Save · out of tolerance",
+    "values": "Values measured",
+    "valueIn": "Garment {unit} · size {size}: {measured} {uom}, within {nominal} ± {tolerance}",
+    "valueOut": "Garment {unit} · size {size}: {measured} {uom}, out of {nominal} ± {tolerance}",
+    "takeBack": "Take back"
+  },
+  "serial": {
+    "scanSerial": "Scan each garment's serial",
+    "scanBatch": "Scan the batch label ({batch})",
+    "hintSerial": "A tick per garment. A garment without a readable number fails the check.",
+    "hintBatch": "Once for the lot: the number on the label must be the work order's batch.",
+    "read": "Read {code}",
+    "ticks": "{matched} of {target} garments checked",
+    "noNumber": "This garment has no readable number",
+    "unknown_one": "{count} number is not this work order's",
+    "unknown_other": "{count} numbers are not this work order's",
+    "takeBack": "Take back",
+    "noNumberCount_one": "{count} garment without a readable number",
+    "noNumberCount_other": "{count} garments without a readable number",
+    "missing_one": "{count} serial not scanned yet:",
+    "missing_other": "{count} serials not scanned yet:",
+    "andMore_one": "and {count} more",
+    "andMore_other": "and {count} more",
+    "batch": {
+      "open": "Batch {batch}: scan its label.",
+      "done": "Batch {batch}: checked.",
+      "wrong": "The number scanned is not batch {batch}: the check fails."
+    },
+    "serial": {
+      "open": "{matched} of {target} garments checked.",
+      "done": "All {target} garments checked.",
+      "wrong": "The check fails: {matched} of {target} checked, {unknown} not this work order's, {noNumber} without a number, {missing} missing."
+    }
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete the last digit",
+    "empty": "Nothing typed",
+    "range": "From {min} to {max}"
+  },
+  "open": {
+    "title": "Open the inspection on its plan",
+    "plan": "Plan",
+    "sample": "to inspect",
+    "name": "Name",
+    "lot": "Lot",
+    "letter": "Code letter",
+    "level": "Level",
+    "class": "{klass}: AQL {aql}, accept up to {accept}, reject at {reject}",
+    "reading": "Reading the sample of this lot from the office…",
+    "lead": "The sample and the accept and reject numbers come from the plan and the customer's AQL profile. The lot is every finished garment not yet released: change it when you inspect fewer.",
+    "lotButton_one": "Lot: {count} garment",
+    "lotButton_other": "Lot: {count} garments",
+    "done": "Done",
+    "action": "Open the inspection",
+    "held": "The sample of this lot is not known yet."
+  },
+  "sign": {
+    "actionPass": "Sign PASS",
+    "actionFail": "Sign FAIL",
+    "titlePass": "Sign the result: PASS",
+    "titleFail": "Sign the result: FAIL",
+    "meaningPass": "With your PIN you confirm you inspected this sample on its plan and it passes.",
+    "meaningFail": "With your PIN you confirm you inspected this sample on its plan and it fails: the lot goes to quality.",
+    "detail": "Final inspection on the plan",
+    "checks": "Checks answered: {answered} of {asked}",
+    "class": "{klass} {found} (accept up to {accept})",
+    "photos": "Photos: {taken} of {slots}",
+    "held": {
+      "decided": "This inspection is signed already.",
+      "waiting_one": "{count} answer still waits on this tablet: it is sent first.",
+      "waiting_other": "{count} answers still wait on this tablet: they are sent first.",
+      "photosWaiting_one": "{count} result waits for its photo.",
+      "photosWaiting_other": "{count} results wait for their photo.",
+      "checks_one": "{count} mandatory check is not answered.",
+      "checks_other": "{count} mandatory checks are not answered.",
+      "photoSet_one": "{count} photo of the set is missing.",
+      "photoSet_other": "{count} photos of the set are missing.",
+      "serials": "The serial check is not finished ({matched} of {target}).",
+      "batch": "The batch label is not scanned yet.",
+      "sample": "A PASS needs the whole sample: {inspected} of {sample} inspected.",
+      "sampleFail": "The whole sample is inspected before a FAIL is signed: {inspected} of {sample}.",
+      "sampleStop": "The sample does not reject yet: inspect the rest ({inspected} of {sample}).",
+      "office": "The office does not take the signature yet: read the sections again."
+    }
+  },
+  "choose": {
+    "title": "{code} leads to more than one inspection",
+    "open": "Open"
+  },
+  "refusal": {
+    "OTHER_BENCH": {
+      "message": "This code belongs to another bench.",
+      "fix": "Scan a lot, a bundle, a serial, a carton or a work order of the final inspection."
+    },
+    "NOTHING_TO_INSPECT": {
+      "message": "Nothing to inspect here: no finished garment waits, or its open inspection is another inspector's.",
+      "fix": "Pick a work order from the list, or ask your team leader."
+    },
+    "LABEL": {
+      "message": "This label is not one the final bench reads.",
+      "fix": "Scan the garment's serial, the bundle ticket, the carton or the work order's traveller."
+    },
+    "CHOOSE": {
+      "message": "This code leads to more than one inspection.",
+      "fix": "Pick the one you are inspecting."
+    }
+  }
+}
