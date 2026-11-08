@@ -3,8 +3,9 @@ import { defineRoutes } from '../../core/manifest'
 import { requireStepUp } from '../auth/office/account'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../auth/sessions/office-auth'
 import { announceLogo, completeLogo, getBranding, linkBranding, publicBranding, publicLogo, saveBranding } from './branding'
-import { announceLogoContract, completeLogoContract, getBrandingContract, linkBrandingContract, publicBrandingContract, publicLogoContract, putBrandingContract } from './contract'
+import { announceLogoContract, completeLogoContract, getBrandingContract, linkBrandingContract, portalSignInHeadContract, publicBrandingContract, publicLogoContract, putBrandingContract } from './contract'
 import { manifest } from './manifest'
+import { portalSignInHead } from './portal-head'
 
 /**
  * Company branding (B-W2b-161; PLT-228, SAL-064; see branding.ts): the office's read and save, the logo's upload, the
@@ -34,4 +35,7 @@ export default defineRoutes('branding', manifest, async (app) => {
   })
 
   app.get('/link/branding', { schema: linkBrandingContract, config: limited }, async (request) => linkBranding(request))
+
+  // B-W2b-164: the portal sign-in page's head, by its address or the mailed link's company (rate-limited like the public read).
+  app.get('/branding/portal-sign-in', { schema: portalSignInHeadContract, config: limited }, async (request) => portalSignInHead(request, request.query))
 })

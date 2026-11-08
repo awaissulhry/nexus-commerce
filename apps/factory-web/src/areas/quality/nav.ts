@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTodo, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
+import { BarChart3, ClipboardCheck, FileWarning, Hand, ListChecks, ListTodo, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -36,6 +36,8 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.quality.problems',
         items: [
           { id: 'quality-ncr', label: 'shell:nav.quality.ncr', href: '/quality/ncr', icon: FileWarning, permission: 'quality.ncr.view' },
+          // B-W2b-119 SCR-146: Corrective actions (CAPA and 8D), between Nonconformances and Complaints (quality.capa.view).
+          { id: 'quality-capa', label: 'shell:nav.quality.capa', href: '/quality/capa', icon: ListChecks, permission: 'quality.capa.view' },
           { id: 'quality-complaints', label: 'shell:nav.quality.complaints', href: '/quality/complaints', icon: MessageSquareWarning, permission: 'quality.complaints.view' },
         ],
       },

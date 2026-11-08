@@ -87,6 +87,7 @@
     "MaintenanceJob": "Intervento di manutenzione",
     "Incident": "Infortunio o quasi incidente",
     "InspectionPlan": "Piano di controllo",
+    "Capa": "Azione correttiva",
     "other": "Record"
   },
   "chip": {
@@ -124,6 +125,7 @@
     "MaintenanceJob": "Interventi",
     "Incident": "Infortuni e quasi incidenti",
     "InspectionPlan": "Piani di controllo",
+    "Capa": "Azioni correttive",
     "other": "Altri record"
   },
   "status": {
@@ -197,6 +199,17 @@
     "PLANNED": "Pianificato",
     "WAITING_PARTS": "In attesa di ricambi",
     "HANDED_BACK": "Riconsegnato",
-    "HELD": "Bloccato"
+    "HELD": "Bloccato",
+    "PLAN": "Pianificazione",
+    "ACT": "Attuazione",
+    "CHECK": "Verifica",
+    "D1": "D1 team",
+    "D2": "D2 problema",
+    "D3": "D3 contenimento",
+    "D4": "D4 causa radice",
+    "D5": "D5 azioni correttive",
+    "D6": "D6 azioni attuate",
+    "D7": "D7 prevenzione",
+    "D8": "D8 chiusura"
   }
 }

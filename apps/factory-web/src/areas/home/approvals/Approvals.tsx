@@ -11,6 +11,8 @@ import { readProblem, writeProblem } from '../../sales/quotes/problems'
 import type { Loaded } from '../../sales/quotes/record/record-model'
 import { viewOf, type ApprovalsViewModel, type ApprovalView } from './model'
 import { ApprovalsView } from './view/ApprovalsView'
+// B-W2b-188 (PLT-089): the person's own "e-mail me approvals" switch.
+import { MailMeSwitch } from '../../../record-panels/approvals/mail-me/MailMeSwitch'
 
 const isApprovalChange = (type: string) => type === 'quote.approval_requested' || type === 'quote.approval_decided' || type === 'quote.reopened' || type === 'quote.cancelled' || type === 'quote.lines_changed' || type === 'quote.updated'
 
@@ -162,6 +164,7 @@ export function Approvals() {
   return (
     <ApprovalsView
       model={model}
+      mailSwitch={<MailMeSwitch api={api} />}
       actions={{
         onView: (next) => address({ view: next, open: null }),
         onOpen: (id) => {

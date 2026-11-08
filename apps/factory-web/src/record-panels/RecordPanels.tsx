@@ -56,6 +56,8 @@ import { usePrintMode } from '../shell/print/print-mode'
 import { RecordPrintView } from './print/view/RecordPrintView'
 // B-W2b-177: the files in depth.
 import { useFileDepth } from './files/use-file-depth'
+// B-W2b-188: asking the record's partner to approve.
+import { useApprovals } from './approvals/use-approvals'
 
 /**
  * The record panels as a record page mounts them: `<RecordPanels record={{ type, id, companyId, siteId }} title party />`.
@@ -430,6 +432,8 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
   const prefix = companyPrefix(session.company?.code ?? '')
   // B-W2b-177: the files in depth (their documents read with every files read; versions, what a file is, markup).
   const depth = useFileDepth({ api, record: key, files: files.items, canUpload: can.upload, canRead: can.readFiles, prefix, reloadFiles: () => void loadFiles(), openPdf: (fileId) => void openPreview(fileId) })
+  // B-W2b-188: the Approvals tab (a record an approval names, partners.approvals.view).
+  const approvals = useApprovals({ api, record: key, title, can: { view: held.has('partners.approvals.view'), ask: held.has('partners.approvals.ask') }, files: files.items, party: givenParty ? { name: givenParty.name, emails: givenParty.emails } : null, reloadPanels: () => void loadThread() })
   const addHeld = addTaskHeld(held, true)
   const loadAssignees = useCallback(async () => {
     setTaskDialog({ people: { status: 'loading' } })
@@ -617,6 +621,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     followers: panelFollowers,
     ...(tab ? { tab } : {}),
     ...(can.readFiles ? { depth: depth.model } : {}),
+    ...(approvals.model ? { approvals: approvals.model } : {}),
   }
 
   const actions: RecordPanelsActions = {
@@ -655,6 +660,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     onFollow: (wanted) => void follow(wanted),
     onAddFollower: (userId) => void addColleague(userId),
     fileDepth: depth.actions,
+    approvals: approvals.actions,
   }
   // B-W2b-05 (PLT-171): the record's print view draws every panel at once, read-only.
   return printing ? <RecordPrintView model={model} actions={actions} /> : <RecordPanelsView model={model} actions={actions} />

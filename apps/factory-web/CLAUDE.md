@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router), the same Next and React versions as `apps/web`, built from the design system `@nexus/ui`
 (packages/ui, compiled here: `transpilePackages`). Four views as route groups: Office `(office)` (built), Links
-`(links)` (built), Floor `(floor)` (built: B-W0-29) and Portal `(portal)` (later steps); office sign-in `(auth)` (built:
+`(links)` (built), Floor `(floor)` (built: B-W0-29) and Portal `(portal)` (the frame: B-W2b-173); office sign-in `(auth)` (built:
 B-W0-26).
 
 ## Commands (from the repository root unless noted)
@@ -37,6 +37,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   page cookie (`factory_tenant`). A new session opens `/w/<company>`, or the profile's authenticator card while
   the person's role needs two-factor they have not set up. `src/areas/me/` — my profile & security (SCR-007,
   `/w/<company>/me`, from the person menu; no navigation row).
+- `src/app/(portal)/p/signin/` + `src/portal/signin/` — the portal's Sign in (B-W2b-164, SCR-026), outside the portal frame:
+  `/p/signin?tenant=<slug>&company=<code>&next=<portal path>&ended=idle|revoked` (the invitation mail's address; the frame's
+  `next`; with neither, the portal this device remembers: cookie `factory_portal`), `/p/signin/continue#token=…` (the mailed
+  link: read with `…/link/preview`, used only on Continue), `/p/signin/privacy?company=<id>` (the company's public privacy
+  notice, a new tab). Whose portal comes from `GET /branding/portal-sign-in`; `server.ts` reads an open session (PORTAL cookie
+  only) and sends it on, or to its first visit; `PortalSignIn.tsx` is the container (the proof of work in `pow.ts` only after
+  a 429 `challenge`), `model.ts` the rules, `view/PortalSignInView.tsx` the view (DS CodeInput, EndState). Catalogue
+  `portal-signin` (+ `ds-words`).
 - Office entries — `/w/<company>` and each area's own address (`/home`, `/admin`; the rail and the brand link go
   there) — redirect on the server to the first page the person may open, in navigation order, among the BUILT pages
   (`shell/office/office-entry.ts`, `OFFICE_PAGES` in shell/nav/office-nav.ts); none built: My profile. A step that
@@ -74,6 +82,18 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   always queue; an override and a picture only exist online (held with the reason). `floor/home/` shows the person's open work
   ("Unfinished on this tablet", `/production/terminal/open`; never carried to the next person on the tablet).
 - `src/floor/tasks/cutting/` — SCR-094 Cut a hide (W1 B-W1-40; B-W2b-110 on B-W2b-103's API): the hide check in depth on the card (`model.ts cardCheck`: the office's `checks` with the thickness measured at the table counted in; words from facts in `view/check-words.ts`, never the API's English); a warning no lead passed STOPS the card ("Cut anyway" instead of "+ 1 set"; the size buttons pick the first set); `view/AnywayDialog.tsx` = pop:hidecut.override (what differs, reason tile, lead's badge or name + PIN), online only (`api.ts cutAnyway`, the cut's client id as Idempotency-Key, never queued): the signature records ONE set at once, the rest of the hide queues as before; the photo of the hide (DS PhotoCapture via `view/HidePhoto.tsx`, online upload, the next cut names it) and the thickness pad (it goes with every cut of the hide this visit).
+- `src/app/(portal)/` + `src/portal/shell/` — the Portal view's frame (B-W2b-173, SCR-027, SCM-101): `/p/<party code>/…`
+  (`p/[party]/layout.tsx`: `GET /portal/me` with the PORTAL cookie only (`shell/server.ts`), the person's own language, the
+  company's branding; no session or the first visit's terms due → `/p/signin?next=<the whole address>` (B-W2b-164's page);
+  another organisation's address → a gate). `PortalShell.tsx` is the container (the one task list = badges and Home, the bell,
+  ONE live channel per tab `GET /portal/live`, the idle sign-out + "Still there?", notices, the pop-ups, keys `/` `?` `g`,
+  the unsaved guard, `brandPortals` + comfortable density on `<body>`); `view/` the frame and its pop-ups.
+  `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
+  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
+  `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,
+  guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
+  `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
+  Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

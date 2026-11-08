@@ -1,0 +1,252 @@
+/*
+ * The approve-link page (SCR-198) LAYOUT inside the link frame (comfortable density, phone first), and the office's
+ * quick sign-in page that opens a mailed approval (PLT-089). Controls are the design system's; semantic tokens only.
+ */
+.fw-ap-stack,
+.fw-ap-card,
+.fw-ap-mark,
+.fw-ap-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ap-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-ap-h2,
+.fw-ap-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ap-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-ap-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+}
+
+.fw-ap-hint,
+.fw-ap-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-ap-sub {
+  font-size: var(--nds-font-size-sm);
+}
+
+p.fw-ap-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ap-question {
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border-left: 3px solid var(--nds-border-strong, var(--nds-border));
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-strong);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-ap-due {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+}
+
+.fw-ap-countdown {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Your decision: the choices side by side where there is room, one under the other on a phone. */
+.fw-ap-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ap-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ap-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-ap-error {
+  margin: 0;
+  color: var(--nds-danger);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ap-markup-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ap-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+/* The photos and documents of the request: tiles that open full size; a concession's two photos side by side. */
+.fw-ap-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ap-files.side {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+
+.fw-ap-file {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ap-caption {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ap-file-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.fw-ap-file-open:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-ap-file-open:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+
+.fw-ap-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-ap-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.fw-ap-file-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-ap-file-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ap-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ap-file-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ap-totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-ap-picture {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 760px);
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-ap-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* The office's quick sign-in (PLT-089): one narrow form in the link column. */
+.fw-ap-signin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  max-width: 28rem;
+}
+
+.fw-ap-signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
