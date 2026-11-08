@@ -16,7 +16,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-104: an inspection plan (by its code).
   'InspectionPlan',
   // B-W2b-119: a CAPA or an 8D (B-W2b-108's indexer).
-  'Capa'] as const
+  'Capa',
+  // B-W2b-129: a cut order (B-W2b-112's indexer).
+  'CutOrder'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -34,6 +36,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'HELD',
   // B-W2b-119: a CAPA's and an 8D's stages (CLOSED and CANCELLED are above).
   'PLAN', 'ACT', 'CHECK', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8',
+  // B-W2b-129: a cut order's (PLANNED, RELEASED, IN_PROGRESS and CANCELLED are above).
+  'CUT', 'RECONCILED',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -115,7 +119,7 @@ export function numbersOf(results: readonly Pick<SearchResult, 'recordId' | 'num
 
 const WARNING = new Set(['PENDING_APPROVAL', 'CHANGES_PROPOSED', 'ON_HOLD', 'QUARANTINE', 'PARTLY_SHIPPED', 'PARTLY_RECEIVED', /* B-W2b-23 */ 'DISPUTED', 'SUSPENDED', 'UNDER_MAINTENANCE', 'WAITING_PARTS', 'SUBMITTED', 'HELD'])
 const DANGER = new Set(['BLOCKED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'REJECTED', 'NOT_DELIVERABLE', 'ERROR', 'REVERSED', 'RETURNED', /* B-W2b-23 */ 'VOIDED', 'FAILED', 'WITHDRAWN', 'DOWN', 'DO_NOT_USE'])
-const DONE = new Set(['ACCEPTED', 'SHIPPED', 'RECEIVED', 'RELEASED', 'COMPLETED', 'DELIVERED', 'POSTED', 'ISSUED', 'ACTIVE', 'CONFIRMED', 'APPROVED', 'INSPECTED', 'REPAIRED', 'ANSWERED', /* B-W2b-23 */ 'PAID', 'PASSED', 'VALID', 'APPLIED', 'SIGNED_OFF', 'RUNNING', 'HANDED_BACK'])
+const DONE = new Set(['ACCEPTED', 'SHIPPED', 'RECEIVED', 'RELEASED', 'COMPLETED', 'DELIVERED', 'POSTED', 'ISSUED', 'ACTIVE', 'CONFIRMED', 'APPROVED', 'INSPECTED', 'REPAIRED', 'ANSWERED', /* B-W2b-23 */ 'PAID', 'PASSED', 'VALID', 'APPLIED', 'SIGNED_OFF', 'RUNNING', 'HANDED_BACK', /* B-W2b-129 */ 'CUT', 'RECONCILED'])
 
 /** The tone a status is drawn in (a pill): waiting, refused or stopped, done, or neutral. */
 export function statusTone(code: string | null): 'neutral' | 'info' | 'success' | 'warning' | 'danger' {
@@ -132,6 +136,7 @@ export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['partie
   /* B-W2b-23 */ 'payments.view', 'payables.view', 'quality.inspections.view', 'quality.holds.view', 'quality.ncr.view', 'compliance.certificates.view', 'compliance.register.view', 'inventory.counts.view', 'inventory.locations.view', 'product.routing.view', 'plant.view',
   /* B-W2b-149 */ 'safety.incidents.view',
   /* B-W2b-104 */ 'quality.plans.view',
-  /* B-W2b-119 */ 'quality.capa.view'])
+  /* B-W2b-119 */ 'quality.capa.view',
+  /* B-W2b-129 */ 'production.cutting.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

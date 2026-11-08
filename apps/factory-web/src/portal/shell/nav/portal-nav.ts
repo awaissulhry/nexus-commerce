@@ -119,7 +119,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
       { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: false },
     ],
   },
-  { id: 'deliveries', label: 'nav.deliveries', href: '/deliveries', icon: Truck, permission: 'portal.shipNotices.view', kinds: ['SUPPLIER'], badge: 'deliveries', phone: 'tab', built: false },
+  // B-W2b-186: the supplier's Ship notices (SCR-227).
+  { id: 'deliveries', label: 'nav.deliveries', href: '/deliveries', icon: Truck, permission: 'portal.shipNotices.view', kinds: ['SUPPLIER'], badge: 'deliveries', phone: 'tab', built: true },
   { id: 'supplier-documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.supplierDocuments.view', kinds: SUPPLIERS, badge: 'documents', phone: 'tab', key: 'd', built: false },
   { id: 'profile', label: 'nav.profile', href: '/profile', icon: IdCard, permission: 'portal.supplierProfile.view', kinds: SUPPLIERS, badge: 'account', phone: 'more', built: false },
   { id: 'accounting', label: 'nav.accounting', href: '/accounting', icon: Calculator, permission: 'portal.accounting.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', key: 'd', built: false },
@@ -145,7 +146,8 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   // B-W2b-179: the supplier's purchase order (its Lines tab first).
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },
   { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
-  { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: false },
+  // B-W2b-186: a supplier's ship notice.
+  { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
 ]

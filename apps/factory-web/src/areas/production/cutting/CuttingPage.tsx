@@ -9,29 +9,35 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import { getAvailability, reserveHides } from '../work-orders/daily/api'
 import { listCuts, roomYield, type CutRow, type CutTiles, type CutView, type YieldFigures } from './api'
-import { addressOf, addressText, csvOf, CUTTING_NAMESPACE, cuttingCanOf, newCutChoices, phrase, readProblem, romeDayStart, writeProblem, type CutAddress } from './model'
-import type { AllocModel, NewCutModel } from './view/CutDialogs'
+import { addressOf, addressText, CUTTING_NAMESPACE, cuttingCanOf, phrase, readProblem, romeDayStart, usedText, writeProblem, type CutAddress } from './model'
+import { createCutOrder, listCutOrders, siteStations, waitingGroups, type CutOrderSummary, type CutOrderTiles, type Station, type WaitingGroup } from './orders/api'
+import { groupKeyOf, listCsv, listRows, NO_DRAFT, newOrderBody, newOrderHeld, orderHref, orderProblem, ORDERS_NAMESPACE, ordersCanOf, orderViewOf, sheetHref, type ListRow, type NewOrderDraft } from './orders/model'
+import type { NewOrderModel } from './orders/view/NewCutOrderDialog'
+import type { AllocModel } from './view/CutDialogs'
 import { CuttingView, type CuttingModel } from './view/CuttingView'
 
 const TIME_ZONE = 'Europe/Rome'
 const PAGE = 50
+const LIVE_CUTS = /^production\.(cut_|hide_|bundle|replacement_)|^workorder\./
+const LIVE_ORDERS = /^(cut_order|cut_ticket|lay|cut_consumption)\./
 
 /**
- * `/w/<company>/production/cutting` (SCR-238): the cuts of the saved filter (`?view=`), the search (`?q=`), 50 a page with
- * "Show more", the tiles (answered with the list) and the room's yield today, and live cut, hide, bundle and recut
- * events behind "N updates · Show". `?new=1` opens New cut order; Create cut order opens Allocate hides
- * (`?alloc=<work order>`), whose hides are reserved whole for the work order.
+ * `/w/<company>/production/cutting` (SCR-238): the cut orders (B-W2b-129) and the work orders' leather cuts (W2a) of the saved
+ * filter (`?view=`) and the search (`?q=`), 50 a page with "Show more", the tiles (answered with the lists; the fabric cut orders
+ * added to Waiting and Cutting) and the room's yield today, and live cut, hide, bundle, recut and cut order events behind "N
+ * updates · Show". `?new=1` opens New cut order (several work orders of one material and colour → a PLANNED cut order, opened
+ * on its record); `?alloc=<work order>` opens Allocate hides for a work order's leather cut (each hide reserved whole).
  */
 export function CuttingPage() {
   return (
-    <WithMessages namespaces={[CUTTING_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={[CUTTING_NAMESPACE, ORDERS_NAMESPACE, 'lists']}>
       <Container />
     </WithMessages>
   )
 }
 
 function Container() {
-  const t = useT(CUTTING_NAMESPACE)
+  const o = useT(ORDERS_NAMESPACE)
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -39,19 +45,26 @@ function Container() {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/production\/cutting\/?$/, '')
   const can = useMemo(() => cuttingCanOf(session.permissions), [session.permissions])
+  const orders = useMemo(() => ordersCanOf(session.permissions), [session.permissions])
   const address = addressOf(params)
 
-  const [rows, setRows] = useState<CuttingModel['rows']>({ items: null, more: false, problem: null })
+  const [cuts, setCuts] = useState<{ items: readonly CutRow[] | null; more: boolean; problem: string | null }>({ items: null, more: false, problem: null })
+  const [orderRows, setOrderRows] = useState<{ items: readonly CutOrderSummary[] | null; more: boolean; problem: string | null }>({ items: null, more: false, problem: null })
   const [limit, setLimit] = useState(PAGE)
   const [tiles, setTiles] = useState<CutTiles | null>(null)
+  const [fabric, setFabric] = useState<CutOrderTiles | null>(null)
   const [yieldToday, setYieldToday] = useState<YieldFigures | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [slow, setSlow] = useState(false)
   const [notice, setNotice] = useState<CuttingModel['notice']>(null)
-  const [newCut, setNewCut] = useState<NewCutModel | null>(null)
+  const [groups, setGroups] = useState<{ value: readonly WaitingGroup[] | null; problem: string | null }>({ value: null, problem: null })
+  const [stations, setStations] = useState<readonly Station[] | null>(null)
+  const [draft, setDraft] = useState<NewOrderDraft>(NO_DRAFT)
+  const [creating, setCreating] = useState<{ busy: boolean; error: NewOrderModel['error'] }>({ busy: false, error: null })
   const [alloc, setAlloc] = useState<AllocModel | null>(null)
   const reserveKey = useRef<string | null>(null)
+  const createKey = useRef<string | null>(null)
   const readId = useRef(0)
 
   const go = useCallback((next: Partial<CutAddress>) => router.replace(`${pathname}${addressText({ ...address, ...next })}`), [router, pathname, address])
@@ -64,22 +77,33 @@ function Container() {
       .catch(() => setYieldToday(null))
   }, [api, can.view])
 
+  /** The fabric cut orders per status (the tiles): one row is enough, the counts come with it. */
+  const loadFabric = useCallback(() => {
+    listCutOrders(api, { view: 'open', kind: 'FABRIC', limit: 1 })
+      .then((page) => setFabric(page.tiles))
+      .catch(() => setFabric(null))
+  }, [api])
+
   const load = useCallback(async () => {
     if (!can.view) return
     const id = ++readId.current
     loadYield()
-    try {
-      const page = await listCuts(api, { view: address.view, q: address.q, limit })
-      if (id !== readId.current) return
-      setRows({ items: page.cuts, more: page.more, problem: null })
-      setTiles(page.tiles)
-      setAsOf(page.asOf)
-      setUpdates(0)
-    } catch (error) {
-      if (id !== readId.current) return
-      setRows({ items: null, more: false, problem: readProblem(error) })
-    }
-  }, [api, can.view, address.view, address.q, limit, loadYield])
+    loadFabric()
+    const orderView = orderViewOf(address.view)
+    const [cutsRead, ordersRead] = await Promise.allSettled([
+      listCuts(api, { view: address.view, q: address.q, limit }),
+      orderView ? listCutOrders(api, { view: orderView, q: address.q, limit }) : Promise.resolve(null),
+    ])
+    if (id !== readId.current) return
+    if (cutsRead.status === 'fulfilled') {
+      setCuts({ items: cutsRead.value.cuts, more: cutsRead.value.more, problem: null })
+      setTiles(cutsRead.value.tiles)
+      setAsOf(cutsRead.value.asOf)
+    } else setCuts({ items: null, more: false, problem: readProblem(cutsRead.reason) })
+    if (ordersRead.status === 'fulfilled') setOrderRows({ items: ordersRead.value?.rows ?? [], more: !!ordersRead.value?.nextCursor, problem: null })
+    else setOrderRows({ items: null, more: false, problem: readProblem(ordersRead.reason) })
+    setUpdates(0)
+  }, [api, can.view, address.view, address.q, limit, loadYield, loadFabric])
 
   useEffect(() => {
     void load()
@@ -94,16 +118,17 @@ function Container() {
     return () => clearTimeout(timer)
   }, [address.view, address.q])
 
-  // Live: a cut, a hide closed, a bundle or a recut somewhere → "N updates · Show"; the tiles follow.
+  // Live: a cut, a hide closed, a bundle, a recut or a cut order somewhere → "N updates · Show"; the tiles follow.
   const refreshTiles = useCoalesced(() => {
     loadYield()
+    loadFabric()
     listCuts(api, { view: address.view, q: address.q, limit: 1 })
       .then((page) => setTiles(page.tiles))
       .catch(() => undefined)
   }, 1000)
   const live = useLive(
     (change) => {
-      if (!/^production\.(cut_|hide_|bundle|replacement_)|^workorder\./.test(change.type)) return
+      if (!LIVE_CUTS.test(change.type) && !LIVE_ORDERS.test(change.type)) return
       setUpdates((count) => count + 1)
       refreshTiles()
     },
@@ -111,22 +136,57 @@ function Container() {
     can.view,
   )
 
-  // ---- New cut order ----------------------------------------------------------------------------------------------------------
+  // ---- New cut order (B-W2b-129) ----------------------------------------------------------------------------------------------
 
-  const loadChoices = useCallback(() => {
-    setNewCut((current) => ({ choices: null, problem: null, busy: false, ...(current?.picked ? { picked: current.picked } : {}) }))
-    listCuts(api, { view: 'waiting', q: '', limit: 200 })
-      .then((page) => setNewCut((current) => (current ? { ...current, choices: newCutChoices(page.cuts), problem: null } : current)))
-      .catch((error: unknown) => setNewCut((current) => (current ? { ...current, choices: null, problem: readProblem(error) } : current)))
+  const loadGroups = useCallback(() => {
+    setGroups({ value: null, problem: null })
+    waitingGroups(api)
+      .then((value) => setGroups({ value, problem: null }))
+      .catch((error: unknown) => setGroups({ value: null, problem: readProblem(error) }))
   }, [api])
 
   useEffect(() => {
-    if (address.newCut && !newCut && can.view) loadChoices()
-    if (!address.newCut && newCut) setNewCut(null)
+    if (address.newCut && can.view) {
+      createKey.current = newIdempotencyKey()
+      setDraft(NO_DRAFT)
+      setCreating({ busy: false, error: null })
+      loadGroups()
+    }
     // Only when the address asks.
   }, [address.newCut])
 
-  // ---- Allocate hides ----------------------------------------------------------------------------------------------------------
+  const group = groups.value?.find((entry) => groupKeyOf(entry) === draft.groupKey) ?? null
+  useEffect(() => {
+    setStations(null)
+    if (!group || !orders.print) return
+    const controller = new AbortController()
+    siteStations(api, group.siteId, controller.signal)
+      .then(setStations)
+      .catch(() => setStations([]))
+    return () => controller.abort()
+  }, [api, group?.siteId, orders.print])
+
+  const create = useCallback(async () => {
+    if (!group || newOrderHeld(draft, group, orders, creating.busy)) return
+    const key = createKey.current ?? newIdempotencyKey()
+    createKey.current = key
+    setCreating({ busy: true, error: null })
+    try {
+      const record = await createCutOrder(api, newOrderBody(draft, group), key)
+      createKey.current = null
+      setCreating({ busy: false, error: null })
+      router.push(orderHref(prefix, record.cutOrder.id))
+    } catch (error) {
+      createKey.current = newIdempotencyKey()
+      setCreating({ busy: false, error: orderProblem(error) })
+      // The cells are read again: another cut order may have taken one meanwhile.
+      waitingGroups(api)
+        .then((value) => setGroups({ value, problem: null }))
+        .catch(() => undefined)
+    }
+  }, [api, draft, group, orders, creating.busy, router, prefix])
+
+  // ---- Allocate hides (a work order's leather cut, W2a) -----------------------------------------------------------------------
 
   const readAvailability = useCallback(
     (cut: CutRow, material: { itemId: string; itemColourId: string | null }) => {
@@ -142,8 +202,7 @@ function Container() {
     async (workOrderId: string) => {
       reserveKey.current = newIdempotencyKey()
       setAlloc({ cut: null, material: null, availability: { value: null, problem: null }, busy: false, problem: null })
-      const known = [...(rows.items ?? []), ...(newCut?.choices ?? [])].find((row) => row.workOrder.id === workOrderId)
-      let cut = known ?? null
+      let cut = (cuts.items ?? []).find((row) => row.workOrder.id === workOrderId) ?? null
       if (!cut) {
         try {
           cut = (await listCuts(api, { view: 'all', q: '', limit: 200 })).cuts.find((row) => row.workOrder.id === workOrderId) ?? null
@@ -161,7 +220,7 @@ function Container() {
       if (material && can.stock) readAvailability(cut, { itemId: material.itemId, itemColourId: material.itemColourId })
       else setAlloc((current) => (current ? { ...current, availability: { value: null, problem: can.stock ? 'problem.gone' : 'problem.forbidden' } } : current))
     },
-    [api, rows.items, newCut?.choices, can.stock, readAvailability],
+    [api, cuts.items, can.stock, readAvailability],
   )
 
   useEffect(() => {
@@ -194,23 +253,35 @@ function Container() {
     [alloc?.cut, alloc?.material, api, go, load, readAvailability],
   )
 
-  // ---- export ----------------------------------------------------------------------------------------------------------------------
+  // ---- the rows, export, tickets ----------------------------------------------------------------------------------------------
+
+  // A failed read of the cuts is the list's error (never drawn as an empty list); a failed read of the cut orders is said above it.
+  const items = cuts.items === null ? null : listRows(address.view, orderRows.items, cuts.items)
+  const rows: CuttingModel['rows'] = cuts.problem ? { items: null, more: false, problem: cuts.problem } : { items, more: cuts.more || orderRows.more, problem: null }
 
   const exportRows = useCallback(
-    (ids: string[]) => {
-      const picked = (rows.items ?? []).filter((row) => ids.includes(row.workOrder.id))
-      const header = ['cut', 'kind', 'style', 'material', 'lot', 'state', 'piecesPlanned', 'piecesCut', 'hides', 'area', 'yieldPct', 'plannedPct', 'table', 'lastCut'].map((column) => t(`csv.${column}`))
-      downloadText(`cuts-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(picked, header, 'en'))
+    (keys: string[]) => {
+      const picked = (items ?? []).filter((row) => keys.includes(row.key))
+      const header = ['cut', 'kind', 'workOrders', 'style', 'material', 'lot', 'state', 'planned', 'piecesCut', 'plies', 'hides', 'area', 'yieldPct', 'table', 'date'].map((column) => o(`csv.${column}`))
+      downloadText(`cuts-${new Date().toISOString().slice(0, 10)}.csv`, listCsv(picked, header, (cut) => usedText(cut.hides.used, 'en')))
     },
-    [rows.items, t],
+    [items, o],
   )
+
+  const openRow = (row: ListRow) => {
+    if (row.order) router.push(orderHref(prefix, row.order.id))
+    else if (can.workOrders) router.push(`${prefix}/production/cutting/${row.cut.workOrder.id}`)
+  }
 
   const model: CuttingModel = {
     prefix,
     can,
+    orders,
     address,
     rows,
+    ordersProblem: !cuts.problem && orderRows.problem ? orderRows.problem : null,
     tiles,
+    fabric,
     yieldToday,
     asOf,
     live,
@@ -218,7 +289,7 @@ function Container() {
     slow,
     timeZone: TIME_ZONE,
     notice,
-    newCut: address.newCut ? (newCut ?? { choices: null, problem: null, busy: false }) : null,
+    newOrder: address.newCut ? { groups: groups.value, problem: groups.problem, stations, draft, busy: creating.busy, error: creating.error } : null,
     alloc: address.alloc ? (alloc ?? { cut: null, material: null, availability: { value: null, problem: null }, busy: false, problem: null }) : null,
   }
 
@@ -231,18 +302,25 @@ function Container() {
         onMore: () => setLimit((current) => Math.min(200, current + PAGE)),
         onRetry: () => {
           void load()
-          if (address.newCut) loadChoices()
+          if (address.newCut) loadGroups()
           if (address.alloc) void openAlloc(address.alloc)
         },
-        onOpen: (row) => (can.workOrders ? router.push(`${prefix}/production/cutting/${row.workOrder.id}`) : undefined),
+        onOpen: openRow,
         onShowUpdates: () => void load(),
         onNew: (open) => go({ newCut: open, alloc: null }),
-        onCreateCut: (workOrderId) => go({ newCut: false, alloc: workOrderId }),
+        onDraft: (next) => {
+          setDraft(next)
+          setCreating((current) => ({ ...current, error: null }))
+        },
+        onCreate: () => void create(),
         onAllocate: (workOrderId) => go({ alloc: workOrderId, newCut: false }),
         onMaterial: (material) => alloc?.cut && readAvailability(alloc.cut, material),
         onReserve: (hideIds) => void reserve(hideIds),
         onExport: exportRows,
-        onTickets: (workOrderId) => router.push(`${prefix}/production/cutting/${workOrderId}?tab=tickets`),
+        onTickets: (row) => {
+          if (row.order) window.open(sheetHref(prefix, row.order.id), '_blank', 'noopener')
+          else router.push(`${prefix}/production/cutting/${row.cut.workOrder.id}?tab=tickets`)
+        },
         onDismissNotice: () => setNotice(null),
       }}
     />

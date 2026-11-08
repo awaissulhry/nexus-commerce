@@ -61,6 +61,8 @@ export interface OrderRecordViewModel {
   /** The "What changed" panel is open (the first visit after a revision opens it). */
   changesOpen: boolean
   notices: { state: 'loading' | 'error' | 'noAccess' | 'ready'; items: readonly NoticeRow[] }
+  /** B-W2b-186: "Announce delivery" (the new ship notice from this order), held with the reason; null: not offered. */
+  announce?: { href: string; heldReason: string | null } | null
   /** Requests from us about this order (the task list's rows). */
   requests: readonly { id: string; title: string; verb: string; href: string }[]
   dialog: { kind: 'confirmAll'; model: ConfirmAllModel } | { kind: 'decline'; model: DeclineModel } | { kind: 'version'; model: VersionModel } | null
@@ -369,7 +371,14 @@ function NoticesTab({ model, actions }: { model: OrderRecordViewModel; actions?:
   const notices = model.notices
   return (
     <Card padded className="fw-pso-card">
-      <h2 className="fw-pso-h2">{t('asn.title')}</h2>
+      <div className="fw-pso-card-head">
+        <h2 className="fw-pso-h2">{t('asn.title')}</h2>
+        {model.announce ? (
+          <Button size="sm" variant="primary" asChild heldReason={model.announce.heldReason}>
+            <a href={model.announce.href}>{t('asn.announce')}</a>
+          </Button>
+        ) : null}
+      </div>
       {notices.state === 'loading' ? (
         <div role="status" aria-label={t('state.loading')} className="fw-pso-stack">
           <Skeleton height={56} />
@@ -390,7 +399,9 @@ function NoticesTab({ model, actions }: { model: OrderRecordViewModel; actions?:
           {notices.items.map((notice) => (
             <li key={notice.id} className="fw-pso-row">
               <span className="fw-pso-row-main">
-                <strong>{notice.number ?? t('asn.draft')}</strong>
+                <a href={`${model.prefix}/deliveries/${encodeURIComponent(notice.id)}${notice.status === 'DRAFT' ? '?step=lines' : ''}`}>
+                  <strong>{notice.number ?? t('asn.draft')}</strong>
+                </a>
                 <span className="fw-pso-sub">
                   {[notice.shipDate ? t('asn.shipDate', { date: day(notice.shipDate) }) : null, t('asn.lines', { count: notice.lines }), notice.carrier ? (notice.trackingNumber ? `${notice.carrier} · ${notice.trackingNumber}` : notice.carrier) : null, notice.ddtNumber ? t('asn.ddt', { number: notice.ddtNumber }) : null]
                     .filter(Boolean)
