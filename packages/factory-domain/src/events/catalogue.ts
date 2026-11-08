@@ -125,6 +125,8 @@ import { events as plantDies } from '../plant-dies/events'
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
 import { events as productionLays } from '../production-lays/events'
+// B-W2b-117: after the cut (a recut ticket, a secondary process, a trolley to sewing changed).
+import { events as productionCutissue } from '../production-cutissue/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -316,7 +318,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-112
   ...productionCutorders,
   // B-W2b-116
-  ...productionLays] as const satisfies readonly EventDefinition[]
+  ...productionLays,
+  // B-W2b-117
+  ...productionCutissue] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

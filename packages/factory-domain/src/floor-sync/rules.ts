@@ -263,6 +263,14 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const counted = whole(p.left)
       return { target: text(p.layId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
     }
+    // B-W2b-117: the trolley's label and the bundle scanned (load, unload), the bundles named missing at the line; never who.
+    case 'production.trolley.load':
+    case 'production.trolley.unload':
+      return { code: text(p.bundle), target: text(p.trolley, 40) }
+    case 'production.trolley.send':
+      return { target: text(p.trolley, 40) }
+    case 'production.trolley.receive':
+      return { target: text(p.trolley, 40), ...(Array.isArray(p.missing) ? { quantity: p.missing.length } : {}) }
   }
 }
 

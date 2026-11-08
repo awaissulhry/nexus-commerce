@@ -70,6 +70,13 @@ export const FLOOR_SYNC_KINDS = [
   'production.lay.roll',
   'production.lay.undo',
   'production.lay.count',
+  // B-W2b-117: a trolley to sewing kept offline (MES-048; design floor.fabriccut "Works offline", "Send a trolley to a line:
+  // scans → Send"): a bundle scanned onto a trolley or taken off, the trolley sent, the line's scan of its label. Each names the
+  // trolley by its label, never by an id the tablet could not know offline.
+  'production.trolley.load',
+  'production.trolley.unload',
+  'production.trolley.send',
+  'production.trolley.receive',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -131,6 +138,11 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.lay.roll': { kind: 'production.lay.roll', permission: 'production.cut', numbers: null, what: 'Spread a roll on a lay' },
   'production.lay.undo': { kind: 'production.lay.undo', permission: 'production.cut', numbers: null, what: 'Undo the last roll of a lay' },
   'production.lay.count': { kind: 'production.lay.count', permission: 'production.cut', numbers: null, what: "Count a lay's plies at both ends" },
+  // B-W2b-117: the trolleys' own right; the module checks again the bundle, the trolley and the line as they stand on arrival.
+  'production.trolley.load': { kind: 'production.trolley.load', permission: 'production.trolleys', numbers: null, what: 'Scan a bundle onto a trolley to sewing' },
+  'production.trolley.unload': { kind: 'production.trolley.unload', permission: 'production.trolleys', numbers: null, what: 'Take a bundle off a trolley' },
+  'production.trolley.send': { kind: 'production.trolley.send', permission: 'production.trolleys', numbers: null, what: 'Send a trolley to a sewing line' },
+  'production.trolley.receive': { kind: 'production.trolley.receive', permission: 'production.trolleys', numbers: null, what: 'Confirm a trolley at the line' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
