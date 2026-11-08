@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
+import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTodo, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -50,6 +50,8 @@ export const officeArea: OfficeAreaNav = {
         id: 'quality-settings',
         label: 'shell:nav.quality.settings',
         items: [
+          // B-W2b-104 SCR-077: Settings › Inspection plans & AQL (plans, AQL profiles, when inspections are created, the calculator; quality.plans.view).
+          { id: 'quality-plans', label: 'shell:nav.quality.plans', href: '/quality/plans', icon: ListTodo, permission: 'quality.plans.view' },
           { id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' },
           // B-W2b-118 SCR-260: Settings › Quality rules (who may sign what, alerts and escalation, result rules; quality.rules.view).
           { id: 'quality-rules', label: 'shell:nav.quality.rules', href: '/quality/settings', icon: Scale, permission: 'quality.rules.view' },

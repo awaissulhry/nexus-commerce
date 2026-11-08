@@ -1,0 +1,46 @@
+{
+  "title": "Campione e accettazione",
+  "reading": "Calcolo del campione…",
+  "retry": "Riprova",
+  "table": "Numeri di accettazione e rifiuto per classe",
+  "derivation": {
+    "one": "Un lotto di {lot} unità si controlla per intero.",
+    "general": "Lotto {lot} · livello generale {level} → lettera codice {letter} → controllare {sample}.",
+    "special": "Lotto {lot} · livello speciale {level} → lettera codice {letter} → controllare {sample}.",
+    "generalWhole": "Lotto {lot} · livello generale {level} → lettera codice {letter} → controllare tutti i {sample} (l'intero lotto).",
+    "specialWhole": "Lotto {lot} · livello speciale {level} → lettera codice {letter} → controllare tutti i {sample} (l'intero lotto)."
+  },
+  "fact": {
+    "letter": "Lettera codice",
+    "sample": "Da controllare",
+    "level": "Livello"
+  },
+  "level": {
+    "general": "Generale {level}",
+    "special": "Speciale {level}"
+  },
+  "col": {
+    "class": "Classe",
+    "aql": "AQL",
+    "accept": "Accetta fino a (Ac)",
+    "reject": "Rifiuta a (Re)"
+  },
+  "class": {
+    "CRITICAL": "Critico",
+    "MAJOR": "Maggiore",
+    "MINOR": "Minore"
+  },
+  "lock": "Critico è sempre 0: un difetto critico rifiuta il lotto.",
+  "lockLaw": "Un capo con un difetto di sicurezza o di conformità non è mai accettato.",
+  "line": {
+    "critical": "{klass}: mai accettato — uno rifiuta il lotto (AQL {aql}, accetta {accept}, rifiuta a {reject}).",
+    "class": "{klass}, AQL {aql}: accetta fino a {accept}, rifiuta a {reject}."
+  },
+  "note": {
+    "arrowDown": "{klass}: la tabella 2-A rimanda in giù dalla lettera {letter} alla {plan} (un campione di {n}).",
+    "arrowUp": "{klass}: la tabella 2-A rimanda in su dalla lettera {letter} alla {plan} (un campione di {n}).",
+    "stricter": "{klass}: il suo piano chiede {n}; è giudicato sull'intero campione di {sample}, più severo.",
+    "differ": "I piani delle classi chiedono campioni diversi: si controlla il più grande, {sample}.",
+    "whole": "Il campione del piano non è più piccolo del lotto: si controllano tutti i {lot}."
+  }
+}

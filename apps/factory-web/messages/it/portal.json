@@ -1,0 +1,347 @@
+{
+  "nav": {
+    "home": "Home",
+    "orders": "Ordini",
+    "ordersTracking": "Ordini e tracciamento",
+    "newOrder": "Nuovo ordine e riordino",
+    "quotesSamples": "Preventivi e campioni",
+    "quotes": "Preventivi e richieste",
+    "catalogue": "Catalogo",
+    "documents": "Documenti",
+    "returns": "Resi e reclami",
+    "account": "Account",
+    "ordersJobs": "Ordini e lavorazioni",
+    "purchaseOrders": "Ordini d'acquisto",
+    "jobs": "Lavorazioni",
+    "deliveries": "Consegne",
+    "profile": "Profilo",
+    "accounting": "Contabilità",
+    "auditRoom": "Sala revisione"
+  },
+  "rail": {
+    "label": "Aree del portale",
+    "withBadge": "{area}, {badge}"
+  },
+  "top": {
+    "home": "Portale {name}: Home"
+  },
+  "search": {
+    "label": "Cerca ordini, documenti e altro",
+    "placeholder": "Cerca ordini, documenti… (va bene il tuo numero d'ordine)",
+    "title": "Cerca",
+    "tooShort": "Scrivi ancora qualche carattere per cercare.",
+    "searching": "Ricerca in corso…",
+    "found_one": "{count} trovato",
+    "found_other": "{count} trovati",
+    "none": "Nessun risultato per «{query}». Prova con il tuo riferimento o con il nostro.",
+    "failed": "La ricerca non risponde. Riprova.",
+    "capped": "Corrispondono molti documenti: scrivi una parte più lunga del riferimento per restringere.",
+    "group": {
+      "orders": "Ordini",
+      "documents": "Documenti",
+      "returns": "Resi",
+      "jobs": "Lavorazioni",
+      "pos": "Ordini d'acquisto"
+    }
+  },
+  "bell": {
+    "label": "Notifiche",
+    "open": "Apri le tue notifiche",
+    "unread_one": "Notifiche: {count} da leggere",
+    "unread_other": "Notifiche: {count} da leggere",
+    "unreadMore_one": "Notifiche: più di {count} da leggere",
+    "unreadMore_other": "Notifiche: più di {count} da leggere",
+    "none": "Notifiche: nulla da leggere",
+    "title": "Notifiche",
+    "markAll": "Segna tutte come lette",
+    "marking": "Le segno come lette…",
+    "failed": "Non è stato possibile leggere le notifiche.",
+    "emptyTitle": "Nulla di nuovo",
+    "empty": "Qui ti avvisiamo quando cambia qualcosa nei tuoi ordini e documenti.",
+    "unreadMark": "Nuova:",
+    "alsoMore_one": "e {count} altra simile",
+    "alsoMore_other": "e altre {count} simili"
+  },
+  "menu": {
+    "label": "Menu di {name}",
+    "access": "Il mio accesso",
+    "email": "Impostazioni e-mail",
+    "display": "Lingua e tema",
+    "shortcuts": "Scorciatoie da tastiera",
+    "signOut": "Esci"
+  },
+  "band": {
+    "portal": "Portale",
+    "ask": "Fai una domanda",
+    "more": "Altre azioni",
+    "pages": "Pagine",
+    "pagesOf": "Pagine di {area}"
+  },
+  "live": {
+    "offline": "Non in linea"
+  },
+  "notice": {
+    "dismiss": "Nascondi",
+    "preview": {
+      "title": "Anteprima",
+      "body": "{name} di {company} sta vedendo in anteprima questo portale come {party}: sola lettura. Ogni anteprima viene registrata."
+    },
+    "offline": {
+      "title": "Nessuna connessione",
+      "body": "Vedi quanto caricato alle {time}. Ciò che invii aspetta il ritorno della connessione; ciò che hai scritto resta."
+    },
+    "accessEnds": {
+      "title": "Il tuo accesso scade presto",
+      "body": "Il tuo accesso a questo portale termina il {date}. Se ti serve più a lungo, chiedi al tuo amministratore."
+    },
+    "readOnly": {
+      "title": "Sola lettura",
+      "body": "Questo documento è chiuso: puoi leggerlo, non modificarlo."
+    }
+  },
+  "foot": {
+    "label": "Note legali",
+    "privacy": "Informativa privacy",
+    "terms": "Condizioni del portale",
+    "free": "Gratuito per i fornitori: nessun costo, nessun limite ai documenti."
+  },
+  "bottomBar": {
+    "navigation": "Aree del portale",
+    "more": "Altro",
+    "count_one": "{count} in attesa per te",
+    "count_other": "{count} in attesa per te",
+    "currentInside": "qui c'è la pagina attuale"
+  },
+  "state": {
+    "loading": "Caricamento in corso…",
+    "retry": "Riprova"
+  },
+  "preview": {
+    "held": "Questa è un'anteprima: è in sola lettura."
+  },
+  "tasks": {
+    "title": "Cosa ti aspetta",
+    "failed": "Non è stato possibile leggere cosa ti aspetta.",
+    "empty": "Non ti aspetta nulla. Ti scriviamo quando serve.",
+    "askedBy": "Richiesto da {name}",
+    "askedBySystem": "Richiesto dal sistema",
+    "done": "Fatto. Ne siamo informati.",
+    "undoing": "Annullamento…",
+    "kind": {
+      "CONFIRM_PO": "Ordini da confermare",
+      "ACCEPT_QUOTE": "Preventivi da accettare",
+      "APPROVE": "Da approvare",
+      "SEND_MEASUREMENTS": "Misure da inviare",
+      "UPLOAD_DOCUMENT": "Documenti richiesti",
+      "ANSWER_MESSAGE": "Messaggi a cui rispondere",
+      "PAY_INVOICE": "Fatture da pagare",
+      "CONFIRM_KIT": "Kit da confermare",
+      "REPORT_PROGRESS": "Avanzamenti da comunicare",
+      "ANSWER_QUESTIONNAIRE": "Questionari da compilare",
+      "RECONFIRM_ORDER": "Ordini modificati da riconfermare"
+    }
+  },
+  "thread": {
+    "title": "Messaggi",
+    "accountTitle": "Facci una domanda",
+    "accountHeading": "Sul tuo account",
+    "empty": "Ancora nessun messaggio. Chiedici pure qualsiasi cosa su questo documento.",
+    "emptyAccount": "Ancora nessun messaggio. Chiedici pure qualsiasi cosa.",
+    "hint": "Puoi anche rispondere alle nostre e-mail: la risposta arriva qui.",
+    "whoCan": "Il tuo accesso ti permette di leggere questa conversazione. Chiedi al tuo amministratore ({names}) di poterci scrivere.",
+    "whoCanNoAdmin": "Il tuo accesso ti permette di leggere questa conversazione. Chiedici di poterci scrivere.",
+    "held": {
+      "PREVIEW": "Questa è un'anteprima: da qui non si invia nulla.",
+      "NO_COMMENT": "Il tuo accesso ti permette di leggere questa conversazione, non di scriverci.",
+      "CLOSED": "Abbiamo chiuso questa conversazione. Se qualcosa è ancora aperto, scrivici sul documento.",
+      "other": "Qui non puoi scrivere."
+    },
+    "failed": {
+      "conflict": "Nel frattempo abbiamo chiuso questa conversazione: il messaggio non è stato inviato. Il testo è ancora qui.",
+      "forbidden": "Il tuo accesso non ti permette di scrivere qui. Il testo è ancora qui.",
+      "invalid": "Il messaggio non può essere inviato così. Controllalo e invialo di nuovo.",
+      "unavailable": "Nessuna connessione: il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
+      "other": "Il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
+      "more": "Non è stato possibile leggere i messaggi precedenti."
+    }
+  },
+  "record": {
+    "tabs": "Sezioni del documento",
+    "messages": "Messaggi",
+    "missingTitle": "Documento non trovato",
+    "missing": "Questo documento non è tra i tuoi, oppure non esiste più.",
+    "toHome": "Vai alla Home",
+    "type": {
+      "SalesOrder": "Ordine",
+      "Quote": "Preventivo",
+      "Shipment": "Spedizione",
+      "Invoice": "Fattura",
+      "Ddt": "DDT",
+      "PurchaseOrder": "Ordine d'acquisto",
+      "SubcontractOrder": "Lavorazione",
+      "ShipNotice": "Avviso di spedizione",
+      "Party": "Account",
+      "other": "Documento"
+    }
+  },
+  "terms": {
+    "title": "Condizioni del portale",
+    "failed": "Non è stato possibile leggere le condizioni del portale. Riprova.",
+    "noneTitle": "Nessuna condizione del portale",
+    "none": "L'azienda non ha ancora pubblicato le condizioni del portale.",
+    "version": "Versione {label}",
+    "published": "pubblicata il {date}",
+    "accepted": "Accettate",
+    "notAccepted": "Non ancora accettate",
+    "otherLanguage": "Mostrate nella lingua in cui l'azienda le ha pubblicate."
+  },
+  "email": {
+    "title": "Impostazioni e-mail",
+    "subtitle": "Come ti scriviamo per ogni argomento. Qualunque scelta, tutto resta nelle notifiche del portale.",
+    "frequency": {
+      "INSTANT": "Subito",
+      "DAILY": "Riepilogo giornaliero",
+      "WEEKLY": "Riepilogo settimanale",
+      "OFF": "Mai"
+    },
+    "frequencyOf": "E-mail su {topic}",
+    "allOff": "Nessuna e-mail non essenziale",
+    "allOffHint": "Spegne ogni argomento che puoi spegnere. Le e-mail su ordini, consegne e fatture continuano ad arrivare.",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "failed": "Non è stato possibile leggere le impostazioni e-mail.",
+    "refused": "Impossibile salvare: le e-mail su ordini, consegne e fatture arrivano sempre subito.",
+    "saveFailed": "Le impostazioni non sono state salvate. Riprova."
+  },
+  "still": {
+    "title": "Ci sei ancora?",
+    "body": "Per la tua sicurezza ti disconnettiamo dopo 30 minuti senza attività.",
+    "left": "Verrai disconnesso tra {left}.",
+    "ended": "Sei stato disconnesso.",
+    "stay": "Resta connesso",
+    "staying": "Ti teniamo connesso…",
+    "cannotStay": "La sessione ha raggiunto le 12 ore: accedi di nuovo per continuare.",
+    "signOut": "Esci ora",
+    "failed": "Non siamo riusciti a tenerti connesso. Riprova."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "close": "Chiudi",
+    "then": "poi",
+    "global": "Ovunque nel portale",
+    "page": "In questa pagina",
+    "search": "Cerca",
+    "go": "Vai a {area}",
+    "help": "Queste scorciatoie",
+    "escape": "Chiudi qualsiasi finestra"
+  },
+  "unsaved": {
+    "title": "Uscire senza inviare?",
+    "message": "Il tuo messaggio per noi non è ancora stato inviato.",
+    "email_one": "{count} modifica alle impostazioni e-mail non è salvata.",
+    "email_other": "{count} modifiche alle impostazioni e-mail non sono salvate.",
+    "save": "Invia ed esci",
+    "saving": "Invio in corso…",
+    "discard": "Esci senza inviare",
+    "stay": "Resta"
+  },
+  "access": {
+    "title": "Il mio accesso",
+    "close": "Chiudi",
+    "failed": "Non è stato possibile leggere il tuo accesso.",
+    "role": "Il tuo ruolo",
+    "preview": "Anteprima dall'ufficio (sola lettura)",
+    "noRole": "Ancora nessun ruolo",
+    "prices": "Prezzi",
+    "pricesYes": "Visibili",
+    "pricesNo": "Non visibili",
+    "capabilities": "Puoi anche",
+    "readOnly": "Solo lettura",
+    "until": "Accesso fino al",
+    "noEnd": "Nessuna scadenza",
+    "allowsTitle": "Cosa ti permette il tuo accesso",
+    "allowsNone": "Ancora nulla: accetta prima le condizioni del portale.",
+    "admins": "Il tuo amministratore: {names}. Chiedi a lui di cambiare il tuo accesso.",
+    "noAdmin": "La tua organizzazione non ha un amministratore nel portale: chiedi a noi di cambiare il tuo accesso.",
+    "capability": {
+      "comment": "commentare",
+      "upload": "inviare file",
+      "approve": "approvare"
+    },
+    "permission": {
+      "files_read": "Aprire i file che condividiamo con te",
+      "threads_read": "Leggere le conversazioni sui tuoi documenti",
+      "portal_colleagues_view": "Vedere gli utenti del portale della tua organizzazione e i loro ruoli",
+      "portal_colleagues_manage": "Invitare colleghi, cambiarne il ruolo, disattivarli",
+      "portal_comment": "Scrivere messaggi sui tuoi documenti",
+      "portal_upload": "Inviare file sui tuoi documenti",
+      "portal_approve": "Approvare, accettare o firmare sui tuoi documenti",
+      "portal_home_view": "Vedere la tua Home: cosa ti aspetta e le notifiche",
+      "portal_salesOrders_view": "Vedere i tuoi ordini, le date, le spedizioni e il tracciamento",
+      "portal_salesOrders_ask": "Chiederci di modificare o annullare un ordine",
+      "portal_purchaseOrders_view": "Vedere i nostri ordini d'acquisto e rispondere",
+      "portal_customerDocuments_view": "Vedere i tuoi documenti: documenti di consegna, conferme, preventivi",
+      "portal_customerDocuments_conformity": "Vedere i documenti di conformità e i certificati",
+      "portal_customerDocuments_finance": "Vedere fatture, note di credito ed estratti conto",
+      "portal_catalogue_view": "Vedere i modelli che puoi acquistare",
+      "portal_orderRequests_manage": "Fare richieste d'ordine e riordinare",
+      "portal_addresses_view": "Vedere i tuoi indirizzi di consegna",
+      "portal_addresses_manage": "Aggiungere, archiviare e scegliere gli indirizzi di consegna",
+      "portal_search": "Cercare i tuoi documenti con i tuoi riferimenti e i nostri",
+      "portal_payments_view": "Vedere cosa deve pagare la tua organizzazione",
+      "portal_payments_pay": "Pagare online fatture e acconti aperti",
+      "portal_jobs_view": "Vedere le nostre lavorazioni per il tuo laboratorio",
+      "portal_shipNotices_view": "Vedere e annunciare le tue consegne",
+      "portal_supplierDocuments_view": "Vedere i documenti che chiediamo e inviarli",
+      "portal_supplierProfile_view": "Vedere i dati aziendali, gli indirizzi e i contatti",
+      "portal_supplierProfile_change": "Inviare modifiche di indirizzi e contatti",
+      "portal_returns_view": "Vedere i tuoi resi e reclami",
+      "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità",
+      "portal_complaints_view": "Seguire i tuoi reclami di qualità",
+      "portal_approvals_view": "Vedere cosa ti chiediamo di approvare"
+    }
+  },
+  "display": {
+    "title": "Lingua e tema",
+    "close": "Chiudi",
+    "language": "Lingua",
+    "languageHint": "La usano il portale e le nostre e-mail.",
+    "previewLanguage": "Un'anteprima usa la tua lingua dell'ufficio.",
+    "saving": "Salvataggio…",
+    "failed": "La lingua non è stata salvata. Riprova.",
+    "theme": "Tema",
+    "themes": {
+      "light": "Chiaro",
+      "dark": "Scuro",
+      "system": "Sistema"
+    },
+    "themeHint": "Su questo dispositivo."
+  },
+  "gate": {
+    "signIn": "Accedi al portale",
+    "otherTitle": "Questo indirizzo è di un'altra organizzazione",
+    "other": "Hai effettuato l'accesso per un'organizzazione diversa da quella indicata in questo indirizzo.",
+    "ownHome": "Vai al mio portale",
+    "switch": "Accedi con un altro utente",
+    "apiTitle": "Il portale non si apre in questo momento",
+    "api": "Il portale non ha risposto. Riprova tra poco. (Codice {code})"
+  },
+  "role": {
+    "customer-buyer": "Acquisti",
+    "customer-finance": "Amministrazione",
+    "customer-quality": "Qualità",
+    "customer-designer": "Stilista",
+    "customer-viewer": "Consultazione",
+    "customer-admin": "Amministratore",
+    "supplier-orders": "Ordini",
+    "supplier-invoices": "Fatture",
+    "supplier-quality": "Qualità",
+    "supplier-admin": "Amministratore",
+    "subcontractor-jobs": "Lavorazioni",
+    "subcontractor-admin": "Amministratore",
+    "guest-accountant": "Commercialista",
+    "partner-comment": "Può commentare",
+    "partner-upload": "Può inviare file",
+    "partner-approve": "Può approvare"
+  }
+}

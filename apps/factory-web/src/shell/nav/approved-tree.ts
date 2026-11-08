@@ -355,6 +355,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Impostazioni',
         hideLabel: false,
         pages: [
+          // W2b: B-W2b-104 Inspection plans & AQL (SCR-077), first in Settings (the tree's order).
+          { id: 'quality.plans', title: 'Inspection plans & AQL', titleIt: 'Piani di controllo e AQL', wave: 'W2b', href: '/quality/plans' },
           { id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' },
           // W2b: B-W2b-118 Quality rules (SCR-260).
           { id: 'quality.settings', title: 'Quality rules', titleIt: 'Regole qualità', wave: 'W2b', href: '/quality/settings' },
@@ -620,6 +622,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
+  // W2b: B-W2b-105 In-line inspection (SCR-176), tile family Quality; supervisor = a team leader's line tablet.
+  { id: 'floor.inline', title: 'In-line inspection', titleIt: 'Controllo in linea', tile: 'inline', modes: ['inspection', 'supervisor'] },
   // W2a: B-W2a-73 the floor area Maintenance & safety, its machine problem (SCR-179); Report an incident is W2b.
   { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
   // W2b: B-W2b-70 Call for help (SCR-172) and the team leader's Line view (SCR-168).

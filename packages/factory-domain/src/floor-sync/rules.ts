@@ -252,6 +252,17 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-125: the kind only (INJURY, NEAR_MISS, HAZARD); never the words, the place or a person.
     case 'safety.incident.report':
       return { code: text(p.kind, 20) }
+    // B-W2b-116: the roll scanned and its plies, or the count of both ends, and the lay; never who.
+    case 'production.lay.roll': {
+      const plies = whole(p.plies)
+      return { code: text(p.code) ?? text(p.rollId, 40), target: text(p.layId, 40), ...(plies !== undefined ? { quantity: plies } : {}) }
+    }
+    case 'production.lay.undo':
+      return { target: text(p.layId, 40) }
+    case 'production.lay.count': {
+      const counted = whole(p.left)
+      return { target: text(p.layId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
+    }
     // B-W2b-117: the trolley's label and the bundle scanned (load, unload), the bundles named missing at the line; never who.
     case 'production.trolley.load':
     case 'production.trolley.unload':

@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
+import { partnerKindsOf } from '@nexus/factory-domain/auth/partners/kinds'
 import { portalIdleExpiryAt, portalStepUpUntil } from '@nexus/factory-domain/auth/portal/session'
+import { legalLines, legalName } from '@nexus/factory-domain/documents/legal'
+import type { CompanyLegal } from '@nexus/factory-domain/documents/model'
 import { ConflictError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -29,11 +33,52 @@ import { portalTermsInForce } from './terms'
 
 const timesOf = (session: { idleExpiresAt: Date; absoluteExpiresAt: Date }) => ({ idleExpiresAt: toUtcIso(session.idleExpiresAt), absoluteExpiresAt: toUtcIso(session.absoluteExpiresAt) })
 
-export function me(app: FastifyInstance, request: FastifyRequest) {
+/** The registered office as the Company row keeps it (`address` JSON; platform/documents reads it the same way). */
+const officeAddress = z.object({ line1: z.string(), line2: z.string().nullish(), postalCode: z.string(), city: z.string(), province: z.string().nullish(), country: z.string() })
+
+/**
+ * B-W2b-173: what the portal's frame needs beside the session — the party's code (the portal address `/p/<code>`) and partner
+ * kinds (an office preview has no person's kind: the frame draws the party's), and the company's legal block (c.c. art.
+ * 2250: its foot), each language as the company's documents print it. Read in the tenant's office scope as the person (the
+ * partner role reads no Company row); public facts only, never an amount but the paid-in capital the law asks to print.
+ */
+async function frameFacts(app: FastifyInstance, session: ReturnType<typeof portalSessionOf>) {
+  return portalOf(app).auth.inTenant(session.tenantId, session.userId, async (client) => {
+    const [party, company] = await Promise.all([
+      client.party.findUnique({ where: { id: session.partyId }, select: { code: true, roles: true } }),
+      client.company.findUnique({
+        where: { id: session.company.id },
+        select: { legalName: true, tradeName: true, address: true, vatNumber: true, fiscalCode: true, reaOffice: true, reaNumber: true, shareCapital: true, soleShareholder: true, inLiquidation: true, currency: true, pec: true },
+      }),
+    ])
+    const address = officeAddress.safeParse(company?.address)
+    const legal: CompanyLegal | null = company
+      ? {
+          legalName: company.legalName,
+          tradeName: company.tradeName,
+          address: address.success ? address.data : null,
+          vatNumber: company.vatNumber,
+          fiscalCode: company.fiscalCode,
+          reaOffice: company.reaOffice,
+          reaNumber: company.reaNumber,
+          shareCapital: company.shareCapital === null ? null : company.shareCapital.toFixed(2),
+          soleShareholder: company.soleShareholder,
+          inLiquidation: company.inLiquidation,
+          currency: company.currency,
+          pec: company.pec,
+        }
+      : null
+    const block = (language: 'it' | 'en') => (legal ? { name: legalName(legal, language), lines: legalLines(legal, language) } : { name: session.company.name, lines: [] })
+    return { code: party?.code ?? session.partyId, kinds: partnerKindsOf(party?.roles ?? []), legal: { it: block('it'), en: block('en') } }
+  })
+}
+
+export async function me(app: FastifyInstance, request: FastifyRequest) {
   const session = portalSessionOf(request)
   const context = requireContext(request)
   const now = portalOf(app).auth.clock.now()
   const stepUpUntil = portalStepUpUntil(session.stepUpAt, now)
+  const facts = await frameFacts(app, session)
   return {
     user: {
       id: session.userId,
@@ -43,8 +88,8 @@ export function me(app: FastifyInstance, request: FastifyRequest) {
       partnerKind: session.person.partnerKind,
       accessUntil: session.person.accessUntil ? toUtcIso(session.person.accessUntil) : null,
     },
-    party: session.party,
-    company: { id: session.company.id, code: session.company.code, name: session.company.name },
+    party: { ...session.party, code: facts.code, kinds: facts.kinds },
+    company: { id: session.company.id, code: session.company.code, name: session.company.name, legal: facts.legal },
     session: { id: session.id, createdAt: toUtcIso(session.createdAt), ...timesOf(session), stepUpUntil: stepUpUntil ? toUtcIso(stepUpUntil) : null },
     preview: session.preview,
     terms: session.terms,
@@ -62,6 +107,32 @@ export async function refresh(app: FastifyInstance, request: FastifyRequest) {
     client.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { lastSeenAt: now, idleExpiresAt } }),
   )
   return timesOf({ idleExpiresAt, absoluteExpiresAt: session.absoluteExpiresAt })
+}
+
+/**
+ * B-W2b-173 (SCM-101): the person's own language, chosen in the portal's person menu — the pages, the notifications and the
+ * e-mails speak it. ONE command in the tenant's office scope as the person (the partner role cannot update its User row),
+ * audited with the language before and after; the same language again changes nothing (its audit row says unchanged). A
+ * preview never gets here (the authenticator: read-only).
+ */
+export async function changeLocale(app: FastifyInstance, request: FastifyRequest, body: { readonly locale: 'it' | 'en' }, idempotencyKey?: string) {
+  const p = portalOf(app)
+  const session = portalSessionOf(request)
+  const { result } = await p.auth.command(
+    p.auth.contextFor(request, session.tenantId, session.userId),
+    { name: 'portal.changeLocale', idempotencyKey, input: body },
+    async ({ tx, audit }) => {
+      const person = await tx.user.findUniqueOrThrow({ where: { id: session.userId }, select: { locale: true } })
+      if (person.locale === body.locale) {
+        audit({ recordType: 'User', recordId: session.userId, companyId: session.company.id, after: { locale: body.locale, unchanged: true } })
+        return { locale: body.locale, changed: false }
+      }
+      await tx.user.update({ where: { id: session.userId }, data: { locale: body.locale }, select: { id: true } })
+      audit({ recordType: 'User', recordId: session.userId, companyId: session.company.id, before: { locale: person.locale }, after: { locale: body.locale } })
+      return { locale: body.locale, changed: true }
+    },
+  )
+  return result
 }
 
 export async function terms(app: FastifyInstance, request: FastifyRequest, query: { readonly locale?: string | undefined }) {

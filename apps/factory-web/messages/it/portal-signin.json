@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "title": "Accesso",
+    "privacyTitle": "Informativa privacy"
+  },
+  "head": {
+    "language": "Lingua",
+    "portal": "Portale partner",
+    "stillLoading": "Ancora un momento…"
+  },
+  "email": {
+    "title": "Accedi a {portal}",
+    "titleAnonymous": "Accedi al portale",
+    "lead": "Ti mandiamo una e-mail con un link di accesso e un codice. Nessuna password.",
+    "label": "E-mail di lavoro",
+    "hint": "L'indirizzo con cui sei stato invitato.",
+    "submit": "Mandami il link di accesso",
+    "sending": "Invio dell'e-mail…",
+    "required": "Scrivi la tua e-mail di lavoro.",
+    "format": "Scrivi un'e-mail come nome@azienda.it",
+    "failed": "Non riusciamo a mandare l'e-mail adesso. Riprova tra un minuto.",
+    "offline": "Nessuna connessione"
+  },
+  "wait": {
+    "seconds_one": "Aspetta {count} secondo prima di chiedere di nuovo.",
+    "seconds_other": "Aspetta {count} secondi prima di chiedere di nuovo.",
+    "minutes_one": "Aspetta {count} minuto prima di chiedere di nuovo.",
+    "minutes_other": "Aspetta {count} minuti prima di chiedere di nuovo."
+  },
+  "check": {
+    "running": "Un momento: controlliamo che sia una persona e non un programma. Non viene mandato nulla altrove.",
+    "failed": "Il controllo non è finito. Riprova."
+  },
+  "code": {
+    "title": "Controlla la tua e-mail",
+    "sent": "Se {email} è invitato, abbiamo mandato un link e un codice. Valgono 15 minuti.",
+    "lead": "Apri il link nell'e-mail, oppure scrivi qui il codice di 6 cifre: su questo dispositivo o su quello dove leggi la posta.",
+    "label": "Codice dall'e-mail",
+    "hint": "6 cifre. Puoi incollare il codice intero.",
+    "submit": "Accedi",
+    "otherEmail": "Usa un'altra e-mail",
+    "wrong": "Il codice non corrisponde.",
+    "triedOut": "Troppi tentativi. Chiedi un nuovo codice.",
+    "expired": "Il codice è scaduto. Possiamo mandarne uno nuovo.",
+    "format": "Scrivi le 6 cifre del codice.",
+    "incomplete": "Scrivi prima le 6 cifre del codice.",
+    "failed": "L'accesso non è riuscito per un problema nostro. Riprova.",
+    "offline": "Nessuna connessione",
+    "checking": "Controllo del codice…"
+  },
+  "link": {
+    "checking": "Apertura del link di accesso…",
+    "title": "Continua sul portale {company}",
+    "as": "Continua sul portale {company} come {email}",
+    "why": "Non succede nulla finché non premi Continua: un programma di posta che apre i link da solo non può usare il tuo.",
+    "continue": "Continua",
+    "deadTitle": "Questo link di accesso non funziona più.",
+    "deadBody": "Un link vale una volta sola e per 15 minuti. Chiedine uno nuovo con la tua e-mail di lavoro.",
+    "newLink": "Mandami un nuovo link",
+    "failed": "L'accesso non è riuscito per un problema nostro. Riprova."
+  },
+  "first": {
+    "title": "Benvenuto in {portal}",
+    "lead": "Due brevi conferme, solo questa prima volta. Puoi cambiarle in seguito.",
+    "name": "Il tuo nome",
+    "nameHint": "Come lo vedono in {company}.",
+    "nameRequired": "Scrivi il tuo nome.",
+    "nameTooLong": "Al massimo 120 caratteri.",
+    "language": "Lingua",
+    "languageHint": "La usano il portale e le sue e-mail.",
+    "summaries": "Riepiloghi via e-mail",
+    "summariesHint": "Per gli aggiornamenti non urgenti. Le e-mail su ordini, consegne e fatture arrivano sempre subito.",
+    "instant": "Subito",
+    "instantHint": "Una e-mail per ogni aggiornamento.",
+    "daily": "Una volta al giorno",
+    "dailyHint": "Un riepilogo al giorno.",
+    "weekly": "Una volta alla settimana",
+    "weeklyHint": "Un riepilogo alla settimana.",
+    "terms": "Condizioni del portale",
+    "termsVersion": "{label}",
+    "termsLoading": "Caricamento delle condizioni del portale…",
+    "termsFailed": "Non è stato possibile caricare le condizioni del portale. Riprova.",
+    "termsRetry": "Caricale di nuovo",
+    "termsLanguage": "Non ancora pronte nella tua lingua: mostrate in {language}.",
+    "accept": "Ho letto e accetto le condizioni del portale di {company}.",
+    "acceptRequired": "Accetta le condizioni del portale per continuare.",
+    "privacy": "Informativa privacy di {company}",
+    "newTab": "si apre in una nuova scheda",
+    "submit": "Vai al mio portale",
+    "saving": "Salvataggio…",
+    "failed": "Non riusciamo a salvare adesso. Riprova.",
+    "termsChanged": "Le condizioni del portale sono cambiate mentre leggevi. Leggi la nuova versione e accettala di nuovo."
+  },
+  "opening": "Accesso fatto. Apertura del tuo portale…",
+  "ended": {
+    "title": "Sei uscito",
+    "idle": "Sei uscito dopo 30 minuti senza attività. Accedi di nuovo per continuare.",
+    "revoked": "La tua sessione è stata chiusa. Accedi di nuovo per continuare.",
+    "hide": "Nascondi"
+  },
+  "paused": {
+    "title": "Accesso sospeso",
+    "endedTitle": "Accesso terminato",
+    "PAUSED": "Il tuo accesso al portale {company} è sospeso. Contatta {contact}.",
+    "ENDED": "Il tuo accesso al portale {company} è terminato il {date}. Contatta {contact} se ti serve ancora.",
+    "ENDED_undated": "Il tuo accesso al portale {company} è terminato. Contatta {contact} se ti serve ancora.",
+    "INVITATION_ENDED": "Il tuo invito al portale {company} non è più valido. Chiedine uno nuovo a {contact}.",
+    "PORTAL_OFF": "Il portale {company} non è ancora attivo per la tua organizzazione. Contatta {contact}.",
+    "TERMS_NOT_PUBLISHED": "Il portale {company} non è ancora aperto: le sue condizioni non sono pubblicate. Contatta {contact}.",
+    "contactPerson": "il tuo referente in {company}",
+    "write": "Scrivi un'e-mail"
+  },
+  "unknown": {
+    "title": "Quale portale?",
+    "none": "Questa pagina non sa di chi è il portale da aprire. Apri l'indirizzo nell'e-mail di invito, oppure il link nell'e-mail di accesso.",
+    "notFound": "Non conosciamo questo indirizzo del portale. Controlla l'indirizzo nell'e-mail di invito, o chiedi all'azienda che ti ha invitato."
+  },
+  "foot": {
+    "invite": "Il portale è su invito. Chiedi al tuo referente in {company}:",
+    "inviteNoContact": "Il portale è su invito. Chiedi al tuo referente in {company}.",
+    "inviteAnonymous": "Il portale è su invito. Chiedi al tuo referente nell'azienda che ti ha invitato.",
+    "privacy": "Informativa privacy di {company}",
+    "newTab": "si apre in una nuova scheda",
+    "legal": "Dati dell'azienda"
+  },
+  "privacy": {
+    "title": "Informativa privacy di {company}",
+    "titleAnonymous": "Informativa privacy",
+    "missing": "A questo indirizzo non è ancora pubblicata un'informativa privacy. Chiedi a {company}.",
+    "missingAnonymous": "A questo indirizzo non è ancora pubblicata un'informativa privacy.",
+    "failed": "Non è stato possibile caricare l'informativa adesso.",
+    "retry": "Riprova",
+    "language": "Non ancora pronta nella tua lingua: mostrata in {language}.",
+    "close": "Puoi chiudere questa scheda: l'accesso resta aperto nell'altra."
+  },
+  "language": {
+    "it": "italiano",
+    "en": "inglese"
+  }
+}

@@ -16,6 +16,8 @@
  *             "Ask a correction" (MES-096): an older own report gets new counts and a reason; the original stays
  */
 
+import type { FirstPieceFlag } from './first-piece'
+
 export const UNDO_WINDOW_MS = 2 * 60_000
 
 export type DefectKind = 'SCRAP' | 'REWORK'
@@ -77,6 +79,8 @@ export interface BundleCard {
   readonly choose: readonly string[]
   readonly hint: { readonly code: string; readonly message: string; readonly fix: string } | null
   readonly reasons: readonly CardReason[]
+  /** B-W2b-105 (QHS-039): the work order's first piece at this bundle's operations (null: none asked; absent: an older card kept on the tablet). */
+  readonly firstPiece?: FirstPieceFlag | null
 }
 
 // ---- what a card opens ------------------------------------------------------------------------------------------------
@@ -135,6 +139,11 @@ export interface Counts {
   readonly rework: Readonly<Record<string, number>>
   /** Good as typed on the pad; null: Good balances itself (expected − scrap − rework). */
   readonly typedGood: number | null
+  /**
+   * B-W2b-105 (MES-127; design floor.reasons "Which operation caused it?"): the operation of the bundle each kind's lines are charged
+   * to; absent or null: not known (nothing charged). Per operation, never per person.
+   */
+  readonly causedAt?: Readonly<Partial<Record<'scrap' | 'rework', string | null>>>
 }
 
 export const NO_COUNTS: Counts = Object.freeze({ scrap: Object.freeze({}), rework: Object.freeze({}), typedGood: null })
@@ -216,12 +225,35 @@ export function finishHeld(counts: Counts, expected: number | null, ceiling: num
   return null
 }
 
-const lines = (record: Readonly<Record<string, number>>) => Object.entries(record).filter(([, quantity]) => quantity > 0).map(([reason, quantity]) => ({ reason, quantity }))
+const lines = (record: Readonly<Record<string, number>>, causedAtOperationId: string | null = null) =>
+  Object.entries(record)
+    .filter(([, quantity]) => quantity > 0)
+    .map(([reason, quantity]) => (causedAtOperationId ? { reason, quantity, causedAtOperationId } : { reason, quantity }))
+
+/** B-W2b-105 (MES-127): the operation a kind's lines are charged to, or null (not known). */
+export const causedAtOf = (counts: Pick<Counts, 'causedAt'>, kind: DefectKind): string | null => counts.causedAt?.[lineKey(kind)] ?? null
+
+/**
+ * The operations a defect found at `at` may be charged to (design floor.reasons "attribute": the bundle's operations as tiles): the
+ * ones up to this one in sequence (a later operation has not touched the bundle), this one last and marked; an operation added by
+ * hand (B-W2b-82) too, by its place. Never a person.
+ */
+export function causeOperations(card: Pick<BundleCard, 'operations'>, at: Pick<CardOperation, 'id' | 'seq'>): { id: string; seq: number; code: string; name: string; here: boolean }[] {
+  return card.operations
+    .filter((operation) => operation.seq <= at.seq || operation.id === at.id)
+    .sort((a, b) => a.seq - b.seq)
+    .map((operation) => ({ id: operation.id, seq: operation.seq, code: operation.code, name: operation.name, here: operation.id === at.id }))
+}
+
+/** The counts with a kind's lines charged to an operation (null: not known). */
+export function withCause(counts: Counts, kind: DefectKind, operationId: string | null): Counts {
+  return { ...counts, causedAt: { ...counts.causedAt, [lineKey(kind)]: operationId } }
+}
 
 /** The queued report's body (floor-sync `production.scan.report`), empty lines left out; `components`: the lots scanned (MES-114). */
 export function reportPayload(card: Pick<BundleCard, 'bundle'>, operationId: string, counts: Counts, expected: number, components: readonly { readonly code: string; readonly garments: number }[] = []): Record<string, unknown> {
-  const scrap = lines(counts.scrap)
-  const rework = lines(counts.rework)
+  const scrap = lines(counts.scrap, causedAtOf(counts, 'SCRAP'))
+  const rework = lines(counts.rework, causedAtOf(counts, 'REWORK'))
   return {
     code: card.bundle.code,
     workOrderOperationId: operationId,
@@ -389,4 +421,7 @@ export const KNOWN_REFUSALS = [
   'BUNDLE_RUNNING',
   // B-W2b-82: an unplanned operation counts good pieces only.
   'UNPLANNED_GOOD_ONLY',
+  // B-W2b-105 (B-W2b-99's codes): the run waits for its first piece; a defect charged to an operation of no work order of the bundle.
+  'FIRST_PIECE',
+  'CHARGED_OPERATION_UNKNOWN',
 ] as const

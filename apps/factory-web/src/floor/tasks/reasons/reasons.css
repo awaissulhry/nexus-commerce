@@ -11,3 +11,11 @@
   font-weight: var(--nds-font-weight-semibold);
   color: var(--nds-text);
 }
+
+/* B-W2b-105: "Which operation caused it?", one row of pressed buttons above the reasons (wrapping to rows on a phone). */
+.fw-reasons-cause-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

@@ -40,6 +40,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Complaint: '/quality/complaints/[id]',
   // B-W2b-118: a quality alert rule (a test of it rings the bell) opens on Quality rules in its dialog.
   QualityAlertRule: '/quality/settings?rule=[id]',
+  // B-W2b-104: an inspection plan's record (SCR-077-plan); an AQL profile and a rule of "When inspections are created" on their tabs.
+  InspectionPlan: '/quality/plans/[id]',
+  AqlProfile: '/quality/plans?tab=aql&profile=[id]',
+  InspectionTrigger: '/quality/plans?tab=triggers&rule=[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
   // Compliance › Tests & substances (SCR-054), which the lot record links.
   Lot: '/warehouse/lots/[id]',
@@ -205,6 +209,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-67: the holds (the page reads the API's own filters: `?status=`, `?overdue=true`, `?system=true`, `?quarantine=`, `?ownerId=me`).
   '/quality/holds': '/quality/holds',
   '/quality/defects': '/quality/defects',
+  // B-W2b-104: the plans (`?stage=`, `?status=`, `?q=` as the API reads them).
+  '/quality/plans': '/quality/plans',
   '/compliance/register': '/compliance/register',
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',
