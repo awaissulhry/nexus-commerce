@@ -379,6 +379,7 @@
     "pack": "Pack",
     "final": "Final inspection",
     "inline": "In-line inspection",
+    "incoming": "Incoming inspection",
     "scan": "Scan anything",
     "sds": "Safety data sheets",
     "hint": {
@@ -393,6 +394,7 @@
       "kits": "Send a kit with its DDT, receive goods back",
       "final": "Check, sign and release garments",
       "inline": "First piece, cutting, roving, end of line",
+      "incoming": "Hide by hide, rolls, components; sign the decision",
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
@@ -726,7 +728,8 @@
       "onBehalf_other": "Entry on behalf: {code} · {count} good",
       "progress": "A machine report's progress",
       "repair": "Repair scan of {code}",
-      "incident": "Incident report"
+      "incident": "Incident report",
+      "incomingRecord": "Incoming inspection: a hide or the checks"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

@@ -54,7 +54,6 @@
   "inspect": "Collauda",
   "start": "Inizia il collaudo",
   "held": {
-    "noFloorScreen": "I collaudi in accettazione si registrano in ufficio finché non arriva la loro schermata di reparto.",
     "noTile": "Questa postazione non ha una schermata per questo: aprilo al banco di collaudo.",
     "notYours": "È di un altro ispettore: lo registra lui."
   },

@@ -66,6 +66,8 @@ export const WHAT_KEY = {
   'production.repair.scan': 'repair',
   // B-W2b-137: an incident report with the worker's name (one without a name never queues).
   'safety.incident.report': 'incident',
+  // B-W2b-115: a hide or the plan's checks of an incoming inspection, kept while the network is gone.
+  'quality.incoming.record': 'incomingRecord',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

@@ -379,6 +379,7 @@
     "pack": "Imballa",
     "final": "Collaudo finale",
     "inline": "Controllo in linea",
+    "incoming": "Controllo in accettazione",
     "scan": "Scansiona",
     "sds": "Schede di sicurezza",
     "hint": {
@@ -393,6 +394,7 @@
       "kits": "Invia un kit con il DDT, ricevi il rientro",
       "final": "Controlla, firma e rilascia i capi",
       "inline": "Primo capo, taglio, itinerante, fine linea",
+      "incoming": "Pelle per pelle, rotoli, componenti; firma la decisione",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
       "machine": "Segnala un guasto; gli interventi del tecnico",
@@ -726,7 +728,8 @@
       "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni",
       "progress": "Avanzamento di una segnalazione guasto",
       "repair": "Scansione di riparazione di {code}",
-      "incident": "Segnalazione di sicurezza"
+      "incident": "Segnalazione di sicurezza",
+      "incomingRecord": "Controllo in accettazione: una pelle o i controlli"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
