@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, CircleAlert, ClipboardList, Clock, CloudOff, Factory, GraduationCap, Hash, Layers, LayoutGrid, LifeBuoy, ListTodo, Package, PackageOpen, Pause, Play, Ruler, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Siren, Tag, TrafficCone, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
+import { ArrowLeft, CircleAlert, ClipboardList, Clock, CloudOff, Factory, GraduationCap, Hash, Layers, LayoutGrid, LifeBuoy, ListTodo, Package, PackageOpen, PackageSearch, Pause, Play, Ruler, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Siren, Tag, TrafficCone, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
@@ -68,6 +68,8 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
   kits: <Factory />,
   labels: <Tag />,
   pack: <Package />,
+  // B-W2b-115
+  incoming: <PackageSearch />,
   final: <ShieldCheck />,
   // B-W2b-105
   inline: <TrafficCone />,

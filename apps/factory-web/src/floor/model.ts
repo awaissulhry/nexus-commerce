@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -82,6 +82,10 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-096: garment labels at the final operation (production.serials: the API's permission; the print goes through it).
   { key: 'labels', permission: 'production.serials', modes: ['packing'], built: true, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
+  // SCR-175 (B-W2b-115): Incoming inspection at the inspection bench (design floor.incoming Modes: inspection; tile family Quality,
+  // before Final inspection so it stays on Home's first page of an inspection tablet, B-W2b-73); its writes ask
+  // quality.incoming.record (floor_inspector). Its scans read a lot's label, a hide tag or an inspection number.
+  { key: 'incoming', permission: 'quality.incoming.record', modes: ['inspection'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
   // SCR-176 (B-W2b-105): In-line inspection at the inspection bench and on a team leader's line tablet (design floor.inline Modes:
   // inspection, supervisor); its writes ask quality.inprocess.record (floor_inspector, team_leader). Its scans read a bundle's ticket.

@@ -243,7 +243,9 @@
     "body": "{good} buoni, {rejected} scartati, {scrapped} persi dal terzista.",
     "material_one": "{count} riga di materiale rientrata nei nostri posti.",
     "material_other": "{count} righe di materiale rientrate nei nostri posti.",
-    "office": "L'ufficio vede ora il ricevimento sull'ordine."
+    "office": "L'ufficio vede ora il ricevimento sull'ordine.",
+    "inspection": "La merce va prima al controllo in accettazione {number}: non entra a magazzino e il terzista non è pagato finché non è deciso.",
+    "inspect": "Controlla {number} ora"
   },
   "refusal": {
     "NOT_FOUND": {

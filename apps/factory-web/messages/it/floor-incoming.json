@@ -1,0 +1,504 @@
+{
+  "title": "Controllo in accettazione",
+  "loading": "Lettura di {code}…",
+  "busy": "Salvataggio…",
+  "online": "Serve la rete: si registra subito.",
+  "notYours": "Questo controllo lo registra e lo firma il controllore che lo ha preso.",
+  "notOpen": "Questo controllo è firmato o annullato: non cambia più.",
+  "noPermission": {
+    "title": "Non è un controllo tuo",
+    "body": "Il controllo in accettazione richiede il diritto di controllore in accettazione. Chiedi al capo linea o alla qualità."
+  },
+  "unit": {
+    "hide_one": "pelle",
+    "hide_other": "pelli",
+    "piece_one": "pezzo",
+    "piece_other": "pezzi"
+  },
+  "scan": {
+    "lot": {
+      "label": "Scansiona il lotto",
+      "hint": "L'etichetta del lotto, il lotto del fornitore, il bagno di tintura, il cartellino di una pelle o il numero di un controllo"
+    },
+    "read": "Letto: {code}",
+    "type": "Digita il codice",
+    "camera": {
+      "start": "Scansiona con la fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera non parte: digita il codice."
+    },
+    "offline": "Senza rete: un controllo letto da questo tablet in questa visita si apre da qui; uno nuovo si apre quando torna la rete.",
+    "wrong": {
+      "notFound": "In questo stabilimento nulla ha il codice {code}.",
+      "otherFactory": "{code} è l'etichetta di un'altra fabbrica.",
+      "typo": "{code} è stato letto male: scansiona di nuovo o digitalo.",
+      "notOnTablet": "{code} non è su questo tablet: si apre quando torna la rete.",
+      "otherBench": "{code} è di un altro banco: scansiona un lotto, una pelle o un controllo in accettazione.",
+      "nothing": "Niente da controllare per {code}: nessun piano in accettazione si applica, o il lotto è già deciso. L'ufficio indica il piano o lo apre.",
+      "label": "{code} è un'etichetta che questo banco non prende: scansiona l'etichetta del lotto.",
+      "notOfLot": "{code} non è una pelle di questo lotto.",
+      "notWhole": "{code} è già tagliata: il campione prende solo pelli intere.",
+      "sampleFull": "Il campione è completo: togli una pelle prima di mettere {code}.",
+      "rollFull": "I rotoli del campione sono tutti registrati: {code} non entra.",
+      "notRollLot": "{code} è il cartellino di un rotolo: scansiona prima l'etichetta del suo lotto."
+    }
+  },
+  "open": {
+    "title": "Aperti in questo stabilimento",
+    "loading": "Lettura dei controlli aperti…",
+    "none": "Nessun controllo in accettazione aperto in questo stabilimento.",
+    "workshop": "merce rientrata da un terzista",
+    "since": "aperto alle {time}",
+    "underWay": "In corso",
+    "toStart": "Da iniziare",
+    "countLabel": "{done} su {sample} nel campione",
+    "count_one": "1 controllo aperto",
+    "count_other": "{count} controlli aperti",
+    "failed": "Non è stato possibile leggere i controlli aperti: scansiona comunque il lotto."
+  },
+  "keys": {
+    "scan": "Scansione",
+    "scanDoes": "un'etichetta apre il suo controllo",
+    "home": "Home",
+    "hideDoes": "il cartellino di una pelle la apre",
+    "accept": "accetta la pelle sullo schermo",
+    "back": "Indietro"
+  },
+  "choose": {
+    "title": "{code} porta a più di un controllo",
+    "incoming": "Controllo in accettazione",
+    "otherBench": "Controllo di un altro banco",
+    "held": "Non è di questo banco: aprilo dove si controlla."
+  },
+  "head": {
+    "lot": "Lotto",
+    "goodsBack": "Merce rientrata",
+    "workshop": "Ordine di lavoro {workOrder} · da un terzista",
+    "plan": "Piano",
+    "noPlan": "Nessun piano",
+    "sample": "Campione",
+    "how": "Estratto",
+    "done": "Fatti",
+    "decided": "Firmato",
+    "cancelled": "Annullato",
+    "progress": "{done} su {of} nel campione",
+    "dye": "bagno {dye}"
+  },
+  "result": {
+    "PASS": "Finora conforme",
+    "FAIL": "Non conforme",
+    "passing": "Accetta fino a {major} con un difetto maggiore e {minor} con uno minore; un difetto critico non è mai accettato.",
+    "over": {
+      "CRITICAL_one": "1 con un difetto critico: un difetto critico non è mai accettato.",
+      "CRITICAL_other": "{count} con un difetto critico: un difetto critico non è mai accettato.",
+      "MAJOR_one": "1 con un difetto maggiore: il piano ne accetta {accept}.",
+      "MAJOR_other": "{count} con un difetto maggiore: il piano ne accetta {accept}.",
+      "MINOR_one": "1 con un difetto minore: il piano ne accetta {accept}.",
+      "MINOR_other": "{count} con un difetto minore: il piano ne accetta {accept}."
+    }
+  },
+  "sample": {
+    "method": {
+      "AQL": "AQL",
+      "FIXED": "Fisso dal piano",
+      "WHOLE": "Tutto il lotto"
+    },
+    "short": "{sample} {unit} su {lot}",
+    "allShort": "tutto il lotto: {lot} {unit}",
+    "rollsShort_one": "1 rotolo su {lot} {uom}",
+    "rollsShort_other": "{count} rotoli su {lot} {uom}",
+    "aqlShort": "AQL {level} · lettera {letter}"
+  },
+  "sections": {
+    "label": "Parti del controllo",
+    "of": "{done} su {of}",
+    "state": {
+      "todo": "Da fare",
+      "partly": "In corso",
+      "done": "Fatto",
+      "failed": "Non conforme"
+    }
+  },
+  "section": {
+    "hides": "Pelli",
+    "rolls": "Rotoli di tessuto",
+    "components": "Protezioni, cerniere, minuteria",
+    "counter": "Difetti",
+    "checks": "Controlli",
+    "decision": "Decisione"
+  },
+  "hides": {
+    "scan": "Scansiona la pelle successiva",
+    "scanHint": "Il cartellino di una pelle (o il numero della conceria digitato)",
+    "lotArea_one": "Superficie della pelle misurata: {percent} rispetto alla conceria (tolleranza {tolerance} %).",
+    "lotArea_other": "Superficie delle {count} pelli misurate: {percent} rispetto alla conceria (tolleranza {tolerance} %).",
+    "claim": "L'ufficio apre il reclamo per la superficie.",
+    "none": "Nessuna pelle nel campione: scansiona la prima.",
+    "sample": "Le pelli del campione",
+    "shade": "tonalità {shade}",
+    "noShade": "tonalità da indicare",
+    "grade": "scelta {grade}",
+    "marks_one": "1 segno",
+    "marks_other": "{count} segni",
+    "count": "{count} pelli controllate su {sample}",
+    "candidates_one": "1 pelle intera del lotto non controllata",
+    "candidates_other": "{count} pelli intere del lotto non controllate"
+  },
+  "area": {
+    "WITHIN": "Entro tolleranza",
+    "SHORT": "In meno",
+    "OVER": "In più",
+    "percentLabel": "differenza dalla superficie della conceria"
+  },
+  "areaUom": {
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²"
+  },
+  "klass": {
+    "CRITICAL": "Critico",
+    "MAJOR": "Maggiore",
+    "MINOR": "Minore"
+  },
+  "decision": {
+    "word": {
+      "ACCEPTED": "Accettata",
+      "REJECTED": "Respinta",
+      "TO_SORT": "Da selezionare",
+      "none": "Da decidere"
+    },
+    "go": "Alla decisione",
+    "sign": "Firma la decisione",
+    "accepted": "Accettati",
+    "rejected": "Respinti",
+    "toSort": "Da selezionare",
+    "rest": "Il resto",
+    "digits": "Digita",
+    "closeDigits": "Chiudi i tasti",
+    "hint": "Accettati, respinti e da selezionare fanno il lotto di {lot} {unit}.",
+    "sum": "Insieme {sum} su {lot} {unit}",
+    "reset": "Come dice il campione",
+    "heldTitle": "Cosa ferma la firma",
+    "ready": "Pronto da firmare: firma il tuo PIN.",
+    "workshopHint": "La merce rientrata da un terzista si decide fascio per fascio: tocca un fascio per respingerlo. I suoi pezzi sono respinti; gli altri proseguono.",
+    "bundles": "I fasci del rientro",
+    "line": "Riga {seq}",
+    "lineHint": "Op {op} · {good} buoni, {defective} difettosi",
+    "lineKept": "Prosegue",
+    "lineRejected": "Respinto"
+  },
+  "hide": {
+    "kind": "Pelle",
+    "inSample": "Nel campione",
+    "newInSample": "Entra nel campione",
+    "fact": {
+      "area": "Superficie ricevuta",
+      "sample": "Campione"
+    },
+    "shade": "Tonalità rispetto al campione master",
+    "outOfShade": "Fuori tono",
+    "grade": "Scelta",
+    "gradeName": "{code} · {name}",
+    "more": "Superficie e segni",
+    "areaRow": "Superficie rispetto alla conceria",
+    "area": {
+      "notMeasured": "Non misurata: vale la superficie ricevuta",
+      "measured": "Misurata {area} {uom}",
+      "title": "Superficie di {code}",
+      "declared": "Superficie della conceria: {area} {uom}",
+      "use": "Usa questa superficie",
+      "typeIt": "Digita la superficie misurata"
+    },
+    "mapRow": "Difetti e zone sulla mappa della pelle",
+    "mapMeta": "Difetti: {defects} · zone: {zones}",
+    "mapCount_one": "1 segno",
+    "mapCount_other": "{count} segni",
+    "accept": "Accetta la pelle",
+    "reject": "Respingi la pelle",
+    "remove": "Togli dal campione",
+    "offline": "Senza rete: la pelle si salva su questo tablet e parte quando torna la rete."
+  },
+  "map": {
+    "title": "Mappa della pelle {code}",
+    "done": "Fatto",
+    "tool": "Cosa mette un tocco",
+    "defects": "Difetti",
+    "zones": "Zone di scelta",
+    "noGrades": "Nessuna scelta del cuoio impostata: le imposta la qualità.",
+    "noDefects": "Nessun difetto della pelle in libreria: li imposta la qualità.",
+    "whichDefect": "Quale difetto?",
+    "whichZone": "Quale scelta?",
+    "zoneName": "Zona {zone}",
+    "close": "Chiudi la zona",
+    "closeHeld_one": "Tocca almeno 3 punti del contorno: finora 1.",
+    "closeHeld_other": "Tocca almeno 3 punti del contorno: finora {count}.",
+    "usable": "utilizzabile {share} %",
+    "tapDefect": "Un tocco mette {defect}.",
+    "tapZone_one": "Tocca il contorno della zona {zone}: finora 1 punto.",
+    "tapZone_other": "Tocca il contorno della zona {zone}: finora {count} punti.",
+    "held": {
+      "pickDefect": "Scegli prima il difetto, poi tocca dov'è.",
+      "pickZone": "Scegli prima la scelta, poi tocca il suo contorno.",
+      "full": "Al massimo 60 segni su una pelle.",
+      "outlineFull": "Al massimo 60 punti in una zona: chiudila."
+    },
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "zoomTop": "Già al massimo ingrandimento",
+    "zoomBottom": "La pelle intera è sullo schermo",
+    "zoom": "{percent} %",
+    "undo": "Annulla l'ultimo",
+    "nothingToUndo": "Niente da annullare",
+    "remove": "Togli {what}",
+    "removeShort": "Togli",
+    "marks": "Segni su questa pelle",
+    "noMarks": "Nessun segno: una pelle senza difetti si accetta così com'è.",
+    "where": "{across} % in larghezza, {down} % in altezza",
+    "keysTitle": "Tasti della mappa della pelle",
+    "keysTrigger": "Tasti",
+    "key": {
+      "arrows": "spostano la croce",
+      "enter": "mette sulla croce",
+      "zoom": "ingrandiscono e riducono",
+      "undo": "annulla l'ultimo segno"
+    }
+  },
+  "roll": {
+    "kindTag": "Rotolo (cartellino)",
+    "kindSupplier": "Rotolo (numero del fornitore)",
+    "width": "Altezza tessuto",
+    "length": "Lunghezza",
+    "points": "Punti",
+    "unknown": "Non nota: misurala",
+    "counters": "Difetti per lunghezza (sistema a 4 punti)",
+    "class": {
+      "1": "1 punto",
+      "2": "2 punti",
+      "3": "3 punti",
+      "4": "4 punti"
+    },
+    "classHint": {
+      "1": "fino a 7,5 cm (3\")",
+      "2": "da 7,5 a 15 cm (3\"–6\")",
+      "3": "da 15 a 23 cm (6\"–9\")",
+      "4": "oltre 23 cm (9\"), o un buco"
+    },
+    "per100Unknown": "punti per 100 yd²: misura altezza e lunghezza",
+    "per100Within": "punti per 100 yd² · entro il limite di {limit}",
+    "per100Over": "punti per 100 yd² · oltre il limite di {limit}: respingere",
+    "size": "Altezza e lunghezza",
+    "use": "Usa",
+    "accept": "Accetta il rotolo",
+    "reject": "Respingi il rotolo",
+    "held": {
+      "width": "Misura prima l'altezza.",
+      "length": "Misura prima la lunghezza."
+    },
+    "acceptAnyway": "Accetta comunque"
+  },
+  "counter": {
+    "less": "Uno in meno: {what}",
+    "more": "Uno in più: {what}",
+    "zero": "Già a zero",
+    "hint": "Pezzi del campione di {sample} con un difetto, per classe (un pezzo conta una volta, sotto il difetto peggiore).",
+    "criticalHint": "Un difetto critico non è mai accettato",
+    "acceptHint": "Accetta fino a {accept} · respinge da {reject}"
+  },
+  "rolls": {
+    "scan": "Scansiona il cartellino del rotolo",
+    "scanHint": "Oppure digita il numero di rotolo del fornitore",
+    "summary_one": "1 rotolo · {length} m · {per100} punti per 100 yd² (limite {limit}).",
+    "summary_other": "{count} rotoli · {length} m · {per100} punti per 100 yd² (limite {limit}).",
+    "over_one": "1 oltre il limite.",
+    "over_other": "{count} oltre il limite.",
+    "none": "Nessun rotolo controllato.",
+    "sample": "I rotoli del campione",
+    "meta": "{width} cm × {length} m · {points} punti · {per100} per 100 yd²",
+    "suggestAccept": "Da accettare",
+    "suggestReject": "Da respingere",
+    "candidates_one": "1 rotolo con cartellino del lotto non controllato",
+    "candidates_other": "{count} rotoli con cartellino del lotto non controllati"
+  },
+  "components": {
+    "hint": "Ogni riga: cos'è, il tipo e il certificato di una protezione, i pezzi guardati e quelli non conformi.",
+    "none": "Nessuna riga.",
+    "line": "Riga {seq} · {kind}",
+    "pieces": "{checked} guardati · {defective} non conformi",
+    "add": "Aggiungi una riga"
+  },
+  "componentKind": {
+    "PROTECTOR": "Protezione",
+    "ZIP": "Cerniera",
+    "REFLECTIVE": "Rifrangente",
+    "HARDWARE": "Minuteria",
+    "OTHER": "Altro"
+  },
+  "certificate": {
+    "VALID": "in vigore",
+    "NOT_IN_FORCE": "non in vigore",
+    "NOT_EN_1621": "non EN 1621",
+    "MISSING": "nessun certificato EN 1621",
+    "NOT_NEEDED": "nessun certificato richiesto"
+  },
+  "component": {
+    "title": "Riga {seq}",
+    "kind": "Cos'è?",
+    "type": "Tipo come marcato (EN 1621-1)",
+    "typeName": "Tipo {type}",
+    "certificate": "Il suo certificato EN 1621",
+    "covers": "copre questo lotto",
+    "noCertificate": "Nessun certificato",
+    "marking": "La marcatura sul pezzo",
+    "markingOk": "Corrisponde al certificato",
+    "markingNo": "Manca o è diversa",
+    "markingHeld": "Scegli prima il suo certificato.",
+    "checked": "Pezzi guardati",
+    "defective": "Pezzi non conformi",
+    "suggested": {
+      "ACCEPTED": "Da accettare.",
+      "REJECTED": "Da respingere."
+    },
+    "reason": {
+      "defective": "{defective} su {checked} non conformi.",
+      "noCertificate": "Senza certificato EN 1621 la protezione non entra in un DPI.",
+      "marking": "Leggi la marcatura: norma, livello, tipo.",
+      "noType": "Indica il tipo, A o B, come marcato."
+    },
+    "accept": "Accetta la riga",
+    "rejectMain": "Respingi la riga",
+    "reject": "Respingi la riga",
+    "acceptAnyway": "Accetta comunque",
+    "held": {
+      "kind": "Indica prima cos'è.",
+      "checked": "Indica quanti pezzi hai guardato."
+    }
+  },
+  "checks": {
+    "left_one": "Manca 1 controllo obbligatorio",
+    "left_other": "Mancano {count} controlli obbligatori",
+    "taps": "I controlli del piano",
+    "values": "Valori da misurare o scegliere",
+    "optional": "facoltativo",
+    "toDo": "da fare",
+    "nominal": "{nominal} ± {tolerance} {uom}",
+    "choice_one": "una di 1 scelta",
+    "choice_other": "una di {count} scelte",
+    "result": {
+      "PASS": "conforme {value}",
+      "FAIL": "non conforme {value}",
+      "NOT_APPLICABLE": "non applicabile"
+    },
+    "office": "{check}: si risponde in ufficio (niente da digitare in reparto)."
+  },
+  "checkClass": {
+    "CRITICAL": "Critici",
+    "MAJOR": "Maggiori",
+    "MINOR": "Minori",
+    "OTHER": "Altri controlli"
+  },
+  "measure": {
+    "savePass": "Salva · entro tolleranza",
+    "saveFail": "Salva · fuori tolleranza",
+    "pass": "Conforme",
+    "fail": "Non conforme",
+    "held": "Inserisci prima un valore."
+  },
+  "held": {
+    "offline": "Per firmare serve la rete.",
+    "waiting_one": "1 registrazione di questo controllo è ancora su questo tablet: parte prima.",
+    "waiting_other": "{count} registrazioni di questo controllo sono ancora su questo tablet: partono prima.",
+    "empty": "Compila le tre quantità.",
+    "whole": "Il lotto si conta in unità intere: numeri interi.",
+    "sum": "Fanno {sum}; il lotto è {lot}.",
+    "hidesUndecided_one": "Decidi prima la pelle {codes}.",
+    "hidesUndecided_other": "Decidi prima ogni pelle del campione: {codes}.",
+    "rollsUndecided_one": "Decidi prima il rotolo senza decisione.",
+    "rollsUndecided_other": "Decidi prima ogni rotolo: {count} sono senza decisione.",
+    "componentsUndecided_one": "Decidi prima la riga dei componenti senza decisione.",
+    "componentsUndecided_other": "Decidi prima ogni riga dei componenti: {count} sono senza decisione.",
+    "below": {
+      "accepted": "Il campione ne ha accettati di più: almeno {min}.",
+      "rejected": "Il campione ne ha respinti di più: almeno {min}.",
+      "toSort": "Il campione ne ha lasciati di più da selezionare: almeno {min}."
+    },
+    "outsideBeforeWhole": "Controlla prima tutto il campione ({done} su {sample}) prima di accettare pelli fuori campione; ora respingi o seleziona il resto.",
+    "outsideBeforeWholeRolls": "Controlla prima ogni rotolo del campione ({done} su {sample}) prima di accettare più dei rotoli accettati; respingi o seleziona il resto.",
+    "failedSplit": "Il campione non è conforme: accetta solo le {accepted} controllate e accettate; respingi o seleziona il resto.",
+    "hard": "Mai tutto il lotto: c'è un difetto critico o un controllo critico non conforme.",
+    "mandatory_one": "Rispondi al controllo obbligatorio prima di accettare tutto il lotto.",
+    "mandatory_other": "Rispondi ai {count} controlli obbligatori prima di accettare tutto il lotto.",
+    "override": {
+      "FAIL": "Le regole dicono non conforme: accettare tutto il lotto contro di esse richiede le ragioni scritte, quindi lo fa l'ufficio.",
+      "PASS": "Le regole dicono conforme: respingere tutto il lotto contro di esse richiede le ragioni scritte, quindi lo fa l'ufficio."
+    },
+    "workshopSort": "La merce rientrata da un terzista non lascia nulla da selezionare.",
+    "notYours": "Lo firma solo il controllore che lo ha preso.",
+    "notOpen": "È firmato o annullato."
+  },
+  "sign": {
+    "title": "Firma la decisione",
+    "summary": "Accettati {accepted} · respinti {rejected} · da selezionare {toSort} ({unit}).",
+    "summaryWorkshop": "Accettati {accepted} · respinti {rejected} ({unit}).",
+    "meaning": "Firmo il controllo in accettazione {number} di {lot}: accettati {accepted}, respinti {rejected}, da selezionare {toSort}.",
+    "detail": "Il tuo PIN firma la decisione."
+  },
+  "done": {
+    "title": "{number} firmato",
+    "again": "Scansiona il lotto successivo",
+    "quantities": "Accettati {accepted} · respinti {rejected} · da selezionare {toSort} ({unit}).",
+    "next": {
+      "RELEASE": "Il lotto {lot} resta in quarantena finché una persona con il ruolo qualità digita il suo codice e lo rilascia.",
+      "REJECT": "Il lotto {lot} resta in quarantena: una persona con il ruolo qualità lo respinge e gli acquisti lo rendono al fornitore.",
+      "SORT": "Quello da selezionare si controlla pezzo per pezzo in un nuovo controllo del lotto {lot} prima del rilascio.",
+      "RELEASE_PART": "L'ufficio blocca o rende i pezzi respinti; poi una persona con il ruolo qualità rilascia il lotto {lot}."
+    },
+    "workshop_one": "1 fascio respinto ({bundles}): non dichiarato all'operazione. Rilavoralo o rendilo al terzista; gli altri proseguono ed entrano nel compenso del terzista.",
+    "workshop_other": "{count} fasci respinti ({bundles}): non dichiarati all'operazione. Rilavorali o rendili al terzista; gli altri proseguono ed entrano nel compenso del terzista.",
+    "workshopAll": "Ogni fascio prosegue all'operazione successiva ed entra nel compenso del terzista.",
+    "rejectedHides": "Pelli respinte: {codes}.",
+    "rejectedRolls": "Rotoli respinti: {codes}.",
+    "signed": "Firmato · {fingerprint}…"
+  },
+  "doneLine": {
+    "hide": "Pelle {code}: {decision}.",
+    "hideRemoved": "La pelle {code} è fuori dal campione.",
+    "roll": "Rotolo {code}: {decision}.",
+    "component": "Riga {code}: {decision}.",
+    "checks": "I controlli di {code} sono salvati.",
+    "counter": "I conteggi sono salvati."
+  },
+  "refusal": {
+    "OTHER_BENCH": {
+      "message": "Questo codice è di un altro banco.",
+      "fix": "Qui scansiona un lotto, una pelle o un controllo in accettazione."
+    },
+    "NOTHING_TO_INSPECT": {
+      "message": "Niente da controllare per questo codice.",
+      "fix": "Nessun piano in accettazione si applica, o il lotto è già deciso: l'ufficio indica il piano o lo apre."
+    },
+    "CHOOSE": {
+      "message": "Questo codice porta a più di un controllo.",
+      "fix": "Apri dalla lista quello che controlli."
+    },
+    "LABEL": {
+      "message": "Questa etichetta non è tra quelle che questo banco prende.",
+      "fix": "Scansiona l'etichetta del lotto."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Questo tablet non è pronto per i controlli.",
+      "fix": "Chiedi all'ufficio di configurarlo."
+    },
+    "other": {
+      "message": "L'ufficio non l'ha accettato.",
+      "fix": "Rileggi il controllo; chiedi alla qualità se resta così."
+    }
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
+  }
+}

@@ -74,6 +74,8 @@ export const WHAT_KEY = {
   'production.trolley.unload': 'trolleyUnload',
   'production.trolley.send': 'trolleySend',
   'production.trolley.receive': 'trolleyReceive',
+  // B-W2b-115: a hide or the plan's checks of an incoming inspection, kept while the network is gone.
+  'quality.incoming.record': 'incomingRecord',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

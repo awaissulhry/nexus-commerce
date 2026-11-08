@@ -97,7 +97,7 @@ export const ROWS: InspectorRow[] = [
 
 export const QUEUE: InspectorQueue = { asOf: AS_OF, rows: ROWS, capped: false }
 
-const HELD = { 'InProcessCheck:fp1': 'noTile', 'IncomingInspection:in1': 'noFloorScreen', 'Inspection:ins11': null, 'WorkOrder:wo44': null, 'InProcessCheck:rv1': 'noTile' } as const
+const HELD = { 'InProcessCheck:fp1': 'noTile', 'IncomingInspection:in1': null, 'Inspection:ins11': null, 'WorkOrder:wo44': null, 'InProcessCheck:rv1': 'noTile' } as const
 
 export const inspections = (extra: Partial<NonNullable<MyWorkViewModel['inspections']>> = {}): NonNullable<MyWorkViewModel['inspections']> => ({
   queue: QUEUE,
@@ -126,7 +126,7 @@ export function inspectionCases(model: Model, frame: Frame) {
     { id: 'w2b-inspections-loading', label: 'W2b: reading my inspections', model: model({ ...bench, inspections: inspections({ queue: null }) }) },
     { id: 'w2b-inspection-final', label: 'W2b: a final inspection\'s card', model: model({ ...bench, step: { kind: 'inspection', key: 'Inspection:ins11' }, inspections: inspections() }), note: 'Inspect opens the final bench on it; a scan does the same.' },
     { id: 'w2b-inspection-due', label: 'W2b: garments that wait — start', model: model({ ...bench, step: { kind: 'inspection', key: 'WorkOrder:wo44' }, inspections: inspections() }) },
-    { id: 'w2b-inspection-incoming', label: 'W2b: an incoming inspection — held with the reason', model: model({ ...bench, step: { kind: 'inspection', key: 'IncomingInspection:in1' }, inspections: inspections() }), note: 'No floor screen records it yet (B-W2b-115): the button says why.' },
+    { id: 'w2b-inspection-incoming', label: 'W2b: an incoming inspection\'s card', model: model({ ...bench, step: { kind: 'inspection', key: 'IncomingInspection:in1' }, inspections: inspections() }), note: 'Inspect opens it on Incoming inspection (B-W2b-115, SCR-175) with its number.' },
     {
       id: 'w2b-inspections-tile',
       label: 'W2b: at a sewing station, a For your work tile',

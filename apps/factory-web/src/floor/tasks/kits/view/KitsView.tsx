@@ -19,6 +19,7 @@ import {
   Printer,
   RotateCcw,
   ScanLine,
+  ShieldCheck,
   ShoppingBag,
   Trash2,
   Truck,
@@ -84,7 +85,7 @@ export interface KitsViewModel {
   held?: boolean
   stage: KitsStage
   /** The person's permissions here: send kits, receive goods back. */
-  may: { readonly send: boolean; readonly receive: boolean }
+  may: { readonly send: boolean; readonly receive: boolean; /** B-W2b-115: may open the incoming inspection of goods back. */ readonly inspect?: boolean }
   mode?: KitMode | null
   /** pick: the site's orders for the mode; null while read. */
   orders?: readonly KitRow[] | null
@@ -100,7 +101,8 @@ export interface KitsViewModel {
   material?: { readonly lineId: string; readonly quantity: number | null; readonly toLocationId: string | null } | null
   /** The reasons a rejected bundle may carry, for the floor's one reason picker (the REWORK list; null: not read yet). */
   reasons?: PickerList | null
-  received?: { readonly good: number; readonly defective: number; readonly scrapped: number; readonly returned: number } | null
+  /** B-W2b-115: `inspection` — the incoming inspection a rule opened with the receipt (goods wait for it before stock and pay). */
+  received?: { readonly good: number; readonly defective: number; readonly scrapped: number; readonly returned: number; readonly inspection?: { readonly id: string; readonly number: string } | null } | null
   busy?: 'read' | 'send' | 'receive' | null
   problem?: { readonly problem: TaskProblem; readonly code: string | null } | null
   timeZone?: string
@@ -136,6 +138,7 @@ export type KitsAction =
   | { type: 'clearDdt' }
   | { type: 'receive' }
   | { type: 'next' }
+  | { type: 'inspect' }
   | { type: 'dismiss' }
   | { type: 'retry' }
 
@@ -646,6 +649,16 @@ function Kits({ model, onAction, onFrame, camera }: KitsViewProps) {
         <TaskLine tone="info" icon={<ClipboardList />}>
           {t('received.office')}
         </TaskLine>
+        {received.inspection ? (
+          <TaskLine tone="warning" icon={<ShieldCheck />}>
+            {t('received.inspection', { number: received.inspection.number })}
+          </TaskLine>
+        ) : null}
+        {received.inspection && model.may.inspect ? (
+          <FloorButton size="lg" variant="secondary" icon={<ShieldCheck />} onClick={() => send({ type: 'inspect' })}>
+            {t('received.inspect', { number: received.inspection.number })}
+          </FloorButton>
+        ) : null}
       </div>
     )
     actions = [{ label: t('action.next'), icon: <ScanLine />, onPress: () => send({ type: 'next' }) }]
