@@ -355,6 +355,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Impostazioni',
         hideLabel: false,
         pages: [
+          // W2b: B-W2b-104 Inspection plans & AQL (SCR-077), first in Settings (the tree's order).
+          { id: 'quality.plans', title: 'Inspection plans & AQL', titleIt: 'Piani di controllo e AQL', wave: 'W2b', href: '/quality/plans' },
           { id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' },
           // W2b: B-W2b-118 Quality rules (SCR-260).
           { id: 'quality.settings', title: 'Quality rules', titleIt: 'Regole qualità', wave: 'W2b', href: '/quality/settings' },
