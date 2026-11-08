@@ -1,0 +1,208 @@
+{
+  "board": {
+    "title": "Cutting room",
+    "privacy": "Cut orders, lays and hides only: no cutter is named",
+    "openCutting": "Cutting",
+    "failed": "The cutting room could not be read",
+    "retry": "Try again",
+    "loading": "Reading…",
+    "noSite": "No site where you may read the cutting room.",
+    "siteLabel": "Cutting room at {site}",
+    "asOfToday": "Today at {time}",
+    "asOfDay": "{day}, read at {time}",
+    "unitsLabel": "Leather per area unit",
+    "unitRow_one": "{uom}: 1 hide · {area} {uom} · yield {yield} ({variance} against plan)",
+    "unitRow_other": "{uom}: {count} hides · {area} {uom} · yield {yield} ({variance} against plan)",
+    "waitingFabric_one": "1 cut lay waits for its fabric used to be confirmed at the table.",
+    "waitingFabric_other": "{count} cut lays wait for their fabric used to be confirmed at the table."
+  },
+  "tile": {
+    "waiting": "Cut orders waiting",
+    "waitingHint": "Released to the tables: {released} · being planned: {planned}",
+    "cutting": "Cutting now",
+    "cuttingHint_one": "1 lay spread at a table",
+    "cuttingHint_other": "{count} lays spread at the tables",
+    "planToday": "Cut against plan today",
+    "planDay": "Cut against plan that day",
+    "planNone_one": "Nothing due: 1 garment cut ahead of plan",
+    "planNone_other": "Nothing due: {count} garments cut ahead of plan",
+    "planAhead_one": "{pct} of plan · 1 garment cut ahead",
+    "planAhead_other": "{pct} of plan · {count} garments cut ahead",
+    "planMet": "{pct} of plan: on plan",
+    "planBehind": "{pct} of plan: behind",
+    "hides": "Hides used today",
+    "hidesNone": "No hide cut yet",
+    "hidesHint_one": "{area} {uom} · 1 piece",
+    "hidesHint_other": "{area} {uom} · {count} pieces",
+    "hidesUnits_one": "1 piece · several area units below",
+    "hidesUnits_other": "{count} pieces · several area units below",
+    "yield": "Leather yield today",
+    "yieldNone": "No hide cut yet",
+    "yieldUnknown": "Only single parts cut: no whole set to measure",
+    "yieldPlan": "Plan {planned} · {variance}",
+    "yieldSeeBelow": "Several area units: see below",
+    "fabric": "Fabric used today",
+    "fabricNone": "No lay cut yet",
+    "fabricHint": "{difference} against the estimate",
+    "fabricHintWaiting_one": "{difference} against the estimate · 1 lay to confirm",
+    "fabricHintWaiting_other": "{difference} against the estimate · {count} lays to confirm",
+    "late": "Late cut orders",
+    "lateHint": "Past their due date, not cut"
+  },
+  "list": {
+    "label": "Open cut orders",
+    "emptyTitle": "No cut order open",
+    "emptyBody": "Cut orders the office plans and releases appear here, cutting first.",
+    "emptyAction": "Plan one on the Cutting page",
+    "more_one": "+ 1 more on the Cutting page",
+    "more_other": "+ {count} more on the Cutting page",
+    "moreNoPage_one": "+ 1 more open cut order",
+    "moreNoPage_other": "+ {count} more open cut orders"
+  },
+  "col": {
+    "cutOrder": "Cut order",
+    "material": "Material",
+    "garments": "Garments",
+    "progress": "Progress",
+    "due": "Due",
+    "workOrders": "Work orders"
+  },
+  "kind": {
+    "LEATHER": "Leather, hide by hide",
+    "FABRIC": "Fabric, in lays"
+  },
+  "status": {
+    "PLANNED": "Planned",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "Cutting",
+    "CUT": "Cut",
+    "RECONCILED": "Reconciled",
+    "CANCELLED": "Cancelled"
+  },
+  "row": {
+    "lays": "Lays {cut} of {of} cut",
+    "noDue": "No due date",
+    "late": "Late"
+  },
+  "yield": {
+    "title": "Cutting and yield",
+    "period": "{from} – {to}",
+    "periodLabel": "Period",
+    "days_one": "1 day",
+    "days_other": "{count} days",
+    "openCutting": "Cutting",
+    "openLots": "Lots",
+    "privacy": "Per cut order, material, lot and supplier: never per cutter.",
+    "failed": "Cutting and yield could not be read",
+    "emptyTitle": "Nothing cut in this period",
+    "emptyBody": "Cut orders cut, lays cut and hides cut in the period appear here.",
+    "tile": {
+      "cut": "Cut against ordered",
+      "cutNone": "No cut order with every line known yet",
+      "cutHint_one": "{pct} · {difference} garments · 1 cut order",
+      "cutHint_other": "{pct} · {difference} garments · {count} cut orders",
+      "waiting": "Waiting for reconciliation",
+      "waitingHint": "Leather cut orders: their cut is known once reconciled",
+      "waitingNone": "None",
+      "fabric": "Fabric used",
+      "fabricNone": "No lay cut and confirmed",
+      "fabricHint_one": "{difference} against {estimated} m estimated · 1 lay",
+      "fabricHint_other": "{difference} against {estimated} m estimated · {count} lays",
+      "leather": "Leather yield",
+      "leatherNone": "No hide cut",
+      "leatherUnits": "Several area units: see below",
+      "leatherHint_one": "Plan {planned} · {variance} · 1 hide, {area} {uom}",
+      "leatherHint_other": "Plan {planned} · {variance} · {count} hides, {area} {uom}"
+    },
+    "chart": {
+      "label": "Leather yield per hide lot, worst first, against what the BOM expects",
+      "yield": "Yield",
+      "axis": "Yield (%)",
+      "planned": "Plan",
+      "caption": "Bars: the share of each lot's area that became pieces. Line: what the bill of materials expects."
+    },
+    "suppliers": {
+      "title": "Per supplier"
+    },
+    "lots": {
+      "title": "Per hide lot"
+    },
+    "fabric": {
+      "title": "Fabric per material",
+      "waiting_one": "1 cut lay is left out: its fabric used is not confirmed yet.",
+      "waiting_other": "{count} cut lays are left out: their fabric used is not confirmed yet."
+    },
+    "orders": {
+      "title": "Cut orders cut in the period",
+      "more_one": "+ 1 more cut order in the period (counted above)",
+      "more_other": "+ {count} more cut orders in the period (counted above)"
+    },
+    "col": {
+      "supplier": "Supplier",
+      "lotsHides": "Lots · hides",
+      "used": "Area used",
+      "yield": "Yield",
+      "planned": "Plan",
+      "lot": "Lot",
+      "hides": "Hides",
+      "material": "Material",
+      "lays": "Lays",
+      "estimated": "Estimated",
+      "usedM": "Used",
+      "difference": "Difference",
+      "cutOn": "Cut on",
+      "ordered": "Ordered",
+      "cutCol": "Cut"
+    },
+    "noSupplier": "No supplier recorded",
+    "lotsHides": "{lots} · {hides}",
+    "supplierLot": "supplier lot {ref}",
+    "reconciled": "Reconciled",
+    "notReconciled": "Not reconciled",
+    "waitsReconcile": "Known once reconciled",
+    "unknown": "Not measured",
+    "below": "Below plan",
+    "belowTitle": "{variance} against the plan"
+  },
+  "leather": {
+    "title": "Leather",
+    "rule": {
+      "ORDER": "One shade lot per order",
+      "GARMENT": "One shade lot per garment",
+      "OFF": "No shade rule at this site"
+    },
+    "failed": "The leather's shade lots could not be read ({why}).",
+    "verdict": {
+      "outOfShade": "A hide is out of shade",
+      "NONE": "No hide yet: the first one sets the shade lot",
+      "ONE": "One shade lot: {lot}, shade {shade}",
+      "MIXED_one": "1 shade lot: against the rule",
+      "MIXED_other": "{count} shade lots: against the rule",
+      "mixedAllowed_one": "1 shade lot",
+      "mixedAllowed_other": "{count} shade lots, allowed by the rule"
+    },
+    "held_one": "1 held",
+    "held_other": "{count} held",
+    "reserved_one": "1 reserved",
+    "reserved_other": "{count} reserved",
+    "cut_one": "1 cut",
+    "cut_other": "{count} cut",
+    "hides": "Hides held {held} · reserved {reserved} · cut {cut}",
+    "lotsLabel": "Shade lots of {material}",
+    "shade": "shade {shade}",
+    "unsorted": "not sorted by shade",
+    "supplierLot": "supplier lot {ref}",
+    "outOfShadeTag": "Out of shade",
+    "breaksHint": "The garments of this order may not match: talk to the cutting room before the next hide is cut."
+  },
+  "photo": {
+    "title": "Photo of the hide",
+    "thickness": "Thickness measured at the table: {mm} mm",
+    "none": "No photo of this hide was taken at the table.",
+    "loading": "Reading the photo…",
+    "alt": "Hide {hide} on the cutting table",
+    "caption": "Hide {hide} · lot {lot}, before the cut",
+    "forbidden": "You may not open files: the photo is not shown.",
+    "failed": "The photo could not be shown."
+  }
+}

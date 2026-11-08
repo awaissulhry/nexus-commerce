@@ -66,6 +66,14 @@ export const WHAT_KEY = {
   'production.repair.scan': 'repair',
   // B-W2b-137: an incident report with the worker's name (one without a name never queues).
   'safety.incident.report': 'incident',
+  // B-W2b-121: the lay at the cutting table and the trolleys to sewing (B-W2b-116, B-W2b-117 kinds).
+  'production.lay.roll': 'layRoll',
+  'production.lay.undo': 'layUndo',
+  'production.lay.count': 'layCount',
+  'production.trolley.load': 'trolleyLoad',
+  'production.trolley.unload': 'trolleyUnload',
+  'production.trolley.send': 'trolleySend',
+  'production.trolley.receive': 'trolleyReceive',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

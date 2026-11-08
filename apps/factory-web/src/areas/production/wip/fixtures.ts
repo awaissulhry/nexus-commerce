@@ -6,6 +6,9 @@ import { LINE_CARDS, LINES } from '../reports/demo/fixtures'
 import type { HeatmapAnswer, HourlyAnswer, TrackedBundle } from './api'
 import { targetDraft, type FloorBoardsCan } from './model'
 import { FloorNowView, type FloorBoardsModel, type FloorNowModel } from './view/FloorNowView'
+// B-W2b-130: the Cutting room (made-up boards).
+import { CUTBOARD, CUTBOARD_EMPTY, CUTBOARD_SITE_2 } from './cutting/fixtures'
+import type { CuttingRoomModel } from './cutting/view/CuttingRoomPanel'
 
 /**
  * SCR-073 — Floor now (design production.floor; MES-167, MES-305) with made-up data only: the tiles, every open work
@@ -16,7 +19,9 @@ import { FloorNowView, type FloorBoardsModel, type FloorNowModel } from './view/
  * "nobody signed in" and machines down: Owner F2), a line card setting the line scope, and the section's own states.
  * B-W2b-66: the tiles for stuck bundles and open help calls, Open line TV, the heat map with a cell's bundles, hour by hour
  * with the lead's reasons and "Why was 08:00–09:00 short?", Set targets, the stuck bundles, each with its states and
- * the role cases (line lead, office without the reason, no permission).
+ * the role cases (line lead, office without the reason, no permission). B-W2b-130: the Cutting room (MES-163) — waiting,
+ * cutting now, cut against plan today, hides used, yield, fabric used, late, the open cut orders — with its states, two sites, and
+ * the roles that do not read it (team leader, sales: production.cutting.view).
  */
 
 // ---- B-W2b-66: made-up boards ----------------------------------------------------------------------------------------
@@ -138,10 +143,27 @@ interface FloorCase {
   floor: FloorNowModel
 }
 
+// ---- B-W2b-130: the Cutting room (production.cutting.view: the owner and the production manager) ----------------------
+const cutting = (over: Partial<CuttingRoomModel> = {}): CuttingRoomModel => ({ prefix: PREFIX, read: { value: [CUTBOARD], problem: null }, cuttingHref: `${PREFIX}/production/cutting`, ...over })
+const CUTTING_OF: Readonly<Record<Role, CuttingRoomModel | undefined>> = { owner: cutting(), manager: cutting(), teamLeader: undefined, sales: undefined }
+
 const late = LIST_ROWS.filter((row) => (row.daysLate ?? 0) > 0)
 const floor = (role: Role, over: Partial<FloorNowModel> = {}): FloorCase => ({
   role,
-  floor: { prefix: PREFIX, can: canOf(role), wip: { value: SITE_WIP, problem: null }, counts: COUNTS, late: { items: late, problem: null }, asOf: at(29, 9, 42), live: 'live', lines: { value: LINES, problem: null }, lineScope: null, boards: boards(role), ...over },
+  floor: {
+    prefix: PREFIX,
+    can: canOf(role),
+    wip: { value: SITE_WIP, problem: null },
+    counts: COUNTS,
+    late: { items: late, problem: null },
+    asOf: at(29, 9, 42),
+    live: 'live',
+    lines: { value: LINES, problem: null },
+    lineScope: null,
+    boards: boards(role),
+    ...(CUTTING_OF[role] ? { cutting: CUTTING_OF[role] } : {}),
+    ...over,
+  },
 })
 
 function FloorDesign({ model }: { model: FloorCase }) {
@@ -182,5 +204,13 @@ export const designScreen = defineDesignScreen<FloorCase>({
     { id: 'stuck-none', label: 'Stuck bundles: None ✓', model: floor('manager', { boards: boards('manager', { stuck: { value: [], problem: null } }) }) },
     { id: 'stuck-error', label: 'Stuck bundles: the read failed', model: floor('manager', { boards: boards('manager', { stuck: { value: null, problem: 'error.offline' } }) }) },
     { id: 'no-boards', label: 'No permission for the boards: the sections are not drawn', model: floor('sales', { boards: boards('sales', { can: { boards: false, targets: false, bundles: false, calls: false } }) }) },
+    // B-W2b-130: the Cutting room (fn-cutting, MES-163).
+    { id: 'w2b-cutting', label: 'W2b · Cutting room: waiting, cutting now, cut against plan today, hides and yield, fabric used, late; the open cut orders', model: floor('manager'), note: 'Scroll to the last section. A number opens the cut order, a work order its Cutting tab; → Cutting and “+ 3 more” open the Cutting page. No cutter names.' },
+    { id: 'w2b-cutting-empty', label: 'W2b · Cutting room: nothing open and nothing cut yet', model: floor('manager', { cutting: cutting({ read: { value: [CUTBOARD_EMPTY], problem: null } }) }) },
+    { id: 'w2b-cutting-sites', label: 'W2b · Cutting room at all sites: a board per site; leather in two area units, never added across', model: floor('owner', { cutting: cutting({ read: { value: [CUTBOARD, CUTBOARD_SITE_2], problem: null } }) }) },
+    { id: 'w2b-cutting-loading', label: 'W2b · Cutting room: still being read', model: floor('manager', { cutting: cutting({ read: { value: null, problem: null } }) }) },
+    { id: 'w2b-cutting-error', label: 'W2b · Cutting room: the read failed, with Try again', model: floor('manager', { cutting: cutting({ read: { value: null, problem: 'error.offline' } }) }) },
+    { id: 'w2b-cutting-no-page', label: 'W2b · Cutting room without the Cutting page link (not built or not allowed): no link drawn', model: floor('manager', { cutting: cutting({ cuttingHref: null }) }) },
+    { id: 'w2b-cutting-no-permission', label: 'W2b · Team leader (no production.cutting.view): the Cutting room is not drawn', model: floor('teamLeader') },
   ],
 })

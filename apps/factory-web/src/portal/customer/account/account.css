@@ -1,0 +1,263 @@
+/*
+ * SCR-188 — the customer's Account (B-W2b-196). Layout only, semantic --nds-* tokens (no raw colours). The page fills the
+ * portal's main area (no max-width of its own): two cards side by side from 1100 px, the two lists across the whole width,
+ * one column on a phone. Inner parts (a form's fields) may keep a width.
+ */
+
+.fw-pacc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pacc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-pacc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-pacc-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-pacc-wide,
+.fw-pacc-section {
+  min-width: 0;
+}
+
+.fw-pacc-section {
+  scroll-margin-top: var(--nds-space-48);
+}
+
+/* An address opened from a notification: its section is the target. */
+.fw-pacc-section:target > .nds-card {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-pacc-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pacc-failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  color: var(--nds-danger-text);
+}
+
+.fw-pacc-failed > span {
+  color: var(--nds-text);
+}
+
+.fw-pacc-muted {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-pacc-strong {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pacc-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pacc-value {
+  overflow-wrap: anywhere;
+}
+
+.fw-pacc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── forms ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pacc-form,
+.fw-pacc-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pacc-form .nds-field,
+.fw-pacc-form input {
+  max-width: 480px;
+}
+
+.fw-pacc-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+.fw-pacc-grid4 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (min-width: 720px) {
+  .fw-pacc-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-pacc-grid4 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-pacc-roles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+@media (min-width: 720px) {
+  .fw-pacc-roles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-pacc-roles legend {
+  margin-bottom: var(--nds-space-6);
+}
+
+/* ── e-mail settings ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pacc-emails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pacc-alloff {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pacc-alloff-text,
+.fw-pacc-topic-name,
+.fw-pacc-twostep-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pacc-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-pacc-topic {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-height: 48px;
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pacc-topic:last-child {
+  border-bottom: 0;
+}
+
+.fw-pacc-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── lists ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pacc-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pacc-cell-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-6) 0;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/* ── company, security ───────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pacc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pacc-security {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pacc-device {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-pacc-twostep {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pacc-alone {
+  margin: var(--nds-space-6) 0;
+  padding-left: var(--nds-space-16);
+}

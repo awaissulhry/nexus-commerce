@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { LOCALES } from '@nexus/factory-domain/email/rules'
+import { PARTY_KINDS } from '@nexus/factory-domain/parties/rules'
+import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { proofBody } from '../../abuse/contract'
 
 /**
@@ -155,4 +157,59 @@ export const stepUpStartContract = defineContract({
 export const stepUpContract = defineContract({
   body: input({ code: codeText }),
   response: { 200: output({ stepUpUntil: instant() }) },
+})
+
+// ---- B-W2b-196: the Account page's own (design portal.customer.account; SAL-066) ----------------------------------------
+
+/** The person's own name and language (the profile card's one Save). */
+export const profileContract = defineContract({
+  body: input({ displayName: z.string().trim().min(1).max(120).optional(), locale: z.enum(LOCALES).optional() }),
+  response: { 200: output({ displayName: z.string(), locale: z.string(), changed: z.boolean() }) },
+})
+
+/** The person's own live portal sessions; `userAgent` as the browser said it at sign-in (never the network). */
+export const sessionsContract = defineContract({
+  response: {
+    200: output({
+      sessions: z.array(
+        output({
+          id: id(),
+          /** This browser's session. */
+          current: z.boolean(),
+          createdAt: instant(),
+          lastSeenAt: instant(),
+          idleExpiresAt: instant(),
+          absoluteExpiresAt: instant(),
+          userAgent: z.string().nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
+export const endOthersContract = defineContract({ response: { 200: output({ ended: z.number().int() }) } })
+
+const partyAddress = output({ name: z.string().nullable(), line1: z.string(), line2: z.string().nullable(), postalCode: z.string(), city: z.string(), province: z.string().nullable(), country: z.string() })
+
+/** What the factory holds for invoicing the organisation, read-only. No amount. */
+export const companyContract = defineContract({
+  response: {
+    200: output({
+      company: output({
+        legalName: z.string(),
+        tradeName: z.string().nullable(),
+        kind: z.enum(PARTY_KINDS),
+        country: z.string(),
+        currency: z.string(),
+        language: z.string(),
+        /** The tax identity in force today (null: none recorded). */
+        taxIdentity: output({ country: z.string(), taxMode: z.enum(PARTY_TAX_MODES), vatNumber: z.string().nullable(), fiscalCode: z.string().nullable(), sdiRecipientCode: z.string().nullable(), pec: z.string().nullable(), validFrom: businessDate() }).nullable(),
+        invoiceAddress: partyAddress.nullable(),
+        /** The registered office when it is not the invoice address. */
+        registeredOffice: partyAddress.nullable(),
+        /** As printed on our documents, in both languages (null: none agreed). */
+        paymentTerms: output({ it: z.string(), en: z.string() }).nullable(),
+      }),
+    }),
+  },
 })

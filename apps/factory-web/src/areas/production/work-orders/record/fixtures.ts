@@ -7,6 +7,8 @@ import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 import { LABOUR, labourAs, NO_OFF_STANDARD } from '../labour/fixtures'
 import type { SplitModel } from '../every-shift/use-split'
+// B-W2b-130: Materials › Leather (the one shade lot rule), made-up.
+import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_OF_SHADE } from './leather/fixtures'
 
 /**
  * SCR-070 — the work order studio (design production.workorders "Record: Work order") with made-up data only: a draft
@@ -14,7 +16,9 @@ import type { SplitModel } from '../every-shift/use-split'
  * a released, in-progress, completed, closed and cancelled one, the facts and the sizes in edit, Materials, Quality,
  * Activity and the thread beside a tab, a change while editing, and the states (loading, error, not found, no
  * permission). Roles: Owner, Production manager, Team leader (floor supervisor in the Office), Sales (read-only).
- * Cutting is SCR-071, Bundles and Operations SCR-072.
+ * Cutting is SCR-071, Bundles and Operations SCR-072. B-W2b-130: Materials › Leather — each leather's shade lots with the hides
+ * held, reserved and cut, and the one shade lot rule in words (one lot, none yet, mixed against the rule, mixed where the rule is
+ * per garment, out of shade), with its states.
  */
 
 export interface RecordCase {
@@ -56,6 +60,8 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       panelsPreview: panelsModel(),
       // B-W2a-46: the W2a parts (holds, finished to stock, yield, scrap and rework, readiness) as the role reads them.
       daily: dailyFor(DAILY_ROLE_OF[role], status),
+      // B-W2b-130.
+      leather: ready(LEATHER_ONE),
       ...over,
     },
   }
@@ -176,6 +182,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2b-offstandard-loading', label: 'W2b · Off-standard minutes: being read', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: null }) }) },
     { id: 'w2b-offstandard-failed', label: 'W2b · Off-standard minutes: the read failed, Try again', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: 'problem.internal' }) }) },
     { id: 'w2b-offstandard-held', label: 'W2b · Off-standard minutes held: no production.offstandard.view, says why', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: null, held: true }) }) },
+    // ---- B-W2b-130: Materials › Leather (wo-leather W2b: one shade lot per order, SCM-206) ----
+    { id: 'w2b-leather', label: 'W2b · Materials › Leather: one shade lot — the hides held, reserved and cut, the rule in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials' }), note: 'A lot opens its record. Nothing here moves stock.' },
+    { id: 'w2b-leather-none', label: 'W2b · Leather: no hide yet — the first hide sets the shade lot', model: recordCase('manager', 'RELEASED', { tab: 'materials', leather: ready(LEATHER_NONE) }) },
+    { id: 'w2b-leather-mixed', label: 'W2b · Leather: two shade lots against the one shade lot rule, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: ready(LEATHER_MIXED) }) },
+    { id: 'w2b-leather-garment', label: 'W2b · Leather: two shade lots where the rule is one per garment (allowed)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: ready(LEATHER_GARMENT) }) },
+    { id: 'w2b-leather-out-of-shade', label: 'W2b · Leather: a hide of the out-of-shade group reserved', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: ready(LEATHER_OUT_OF_SHADE) }) },
+    { id: 'w2b-leather-loading', label: 'W2b · Leather: still being read', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: PART_LOADING }) },
+    { id: 'w2b-leather-error', label: 'W2b · Leather: the read failed, with Try again', model: recordCase('manager', 'IN_PROGRESS', { tab: 'materials', leather: { value: null, problem: 'error.offline' } }) },
+    { id: 'w2b-leather-sales', label: 'W2b · Sales (read-only): the leather’s shade lots, no pick list', model: recordCase('sales', 'IN_PROGRESS', { tab: 'materials' }) },
     { id: 'w2b-minutes-no-cost', label: 'W2b · Minutes without the cost grain: the minutes stay, the cost says why not', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', LABOUR) }) },
   ],
 })

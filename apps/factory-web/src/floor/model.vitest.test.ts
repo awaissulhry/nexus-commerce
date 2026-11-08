@@ -46,10 +46,10 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     // B-W2b-137: Report an incident is kept on the first page with the Line view and Scan anything.
     expect(pageOf('cutting', 0).tiles.map((tile) => tile.key)).toEqual(['mywork', 'operation', 'incident', 'lineview', 'scan'])
     expect(pageOf('cutting', 0)).toMatchObject({ page: 0, pages: 3, more: 5 })
-    // B-W2b-145: Training & PPE sign-off makes a lead's cutting Home three pages.
-    expect(pageOf('cutting', 1).tiles.map((tile) => tile.key)).toEqual(['cut', 'bundles', 'machine', 'clock', 'training'])
-    expect(pageOf('cutting', 1)).toMatchObject({ page: 1, pages: 3, more: 1 })
-    expect(pageOf('cutting', 2).tiles.map((tile) => tile.key)).toEqual(['help'])
+    // B-W2b-145: Training & PPE sign-off makes a lead's cutting Home three pages. B-W2b-121: Fabric cutting after Cut a hide.
+    expect(pageOf('cutting', 1).tiles.map((tile) => tile.key)).toEqual(['cut', 'fabriccut', 'bundles', 'machine', 'clock'])
+    expect(pageOf('cutting', 1)).toMatchObject({ page: 1, pages: 3, more: 2 })
+    expect(pageOf('cutting', 2).tiles.map((tile) => tile.key)).toEqual(['training', 'help'])
     expect(pageOf('cutting', 2)).toMatchObject({ page: 2, pages: 3, more: 0 })
     // A page past the end (a person with fewer tiles took over) is the last one.
     expect(pageOf('cutting', 9).page).toBe(2)
@@ -76,6 +76,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'mywork', held: null },
       { key: 'operation', held: null },
       { key: 'cut', held: null },
+      // B-W2b-121
+      { key: 'fabriccut', held: null },
       { key: 'bundles', held: null },
       { key: 'clock', held: null },
       { key: 'training', held: null },
@@ -86,7 +88,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('a tile asks the permission its page\'s API needs (fail closed)', () => {
-    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', 'clock', 'training', 'help', 'incident', 'scan'])
+    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', /* B-W2b-121 */ 'fabriccut', 'clock', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'clock', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
@@ -141,11 +143,12 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('holds every scan tile with "Read the notice first" while the notice blocks scans (My work only reads: never held)', () => {
-    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', null, null, null, null, 'notice'])
+    // B-W2b-121: Fabric cutting takes scans (its ticket, rolls, bundles): held too.
+    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', 'notice', null, null, null, null, 'notice'])
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
   })
 
   it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {

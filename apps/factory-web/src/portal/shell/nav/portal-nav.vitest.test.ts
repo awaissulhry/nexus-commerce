@@ -34,7 +34,14 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('never shows a door to a page not built: today only Home, which the frame draws', () => {
-    for (const kind of ['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const) expect(ids(kind, false).map(([id]) => id)).toEqual(['home'])
+    for (const kind of ['SUBCONTRACTOR', 'GUEST'] as const) expect(ids(kind, false).map(([id]) => id)).toEqual(['home'])
+    // B-W2b-179: a supplier's Purchase orders (the area left with one page takes its name and address).
+    expect(ids('SUPPLIER', false)).toEqual([
+      ['home', 'nav.home', '/'],
+      ['work', 'nav.purchaseOrders', '/orders'],
+    ])
+    // B-W2b-196: the customer's Account.
+    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'account'])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
@@ -93,8 +100,13 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('a record opens its own page once built, else the frame’s record page', () => {
-    expect(RECORD_PAGES.every((page) => !page.built)).toBe(true)
+    // B-W2b-196: our check of a delivery address opens the Account on that address.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'PartyAddress'])
+    expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')
+    expect(recordPageOf(['SUPPLIER'], 'PartyAddress', 'a1')).toBeNull()
     expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBeNull()
+    // B-W2b-179: a supplier's purchase order opens its own page.
+    expect(recordPageOf(['SUPPLIER'], 'PurchaseOrder', 'po')).toBe('/orders/po')
     const built = RECORD_PAGES.map((page) => ({ ...page, built: true }))
     expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x', built)).toBe('/orders/x')
     expect(recordPageOf(['SUPPLIER'], 'SalesOrder', 'x', built)).toBeNull()
