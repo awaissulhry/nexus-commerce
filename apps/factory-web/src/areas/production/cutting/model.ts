@@ -7,10 +7,10 @@ import { CUT_VIEWS, type CutRow, type CutState, type CutTiles, type CutView, typ
  * Production › Cutting room › Cutting (SCR-238; design production.cutting): the rules without a screen. What a person may
  * do (from the session's permissions; the API checks every call again), the page's address (`?view=` the saved filters,
  * `?q=`, `?new=1` New cut order, `?alloc=<work order>` Allocate hides), the tiles, the words of a cut's state, its area
- * per unit (never added across units), the cuts New cut order offers (waiting, the same material and colour), the record's
- * tabs, its pieces by part and size with the recuts, the yield per lot and supplier, the tickets and what holds a reprint
- * or a void, and a refused write in words. W2a has no cut order of its own: a cut is one work order's leather, cut by
- * hide at the cutting table (fabric lays, markers and grouped cut orders are W2b, MES-034/037). Words are message keys
+ * per unit (never added across units), the record's tabs, its pieces by part and size with the recuts, the yield per lot
+ * and supplier, the tickets and what holds a reprint or a void, and a refused write in words. Here a cut is one work
+ * order's leather, cut by hide at the cutting table; cut orders of several work orders (fabric lays, markers, a leather
+ * group, MES-034/037) are B-W2b-129's `orders/` beside it on the same page. Words are message keys
  * of the `cutting` catalogue with their parameters; the views translate them. Never who cut: per work order, table, hide
  * and lot only (Statuto dei Lavoratori art. 4; SCM-255).
  */
@@ -55,6 +55,8 @@ export interface CuttingCan {
   readonly recut: boolean
   /** production.bundles: reprint and void a ticket. */
   readonly bundles: boolean
+  /** B-W2b-129: purchasing.claims.manage: a supplier lot raised with its supplier from the yield (a supplier claim). */
+  readonly claims: boolean
 }
 
 export function cuttingCanOf(permissions: readonly string[]): CuttingCan {
@@ -67,6 +69,7 @@ export function cuttingCanOf(permissions: readonly string[]): CuttingCan {
     scrap: held.has('production.scrap.view'),
     recut: held.has('production.scrap'),
     bundles: held.has('production.bundles'),
+    claims: held.has('purchasing.claims.manage'),
   }
 }
 
@@ -119,11 +122,14 @@ export const TILES: readonly TileRule[] = [
   { id: 'yieldToday', view: null },
 ]
 
-/** The tile's figure in words ("—" while unknown). */
-export function tileValue(id: TileRule['id'], tiles: CutTiles | null, yieldToday: YieldFigures | null, locale: string): string {
+/**
+ * The tile's figure in words ("—" while unknown). B-W2b-129: Waiting to cut and Cutting now add the fabric cut orders
+ * (`fabric`: planned + released wait, in progress cuts; a leather cut order's work orders are counted by their cuts).
+ */
+export function tileValue(id: TileRule['id'], tiles: CutTiles | null, yieldToday: YieldFigures | null, locale: string, fabric: { readonly waiting: number; readonly cutting: number } | null = null): string {
   if (!tiles) return '—'
-  if (id === 'waiting') return String(tiles.waiting)
-  if (id === 'cutting') return String(tiles.cutting)
+  if (id === 'waiting') return String(tiles.waiting + (fabric?.waiting ?? 0))
+  if (id === 'cutting') return String(tiles.cutting + (fabric?.cutting ?? 0))
   if (id === 'piecesToday') return String(tiles.piecesToday)
   if (id === 'areaToday') return `${tiles.hidesToday} · ${areaNumber(tiles.areaTodayM2, locale)} m²`
   if (!yieldToday || yieldToday.yieldPct === null) return '—'
@@ -174,35 +180,6 @@ export function materialLine(row: Pick<CutRow, 'materials'>): string {
 /** The shade lots (lot code and dye batch). */
 export function lotLine(row: Pick<CutRow, 'lots'>): string {
   return row.lots.map((lot) => (lot.dyeBatch ? `${lot.code} (${lot.dyeBatch})` : lot.code)).join(', ') || '—'
-}
-
-/** The key New cut order groups by: one leather and colour (W2a: a cut is one work order; grouping several is W2b). */
-export const materialKey = (row: Pick<CutRow, 'materials'>): string => row.materials.map((material) => `${material.itemId}|${material.colourCode ?? '-'}`).sort().join(',')
-
-// ---- New cut order ------------------------------------------------------------------------------------------------------------
-
-/** The cuts New cut order offers: released work orders with nothing cut yet and no hide allocated. */
-export function newCutChoices(rows: readonly CutRow[]): CutRow[] {
-  return rows.filter((row) => row.state === 'WAITING' && row.allocated === 0)
-}
-
-/**
- * Why a work order cannot be ticked in New cut order (else null): another material and colour than the first ticked
- * (one cut cuts one leather; a cut order of several work orders is W2b).
- */
-export function newCutRowHeld(row: CutRow, picked: readonly CutRow[]): Phrase | null {
-  const first = picked[0]
-  if (first && first.workOrder.id !== row.workOrder.id && materialKey(first) !== materialKey(row)) return phrase('newCut.why.material', { material: materialLine(first) })
-  return null
-}
-
-/** Why Create cut order is held (else null). */
-export function newCutHeld(picked: readonly CutRow[], can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.reserve) return phrase('held.permission', { permission: 'inventory.reserve' })
-  if (busy) return phrase('held.busy')
-  if (picked.length === 0) return phrase('newCut.held.none')
-  if (picked.length > 1) return phrase('newCut.held.many')
-  return null
 }
 
 // ---- Allocate hides ---------------------------------------------------------------------------------------------------------------
@@ -455,38 +432,6 @@ export function voidHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): Phr
 
 /** A typed reason long enough for the API (3 to 200 characters). */
 export const reasonOk = (value: string): boolean => value.trim().length >= 3 && value.trim().length <= 200
-
-// ---- CSV ----------------------------------------------------------------------------------------------------------------------------
-
-const cell = (value: string | number) => {
-  const text = String(value)
-  return /[",\n;]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
-}
-
-/** Export N (CSV): the selected cuts as the columns show them (never who cut). */
-export function csvOf(rows: readonly CutRow[], header: readonly string[], locale: string): string {
-  const lines = rows.map((row) =>
-    [
-      row.workOrder.number,
-      'LEATHER',
-      row.style.code,
-      materialLine(row),
-      lotLine(row),
-      row.state,
-      row.pieces.planned,
-      row.pieces.cut,
-      row.hides.count,
-      usedText(row.hides.used, locale),
-      row.yield.yieldPct ?? '',
-      row.yield.plannedPct ?? '',
-      row.stations.map((station) => station.code).join(' '),
-      row.lastCutAt ?? '',
-    ]
-      .map(cell)
-      .join(','),
-  )
-  return [header.map(cell).join(','), ...lines].join('\n')
-}
 
 // ---- a cut from its work order (the record) ---------------------------------------------------------------------------------------
 

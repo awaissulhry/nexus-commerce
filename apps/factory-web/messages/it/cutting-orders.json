@@ -1,0 +1,662 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "noReason": "nessun motivo indicato"
+  },
+  "noAccess": {
+    "title": "Non puoi aprire questa pagina",
+    "body": "Serve il permesso {permission}. Chiedi a un amministratore di darlo al tuo ruolo."
+  },
+  "live": {
+    "connecting": "Connessione agli aggiornamenti in corso",
+    "live": "In diretta",
+    "offline": "Non in linea: dati dell’ultima lettura"
+  },
+  "kind": {
+    "LEATHER": "Pelle",
+    "FABRIC": "Tessuto"
+  },
+  "status": {
+    "PLANNED": "Pianificato",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In taglio",
+    "CUT": "Tagliato",
+    "RECONCILED": "Riconciliato",
+    "CANCELLED": "Annullato"
+  },
+  "layStatus": {
+    "PLANNED": "Pianificato",
+    "SPREADING": "In stesura",
+    "CHECKED": "Contato",
+    "CUT": "Tagliato",
+    "CANCELLED": "Annullato"
+  },
+  "ticketStatus": {
+    "OPEN": "Non iniziato",
+    "STARTED": "Iniziato",
+    "DONE": "Finito",
+    "VOID": "Annullato"
+  },
+  "reason": {
+    "PLIES_SHORT": "Meno strati stesi del piano",
+    "FABRIC_SHORT": "Tessuto finito",
+    "ROLL_FAULT": "Difetto del rotolo",
+    "MISCUT": "Errore di taglio",
+    "OVERCUT": "Tagliato più dell’ordinato",
+    "OTHER": "Altro (scrivi il motivo)"
+  },
+  "warning": {
+    "WIDTH_UNKNOWN": "L’altezza di un rotolo non è nota: verifica che basti per il piazzamento.",
+    "SHRINKAGE_UNKNOWN": "Il ritiro di un rotolo non è noto.",
+    "SHADE_UNKNOWN": "La tonalità di un rotolo non è nota: il materasso potrebbe mescolare tonalità.",
+    "LOT_NOT_RELEASED": "Il lotto di un rotolo è ancora in quarantena.",
+    "SHADES_ACROSS_LAYS": "I materassi sono tagliati da gruppi di tonalità diversi: tieni insieme i capi di ogni materasso nei fasci.",
+    "SHRINKAGE_ACROSS_LAYS": "I materassi sono tagliati da gruppi di ritiro diversi: tieni insieme i capi di ogni materasso nei fasci."
+  },
+  "refusal": {
+    "NOT_PLANNED": "Il piano cambia solo mentre l’ordine di taglio è pianificato (prima rimandalo in pianificazione).",
+    "NOT_AT_TABLE": "Questo ordine di taglio non è rilasciato al tavolo di taglio.",
+    "NOT_OPEN": "Questo ordine di taglio è tagliato, riconciliato o annullato: non cambia più.",
+    "TICKET_SCANNED": "Un buono di questo ordine è già stato scansionato al tavolo: non torna in pianificazione e non si annulla.",
+    "NO_LINE": "Questo ordine di taglio non ha ancora taglie di ordini di lavoro.",
+    "NO_MARKER": "Un ordine di taglio di tessuto si rilascia con il suo piazzamento (nome e lunghezza).",
+    "LAYS_PLIES": "Gli strati dei materassi non corrispondono agli strati del piazzamento: ripianifica i materassi.",
+    "WORK_ORDER_NOT_OPEN": "Un ordine di lavoro scelto non è più rilasciato o in corso.",
+    "WORK_ORDER_ON_HOLD": "Un ordine di lavoro scelto è bloccato: non si taglia nulla per lui.",
+    "WORK_ORDER_OTHER_SITE": "Un ordine di lavoro scelto è di un altro stabilimento.",
+    "NOT_THE_MATERIAL": "Una taglia scelta non usa questo materiale e colore.",
+    "NOT_A_CUT_MATERIAL": "Questo materiale non si taglia a pelle né a lunghezza.",
+    "CELL_FULL": "Un altro ordine di taglio ha preso nel frattempo capi di una taglia: ne restano meno di quelli chiesti. Le taglie sono state rilette.",
+    "ROLL_NOT_IN_STOCK": "Questo rotolo non è a magazzino qui.",
+    "ROLL_OTHER_MATERIAL": "Questo rotolo è di un altro materiale o colore.",
+    "ROLL_TOO_NARROW": "Questo rotolo è più stretto del piazzamento.",
+    "ROLL_REJECTED": "Questo rotolo è stato respinto al controllo in arrivo.",
+    "LOT_HELD": "Il lotto di questo rotolo è bloccato.",
+    "LOT_NOT_USABLE": "Il lotto di questo rotolo è respinto o bloccato.",
+    "ROLL_SHORT": "Su questo rotolo non resta nemmeno uno strato intero.",
+    "MIXED_SHADE": "Un materasso si taglia da un solo gruppo di tonalità: la tonalità di questo rotolo è diversa dagli altri rotoli del materasso.",
+    "MIXED_SHRINKAGE": "Un materasso si taglia da un solo gruppo di ritiro: il gruppo di questo rotolo è diverso dagli altri rotoli del materasso.",
+    "LAY_FULL": "Il materasso ha già tutti i suoi strati.",
+    "LAY_NOT_PLANNED": "Questo materasso è già al tavolo: i suoi rotoli si cambiano lì.",
+    "ROLL_TWICE": "Un rotolo è indicato due volte.",
+    "TICKET_VOID": "Questo buono è annullato.",
+    "TICKET_DONE": "Questo buono è finito: il suo taglio è concluso.",
+    "TICKET_STARTED": "Questo buono è già stato iniziato.",
+    "TICKET_NOT_STARTED": "Questo buono non è stato iniziato al tavolo.",
+    "TICKET_IS_RECUT": "È un buono di ritaglio: si gestisce con i ritagli.",
+    "CUT_ORDER_NOT_RELEASED": "L’ordine di taglio non è rilasciato: i suoi buoni ora non si tagliano.",
+    "PLIES_NOT_COUNTED": "Gli strati del materasso non sono ancora stati contati ai due capi.",
+    "NOT_CUT": "Un ordine di taglio si riconcilia quando è tagliato.",
+    "FABRIC_NOT_CONFIRMED": "Il tessuto usato su un materasso tagliato non è ancora confermato al tavolo: va confermato prima (così il tessuto viene prelevato per gli ordini di lavoro).",
+    "FLOOR_NOT_READY": "Il reparto di questo stabilimento non è ancora pronto per il lavoro reale."
+  },
+  "problem": {
+    "read": "Lettura non riuscita. Riprova.",
+    "forbidden": "Non puoi fare o vedere questo.",
+    "gone": "Questo non esiste più.",
+    "offline": "Il server della fabbrica non risponde. Controlla la connessione e riprova.",
+    "write": "Non salvato. Riprova.",
+    "changed": "Qualcuno l’ha cambiato nel frattempo. È stato riletto: controlla e riprova.",
+    "invalid": "La richiesta così non è accettata. Controlla i campi.",
+    "field": {
+      "ratio": "Il rapporto di una taglia non è corretto (capi interi in uno strato).",
+      "quantity": "I capi di una taglia non sono corretti.",
+      "reason": "Indica il motivo.",
+      "note": "Altro: scrivi il motivo.",
+      "lines": "Una taglia scelta non è più valida: rileggi le taglie.",
+      "marker": "Nome, lunghezza o altezza del piazzamento non sono corretti.",
+      "plies": "Gli strati non sono corretti.",
+      "lays": "Gli strati dei materassi non sono corretti.",
+      "station": "Il tavolo non è una postazione di questo stabilimento.",
+      "printer": "Scegli una stampante di etichette di questo stabilimento (ce ne sono più di una), oppure mostra solo l’etichetta.",
+      "rolls": "Un rotolo scelto non è più valido: rileggi i rotoli."
+    }
+  },
+  "held": {
+    "permission": "Serve il permesso {permission}.",
+    "busy": "In corso…",
+    "loading": "Ancora in lettura",
+    "reason": "Scrivi il motivo in almeno 3 caratteri.",
+    "release": {
+      "status": "Si rilascia solo un ordine di taglio pianificato."
+    },
+    "back": {
+      "status": "Torna in pianificazione solo un ordine di taglio rilasciato.",
+      "started": "Un buono è stato scansionato o un materasso è al tavolo: non torna in pianificazione."
+    },
+    "cancel": {
+      "status": "Si annulla solo un ordine di taglio pianificato o rilasciato.",
+      "started": "Un buono è stato scansionato al tavolo: non si annulla."
+    },
+    "reconcile": {
+      "notCut": "Un ordine di taglio si riconcilia quando ogni materasso è tagliato.",
+      "done": "Questo ordine di taglio è già riconciliato."
+    },
+    "rolls": {
+      "leather": "La pelle si taglia pelle per pelle: le pelli si assegnano a ogni ordine di lavoro.",
+      "notReleased": "I rotoli si assegnano dopo il rilascio dell’ordine di taglio.",
+      "layAtTable": "Il materasso {seq} è al tavolo: i suoi rotoli si cambiano lì.",
+      "layFull": "Il materasso {seq} ha tutti i suoi strati."
+    },
+    "ticket": {
+      "void": "Questo buono è annullato.",
+      "done": "Questo buono è finito: il suo taglio è concluso."
+    }
+  },
+  "plan": {
+    "fabric": "{lays} materassi · {plies} strati · {garments} capi",
+    "leather_one": "{count} capo",
+    "leather_other": "{count} capi"
+  },
+  "tile": {
+    "withFabric_one": "con {count} ordine di taglio di tessuto",
+    "withFabric_other": "con {count} ordini di taglio di tessuto"
+  },
+  "col": {
+    "hidesOrPlies": "Pelli o strati",
+    "date": "Data"
+  },
+  "list": {
+    "laysCut": "{cut} di {count} materassi tagliati",
+    "tickets": "{done} di {count} buoni finiti",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "byHide": "a pelle",
+    "yieldOnRecord": "nella scheda",
+    "ordersFailed": "Non è stato possibile leggere gli ordini di taglio"
+  },
+  "csv": {
+    "cut": "Taglio",
+    "kind": "Tipo",
+    "workOrders": "Ordini di lavoro",
+    "style": "Modello",
+    "material": "Materiale e colore",
+    "lot": "Lotto tonalità",
+    "state": "Stato",
+    "planned": "Pianificati (pezzi o capi)",
+    "piecesCut": "Pezzi tagliati",
+    "plies": "Strati",
+    "hides": "Pelli",
+    "area": "Superficie usata",
+    "yieldPct": "Resa %",
+    "table": "Tavolo",
+    "date": "Data"
+  },
+  "newOrder": {
+    "title": "Nuovo ordine di taglio",
+    "body": "Ordini di lavoro di un materiale e colore, tagliati insieme a un tavolo: il tessuto a materassi da un piazzamento, la pelle pelle per pelle.",
+    "failed": "Non è stato possibile leggere gli ordini di lavoro in attesa",
+    "reading": "Lettura degli ordini di lavoro in attesa…",
+    "empty": {
+      "title": "Nulla attende un ordine di taglio",
+      "body": "Ogni taglia degli ordini di lavoro rilasciati è già su un ordine di taglio del suo materiale."
+    },
+    "material": "Materiale e colore",
+    "materialHint": "Un materiale e colore in uno stabilimento: le sue taglie di ogni ordine di lavoro in attesa.",
+    "pickMaterial": "Scegli un materiale…",
+    "group": "{kind} · {material} {name} — {left} capi restanti · ordini di lavoro: {workOrders}",
+    "cells": "Taglie in attesa",
+    "cellsCount_one": "{count} taglia in attesa",
+    "cellsCount_other": "{count} taglie in attesa",
+    "picked_one": "{count} taglia scelta",
+    "picked_other": "{count} taglie scelte",
+    "leftOf": "{left} di {quantity}",
+    "col": {
+      "workOrder": "Ordine di lavoro",
+      "style": "Modello",
+      "cell": "Colore e taglia",
+      "left": "Restano",
+      "due": "Consegna",
+      "ratio": "In uno strato",
+      "garments": "Capi",
+      "onOrder": "Su questo ordine"
+    },
+    "markerName": "Piazzamento",
+    "markerLength": "Lunghezza piazzamento (m)",
+    "markerLengthHint": "La lunghezza di uno strato sul tavolo, al massimo 50 m.",
+    "markerWidth": "Altezza utile (cm)",
+    "markerWidthHint": "Un rotolo più stretto viene rifiutato.",
+    "plies": "Strati",
+    "pliesHint": "Ogni taglia del piazzamento si taglia su ogni strato.",
+    "lays": "Materassi",
+    "laysHint": "In quanti materassi si dividono gli strati.",
+    "laysSplit": "Strati per materasso: {split}",
+    "leather": "La pelle si taglia pelle per pelle: scrivi i capi di ogni taglia (vuoto: quelli che restano). Le pelli si assegnano poi a ogni ordine di lavoro.",
+    "lines": "Su questo ordine di taglio",
+    "ratioOf": "Capi di {cell} in uno strato",
+    "garmentsOf": "Capi di {cell}",
+    "ratioLine": "Taglie nel piazzamento: {ratio}",
+    "table": "Tavolo di taglio",
+    "tableHint": "Facoltativo: il buono si stampa sulla sua stampante di etichette.",
+    "tableNoRight": "Scegliere un tavolo richiede print.view; si può lasciare vuoto.",
+    "noTable": "Nessun tavolo per ora",
+    "due": "Consegna",
+    "dueHint": "Facoltativa.",
+    "total_one": "{count} capo su questo ordine di taglio",
+    "total_other": "{count} capi su questo ordine di taglio",
+    "go": "Crea ordine di taglio",
+    "why": {
+      "full": "Di questa taglia non resta nulla: altri ordini di taglio di questo materiale la tagliano tutta."
+    },
+    "held": {
+      "group": "Scegli prima un materiale e colore.",
+      "cells": "Spunta le taglie da tagliare.",
+      "tooMany": "Al massimo {max} taglie su un ordine di taglio.",
+      "markerName": "Dai un nome al piazzamento.",
+      "markerLength": "La lunghezza del piazzamento in metri, sopra 0 e al massimo {max}.",
+      "markerWidth": "L’altezza utile in cm, sopra 0 e al massimo {max}.",
+      "plies": "Gli strati, da 1 a {max}.",
+      "lays": "I materassi, da 1 a {max} (nessun materasso senza strati).",
+      "layTooHigh": "Un materasso tiene al massimo {max} strati: dividili in più materassi.",
+      "ratio": "{cell}: i capi in uno strato, un numero intero da 1 a {max}.",
+      "beyond": "{cell}: chiesti {garments} capi, ne restano {left}.",
+      "quantity": "{cell}: i capi, un numero intero da 1.",
+      "due": "La consegna non è un giorno valido."
+    }
+  },
+  "record": {
+    "back": "Taglio",
+    "backToList": "Torna a Taglio",
+    "title": "Ordine di taglio",
+    "titleOf": "Ordine di taglio · {number}",
+    "tabs": "Sezioni dell’ordine di taglio",
+    "loading": "Lettura dell’ordine di taglio…",
+    "more": "Altre azioni",
+    "copyNumber": "Copia il numero",
+    "due": "consegna {date}",
+    "workOrders": "Ordini di lavoro {list} · modelli {styles}",
+    "sheet": "Foglio materasso / PDF buono",
+    "release": "Rilascia",
+    "reconcile": "Riconcilia taglio",
+    "toPlanning": "Rimanda in pianificazione…",
+    "cancelAction": "Annulla l’ordine di taglio…",
+    "cancelled": {
+      "title": "Annullato",
+      "body": "Motivo: {reason}."
+    },
+    "held": {
+      "title_one": "{count} ordine di lavoro bloccato: il tavolo non taglia nulla per lui",
+      "title_other": "{count} ordini di lavoro bloccati: il tavolo non taglia nulla per loro",
+      "line": "{number}: {reason}"
+    },
+    "state": {
+      "forbidden": {
+        "title": "Non puoi aprire questo ordine di taglio",
+        "body": "Appartiene a una società o a uno stabilimento che non puoi vedere."
+      },
+      "missing": {
+        "title": "Questo ordine di taglio non esiste",
+        "body": "Non è stato trovato. Potrebbe appartenere a un’altra società."
+      },
+      "error": {
+        "title": "Non è stato possibile leggere l’ordine di taglio",
+        "body": "Riprova tra un momento."
+      }
+    }
+  },
+  "tab": {
+    "lay": "Materasso o pelli",
+    "pieces": "Pezzi",
+    "yield": "Resa",
+    "tickets": "Buoni"
+  },
+  "part": {
+    "failed": "Non è stato possibile leggere {part}",
+    "loading": "Lettura di {part}…"
+  },
+  "marker": {
+    "title": "Piazzamento",
+    "name": "Piazzamento",
+    "length": "Lunghezza",
+    "width": "Altezza utile",
+    "sizes": "Taglie nel piazzamento",
+    "perPly": "Uno strato taglia",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "plies": "Strati",
+    "none": "Nessun piazzamento per ora: un ordine di taglio di tessuto si rilascia con il suo piazzamento.",
+    "cad": "Il piazzamento si scrive a mano (nome, lunghezza, altezza); l’importazione del file CAD arriva più avanti."
+  },
+  "lays": {
+    "title": "Materassi",
+    "count_one": "{count} materasso",
+    "count_other": "{count} materassi",
+    "layOf": "Materasso {seq} di {of}",
+    "ticket": "Buono {number} · {status}",
+    "noTicket": "Nessun buono per ora (creato al rilascio)",
+    "width": "altezza {width} cm",
+    "widthUnknown": "altezza non indicata",
+    "plies_one": "{count} strato",
+    "plies_other": "{count} strati",
+    "counted": "contati {count} ai due capi",
+    "allocated": "i rotoli danno {allocated} di {plies}",
+    "noRolls": "Nessun rotolo per ora",
+    "groups": "tonalità {shade} · ritiro {shrinkage}",
+    "rowMenu": "Azioni per il materasso {seq}",
+    "allocate": "Rotoli…",
+    "sheet": "Foglio materasso (nuova scheda)",
+    "col": {
+      "lay": "Materasso",
+      "marker": "Piazzamento",
+      "sizes": "Taglie nel piazzamento",
+      "plies": "Strati",
+      "length": "Lunghezza",
+      "rolls": "Rotoli",
+      "more": "Altro"
+    },
+    "empty": {
+      "title": "Nessun materasso",
+      "body": "Un ordine di taglio di tessuto divide i suoi strati in materassi quando si pianifica."
+    },
+    "hint": "Ogni materasso si stende da un solo gruppo di tonalità e di ritiro; il suo buono si scansiona all’inizio e alla fine del taglio.",
+    "cancelled_one": "{count} materasso è stato annullato quando il piano è cambiato.",
+    "cancelled_other": "{count} materassi sono stati annullati quando il piano è cambiato.",
+    "allocateHint": "Apri un materasso per assegnargli i rotoli: la proposta riempie ogni materasso da un gruppo di tonalità, prima code e rotoli iniziati."
+  },
+  "lines": {
+    "title": "Ordini di lavoro e taglie",
+    "garmentsOf": "{garments} di {cell}",
+    "notReleased": "non ancora rilasciato",
+    "col": {
+      "workOrder": "Ordine di lavoro",
+      "style": "Modello",
+      "cell": "Colore e taglia",
+      "ratio": "In uno strato",
+      "garments": "Capi"
+    },
+    "hint": "Ogni taglia del piazzamento si taglia su ogni strato: i capi di una taglia = il suo rapporto × gli strati. Rilasciato: {when}."
+  },
+  "hides": {
+    "title": "Pelli",
+    "body": "La pelle si taglia pelle per pelle per ogni ordine di lavoro: le pelli assegnate e tagliate, la loro superficie e il controllo dello stesso lotto di tonalità sono nel taglio di ogni ordine di lavoro.",
+    "ofWorkOrder": "Pelli di {number}",
+    "garments_one": "{count} capo su questo ordine di taglio",
+    "garments_other": "{count} capi su questo ordine di taglio"
+  },
+  "pieces": {
+    "bySize": "Ordinati e tagliati per taglia",
+    "byLine": "Per ordine di lavoro e taglia",
+    "sum": "{ordered} ordinati · {cut} tagliati ({difference})",
+    "col": {
+      "size": "Taglia",
+      "ordered": "Ordinati",
+      "cut": "Tagliati",
+      "recut": "Ritagliati",
+      "difference": "Differenza",
+      "reason": "Motivo"
+    },
+    "asOrdered": "Come ordinato",
+    "toExplain": "Da spiegare in Riconcilia taglio",
+    "hintFabric": "Tagliati = il rapporto della taglia × gli strati contati sui materassi già tagliati; ritagliati = buoni di ritaglio finiti dal rilascio.",
+    "hintLeather": "Tagliati = il registro di taglio dell’ordine di lavoro per la taglia, meno quanto riconciliato da ordini di taglio di pelle precedenti."
+  },
+  "yield": {
+    "title": "Resa",
+    "balance": "Prelevato, usato e reso",
+    "perLay": "Per materasso",
+    "never": "Per materasso e rotolo; mai per tagliatore.",
+    "leather": "La resa della pelle è per pelle: il taglio di ogni ordine di lavoro ha la sua resa per pelle, lotto e fornitore.",
+    "ofWorkOrder": "Resa di {number}",
+    "none": {
+      "title": "Nessun materasso tagliato per ora",
+      "body": "Il tessuto usato compare qui quando un materasso è tagliato e il suo tessuto è confermato al tavolo."
+    }
+  },
+  "material": {
+    "issued": "Prelevato",
+    "used": "Usato",
+    "returned": "Code rese",
+    "estimated": "Stima",
+    "recorded": "Rapporto di stesura",
+    "endLoss": "Sfrido di testa",
+    "endBits": "Ritagli di testa",
+    "col": {
+      "lay": "Materasso",
+      "plies": "Strati"
+    },
+    "lay": "Materasso {seq}",
+    "sum": "Totale",
+    "notConfirmed": "non confermato",
+    "unconfirmed_one": "Il tessuto usato sul materasso {lays} non è ancora confermato: conta con il rapporto di stesura.",
+    "unconfirmed_other": "Il tessuto usato sui materassi {lays} non è ancora confermato: contano con il rapporto di stesura.",
+    "hint": "Prelevato = registrato sugli ordini di lavoro alla conferma; usato = il dato confermato dal tagliatore; le code rese restano sul loro rotolo a magazzino.",
+    "asEstimated": "Come da stima",
+    "more": "{metres} m in più della stima (+{pct} %)",
+    "less": "{metres} m in meno della stima (−{pct} %)"
+  },
+  "tickets": {
+    "title": "Buoni di taglio",
+    "count_one": "{count} buono",
+    "count_other": "{count} buoni",
+    "lay": "Materasso {seq}",
+    "leather": "Pelle",
+    "printedAt": "stampato {at}",
+    "notPrinted": "non ancora stampato",
+    "rowMenu": "Azioni per {number}",
+    "print": "Stampa…",
+    "void": "Annulla…",
+    "printMany_one": "Stampa {count}",
+    "printMany_other": "Stampa {count}",
+    "col": {
+      "number": "Buono",
+      "status": "Stato",
+      "started": "Iniziato",
+      "done": "Finito"
+    },
+    "empty": {
+      "title": "Nessun buono",
+      "body": "Ogni buono di questo ordine di taglio è stato annullato.",
+      "planned": "I buoni si creano al rilascio dell’ordine di taglio: uno per materasso, uno per la pelle."
+    },
+    "hint": "Un buono perso si annulla con il motivo e se ne crea uno nuovo per lo stesso materasso; un buono annullato non si scansiona più.",
+    "held": {
+      "none": "Seleziona i buoni da stampare."
+    },
+    "shown": "Buono {number}",
+    "code": "Codice a barre {code}"
+  },
+  "print": {
+    "title_one": "Stampa {count} buono",
+    "title_other": "Stampa {count} buoni",
+    "body": "Buoni: {list}.",
+    "printer": "Stampante di etichette",
+    "printerHint": "Predefinita: la stampante del tavolo, altrimenti l’unica dello stabilimento.",
+    "default": "Stampante predefinita",
+    "showOnly": "Mostra solo l’etichetta (non stampare)",
+    "language": "Lingua del buono",
+    "go_one": "Stampa {count}",
+    "go_other": "Stampa {count}",
+    "show": "Mostra l’etichetta",
+    "held": {
+      "showOne": "Mostra un’etichetta alla volta."
+    }
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "void": {
+    "title": "Annulla {number}",
+    "body": "Il buono non si scansionerà più. Il materasso tiene i suoi rotoli e strati.",
+    "reason": "Motivo",
+    "replace": "Crea un nuovo buono per lo stesso materasso",
+    "go": "Annulla il buono"
+  },
+  "back": {
+    "title": "{number} in pianificazione",
+    "body": "I suoi buoni aperti si annullano e i rotoli si tolgono dai materassi; poi il piano può cambiare.",
+    "go": "Rimanda in pianificazione"
+  },
+  "cancel": {
+    "title": "Annulla {number}",
+    "body": "I suoi buoni aperti si annullano e i materassi si annullano; le taglie dei suoi ordini di lavoro tornano libere per un altro ordine di taglio.",
+    "go": "Annulla l’ordine di taglio"
+  },
+  "rolls": {
+    "title": "Rotoli per il materasso {seq} · {number}",
+    "body": "Il materasso {seq} prende {plies} strati; i suoi rotoli ne danno {allocated}. Spunta rotoli di un solo gruppo di tonalità e di ritiro.",
+    "onLay": "Sul materasso {seq}",
+    "noneOnLay": "Nessun rotolo su questo materasso per ora.",
+    "onLayLine": "lotto {lot} · tonalità {shade} · ritiro {shrinkage} · {plies} strati",
+    "remove": "Togli",
+    "removeOf": "Togli {code} dal materasso",
+    "candidates": "Rotoli di questo tessuto",
+    "useProposal": "Usa la proposta",
+    "noProposal": "Nessuna proposta per questo materasso: nessun gruppo di rotoli basta.",
+    "perPly": "Uno strato prende {metres} m da un rotolo (tolleranza {allowance} cm).",
+    "count_one": "{count} rotolo",
+    "count_other": "{count} rotoli",
+    "picked": "{count} scelti · {plies} strati",
+    "shadeUnknown": "tonalità non nota",
+    "outOfShade": "fuori tonalità",
+    "plannedElsewhere": "{length} {uom} pianificati su altri materassi",
+    "free": "libero",
+    "col": {
+      "roll": "Rotolo",
+      "shade": "Tonalità",
+      "shrinkage": "Ritiro",
+      "width": "Altezza",
+      "left": "Lunghezza restante",
+      "plies": "Strati che dà",
+      "take": "Presi"
+    },
+    "empty": {
+      "title": "Nessun rotolo di questo tessuto qui",
+      "body": "Nessun rotolo di questo tessuto e colore è a magazzino nello stabilimento dell’ordine di taglio."
+    },
+    "give": "I rotoli scelti danno {given} dei {need} strati ancora necessari.",
+    "go_one": "Assegna {count} rotolo",
+    "go_other": "Assegna {count} rotoli",
+    "held": {
+      "none": "Spunta almeno un rotolo."
+    },
+    "why": {
+      "mine": "Già sul materasso {seq}.",
+      "shade": "Il materasso {seq} si taglia dalla tonalità {lay}: questo rotolo è tonalità {roll}. Un solo gruppo di tonalità per materasso.",
+      "shrinkage": "Il materasso {seq} si taglia dal gruppo di ritiro {lay}: questo rotolo è del gruppo {roll}. Un solo gruppo di ritiro per materasso.",
+      "full": "Il materasso {seq} ha tutti i suoi strati con i rotoli scelti."
+    },
+    "rule": "Assegnare non muove il magazzino: il tessuto si preleva quando il materasso è tagliato e il tessuto usato è confermato al tavolo."
+  },
+  "reconcile": {
+    "title": "Riconcilia taglio · {number}",
+    "figures": "il taglio rispetto all’ordine",
+    "sum": "{ordered} capi ordinati · {cut} tagliati ({difference}).",
+    "sizes": "Pianificati e tagliati per taglia",
+    "material": "Tessuto prelevato, usato e reso",
+    "lines": "Ogni taglia di ogni ordine di lavoro",
+    "allDone": "Ogni riga è riconciliata.",
+    "col": {
+      "reason": "Motivo",
+      "note": "A parole (serve per Altro)"
+    },
+    "reasonOf": "Motivo per {cell}",
+    "noteOf": "Parole per {cell}",
+    "pickReason": "Scegli un motivo…",
+    "asOrdered": "Tagliato come ordinato",
+    "held": {
+      "reason": "Riga {seq}: tagliati {cut} di {ordered}: scegli un motivo.",
+      "note": "Riga {seq}: Altro richiede il motivo scritto."
+    },
+    "hint": "Riconciliato, l’ordine di taglio è chiuso: i suoi dati alimentano la resa e l’avanzamento degli ordini di lavoro.",
+    "go": "Riconcilia"
+  },
+  "notice": {
+    "released_one": "{number} rilasciato: {count} buono da stampare.",
+    "released_other": "{number} rilasciato: {count} buoni da stampare.",
+    "back": "{number} è tornato in pianificazione.",
+    "cancelled": "{number} è annullato.",
+    "allocated_one": "{count} rotolo assegnato al materasso {seq} ({plies} strati).",
+    "allocated_other": "{count} rotoli assegnati al materasso {seq} ({plies} strati).",
+    "removed": "{code} tolto dal materasso {seq}.",
+    "printed_one": "{count} buono inviato alla stampante.",
+    "printed_other": "{count} buoni inviati alla stampante.",
+    "notPrinted_one": "{count} buono non è stato stampato: la sua etichetta è qui sotto.",
+    "notPrinted_other": "{count} buoni non sono stati stampati: l’ultima etichetta è qui sotto.",
+    "voided": "{number} è annullato.",
+    "voidedReplaced": "{number} è annullato; {replacement} è stato creato per lo stesso materasso.",
+    "reconciled": "{number} riconciliato: {ordered} ordinati, {cut} tagliati."
+  },
+  "sheet": {
+    "title": "Foglio materasso",
+    "titleOf": "Foglio materasso · {number}",
+    "back": "Torna all’ordine di taglio",
+    "reading": "Lettura dell’ordine di taglio…",
+    "failed": "Non è stato possibile leggere l’ordine di taglio",
+    "nothing": "Nessun ordine di taglio indicato",
+    "nothingBody": "Apri il foglio materasso da un ordine di taglio.",
+    "noDue": "nessuna consegna",
+    "lay": "Materasso",
+    "planned": "Pianificato: i buoni si creano al rilascio, quindi questo foglio non ha ancora il codice a barre.",
+    "cancelled": "Questo ordine di taglio è annullato: il suo foglio non è per il tavolo.",
+    "leather": "Pelle: pelle per pelle",
+    "noLay": "Nessun materasso da stampare",
+    "noLayBody": "Questo ordine di taglio non ha più materassi.",
+    "layTitle": "Materasso {seq} di {of} · {plies} strati",
+    "layLength": "Lunghezza materasso",
+    "shade": "Gruppo di tonalità",
+    "shrinkage": "Gruppo di ritiro",
+    "noRolls": "nessun rotolo assegnato per ora",
+    "rolls": "Rotoli da stendere",
+    "col": {
+      "lot": "Lotto",
+      "planned": "Strati pianificati",
+      "spread": "Strati stesi",
+      "splices": "Giunte",
+      "endLoss": "Sfrido di testa (cm)",
+      "endBack": "Coda resa (cm)",
+      "garments": "Capi in questo materasso"
+    },
+    "rule": "Un solo gruppo di tonalità e di ritiro per materasso. Scrivi su una riga vuota un rotolo aggiunto al tavolo; il tavolo registra il rapporto sul suo tablet.",
+    "countLeft": "Strati contati, capo sinistro",
+    "countRight": "Strati contati, capo destro",
+    "cutAt": "Tagliato alle (ora)",
+    "table": "Tavolo",
+    "ticketStart": "Buono scansionato all’inizio",
+    "ticketEnd": "Buono scansionato alla fine",
+    "noTicket": "Nessun buono per ora: creato al rilascio.",
+    "footer": "Carta per il tavolo di taglio: fanno fede le scansioni e i conteggi del tablet."
+  },
+  "shadeLot": {
+    "none": "Nessuna pelle tagliata o assegnata per ora: la prima pelle fissa il lotto di tonalità.",
+    "one": "Un solo lotto di tonalità",
+    "lot_one": "lotto {lot}, tonalità {shade}: {count} pelle",
+    "lot_other": "lotto {lot}, tonalità {shade}: {count} pelli",
+    "unknown": "non nota",
+    "many": "Pelli di {count} lotti di tonalità",
+    "rule": "Un solo lotto di tonalità per ordine: il tavolo di taglio avvisa e un capo firma Taglia comunque; un altro lotto si riserva solo con inventory.shade.override."
+  },
+  "ofWorkOrder": {
+    "title": "Ordini di taglio e materassi",
+    "none": "Nessun ordine di taglio indica questo ordine di lavoro: il suo tessuto si taglia su un ordine di taglio con i suoi materassi.",
+    "hint": "Un ordine di taglio raggruppa ordini di lavoro di un materiale e colore: il tessuto si taglia a materassi da un piazzamento; materassi, rotoli e buoni sono sull’ordine di taglio."
+  },
+  "balance": {
+    "title": "Prelevato, usato e reso",
+    "none": "Nulla è stato ancora prelevato per questo ordine di lavoro.",
+    "col": {
+      "unit": "Unità",
+      "hides": "Pelli",
+      "issued": "Prelevato",
+      "used": "Tagliato",
+      "waste": "Scarto",
+      "returned": "Reso a magazzino",
+      "left": "Ancora sulla pelle"
+    },
+    "hint": "Ogni pelle prelevata per questo ordine di lavoro: cosa è stato tagliato, scartato, reso a magazzino e cosa resta. Superfici di unità diverse non si sommano mai."
+  },
+  "feedback": {
+    "col": {
+      "plan": "Rispetto al piano",
+      "action": "Al fornitore"
+    },
+    "points": "{points} punti",
+    "raise": "Segnala al fornitore",
+    "held": {
+      "noSupplier": "Questo lotto non indica un fornitore."
+    },
+    "hint": "Un lotto molto sotto il piano si segnala al fornitore con un reclamo sul lotto: la qualità e la valutazione del fornitore lo contano."
+  }
+}
