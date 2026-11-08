@@ -1792,6 +1792,7 @@
     "production_reports_view": "See the daily production report per line, style and size",
     "production_reports_subscribe": "E-mail the production report to colleagues",
     "production_cutting_view": "See the cutting room's yield",
+    "production_cutorders_manage": "Plan cut orders of several work orders, allocate rolls and print or void cut tickets",
     "planning_firm": "Make planned orders firm",
     "planning_exceptions_manage": "Work the planning exceptions",
     "reasons_view": "See the reason lists and how often each code is used",
