@@ -65,6 +65,11 @@ export const FLOOR_SYNC_KINDS = [
   // "honest that it waits when offline"). One sent WITHOUT a name never goes through the queue (its ledger names the tablet):
   // the module refuses it here, the tablet sends it online.
   'safety.incident.report',
+  // B-W2b-116: a lay at the cutting table (design floor.fabriccut "Works offline": "Add a roll to the lay", "Check plies when both
+  // ends match"): a roll spread on it with its plies, splices, end loss and end returned, the last one undone, both ends counted.
+  'production.lay.roll',
+  'production.lay.undo',
+  'production.lay.count',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -122,6 +127,10 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.repair.scan': { kind: 'production.repair.scan', permission: 'production.repair', numbers: null, what: 'Scan a bundle in or out at a repair station' },
   // B-W2b-125: anyone at the station reports (floor.work, as a help call); the number is taken when the office records it.
   'safety.incident.report': { kind: 'safety.incident.report', permission: 'floor.work', numbers: null, what: 'Report an incident, a near miss or a hazard' },
+  // B-W2b-116: the cutting table's own right; the module checks again the lay, its started ticket and the rolls.
+  'production.lay.roll': { kind: 'production.lay.roll', permission: 'production.cut', numbers: null, what: 'Spread a roll on a lay' },
+  'production.lay.undo': { kind: 'production.lay.undo', permission: 'production.cut', numbers: null, what: 'Undo the last roll of a lay' },
+  'production.lay.count': { kind: 'production.lay.count', permission: 'production.cut', numbers: null, what: "Count a lay's plies at both ends" },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
