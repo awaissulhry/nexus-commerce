@@ -275,6 +275,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   its code) → size (a tap finishes the item) → how many → the person's PIN signs the receipt. ONLINE only (a PIN is never queued);
   a 401 on a signature is the badge or PIN unless `GET /floor/me` says the session ended (`api.ts signedOrWrong`). Closed or
   cancelled in the office: signing stops with the reason (live hints + a 30 s beat).
+  B-W2b-105: `floor/tasks/inline/` (SCR-176, `/floor/inline`, tile `inline` at the inspection bench and a lead's line tablet,
+  quality.inprocess.record; catalogue `floor-inline`; on B-W2b-99's API): the line and its DHU today on top, Which check? (four tiles,
+  the site's first pieces waiting); First piece = scan → which operation waits → the plan's checks (DS FloorChecklist, key
+  measurements with DS QuantityPad + LimitMeter, the verdict by the numbers) → Approve or Reject with the PIN (DS PinSignBlock, ONE
+  key per signature); Cutting and First piece online only; Roving and an end-of-line Pass online first, queued as
+  `quality.inprocess.record` (the try's key = `<device>.<client event id>`); Send back = the check charged to an operation, then the
+  rework loop (OTHER, else the reason asked), online only. Operation's first-piece hold: `tasks/scans/first-piece.ts` (the card's
+  `firstPiece`), Finish/Start/Resume held, `use-first-piece.ts` lifts it live; the reason picker's `cause` = "Which operation caused
+  it?" (`causedAtOperationId` on each scrap / rework line; Not known by default).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
