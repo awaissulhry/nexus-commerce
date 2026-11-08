@@ -100,6 +100,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
   chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
   design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+- `src/portal/supplier/deliveries/` — the supplier's Ship notices (B-W2b-186 on B-W2b-182's API, SCR-227; catalogue
+  `portal-deliveries`, CSS prefix `fw-psn-`): `/p/<party>/deliveries?state=&q=` (the list frame, Export N, ⋯ Cancel…),
+  `/deliveries/new?po=<id>` and `/deliveries/<id>?step=lines|packing|transport|review` (`NoticePage.tsx`: a draft on its
+  four steps, a SENT notice as it stands or — with `step` — being changed; each step writes at its version with one
+  Idempotency-Key per body; the sheet is read with `apply: false`, kept with `apply: true`). `model.ts` says every check,
+  sheet row and refusal from codes, columns and issue paths (the API's English is dropped by the zod schemas).
+  `RECORD_PAGES.ShipNotice` opens `/deliveries/<id>`; the PO record's Ship notices tab has "Announce delivery".
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

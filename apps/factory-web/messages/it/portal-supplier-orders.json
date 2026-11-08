@@ -349,7 +349,10 @@
     "shipDate": "Spedisce il {date}",
     "lines_one": "{count} riga",
     "lines_other": "{count} righe",
-    "ddt": "DDT {number}"
+    "ddt": "DDT {number}",
+    "announce": "Annuncia una consegna",
+    "mayWrite": "Il tuo accesso ti fa leggere le consegne, non annunciarle: chiedi al tuo amministratore il permesso di caricare.",
+    "notConfirmed": "Prima conferma l'ordine: poi annuncia cosa spedisci."
   },
   "docs": {
     "title": "Documenti",
