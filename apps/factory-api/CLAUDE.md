@@ -305,6 +305,13 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
 - B-W2b-173 (the portal frame): `GET /portal/me` also names `party.code` (the portal address `/p/<code>`), `party.kinds`
   (an office preview's rail) and `company.legal` {it, en} (the foot's c.c. art. 2250 block, as the documents print it);
   `POST /portal/me/locale` {locale} = the person's own language (command `portal.changeLocale`, audited; a preview: 403).
+- B-W2b-196 (the customer's Account, `self.ts`): `POST /portal/me/profile` {displayName?, locale?} (command
+  `portal.changeProfile`, audited before → after, nothing twice), `GET /portal/sessions` (the person's own live PARTNER
+  sessions: started, last used, the User-Agent, `current`; never a preview's) + `POST /portal/sessions/end-others` (revokes
+  the others, SIGNED_OUT, audited on the User), `GET /portal/company` (portal.colleagues.view: the party's names, the tax
+  identity in force, the default invoice address, the registered office, the payment terms it/en; no amount). All in the
+  office scope as the person. Partner live (factory-domain `PARTNER_LIVE_EVENTS`): `delivery_address.checked`,
+  `partner_user.invited|changed` reach the party's sessions.
 - Scheduler cron `portal.purgeCodes` (`purge.ts`, minute 41 hourly): codes expired more than a day ago are deleted.
 - Office paths answer a partner address in words: an office invitation 409, a password reset request sends nothing,
   confirm and "require a reset" 409 (a partner person has no password).
