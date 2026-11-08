@@ -13,6 +13,8 @@ import {
   BRAND_VARS,
   brandBlocks,
   brandHover,
+  brandPortals,
+  type BrandPortalTarget,
   brandingAttrs,
   brandingRoles,
   brandingStyle,
@@ -162,11 +164,82 @@ describe('the generated stylesheet (styles/branding.css)', () => {
   it('each role fires only in its theme: light rules exclude anything under .dark, dark rules require it', () => {
     const blocks = brandBlocks()
     for (const b of blocks.filter((x) => x.selector.includes('-light'))) expect(b.selector).toMatch(/:not\(\.dark, \.dark \*\)$/)
-    for (const b of blocks.filter((x) => x.selector.includes('-dark'))) expect(b.selector).toMatch(/^\.dark \[data-brand~='(primary|accent)-dark'\], \.dark\[data-brand~='(primary|accent)-dark'\]$/)
+    // Dark: under a .dark, .dark itself, or a .dark surface inside the subtree (a dark pop-up; D24, B-W2b-155).
+    for (const b of blocks.filter((x) => x.selector.includes('-dark'))) expect(b.selector).toMatch(/^\.dark \[data-brand~='(primary|accent)-dark'\], \.dark\[data-brand~='(primary|accent)-dark'\], \[data-brand~='(primary|accent)-dark'\] \.dark$/)
     // A role a colour failed is not in data-brand, so its rule never fires and the token keeps its inherited value.
     expect(blocks.map((b) => b.selector.match(/~='([a-z-]+)'/)?.[1]).filter(Boolean).sort()).toEqual(['accent-dark', 'accent-light', 'primary-dark', 'primary-light'])
   })
   it('the decoration falls back to the subtree\'s primary (the brand\'s where it passed, else the design system\'s)', () => {
     expect(brandBlocks()[0]).toMatchObject({ selector: '[data-brand]', vars: [{ name: '--nds-brand-accent', value: 'var(--nds-primary)' }] })
+  })
+})
+
+/** A stand-in for `<body>`: its attributes and its inline custom properties. */
+function fakeBody(attrs: Record<string, string> = {}, props: Record<string, string> = {}): BrandPortalTarget & { attrs: Record<string, string>; props: Record<string, string> } {
+  const a = { ...attrs }
+  const p = { ...props }
+  return {
+    attrs: a,
+    props: p,
+    getAttribute: (name) => (name in a ? a[name] : null),
+    setAttribute: (name, value) => void (a[name] = value),
+    removeAttribute: (name) => void delete a[name],
+    style: {
+      getPropertyValue: (name) => p[name] ?? '',
+      setProperty: (name, value) => void (p[name] = value),
+      removeProperty: (name) => {
+        const was = p[name] ?? ''
+        delete p[name]
+        return was
+      },
+    },
+  }
+}
+
+describe('pop-ups take the brand (D24, B-W2b-155)', () => {
+  const NAVY = { name: 'Demo Navy', accent: '#1d3557', accentDark: '#a8c5ff' }
+
+  it('brandPortals puts the subtree\'s data-brand and --nds-brand-* properties on <body>, and the undo puts back what it had', () => {
+    const body = fakeBody({ class: 'x' }, { '--nds-other': '1' })
+    const undo = brandPortals(NAVY, body)
+    const attrs = brandingAttrs(NAVY)
+    expect(body.attrs['data-brand']).toBe(attrs['data-brand'])
+    expect(body.attrs['data-brand']).toContain('primary-light')
+    for (const [name, value] of Object.entries(attrs.style as Record<string, string>)) expect(body.props[name]).toBe(value)
+    undo()
+    expect(body.attrs).toEqual({ class: 'x' })
+    expect(body.props).toEqual({ '--nds-other': '1' })
+  })
+
+  it('a second brand clears every brand property first: a role it failed keeps nothing from the first', () => {
+    const body = fakeBody()
+    const first = brandPortals(NAVY, body)
+    // A light grey passes no role in light: nothing of the navy's light roles may stay.
+    const undo = brandPortals({ name: 'Pale', accent: '#eeeeee', accentDark: '#eeeeee' }, body)
+    expect(body.props[BRAND_VARS.light.primary]).toBeUndefined()
+    expect(body.attrs['data-brand']).not.toContain('primary-light')
+    undo()
+    expect(body.attrs['data-brand']).toBe(brandingAttrs(NAVY)['data-brand'])
+    expect(body.props[BRAND_VARS.light.primary]).toBe('#1d3557')
+    first()
+    expect(body.attrs).toEqual({})
+    expect(body.props).toEqual({})
+  })
+
+  it('no branding or no document: nothing changes', () => {
+    const body = fakeBody({ 'data-brand': 'keep' })
+    brandPortals(null, body)()
+    expect(body.attrs).toEqual({ 'data-brand': 'keep' })
+    expect(() => brandPortals(NAVY)()).not.toThrow() // Node: no document
+  })
+
+  it('a dark surface inside a branded subtree (a dark pop-up) takes the dark roles again, and its decoration follows its own primary', () => {
+    const blocks = brandBlocks()
+    const byVar = (selector: string) => blocks.find((b) => b.selector === selector)
+    expect(byVar('[data-brand] .dark')?.vars).toEqual([{ name: '--nds-brand-accent', value: 'var(--nds-primary)' }])
+    const darkPrimary = blocks.find((b) => b.selector.endsWith("[data-brand~='primary-dark'] .dark"))
+    expect(darkPrimary?.vars.map((v) => v.name)).toEqual(['--nds-primary', '--nds-primary-hover'])
+    // The fallback comes before the dark accent rule (same weight: the accent wins where it passed).
+    expect(blocks.findIndex((b) => b.selector === '[data-brand] .dark')).toBeLessThan(blocks.findIndex((b) => b.selector.endsWith("[data-brand~='accent-dark'] .dark")))
   })
 })

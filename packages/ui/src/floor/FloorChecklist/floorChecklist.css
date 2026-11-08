@@ -1,0 +1,219 @@
+/*
+ * DS floor kit — FloorChecklist (B-W2b-78). Sized by `--nds-density-*`: inside `data-density="floor"` every button is
+ * 56 px (64 px for the main action) and separate targets sit `--nds-density-target-gap` (48 px) apart — tablet and glove
+ * sized; the console's sizes at standard. Colours are semantic roles paired as the contrast gate measures them; a state is
+ * never colour alone (an icon AND a word).
+ */
+.nds-fcl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-fcl / inline-size;
+}
+.nds-fcl-title,
+.nds-fcl-ask {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+}
+/* The question takes the focus when a fail step opens (a screen reader reads it); no ring for a tap. */
+.nds-fcl-ask:focus:not(:focus-visible) {
+  outline: none;
+}
+.nds-fcl-progress {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-fcl-failed {
+  color: var(--nds-danger-text);
+}
+.nds-fcl-held,
+.nds-fcl-note {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-fcl-note {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+/* ── the group strip ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-fcl-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-gap);
+}
+/* Each group button grows to fill its row: on a phone each takes a whole row, never a word broken letter by letter. */
+.nds-fcl-groups > * {
+  flex: 1 1 auto;
+}
+.nds-fcl-group-state {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* ── one group: its head, then its checks ────────────────────────────────────────────────────────────────────────── */
+.nds-fcl-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-fcl-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.nds-fcl-group-icon {
+  display: inline-flex;
+  color: var(--nds-text-2);
+}
+.nds-fcl-group-icon svg {
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.nds-fcl-group-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-fcl-group-count {
+  flex: 1 1 auto;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-fcl-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-fcl-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.nds-fcl-item:not(:has(.nds-fcl-visual)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.nds-fcl-item[data-result='pass'] {
+  border-inline-start-color: var(--nds-success);
+}
+.nds-fcl-item[data-result='fail'] {
+  border-inline-start-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+}
+.nds-fcl-visual {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--nds-density-icon) * 2.2);
+  height: calc(var(--nds-density-icon) * 2.2);
+  overflow: hidden;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-fcl-visual svg {
+  width: calc(var(--nds-density-icon) * 1.3);
+  height: calc(var(--nds-density-icon) * 1.3);
+}
+.nds-fcl-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nds-fcl-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-fcl-label {
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.nds-fcl-hint {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-fcl-answer {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-fcl-item[data-result='pass'] .nds-fcl-answer {
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-fcl-item[data-result='fail'] .nds-fcl-answer,
+.nds-fcl-item[data-result='fail'] .nds-fcl-hint {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-fcl-answer-icon {
+  width: 1.1em;
+  height: 1.1em;
+  margin-inline-end: var(--nds-space-4);
+  vertical-align: -0.2em;
+}
+.nds-fcl-item-held {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-warning-text);
+}
+.nds-fcl-buttons,
+.nds-fcl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+.nds-fcl-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.nds-fcl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* A narrow screen (a phone, a split tablet): Pass and Fail under the words. */
+@container nds-fcl (max-width: 36rem) {
+  .nds-fcl-item,
+  .nds-fcl-item:not(:has(.nds-fcl-visual)) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .nds-fcl-item:not(:has(.nds-fcl-visual)) .nds-fcl-text {
+    grid-column: 1 / -1;
+  }
+  .nds-fcl-buttons {
+    grid-column: 1 / -1;
+  }
+  /* Side by side while each keeps room for its icon and word; else one under the other, each the whole row. */
+  .nds-fcl-buttons > * {
+    flex: 1 1 9rem;
+  }
+}

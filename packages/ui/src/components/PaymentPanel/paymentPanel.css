@@ -1,0 +1,147 @@
+/*
+ * DS — PaymentPanel (B-W2b-155). A frame around the provider's own fields: the purpose and the amount, the method
+ * choice, the fields' box, the state in words, the security note. Colours are semantic roles (`--nds-<tone>-text` on
+ * `--nds-<tone>-soft` for the result blocks); a state is never colour alone (icon AND words). Sizes read
+ * `--nds-density-*` (the link and portal pages are comfortable: 44 px controls, 16 px type).
+ */
+.nds-pay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-pay / inline-size;
+}
+.nds-pay-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-16);
+}
+.nds-pay-title {
+  margin: 0;
+  min-width: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.05);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.nds-pay-amount {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-strong);
+}
+.nds-pay-methods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.nds-pay-legend {
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pay-chosen {
+  margin: 0;
+}
+.nds-pay-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-raised);
+}
+.nds-pay-mount:empty {
+  min-height: var(--nds-density-control-h);
+}
+.nds-pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.nds-pay-actions .nds-btn {
+  min-height: var(--nds-density-control-h-primary);
+}
+.nds-pay-result,
+.nds-pay-held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-sunken);
+}
+.nds-pay-result[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-pay-result[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-pay-result-text {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-pay-icon {
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.nds-pay-status {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* Empty, it stays in the accessibility tree (a live region must exist before its words come) but takes no room. */
+.nds-pay-status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.nds-pay-secure {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+.nds-pay-secure .nds-pay-icon {
+  width: calc(var(--nds-density-icon) * 0.8);
+  height: calc(var(--nds-density-icon) * 0.8);
+}
+
+@container nds-pay (max-width: 480px) {
+  .nds-pay-actions > .nds-btn,
+  .nds-pay-actions > .nds-tooltip {
+    flex: 1 1 100%;
+  }
+  .nds-pay-actions > .nds-tooltip > .nds-btn {
+    width: 100%;
+  }
+}

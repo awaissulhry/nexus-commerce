@@ -34,14 +34,24 @@
  * With `onMtmChange` the editor shows a switch, "One made-to-measure unit". On, the grid and the curve fill are
  * hidden and `mtmSlot` (the app's measurement-profile picker) is shown instead. The quantities are left as they are:
  * the screen decides what an MTM line stores.
+ *
+ * ## Stacked (a phone; B-W2b-155)
+ *
+ * `layout="stacked"` (or `"auto"`: stacked under 760 px) draws ONE colourway at a time: the colourways as tabs (swatch,
+ * name, pieces; arrows between them), the sizes as rows with − and + beside the number and, with `left`, what is left
+ * of each size. Same model, same words for each cell, same keys turned to the screen (↑ / ↓ and Enter between sizes,
+ * Escape puts the quantity back) and the same paste (a single column copied from a spreadsheet lands down the sizes).
+ * Default `table`: a screen that does not ask draws exactly as before.
  */
 import { useId, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { Minus, Plus } from 'lucide-react'
 
 import { Button } from '../../primitives/Button'
 import { Input } from '../../primitives/Input'
 import { Select } from '../../primitives/Select'
 import { Toggle } from '../../primitives/Toggle'
 import { Field } from '../../components/Field'
+import { useNarrow } from '../../components/useNarrow'
 import {
   SIZE_GRID_MAX_QUANTITY,
   clampSizeGridQuantity,
@@ -59,15 +69,17 @@ import {
   sizeGridStep,
   sizeGridTotals,
   sizeGridOffers,
+  stackedPasteText,
   type SizeGridColour,
   type SizeGridCopy,
   type SizeGridCurve,
   type SizeGridDirection,
   type SizeGridIssue,
+  type SizeGridLayout,
   type SizeGridSize,
   type SizeGridValue,
 } from './sizeGridModel'
-import { SizeGridFoot, SizeGridHead, SizeGridIssueGlyph, SizeGridIssueList, SizeGridRowHead, SizeGridScroll, useOverflowX, type SizeGridIssueLine } from './sizeGridParts'
+import { SizeGridFoot, SizeGridHead, SizeGridIssueGlyph, SizeGridIssueList, SizeGridRowHead, SizeGridScroll, SizeGridSwatch, useOverflowX, type SizeGridIssueLine } from './sizeGridParts'
 import './size-grid.css'
 
 export interface SizeGridEditorProps {
@@ -99,6 +111,13 @@ export interface SizeGridEditorProps {
   /** The words, for another language. */
   copy?: Partial<SizeGridCopy>
   className?: string
+  /**
+   * B-W2b-155: `table` (default, every screen today), `stacked` (one colourway at a time, sizes as rows with − / +; the
+   * portal on a phone), or `auto` (stacked under 760 px, the table above).
+   */
+  layout?: SizeGridLayout
+  /** What is left of each size (stock, still to deliver), colour key → size key → pieces: shown beside it when stacked. */
+  left?: SizeGridValue
 }
 
 /** The curve-fill target that means every colour (an option value no colour key is expected to take). */
@@ -121,6 +140,8 @@ export function SizeGridEditor({
   locale,
   copy: copyIn,
   className,
+  layout = 'table',
+  left,
 }: SizeGridEditorProps) {
   const copy = useMemo(() => sizeGridCopy(copyIn), [copyIn])
   const uid = useId()
@@ -129,7 +150,6 @@ export function SizeGridEditor({
   const noteId = `${uid}-note`
   const scrollRef = useRef<HTMLDivElement>(null)
   const empty = !colours.length || !sizes.length
-  const overflowing = useOverflowX(scrollRef, !mtm && !empty)
   const cells = useRef(new Map<string, HTMLInputElement>())
   /** Text in a cell that differs from its quantity while it is being typed (a blank, or not a whole number yet). */
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -137,6 +157,13 @@ export function SizeGridEditor({
   const entered = useRef<{ key: string; quantity: number } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [note, setNote] = useState('')
+  const narrow = useNarrow()
+  const stacked = layout === 'stacked' || (layout === 'auto' && narrow)
+  const overflowing = useOverflowX(scrollRef, !mtm && !empty && !stacked)
+  /** The colourway the stacked layout shows. */
+  const [shown, setShown] = useState(0)
+  const shownRow = Math.min(shown, Math.max(colours.length - 1, 0))
+  const tabs = useRef(new Map<number, HTMLButtonElement>())
 
   const offered = useMemo(() => sizeGridOffered(colours, sizes), [colours, sizes])
   const totals = useMemo(() => sizeGridTotals(value, colours, sizes, max), [value, colours, sizes, max])
@@ -144,10 +171,17 @@ export function SizeGridEditor({
   const fmt = (n: number) => formatSizeGridQuantity(n, locale)
 
   const focusCell = (row: number, col: number) => {
-    const el = cells.current.get(keyOf(row, col))
-    if (!el) return
-    el.focus()
-    el.select()
+    const go = () => {
+      const el = cells.current.get(keyOf(row, col))
+      if (!el) return
+      el.focus()
+      el.select()
+    }
+    // Stacked: another colourway's cell is drawn once its tab is shown.
+    if (stacked && row !== shownRow) {
+      setShown(row)
+      requestAnimationFrame(go)
+    } else go()
   }
 
   const announceTotals = (next: SizeGridValue, row: number, col: number) => {
@@ -199,6 +233,16 @@ export function SizeGridEditor({
     const all = start === 0 && end === len
     let dir: SizeGridDirection | null = null
     if (e.altKey || e.ctrlKey || e.metaKey) return
+    // Stacked: the sizes run down the screen, so ↑ / ↓ and Enter move between sizes (left / right in the model); ← and →
+    // stay in the number.
+    if (stacked && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter')) {
+      e.preventDefault()
+      const back = e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)
+      const next = sizeGridStep(offered, { row, col }, back ? 'left' : 'right')
+      if (next) focusCell(next.row, next.col)
+      return
+    }
+    if (stacked && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return
     switch (e.key) {
       case 'ArrowUp':
         dir = 'up'
@@ -238,7 +282,8 @@ export function SizeGridEditor({
   }
 
   const onCellPaste = (e: ClipboardEvent<HTMLInputElement>, row: number, col: number) => {
-    const text = e.clipboardData.getData('text/plain')
+    const raw = e.clipboardData.getData('text/plain')
+    const text = stacked ? stackedPasteText(raw) : raw
     e.preventDefault()
     const result = pasteIntoSizeGrid(value, colours, sizes, { colour: colours[row].key, size: sizes[col].key }, text, max)
     setDrafts({})
@@ -274,8 +319,183 @@ export function SizeGridEditor({
     })
   })
 
+  /** One cell's input, the same in the table and the stacked layout: its name, value, keys, paste and issue tone. */
+  const cellInput = (row: number, col: number) => {
+    const c = colours[row]
+    const sz = sizes[col]
+    const key = keyOf(row, col)
+    const q = sizeGridCell(value, c, sz.key, max)
+    const cellIssues = sizeGridIssuesFor(issues, c.key, sz.key)
+    const notWhole = key in drafts && parseSizeGridQuantity(drafts[key]) === null
+    const tone = notWhole ? 'error' : sizeGridIssueTone(cellIssues)
+    const describedBy = [...(issueIds.get(key) ?? []), ...(notWhole ? [noteId] : [])].join(' ') || undefined
+    const text = drafts[key] ?? String(q)
+    const input = (
+      <input
+        ref={(el) => {
+          if (el) cells.current.set(key, el)
+          else cells.current.delete(key)
+        }}
+        className="nds-size-grid-input"
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label={copy.cellName(c.label, sz.label)}
+        aria-invalid={tone === 'error' ? true : undefined}
+        aria-describedby={describedBy}
+        data-zero={q === 0 && !(key in drafts) ? '' : undefined}
+        value={text}
+        onFocus={(e) => {
+          entered.current = { key, quantity: q }
+          e.currentTarget.select()
+        }}
+        onBlur={() => {
+          if (key in drafts) {
+            setDraft(key, null)
+            if (parseSizeGridQuantity(drafts[key]) === null) setNote('')
+          }
+        }}
+        onChange={(e) => onCellChange(row, col, e.currentTarget.value)}
+        onKeyDown={(e) => onCellKeyDown(e, row, col)}
+        onPaste={(e) => onCellPaste(e, row, col)}
+      />
+    )
+    return { key, q, tone, input }
+  }
+
+  /** A stepper press: one piece more or fewer, the typed text dropped, the totals said. */
+  const step = (row: number, col: number, by: 1 | -1) => {
+    const key = keyOf(row, col)
+    const q = sizeGridCell(value, colours[row], sizes[col].key, max)
+    setDraft(key, null)
+    setNote('')
+    commit(row, col, clampSizeGridQuantity(q + by, max))
+  }
+
+  /** The stacked layout (B-W2b-155): the colourways as tabs, the shown one's sizes as rows with − / + and what is left. */
+  const stackedView = () => {
+    const row = shownRow
+    const c = colours[row]
+    const many = colours.length > 1
+    const panelId = `${uid}-panel`
+    const tabId = (i: number) => `${uid}-tab-${i}`
+    const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+      const last = colours.length - 1
+      const to = e.key === 'ArrowRight' ? (i === last ? 0 : i + 1) : e.key === 'ArrowLeft' ? (i === 0 ? last : i - 1) : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
+      if (to === null) return
+      e.preventDefault()
+      setShown(to)
+      requestAnimationFrame(() => tabs.current.get(to)?.focus())
+    }
+    return (
+      <div className="nds-size-grid-stack">
+        {many ? (
+          <div className="nds-size-grid-tabs" role="tablist" aria-label={copy.colourPicker}>
+            {colours.map((col, i) => {
+              const tone = sizeGridIssueTone((issues ?? []).filter((issue) => issue.colour === col.key))
+              const total = fmt(totals.rows[col.key] ?? 0)
+              return (
+                <button
+                  key={col.key}
+                  ref={(el) => {
+                    if (el) tabs.current.set(i, el)
+                    else tabs.current.delete(i)
+                  }}
+                  id={tabId(i)}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === row}
+                  aria-controls={panelId}
+                  aria-label={copy.colourTab(col.label, total)}
+                  tabIndex={i === row ? 0 : -1}
+                  className="nds-size-grid-tab"
+                  data-tone={tone ?? undefined}
+                  onClick={() => setShown(i)}
+                  onKeyDown={(e) => onTabKey(e, i)}
+                >
+                  <SizeGridSwatch colour={col} />
+                  <span className="nds-size-grid-tab-name">{col.label}</span>
+                  <span className="nds-size-grid-tab-total" aria-hidden>
+                    {total}
+                  </span>
+                  {tone ? <SizeGridIssueGlyph tone={tone} /> : null}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+        <div className="nds-size-grid-stack-panel" id={panelId} role={many ? 'tabpanel' : undefined} aria-labelledby={many ? tabId(row) : undefined}>
+          <table className="nds-size-grid-stack-table">
+            <caption id={captionId} className="nds-vh">
+              {`${caption ?? copy.caption}: ${c.label}`}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{copy.sizeHeader}</th>
+                {left ? <th scope="col">{copy.leftHeader}</th> : null}
+                <th scope="col" className="nds-size-grid-stack-qtyhead">
+                  {copy.quantityHeader}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sizes.map((sz, col) => {
+                const name = copy.cellName(c.label, sz.label)
+                const leftHere = left?.[c.key]?.[sz.key]
+                const leftCell = left ? <td className="nds-size-grid-stack-left">{typeof leftHere === 'number' ? copy.left(fmt(leftHere)) : ''}</td> : null
+                if (!sizeGridOffers(c, sz.key)) {
+                  return (
+                    <tr key={sz.key} data-off="">
+                      <th scope="row" className="nds-size-grid-stack-size">
+                        {sz.label}
+                      </th>
+                      {leftCell}
+                      <td className="nds-size-grid-stack-qty nds-size-grid-off">
+                        <span aria-hidden>{copy.notOffered}</span>
+                        <span className="nds-vh">{`${name}: ${copy.notOffered}`}</span>
+                      </td>
+                    </tr>
+                  )
+                }
+                const { q, tone, input } = cellInput(row, col)
+                return (
+                  <tr key={sz.key}>
+                    <th scope="row" className="nds-size-grid-stack-size">
+                      {sz.label}
+                    </th>
+                    {leftCell}
+                    <td className="nds-size-grid-stack-qty">
+                      <span className="nds-size-grid-stepper">
+                        <Button className="nds-size-grid-step" aria-label={copy.less(name)} heldReason={q <= 0 ? copy.atZero : null} onClick={() => step(row, col, -1)}>
+                          <Minus size={16} aria-hidden />
+                        </Button>
+                        <span className="nds-size-grid-cell" data-tone={tone ?? undefined}>
+                          {input}
+                          {tone ? (
+                            <span className="nds-size-grid-mark">
+                              <SizeGridIssueGlyph tone={tone} size={10} />
+                            </span>
+                          ) : null}
+                        </span>
+                        <Button className="nds-size-grid-step" aria-label={copy.more(name)} heldReason={q >= max ? copy.atMax(maxText) : null} onClick={() => step(row, col, 1)}>
+                          <Plus size={16} aria-hidden />
+                        </Button>
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="nds-size-grid-stack-totals">{copy.stackTotals({ colour: c.label, total: fmt(totals.rows[c.key] ?? 0), grand: fmt(totals.grand) })}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className={['nds-size-grid', className].filter(Boolean).join(' ')} data-mode="edit">
+    <div className={['nds-size-grid', className].filter(Boolean).join(' ')} data-mode="edit" data-layout={stacked ? 'stacked' : undefined}>
       {onMtmChange ? (
         <label className="nds-size-grid-mtm" htmlFor={mtmId}>
           <Toggle id={mtmId} checked={mtm} onChange={onMtmChange} />
@@ -306,82 +526,52 @@ export function SizeGridEditor({
               {caption ?? copy.caption}
             </p>
           ) : null}
-          <SizeGridScroll scrollRef={scrollRef} labelledBy={captionId} focusable={overflowing}>
-            <table className="nds-size-grid-table">
-              <caption id={captionId} className="nds-vh">
-                {caption ?? copy.caption}
-              </caption>
-              <SizeGridHead sizes={sizes} copy={copy} />
-              <tbody>
-                {colours.map((c, row) => {
-                  const rowIssues = sizeGridIssuesFor(issues, c.key, null)
-                  return (
-                    <tr key={c.key}>
-                      <SizeGridRowHead colour={c} tone={sizeGridIssueTone(rowIssues)} describedBy={issueIds.get(`row:${row}`)?.join(' ')} />
-                      {sizes.map((s, col) => {
-                        const name = copy.cellName(c.label, s.label)
-                        if (!sizeGridOffers(c, s.key)) {
+          {stacked ? (
+            stackedView()
+          ) : (
+            <SizeGridScroll scrollRef={scrollRef} labelledBy={captionId} focusable={overflowing}>
+              <table className="nds-size-grid-table">
+                <caption id={captionId} className="nds-vh">
+                  {caption ?? copy.caption}
+                </caption>
+                <SizeGridHead sizes={sizes} copy={copy} />
+                <tbody>
+                  {colours.map((c, row) => {
+                    const rowIssues = sizeGridIssuesFor(issues, c.key, null)
+                    return (
+                      <tr key={c.key}>
+                        <SizeGridRowHead colour={c} tone={sizeGridIssueTone(rowIssues)} describedBy={issueIds.get(`row:${row}`)?.join(' ')} />
+                        {sizes.map((s, col) => {
+                          const name = copy.cellName(c.label, s.label)
+                          if (!sizeGridOffers(c, s.key)) {
+                            return (
+                              <td key={s.key} className="nds-size-grid-off">
+                                <span aria-hidden>–</span>
+                                <span className="nds-vh">{`${name}: ${copy.notOffered}`}</span>
+                              </td>
+                            )
+                          }
+                          const { tone, input } = cellInput(row, col)
                           return (
-                            <td key={s.key} className="nds-size-grid-off">
-                              <span aria-hidden>–</span>
-                              <span className="nds-vh">{`${name}: ${copy.notOffered}`}</span>
+                            <td key={s.key} className="nds-size-grid-cell" data-tone={tone ?? undefined}>
+                              {input}
+                              {tone ? (
+                                <span className="nds-size-grid-mark">
+                                  <SizeGridIssueGlyph tone={tone} size={10} />
+                                </span>
+                              ) : null}
                             </td>
                           )
-                        }
-                        const key = keyOf(row, col)
-                        const q = sizeGridCell(value, c, s.key, max)
-                        const cellIssues = sizeGridIssuesFor(issues, c.key, s.key)
-                        const notWhole = key in drafts && parseSizeGridQuantity(drafts[key]) === null
-                        const tone = notWhole ? 'error' : sizeGridIssueTone(cellIssues)
-                        const describedBy = [...(issueIds.get(key) ?? []), ...(notWhole ? [noteId] : [])].join(' ') || undefined
-                        const text = drafts[key] ?? String(q)
-                        return (
-                          <td key={s.key} className="nds-size-grid-cell" data-tone={tone ?? undefined}>
-                            <input
-                              ref={(el) => {
-                                if (el) cells.current.set(key, el)
-                                else cells.current.delete(key)
-                              }}
-                              className="nds-size-grid-input"
-                              type="text"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              spellCheck={false}
-                              aria-label={name}
-                              aria-invalid={tone === 'error' ? true : undefined}
-                              aria-describedby={describedBy}
-                              data-zero={q === 0 && !(key in drafts) ? '' : undefined}
-                              value={text}
-                              onFocus={(e) => {
-                                entered.current = { key, quantity: q }
-                                e.currentTarget.select()
-                              }}
-                              onBlur={() => {
-                                if (key in drafts) {
-                                  setDraft(key, null)
-                                  if (parseSizeGridQuantity(drafts[key]) === null) setNote('')
-                                }
-                              }}
-                              onChange={(e) => onCellChange(row, col, e.currentTarget.value)}
-                              onKeyDown={(e) => onCellKeyDown(e, row, col)}
-                              onPaste={(e) => onCellPaste(e, row, col)}
-                            />
-                            {tone ? (
-                              <span className="nds-size-grid-mark">
-                                <SizeGridIssueGlyph tone={tone} size={10} />
-                              </span>
-                            ) : null}
-                          </td>
-                        )
-                      })}
-                      <td className="nds-size-grid-num nds-size-grid-total">{fmt(totals.rows[c.key] ?? 0)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <SizeGridFoot sizes={sizes} totals={totals} copy={copy} locale={locale} />
-            </table>
-          </SizeGridScroll>
+                        })}
+                        <td className="nds-size-grid-num nds-size-grid-total">{fmt(totals.rows[c.key] ?? 0)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <SizeGridFoot sizes={sizes} totals={totals} copy={copy} locale={locale} />
+              </table>
+            </SizeGridScroll>
+          )}
           {note ? (
             <p className="nds-size-grid-note" id={noteId}>
               {note}

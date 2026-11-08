@@ -1,0 +1,189 @@
+/*
+ * DS — PartnerThread (B-W2b-155). The partner side of a record's thread: messages oldest first, ours on one side and
+ * theirs on the other from 560 px of its own width, both full width below (container query). Colours are semantic
+ * roles: our message on `--nds-surface-raised`, theirs on `--nds-info-soft`, the text `--nds-text` on both. Sizes read
+ * `--nds-density-*` (the portal is comfortable).
+ */
+.nds-pthread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-pthread / inline-size;
+}
+.nds-pthread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-14);
+}
+.nds-pthread-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-pthread-record {
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.nds-pthread-icon {
+  flex-shrink: 0;
+  width: calc(var(--nds-density-icon) * 0.85);
+  height: calc(var(--nds-density-icon) * 0.85);
+}
+.nds-pthread-state,
+.nds-pthread-held,
+.nds-pthread-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-pthread-state[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-pthread-held {
+  color: var(--nds-text);
+}
+.nds-pthread-more {
+  display: flex;
+  justify-content: center;
+}
+.nds-pthread-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-pthread-item {
+  display: flex;
+  min-width: 0;
+}
+.nds-pthread-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-raised);
+}
+.nds-pthread-item[data-side='partner'] .nds-pthread-msg {
+  border-color: transparent;
+  background: var(--nds-info-soft);
+}
+.nds-pthread-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-2) var(--nds-space-10);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-pthread-author {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pthread-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nds-pthread-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-pthread-file {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-pthread-file a {
+  color: var(--nds-text-link);
+}
+.nds-pthread-size,
+.nds-pthread-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+.nds-pthread-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-pthread-label {
+  padding: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pthread-attach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.nds-pthread-send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+.nds-pthread-send .nds-btn {
+  min-height: var(--nds-density-control-h);
+}
+.nds-pthread-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+
+@container nds-pthread (min-width: 560px) {
+  .nds-pthread-msg {
+    width: auto;
+    max-width: 82%;
+  }
+  .nds-pthread-item[data-side='partner'] {
+    justify-content: flex-end;
+  }
+}
+@container nds-pthread (max-width: 480px) {
+  .nds-pthread-send > .nds-btn,
+  .nds-pthread-send > .nds-tooltip {
+    flex: 1 1 100%;
+  }
+  .nds-pthread-send > .nds-tooltip > .nds-btn {
+    width: 100%;
+  }
+}

@@ -345,6 +345,21 @@ export function pasteIntoSizeGrid(
   return result
 }
 
+/**
+ * The stacked layout's paste (B-W2b-155): there the sizes run DOWN the screen, so a single column copied from a
+ * spreadsheet (one value per line) lands down the sizes of the colourway shown — it becomes one row for
+ * `pasteIntoSizeGrid`. A single row, or a block of several rows and columns, lands as in the table (rows down the
+ * colourways from the one shown, columns across the sizes).
+ */
+export function stackedPasteText(text: string): string {
+  const block = parseSizeGridPaste(text)
+  if (block.length > 1 && block.every((row) => row.length === 1)) return block.map((row) => row[0]).join('\t')
+  return text
+}
+
+/** Where a size grid is drawn: the table, or one colourway at a time (`stacked`); `auto` picks by the screen's width. */
+export type SizeGridLayout = 'table' | 'stacked' | 'auto'
+
 /* ── keyboard ────────────────────────────────────────────────────────────────────────────── */
 
 export type SizeGridDirection = 'up' | 'down' | 'left' | 'right'
@@ -400,6 +415,27 @@ export interface SizeGridCopy {
   mtmSwitch: string
   mtmHint: string
   issuesHeading: string
+  // The stacked layout (B-W2b-155): one colourway at a time, sizes as rows with steppers.
+  /** The colourway picker's name. */
+  colourPicker: string
+  /** A colourway's tab: its name and its pieces ("Black, 24 pieces"), for a screen reader. */
+  colourTab: (colour: string, total: string) => string
+  sizeHeader: string
+  /** The column of what is left (stock, still to deliver). */
+  leftHeader: string
+  quantityHeader: string
+  /** "12 left". */
+  left: (count: string) => string
+  /** The − button's name: "Fewer: Black, size M". */
+  less: (cell: string) => string
+  /** The + button's name: "More: Black, size M". */
+  more: (cell: string) => string
+  /** − held at zero. */
+  atZero: string
+  /** + held at the most a cell takes. */
+  atMax: (max: string) => string
+  /** Under the sizes: "Black: 24 · All colourways: 60". */
+  stackTotals: (p: { colour: string; total: string; grand: string }) => string
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -442,6 +478,17 @@ export const SIZE_GRID_COPY: SizeGridCopy = {
   mtmSwitch: 'One made-to-measure unit',
   mtmHint: 'One piece made to the measurement profile below. The size grid is not used.',
   issuesHeading: 'To check in this grid',
+  colourPicker: 'Colourway',
+  colourTab: (colour, total) => `${colour}, ${total} pieces`,
+  sizeHeader: 'Size',
+  leftHeader: 'Left',
+  quantityHeader: 'Pieces',
+  left: (count) => `${count} left`,
+  less: (cell) => `Fewer: ${cell}`,
+  more: (cell) => `More: ${cell}`,
+  atZero: 'Already 0',
+  atMax: (max) => `At most ${max} pieces in one cell`,
+  stackTotals: ({ colour, total, grand }) => `${colour}: ${total} · All colourways: ${grand}`,
 }
 
 /** Merges a screen's words over the defaults. */

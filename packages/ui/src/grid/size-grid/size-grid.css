@@ -313,6 +313,128 @@
   color: var(--nds-text);
 }
 
+/* ── stacked: one colourway at a time (B-W2b-155; `layout="stacked"`) ──────────────────────── */
+
+/* The stacked grid fills its column (the table's grid keeps its own width). */
+.nds-size-grid[data-layout='stacked'] {
+  align-items: stretch;
+  width: 100%;
+}
+.nds-size-grid-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.nds-size-grid-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: var(--nds-density-target-min);
+  padding: 0 var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  cursor: pointer;
+}
+.nds-size-grid-tab:hover {
+  background: var(--nds-surface-hover);
+}
+.nds-size-grid-tab[aria-selected='true'] {
+  border-color: var(--nds-primary);
+  box-shadow: inset 0 0 0 1px var(--nds-primary);
+  font-weight: 600;
+}
+.nds-size-grid-tab:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-size-grid-tab-total {
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.nds-size-grid-tab[data-tone='error'] .nds-size-grid-glyph {
+  color: var(--nds-danger-text);
+}
+.nds-size-grid-tab[data-tone='warning'] .nds-size-grid-glyph {
+  color: var(--nds-warning-text);
+}
+.nds-size-grid-stack-panel {
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.nds-size-grid-stack-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.nds-size-grid-stack-table thead th {
+  padding: var(--nds-space-6) var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+  background: var(--nds-grid-header-bg);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: 600;
+  text-align: left;
+}
+.nds-size-grid-stack-table thead th.nds-size-grid-stack-qtyhead {
+  text-align: right;
+}
+.nds-size-grid-stack-table tbody tr + tr > * {
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-size-grid-stack-size {
+  padding: var(--nds-space-6) var(--nds-space-12);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.nds-size-grid-stack-left {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.nds-size-grid-stack-qty {
+  padding: var(--nds-space-6) var(--nds-space-12);
+  text-align: right;
+}
+.nds-size-grid-stack-qty.nds-size-grid-off {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+}
+/* − number +: the buttons are touch targets (the density's minimum), the number between them a bordered field. */
+.nds-size-grid-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-size-grid-stepper .nds-size-grid-step {
+  min-width: var(--nds-density-target-min);
+  min-height: var(--nds-density-target-min);
+  padding: 0;
+  justify-content: center;
+}
+.nds-size-grid-stepper .nds-size-grid-input {
+  width: 4.4em;
+  min-width: 0;
+  min-height: var(--nds-density-target-min);
+  border-color: var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.nds-size-grid-stack-totals {
+  margin: 0;
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
 /* ── paper ───────────────────────────────────────────────────────────────────────────────── */
 
 @media print {
