@@ -11,6 +11,8 @@ import type { ComponentType, ReactNode } from 'react'
 
 /** A screen by its SCR id; a shared part every list uses has its own lab (`list-frame`), the DS words theirs (`ds-words`), the shared DS parts theirs (`ds-parts`), the floor and people DS parts theirs (`ds-floor-parts`). */
 export type ScreenId = `SCR-${string}` | 'list-frame' | 'ds-words' | 'ds-parts' | 'ds-floor-parts'
+  // B-W2b-78: the quality and floor DS parts' lab.
+  | 'ds-quality-parts'
 
 export interface DesignCase<M> {
   /** Unique in the screen; part of the frame's address (`/design/SCR-003/normal`). */

@@ -1,0 +1,172 @@
+/*
+ * DS — LimitMeter / ToleranceCell (B-W2b-78). Words in `--nds-<tone>-text` (on the surface, or on `--nds-<tone>-soft` for
+ * the verdict capsule); the bar's marks are graphical (`--nds-<tone>` fills, `--nds-border-strong` lines). A verdict is
+ * never colour alone: an icon shape AND a word. Sizes read `--nds-density-*` (the console's sizes at standard).
+ */
+.nds-limit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-limit-name {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-limit-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+}
+.nds-limit-value {
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nds-limit-target {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.nds-limit-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-limit[data-variant='bar'] .nds-limit-verdict {
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+}
+.nds-limit-icon {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-limit[data-tone='success'] .nds-limit-verdict {
+  color: var(--nds-success-text);
+}
+.nds-limit[data-tone='danger'] .nds-limit-verdict {
+  color: var(--nds-danger-text);
+}
+.nds-limit[data-tone='warning'] .nds-limit-verdict {
+  color: var(--nds-warning-text);
+}
+.nds-limit[data-tone='neutral'] .nds-limit-verdict {
+  color: var(--nds-text-2);
+}
+.nds-limit[data-variant='bar'][data-tone='success'] .nds-limit-verdict {
+  background: var(--nds-success-soft);
+}
+.nds-limit[data-variant='bar'][data-tone='danger'] .nds-limit-verdict {
+  background: var(--nds-danger-soft);
+}
+.nds-limit[data-variant='bar'][data-tone='warning'] .nds-limit-verdict {
+  background: var(--nds-warning-soft);
+}
+
+/* ── the bar: track, fill (or the hatched zone under the LOQ), the LOQ mark, the limit line; tolerance: band, nominal, value ── */
+.nds-limit-bar {
+  position: relative;
+  display: block;
+  height: calc(var(--nds-density-font-label) * 0.9);
+  min-height: 0.6rem;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
+}
+.nds-limit-fill,
+.nds-limit-hatch,
+.nds-limit-band {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--nds-limit-from, 0%);
+  inset-inline-end: var(--nds-limit-to, 100%);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-limit-fill {
+  background: var(--nds-text-2);
+}
+.nds-limit[data-tone='success'] .nds-limit-fill {
+  background: var(--nds-success);
+}
+.nds-limit[data-tone='danger'] .nds-limit-fill {
+  background: var(--nds-danger);
+}
+.nds-limit[data-tone='warning'] .nds-limit-fill {
+  background: var(--nds-warning);
+}
+.nds-limit-hatch {
+  background: repeating-linear-gradient(135deg, var(--nds-success) 0 2px, transparent 2px 6px);
+}
+.nds-limit[data-tone='warning'] .nds-limit-hatch {
+  background: repeating-linear-gradient(135deg, var(--nds-warning) 0 2px, transparent 2px 6px);
+}
+.nds-limit-band {
+  background: var(--nds-success-soft);
+  box-shadow: inset 0 0 0 1px var(--nds-success);
+}
+.nds-limit-line,
+.nds-limit-loq,
+.nds-limit-nominal {
+  position: absolute;
+  inset-block: -0.25rem;
+  inset-inline-start: var(--nds-limit-at, 0%);
+  width: 0;
+  border-inline-start: 2px solid var(--nds-text);
+  transform: translateX(-1px);
+}
+.nds-limit-loq {
+  border-inline-start: 2px dashed var(--nds-text-2);
+}
+.nds-limit-nominal {
+  inset-block: 0;
+  border-inline-start: 1px solid var(--nds-success);
+}
+.nds-limit-mark {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: var(--nds-limit-at, 0%);
+  width: calc(var(--nds-density-font-label) * 0.9);
+  height: calc(var(--nds-density-font-label) * 0.9);
+  border: 2px solid var(--nds-surface);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-text);
+  transform: translate(-50%, -50%);
+}
+.nds-limit[data-tone='success'] .nds-limit-mark {
+  background: var(--nds-success);
+}
+.nds-limit[data-tone='danger'] .nds-limit-mark {
+  background: var(--nds-danger);
+}
+
+/* ── the cell: one line, no bar ───────────────────────────────────────────────────────────────────────────────────── */
+.nds-limit[data-variant='cell'] {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-6);
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.nds-limit[data-variant='cell'] .nds-limit-value {
+  font-weight: var(--nds-font-weight-medium);
+}
+.nds-limit-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

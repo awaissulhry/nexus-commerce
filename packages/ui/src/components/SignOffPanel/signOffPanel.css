@@ -1,0 +1,213 @@
+/*
+ * DS — SignOffPanel (B-W2b-78). Colours are semantic roles paired as the contrast gate measures them (`--nds-<tone>-text`
+ * on `--nds-<tone>-soft` for the state words; the card on `--nds-surface`). A state is never colour alone: an icon shape
+ * AND a word. Sizes read `--nds-density-*` (the console's sizes at standard).
+ */
+.nds-signoff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-signoff / inline-size;
+}
+.nds-signoff-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+.nds-signoff-icon {
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+  color: var(--nds-text-2);
+}
+.nds-signoff-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-signoff-summary {
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-signoff-summary[data-state='signed'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-signoff-summary[data-state='rejected'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+
+/* ── the steps: a numbered rail, the current step marked by its border and a bar (never colour alone) ─────────────── */
+.nds-signoff-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-signoff-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+}
+.nds-signoff-step[data-current='true'] {
+  border-color: var(--nds-border-strong);
+  box-shadow: inset 3px 0 0 var(--nds-primary);
+}
+.nds-signoff-num {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--nds-density-font-body) * 1.9);
+  height: calc(var(--nds-density-font-body) * 1.9);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.nds-signoff-step[data-state='signed'] .nds-signoff-num {
+  border-color: var(--nds-success);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-signoff-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-signoff-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+}
+.nds-signoff-label {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-signoff-role {
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-round);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-signoff-state,
+.nds-signoff-rule-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-signoff-state-icon {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-signoff-step[data-state='signed'] .nds-signoff-state,
+.nds-signoff-rule[data-state='met'] .nds-signoff-rule-state {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-signoff-step[data-state='held'] .nds-signoff-state,
+.nds-signoff-rule[data-state='unknown'] .nds-signoff-rule-state {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-signoff-step[data-state='rejected'] .nds-signoff-state,
+.nds-signoff-rule[data-state='broken'] .nds-signoff-rule-state {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-signoff-step[data-state='waiting'] .nds-signoff-state {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-signoff-line,
+.nds-signoff-fp,
+.nds-signoff-note {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.nds-signoff-fp code {
+  font-family: var(--nds-font-mono);
+  color: var(--nds-text);
+}
+.nds-signoff-reason {
+  overflow-wrap: anywhere;
+}
+.nds-signoff-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: var(--nds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-signoff-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+.nds-signoff-rule-text {
+  min-width: 0;
+  font-size: var(--nds-density-font-label);
+  overflow-wrap: anywhere;
+}
+.nds-signoff-held {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-warning-text);
+}
+.nds-signoff-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+  margin-top: var(--nds-space-4);
+}
+.nds-signoff-sign {
+  margin-top: var(--nds-space-6);
+}
+.nds-signoff-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+@container nds-signoff (max-width: 26rem) {
+  .nds-signoff-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

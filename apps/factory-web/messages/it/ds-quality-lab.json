@@ -1,0 +1,143 @@
+{
+  "title": "Parti del design system per qualità e reparto",
+  "subtitle": "Le parti che qualità, conformità e reparto usano in due o più aree, ora nel design system. Dati di esempio.",
+  "section": {
+    "office": "Parti di qualità e conformità",
+    "floor": "Parti di reparto (livello reparto)",
+    "floorNote": "Disegnate a misura di tablet e di guanti, come su un tablet di reparto."
+  },
+  "part": {
+    "gate": "Spiegazione del blocco",
+    "gateCompact": "Il blocco in una riga, e in un popover",
+    "gateList": "Cosa blocca (elenco)",
+    "signoff": "Firme con separazione dei compiti",
+    "limits": "Risultati rispetto a un limite",
+    "tolerance": "Misure rispetto a una tolleranza",
+    "checklist": "Lista di controllo di reparto",
+    "floorGate": "Il blocco in reparto",
+    "floorSign": "Firma del primo capo con il PIN"
+  },
+  "gate": {
+    "title": "Blocco certificato",
+    "rule": "Un capo può essere etichettato, rilasciato e spedito solo se un certificato valido copre il suo modello, colore e taglia in quel giorno.",
+    "cert": "Il certificato copre ogni taglia del lotto",
+    "covered": "Coperto",
+    "notCovered": "Non coperto",
+    "certOk": "Coperto: CERT-0001 (EN 17092-4, classe AA) copre JK-100 Nero 46–56, valido fino al 12 mar 2029.",
+    "certNo": "La taglia 58 è fuori dall’intervallo coperto 46–56.",
+    "certWho": "Responsabile conformità",
+    "certHow": "chiedi all’organismo notificato di estendere il certificato, oppure togli la taglia 58 dall’ordine",
+    "certFix": "Apri il certificato",
+    "law": "Gli indumenti di protezione si possono vendere solo con il certificato dell’organismo notificato che li ha provati.",
+    "crvi": "Cr VI dei lotti di pelle CONFORME",
+    "crviOk": "Lotti L-0231 e L-0233: 1,2 e 0,8 mg/kg, sotto il limite di 3 mg/kg.",
+    "pending": "IN ATTESA",
+    "crviWho": "Qualità",
+    "crviFix": "Registra l’esito della prova",
+    "crviFixHeld": "Solo la qualità può registrare l’esito di una prova",
+    "label": "Il modello di etichetta è attivo",
+    "labelOk": "LBL-JK100 revisione 2.",
+    "four": "Rilascia una seconda persona",
+    "override": "Rilascio in deroga, solo per questo ordine di lavoro, per al massimo 7 giorni.",
+    "overrideWho": "Direttore di stabilimento",
+    "overrideHow": "un motivo scritto e il codice dell’app di autenticazione",
+    "overrideAction": "Deroga per WO-0142",
+    "overrideHeld": "Solo il direttore di stabilimento può concedere la deroga",
+    "asOf": "3 nov 2026, 10:42",
+    "release": "Rilascia 48 capi"
+  },
+  "list": {
+    "de": "JK-100 non può essere spedito in Germania: mancano le informazioni per l’utilizzatore in tedesco.",
+    "deWho": "Responsabile conformità",
+    "deFix": "Aggiungi il tedesco",
+    "cert": "Il certificato CERT-0001 scade tra 28 giorni; ne dipendono 3 ordini aperti.",
+    "certWho": "Responsabile conformità",
+    "certFix": "Avvia il rinnovo",
+    "certHeld": "Solo il responsabile conformità può avviare un rinnovo",
+    "lot": "Il lotto L-0231 (vacchetta nera) non ha prove sul Cr VI; 6 ordini di lavoro attendono.",
+    "lotWho": "Qualità",
+    "lotFix": "Registra l’esito della prova"
+  },
+  "sign": {
+    "title": "Chi firma",
+    "result": "Esito firmato",
+    "inspector": "Collaudatrice",
+    "bench": "al banco 2",
+    "release": "Rilascio da parte di una seconda persona",
+    "releaseAction": "Rilascia 48 capi",
+    "whoMay": "Responsabile qualità o direttore di stabilimento",
+    "qualityLead": "Responsabile qualità",
+    "maker": "Prodotto da (dalle scansioni): 9 persone della Linea 2 — tu non sei tra loro",
+    "rejectedWhy": "Il campione è stato preso da un solo cartone: va ripreso da tutto il lotto."
+  },
+  "limit": {
+    "crvi": "Cr VI, lotto L-0231",
+    "crviFail": "Cr VI, lotto L-0240",
+    "crviBelow": "Cr VI, lotto L-0233 (laboratorio: non rilevato)",
+    "crviInconclusive": "Cr VI, lotto L-0235 (metodo sopra il limite)",
+    "tear": "Resistenza allo strappo",
+    "ph": "pH",
+    "cellNote": "In una cella di elenco:"
+  },
+  "measure": {
+    "chest": "Torace ½",
+    "waist": "Vita ½",
+    "sleeve": "Manica",
+    "back": "Lunghezza dietro"
+  },
+  "checklist": {
+    "title": "Collaudo finale · WO-0142",
+    "sign": "Firma l’esito",
+    "signed": "Pronto per la firma: qui si aprirebbe il passo del PIN.",
+    "held": "L’ordine di lavoro è bloccato: prima sblocca il blocco.",
+    "photoNote": "Qui va la fotocamera dell’app (PhotoCapture). Questa demo usa una foto di esempio.",
+    "usePhoto": "Usa la foto di esempio"
+  },
+  "group": {
+    "labels": "Etichette",
+    "garment": "Capo",
+    "armour": "Protezioni",
+    "packaging": "Imballo e documenti"
+  },
+  "item": {
+    "class": "Etichetta di classe EN 17092",
+    "classHint": "Classe AA, dentro il collo",
+    "ce": "Marchio CE",
+    "care": "Etichetta di manutenzione",
+    "fibre": "Composizione fibrosa",
+    "origin": "Dichiarazione di origine",
+    "build": "Confezione",
+    "zips": "Cerniere",
+    "reflective": "Strisce riflettenti",
+    "fitted": "Protezioni inserite",
+    "marked": "Protezioni marcate EN 1621",
+    "markedHint": "Taglia e tipo A o B",
+    "markedHeld": "Prima scansiona il lotto delle protezioni",
+    "leaflet": "Informazioni per l’utilizzatore nelle lingue giuste",
+    "hangtag": "Cartellini"
+  },
+  "reason": {
+    "missing": "Mancante",
+    "wrong": "Sbagliata",
+    "unreadable": "Illeggibile",
+    "stitching": "Cuciture",
+    "zip": "Cerniera difettosa",
+    "damage": "Materiale danneggiato",
+    "armourMissing": "Protezione mancante",
+    "armourSize": "Taglia sbagliata",
+    "leaflet": "Manca il foglietto",
+    "hangtag": "Manca il cartellino",
+    "other": "Altro"
+  },
+  "floor": {
+    "title": "Approvazione del primo capo",
+    "firstPiece": "Primo capo approvato",
+    "whoMay": "Un collaudatore che non l’ha cucito",
+    "maker": "Prodotto da (dalle scansioni): Linea 2, postazioni 3–7 — tu non sei tra loro",
+    "meaning": "Firmando confermi che il primo capo di WO-0142 corrisponde al campione approvato e che la produzione può partire.",
+    "wrong_one": "PIN errato. Resta {count} tentativo.",
+    "wrong_other": "PIN errato. Restano {count} tentativi.",
+    "locked": "Bloccato fino alle 10:47.",
+    "demo": "PIN di esempio: {pin}"
+  }
+}

@@ -653,5 +653,154 @@
     "copied": "Copiata",
     "copyFailed": "Copia non riuscita",
     "region": "Sigillo del documento"
+  },
+  "gateExplainer": {
+    "states": {
+      "pass": "Soddisfatto",
+      "fail": "Non soddisfatto",
+      "unknown": "Non noto",
+      "notNeeded": "Non richiesto"
+    },
+    "verdicts": {
+      "open": "Via libera",
+      "held": "Bloccato",
+      "unknown": "Non ancora noto"
+    },
+    "summary": "{passed} di {total} controlli soddisfatti",
+    "who": "Chi può sbloccarlo: {who}",
+    "how": "Come: {how}",
+    "override": "Deroga",
+    "overrideWho": "Chi può concedere la deroga: {who}",
+    "asOf": "Com’era il {when}",
+    "list": "Controlli",
+    "fix": "Risolvi",
+    "empty": "Non c’è nessun blocco",
+    "showWhy": "{line} — mostra il perché",
+    "none": "Per questo blocco non è indicato nessun controllo",
+    "held_one": "{count} controllo non soddisfatto: {names}",
+    "held_other": "{count} controlli non soddisfatti: {names}",
+    "unknownHeld_one": "{count} controllo non ancora noto: {names}",
+    "unknownHeld_other": "{count} controlli non ancora noti: {names}",
+    "namesJoin": "; ",
+    "now": "ora: {value}",
+    "allMet_one": "Il controllo è soddisfatto",
+    "allMet_other": "Tutti i {count} controlli soddisfatti",
+    "more": "+{count} altri"
+  },
+  "signOffPanel": {
+    "title": "Firme",
+    "states": {
+      "signed": "Firmato",
+      "waiting": "In attesa",
+      "held": "Bloccato",
+      "rejected": "Respinto",
+      "notNeeded": "Non richiesto"
+    },
+    "methods": {
+      "pin": "PIN",
+      "code": "Codice",
+      "typed": "Nome digitato"
+    },
+    "ruleStates": {
+      "met": "Rispettata",
+      "broken": "Non rispettata",
+      "unknown": "Non nota"
+    },
+    "signedBy": "Firmato da {who}",
+    "signedByRole": "Firmato da {who} ({role})",
+    "rejectedBy": "Respinto da {who}",
+    "whoMay": "Chi può firmare: {who}",
+    "fingerprint": "Impronta",
+    "summary": "{signed} di {total} firmati",
+    "complete": "Tutti i passaggi firmati",
+    "rejectedSummary": "Respinto",
+    "steps": "Passaggi di firma",
+    "step": "Passaggio {n}",
+    "afterStep": "Attende il passaggio {step}: {label}",
+    "rules": {
+      "maker": {
+        "met": "Non ha prodotto questi capi (dalle scansioni)",
+        "broken": "Ha prodotto alcuni di questi capi (dalle scansioni): deve firmare un’altra persona",
+        "unknown": "Chi ha prodotto questi capi non è ancora noto"
+      },
+      "fourEyes": {
+        "met": "Firma una seconda persona (quattro occhi)",
+        "broken": "Hai firmato un passaggio precedente: questo deve firmarlo una seconda persona (quattro occhi)",
+        "unknown": "Il controllo a quattro occhi non si può ancora fare"
+      },
+      "authorNotApprover": {
+        "met": "L’autore non approva il proprio lavoro",
+        "broken": "L’hai scritto tu: deve approvarlo un’altra persona",
+        "unknown": "L’autore non è ancora noto"
+      },
+      "other": {
+        "met": "Regola rispettata",
+        "broken": "Regola non rispettata",
+        "unknown": "Regola non ancora verificata"
+      }
+    }
+  },
+  "limitMeter": {
+    "verdicts": {
+      "pass": "Conforme",
+      "fail": "Non conforme",
+      "belowDetection": "Sotto il limite di rilevabilità",
+      "inconclusive": "Non conclusivo",
+      "notMeasured": "Non misurato",
+      "noLimit": "Nessun limite impostato"
+    },
+    "tolerance": {
+      "pass": "In tolleranza",
+      "over": "Sopra",
+      "under": "Sotto",
+      "notMeasured": "Non misurato"
+    },
+    "limit": "limite {limit}",
+    "minimum": "minimo {limit}",
+    "belowLoq": "< {loq}",
+    "loq": "limite di quantificazione {loq}",
+    "nominalSymmetric": "{nominal} ± {plus}",
+    "nominalAsymmetric": "{nominal} −{minus} / +{plus}",
+    "overBy": "oltre di {by}",
+    "underBy": "sotto di {by}",
+    "cellOf": "{value} / {limit}"
+  },
+  "floorChecklist": {
+    "groups": "Gruppi",
+    "states": {
+      "open": "Da iniziare",
+      "partly": "In corso",
+      "passed": "Conforme",
+      "failed": "Non conforme"
+    },
+    "passed": "Conforme",
+    "failed": "Non conforme",
+    "notChecked": "Da controllare",
+    "failedBecause": "Non conforme: {reason}",
+    "withPhoto": "con foto",
+    "optional": "Facoltativo",
+    "pass": "Conforme",
+    "fail": "Non conforme",
+    "groupPasses": "Gruppo conforme",
+    "groupAnswered": "Ogni controllo di questo gruppo ha già una risposta",
+    "progress": "{done} di {total} gruppi completati",
+    "checked": "{answered} di {total} controllati",
+    "failedCount_one": "{count} non conforme",
+    "failedCount_other": "{count} non conformi",
+    "whatIsWrong": "Cosa non va in “{item}”?",
+    "reasons": "Motivi",
+    "photo": "Fai una foto di “{item}”",
+    "photoNeeded": "Per questo motivo serve una foto",
+    "skipPhoto": "Senza foto",
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "announcePass": "{item}: conforme",
+    "announceFail": "{item}: non conforme",
+    "announceGroup_one": "{group}: {count} controllo conforme",
+    "announceGroup_other": "{group}: {count} controlli conformi",
+    "left_one": "Manca {count} controllo obbligatorio: {names}",
+    "left_other": "Mancano {count} controlli obbligatori: {names}",
+    "namesJoin": ", ",
+    "none": "Non è indicato nessun controllo"
   }
 }
