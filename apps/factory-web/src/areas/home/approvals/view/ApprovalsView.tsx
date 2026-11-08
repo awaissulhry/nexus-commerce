@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Check, ExternalLink, Inbox, X } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
@@ -26,15 +26,16 @@ export type { ApprovalsViewModel, ApprovalsActions } from '../model'
  * behind each broken rule, the lines; Approve (A) and Reject (R, a reason) held with their reason for the requester or
  * a person without the margin grain; J / K walk the queue. It fetches nothing (Approvals.tsx loads it).
  */
-export function ApprovalsView({ model, actions }: { model: ApprovalsViewModel; actions?: ApprovalsActions }) {
+export function ApprovalsView({ model, actions, mailSwitch }: { model: ApprovalsViewModel; actions?: ApprovalsActions; mailSwitch?: ReactNode }) {
   return (
     <WithMessages namespaces={['approvals', 'sales', 'lists']}>
-      <Approvals model={model} actions={actions} />
+      <Approvals model={model} actions={actions} mailSwitch={mailSwitch} />
     </WithMessages>
   )
 }
 
-function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: ApprovalsActions }) {
+/** `mailSwitch` (B-W2b-188, PLT-089): the person's own "e-mail me approvals that wait for me", drawn by its own part. */
+function Approvals({ model, actions, mailSwitch }: { model: ApprovalsViewModel; actions?: ApprovalsActions; mailSwitch?: ReactNode }) {
   const t = useT('approvals')
   const sales = useT('sales')
   const lists = useT('lists')
@@ -106,6 +107,7 @@ function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: Ap
         <span className="fw-apv-hint" role="status">
           {model.asOf ? t('updated', { time: formatTime(model.asOf, { locale }) }) : t('notYet')}
         </span>
+        {mailSwitch}
       </div>
       {model.notice && (
         <Banner

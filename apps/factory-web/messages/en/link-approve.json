@@ -1,0 +1,269 @@
+{
+  "title": "{kind} · {label}",
+  "retry": "Try again",
+  "arrow": "{before} → {after}",
+  "loading": {
+    "now": "Loading the request…",
+    "slow": "Still loading…"
+  },
+  "what": {
+    "title": "What we ask",
+    "kind": "What to approve",
+    "record": "About",
+    "due": "Answer by",
+    "dueIn": "{left} left",
+    "dueNow": "the time is up",
+    "from": "Who asks",
+    "state": "Where it stands",
+    "dueAt": "Due at"
+  },
+  "panel": {
+    "proof": {
+      "title": "Design proof",
+      "hint": "The final design before cutting. Check names and numbers, colours and where the logos sit; zoom in on the PDF."
+    },
+    "signature": {
+      "title": "The document to sign",
+      "hint": "Read the document in full before you sign it. {company} keeps your signature with this version."
+    },
+    "concession": {
+      "title": "Concession",
+      "hint": "A deviation {company} asks you to accept: what differs, the photos side by side, and what they propose."
+    },
+    "sample": {
+      "title": {
+        "SAMPLE": "Sample",
+        "COLOUR": "Colour",
+        "LEATHER": "Leather",
+        "ARTWORK": "Artwork"
+      },
+      "hint": "The photos and the spec of what {company} asks you to approve. Open a photo full size; mark it to show us a spot."
+    },
+    "order": {
+      "title": "Revised order {number} · revision {revision}",
+      "lines": "What changed, line by line ({count})",
+      "noLines": "No line changed: only the order's details below.",
+      "line": "Line {seq} · {style} · {colour}",
+      "change": {
+        "ADDED": "Added",
+        "REMOVED": "Removed",
+        "CHANGED": "Changed"
+      },
+      "pieces": "Pieces: {before} → {after}",
+      "size": "Size {size}",
+      "unitPrice": "Unit price",
+      "lineNet": "Line amount (excl. VAT)",
+      "net": "Net total (excl. VAT)",
+      "gross": "Total incl. VAT",
+      "netMoved": "Your earlier acceptance ends if the net value changes: approving confirms the new total.",
+      "noPrices": "The amounts are not shown here.",
+      "header": {
+        "customerRef": "Your reference",
+        "requestedDate": "Requested date"
+      }
+    }
+  },
+  "files": {
+    "label": "Photos and documents",
+    "none": "No photo or document goes with this request.",
+    "open": "Open {name} full size",
+    "picture": "Photo",
+    "pdf": "PDF",
+    "other": "File",
+    "loading": "Loading the file…",
+    "problem": "This file can't be shown right now. You can still answer.",
+    "mark": "Mark the photo",
+    "markAgain": "Change my marks",
+    "first": "First photo",
+    "second": "Second photo",
+    "marked_one": "{count} mark",
+    "marked_other": "{count} marks"
+  },
+  "viewer": {
+    "count": "{n} of {count}",
+    "previous": "Previous",
+    "next": "Next",
+    "first": "This is the first file.",
+    "last": "This is the last file.",
+    "only": "There is only this file.",
+    "picture": "Photo {name}",
+    "noPreview": "This file can't be shown in the page."
+  },
+  "mark": {
+    "title": "Mark the photo: {name}",
+    "introPicture": "Draw arrows and circles where you want us to look, and add a note. The marks go with your answer when you sign it.",
+    "introPdf": "Choose the page, draw arrows and circles on it, and add a note. The marks go with your answer when you sign it.",
+    "pages": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "page": "Page {page}",
+    "pageOf": "Page {page} of {pages}",
+    "note": "Note (optional)",
+    "noteHint": "What should we look at, or change?",
+    "loadingPicture": "Loading the photo…",
+    "loadingPage": "Drawing the page…",
+    "problem": "This photo can't be marked right now. Close and try again.",
+    "surface": "Marks on {name}",
+    "add": "Add to my comment",
+    "cancel": "Cancel",
+    "held": {
+      "none": "Draw at least one arrow or circle first.",
+      "many": "At most 200 marks.",
+      "firstPage": "This is the first page.",
+      "lastPage": "This is the last page."
+    }
+  },
+  "decision": {
+    "title": "Your decision",
+    "legend": "What is your answer?",
+    "option": {
+      "APPROVED": {
+        "title": "Approve",
+        "body": "It is right as it is: go ahead."
+      },
+      "APPROVED_WITH_CHANGES": {
+        "title": "Approve with changes",
+        "body": "Go ahead once the changes you write below are made."
+      },
+      "REFUSED": {
+        "title": "Refuse",
+        "body": "Do not go ahead: tell us why below."
+      }
+    },
+    "comment": {
+      "optional": "Comment (optional)",
+      "what": "What should change",
+      "why": "Why you refuse",
+      "needed": "Needed with this answer.",
+      "hint": "Anything you want us to know."
+    },
+    "marked": "Your marks on {name}: {count}",
+    "markEdit": "Change",
+    "markRemove": "Remove the marks",
+    "markHint": "To point at a spot, use Mark the photo on a photo above.",
+    "noPhotos": "No photo goes with this request.",
+    "held": "This request takes no answer now.",
+    "problem": {
+      "choose": "Choose your answer first: approve, approve with changes or refuse.",
+      "why": "Say why you refuse.",
+      "what": "Say what you want changed.",
+      "long": "The comment is too long: at most 4000 characters."
+    }
+  },
+  "sign": {
+    "title": "Sign your answer",
+    "summary": {
+      "none": "Choose your answer above, then type your name to sign it.",
+      "APPROVED": "You approve {label} as {company} sent it.",
+      "APPROVED_WITH_CHANGES": "You approve {label} with the changes you wrote.",
+      "REFUSED": "You refuse {label}, for the reason you wrote."
+    },
+    "legal": "Your typed name signs this answer; {company} keeps it with the time, the request and what you wrote. You can answer once: this link then opens nothing. We send you a copy by e-mail.",
+    "name": "Your full name",
+    "nameHint": "As you sign your letters: first name and surname.",
+    "nameEmpty": "Type your full name to sign.",
+    "choose": "Sign and send",
+    "go": {
+      "APPROVED": "Approve and sign",
+      "APPROVED_WITH_CHANGES": "Approve with changes and sign",
+      "REFUSED": "Refuse and sign"
+    },
+    "busy": "Sending your answer…"
+  },
+  "done": {
+    "name": "Signed by",
+    "at": "At",
+    "words": "Your words",
+    "marks": "Marks",
+    "marksValue": "On one photo of the request",
+    "reference": "Reference",
+    "receiptSent": "We sent you a copy by e-mail.",
+    "receiptFailed": "The copy by e-mail did not go out: keep this page as your receipt.",
+    "closed": "This link now opens nothing: the answer is final.",
+    "contact": "Questions about this answer"
+  },
+  "problem": {
+    "read": "The request could not be read.",
+    "readBody": "Nothing was answered. Check your connection and try again.",
+    "gone": "This request no longer takes an answer: it was answered, withdrawn or its time ran out.",
+    "wrongPerson": "This link is for someone else.",
+    "changed": "The request changed meanwhile: it was read again. Check it and answer again.",
+    "name": "Type your full name (at least 2 letters) to sign.",
+    "invalid": "Some of the answer is missing or too long: check the comment and your name.",
+    "rateLimited": "Too many tries. Wait a few minutes and try again.",
+    "unavailable": "The service is not answering. Try again in a moment.",
+    "internal": "Something went wrong. Try again."
+  },
+  "office": {
+    "title": "Approve from e-mail",
+    "checking": "Checking whether you are signed in…",
+    "opening": "Opening the approval…",
+    "signIn": {
+      "title": "Sign in to open the approval",
+      "body": "The e-mail approves nothing by itself: sign in to the office as usual, and the approval opens where you decide it.",
+      "company": "Company",
+      "companyHint": "Your company's sign-in name.",
+      "email": "E-mail",
+      "password": "Password",
+      "go": "Sign in and open",
+      "busy": "Signing in…",
+      "forgot": "Forgot your password?"
+    },
+    "field": {
+      "company": "Type your company's sign-in name.",
+      "email": "Type your e-mail address.",
+      "password": "Type your password."
+    },
+    "code": {
+      "title": "The code from your app",
+      "body": "Signing in as {email} needs the 6-digit code from your authenticator app.",
+      "label": "Code",
+      "hint": "Paste it or type it: it is checked as soon as it is complete.",
+      "back": "Back",
+      "recovery": "Use a recovery code instead"
+    },
+    "open": {
+      "title": "Opening {label}",
+      "body": "The approval opens in the office, where you decide it.",
+      "go": "Open it"
+    },
+    "decided": {
+      "title": "This approval no longer waits for you",
+      "body": "{label} was decided or moved on meanwhile.",
+      "go": "Open it"
+    },
+    "notValid": {
+      "title": "This link is not for this account",
+      "body": "It opens only for the person it was mailed to, signed in. Everything that waits for you is in Home › Approvals.",
+      "home": "Open Home › Approvals",
+      "switch": "Sign out and use another account"
+    },
+    "missing": {
+      "title": "There is no approval in this address",
+      "body": "Open the link from the e-mail again, whole, or sign in and open Home › Approvals.",
+      "go": "Office sign-in"
+    },
+    "change": {
+      "title": "Choose a new password first",
+      "body": "Your administrator asked for a new password: set it on the office sign-in, then open the e-mail's link again.",
+      "go": "Office sign-in"
+    },
+    "setup": {
+      "title": "Set up two-factor first",
+      "body": "Your role signs in with a code from an authenticator app. Set it up, then open the e-mail's link again.",
+      "go": "Set it up"
+    },
+    "error": {
+      "title": "The approval could not be opened.",
+      "body": "Check your connection and try again."
+    },
+    "problem": {
+      "wrongCredentials": "The company, e-mail or password is not right (or the account is locked for a while).",
+      "wrongCode": "That code is not right. Type the current one from your app.",
+      "suspended": "This account is suspended: ask your administrator.",
+      "rateLimited": "Too many tries. Wait a few minutes and try again.",
+      "invalid": "Something in the form is missing or not valid.",
+      "unavailable": "The service is not answering. Try again in a moment."
+    }
+  }
+}
