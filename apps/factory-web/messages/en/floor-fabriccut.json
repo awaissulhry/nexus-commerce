@@ -1,0 +1,686 @@
+{
+  "title": "Fabric cutting",
+  "loading": "Reading {code}…",
+  "busy": "Sending…",
+  "noPermission": {
+    "title": "Fabric cutting is not yours here",
+    "body": "Your role does not cut at this table. Ask your team leader."
+  },
+  "held": {
+    "online": "This needs the network. Wait for it, then do it.",
+    "trolleys": "Your role does not send trolleys to sewing.",
+    "secondary": "Your role does not move secondary processes."
+  },
+  "scan": {
+    "read": "Read: {code}",
+    "type": "Type the code",
+    "camera": {
+      "start": "Scan with the camera",
+      "stop": "Stop the camera",
+      "error": "The camera does not start. Type the code instead."
+    }
+  },
+  "wrong": {
+    "notTicket": "{code} is no cut ticket. Scan the ticket on the lay sheet.",
+    "notRoll": "{code} is no roll label. Scan the label on the roll.",
+    "notBundle": "{code} is no bundle ticket. Scan a bundle.",
+    "notTrolley": "{code} is no trolley label: letters and digits, no spaces, at most 20.",
+    "notFound": "Nothing with {code} at this site. Check the label, or ask the cutting office.",
+    "notOnTablet": "{code} is not on this tablet and there is no network. Scan it again when the network is back.",
+    "otherFactory": "{code} is a label of another factory.",
+    "typo": "{code} was misread. Scan it again.",
+    "otherTicket": "{code} is not this lay's ticket. Scan the ticket of the lay you cut."
+  },
+  "start": {
+    "scan": "Scan the cut ticket",
+    "scanHint": "The ticket is on the lay sheet: start, spread, count and cut from it.",
+    "more": "More at the cutting table",
+    "recuts": "Recut tickets",
+    "recutsHint": "Panels asked by sewing or quality",
+    "recutsCount_one": "{count} recut waiting",
+    "recutsCount_other": "{count} recuts waiting",
+    "sewing": "Send to sewing",
+    "sewingHint": "Bundles onto a trolley, then to a line",
+    "reading": "Reading the tickets to cut…",
+    "waiting": "Tickets to cut",
+    "none": "No ticket waits to be cut at this site.",
+    "lay": "Lay {seq}",
+    "due": "due {day}",
+    "count_one": "{count} ticket",
+    "count_other": "{count} tickets"
+  },
+  "ticket": {
+    "type": "Cut ticket",
+    "layOf": "Lay {seq} of {of}",
+    "ratio": "Sizes and ratio",
+    "start": "Start cutting",
+    "notNow": "Not now: see why on the card.",
+    "leather": "This cut order cuts leather hide by hide: cut it on Cut a hide.",
+    "go": {
+      "spread": "Spread the lay",
+      "cut": "Cut",
+      "stickers": "Ply stickers"
+    }
+  },
+  "ticketStatus": {
+    "OPEN": "To start",
+    "STARTED": "Being cut",
+    "DONE": "Cut",
+    "VOID": "Void"
+  },
+  "fact": {
+    "plies": "Plies",
+    "pliesCount_one": "ply",
+    "pliesCount_other": "plies",
+    "garments": "Garments",
+    "lay": "Lay",
+    "marker": "Marker",
+    "material": "Material",
+    "parts": "Parts",
+    "workOrders": "Work orders",
+    "due": "Due"
+  },
+  "steps": {
+    "label": "Steps of this lay",
+    "start": "Ticket",
+    "spread": "Spread",
+    "check": "Check",
+    "cut": "Cut",
+    "stickers": "Stickers",
+    "fabric": "Fabric used",
+    "state": {
+      "done": "done",
+      "now": "now",
+      "todo": "to do"
+    }
+  },
+  "unit": {
+    "m": "m",
+    "cm": "cm",
+    "mm": "mm",
+    "plies": "plies"
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
+  },
+  "spread": {
+    "reading": "Reading the lay…",
+    "sums": "The lay so far",
+    "plies": "Plies spread",
+    "of": "of {planned}",
+    "needed": "Still needed",
+    "length": "One ply",
+    "rolls": "Rolls used",
+    "scan": "Scan a roll label",
+    "scanHint_one": "{count} more ply is needed: scan the roll you spread it from.",
+    "scanHint_other": "{count} more plies are needed: scan each roll as you spread it.",
+    "full": "Every ply is spread. Count both ends next.",
+    "empty": "No roll on this lay yet. Scan the first roll.",
+    "report": "The lay report, roll by roll",
+    "undo": "Undo last roll",
+    "count": "Count both ends",
+    "held": {
+      "nothing": "Nothing is spread yet: scan a roll first.",
+      "planned": "The lay starts with its first roll: scan a roll first.",
+      "noRoll": "No roll to take back."
+    }
+  },
+  "roll": {
+    "cancel": "Back",
+    "add": "Add roll",
+    "fields": "This roll",
+    "subject": "Ticket {ticket} · lay {seq} of {of}",
+    "scan": "Scan this roll again to add it",
+    "scanHint": "Or scan the next roll.",
+    "field": {
+      "plies": "Plies from this roll",
+      "splices": "Splices",
+      "endLoss": "End loss",
+      "endReturned": "Roll end back"
+    },
+    "asNeeded": "as needed",
+    "notMeasured": "not measured",
+    "needed_one": "{count} needed",
+    "needed_other": "{count} needed",
+    "held": {
+      "plies": "Type the plies from this roll.",
+      "full": "The lay has every ply: count both ends."
+    },
+    "lot": "lot {lot}",
+    "splices_one": "{count} splice",
+    "splices_other": "{count} splices",
+    "endLoss": "end loss {length} {unit}",
+    "shade": "shade {shade}",
+    "kept": "Saved on this tablet",
+    "plies_one": "ply",
+    "plies_other": "plies"
+  },
+  "warning": {
+    "END_DIFFERS": "The roll end measured back differs from what the lay report leaves on it. The warehouse measures the roll again.",
+    "WIDTH_UNKNOWN": "This roll's width is not known: check it is as wide as the marker.",
+    "SHRINKAGE_UNKNOWN": "This roll's shrinkage group is not known.",
+    "SHADE_UNKNOWN": "This roll's shade is not known: check it matches the lay.",
+    "LOT_NOT_RELEASED": "This roll's lot is not released by quality yet.",
+    "SHADES_ACROSS_LAYS": "The lays of this cut order are cut from different shades.",
+    "SHRINKAGE_ACROSS_LAYS": "The lays of this cut order are cut from different shrinkage groups.",
+    "PLANNED_ON_OTHER_LINE": "This bundle's work order is planned on another line.",
+    "other": "The office noted something about this roll: the cutting office has the details."
+  },
+  "count": {
+    "lead_one": "{count} ply spread. Count the plies at both ends of the lay.",
+    "lead_other": "{count} plies spread. Count the plies at both ends of the lay.",
+    "left": "Left end",
+    "right": "Right end",
+    "expected_one": "{count} spread",
+    "expected_other": "{count} spread",
+    "match": "Both ends match",
+    "hardStop": "Any difference stops the cut: recount before cutting.",
+    "differ": "Left {left}, right {right}. Recount before cutting.",
+    "differFix": "The ends must say the same number of plies. Count both ends again, or correct the rolls of the lay.",
+    "recount": "Recount",
+    "held": {
+      "empty": "Type the plies at both ends."
+    }
+  },
+  "cut": {
+    "elapsed": "Cutting since the start",
+    "scan": "Scan the ticket when the cut is done",
+    "scanHint": "Scan {code} again at the end of cutting.",
+    "done": "Cut done"
+  },
+  "stickers": {
+    "lead": "Each ply and part gets its number, so a garment's parts come from one ply.",
+    "parts": "The stickers number these parts: {parts}.",
+    "print": "Print ply stickers",
+    "skip": "Fabric used",
+    "again": "Print again",
+    "next": "Fabric used",
+    "run": "Plies {first} to {last} · {count} stickers · {parts}",
+    "labelName": "Ply sticker",
+    "more": "The next stickers",
+    "noPrinter": "No label printer here: the stickers are shown, not printed. Ask the cutting office to set one up.",
+    "held": {
+      "noParts": "The pattern lists no parts of this material to number: the cutting office names them."
+    }
+  },
+  "fabric": {
+    "figures": "Fabric of this lay",
+    "estimate": "Estimate",
+    "recorded": "Lay report",
+    "confirmed": "Confirmed",
+    "used": "Metres used",
+    "confirm": "Confirm",
+    "correct": "Correct",
+    "diff": {
+      "more": "{metres} m more than the estimate (+{percent}%).",
+      "less": "{metres} m less than the estimate (−{percent}%).",
+      "same": "As the estimate."
+    },
+    "held": {
+      "same": "Confirmed already with this figure.",
+      "closed": "The cut order is reconciled: the fabric used no longer changes."
+    },
+    "notCut": "The lay is not cut yet: its fabric used is confirmed after the cut.",
+    "saved": "Fabric used: {metres} m",
+    "savedText": "The fabric is booked to the work orders of this lay. Scan the next ticket.",
+    "nextTicket": "Next ticket"
+  },
+  "recuts": {
+    "title": "Recut tickets",
+    "scan": "Scan a recut ticket",
+    "scanHint": "Or open one from the list.",
+    "reading": "Reading the recuts…",
+    "none": "No recuts waiting.",
+    "count_one": "{count} recut",
+    "count_other": "{count} recuts"
+  },
+  "recut": {
+    "type": "Recut ticket",
+    "joins": "The new panels join bundle {bundle}",
+    "part": "Part",
+    "whole": "whole garments",
+    "setsLabel": "Sets",
+    "sets_one": "set",
+    "sets_other": "sets",
+    "sizeLabel": "Colour and size",
+    "size": "{colour} {size}",
+    "from": "Cut from",
+    "style": "Style",
+    "rush": "Rush",
+    "cutFrom": "Cut it from lot {lot}: the same shade as the bundle.",
+    "cutFromBoth": "Cut it from lot {lot} or from end bits of the same shade.",
+    "cutFromEnds": "Cut it from end bits of the bundle's shade.",
+    "start": "Start the recut",
+    "finish": "Recut done",
+    "print": "Print the ticket",
+    "noPrinter": "No label printer here: the ticket is shown, not printed."
+  },
+  "trolleys": {
+    "title": "Send to sewing",
+    "scan": "Scan the trolley label",
+    "scanHint": "A new label starts loading; a trolley on its way to this line is received.",
+    "here": "This tablet is at line {line}: trolleys coming to it are listed first.",
+    "reading": "Reading the trolleys…",
+    "none": "No trolley is loading or on its way.",
+    "mine": "coming to this line",
+    "count_one": "{count} trolley",
+    "count_other": "{count} trolleys"
+  },
+  "trolleyStatus": {
+    "LOADING": "Loading",
+    "SENT": "On its way",
+    "RECEIVED": "Received",
+    "CANCELLED": "Cancelled"
+  },
+  "trolley": {
+    "type": "Trolley",
+    "toLine": "to line {line}",
+    "scan": "Scan a bundle onto the trolley",
+    "scanHint": "Scan each bundle as it goes on. Tap a bundle to take it off.",
+    "new": "A new trolley: scan its first bundle.",
+    "empty": "No bundle on this trolley yet.",
+    "list": "Bundles on the trolley",
+    "bundles_one": "bundle",
+    "bundles_other": "bundles",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "missing": "Not here",
+    "here": "Here",
+    "received": "Received",
+    "unload": "Take off",
+    "send_one": "Send {count} bundle to line {line}",
+    "send_other": "Send {count} bundles to line {line}",
+    "sendNoLine_one": "Send {count} bundle",
+    "sendNoLine_other": "Send {count} bundles",
+    "held": {
+      "empty": "Scan a bundle onto the trolley first."
+    },
+    "kept_one": "{count} bundle saved on this tablet: {codes}",
+    "kept_other": "{count} bundles saved on this tablet: {codes}",
+    "receiveLead_one": "{count} bundle on this trolley. Tap a bundle that is not here, then confirm.",
+    "receiveLead_other": "{count} bundles on this trolley. Tap a bundle that is not here, then confirm.",
+    "receive": "Received",
+    "receiveMissing_one": "Received · {count} missing",
+    "receiveMissing_other": "Received · {count} missing",
+    "missingCount_one": "{count} bundle was not on it.",
+    "missingCount_other": "{count} bundles were not on it.",
+    "none": {
+      "LOADING": "This trolley is being loaded.",
+      "SENT": "This trolley is on its way to line {line}.",
+      "RECEIVED": "Received at line {line} at {time}.",
+      "CANCELLED": "This trolley was cancelled."
+    }
+  },
+  "process": {
+    "title": "{bundle} waits for a process before sewing",
+    "waits": "It goes to sewing once its process is done.",
+    "elsewhere": "Its process is done at another station first."
+  },
+  "print": {
+    "queued": "Waiting to print",
+    "sent": "Sent to the printer",
+    "printed": "Printed",
+    "failed": "Not printed",
+    "failedHint": "The printer did not print it: check the printer, then print again.",
+    "invalid": "This code cannot be printed: {code}",
+    "code": "Barcode {code}"
+  },
+  "keys": {
+    "tab": "Move between rows",
+    "enter": "Open the row with the focus",
+    "escape": "Back"
+  },
+  "notice": {
+    "refused": "The office refused it. Ask the cutting office."
+  },
+  "done": {
+    "started": "Ticket {code} started",
+    "roll_one": "Roll {code}: {count} ply",
+    "roll_other": "Roll {code}: {count} plies",
+    "undo": "Roll {code} taken back",
+    "count_one": "Both ends counted: {count} ply",
+    "count_other": "Both ends counted: {count} plies",
+    "cut": "Ticket {code}: the lay is cut",
+    "fabric": "Ticket {code}: fabric used confirmed",
+    "recutStarted": "Recut {code} started",
+    "recutDone": "Recut {code} done: the panels join {line}",
+    "load": "Bundle {code} on trolley {line}",
+    "unload": "Bundle {code} off trolley {line}",
+    "send_one": "Trolley {code}: {count} bundle to line {line}",
+    "send_other": "Trolley {code}: {count} bundles to line {line}",
+    "receive_one": "Trolley {code} received: {count} bundle",
+    "receive_other": "Trolley {code} received: {count} bundles",
+    "process": "Bundle {code}: process moved"
+  },
+  "refusal": {
+    "NOT_FABRIC": {
+      "message": "This cut order cuts leather hide by hide.",
+      "fix": "Cut it on Cut a hide."
+    },
+    "CUT_ORDER_NOT_AT_TABLE": {
+      "message": "This cut order is not released for cutting.",
+      "fix": "Ask the cutting office to release it."
+    },
+    "TICKET_NOT_STARTED": {
+      "message": "The ticket is not started yet.",
+      "fix": "Start cutting from the ticket first."
+    },
+    "LAY_NOT_OPEN": {
+      "message": "This lay is cut or cancelled: its report no longer changes.",
+      "fix": "Scan the ticket of the next lay."
+    },
+    "LAY_NOT_SPREAD": {
+      "message": "This lay is not spread yet.",
+      "fix": "Scan its first roll."
+    },
+    "LAY_FULL": {
+      "message": "With these plies the lay would have more than it plans.",
+      "fix": "Lower the plies from this roll."
+    },
+    "ROLL_SHORT": {
+      "message": "This roll is too short for these plies.",
+      "fix": "Lower the plies, or ask the warehouse to measure the roll again."
+    },
+    "ROLL_NOT_IN_LAY": {
+      "message": "This roll is not on this lay.",
+      "fix": "Scan a roll of this lay."
+    },
+    "NOT_LAST_ROLL": {
+      "message": "Only the last roll is taken back.",
+      "fix": "Undo the last roll first."
+    },
+    "PLY_TOO_SHORT": {
+      "message": "A ply is shorter than the marker.",
+      "fix": "Ask the cutting office for the lay's length."
+    },
+    "NOTHING_SPREAD": {
+      "message": "Nothing is spread on this lay yet.",
+      "fix": "Scan its rolls first."
+    },
+    "PLIES_DIFFER": {
+      "message": "The two ends do not match. Recount before cutting.",
+      "fix": "Count both ends again."
+    },
+    "COUNT_NOT_SPREAD": {
+      "message": "Both ends say a number the rolls did not give.",
+      "fix": "Recount, or correct the rolls of the lay."
+    },
+    "LAY_NOT_CUT": {
+      "message": "The lay is not cut yet.",
+      "fix": "Scan the ticket again when the cut is done."
+    },
+    "CONSUMPTION_CLOSED": {
+      "message": "The cut order is reconciled: the fabric used no longer changes.",
+      "fix": "Ask the cutting office."
+    },
+    "ROLL_NOT_IN_STOCK": {
+      "message": "This roll is not in stock.",
+      "fix": "Scan another roll, or ask the warehouse."
+    },
+    "ROLL_OTHER_MATERIAL": {
+      "message": "This roll is another material or colour.",
+      "fix": "Scan a roll of the ticket's material."
+    },
+    "ROLL_TOO_NARROW": {
+      "message": "This roll is narrower than the marker.",
+      "fix": "Scan a wider roll."
+    },
+    "ROLL_REJECTED": {
+      "message": "This roll failed its incoming inspection.",
+      "fix": "Put it aside and scan another roll."
+    },
+    "LOT_HELD": {
+      "message": "This roll's lot is on hold.",
+      "fix": "Put it aside and scan another roll."
+    },
+    "LOT_NOT_USABLE": {
+      "message": "This roll's lot is rejected or blocked.",
+      "fix": "Put it aside and scan another roll."
+    },
+    "MIXED_SHADE": {
+      "message": "This roll is another shade than the lay.",
+      "fix": "Scan a roll of the lay's shade."
+    },
+    "MIXED_SHRINKAGE": {
+      "message": "This roll is another shrinkage group than the lay.",
+      "fix": "Scan a roll of the lay's shrinkage group."
+    },
+    "LAY_NOT_PLANNED": {
+      "message": "This lay is not planned any more.",
+      "fix": "Ask the cutting office."
+    },
+    "ROLL_TWICE": {
+      "message": "This roll is on the lay already.",
+      "fix": "Scan another roll."
+    },
+    "TICKET_VOID": {
+      "message": "This ticket is void.",
+      "fix": "Ask the cutting office for its new ticket."
+    },
+    "TICKET_DONE": {
+      "message": "This ticket is cut already.",
+      "fix": "Scan the next ticket."
+    },
+    "TICKET_STARTED": {
+      "message": "This ticket is started already.",
+      "fix": "Go on with its lay."
+    },
+    "TICKET_IS_RECUT": {
+      "message": "This is a recut ticket.",
+      "fix": "Open it from Recut tickets."
+    },
+    "CUT_ORDER_NOT_RELEASED": {
+      "message": "The cut order is not released.",
+      "fix": "Ask the cutting office to release it."
+    },
+    "PLIES_NOT_COUNTED": {
+      "message": "The plies are not counted at both ends yet.",
+      "fix": "Count both ends before the cut."
+    },
+    "PLIES_BEYOND_COUNT": {
+      "message": "These plies go beyond the count.",
+      "fix": "Ask the cutting office."
+    },
+    "PLIES_NUMBERED": {
+      "message": "Every ply of this lay is numbered already.",
+      "fix": "Print the run again if a sticker is missing."
+    },
+    "NO_PARTS": {
+      "message": "The pattern lists no parts to number.",
+      "fix": "Ask the cutting office to name the parts."
+    },
+    "RUN_TOO_BIG": {
+      "message": "Too many stickers in one run.",
+      "fix": "Ask the cutting office."
+    },
+    "RUN_VOID": {
+      "message": "This sticker run was voided.",
+      "fix": "Print a new run."
+    },
+    "WORK_ORDER_ON_HOLD": {
+      "message": "A work order of this ticket is on hold.",
+      "fix": "Ask the cutting office: nothing is cut for it now."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "A work order of this ticket is not open.",
+      "fix": "Ask the cutting office."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "The floor of this site is not ready for real work yet.",
+      "fix": "Ask the office: the workers' notice comes first."
+    },
+    "OVER_ISSUE": {
+      "message": "More fabric than the work orders need.",
+      "fix": "The cutting office confirms it in the office."
+    },
+    "QUALITY_HOLD": {
+      "message": "The fabric of a roll is on a quality hold.",
+      "fix": "Ask quality before confirming."
+    },
+    "RESERVED_FOR_OTHER": {
+      "message": "A roll is reserved for another work order.",
+      "fix": "Ask the cutting office."
+    },
+    "LENGTH_BEYOND_LEFT": {
+      "message": "A roll does not have this much fabric left.",
+      "fix": "Ask the warehouse to measure the roll again."
+    },
+    "BUNDLE_NOT_ACTIVE": {
+      "message": "This bundle is not active.",
+      "fix": "Scan another bundle, or ask your team leader."
+    },
+    "BUNDLE_NEEDED": {
+      "message": "A recut needs its bundle.",
+      "fix": "Ask the cutting office."
+    },
+    "NOT_OF_CELL": {
+      "message": "This is not the bundle's colour and size.",
+      "fix": "Ask the cutting office."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "More than the bundle holds.",
+      "fix": "Ask the cutting office."
+    },
+    "NOT_A_PART": {
+      "message": "This part is not on the pattern.",
+      "fix": "Ask the cutting office."
+    },
+    "NO_SOURCE": {
+      "message": "The recut names no lot and no end bits.",
+      "fix": "Ask the cutting office."
+    },
+    "LOT_OTHER_MATERIAL": {
+      "message": "The lot is another material.",
+      "fix": "Ask the cutting office."
+    },
+    "LOT_NOT_SAME_SHADE": {
+      "message": "The lot is another shade than the bundle.",
+      "fix": "Ask the cutting office."
+    },
+    "REPLACEMENT_NOT_RECUT": {
+      "message": "The request is no recut.",
+      "fix": "Ask the cutting office."
+    },
+    "REPLACEMENT_NOT_OPEN": {
+      "message": "The request is not open any more.",
+      "fix": "Ask the cutting office."
+    },
+    "REPLACEMENT_HAS_TICKET": {
+      "message": "The request has its ticket already.",
+      "fix": "Ask the cutting office."
+    },
+    "REPLACEMENT_OTHER_CELL": {
+      "message": "The request is for another colour or size.",
+      "fix": "Ask the cutting office."
+    },
+    "REPLACEMENT_OTHER_PART": {
+      "message": "The request is for another part.",
+      "fix": "Ask the cutting office."
+    },
+    "MORE_THAN_REPLACEMENT": {
+      "message": "More than the request asks.",
+      "fix": "Ask the cutting office."
+    },
+    "TICKET_IS_CUT": {
+      "message": "This is a cut ticket, not a recut.",
+      "fix": "Scan it on the start screen."
+    },
+    "BUNDLE_VOID": {
+      "message": "The bundle of this recut is void.",
+      "fix": "Ask the cutting office."
+    },
+    "KIND_OPEN_ALREADY": {
+      "message": "This bundle has this process open already.",
+      "fix": "Go on with it."
+    },
+    "ON_A_TROLLEY": {
+      "message": "This bundle is on a trolley already.",
+      "fix": "Take it off the trolley first."
+    },
+    "NOT_A_WORK_CENTRE": {
+      "message": "This station is no work centre for this process.",
+      "fix": "Do it at its own station."
+    },
+    "WORK_CENTRE_OUTSIDE": {
+      "message": "This process is done outside.",
+      "fix": "The office sends it to the workshop."
+    },
+    "WRONG_STATE": {
+      "message": "This process cannot move now.",
+      "fix": "Scan the bundle again."
+    },
+    "SUBCONTRACT_NEEDED": {
+      "message": "An outside process needs its subcontract order.",
+      "fix": "The office sends it."
+    },
+    "SUBCONTRACT_NOT_SENDABLE": {
+      "message": "The subcontract order cannot take it now.",
+      "fix": "Ask the office."
+    },
+    "OUTSIDE_FROM_OFFICE": {
+      "message": "An outside process is sent from the office.",
+      "fix": "Ask the office."
+    },
+    "NOT_A_TROLLEY": {
+      "message": "This is no trolley label.",
+      "fix": "Scan the label on the trolley."
+    },
+    "TROLLEY_SENT": {
+      "message": "This trolley is on its way already.",
+      "fix": "Use another trolley."
+    },
+    "NO_OPEN_TROLLEY": {
+      "message": "No trolley with this label is loading or on its way.",
+      "fix": "Scan its bundles first."
+    },
+    "TROLLEY_NOT_LOADING": {
+      "message": "This trolley was sent: its bundles stay on it.",
+      "fix": "Receive it at the line."
+    },
+    "TROLLEY_NOT_SENT": {
+      "message": "This trolley is still being loaded.",
+      "fix": "It is received once it was sent."
+    },
+    "TROLLEY_EMPTY": {
+      "message": "This trolley carries no bundle.",
+      "fix": "Scan its bundles first."
+    },
+    "TROLLEY_FULL": {
+      "message": "This trolley is full.",
+      "fix": "Send it, and load another trolley."
+    },
+    "LINE_NEEDED": {
+      "message": "No line is planned for this bundle.",
+      "fix": "Ask your team leader which line it goes to."
+    },
+    "LINE_NOT_ACTIVE": {
+      "message": "The line is not active.",
+      "fix": "Ask your team leader."
+    },
+    "PROCESS_PENDING": {
+      "message": "This bundle waits for a process before sewing.",
+      "fix": "Do its process first, then load it."
+    },
+    "ON_THIS_TROLLEY": {
+      "message": "This bundle is on this trolley already.",
+      "fix": "Scan the next bundle."
+    },
+    "ON_ANOTHER_TROLLEY": {
+      "message": "This bundle is on another trolley.",
+      "fix": "Take it off that trolley first."
+    },
+    "NOT_ON_TROLLEY": {
+      "message": "This bundle is not on this trolley.",
+      "fix": "Scan a bundle of this trolley."
+    },
+    "OTHER_LINE": {
+      "message": "This trolley goes to another line.",
+      "fix": "Send it on to its line."
+    }
+  }
+}

@@ -324,6 +324,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (SCR-089 `w2b-insp*`, catalogue `floor-myinspections`): GET /quality/queue?scope=mine, the list at an inspection bench (a For your work
   tile elsewhere), a row's card opens the final bench or In-line with its code; the offline pack (GET /quality/queue/offline) keeps my
   open final inspections' models for the visit (`keepModel`, by id and by number).
+  B-W2b-121: `floor/tasks/fabriccut/` (SCR-182, `/floor/fabriccut`, tile `fabriccut` after Cut a hide at a cutting station, production.cut;
+  catalogue `floor-fabriccut`; on the APIs of B-W2b-112, -116 and -117): the ticket (scan or a row of GET /production/cut-tickets/waiting →
+  the card: ratio chips, plies big; Start cutting = POST …/start) → Spread (GET /production/lays/:id; a roll scanned = one pad, four figures:
+  plies — default what the lay still needs, untouched = left out so the office takes what the roll gives —, splices, end loss and the roll
+  end back in metres; a roll the lay has starts at its row; the same roll scanned again = Add; Undo last roll) → Check (both ends start at
+  the plies spread; a difference is the hard stop "Left 24, right 23", never sent) → Cut (FloorElapsed since the start; the ticket scanned
+  again or Cut done = POST …/finish) → Ply stickers (POST /production/lays/:id/ply-runs, DS LabelPreview with the job's state) → Fabric used
+  (estimate, lay report, the pad; `{}` confirms the report's figure, a typed one is sent in metres). Beside it: Recut tickets (GET
+  /production/recut-tickets/waiting, a card's Start / Done / Print) and Send to sewing (trolleys: scan the label → bundles → Send N bundles
+  to line X; at a line's station the same label → Received with the bundles named missing; a bundle whose secondary process waits gets
+  its one tap). Online first, kept as `production.lay.roll|undo|count` and `production.trolley.load|unload|send|receive` (the try's key
+  `<device>.<client event id>`; `model.ts applyKept…` moves the lay on screen); the start/end scans, stickers, fabric used, recuts and
+  process taps online only. Refusals in its own words (`model.ts KNOWN_REFUSALS`, held against the domain lists by its test).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up

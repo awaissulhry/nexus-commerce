@@ -397,6 +397,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       mywork: 'floor.work', // GET /production/dispatch/station (B-W2a-74)
       operation: 'production.scan',
       cut: 'production.cut',
+      fabriccut: 'production.cut', // GET /production/cut-tickets/waiting, /production/lays/:id (B-W2b-121 on B-W2b-112, -116)
       bundles: 'production.bundles',
       receive: 'inventory.receive',
       pick: 'inventory.issue',
@@ -425,7 +426,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-137: Report an incident stays on the first page too, before the Line view (it must never fall off a full Home).
       // B-W2b-145: Training & PPE sign-off at every station mode (tile family Me, after My day).
       // B-W2b-105: In-line inspection at the inspection bench (tile family Quality, after Final inspection).
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-121: Fabric cutting at the cutting table, after Cut a hide (tile family Cutting).
+      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       inspection: ['mywork', 'operation', 'final', 'inline', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
