@@ -11,7 +11,6 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { csvLine, downloadText, isStepUpCancelled, liveMatches, useLive, useStepUp } from '../_shared/hooks'
 import { listLots, type Lot } from '../_shared/lots'
 import { failedRead, newNcrAddress, problemKey, qualityCan, ready, reading, type Notice, type Read } from '../_shared/model'
-import { QualityMessages } from '../_shared/parts'
 import { PlaceHold, type PlaceHoldPrefill } from '../holds/place/PlaceHold'
 import {
   assignInspections,
@@ -50,6 +49,7 @@ import {
   inspectionCsvRow,
   isSerialRelease,
   LIST_EVENTS,
+  MAX,
   NEW_DRAFT,
   nextLimit,
   ownCustomerIds,
@@ -80,6 +80,11 @@ import {
   type View,
 } from './model'
 import { InspectionsView } from './view/InspectionsView'
+// B-W2b-127: incoming and in-line in one list, Amended results, the report verbs, New inspection's In-line kind and plan.
+import { getWorkOrderPlans, listIncoming, listInline, openInline, type IncomingRow, type InlineRow, type WorkOrderPlans } from './depth/api'
+import { depthCan, kindFromAddress, kindsRead, kindTerm, lotOf, numberOf, planOf, planPick, reportsAddress, rowHref, sampleOf, subjectOf, unionRows, type KindFilter, type ListRow } from './depth/model'
+import { DepthMessages } from './depth/parts'
+import { useOfficeScope } from '../../../shell/scope/scope-context'
 
 /**
  * The Inspections container (`/w/<company>/quality/inspections`, SCR-075): reads the view's rows (inspections, the reversed
@@ -90,9 +95,9 @@ import { InspectionsView } from './view/InspectionsView'
  */
 export function InspectionsPage() {
   return (
-    <QualityMessages>
+    <DepthMessages>
       <InspectionsContainer />
-    </QualityMessages>
+    </DepthMessages>
   )
 }
 
@@ -103,11 +108,22 @@ function InspectionsContainer() {
   const pathname = usePathname()
   const params = useSearchParams()
   const t = useT('quality')
+  const td = useT('inspections-depth')
   const locale = useLocale()
   const can = useMemo(() => qualityCan(session.permissions), [session.permissions])
+  const depth = useMemo(() => depthCan(session.permissions), [session.permissions])
+  // B-W2b-127: the in-process checks are read per site (the top bar's site, else each of the person's sites).
+  const scope = useOfficeScope()
+  const siteIds = useMemo(() => (scope.siteId ? [scope.siteId] : scope.sites.map((site) => site.id)), [scope.siteId, scope.sites])
+  const siteKey = siteIds.join(',')
   const prefix = companyPrefix(session.company?.code ?? '')
   const companyId = session.company?.id ?? null
   const [view, setViewState] = useState<View>(() => viewFromAddress(params))
+  const [kindFilter, setKindFilter] = useState<KindFilter>(() => kindFromAddress(params))
+  const [incoming, setIncoming] = useState<Read<readonly IncomingRow[]> | null>(null)
+  const [inline, setInline] = useState<Read<readonly InlineRow[]> | null>(null)
+  const [inlineCapped, setInlineCapped] = useState(false)
+  const [plans, setPlans] = useState<Read<WorkOrderPlans> | null>(null)
   const [limit, setLimit] = useState(PAGE)
   const [rows, setRows] = useState<Read<readonly InspectionRow[]>>(reading())
   const [releases, setReleases] = useState<Read<readonly Release[]>>(reading())
@@ -162,16 +178,18 @@ function InspectionsContainer() {
 
   /** The address keeps the view and the open release (Back closes it; a copied address opens it). */
   const writeAddress = useCallback(
-    (next: { view?: View; open?: string | null }) => {
+    (next: { view?: View; open?: string | null; kind?: KindFilter }) => {
       const query = new URLSearchParams()
       const nextView = next.view ?? view
       if (nextView !== 'all') query.set('view', nextView)
+      const term = kindTerm(next.kind ?? kindFilter)
+      if (term) query.set('kind', term)
       const nextOpen = next.open === undefined ? openId : next.open
       if (nextOpen) query.set('open', nextOpen)
       const qs = query.toString()
       router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false })
     },
-    [openId, pathname, router, view],
+    [kindFilter, openId, pathname, router, view],
   )
 
   const load = useCallback(async () => {
@@ -181,11 +199,30 @@ function InspectionsContainer() {
     request.current = controller
     try {
       if (kind === 'inspections') {
-        const query = { status: view === 'open' ? ('OPEN' as const) : null, waitingRelease: view === 'waiting', failedUndecided: view === 'failed', mine: view === 'mine', overdue: view === 'overdue', limit }
-        const answer = await listInspections(api, query, controller.signal)
+        // B-W2b-127: the kinds this view reads for this person; each read fails on its own (a banner), the final one decides the frame.
+        const kinds = kindsRead(view, kindFilter, { inspectionsView: can.inspectionsView, incomingView: depth.incomingView, inprocessView: depth.inprocessView })
+        const status = view === 'open' ? ('OPEN' as const) : null
+        const query = { status, waitingRelease: view === 'waiting', failedUndecided: view === 'failed', mine: view === 'mine', overdue: view === 'overdue', amended: view === 'amended', limit }
+        const readIncoming = kinds.includes('INCOMING')
+          ? listIncoming(api, { status, limit }, controller.signal).then(
+              (answer) => ready<readonly IncomingRow[]>(answer.rows),
+              (error: unknown) => failedRead<readonly IncomingRow[]>(problemKey(error)),
+            )
+          : Promise.resolve(null)
+        const readInline = kinds.includes('INLINE')
+          ? listInline(api, { siteIds, status }, controller.signal).then(
+              (answer) => ({ read: ready<readonly InlineRow[]>(answer.rows), capped: answer.capped }),
+              (error: unknown) => ({ read: failedRead<readonly InlineRow[]>(problemKey(error)), capped: false }),
+            )
+          : Promise.resolve(null)
+        const [answer, incomingRead, inlineRead] = await Promise.all([kinds.includes('FINAL') ? listInspections(api, query, controller.signal) : Promise.resolve([] as InspectionRow[]), readIncoming, readInline])
         if (controller.signal.aborted) return
         setRows(ready(answer))
-        setSelected((current) => current.filter((id) => answer.some((row) => row.id === id)))
+        setIncoming(incomingRead)
+        setInline(inlineRead?.read ?? null)
+        setInlineCapped(inlineRead?.capped ?? false)
+        const keys = new Set(unionRows({ final: answer, incoming: incomingRead?.value ?? [], inline: inlineRead?.read.value ?? [] }, limit).map((entry) => entry.key))
+        setSelected((current) => current.filter((key) => keys.has(key)))
       } else if (kind === 'releases') {
         const answer = await listReleases(api, { reversed: true, limit }, controller.signal)
         if (controller.signal.aborted) return
@@ -208,13 +245,22 @@ function InspectionsContainer() {
       else if (kind === 'releases') setReleases(problem)
       else setLots(problem)
     }
-  }, [api, can.inspectionsView, can.lotsView, kind, limit, view])
+  // siteKey stands for siteIds: the same sites give the same read.
+  }, [api, can.inspectionsView, can.lotsView, depth.incomingView, depth.inprocessView, kind, kindFilter, limit, view, siteKey])
 
   const loadTiles = useCallback(async () => {
     if (!can.inspectionsView) return
     const counted = (rowsRead: readonly unknown[]): TileCount => ({ count: rowsRead.length, capped: rowsRead.length >= 200 })
     const readers: Record<TileId, () => Promise<TileCount>> = {
-      open: async () => counted(await listInspections(api, { status: 'OPEN', limit: 200 })),
+      // B-W2b-127: Open counts every kind the person sees (the tile shows the Open view, which lists them all).
+      open: async () => {
+        const [finals, incomings, inlines] = await Promise.all([
+          listInspections(api, { status: 'OPEN', limit: 200 }),
+          depth.incomingView ? listIncoming(api, { status: 'OPEN', limit: 200 }) : Promise.resolve({ rows: [], more: false }),
+          depth.inprocessView ? listInline(api, { siteIds, status: 'OPEN' }) : Promise.resolve({ rows: [], capped: false }),
+        ])
+        return { count: finals.length + incomings.rows.length + inlines.rows.length, capped: finals.length >= 200 || incomings.more || inlines.capped }
+      },
       overdue: async () => counted(await listInspections(api, { overdue: true, limit: 200 })),
       waiting: async () => counted(await listInspections(api, { waitingRelease: true, limit: 200 })),
       failed: async () => counted(await listInspections(api, { failedUndecided: true, limit: 200 })),
@@ -231,7 +277,7 @@ function InspectionsContainer() {
         }
       }),
     )
-  }, [api, can.inspectionsView, can.lotsView])
+  }, [api, can.inspectionsView, can.lotsView, depth.incomingView, depth.inprocessView, siteKey])
 
   const loadRule = useCallback(async () => {
     if (!can.inspectionsView) return
@@ -356,14 +402,43 @@ function InspectionsContainer() {
   }, [api, returnDraft, returnRecord?.value])
 
   const create = useCallback(async () => {
+    // B-W2b-127 (design qi-new "In-line (W2b)"): an OPEN in-process check the line tablet answers; it opens its record.
+    if (newDraft.kind === 'INLINE') {
+      setBusy(true)
+      setDialogProblem(null)
+      setDialogLines([])
+      createKey.current ??= newIdempotencyKey()
+      try {
+        const check = await openInline(
+          api,
+          { kind: newDraft.inlineKind, ...(newDraft.workOrderId ? { workOrderId: newDraft.workOrderId } : {}), ...(newDraft.bundleCode.trim() ? { bundleCode: newDraft.bundleCode.trim() } : {}), note: newDraft.note.trim() || null },
+          createKey.current,
+        )
+        createKey.current = null
+        setDialog(null)
+        setNewDraft(NEW_DRAFT)
+        router.push(`${prefix}/quality/inspections/inline/${encodeURIComponent(check.id)}`)
+      } catch (error) {
+        if (!isApiError(error) || error.kind !== 'conflict') createKey.current = null
+        setDialogProblem(isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid') ? 'new.problem.refused' : problemKey(error))
+        if (isApiError(error)) setDialogLines(error.issues.map((issue) => issue.message ?? '').filter(Boolean))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     if (!newDraft.workOrderId) return
     setBusy(true)
     setDialogProblem(null)
+    setDialogLines([])
     createKey.current ??= newIdempotencyKey()
+    // B-W2b-127: on a plan the sample comes from it (B-W2b-97); typed by hand stays W1's plan.
+    const pick = planPick(plans?.value ?? null, newDraft.planId)
+    const sampling = !newDraft.typed && pick.id ? { lotSize: Number(newDraft.lotSize), planId: pick.id, planReason: pick.other || plans?.value?.suggestedId === null ? newDraft.planReason.trim() : null } : planBody(newDraft)
     try {
       const inspection = await openInspection(
         api,
-        { workOrderId: newDraft.workOrderId, ...planBody(newDraft), note: newDraft.note.trim() || null, ...(newDraft.assignee ? assigneeBody(newDraft.assignee) : {}), ...(newDraft.dueAt ? { dueAt: newDraft.dueAt } : {}) },
+        { workOrderId: newDraft.workOrderId, ...sampling, note: newDraft.note.trim() || null, ...(newDraft.assignee ? assigneeBody(newDraft.assignee) : {}), ...(newDraft.dueAt ? { dueAt: newDraft.dueAt } : {}) },
         createKey.current,
       )
       createKey.current = null
@@ -372,11 +447,43 @@ function InspectionsContainer() {
       router.push(`${prefix}/quality/inspections/${encodeURIComponent(inspection.id)}?tab=checks`)
     } catch (error) {
       if (!isApiError(error) || error.kind !== 'conflict') createKey.current = null
-      setDialogProblem(isApiError(error) && error.kind === 'conflict' ? 'new.problem.refused' : problemKey(error))
+      setDialogProblem(isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid') ? 'new.problem.refused' : problemKey(error))
+      if (isApiError(error)) setDialogLines(error.issues.map((issue) => issue.message ?? '').filter(Boolean))
     } finally {
       setBusy(false)
     }
-  }, [api, newDraft, prefix, router])
+  }, [api, newDraft, plans?.value, prefix, router])
+
+  // ---- B-W2b-127 New inspection › Final: the plans that apply to the picked work order and its sample for the lot ----
+  const planFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (dialog?.kind !== 'new' || newDraft.kind !== 'FINAL' || !newDraft.workOrderId) {
+      setPlans(null)
+      return
+    }
+    const workOrderId = newDraft.workOrderId
+    const lotSize = /^\d+$/.test(newDraft.lotSize.trim()) ? Number(newDraft.lotSize) : undefined
+    const controller = new AbortController()
+    setPlans((current) => current ?? reading())
+    const timer = setTimeout(() => {
+      getWorkOrderPlans(api, workOrderId, { lotSize, planId: newDraft.planId }, controller.signal)
+        .then((answer) => {
+          setPlans(ready(answer))
+          // The first read of a work order turns to its plan when one applies (typing by hand stays a choice).
+          if (planFor.current !== workOrderId) {
+            planFor.current = workOrderId
+            if (answer.plans.some((plan) => plan.usable)) setNewDraft((draft) => (draft.workOrderId === workOrderId ? { ...draft, typed: false } : draft))
+          }
+        })
+        .catch((error: unknown) => {
+          if ((error as { name?: string } | null)?.name !== 'AbortError') setPlans(failedRead(problemKey(error)))
+        })
+    }, 250)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [api, dialog?.kind, newDraft.kind, newDraft.workOrderId, newDraft.lotSize, newDraft.planId])
 
   // ---- the release rule ----
   useEffect(() => {
@@ -584,8 +691,12 @@ function InspectionsContainer() {
       const pick = new Set(ids)
       const stamp = new Date().toISOString().slice(0, 10)
       if (exportKind === 'inspections') {
-        const lines = [csvLine(INSPECTION_CSV_HEAD.map((key) => t(key))), ...(rows.value ?? []).filter((row) => pick.has(row.id)).map((row) => csvLine(inspectionCsvRow(row, t)))]
-        downloadText(`inspections-${stamp}.csv`, lines.join('\n'))
+        // B-W2b-127: the picked rows of every kind (a final row keeps its W1 columns after the shared ones).
+        const say = (words: { key: string; params?: Readonly<Record<string, string | number>> }) => (words.key === 'text' ? String(words.params?.text ?? '') : td(words.key, words.params as Record<string, string | number> | undefined))
+        const entries = unionRows({ final: rows.value ?? [], incoming: incoming?.value ?? [], inline: inline?.value ?? [] }, MAX * 3).filter((entry: ListRow) => pick.has(entry.key))
+        const head = [td('col.kind'), td('col.number'), td('col.subject'), td('col.lot'), td('col.sample'), td('col.plan'), ...INSPECTION_CSV_HEAD.map((key) => t(key))]
+        const body = entries.map((entry) => csvLine([td(`kind.${entry.kind}`), say(numberOf(entry)), say(subjectOf(entry)), say(lotOf(entry)), say(sampleOf(entry)), say(planOf(entry)), ...(entry.kind === 'FINAL' ? inspectionCsvRow(entry.row, t) : [])]))
+        downloadText(`inspections-${stamp}.csv`, [csvLine(head), ...body].join('\n'))
       } else if (exportKind === 'releases') {
         const head = ['csv.release', 'csv.workOrder', 'csv.garments', 'csv.takenBack', 'csv.onHold', 'csv.releasedBy', 'csv.releasedAt'].map((key) => t(key))
         const body = (releases.value ?? [])
@@ -601,17 +712,31 @@ function InspectionsContainer() {
         downloadText(`lots-on-hold-${stamp}.csv`, [csvLine(head), ...body].join('\n'))
       }
     },
-    [locale, lots.value, releases.value, rows.value, session.user.id, t],
+    [incoming?.value, inline?.value, locale, lots.value, releases.value, rows.value, session.user.id, t, td],
   )
 
   const setView = (next: View) => {
     setViewState(next)
     setLimit(PAGE)
     setSelected([])
-    if (viewKind(next) === 'inspections') setRows(reading())
+    if (viewKind(next) === 'inspections') {
+      setRows(reading())
+      setIncoming(null)
+      setInline(null)
+    }
     else if (viewKind(next) === 'releases') setReleases(reading())
     else setLots(reading())
     writeAddress({ view: next })
+  }
+
+  /** B-W2b-127: the kind chips (the list's own address term `?kind=`). */
+  const setKind = (next: KindFilter) => {
+    setKindFilter(next)
+    setSelected([])
+    setRows(reading())
+    setIncoming(null)
+    setInline(null)
+    writeAddress({ kind: next })
   }
 
   const openDialog = (next: ListDialog | null) => {
@@ -619,6 +744,8 @@ function InspectionsContainer() {
     setDialogLines([])
     if (next?.kind === 'new') {
       setNewDraft(NEW_DRAFT)
+      setPlans(null)
+      planFor.current = null
       setCells(null)
       setNewPeople(null)
       setReturns(null)
@@ -654,6 +781,12 @@ function InspectionsContainer() {
         asOf,
         live,
         updates,
+        kind: kindFilter,
+        depth,
+        incoming,
+        inline,
+        inlineCapped,
+        plans,
         selected,
         notice,
         open: openId ? { id: openId, detail } : null,
@@ -688,6 +821,10 @@ function InspectionsContainer() {
         onSelect: (ids) => setSelected([...ids]),
         onDialog: openDialog,
         onOpenInspection: (row) => router.push(`${prefix}/quality/inspections/${encodeURIComponent(row.id)}`),
+        onOpenEntry: (entry) => router.push(rowHref(prefix, entry)),
+        onKind: setKind,
+        onPrintReports: (ids) => window.open(reportsAddress(prefix, ids), '_blank', 'noopener'),
+        onRetryPart: () => void load(),
         onOpenRelease: (id) => writeAddress({ open: id }),
         onOpenLot: (lot) => router.push(`${prefix}/warehouse/lots/${encodeURIComponent(lot.id)}`),
         onRetryRelease: () => void loadDetail(),

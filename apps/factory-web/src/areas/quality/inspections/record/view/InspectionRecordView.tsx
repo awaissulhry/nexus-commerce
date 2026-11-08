@@ -2,14 +2,16 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { ExternalLink, MoreHorizontal, PenLine, Undo2 } from 'lucide-react'
+import { ExternalLink, FileText, MoreHorizontal, PenLine, Undo2 } from 'lucide-react'
+import { GateExplainer } from '@nexus/ui/components/GateExplainer/index'
 import { Banner, EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input, Pill, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
+import { useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StepUpState } from '../../../_shared/hooks'
 import { evidenceAddress } from '../../../_shared/model'
-import { dash, Facts, NoticeBanner, QualityMessages, RecordFrame, Section, StepUpDialog } from '../../../_shared/parts'
+import { dash, Facts, NoticeBanner, RecordFrame, Section } from '../../../_shared/parts'
 import type { DefectBody, FinalCell, Inspection } from '../../api'
 import { AssignDialog } from '../../view/AssignDialog'
 import {
@@ -36,6 +38,34 @@ import {
 } from '../../model'
 import { CancelModal, PlanModal, ReleaseModal, resultReasons, SignModal } from './dialogs'
 import { DefectsTab } from './DefectsTab'
+// B-W2b-127: the W2b parts of the record — Sample & AQL, Measurements, the plan's checks, the serial and batch check, the photo
+// set, Amendments with Amend signed result, the report window, the release gate as GateExplainer.
+import type { ChartPoint, ResultBody } from '../../depth/api'
+import { amendHeld, gateChecks, planRecordHeld, reportAddress, signHoldsOf } from '../../depth/model'
+import { DepthMessages, DepthStepUp, useDepthT, useSay } from '../../depth/parts'
+import type { ProfileDraft } from '../../depth/use-final-depth'
+import { AmendmentsSection, type AmendmentsActions } from '../../depth/view/AmendmentsSection'
+import { AqlTab } from '../../depth/view/AqlTab'
+import { MeasurementsTab } from '../../depth/view/MeasurementsTab'
+import { IdentitySection, PlanChecks } from '../../depth/view/PlanChecks'
+import { PhotoSet } from '../../depth/view/PhotoSet'
+
+/** B-W2b-127: the record's W2b state (the container's hooks) and the rights it reads. */
+export type RecordDepth = NonNullable<InspectionRecordModel['depth']>
+
+export interface RecordDepthActions extends AmendmentsActions {
+  onUnit?: (unit: number) => void
+  onAnswerResult?: (body: ResultBody) => void
+  onMeasure?: (point: ChartPoint, unit: number, text: string) => void
+  onChartPage?: (from: number) => void
+  onChartSize?: (size: string) => void
+  onCreateDefect?: (point: ChartPoint, unit: number, words: string) => void
+  onRetrySheet?: () => void
+  onRetryAql?: () => void
+  onOpenProfile?: () => void
+  onProfileDraft?: (draft: ProfileDraft | null) => void
+  onSaveProfile?: () => void
+}
 import '../../inspections.css'
 
 export interface InspectionRecordActions {
@@ -68,9 +98,13 @@ export interface InspectionRecordActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  /** B-W2b-127. */
+  depth?: RecordDepthActions
 }
 
-const TAB_KEYS: Record<RecordTab, string> = { checks: 'record.tab.checks', defects: 'record.tab.defects', decision: 'record.tab.decision' }
+const TAB_KEYS: Record<RecordTab, string> = { checks: 'record.tab.checks', aql: 'tab.aql', measurements: 'tab.measurements', defects: 'record.tab.defects', decision: 'record.tab.decision' }
+/** The tabs whose words are this step's catalogue. */
+const DEPTH_TABS: ReadonlySet<RecordTab> = new Set(['aql', 'measurements'])
 
 /**
  * SCR-076 the inspection record (design quality.inspections "Inspection" record, 00 §2.2): the band (‹ Inspections, the
@@ -83,18 +117,33 @@ const TAB_KEYS: Record<RecordTab, string> = { checks: 'record.tab.checks', defec
  */
 export function InspectionRecordView({ model, actions, stepUp }: { model: InspectionRecordModel; actions?: InspectionRecordActions; stepUp?: StepUpState }) {
   return (
-    <QualityMessages>
+    <DepthMessages>
       <Record model={model} actions={actions} stepUp={stepUp} />
-    </QualityMessages>
+    </DepthMessages>
   )
 }
 
 function Record({ model, actions, stepUp }: { model: InspectionRecordModel; actions?: InspectionRecordActions; stepUp?: StepUpState }) {
   const t = useT('quality')
+  const td = useDepthT()
+  const say = useSay()
   const locale = useLocale()
   const { read, can } = model
   const inspection = read.inspection
-  const abilities = recordAbilities(read, can)
+  const depth = model.depth ?? null
+  const onPlan = inspection.planVersion !== null
+  const sheet = depth?.final.sheet ?? null
+  const w1Abilities = recordAbilities(read, can)
+  // B-W2b-127: on a plan the checklist is the plan's results (W1's twelve rows do not hold its signature): the sheet's facts do.
+  const planHolds = onPlan && sheet?.value && inspection.status === 'OPEN' ? signHoldsOf(sheet.value, locale) : []
+  const planSignHeld = !onPlan ? null : w1Abilities.recordHeld ? null : read.maker.made ? null : !sheet?.value ? 'checks.held.reading' : sheet.value.result.resultNow === 'PASS' && planHolds.length > 0 ? 'hold.signPass' : null
+  const abilities = onPlan ? { ...w1Abilities, signHeld: w1Abilities.recordHeld ?? (read.maker.made ? 'held.maker' : null) } : w1Abilities
+  const signHeldWords = planSignHeld ? (planSignHeld === 'hold.signPass' ? td('hold.signPass', { holds: planHolds.map(say).join(' · ') }) : td(planSignHeld)) : abilities.signHeld ? t(abilities.signHeld) : null
+  const amendments = depth?.amendments ?? null
+  const amended = amendments?.read?.value?.record.amended ?? false
+  const signed = inspection.status === 'PASSED' || inspection.status === 'FAILED'
+  // The lot's sizes (the work order's cells): the chart measures a point the plan does not size in the one picked.
+  const chartSizes = [...new Set((model.final.value?.cells ?? []).map((cell) => cell.size))]
   const dialog = model.dialog ?? null
   const open = (next: RecordDialog | null) => actions?.onDialog?.(next)
   const status = statusOf({ status: inspection.status, overridden: inspection.overridden, onHold: false, reversed: 0 })
@@ -111,7 +160,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey || dialog) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], [role="radiogroup"]') || target.isContentEditable)) return
-      if (event.key === 's' && !abilities.signHeld) {
+      if (event.key === 's' && !signHeldWords && inspection.status === 'OPEN') {
         event.preventDefault()
         open({ kind: 'sign' })
       }
@@ -122,7 +171,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
 
   const primary =
     inspection.status === 'OPEN' ? (
-      <Button size="sm" variant="primary" onClick={() => open({ kind: 'sign' })} heldReason={abilities.signHeld ? t(abilities.signHeld) : null}>
+      <Button size="sm" variant="primary" onClick={() => open({ kind: 'sign' })} heldReason={signHeldWords}>
         <PenLine size={14} aria-hidden /> {t('record.sign')}
       </Button>
     ) : inspection.status === 'PASSED' && releasableCells.length > 0 ? (
@@ -141,6 +190,22 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
     ...(evidence
       ? [{ id: 'evidence', label: t('record.evidence'), href: evidence, target: '_blank' as const, icon: <ExternalLink size={14} aria-hidden /> }]
       : [{ id: 'evidence-none', label: t('record.evidence'), disabled: true, description: t('held.noBatch') }]),
+    // B-W2b-127 (design pop:ins-amend, tab:qi-report-pdf): Amend signed result, the report and its share link (new tabs).
+    ...(depth
+      ? (() => {
+          const heldKey = amendHeld(amendments?.read?.value ?? null, depth.can)
+          const reportHeldKey = signed ? null : 'report.held.notSigned'
+          return [
+            { id: 'sep-w2b', separator: true },
+            { id: 'amend', label: td('amend.menu'), onSelect: () => actions?.depth?.onOpen?.({ kind: 'amend' }), disabled: heldKey !== null, description: heldKey ? td(heldKey) : undefined },
+            reportHeldKey
+              ? { id: 'report', label: td('row.report'), disabled: true, description: td(reportHeldKey), icon: <FileText size={14} aria-hidden /> }
+              : { id: 'report', label: td('row.report'), href: reportAddress(model.prefix, inspection.id), target: '_blank' as const, icon: <FileText size={14} aria-hidden /> },
+            reportHeldKey ? { id: 'share', label: td('row.share'), disabled: true, description: td(reportHeldKey) } : { id: 'share', label: td('row.share'), href: reportAddress(model.prefix, inspection.id, { share: true }), target: '_blank' as const },
+            { id: 'sep-w2b-end', separator: true },
+          ]
+        })()
+      : []),
     { id: 'cancel', label: t('record.cancel'), onSelect: () => open({ kind: 'cancel' }), disabled: !!abilities.cancelHeld, description: abilities.cancelHeld ? t(abilities.cancelHeld) : undefined },
     { id: 'copy', label: t('row.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(inspection.label) },
     { id: 'sep', separator: true },
@@ -174,6 +239,8 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
             {t(status.key)}
           </Pill>
           {inspection.overridden && <Tag tone="warning">{t('record.overridden')}</Tag>}
+          {amended && <Tag tone="info">{td('status.AMENDED')}</Tag>}
+          {inspection.planVersion && <Tag tone="neutral">{td('plan.version', { code: inspection.planVersion.code, number: inspection.planVersion.number })}</Tag>}
         </span>
       }
       actions={
@@ -182,7 +249,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
           <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={menu} />
         </>
       }
-      tabs={(['checks', 'defects', 'decision'] as const).map((tab) => ({ id: tab, label: t(TAB_KEYS[tab]) }))}
+      tabs={(['checks', 'aql', 'measurements', 'defects', 'decision'] as const).map((tab) => ({ id: tab, label: DEPTH_TABS.has(tab) ? td(TAB_KEYS[tab]) : t(TAB_KEYS[tab]) }))}
       active={model.tab}
       tabHref={(tab) => `${base}?tab=${tab}`}
     >
@@ -203,7 +270,25 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
       )}
       {inspection.status === 'CANCELLED' && <Banner tone="neutral" title={t('record.cancelledBanner')} />}
       {model.tab === 'checks' ? (
-        <ChecksTab model={model} actions={actions} recordHeld={abilities.recordHeld} />
+        <ChecksTab model={model} actions={actions} recordHeld={abilities.recordHeld} signHeld={signHeldWords} planHolds={planHolds.map(say)} />
+      ) : model.tab === 'aql' ? (
+        <AqlTab
+          model={{
+            aql: depth?.final.aql ?? null,
+            sheet,
+            changeHeld: !can.inspectionsRecord ? 'aql.held.noRight' : null,
+            profiles: depth?.final.profiles ?? null,
+            profileDraft: depth?.final.profileDraft ?? null,
+            profileBusy: depth?.final.profileBusy ?? false,
+            profileProblem: depth?.final.profileProblem ?? null,
+          }}
+          actions={{ onRetry: actions?.depth?.onRetryAql, onOpenProfile: actions?.depth?.onOpenProfile, onProfileDraft: actions?.depth?.onProfileDraft, onSaveProfile: actions?.depth?.onSaveProfile }}
+        />
+      ) : model.tab === 'measurements' ? (
+        <MeasurementsTab
+          model={{ sheet: onPlan ? sheet : null, marks: depth?.final.marks ?? {}, held: abilities.recordHeld ? 'chart.held.record' : planRecordHeld(sheet?.value ?? null, null), from: depth?.chartFrom ?? 1, defectHeld: abilities.recordHeld ? 'chart.held.defects' : null, sizes: chartSizes, size: depth?.chartSize ?? chartSizes[0] ?? null }}
+          actions={{ onSize: actions?.depth?.onChartSize, onMeasure: actions?.depth?.onMeasure, onPage: actions?.depth?.onChartPage, onCreateDefect: actions?.depth?.onCreateDefect, onRetry: actions?.depth?.onRetrySheet }}
+        />
       ) : model.tab === 'defects' ? (
         <DefectsTab
           model={model.defects ?? { lines: [], saving: 'idle', library: { value: null, problem: null }, photos: { value: null, problem: null }, photoSrc: {} }}
@@ -213,6 +298,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
           canRaise={can.ncrRaise}
           saved={savedDefectIds(inspection)}
           dialog={dialog?.kind === 'pick' || dialog?.kind === 'zone' || dialog?.kind === 'photo' ? dialog : null}
+          causes={depth?.final.causes ?? null}
           actions={{
             onLines: actions?.onLines,
             onPhoto: actions?.onPhoto,
@@ -225,8 +311,9 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
           }}
         />
       ) : (
-        <DecisionTab model={model} actions={actions} signHeld={abilities.signHeld} />
+        <DecisionTab model={model} actions={actions} signHeld={signHeldWords} />
       )}
+      {model.tab === 'defects' && <PhotoSet sheet={onPlan ? sheet : null} photoSrc={depth?.final.photoSrc ?? {}} />}
 
       <SignModal
         open={dialog?.kind === 'sign'}
@@ -272,7 +359,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
         onClose={() => open(null)}
       />
       <AssignDialog state={model.assign ?? null} onValue={(value) => actions?.onAssignValue?.(value)} onSave={() => actions?.onAssignSave?.()} onClose={() => actions?.onAssignClose?.()} />
-      {stepUp && <StepUpDialog state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
+      {stepUp && <DepthStepUp state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
       {dialog?.kind === 'shortcuts' && <RecordKeys onClose={() => open(null)} />}
     </RecordFrame>
   )
@@ -293,9 +380,13 @@ function RecordKeys({ onClose }: { onClose: () => void }) {
 
 // ---- Checks & results -----------------------------------------------------------------------------------------------------------
 
-function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordModel; actions?: InspectionRecordActions; recordHeld: string | null }) {
+function ChecksTab({ model, actions, recordHeld, signHeld, planHolds }: { model: InspectionRecordModel; actions?: InspectionRecordActions; recordHeld: string | null; signHeld: string | null; planHolds: readonly string[] }) {
   const t = useT('quality')
+  const td = useDepthT()
   const inspection = model.read.inspection
+  // B-W2b-127: on a plan the checks are the plan version's (B-W2b-97's sheet); W1's twelve rows stay for W1 inspections.
+  const onPlan = inspection.planVersion !== null
+  const sheet = model.depth?.final.sheet ?? null
   const rows = model.checklist
   const counts = checklistCounts(rows)
   const editable = recordHeld === null
@@ -310,13 +401,15 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
           title={t('plan.heading')}
           sub={t('plan.sub')}
           actions={
-            <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'plan' })} heldReason={recordHeld ? t(recordHeld) : null}>
+            <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'plan' })} heldReason={onPlan ? td('plan.bound') : recordHeld ? t(recordHeld) : null}>
               {t('plan.edit')}
             </Button>
           }
         >
           <Facts
             items={[
+              ...(inspection.planVersion ? [{ label: td('plan.label'), value: td('plan.version', { code: inspection.planVersion.code, number: inspection.planVersion.number }) }] : []),
+              ...(inspection.codeLetter ? [{ label: td('plan.letter'), value: inspection.codeLetter }] : []),
               { label: t('plan.lot'), value: inspection.plan.lotSize },
               { label: t('plan.sample'), value: inspection.plan.hundredPercent ? t('plan.hundred', { count: inspection.plan.sampleSize }) : inspection.plan.sampleSize },
               { label: t('plan.level'), value: inspection.plan.inspectionLevel },
@@ -325,6 +418,18 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
             ]}
           />
         </Section>
+        {onPlan ? (
+          <PlanChecks
+            sheet={sheet}
+            unit={model.depth?.final.unit ?? 1}
+            marks={model.depth?.final.marks ?? {}}
+            held={recordHeld ? null : planRecordHeld(sheet?.value ?? null, null)}
+            prefix={model.prefix}
+            onUnit={actions?.depth?.onUnit}
+            onAnswer={actions?.depth?.onAnswerResult}
+            onRetry={actions?.depth?.onRetrySheet}
+          />
+        ) : (
         <Section id="checklist" title={t('checklist.heading')} sub={t('checklist.counts', { answered: counts.answered, total: counts.total, failed: counts.failed })}>
           {recordHeld && inspection.status === 'OPEN' && <p className="fw-q-hint">{t(recordHeld)}</p>}
           {checklistGroups(rows).map(({ group, rows: groupRows }) => (
@@ -385,6 +490,7 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
             </div>
           ))}
         </Section>
+        )}
         <Section
           id="defects"
           title={t('defects.heading')}
@@ -423,8 +529,19 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
             />
           )}
         </Section>
+        <IdentitySection sheet={onPlan ? sheet : null} workOrderHref={model.can.workOrdersView ? `${model.prefix}/production/work-orders/${encodeURIComponent(inspection.workOrderId)}?tab=bundles` : null} />
       </div>
       <Section id="now" title={t('result.heading')}>
+        {onPlan && sheet?.value && inspection.status === 'OPEN' ? (
+          <Banner tone={sheet.value.result.resultNow === 'FAIL' ? 'danger' : planHolds.length > 0 ? 'info' : 'success'} title={td(`result.plan.${sheet.value.result.resultNow}`)}>
+            <ul className="fw-q-lines">
+              <li>{td('checks.now', { answered: sheet.value.checksNow.answered, total: sheet.value.checksNow.outOf, failed: sheet.value.checksNow.failed.length, critical: sheet.value.checksNow.failedCritical.length > 0 ? sheet.value.checksNow.failedCritical.join(', ') : td('checks.criticalNone') })}</li>
+              {planHolds.map((hold) => (
+                <li key={hold}>{hold}</li>
+              ))}
+            </ul>
+          </Banner>
+        ) : (
         <Banner
           tone={inspection.status === 'OPEN' && counts.answered < counts.total ? (computed.result === 'FAIL' ? 'danger' : 'info') : computed.result === 'PASS' ? 'success' : 'danger'}
           title={
@@ -443,11 +560,12 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
             </ul>
           )}
         </Banner>
+        )}
         <p className="fw-q-hint">{t(model.read.maker.made ? 'result.makerYes' : 'result.makerNo')}</p>
         {model.read.statementNeeded && <p className="fw-q-hint">{t('result.statementNeeded')}</p>}
         {final && <CertificateLine cells={final.cells} />}
         {inspection.status === 'OPEN' && (
-          <Button size="sm" variant="primary" onClick={() => actions?.onDialog?.({ kind: 'sign' })} heldReason={recordAbilities(model.read, model.can).signHeld ? t(recordAbilities(model.read, model.can).signHeld!) : null}>
+          <Button size="sm" variant="primary" onClick={() => actions?.onDialog?.({ kind: 'sign' })} heldReason={signHeld}>
             {t('record.sign')}
           </Button>
         )}
@@ -473,6 +591,8 @@ function CertificateLine({ cells }: { cells: readonly FinalCell[] }) {
 
 function DecisionTab({ model, actions, signHeld }: { model: InspectionRecordModel; actions?: InspectionRecordActions; signHeld: string | null }) {
   const t = useT('quality')
+  const td = useDepthT()
+  const ds = useDsWords()
   const locale = useLocale()
   const inspection: Inspection = model.read.inspection
   const final = model.final.value
@@ -488,7 +608,7 @@ function DecisionTab({ model, actions, signHeld }: { model: InspectionRecordMode
             <>
               <p className="fw-q-hint">{t('decision.notSigned')}</p>
               <span>
-                <Button size="sm" variant="primary" onClick={() => actions?.onDialog?.({ kind: 'sign' })} heldReason={signHeld ? t(signHeld) : null}>
+                <Button size="sm" variant="primary" onClick={() => actions?.onDialog?.({ kind: 'sign' })} heldReason={signHeld}>
                   {t('record.sign')}
                 </Button>
               </span>
@@ -569,9 +689,16 @@ function DecisionTab({ model, actions, signHeld }: { model: InspectionRecordMode
                   cell.released,
                   cell.releasable,
                   open > 0 ? (
-                    <Tag key="g" tone="warning">
-                      {t('decision.gateOpen', { count: open })}
-                    </Tag>
+                    // B-W2b-127 (design qi-gate): the gate in words — each check, who can clear it — opened from the cell.
+                    <GateExplainer
+                      key="g"
+                      form="popover"
+                      title={td('gate.title', { cell: `${cell.colourwayCode} ${cell.size}` })}
+                      rule={td('gate.rule')}
+                      checks={gateChecks(cell).map((check) => ({ id: check.id, label: t(`gate.${check.code}`), state: check.state, stateLabel: td(`gate.state.${check.state}`), reason: check.state === 'fail' ? td(`gate.open.${check.code}`) : undefined, who: check.state === 'fail' ? td(`gate.who.${check.code}`) : undefined }))}
+                      labels={ds.gateExplainer}
+                      lawLabels={ds.lawRef}
+                    />
                   ) : cell.releasable === 0 ? (
                     <Tag key="g" tone="neutral">
                       {t('decision.gateDone')}
@@ -651,6 +778,16 @@ function DecisionTab({ model, actions, signHeld }: { model: InspectionRecordMode
           </ul>
         )}
       </Section>
+
+      {/* B-W2b-127 (design dec-amend): corrections after signing, each with its second signature. */}
+      {model.depth && (inspection.status === 'PASSED' || inspection.status === 'FAILED') && (
+        <AmendmentsSection state={model.depth.amendments} can={model.depth.can} causes={model.depth.final.causes} actions={actions?.depth} />
+      )}
+      {model.depth && inspection.status === 'OPEN' && (
+        <Section id="amendments" title={td('amend.heading')}>
+          <p className="fw-q-hint">{td('amend.notSigned')}</p>
+        </Section>
+      )}
     </div>
   )
 }

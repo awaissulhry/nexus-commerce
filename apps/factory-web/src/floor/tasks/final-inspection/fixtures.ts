@@ -3,6 +3,8 @@ import { onFloor, signedInFrame } from '../../frame/fixtures'
 import { failItem, passGroup, suggestedPlan, type Answer, type Check } from './model'
 import { fromListReason, type PickerList, type PickerReason } from '../reasons/model'
 import { FinalView, type CellModel, type FinalViewModel, type HoldDialogModel, type InspectionModel, type OrderModel } from './view/FinalView'
+// B-W2b-109: the bench on its plan.
+import { planCases } from './plan/fixtures'
 
 /**
  * SCR-097's cases: the inspection bench at tablet width, from the work orders to inspect to the release and its labels,
@@ -270,5 +272,6 @@ export const designScreen = defineDesignScreen<FinalViewModel>({
       model: base({ kind: 'gate', order: order({ main: null, cells: [cell('NERO 50', { held: 'noRight' })] }) }, { can: { record: false, release: false, labels: false } }),
       note: 'A team leader sees the gate; recording and releasing are held with the reason.',
     },
+    ...planCases(base, openOrder, frame),
   ],
 })

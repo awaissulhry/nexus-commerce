@@ -1,6 +1,7 @@
 import type { ComposerDraft, FileAudience, FileKind, PanelTab, ThreadStatus, TimelineFilter } from '../model'
 import type { TaskDraft } from '../tasks/model'
 import type { FileDepthActions } from '../files/actions'
+import type { ApprovalsPanelActions } from '../approvals/model'
 
 /**
  * What the record panels ask of their page (RecordPanels.tsx does each through the API). In the design index none is
@@ -33,4 +34,6 @@ export interface RecordPanelsActions {
   onAddFollower?: (userId: string) => void
   /** B-W2b-177: the files in depth (versions, what a file is and until when, markup, what a move needs). */
   fileDepth?: FileDepthActions
+  /** B-W2b-188: the Approvals tab (ask a partner to approve, withdraw, the link given once). */
+  approvals?: ApprovalsPanelActions
 }

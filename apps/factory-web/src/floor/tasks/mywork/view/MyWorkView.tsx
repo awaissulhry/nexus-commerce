@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Warehouse, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Warehouse, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, ScanInput, type CameraScanner, type FloorActions } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
 import { FloorListUpdates } from '@nexus/ui/floor/FloorListUpdates/index'
@@ -20,6 +20,9 @@ import { arranged, emptyOf, excerptOf, leftOf, MATERIAL_TONE, putLastWords, STAT
 // B-W2b-126: the repair queue (MES-132).
 import { repairHeld, repairTile, type RepairQueue } from '../repair/model'
 import { RepairCard, RepairLine, RepairList, RepairOut, RepairUnread, type RepairLineModel } from '../repair/view/RepairViews'
+// B-W2b-109: the inspector queue (QHS-068).
+import type { InspectorQueue, OpenHeld } from '../inspections/model'
+import { InspectionCard, InspectionList, InspectionsUnread } from '../inspections/view/InspectionViews'
 import '../mywork.css'
 
 /**
@@ -49,6 +52,9 @@ export type MyWorkStep =
   | { readonly kind: 'repair' }
   | { readonly kind: 'repairItem'; readonly reworkId: string }
   | { readonly kind: 'repairOut'; readonly reworkId: string; readonly code: string | null; readonly good: number | null }
+  /** B-W2b-109: my inspections (the inspector queue); one inspection's card. */
+  | { readonly kind: 'inspections' }
+  | { readonly kind: 'inspection'; readonly key: string }
   | { readonly kind: 'noPermission' }
 
 export interface MyWorkViewModel {
@@ -95,6 +101,25 @@ export interface MyWorkViewModel {
   repairLine?: RepairLineModel | null
   /** A scan is on its way. */
   repairBusy?: boolean
+  /** B-W2b-109: my inspections (null: the person holds no inspection view). */
+  inspections?: InspectionsModel | null
+}
+
+/** B-W2b-109: the inspector queue as this tablet shows it. */
+export interface InspectionsModel {
+  /** The queue on screen; null: not read yet (or none kept). */
+  readonly queue: InspectorQueue | null
+  /** From this tablet: as of when. */
+  readonly asOf: string | null
+  /** Not read and none kept. */
+  readonly problem: 'offline' | 'error' | null
+  /** A fresher queue waits behind "List changed · Show", and how many rows differ. */
+  readonly changed: boolean
+  readonly pending: number
+  /** At an inspection bench the queue is My work's list: the station's queue is the secondary action. */
+  readonly first: boolean
+  /** Why "Inspect" cannot open a row here, by row key. */
+  readonly held: Readonly<Record<string, OpenHeld>>
 }
 
 export interface MyWorkCall {
@@ -126,6 +151,13 @@ export type MyWorkAction =
   | { type: 'repairAllGood' }
   | { type: 'repairConfirm' }
   | { type: 'repairRetry' }
+  // B-W2b-109: my inspections.
+  | { type: 'inspections' }
+  | { type: 'inspectionOpen'; key: string }
+  | { type: 'inspectionGo'; key: string }
+  | { type: 'inspectionsShow' }
+  | { type: 'inspectionsRetry' }
+  | { type: 'stationQueue' }
 
 export interface MyWorkViewProps {
   model: MyWorkViewModel
@@ -177,6 +209,7 @@ function useRowKeys() {
 
 export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) {
   const t = useT('floor-mywork')
+  const ti = useT('floor-myinspections')
   const shared = useT('floor-tasks')
   const floor = useT('floor')
   const ds = useDsWords()
@@ -201,6 +234,19 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
     <ScanInput
       label={t('scan.label')}
       hint={model.held ? floor('tile.held.notice') : t('scan.hint')}
+      scannedLabel={(code) => floor('scan.read', { code })}
+      keyboardLabel={floor('scan.type')}
+      disabled={Boolean(model.held)}
+      camera={camera ? { scanner: camera, startLabel: floor('scan.camera.start'), stopLabel: floor('scan.camera.stop'), errorLabel: floor('scan.camera.error') } : undefined}
+      onScan={(code) => send({ type: 'scan', code })}
+    />
+  )
+
+  // B-W2b-109: on my inspections a scan opens the final bench (QHS-065), and the field says so.
+  const inspectScanField = (
+    <ScanInput
+      label={ti('scan.label')}
+      hint={model.held ? floor('tile.held.notice') : ti('scan.hint')}
       scannedLabel={(code) => floor('scan.read', { code })}
       keyboardLabel={floor('scan.type')}
       disabled={Boolean(model.held)}
@@ -261,8 +307,10 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
   const unread = unreadCount(openMessages, model.seen ?? [])
   // B-W2b-126: the repair queue's tile (this station's repairs, else the site's), hidden at zero.
   const repairCount = repairTile(model.repair ?? null)
+  // B-W2b-109: my inspections' tile (hidden at zero), what waits for me or for nobody yet.
+  const inspectionCount = model.inspections?.queue?.rows.length ?? 0
   const forYourWork =
-    unread > 0 || repairCount ? (
+    unread > 0 || repairCount || inspectionCount > 0 ? (
       // Design "For your work": a count as a chip, hidden at zero. "New instructions" joins it with W2b-4.
       <section className="fw-floor-stack fw-mywork-foryou" aria-labelledby="fw-mywork-foryou">
         <h2 id="fw-mywork-foryou" className="fw-floor-section-title">
@@ -279,6 +327,9 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
               tone={repairCount.here ? 'primary' : 'neutral'}
               onPress={() => send({ type: 'repair' })}
             />
+          ) : null}
+          {inspectionCount > 0 ? (
+            <FloorTile icon={<ClipboardCheck />} label={ti('tile')} count={formatNumber(inspectionCount, locale)} countLabel={ti('tileCount', { count: inspectionCount })} tone="primary" onPress={() => send({ type: 'inspections' })} />
           ) : null}
         </FloorTileGrid>
       </section>
@@ -403,6 +454,39 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
         <RepairOut row={row} good={step.good} onGood={(value) => send({ type: 'repairGood', value })} onAllGood={() => send({ type: 'repairAllGood' })} onConfirm={() => send({ type: 'repairConfirm' })} heldReason={held} />
       ) : (
         <FloorState tone="info" icon={<CircleCheckBig />} title={t('repair.gone.title')} text={t('repair.gone.body')} />
+      )
+      break
+    }
+
+    // B-W2b-109: my inspections (the inspector queue) and one inspection's card.
+    case 'inspections': {
+      const insp = model.inspections
+      actions = insp?.first ? [home, { label: ti('station'), icon: <ListTodo />, onPress: () => send({ type: 'stationQueue' }), variant: 'secondary' }] : [back]
+      body = (
+        <>
+          {inspectScanField}
+          {insp?.queue ? (
+            <InspectionList queue={insp.queue} asOf={insp.asOf} pending={insp.pending} changed={insp.changed} onShow={() => send({ type: 'inspectionsShow' })} onOpen={(key) => send({ type: 'inspectionOpen', key })} timeZone={timeZone} />
+          ) : insp?.problem ? (
+            <InspectionsUnread problem={insp.problem} onRetry={() => send({ type: 'inspectionsRetry' })} />
+          ) : (
+            <p className="fw-floor-muted" aria-busy="true">
+              {t('loading')}
+            </p>
+          )}
+        </>
+      )
+      break
+    }
+
+    case 'inspection': {
+      const row = model.inspections?.queue?.rows.find((entry) => entry.key === step.key) ?? null
+      actions = [back]
+      body = (
+        <>
+          {inspectScanField}
+          {row ? <InspectionCard row={row} held={model.inspections?.held[row.key] ?? null} asOf={model.inspections?.asOf ?? null} onGo={() => send({ type: 'inspectionGo', key: row.key })} timeZone={timeZone} /> : <FloorState tone="info" icon={<CircleCheckBig />} title={ti('gone.title')} text={ti('gone.body')} />}
+        </>
       )
       break
     }

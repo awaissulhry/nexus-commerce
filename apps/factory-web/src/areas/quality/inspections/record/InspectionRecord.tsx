@@ -11,7 +11,7 @@ import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { isStepUpCancelled, liveMatches, useLive, useRecordTab, useStepUp } from '../../_shared/hooks'
 import { failedRead, hasIssue, newNcrAddress, problemKey, qualityCan, ready, reading, refusalLines, type Notice, type Read } from '../../_shared/model'
-import { QualityMessages, RecordProblem, RecordSkeleton } from '../../_shared/parts'
+import { RecordProblem, RecordSkeleton } from '../../_shared/parts'
 import { PlaceHold, type PlaceHoldPrefill } from '../../holds/place/PlaceHold'
 import {
   assignInspections,
@@ -60,6 +60,11 @@ import {
   type SignDraft,
 } from '../model'
 import { InspectionRecordView } from './view/InspectionRecordView'
+// B-W2b-127: the W2b parts — the plan's sheet, Sample & AQL, the causes, the amendments.
+import { depthCan, measurementDefect } from '../depth/model'
+import { DepthMessages } from '../depth/parts'
+import { useAmendments } from '../depth/use-amendments'
+import { useFinalDepth } from '../depth/use-final-depth'
 
 /**
  * The inspection record's container (`/w/<company>/quality/inspections/<id>?tab=checks|decision`, SCR-076): reads the
@@ -71,13 +76,16 @@ import { InspectionRecordView } from './view/InspectionRecordView'
  */
 export function InspectionRecord({ inspectionId }: { inspectionId: string }) {
   return (
-    <QualityMessages>
+    <DepthMessages>
       <Container inspectionId={inspectionId} />
-    </QualityMessages>
+    </DepthMessages>
   )
 }
 
 const DECISION_EVENTS = ['quality.inspection_', 'quality.garments_released', 'quality.release_reversed', 'quality.release_rule_changed'] as const
+/** B-W2b-127: the bench's answers (the sheet) and the corrections (the amendments) move on their own. */
+const SHEET_EVENTS = ['final_inspection.recorded'] as const
+const AMEND_EVENTS = ['inspection_amendment.'] as const
 
 const NO_DEFECTS: DefectsTabModel = { lines: [], saving: 'idle', library: reading(), photos: reading(), photoSrc: {} }
 
@@ -88,8 +96,11 @@ function Container({ inspectionId }: { inspectionId: string }) {
   const t = useT('quality')
   const locale = useLocale()
   const can = useMemo(() => qualityCan(session.permissions), [session.permissions])
+  const depthRights = useMemo(() => depthCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(RECORD_TABS)
+  const [chartFrom, setChartFrom] = useState(1)
+  const [chartSize, setChartSize] = useState<string | null>(null)
   const [read, setRead] = useState<Read<InspectionRead>>(reading())
   const [checklist, setChecklist] = useState<ChecklistRow[]>([])
   const [saving, setSaving] = useState<Record<string, 'saving' | 'saved' | 'failed'>>({})
@@ -114,6 +125,11 @@ function Container({ inspectionId }: { inspectionId: string }) {
   const [stale, setStale] = useState<string | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const version = useRef<number | null>(null)
+  // B-W2b-127: the plan's sheet and the amendments read beside the record (the sheet's writes share its version).
+  const onPlan = read.value?.inspection.planVersion != null
+  const signedNow = read.value ? read.value.inspection.status === 'PASSED' || read.value.inspection.status === 'FAILED' : false
+  const depthFinal = useFinalDepth({ api, inspectionId, onPlan, tab, language: locale, canDefects: can.defectsView, canAql: depthRights.aqlView, companyId: read.value?.inspection.companyId ?? null, version })
+  const amendments = useAmendments({ api, kind: 'Inspection', id: inspectionId, enabled: signedNow, guard, onSigned: () => void load() })
   const pending = useRef<ChecklistRow[] | null>(null)
   const savingNow = useRef(false)
   const signKey = useRef<string | null>(null)
@@ -179,11 +195,17 @@ function Container({ inspectionId }: { inspectionId: string }) {
 
   const live = useLive(
     (change) => {
+      if (liveMatches(change, SHEET_EVENTS)) void depthFinal.loadSheet()
+      if (liveMatches(change, AMEND_EVENTS)) void amendments.load()
       if (!liveMatches(change, DECISION_EVENTS)) return
       if (dialog && dialog.kind !== 'shortcuts') setStale(formatTime(new Date(), { locale }))
       else void load()
     },
-    () => void load(),
+    () => {
+      void load()
+      void depthFinal.loadSheet()
+      void amendments.load()
+    },
   )
 
   // ---- the checklist: one PATCH at a time with the newest version; answers typed meanwhile wait and go next ----
@@ -264,7 +286,8 @@ function Container({ inspectionId }: { inspectionId: string }) {
           {
             version: version.current!,
             result: signDraft.result,
-            checklist: checklistBody(checklist),
+            // B-W2b-127: on a plan none is sent (the API writes it from the results, 409 PLAN_CHECKS otherwise).
+            ...(value.inspection.planVersion ? {} : { checklist: checklistBody(checklist) }),
             ...(value.statementNeeded ? { notMakerStatement: signDraft.statement } : {}),
             overrideReason: signDraft.overrideReason.trim() || null,
             note: signDraft.note.trim() || null,
@@ -477,6 +500,7 @@ function Container({ inspectionId }: { inspectionId: string }) {
         stale,
         defects,
         assign,
+        depth: { can: depthRights, final: depthFinal.state, amendments: amendments.state, chartFrom, chartSize },
       }}
       stepUp={stepUp}
       actions={{
@@ -523,6 +547,30 @@ function Container({ inspectionId }: { inspectionId: string }) {
         onDismissNotice: () => setNotice(null),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
+        depth: {
+          onUnit: depthFinal.setUnit,
+          onAnswerResult: (body) => void depthFinal.answer(body),
+          onMeasure: depthFinal.measure,
+          onChartPage: setChartFrom,
+          onChartSize: setChartSize,
+          onCreateDefect: (point, _unit, words) => {
+            void saveLines(measurementDefect(defects.lines, point, words))
+            setNotice({ key: 'defects.saved', tone: 'success' })
+          },
+          onRetrySheet: () => void depthFinal.loadSheet(),
+          onRetryAql: () => void depthFinal.loadAql(),
+          onOpenProfile: depthFinal.openProfile,
+          onProfileDraft: depthFinal.setProfileDraft,
+          onSaveProfile: () => void depthFinal.saveProfile(),
+          onOpen: amendments.open,
+          onDraft: amendments.setDraft,
+          onRefuseReason: amendments.setRefuseReason,
+          onRequest: () => void amendments.request(),
+          onSign: (id) => void amendments.sign(id),
+          onRefuse: () => void amendments.refuse(),
+          onRetry: () => void amendments.load(),
+          onDismiss: amendments.dismiss,
+        },
       }}
     />
     <PlaceHold

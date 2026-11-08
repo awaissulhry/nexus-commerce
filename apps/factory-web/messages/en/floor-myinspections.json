@@ -1,0 +1,82 @@
+{
+  "title": "My inspections",
+  "tile": "My inspections",
+  "tileCount_one": "{count} inspection waits for you",
+  "tileCount_other": "{count} inspections wait for you",
+  "station": "Station queue",
+  "asOf": "As of {time}",
+  "fromTablet": "from this tablet",
+  "empty": {
+    "title": "No inspection waits",
+    "body": "Nothing waits for you or for nobody yet. Scan a lot, a bundle, a serial or a work order to start one."
+  },
+  "plan": "plan {code} v{number}",
+  "due": "due {time}",
+  "overdue": "overdue since {time}",
+  "overdueFlag": "Overdue",
+  "taken": {
+    "MINE": "yours",
+    "NOBODY": "nobody's yet",
+    "OTHER": "another inspector's"
+  },
+  "count": {
+    "RUN_one": "{count} run waits",
+    "RUN_other": "{count} runs wait",
+    "WORK_ORDERS_one": "{count} work order waits",
+    "WORK_ORDERS_other": "{count} work orders wait",
+    "SHIPPING_one": "{count} garment waits to ship",
+    "SHIPPING_other": "{count} garments wait to ship",
+    "STOCK_one": "{count} in quarantine",
+    "STOCK_other": "{count} in quarantine",
+    "NONE_one": "{count}",
+    "NONE_other": "{count}",
+    "left_one": "{count} of the sample left",
+    "left_other": "{count} of the sample left"
+  },
+  "count_one": "{count} inspection",
+  "count_other": "{count} inspections",
+  "capped": "more in the office",
+  "keys": {
+    "rows": "move between inspections",
+    "open": "open the inspection"
+  },
+  "fact": {
+    "plan": "Plan",
+    "progress": "Sample",
+    "waiting": "Waiting since",
+    "due": "Due",
+    "operation": "Operation",
+    "taken": "Whose",
+    "blocks": "Holds up"
+  },
+  "operation": "Op {seq} {name}",
+  "scanToStart": "Scan the lot, the bundle, a garment's serial or the carton at the bench, or press Inspect.",
+  "inspect": "Inspect",
+  "start": "Start the inspection",
+  "held": {
+    "noFloorScreen": "Incoming inspections are recorded in the office until their floor screen comes.",
+    "noTile": "This station has no screen for it: open it at the inspection bench.",
+    "notYours": "It is another inspector's: they record it."
+  },
+  "offline": "My inspections were not read on this tablet yet. Scan a code to work anyway: the bench says what it knows.",
+  "error": {
+    "title": "My inspections could not be read",
+    "body": "Scan a lot, a bundle or a work order to work anyway, or try again."
+  },
+  "gone": {
+    "title": "No longer waiting",
+    "body": "This inspection left the queue: it was signed, cancelled or taken by another inspector."
+  },
+  "since": "waiting since {time}",
+  "blocks": {
+    "RUN": "Holds a run",
+    "WORK_ORDERS": "Work orders wait",
+    "SHIPPING": "Due to ship",
+    "STOCK": "In quarantine",
+    "NONE": "Nothing waits"
+  },
+  "scan": {
+    "label": "Scan a lot, a bundle, a serial or a work order",
+    "hint": "The final bench opens with it: the right inspection, or a new one on its plan."
+  }
+}

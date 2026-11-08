@@ -4,12 +4,16 @@ import { AUTH_RATE_LIMITS, type AuthRateLimit } from '../sessions/office-auth'
 import { changeLocale, firstVisit, me, refresh, terms } from './account'
 import {
   codeContract,
+  companyContract,
+  endOthersContract,
   firstVisitContract,
   linkContract,
   linkPreviewContract,
   localeContract,
   meContract,
+  profileContract,
   refreshContract,
+  sessionsContract,
   signOutContract,
   startContract,
   stepUpContract,
@@ -17,6 +21,7 @@ import {
   termsContract,
 } from './contract'
 import { manifest } from './manifest'
+import { changeProfile, companyData, endOtherSessions, listSessions } from './self'
 import { continueLink, previewLink, signInWithCode, signOut, startSignIn } from './sign-in'
 import { startStepUp, stepUp } from './step-up'
 
@@ -36,6 +41,10 @@ import { startStepUp, stepUp } from './step-up'
  * POST /portal/first-visit           name, language and the acknowledgement of the portal terms (once per version)
  * POST /portal/step-up/start         a step-up code by e-mail
  * POST /portal/step-up               the step-up code → 5 minutes for the sensitive partner acts
+ * POST /portal/me/profile            B-W2b-196 (the Account page): the person's own name and language, one command
+ * GET  /portal/sessions              B-W2b-196: the person's own live portal sessions (Sign-in and sessions, SAL-066)
+ * POST /portal/sessions/end-others   B-W2b-196: signs out every other session of the person
+ * GET  /portal/company               B-W2b-196: what the factory holds for invoicing the organisation (read-only)
  *
  * Public routes: the abuse guard (platform/abuse: per address and network, a proof-of-work challenge after suspicious
  * traffic) and, on top, the per-address rate limits of office sign-in (sessions/office-auth.ts).
@@ -57,4 +66,9 @@ export default defineRoutes('auth-portal', manifest, async (app) => {
   app.post('/portal/first-visit', { schema: firstVisitContract }, (request) => firstVisit(app, request, request.body, idempotencyKeyFrom(request)))
   app.post('/portal/step-up/start', { schema: stepUpStartContract, config: limit(limits.codes) }, (request, reply) => startStepUp(app, request, reply))
   app.post('/portal/step-up', { schema: stepUpContract, config: limit(limits.codes) }, (request, reply) => stepUp(app, request, reply, request.body))
+  // B-W2b-196: the Account page (self.ts).
+  app.post('/portal/me/profile', { schema: profileContract }, (request) => changeProfile(app, request, request.body, idempotencyKeyFrom(request)))
+  app.get('/portal/sessions', { schema: sessionsContract }, (request) => listSessions(app, request))
+  app.post('/portal/sessions/end-others', { schema: endOthersContract }, (request) => endOtherSessions(app, request, idempotencyKeyFrom(request)))
+  app.get('/portal/company', { schema: companyContract }, (request) => companyData(app, request))
 })

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CalendarClock, ClipboardCheck, Download, Hand, MoreHorizontal, Settings2, UserCheck, X } from 'lucide-react'
+import { CalendarClock, ClipboardCheck, Download, FileText, Hand, MoreHorizontal, Printer, Settings2, UserCheck, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -13,9 +13,12 @@ import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { CR_VI_TONE, LOT_TONE, type Lot } from '../../_shared/lots'
 import { countText, type Read } from '../../_shared/model'
-import { dash, Freshness, NoAccess, NoticeBanner, PageHead, QualityMessages, StepUpDialog } from '../../_shared/parts'
+import { dash, Freshness, NoAccess, NoticeBanner, PageHead, StepUpDialog } from '../../_shared/parts'
 import type { StepUpState } from '../../_shared/hooks'
 import type { InspectionRow, Release } from '../api'
+// B-W2b-127: incoming and in-line rows in the one list, the kind chips, the report verbs and Print N reports.
+import { finalRowsOf, KINDS, kindChipHeld, lotOf, numberOf, otherStatusOf, planOf, printHeld, reportAddress, reportHeld, rowHref, sampleOf, subjectOf, unionRows, viewJoins, type Kind, type ListRow } from '../depth/model'
+import { DepthMessages, KindTag, useDepthT, useSay } from '../depth/parts'
 import { AssignDialog } from './AssignDialog'
 import { DueDialog } from './DueDialog'
 import {
@@ -67,6 +70,11 @@ export interface InspectionsListActions {
   onOpenLot?: (lot: Lot) => void
   onRetryRelease?: () => void
   onExport?: (kind: 'inspections' | 'releases' | 'lots', ids: readonly string[]) => void
+  /** B-W2b-127: the kind chips (`?kind=`), Print N reports (a new tab), a part of the list read again. */
+  onKind?: (kind: 'all' | Kind) => void
+  onPrintReports?: (ids: readonly string[]) => void
+  onRetryPart?: (part: 'incoming' | 'inline') => void
+  onOpenEntry?: (entry: ListRow) => void
   onNewDraft?: (draft: NewDraft) => void
   onPickWorkOrder?: (workOrderId: string) => void
   onCreate?: () => void
@@ -123,19 +131,24 @@ function Mark({ mark }: { mark: CellMark | undefined }) {
  */
 export function InspectionsView({ model, actions, stepUp }: { model: InspectionsListModel; actions?: InspectionsListActions; stepUp?: StepUpState }) {
   return (
-    <QualityMessages>
+    <DepthMessages>
       <Inspections model={model} actions={actions} stepUp={stepUp} />
-    </QualityMessages>
+    </DepthMessages>
   )
 }
 
 function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; actions?: InspectionsListActions; stepUp?: StepUpState }) {
   const t = useT('quality')
+  const td = useDepthT()
+  const say = useSay()
   const lists = useT('lists')
   const locale = useLocale()
   const can = model.can
+  const depth = model.depth
   const dialog = model.dialog ?? null
   const kind = viewKind(model.view)
+  const kindFilter = model.kind ?? 'all'
+  const sees = { inspectionsView: can.inspectionsView, incomingView: depth?.incomingView ?? false, inprocessView: depth?.inprocessView ?? false }
   const open = (next: ListDialog | null) => actions?.onDialog?.(next)
   // W2a: New inspection has kinds (a final one, an incoming lot, a return); it is held only when none is open to this person.
   const kindsOpen = NEW_KINDS.some((newKind) => kindHeld(newKind, can) === null)
@@ -157,37 +170,71 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   // The cells reach the page's actions through a ref: a new actions object must not rebuild the columns.
   const live = useRef({ actions, people: model.people ?? {}, marks: model.marks ?? {}, rows: model.rows.value ?? [] })
   live.current = { actions, people: model.people ?? {}, marks: model.marks ?? {}, rows: model.rows.value ?? [] }
+  // B-W2b-127: the one list — final rows with the incoming and in-line ones the view reads (newest first, at most the page).
+  const entries = useMemo(
+    () => unionRows({ final: model.rows.value ?? [], incoming: model.incoming?.value ?? [], inline: model.inline?.value ?? [] }, model.limit),
+    [model.rows.value, model.incoming?.value, model.inline?.value, model.limit],
+  )
   const inspectionHref = (id: string) => `${model.prefix}/quality/inspections/${encodeURIComponent(id)}`
   const releaseHref = (id: string) => `${model.prefix}/quality/inspections?view=reversed&open=${encodeURIComponent(id)}`
   // A lot on hold opens its Warehouse record (SCR-201: stock, trace, the checklist); its decisions link on to Tests & substances.
   const lotHref = (id: string) => `${model.prefix}/warehouse/lots/${encodeURIComponent(id)}`
 
-  const inspectionColumns = useMemo<ColDef<InspectionRow>[]>(() => {
-    const NameCell = ({ data }: ICellRendererParams<InspectionRow>) =>
+  const inspectionColumns = useMemo<ColDef<ListRow>[]>(() => {
+    // B-W2b-127 (design qi-grid): one frame over final, incoming and in-line rows. A final row keeps its W1/W2a cells (the
+    // inline Inspector and Due, the release words); an incoming or in-line row says its own facts, never a person.
+    const NameCell = ({ data }: ICellRendererParams<ListRow>) =>
       data ? (
         <span className="fw-q-cell">
-          <Link className="fw-q-name" href={inspectionHref(data.id)} tabIndex={-1}>
-            {data.label}
+          <Link className="fw-q-name" href={rowHref(model.prefix, data)} tabIndex={-1}>
+            {say(numberOf(data))}
           </Link>
           <span className="fw-q-hint">{t('list.opened', { date: formatDate(data.createdAt, { locale }) })}</span>
         </span>
       ) : null
-    const StatusCell = ({ data }: ICellRendererParams<InspectionRow>) => {
+    const KindCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <KindTag kind={data.kind} /> : null)
+    const SubjectCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <span>{say(subjectOf(data))}</span> : null)
+    const SupplierCell = ({ data }: ICellRendererParams<ListRow>) => <span className={data?.kind === 'INCOMING' && data.row.supplier ? undefined : 'fw-q-hint'}>{data?.kind === 'INCOMING' && data.row.supplier ? data.row.supplier.name : '—'}</span>
+    const SizeCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <span className="fw-q-num">{say(lotOf(data))}</span> : null)
+    const SampleCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <span className="fw-q-num">{say(sampleOf(data))}</span> : null)
+    const PlanCell = ({ data }: ICellRendererParams<ListRow>) => (data ? <span className={data.kind === 'FINAL' && !data.row.planVersion ? 'fw-q-hint' : 'fw-q-code'}>{say(planOf(data))}</span> : null)
+    const StatusCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
-      const status = statusOf(data)
-      const hold = holdOf(data)
+      if (data.kind !== 'FINAL') {
+        const status = otherStatusOf(data)
+        return (
+          <span className="fw-q-cell">
+            <span className="fw-q-cell-row">
+              <Pill tone={status.tone} dot>
+                {td(status.key)}
+              </Pill>
+              {data.kind === 'INCOMING' && data.row.amended && <Tag tone="info">{td('status.AMENDED')}</Tag>}
+            </span>
+            {data.kind === 'INCOMING' && data.row.decision && <span className="fw-q-hint">{td('decision.split', { accepted: Number(data.row.decision.accepted), rejected: Number(data.row.decision.rejected), toSort: Number(data.row.decision.toSort) })}</span>}
+            {data.kind === 'INLINE' && data.row.dhu && <span className="fw-q-hint">{td('inline.dhu', { dhu: data.row.dhu })}</span>}
+          </span>
+        )
+      }
+      const row = data.row
+      const status = statusOf(row)
+      const hold = holdOf(row)
       return (
         <span className="fw-q-cell">
-          <Pill tone={status.tone} dot>
-            {t(status.key)}
-          </Pill>
-          {data.undecided ? <span className="fw-q-hint">{t('list.undecided')}</span> : hold && <span className="fw-q-hint">{t(hold.key, hold.params)}</span>}
-          {(data.holds > 0 || data.ncrs > 0) && <span className="fw-q-hint">{t('list.decidedIn', { holds: data.holds, ncrs: data.ncrs })}</span>}
+          <span className="fw-q-cell-row">
+            <Pill tone={status.tone} dot>
+              {t(status.key)}
+            </Pill>
+            {row.amended && <Tag tone="info">{td('status.AMENDED')}</Tag>}
+          </span>
+          {row.undecided ? <span className="fw-q-hint">{t('list.undecided')}</span> : hold && <span className="fw-q-hint">{t(hold.key, hold.params)}</span>}
+          {(row.holds > 0 || row.ncrs > 0) && <span className="fw-q-hint">{t('list.decidedIn', { holds: row.holds, ncrs: row.ncrs })}</span>}
         </span>
       )
     }
-    const AssignedCell = ({ data }: ICellRendererParams<InspectionRow>) => {
-      if (!data) return null
+    const AssignedCell = ({ data: entry }: ICellRendererParams<ListRow>) => {
+      if (!entry) return null
+      if (entry.kind !== 'FINAL') return <span className="fw-q-hint">{entry.kind === 'INCOMING' ? td(entry.row.inspectorKind === 'FLOOR' ? 'who.bench' : entry.row.inspectorKind === 'OFFICE' ? 'who.office' : 'who.nobody') : '—'}</span>
+      const data = entry.row
       const words = assignedWords(data.assigned, model.me)
       const act = live.current.actions
       if (!can.inspectionsRecord || data.status !== 'OPEN') return <span className={data.assigned ? undefined : 'fw-q-hint'}>{data.status === 'OPEN' ? t(words.key, words.params) : '—'}</span>
@@ -203,11 +250,11 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
             onChange={(event) => act?.onAssignCell?.(data, event.target.value)}
           >
             <option value="">{t('assign.nobody')}</option>
-            {current && !found?.value?.inspectors.some((entry) => `${entry.kind}:${entry.id}` === current) && <option value={current}>{t(words.key, words.params)}</option>}
-            {(found?.value?.inspectors ?? []).map((entry) => (
-              <option key={`${entry.kind}:${entry.id}`} value={`${entry.kind}:${entry.id}`} disabled={entry.made.length > 0}>
-                {entry.me ? t('assign.meNamed', { name: entry.name }) : entry.kind === 'WORKER' ? t('assign.benchNamed', { name: entry.name }) : entry.name}
-                {entry.made.length > 0 ? ` — ${t('assign.made', { orders: entry.made.join(', ') })}` : ''}
+            {current && !found?.value?.inspectors.some((person) => `${person.kind}:${person.id}` === current) && <option value={current}>{t(words.key, words.params)}</option>}
+            {(found?.value?.inspectors ?? []).map((person) => (
+              <option key={`${person.kind}:${person.id}`} value={`${person.kind}:${person.id}`} disabled={person.made.length > 0}>
+                {person.me ? t('assign.meNamed', { name: person.name }) : person.kind === 'WORKER' ? t('assign.benchNamed', { name: person.name }) : person.name}
+                {person.made.length > 0 ? ` — ${t('assign.made', { orders: person.made.join(', ') })}` : ''}
               </option>
             ))}
           </Select>
@@ -216,9 +263,14 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       )
     }
     // B-W2b-17 (design qi-grid inline "Due"): by when it is due, autosaved (one call with the row's version); overdue said in
-    // words; a decided inspection, or a reader without quality.inspections.record, sees it read only.
-    const DueCell = ({ data }: ICellRendererParams<InspectionRow>) => {
-      if (!data) return null
+    // words; a decided inspection, or a reader without quality.inspections.record, sees it read only. Incoming: read only.
+    const DueCell = ({ data: entry }: ICellRendererParams<ListRow>) => {
+      if (!entry) return null
+      if (entry.kind !== 'FINAL') {
+        const dueAt = entry.kind === 'INCOMING' ? entry.row.dueAt : null
+        return <span className={dueAt ? 'fw-q-num' : 'fw-q-hint'}>{dueAt ? formatDateTime(dueAt, { locale }) : '—'}</span>
+      }
+      const data = entry.row
       const state = dueState(data)
       const words = data.dueAt ? formatDateTime(data.dueAt, { locale }) : t('due.none')
       const held = dueRowHeld(data, can)
@@ -250,32 +302,53 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         </span>
       )
     }
-    const LotCell = ({ data }: ICellRendererParams<InspectionRow>) =>
-      data ? (
-        <span className="fw-q-cell">
-          <span className="fw-q-num">{t('list.lotOf', { lot: data.lotSize, sample: data.sampleSize })}</span>
-        </span>
-      ) : null
-    const ReleasedCell = ({ data }: ICellRendererParams<InspectionRow>) =>
-      data ? (
+    const ReleasedCell = ({ data: entry }: ICellRendererParams<ListRow>) => {
+      if (!entry) return null
+      if (entry.kind !== 'FINAL') return <span className="fw-q-hint">—</span>
+      const data = entry.row
+      return (
         <span className="fw-q-cell">
           <span className="fw-q-num">{t('list.released', { released: data.released, lot: data.lotSize })}</span>
           {data.reversed > 0 && <span className="fw-q-hint">{t('list.takenBack', { count: data.reversed })}</span>}
           {data.toRelease > 0 && !data.onHold && <span className="fw-q-hint">{t('list.toRelease', { count: data.toRelease })}</span>}
         </span>
-      ) : null
-    const InspectorCell = ({ data }: ICellRendererParams<InspectionRow>) => (data ? <span>{t(whoKey(data.inspector, model.me).key)}</span> : null)
-    const DecidedCell = ({ data }: ICellRendererParams<InspectionRow>) => (data ? <span>{dash(data.decidedAt ? formatDateTime(data.decidedAt, { locale }) : null)}</span> : null)
-    const ActionsCell = ({ data }: ICellRendererParams<InspectionRow>) =>
-      data ? (
+      )
+    }
+    const InspectorCell = ({ data }: ICellRendererParams<ListRow>) =>
+      data ? <span>{data.kind === 'FINAL' ? t(whoKey(data.row.inspector, model.me).key) : data.kind === 'INCOMING' && data.row.status === 'DECIDED' ? td(data.row.inspectorKind === 'FLOOR' ? 'who.bench' : 'who.office') : '—'}</span> : null
+    const DecidedCell = ({ data }: ICellRendererParams<ListRow>) => {
+      const at = data?.kind === 'FINAL' ? data.row.decidedAt : data?.kind === 'INLINE' ? data.row.decidedAt : null
+      return data ? <span>{dash(at ? formatDateTime(at, { locale }) : null)}</span> : null
+    }
+    const ActionsCell = ({ data: entry }: ICellRendererParams<ListRow>) => {
+      if (!entry) return null
+      const href = rowHref(model.prefix, entry)
+      const name = say(numberOf(entry))
+      if (entry.kind !== 'FINAL')
+        return (
+          <Menu
+            align="right"
+            label={<MoreHorizontal size={16} aria-hidden />}
+            triggerProps={{ 'aria-label': t('row.menu', { name }) }}
+            items={[
+              { id: 'open', label: t('row.open'), href },
+              { id: 'tab', label: t('row.openNewTab'), href, target: '_blank' },
+              { id: 'sep-copy', separator: true },
+              { id: 'copy', label: t('row.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(name) },
+            ]}
+          />
+        )
+      const data = entry.row
+      const reportReason = reportHeld(entry)
+      return (
         <Menu
           align="right"
           label={<MoreHorizontal size={16} aria-hidden />}
           triggerProps={{ 'aria-label': t('row.menu', { name: data.label }) }}
           items={[
-            { id: 'open', label: t('row.open'), href: inspectionHref(data.id) },
-            { id: 'tab', label: t('row.openNewTab'), href: inspectionHref(data.id), target: '_blank' },
-            ...(data.toRelease > 0 && !data.onHold ? [{ id: 'release', label: t('row.release'), href: `${inspectionHref(data.id)}?tab=decision` }] : []),
+            { id: 'open', label: t('row.open'), href },
+            { id: 'tab', label: t('row.openNewTab'), href, target: '_blank' },
+            ...(data.toRelease > 0 && !data.onHold ? [{ id: 'release', label: t('row.release'), href: `${href}?tab=decision` }] : []),
             { id: 'sep-w2a', separator: true },
             {
               id: 'assign',
@@ -286,12 +359,21 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
             },
             { id: 'hold', label: t('row.placeHold'), onSelect: () => live.current.actions?.onPlaceHold?.(data), disabled: !can.holdsPlace, description: can.holdsPlace ? undefined : t('held.noHoldPlace') },
             { id: 'ncr', label: t('row.createNcr'), onSelect: () => live.current.actions?.onRaiseNcr?.(data), disabled: !can.ncrRaise, description: can.ncrRaise ? undefined : t('raiseNcr.held.noRight') },
+            // B-W2b-127 (design qi-grid row verbs): Report PDF and Share report link, each in the report window (a new tab).
+            { id: 'sep-report', separator: true },
+            reportReason
+              ? { id: 'report', label: td('row.report'), disabled: true, description: td(reportReason), icon: <FileText size={14} aria-hidden /> }
+              : { id: 'report', label: td('row.report'), href: reportAddress(model.prefix, data.id), target: '_blank' as const, icon: <FileText size={14} aria-hidden /> },
+            reportReason
+              ? { id: 'share', label: td('row.share'), disabled: true, description: td(reportReason) }
+              : { id: 'share', label: td('row.share'), href: reportAddress(model.prefix, data.id, { share: true }), target: '_blank' as const },
             { id: 'sep-copy', separator: true },
             { id: 'copy', label: t('row.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(data.label) },
           ]}
         />
-      ) : null
-    const column = (colId: string, header: string, cellRenderer: ColDef<InspectionRow>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number }): ColDef<InspectionRow> => ({
+      )
+    }
+    const column = (colId: string, header: string, cellRenderer: ColDef<ListRow>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number }): ColDef<ListRow> => ({
       colId,
       headerName: header,
       cellRenderer,
@@ -299,19 +381,23 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       ...size,
     })
     return [
-      column('inspection', t('col.inspection'), NameCell, { flex: 1.6, minWidth: 180 }),
-      { colId: 'workOrder', headerName: t('col.workOrder'), sortable: false, flex: 1, minWidth: 130, valueGetter: (params) => params.data?.number ?? '' },
-      column('status', t('col.status'), StatusCell, { flex: 2, minWidth: 220 }),
+      column('inspection', td('col.number'), NameCell, { flex: 1.5, minWidth: 180 }),
+      column('kind', td('col.kind'), KindCell, { flex: 0.8, minWidth: 110 }),
+      column('workOrder', td('col.subject'), SubjectCell, { flex: 1.5, minWidth: 170 }),
+      column('supplier', td('col.supplier'), SupplierCell, { flex: 1.1, minWidth: 140 }),
+      column('lot', td('col.lot'), SizeCell, { flex: 1, minWidth: 130 }),
+      column('sample', td('col.sample'), SampleCell, { flex: 0.9, minWidth: 110 }),
+      column('plan', td('col.plan'), PlanCell, { flex: 1, minWidth: 130 }),
+      column('status', t('col.status'), StatusCell, { flex: 1.8, minWidth: 210 }),
       column('assigned', t('col.assigned'), AssignedCell, { flex: 1.3, minWidth: can.inspectionsRecord ? 190 : 140 }),
       column('due', t('col.due'), DueCell, { flex: 1.2, minWidth: can.inspectionsRecord ? 200 : 150 }),
-      column('lot', t('col.lot'), LotCell, { flex: 1, minWidth: 130 }),
       column('released', t('col.released'), ReleasedCell, { flex: 1.2, minWidth: 150 }),
       column('inspector', t('col.signedBy'), InspectorCell, { flex: 1, minWidth: 120 }),
       column('decided', t('col.decided'), DecidedCell, { flex: 1.1, minWidth: 140 }),
       { ...column('actions', t('col.actions'), ActionsCell, { width: 72, minWidth: 72 }), suppressHeaderMenuButton: true },
     ]
     // The cells close over the words, the person and their rights: a change of language rebuilds them.
-  }, [t, locale, model.prefix, model.me, can.inspectionsRecord, can.holdsPlace, can.ncrRaise, model.people, model.marks])
+  }, [t, td, say, locale, model.prefix, model.me, can.inspectionsRecord, can.holdsPlace, can.ncrRaise, model.people, model.marks])
 
   const releaseColumns = useMemo<ColDef<Release>[]>(() => {
     const NameCell = ({ data }: ICellRendererParams<Release>) => {
@@ -439,23 +525,39 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
     { id: 'heading', heading: true, label: t('list.rowsHeading') },
     ...VIEWS.map((view) => ({
       id: view,
-      label: t(`view.${view}`),
+      label: view === 'amended' ? td('view.amended') : t(`view.${view}`),
       checked: model.view === view,
       disabled: view === 'lots' && !can.lotsView,
       description: view === 'lots' && !can.lotsView ? t('held.noLots') : undefined,
       onSelect: () => actions?.onView?.(view),
     })),
   ]
+  // B-W2b-127 (design qi-grid filter row "Kind (Incoming · In-line · Final · Return) first"): the kinds this person sees, in the
+  // views that read them; elsewhere one line says why only final inspections are listed. Returns are graded on the return.
+  const kindsShown = KINDS.filter((entry) => kindChipHeld(entry, 'all', sees) === null)
+  const kindChips =
+    kind !== 'inspections' || kindsShown.length < 2 ? null : viewJoins(model.view) ? (
+      <span className="fw-q-chips" role="group" aria-label={td('kind.label')}>
+        {kindsShown.map((entry) => (
+          <FilterChip key={entry} pressed={kindFilter === entry} onClick={() => actions?.onKind?.(kindFilter === entry ? 'all' : entry)}>
+            {td(`kind.${entry}`)}
+          </FilterChip>
+        ))}
+      </span>
+    ) : (
+      <span className="fw-q-hint">{td('kind.held.view')}</span>
+    )
   const tools = (
     <>
-      <Menu label={t('list.rows', { view: t(`view.${model.view}`) })} items={viewItems} />
+      <Menu label={t('list.rows', { view: model.view === 'amended' ? td('view.amended') : t(`view.${model.view}`) })} items={viewItems} />
       {model.view !== 'all' && (
         <span className="fw-q-chips" aria-label={t('list.activeFilters')}>
-          <FilterChip pressed onClick={() => actions?.onView?.('all')} aria-label={t('list.removeFilter', { name: t(`view.${model.view}`) })}>
-            {t(`view.${model.view}`)} <X size={12} aria-hidden />
+          <FilterChip pressed onClick={() => actions?.onView?.('all')} aria-label={t('list.removeFilter', { name: model.view === 'amended' ? td('view.amended') : t(`view.${model.view}`) })}>
+            {model.view === 'amended' ? td('view.amended') : t(`view.${model.view}`)} <X size={12} aria-hidden />
           </FilterChip>
         </span>
       )}
+      {kindChips}
     </>
   )
   const moreItems: MenuItemDef[] = [
@@ -464,22 +566,34 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
     { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
 
-  const read: Read<readonly unknown[]> = kind === 'inspections' ? model.rows : kind === 'releases' ? model.releases : model.lots
+  // B-W2b-127: the final read decides the frame's state (a failed incoming or in-line read is its own banner, never an empty list).
+  const finalRead = model.rows
+  const otherReading = (model.incoming !== null && model.incoming !== undefined && model.incoming.value === null && !model.incoming.problem) || (model.inline !== null && model.inline !== undefined && model.inline.value === null && !model.inline.problem)
+  const read: Read<readonly unknown[]> = kind === 'inspections' ? (finalRead.problem ? finalRead : finalRead.value === null || otherReading ? { value: null, problem: null } : { value: entries, problem: null }) : kind === 'releases' ? model.releases : model.lots
   const rows = read.value ?? []
   const count = rows.length
   const selectedCount = model.selected.length
-  const pickedRows = kind === 'inspections' ? (model.rows.value ?? []).filter((row) => model.selected.includes(row.id)) : []
-  const bulkAssignHeld = kind === 'inspections' ? assignHeld(pickedRows, can) : null
-  const bulkDueHeld = kind === 'inspections' ? dueBulkHeld(pickedRows, can) : null
+  const pickedEntries = kind === 'inspections' ? entries.filter((entry) => model.selected.includes(entry.key)) : []
+  const pickedRows = finalRowsOf(pickedEntries)
+  const mixed = pickedEntries.length !== pickedRows.length
+  const bulkAssignHeld = kind === 'inspections' ? (mixed ? 'assign.held.kind' : assignHeld(pickedRows, can)) : null
+  const bulkDueHeld = kind === 'inspections' ? (mixed ? 'assign.held.kind' : dueBulkHeld(pickedRows, can)) : null
+  const bulkPrintHeld = kind === 'inspections' ? printHeld(pickedEntries) : null
+  const heldWords = (key: string | null) => (key === null ? null : key === 'assign.held.kind' ? td('bulk.finalOnly') : t(key))
   const bulk = (
     <>
       {kind === 'inspections' && (
-        <Button size="sm" onClick={() => actions?.onAssign?.(pickedRows)} heldReason={bulkAssignHeld ? t(bulkAssignHeld) : null} aria-label={t('assign.bulk', { count: selectedCount })}>
+        <Button size="sm" onClick={() => actions?.onPrintReports?.(pickedRows.map((row) => row.id))} heldReason={bulkPrintHeld ? td(bulkPrintHeld) : null} aria-label={td('bulk.print', { count: selectedCount })}>
+          <Printer size={13} aria-hidden /> <SelectionLabel>{td('bulk.print', { count: selectedCount })}</SelectionLabel>
+        </Button>
+      )}
+      {kind === 'inspections' && (
+        <Button size="sm" onClick={() => actions?.onAssign?.(pickedRows)} heldReason={heldWords(bulkAssignHeld)} aria-label={t('assign.bulk', { count: selectedCount })}>
           <UserCheck size={13} aria-hidden /> <SelectionLabel>{t('assign.bulk', { count: selectedCount })}</SelectionLabel>
         </Button>
       )}
       {kind === 'inspections' && (
-        <Button size="sm" onClick={() => actions?.onDue?.(pickedRows)} heldReason={bulkDueHeld ? t(bulkDueHeld) : null} aria-label={t('due.bulk', { count: selectedCount })}>
+        <Button size="sm" onClick={() => actions?.onDue?.(pickedRows)} heldReason={heldWords(bulkDueHeld)} aria-label={t('due.bulk', { count: selectedCount })}>
           <CalendarClock size={13} aria-hidden /> <SelectionLabel>{t('due.bulk', { count: selectedCount })}</SelectionLabel>
         </Button>
       )}
@@ -512,7 +626,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       />
     ) : (
       <EmptyState
-        title={t(`list.none.${model.view}`)}
+        title={model.view === 'amended' ? td('view.amendedNone') : kindFilter !== 'all' ? td('kind.none', { kind: td(`kind.${kindFilter}`) }) : t(`list.none.${model.view}`)}
         action={
           <Button size="sm" onClick={() => actions?.onView?.('all')}>
             {t('list.showAll')}
@@ -523,7 +637,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   ) : undefined
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.new') }]
   const frameCommon = {
-    count: read.value === null ? t('list.countReading') : count >= model.limit ? t('list.countAtLeast', { count }) : t('list.count', { count }),
+    count: read.value === null ? t('list.countReading') : count >= model.limit || model.inlineCapped ? t('list.countAtLeast', { count }) : t('list.count', { count }),
     tools,
     right: <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('list.more') }} items={moreItems} />,
     selection: { selected: model.selected, onChange: (ids: string[]) => actions?.onSelect?.(ids), actions: bulk },
@@ -589,14 +703,33 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       ) : null}
       <MetricStrip metrics={tiles} />
 
+      {kind === 'inspections' &&
+        (['incoming', 'inline'] as const).map((part) => {
+          const partRead = part === 'incoming' ? model.incoming : model.inline
+          return partRead?.problem ? (
+            <Banner
+              key={part}
+              tone="warning"
+              title={td(`failed.${part}`)}
+              action={
+                <Button size="sm" onClick={() => actions?.onRetryPart?.(part)}>
+                  {t('common.retry')}
+                </Button>
+              }
+            >
+              {t(partRead.problem)}
+            </Banner>
+          ) : null
+        })}
+      {kind === 'inspections' && model.inlineCapped && <p className="fw-q-hint">{td('capped.inline')}</p>}
       {kind === 'inspections' && (
-        <ListFrame<InspectionRow>
+        <ListFrame<ListRow>
           key="inspections"
           label={t('list.table.inspections')}
-          rows={model.rows.problem ? [] : model.rows.value}
-          rowId={(row) => row.id}
+          rows={read.value === null ? null : (read.value as readonly ListRow[])}
+          rowId={(row) => row.key}
           columns={inspectionColumns}
-          onOpen={(row) => actions?.onOpenInspection?.(row)}
+          onOpen={(row) => (row.kind === 'FINAL' ? actions?.onOpenInspection?.(row.row) : actions?.onOpenEntry?.(row))}
           {...frameCommon}
         />
       )}
@@ -658,6 +791,8 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         onPick={(id) => actions?.onPickWorkOrder?.(id)}
         onCreate={() => actions?.onCreate?.()}
         onClose={() => open(null)}
+        depth={depth}
+        plans={model.plans ?? null}
       />
       <RulesModal
         open={dialog?.kind === 'rules'}

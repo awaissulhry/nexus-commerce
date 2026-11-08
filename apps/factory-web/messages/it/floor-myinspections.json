@@ -1,0 +1,82 @@
+{
+  "title": "I miei collaudi",
+  "tile": "I miei collaudi",
+  "tileCount_one": "{count} collaudo ti aspetta",
+  "tileCount_other": "{count} collaudi ti aspettano",
+  "station": "Coda della postazione",
+  "asOf": "Aggiornato alle {time}",
+  "fromTablet": "da questo tablet",
+  "empty": {
+    "title": "Nessun collaudo in attesa",
+    "body": "Niente aspetta te o ancora nessuno. Scansiona un lotto, un fascio, una matricola o un ordine di lavoro per iniziarne uno."
+  },
+  "plan": "piano {code} v{number}",
+  "due": "entro {time}",
+  "overdue": "in ritardo dalle {time}",
+  "overdueFlag": "In ritardo",
+  "taken": {
+    "MINE": "tuo",
+    "NOBODY": "ancora di nessuno",
+    "OTHER": "di un altro ispettore"
+  },
+  "count": {
+    "RUN_one": "{count} produzione in attesa",
+    "RUN_other": "{count} produzioni in attesa",
+    "WORK_ORDERS_one": "{count} ordine di lavoro in attesa",
+    "WORK_ORDERS_other": "{count} ordini di lavoro in attesa",
+    "SHIPPING_one": "{count} capo in attesa di spedizione",
+    "SHIPPING_other": "{count} capi in attesa di spedizione",
+    "STOCK_one": "{count} in quarantena",
+    "STOCK_other": "{count} in quarantena",
+    "NONE_one": "{count}",
+    "NONE_other": "{count}",
+    "left_one": "ne manca {count} del campione",
+    "left_other": "ne mancano {count} del campione"
+  },
+  "count_one": "{count} collaudo",
+  "count_other": "{count} collaudi",
+  "capped": "altri in ufficio",
+  "keys": {
+    "rows": "passa da un collaudo all'altro",
+    "open": "apri il collaudo"
+  },
+  "fact": {
+    "plan": "Piano",
+    "progress": "Campione",
+    "waiting": "In attesa dalle",
+    "due": "Entro",
+    "operation": "Fase",
+    "taken": "Di chi",
+    "blocks": "Cosa ferma"
+  },
+  "operation": "Fase {seq} {name}",
+  "scanToStart": "Scansiona al banco il lotto, il fascio, la matricola di un capo o il collo, oppure premi Collauda.",
+  "inspect": "Collauda",
+  "start": "Inizia il collaudo",
+  "held": {
+    "noFloorScreen": "I collaudi in accettazione si registrano in ufficio finché non arriva la loro schermata di reparto.",
+    "noTile": "Questa postazione non ha una schermata per questo: aprilo al banco di collaudo.",
+    "notYours": "È di un altro ispettore: lo registra lui."
+  },
+  "offline": "I miei collaudi non sono ancora stati letti su questo tablet. Scansiona un codice per lavorare comunque: il banco dice ciò che sa.",
+  "error": {
+    "title": "Non è stato possibile leggere i miei collaudi",
+    "body": "Scansiona un lotto, un fascio o un ordine di lavoro per lavorare comunque, o riprova."
+  },
+  "gone": {
+    "title": "Non più in attesa",
+    "body": "Questo collaudo ha lasciato la coda: è stato firmato, annullato o preso da un altro ispettore."
+  },
+  "since": "in attesa dalle {time}",
+  "blocks": {
+    "RUN": "Ferma una produzione",
+    "WORK_ORDERS": "Ordini in attesa",
+    "SHIPPING": "Da spedire",
+    "STOCK": "In quarantena",
+    "NONE": "Niente in attesa"
+  },
+  "scan": {
+    "label": "Scansiona un lotto, un fascio, una matricola o un ordine di lavoro",
+    "hint": "Si apre il banco di collaudo: il collaudo giusto, o uno nuovo sul suo piano."
+  }
+}

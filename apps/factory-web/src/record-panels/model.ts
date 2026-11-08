@@ -8,6 +8,7 @@
  */
 
 import type { FileDepthModel } from './files/model'
+import type { ApprovalsPanelModel } from './approvals/model'
 
 /** apps/factory-api platform/files/rules.ts FILE_KINDS (B-W2b-96: AUDIO, a voice note of a machine request or job, QHS-189). */
 export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'] as const
@@ -82,7 +83,8 @@ export const FISCAL_RETENTION_YEARS = 10
 
 // ── the view model ────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type PanelTab = 'thread' | 'tasks' | 'files' | 'history'
+// B-W2b-188: 'approvals' (the tab of a record an approval names; its words are the record-approvals catalogue's).
+export type PanelTab = 'thread' | 'tasks' | 'files' | 'history' | 'approvals'
 export const PANEL_TABS: readonly PanelTab[] = ['thread', 'tasks', 'files', 'history']
 
 export interface PanelRecord {
@@ -283,6 +285,8 @@ export interface RecordPanelsViewModel {
   followers?: PanelFollowers | null
   /** B-W2b-177: the files in depth (documents and their expiry, what a move needs, versions, markup); absent: W0's panel. */
   depth?: FileDepthModel
+  /** B-W2b-188: the record's approval requests to its partner (absent: no Approvals tab). */
+  approvals?: ApprovalsPanelModel
 }
 
 // ── tasks and followers on the record (B-W2a-40; COL-037, COL-011; design shell.panels side panel, popups) ────────────

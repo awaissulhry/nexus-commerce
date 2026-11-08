@@ -1,0 +1,378 @@
+{
+  "title": "Account",
+  "state": {
+    "loading": "Caricamento",
+    "slow": "Ancora in caricamento…",
+    "failed": "Non siamo riusciti a leggere questa parte. Non si è perso nulla: riprova.",
+    "retry": "Riprova",
+    "saving": "Salvataggio…",
+    "sending": "Invio…"
+  },
+  "status": {
+    "saving": "Salvataggio…",
+    "unsaved": "Modifiche non salvate",
+    "saved": "Salvato"
+  },
+  "keys": {
+    "save": "Salva la scheda che stai modificando",
+    "cancel": "Chiude una finestra (chiede se hai scritto qualcosa)"
+  },
+  "unsaved": {
+    "profile": "Le modifiche al tuo profilo non sono ancora salvate.",
+    "emails": "Le impostazioni e-mail non sono ancora salvate.",
+    "address": "L'indirizzo di consegna che hai scritto non è ancora salvato."
+  },
+  "receipt": {
+    "hide": "Nascondi",
+    "invited": "Abbiamo inviato un invito a {name} ({email}). Vale fino al {date}.",
+    "roleChanged": "{name} ora è {role}.",
+    "deactivated_one": "{names} non può più accedere.",
+    "deactivated_other": "{names} non possono più accedere.",
+    "deactivatedNotMoved_one": "{names} non può più accedere. 1 richiesta non è passata al collega scelto (il suo ruolo non la gestisce): è tornata a tutti quelli che possono rispondere.",
+    "deactivatedNotMoved_other": "{names} non può più accedere. {count} richieste non sono passate al collega scelto (il suo ruolo non le gestisce): sono tornate a tutti quelli che possono rispondere.",
+    "addressAdded": "Abbiamo ricevuto “{address}”. Lo verifichiamo prima della prima consegna; potrai sceglierlo per gli ordini dopo la verifica.",
+    "addressDefault": "“{address}” ora è il tuo indirizzo di consegna predefinito.",
+    "addressRemoved_one": "L'indirizzo è stato rimosso. Gli ordini già inviati lo mantengono.",
+    "addressRemoved_other": "{count} indirizzi sono stati rimossi. Gli ordini già inviati li mantengono.",
+    "endedOthers_one": "1 altra sessione è stata chiusa.",
+    "endedOthers_other": "{count} altre sessioni sono state chiuse."
+  },
+  "failed": {
+    "conflict": "Qualcuno ha appena cambiato questo dato. L'abbiamo riletto: controlla e riprova.",
+    "forbidden": "Il tuo accesso non lo consente.",
+    "gone": "Non c'è più. Abbiamo riletto l'elenco.",
+    "invalid": "Così com'è non è stato accettato. Controlla e riprova.",
+    "wait": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova.",
+    "signedOut": "La sessione è terminata. Accedi di nuovo per continuare.",
+    "network": "Non riusciamo a raggiungere il portale. Controlla la connessione e riprova."
+  },
+  "held": {
+    "preview": "Questa è un'anteprima del portale: qui non si può cambiare nulla.",
+    "loading": "Stiamo ancora leggendo i tuoi colleghi.",
+    "adminInvites": "Solo il tuo amministratore ({names}) invita i colleghi.",
+    "adminInvitesNone": "Solo l'amministratore della tua azienda invita i colleghi: chiedici chi è.",
+    "seats": "Il tuo portale accoglie al massimo {max} persone. Disattiva prima qualcuno, o chiedici più posti.",
+    "noRoles": "Nessun ruolo è ancora aperto alla tua azienda: chiedici.",
+    "yourself": "Non puoi cambiare il tuo accesso: chiedi a un altro amministratore, o a noi.",
+    "deactivated": "Già disattivato.",
+    "noneChosen": "Scegli prima una o più righe.",
+    "sameRole": "È il ruolo che ha adesso.",
+    "handoverFirst": "Prima leggiamo le sue richieste aperte.",
+    "noOthers": "Questa è la tua unica sessione.",
+    "defaultAlready": "È già il predefinito.",
+    "defaultWaiting": "È in attesa della nostra verifica: potrà diventare il predefinito dopo la verifica.",
+    "defaultRemoved": "Un indirizzo rimosso o non accettato non può essere il predefinito.",
+    "removedAlready": "Già rimosso."
+  },
+  "profile": {
+    "title": "Il mio profilo",
+    "subtitle": "I tuoi dati. I colleghi vedono il tuo nome.",
+    "name": "Nome",
+    "nameNeeded": "Scrivi il tuo nome.",
+    "nameTooLong": "Al massimo 120 caratteri.",
+    "email": "E-mail (il tuo accesso)",
+    "emailByAdmin": "Chiedi al tuo amministratore ({names}) di cambiarla: invita il nuovo indirizzo.",
+    "emailByAdminNone": "Chiedi all'amministratore della tua azienda di cambiarla: invita il nuovo indirizzo.",
+    "emailByUs": "È il tuo accesso: chiedici di cambiarla.",
+    "language": "Lingua",
+    "languageHint": "La usano il portale e le nostre e-mail per te.",
+    "theme": "Tema",
+    "themeHint": "Solo su questo dispositivo. Cambia subito.",
+    "themeMode": {
+      "light": "Chiaro",
+      "dark": "Scuro",
+      "system": "Come il dispositivo"
+    },
+    "save": "Salva profilo"
+  },
+  "emails": {
+    "title": "Impostazioni e-mail",
+    "subtitle": "Cosa ti arriva per e-mail, e quanto spesso.",
+    "allOff": "Nessuna e-mail non essenziale",
+    "allOffHint": "Le e-mail su ordini, consegne e fatture continuano ad arrivare: servono per gestire i tuoi ordini.",
+    "frequency": {
+      "INSTANT": "Subito",
+      "DAILY": "Riepilogo giornaliero",
+      "WEEKLY": "Riepilogo settimanale",
+      "OFF": "Mai"
+    },
+    "frequencyOf": "Quanto spesso: {topic}",
+    "save": "Salva impostazioni e-mail",
+    "failed": "Non siamo riusciti a leggere le tue impostazioni e-mail.",
+    "refused": "Questa modifica non è stata accettata: le e-mail su ordini, consegne e fatture restano attive.",
+    "preview": "Le impostazioni e-mail sono di ciascuna persona: l'anteprima non le mostra."
+  },
+  "users": {
+    "title": "Colleghi",
+    "subtitle": "Le persone della tua azienda in questo portale.",
+    "subtitleAdmin": "Inviti e rimuovi i tuoi colleghi, nei limiti concordati con la tua azienda.",
+    "yourAdmin": "Il tuo amministratore è {names}: chiedi a lui di invitare un collega o cambiare un ruolo.",
+    "tableLabel": "Colleghi",
+    "count_one": "1 persona",
+    "count_other": "{count} persone",
+    "seats": "{taken} posti occupati su {max}",
+    "seatsOpen_one": "1 posto occupato, nessun limite",
+    "seatsOpen_other": "{count} posti occupati, nessun limite",
+    "col": {
+      "name": "Nome",
+      "email": "E-mail",
+      "role": "Ruolo",
+      "prices": "Vede i prezzi",
+      "lastSignIn": "Ultimo accesso",
+      "status": "Stato",
+      "more": "Altro"
+    },
+    "prices": {
+      "yes": "Sì",
+      "no": "No"
+    },
+    "never": "Mai",
+    "you": "Tu",
+    "admin": "Amministratore",
+    "status": {
+      "ACTIVE": "Attivo",
+      "INVITED": "Invitato",
+      "SUSPENDED": "Sospeso",
+      "DEACTIVATED": "Disattivato"
+    },
+    "invitationEnds": "fino al {date}",
+    "invite": "Invita un collega",
+    "changeRole": "Cambia ruolo",
+    "deactivate": "Disattiva",
+    "deactivateN_one": "Disattiva 1",
+    "deactivateN_other": "Disattiva {count}",
+    "rowMenu": "Altro per {name}",
+    "onlyYou": "Per ora ci sei solo tu.",
+    "onlyYouHint": "Invita i colleghi che ordinano, pagano o controllano la qualità con noi.",
+    "failed": "Non siamo riusciti a leggere i tuoi colleghi."
+  },
+  "role": {
+    "prices": {
+      "yes": "vede i prezzi",
+      "no": "senza prezzi"
+    },
+    "sees": {
+      "customer-buyer": "Ordini, documenti e approvazioni",
+      "customer-finance": "Fatture, pagamenti e documenti",
+      "customer-quality": "Qualità, certificati e reclami",
+      "customer-designer": "Campioni, catalogo e approvazione dei disegni",
+      "customer-viewer": "Ordini e documenti, in sola lettura",
+      "customer-admin": "Tutto, e invita e rimuove i colleghi",
+      "withPrices": "Ciò che il ruolo comprende",
+      "noPrices": "Ciò che il ruolo comprende"
+    }
+  },
+  "invite": {
+    "title": "Invita un collega",
+    "subtitle": "Gli inviamo per e-mail un link per accedere. Vale 7 giorni.",
+    "name": "Nome",
+    "email": "E-mail di lavoro",
+    "emailHint": "Accede con questo indirizzo: ogni volta riceve lì un codice.",
+    "role": "Ruolo",
+    "language": "Lingua dell'invito",
+    "languageHint": "Può cambiarla dopo l'accesso.",
+    "send": "Invia invito",
+    "problem": {
+      "name": "Scrivi il suo nome.",
+      "email": "Scrivi un indirizzo e-mail completo, con @ e il dominio.",
+      "role": "Scegli un ruolo."
+    },
+    "failed": {
+      "address": "Questo indirizzo non si può invitare qui: è già nel tuo portale, o appartiene a un altro account. Chiedici se dovrebbe essere tuo.",
+      "seats": "Non siamo riusciti a invitarlo ora: i posti del tuo portale potrebbero essere esauriti, o il ruolo non è pronto. Chiedici.",
+      "invalid": "Questo ruolo non è aperto alla tua azienda, o un campo non è stato accettato. Controlla e riprova."
+    }
+  },
+  "roleDialog": {
+    "title": "Cambia il ruolo di {name}",
+    "subtitle": "Ogni ruolo dice cosa vede prima che tu scelga.",
+    "current": "{role} (attuale)",
+    "save": "Cambia ruolo"
+  },
+  "raise": {
+    "title": "Rendere {name} amministratore?",
+    "what": "Gli amministratori invitano e rimuovono i colleghi e ne cambiano i ruoli.",
+    "prices": "Gli amministratori vedono i prezzi.",
+    "stepUp": "Prima ti chiediamo un codice via e-mail.",
+    "confirm": "Rendi amministratore",
+    "back": "Puoi cambiare di nuovo il ruolo in qualsiasi momento"
+  },
+  "deactivate": {
+    "title": "Disattivare {name}?",
+    "titleN": "Disattivare {count} colleghi?",
+    "noSignIn": "Da adesso {name} non può più accedere.",
+    "noSignInN": "Da adesso {names} non possono più accedere.",
+    "moveTo_one": "1 richiesta assegnata a lui passa a:",
+    "moveTo_other": "{count} richieste assegnate a lui passano a:",
+    "moveHint": "Le altre richieste aperte restano alla tua azienda: le vede chi può rispondere.",
+    "everyone": "Tutti quelli che possono rispondere",
+    "stay_one": "La sua richiesta aperta resta alla tua azienda: la vede chi può rispondere.",
+    "stay_other": "Le sue {count} richieste aperte restano alla tua azienda: le vede chi può rispondere.",
+    "nothingOpen": "Nessuna richiesta aperta lo aspetta.",
+    "aloneTitle_one": "Solo lui poteva rispondere a 1 richiesta",
+    "aloneTitle_other": "Solo lui poteva rispondere a {count} richieste",
+    "aloneHint": "Dai prima a un collega il ruolo necessario, o chiedici.",
+    "handoverFailed": "Non siamo riusciti a leggere le sue richieste aperte.",
+    "confirm": "Disattiva",
+    "confirmN": "Disattiva {count}"
+  },
+  "addresses": {
+    "title": "Indirizzi di consegna",
+    "subtitle": "Dove consegniamo i tuoi ordini. Il tuo amministratore aggiunge i nuovi.",
+    "subtitleAdmin": "Dove consegniamo i tuoi ordini. Verifichiamo ogni nuovo indirizzo prima della prima consegna.",
+    "tableLabel": "Indirizzi di consegna",
+    "count_one": "1 indirizzo",
+    "count_other": "{count} indirizzi",
+    "waitingCount_one": "1 in attesa di verifica",
+    "waitingCount_other": "{count} in attesa di verifica",
+    "col": {
+      "address": "Indirizzo",
+      "contact": "Referente",
+      "status": "Stato",
+      "added": "Aggiunto da",
+      "more": "Altro"
+    },
+    "default": "Predefinito",
+    "state": {
+      "APPROVED": "Approvato",
+      "OURS": "Approvato",
+      "WAITING": "In attesa della nostra verifica",
+      "REFUSED": "Non accettato",
+      "REMOVED": "Rimosso"
+    },
+    "reason": "Motivo: {reason}",
+    "askedOn": "Chiesto il {date}; non usabile per gli ordini fino alla verifica",
+    "checkedOn": "Verificato il {date}",
+    "addedByUs": "Noi",
+    "addedByYou": "Tu",
+    "addedBy": "{name}",
+    "add": "Aggiungi un indirizzo",
+    "makeDefault": "Rendi predefinito",
+    "remove": "Rimuovi",
+    "removeN_one": "Rimuovi 1",
+    "removeN_other": "Rimuovi {count}",
+    "rowMenu": "Altro per {name}",
+    "empty": "Ancora nessun indirizzo di consegna.",
+    "emptyHint": "Aggiungi i luoghi dove deve arrivare la merce.",
+    "failed": "Non siamo riusciti a leggere i tuoi indirizzi di consegna."
+  },
+  "address": {
+    "title": "Indirizzo di consegna",
+    "subtitle": "Un nuovo luogo dove consegniamo i tuoi ordini.",
+    "check": "Verifichiamo gli indirizzi nuovi o cambiati prima della consegna successiva. Fino ad allora l'indirizzo non è proposto per gli ordini.",
+    "name": "Nome del luogo",
+    "nameHint": "Per esempio “Magazzino Milano”.",
+    "line1": "Via e numero civico",
+    "line2": "Altro (piano, edificio)",
+    "postalCode": "CAP",
+    "city": "Città",
+    "province": "Provincia",
+    "country": "Paese",
+    "countryHint": "Due lettere: IT, FR, DE …",
+    "contactName": "Chi riceve la merce",
+    "phone": "Telefono",
+    "notes": "Note per il corriere",
+    "notesHint": "Orari, banchina, accesso.",
+    "save": "Salva indirizzo",
+    "problem": {
+      "line1": "Scrivi via e numero civico.",
+      "postalCode": "Scrivi il CAP.",
+      "capIt": "Un CAP italiano ha 5 cifre.",
+      "city": "Scrivi la città.",
+      "country": "Due lettere, per esempio IT.",
+      "tooLong": "È troppo lungo."
+    },
+    "failed": {
+      "invalid": "Così com'è l'indirizzo non è stato accettato. Controlla i campi e riprova."
+    }
+  },
+  "remove": {
+    "title_one": "Rimuovere questo indirizzo di consegna?",
+    "title_other": "Rimuovere {count} indirizzi di consegna?",
+    "sent": "Gli ordini già inviati mantengono il loro indirizzo; i nuovi ordini non potranno sceglierlo.",
+    "confirm_one": "Rimuovi indirizzo",
+    "confirm_other": "Rimuovi {count} indirizzi",
+    "back": "Per usarlo di nuovo, aggiungilo di nuovo (lo verifichiamo di nuovo)."
+  },
+  "company": {
+    "title": "Dati aziendali",
+    "subtitle": "Ciò che teniamo per le tue fatture. Sola lettura.",
+    "legalName": "Ragione sociale",
+    "tradeName": "Nome commerciale",
+    "vatNumber": "Partita IVA",
+    "fiscalCode": "Codice fiscale",
+    "sdiCode": "Codice destinatario SDI",
+    "pec": "PEC",
+    "invoiceAddress": "Indirizzo di fatturazione",
+    "registeredOffice": "Sede legale",
+    "paymentTerms": "Condizioni di pagamento",
+    "currency": "Valuta",
+    "wrong": "Qualcosa non va?",
+    "ask": "Chiedici",
+    "failed": "Non siamo riusciti a leggere i tuoi dati aziendali.",
+    "noAccess": "Il tuo ruolo non mostra i dati aziendali. Chiedi al tuo amministratore."
+  },
+  "security": {
+    "title": "Accesso e sessioni",
+    "subtitle": "Dove hai effettuato l'accesso a questo portale.",
+    "sessions": "Le tue sessioni",
+    "col": {
+      "device": "Dispositivo",
+      "started": "Accesso",
+      "lastSeen": "Ultima attività"
+    },
+    "device": "{browser} su {system}",
+    "browser": {
+      "chrome": "Chrome",
+      "edge": "Edge",
+      "firefox": "Firefox",
+      "safari": "Safari",
+      "opera": "Opera",
+      "other": "Un browser"
+    },
+    "system": {
+      "windows": "Windows",
+      "mac": "Mac",
+      "ios": "iPhone o iPad",
+      "android": "Android",
+      "linux": "Linux",
+      "other": "un altro dispositivo"
+    },
+    "thisOne": "Questo dispositivo",
+    "now": "Adesso",
+    "timeouts": "Una sessione termina dopo 30 minuti senza uso, e sempre dopo 12 ore. Ogni accesso chiede un codice che ti inviamo per e-mail.",
+    "endOthers": "Esci dalle altre",
+    "twoStep": "Accesso in due passaggi con un'app di autenticazione",
+    "twoStepHeld": "Non ancora disponibile: ogni accesso chiede già un nuovo codice che ti inviamo per e-mail.",
+    "failed": "Non siamo riusciti a leggere le tue sessioni.",
+    "preview": "Le sessioni sono di ciascuna persona: l'anteprima non le mostra."
+  },
+  "endOthers": {
+    "title_one": "Chiudere l'altra sessione?",
+    "title_other": "Chiudere le altre {count} sessioni?",
+    "what_one": "L'altro dispositivo esce subito: per rientrare serve un nuovo codice.",
+    "what_other": "Gli altri {count} dispositivi escono subito: per rientrare ognuno ha bisogno di un nuovo codice.",
+    "stay": "Questo dispositivo resta collegato.",
+    "confirm": "Esci dalle altre",
+    "back": "Accedi di nuovo su quel dispositivo con un nuovo codice"
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "sentence": "Abbiamo inviato un codice di 6 cifre a {email}. Conferma che sei tu per i prossimi 5 minuti.",
+    "confirm": "Conferma",
+    "wrong": "Il codice non è corretto. Controlla l'ultima e-mail e riprova.",
+    "triedOut": "Troppi codici errati. Chiudi e ricomincia: ti inviamo un nuovo codice.",
+    "expired": "Questo codice non vale più. Chiudi e ricomincia: ti inviamo un nuovo codice.",
+    "wait": "Ti abbiamo inviato un codice poco fa: aspetta un minuto prima di chiederne uno nuovo.",
+    "sendFailed": "Non siamo riusciti a inviare il codice. Chiudi e riprova."
+  },
+  "dialog": {
+    "cancel": "Annulla"
+  },
+  "closed": {
+    "title": "Il tuo accesso non comprende la pagina Account.",
+    "askAdmin": "Il tuo amministratore ({names}) può dirti di più.",
+    "askUs": "Chiedici se ti serve.",
+    "home": "Torna alla Home"
+  }
+}
