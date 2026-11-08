@@ -1,5 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
+import { appClock } from '../../../platform/portal/tasks/clock'
+import { approveAddress, listAddressChecks, refuseAddress } from './address-check'
 import { addAddress, archiveAddress, defaultAddress, listAddresses } from './addresses'
 import { browseCatalogue, catalogueStyle } from './browse'
 import {
@@ -8,6 +10,9 @@ import {
   addLinesContract,
   addressesContract,
   addressMoveContract,
+  addressChecksContract,
+  approveAddressContract,
+  refuseAddressContract,
   catalogueContract,
   catalogueStyleContract,
   changeLineContract,
@@ -81,6 +86,11 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   // The office.
   app.get('/sales/order-requests', { schema: officeListContract }, async (request) => listOfficeRequests(request, request.query))
   app.get('/sales/order-requests/:requestId', { schema: officeGetContract }, async (request) => officeRequestView(request, request.params.requestId))
-  app.post('/sales/order-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/order-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
   app.post('/sales/order-requests/:requestId/refuse', { schema: refuseContract }, async (request) => refuseRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-F13b: the office's check of the delivery addresses customers add in the portal.
+  app.get('/sales/delivery-addresses', { schema: addressChecksContract }, async (request) => listAddressChecks(request, request.query))
+  app.post('/sales/delivery-addresses/:addressId/approve', { schema: approveAddressContract }, async (request) => approveAddress(request, request.params.addressId, request.body, idempotencyKeyFrom(request), appClock(app)))
+  app.post('/sales/delivery-addresses/:addressId/refuse', { schema: refuseAddressContract }, async (request) => refuseAddress(request, request.params.addressId, request.body, idempotencyKeyFrom(request), appClock(app)))
 })

@@ -31,9 +31,17 @@ import { sendcloudSignature, statusChangeKey } from './webhook'
  *              send for it (signed with Sendcloud's header AND the factory's fake header, which a FAKE account's inbound
  *              route checks); an event whose webhook is never posted is a lost update the poll finds (`tracking`)
  *   scripts    `play(trackingNumber, 'delivered' | 'returned' | 'exception')` runs a whole sequence
+ *   ETA, page  B-W2b-F14: a label says the carrier's expected delivery (FAKE_ETA_DAYS after it was made) and its tracking
+ *              page (https); each event says the ETA as it stood, the newest one in a tracking answer the ETA now; an
+ *              EXCEPTION moves it a day later, `delay` by hand (the poll reads it); `trackingPageNext(url)` scripts the next
+ *              label's page (e.g. an http one)
  */
 
 export const FAKE_MAX_WEIGHT_KG = 30
+
+/** B-W2b-F14: the fake carrier expects to deliver this many days after the label was made. */
+export const FAKE_ETA_DAYS = 2
+const DAY_MS = 86_400_000
 
 /** The Sendcloud status (webhook id and message) and the v3 tracking code of each factory status, as the fake reports it. */
 export const FAKE_STATUSES: Readonly<Record<TrackingStatus, { readonly id: number; readonly message: string; readonly code: string }>> = Object.freeze({
@@ -57,6 +65,8 @@ interface FakeLabel {
   readonly parcelId: string
   voided: VoidOutcome | null
   readonly events: CarrierTrackingEvent[]
+  /** The carrier's expected delivery as it stands (ISO instant). */
+  eta: string
 }
 
 /** One webhook delivery as Sendcloud would post it. */
@@ -103,12 +113,25 @@ export class FakeSendcloud implements CarrierPort {
   private readonly failures: { readonly httpStatus: number; readonly message: string }[] = []
   private refuseVoids = 0
   private sequence = 0
+  private nextPage: { readonly url: string | null } | null = null
 
   constructor(private readonly clock: { now(): Date } = { now: () => new Date() }) {}
 
   /** The next `count` calls (any operation) fail with this HTTP status (503: the gateway retries it; 4xx: final). */
   failNext(count: number, httpStatus = 503, message = 'Sendcloud is not available (fake).'): void {
     for (let index = 0; index < count; index++) this.failures.push({ httpStatus, message })
+  }
+
+  /** B-W2b-F14: the next label's tracking page is this one (http, null…), as a carrier might answer. */
+  trackingPageNext(url: string | null): void {
+    this.nextPage = { url }
+  }
+
+  /** B-W2b-F14: the carrier moves a label's expected delivery by `days` (the poll reads it with the events). */
+  delay(key: string, days: number): string {
+    const found = this.find(key)
+    found.eta = new Date(Date.parse(found.eta) + days * DAY_MS).toISOString()
+    return found.eta
   }
 
   /** The next `count` voids are refused (the carrier collected the parcel). */
@@ -153,15 +176,19 @@ export class FakeSendcloud implements CarrierPort {
     const parcelId = String(++this.sequence)
     const providerId = `fk-${digest.slice(0, 8)}:${parcelId}`
     const trackingNumber = `FK${digest.slice(0, 12).toUpperCase()}`
+    const eta = new Date(this.clock.now().getTime() + FAKE_ETA_DAYS * DAY_MS).toISOString()
+    const page = this.nextPage
+    this.nextPage = null
     const label: CarrierLabel = Object.freeze({
       providerId,
       trackingNumber,
-      trackingUrl: `https://tracking.invalid/${trackingNumber}`,
+      trackingUrl: page ? page.url : `https://tracking.invalid/${trackingNumber}`,
+      expectedDeliveryAt: eta,
       carrierCode: request.carrierCode ?? 'fake',
       carrierName: 'Fake Carrier',
     })
-    const created = { externalEventId: `fake:${trackingNumber}:0`, occurredAt: this.clock.now().toISOString(), code: FAKE_STATUSES.LABEL_CREATED.code, description: FAKE_STATUSES.LABEL_CREATED.message, location: null }
-    this.labels.set(providerId, { label, request, parcelId, voided: null, events: [created] })
+    const created = { externalEventId: `fake:${trackingNumber}:0`, occurredAt: this.clock.now().toISOString(), code: FAKE_STATUSES.LABEL_CREATED.code, description: FAKE_STATUSES.LABEL_CREATED.message, location: null, expectedDeliveryAt: eta }
+    this.labels.set(providerId, { label, request, parcelId, voided: null, events: [created], eta })
     this.byReference.set(request.externalReference, providerId)
     call.answer({ httpStatus: 201, response: { fake: true, providerId } })
     return label
@@ -194,7 +221,8 @@ export class FakeSendcloud implements CarrierPort {
     this.guard(call)
     const found = this.find(label.providerId)
     call.answer({ httpStatus: 200, response: { fake: true, events: found.events.length } })
-    return found.events.map((event) => ({ ...event }))
+    // The newest event says the carrier's expected delivery as it stands now (B-W2b-F14).
+    return found.events.map((event, index) => ({ ...event, ...(index === found.events.length - 1 ? { expectedDeliveryAt: found.eta } : {}) }))
   }
 
   /**
@@ -205,7 +233,9 @@ export class FakeSendcloud implements CarrierPort {
   advance(key: string, status: TrackingStatus, secret: string, at: Date = this.clock.now()): FakeWebhook {
     const found = this.find(key)
     const sendcloud = FAKE_STATUSES[status]
-    found.events.push({ externalEventId: `fake:${found.label.trackingNumber}:${found.events.length}`, occurredAt: at.toISOString(), code: sendcloud.code, description: sendcloud.message, location: 'FAKE HUB' })
+    // A failed attempt puts the delivery a day later (B-W2b-F14).
+    if (status === 'EXCEPTION') found.eta = new Date(Date.parse(found.eta) + DAY_MS).toISOString()
+    found.events.push({ externalEventId: `fake:${found.label.trackingNumber}:${found.events.length}`, occurredAt: at.toISOString(), code: sendcloud.code, description: sendcloud.message, location: 'FAKE HUB', expectedDeliveryAt: found.eta })
     return this.webhook(found, status, secret, at)
   }
 

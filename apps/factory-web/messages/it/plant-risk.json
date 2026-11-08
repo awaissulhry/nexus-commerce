@@ -178,7 +178,8 @@
   "signed": {
     "OFFICE": "Firmato qui il {date} ({person})",
     "PAPER": "Firmato su carta il {date}, registrato da {person}",
-    "FLOOR_PIN": "Firmato su tablet il {date}"
+    "FLOOR_PIN": "Firmato su tablet il {date}",
+    "LINK": "Firmato tramite link il {date} (una richiesta di approvazione inviata da noi)"
   },
   "version": {
     "noneSigned": "Ancora nessuna versione firmata",

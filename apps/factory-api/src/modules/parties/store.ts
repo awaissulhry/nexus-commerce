@@ -45,6 +45,8 @@ export const PARTY_COLUMNS = {
   language: true,
   paymentTerms: true,
   internalNote: true,
+  // W2b schema wave 23 (B-W2b-F13a).
+  website: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -69,11 +71,48 @@ export const ADDRESS_COLUMNS = {
   isDefaultBillTo: true,
   isDefaultShipTo: true,
   status: true,
+  // B-W2b-F13b (wave 23): a delivery address a customer added waits for the office's check (partner-visible; null = ours).
+  approvalStatus: true,
   version: true,
   createdAt: true,
   updatedAt: true,
 } as const satisfies Prisma.PartyAddressSelect
 export type AddressRowData = Prisma.PartyAddressGetPayload<{ select: typeof ADDRESS_COLUMNS }>
+
+/**
+ * B-W2b-F15: the check of a customer's delivery address as the OFFICE reads it (the party record; Sales › Delivery addresses
+ * to check): who asked and when, who decided and when, why it was refused. The decider is named only here: the portal's
+ * own list (sales/portal-ordering addresses.ts, factory-domain `approvalView`) never names an office person.
+ */
+export const ADDRESS_CHECK_COLUMNS = {
+  ...ADDRESS_COLUMNS,
+  requestedAt: true,
+  requestedByUserId: true,
+  decidedAt: true,
+  decidedById: true,
+  refuseReason: true,
+} as const satisfies Prisma.PartyAddressSelect
+export type AddressCheckRowData = Prisma.PartyAddressGetPayload<{ select: typeof ADDRESS_CHECK_COLUMNS }>
+
+/** The display names of the people who asked for and decided these addresses (read in the office scope). */
+export async function addressCheckNames(client: Pick<FactoryClient | CommandTx, 'user'>, rows: readonly Pick<AddressCheckRowData, 'requestedByUserId' | 'decidedById'>[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(rows.flatMap((row) => [row.requestedByUserId, row.decidedById]).filter((id): id is string => id !== null))]
+  if (wanted.length === 0) return new Map()
+  return new Map((await client.user.findMany({ where: { id: { in: wanted } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
+}
+
+/** The check of one address for the office; null: an address of the office's own (never checked). */
+export function addressCheckOf(row: AddressCheckRowData, names: ReadonlyMap<string, string>): AddressView['approval'] {
+  if (row.approvalStatus === null) return null
+  return {
+    status: row.approvalStatus,
+    requestedAt: row.requestedAt ? toUtcIso(row.requestedAt) : null,
+    requestedBy: row.requestedByUserId ? (names.get(row.requestedByUserId) ?? null) : null,
+    decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
+    decidedBy: row.decidedById ? (names.get(row.decidedById) ?? null) : null,
+    refuseReason: row.refuseReason,
+  }
+}
 
 export const CONTACT_COLUMNS = {
   id: true,
@@ -147,7 +186,7 @@ export const isUniqueViolation = (error: unknown): boolean => (error as { code?:
 
 // ---- rows as domain fields ---------------------------------------------------------------------------------------------
 
-export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalName' | 'tradeName' | 'roles' | 'country' | 'currency' | 'language' | 'paymentTerms' | 'internalNote'>): PartyFields {
+export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalName' | 'tradeName' | 'roles' | 'country' | 'currency' | 'language' | 'paymentTerms' | 'internalNote' | 'website'>): PartyFields {
   return {
     code: row.code,
     kind: row.kind,
@@ -159,6 +198,7 @@ export function partyFieldsOf(row: Pick<PartyRowData, 'code' | 'kind' | 'legalNa
     language: row.language,
     paymentTerms: row.paymentTerms,
     internalNote: row.internalNote,
+    website: row.website,
   }
 }
 
@@ -217,8 +257,19 @@ export function standingView(standing: ViesStanding): ViesStandingView {
   }
 }
 
-export function addressViewOf(row: AddressRowData): AddressView {
-  return { ...addressFieldsOf(row), kinds: [...row.kinds], id: row.id, isDefaultBillTo: row.isDefaultBillTo, isDefaultShipTo: row.isDefaultShipTo, status: row.status, version: row.version, createdAt: toUtcIso(row.createdAt), updatedAt: toUtcIso(row.updatedAt) }
+export function addressViewOf(row: AddressCheckRowData, names: ReadonlyMap<string, string>): AddressView {
+  return {
+    ...addressFieldsOf(row),
+    kinds: [...row.kinds],
+    id: row.id,
+    isDefaultBillTo: row.isDefaultBillTo,
+    isDefaultShipTo: row.isDefaultShipTo,
+    status: row.status,
+    approval: addressCheckOf(row, names),
+    version: row.version,
+    createdAt: toUtcIso(row.createdAt),
+    updatedAt: toUtcIso(row.updatedAt),
+  }
 }
 
 export function contactViewOf(row: ContactRowData): ContactView {
@@ -313,7 +364,9 @@ type Reader = FactoryClient | CommandTx
 export async function readRecord(client: Reader, partyId: string, now: Date): Promise<PartyView> {
   const party = await client.party.findUniqueOrThrow({ where: { id: partyId }, select: PARTY_COLUMNS })
   // One query after the other: a select with several relations would make Prisma run them at once on one connection.
-  const addresses = await client.partyAddress.findMany({ where: { partyId }, select: ADDRESS_COLUMNS })
+  // B-W2b-F15: with our check of the addresses a customer added in the portal (who asked, who decided, why refused).
+  const addresses = await client.partyAddress.findMany({ where: { partyId }, select: ADDRESS_CHECK_COLUMNS })
+  const names = await addressCheckNames(client, addresses)
   const contacts = await client.partyContact.findMany({ where: { partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
   const identities = await client.partyTaxIdentity.findMany({ where: { partyId }, select: TAX_COLUMNS, orderBy: [{ validFrom: 'desc' }] })
   const current = identityAt(identities.map((row) => ({ row, validFrom: dateText(row.validFrom) })), dayOf(now))?.row ?? null
@@ -328,8 +381,9 @@ export async function readRecord(client: Reader, partyId: string, now: Date): Pr
     ...partyRowOf(party, current, standing, addresses, warnings),
     paymentTerms: party.paymentTerms,
     internalNote: party.internalNote,
+    website: party.website,
     blocked: blocked ? { reason: blocked.reason, at: toUtcIso(blocked.at) } : null,
-    addresses: [...addresses].sort(byUse).map(addressViewOf),
+    addresses: [...addresses].sort(byUse).map((row) => addressViewOf(row, names)),
     contacts: [...contacts].sort((a, b) => (a.status === b.status ? 0 : a.status === 'ACTIVE' ? -1 : 1)).map(contactViewOf),
     taxIdentities: identities.map((row) => taxViewOf(row, current?.id ?? null)),
     viesChecks: checks.slice(0, RECORD_VIES_CHECKS).map(viesCheckViewOf),

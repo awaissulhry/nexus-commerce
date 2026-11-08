@@ -298,6 +298,8 @@ describe('navigation, pages, words and the design fixtures', () => {
     // Keys built from codes: every kind, severity, group, lens and stage the API names.
     const KINDS = ['ORDER_PROMISE', 'WORK_ORDER_HELD', 'LOT_HOLD', 'INVOICE_SDI', 'QUOTE_APPROVAL', 'PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'INVOICE_TO_ISSUE', 'REGISTER_DUTY', 'PRIVACY_DUTY', 'STYLE_COMPLIANCE', 'MAIL_TO_SORT', 'NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST']
     for (const kind of KINDS) used.add(`today.kind.${kind}`)
+    // B-W2b-F13b: the delivery addresses customers added, to check.
+    used.add('today.kind.DELIVERY_ADDRESS')
     for (const severity of ['HIGH', 'MEDIUM', 'LOW']) used.add(`today.severity.${severity}`)
     for (const group of ['NOW', 'TODAY', 'THIS_WEEK', 'LATER']) used.add(`today.group.${group}`)
     for (const panel of PANELS) {

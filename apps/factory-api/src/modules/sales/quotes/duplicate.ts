@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { usableForOrders } from '@nexus/factory-domain/parties/address-approval'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { addDays, piecesOf, priceBasisOf, priceText, versionTaxModeOf, type DepositKind, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
@@ -91,8 +92,9 @@ async function activeContact(db: Reader, partyId: string, contactId: string | nu
 
 async function activeAddress(db: Reader, partyId: string, addressId: string | null): Promise<string | null> {
   if (addressId === null) return null
-  const row = await db.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true } })
-  return row && row.partyId === partyId && row.status === 'ACTIVE' ? addressId : null
+  const row = await db.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, approvalStatus: true } })
+  // B-W2b-F13b: an address a customer added is used once we approved it (a portal request's is approved by its accept).
+  return row && row.partyId === partyId && row.status === 'ACTIVE' && usableForOrders(row.approvalStatus) ? addressId : null
 }
 
 /** Inside the copy's command: the new quote with its first DRAFT version and the source's lines (B-W2b-190: exported for a portal request). */

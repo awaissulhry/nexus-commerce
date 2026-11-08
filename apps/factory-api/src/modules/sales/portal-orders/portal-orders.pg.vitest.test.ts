@@ -286,9 +286,49 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     expect(transit.items.map((row: Json) => [row.number, row.order.customerRef, row.status])).toEqual([['SEED-SH-0001', 'SEED-PO-78', 'IN_TRANSIT']])
     expect(transit.items[0].trackingNumbers).toHaveLength(2)
     expect((await ok(browsers.other, '/portal/sales-orders/in-transit')).items).toEqual([])
-    const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => count.key.startsWith('orders.')).map((count: Json) => [count.key, count.value]))
+    // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
+    const own = ['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'orders.in_transit']
+    const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => own.includes(count.key)).map((count: Json) => [count.key, count.value]))
     expect(counts(await ok(browsers.buyer, '/portal/home'))).toEqual({ 'orders.open': 3, 'orders.in_production': 0, 'orders.shipping_this_week': expect.any(Number), 'orders.in_transit': 1 })
     expect(counts(await ok(browsers.designer, '/portal/home'))).toEqual({ 'orders.open': null, 'orders.in_production': null, 'orders.shipping_this_week': null, 'orders.in_transit': null })
     expect(counts(await ok(browsers.other, '/portal/home'))).toEqual({ 'orders.open': 0, 'orders.in_production': 0, 'orders.shipping_this_week': 0, 'orders.in_transit': 0 })
+  })
+
+  it("B-W2b-F14: shows the carrier's expected delivery while on the way, and \"Track on the carrier's site\" only for an https page", async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    const shipment = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0001'])
+    const parcels = await admin<{ id: string; trackingNumber: string }>('SELECT id, "trackingNumber" FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq', [shipment.id])
+    const eta = new Date(Date.UTC(2026, 10, 20, 12, 0)).toISOString()
+    // As a label bought then would have kept them (the seeded parcels left before the columns existed): written around the
+    // guards, which let a parcel change only until the goods leave. Parcel 2 has no page.
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin('UPDATE "Parcel" SET "trackingUrl" = $2 WHERE id = $1', [parcels[0]!.id, `https://tracking.example.com/${parcels[0]!.trackingNumber}`])
+      await admin('UPDATE "Shipment" SET "expectedDeliveryAt" = $2 WHERE id = $1', [shipment.id, eta])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const answer = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
+    expect(answer.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', status: 'IN_TRANSIT', expectedDeliveryAt: eta })
+    expect(answer.shipments[0].parcels.map((parcel: Json) => parcel.trackingLink)).toEqual([
+      { url: `https://tracking.example.com/${parcels[0]!.trackingNumber}`, words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } },
+      null,
+    ])
+    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
+    expect(transit.items[0]).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta, trackingLinks: [{ trackingNumber: parcels[0]!.trackingNumber, url: `https://tracking.example.com/${parcels[0]!.trackingNumber}` }] })
+    const list = await ok(browsers.buyer, '/portal/sales-orders?chip=ALL')
+    expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta })
+    // The database never keeps an http page (Parcel_tracking_url_check, every login): there is none to show.
+    await expect(admin('UPDATE "Parcel" SET "trackingUrl" = $2 WHERE id = $1', [parcels[1]!.id, 'http://tracking.example.com/plain'])).rejects.toThrow(/https address|parcels are added and removed/)
+    // Once delivered, the customer sees the day it arrived, not an expected one.
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Shipment" SET status = 'DELIVERED', "deliveredAt" = now() WHERE id = $1`, [shipment.id])
+      const delivered = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
+      expect(delivered.shipments[0]).toMatchObject({ status: 'DELIVERED', expectedDeliveryAt: null })
+    } finally {
+      await admin(`UPDATE "Shipment" SET status = 'SHIPPED', "deliveredAt" = NULL WHERE id = $1`, [shipment.id])
+      await admin('SET session_replication_role = DEFAULT')
+    }
   })
 })

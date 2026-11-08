@@ -642,6 +642,8 @@
       "none": "Nessuna conferma registrata",
       "byLink": "Confermato tramite link",
       "byLinkName": "Confermato tramite link da {name}",
+      "byPortal": "Confermato nel portale fornitori",
+      "byPortalName": "Confermato nel portale fornitori da {name}",
       "byOffice": "Confermato, registrato in ufficio"
     },
     "bulk": {
@@ -830,6 +832,7 @@
       "confirmedByName": "Confermato come richiesto da {name} sul link, il {date}.",
       "confirmedLink": "Confermato come richiesto sul link, il {date}.",
       "confirmedOffice": "Confermato, registrato in ufficio, il {date}.",
+      "confirmedPortal": "Confermato da {name} nel portale fornitori, il {date}.",
       "declined": "Rifiutato dal fornitore, il {date}.",
       "declinedNext": "Sentili, poi invia un nuovo link — o annulla l’ordine.",
       "proposed": "{name} ha proposto modifiche il {date}.",
@@ -841,6 +844,8 @@
       "how": "Come",
       "viaLink": "Sul link di conferma",
       "viaOffice": "Registrata in ufficio",
+      "viaPortal": "Nel portale fornitori",
+      "person": "Chi",
       "theirNote": "La loro nota:",
       "decision": {
         "ACCEPTED": "Hai accettato le modifiche il {date}: ora sono la conferma.",

@@ -3,7 +3,7 @@ import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { orderProgress, type OrderProgress } from '@nexus/factory-domain/sales/orders/orders'
 import { customerPromiseHistory } from '@nexus/factory-domain/sales/portal-orders/promise'
-import { customerShipmentStatusOf, isOnTheWay, SHIPMENT_STATUS_WORDS, SHOWN_SHIPMENT_STATUSES } from '@nexus/factory-domain/sales/portal-orders/shipments'
+import { customerEtaOf, customerShipmentStatusOf, isOnTheWay, SHIPMENT_STATUS_WORDS, SHOWN_SHIPMENT_STATUSES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { chipCounts, CUSTOMER_STATUS_WORDS, customerStatusOf, DATE_MOVED_DAYS, inChip, isStillToShip, milestonesOf, type CustomerOrderStatus, type OrderChip } from '@nexus/factory-domain/sales/portal-orders/status'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
@@ -77,7 +77,8 @@ function nextShipmentOf(shipments: readonly PortalShipmentRow[], latest: Readonl
   const next = onTheWay ?? packed
   if (!next) return null
   const status = customerShipmentStatusOf(next.status, latest.get(next.id) ?? [])
-  return { id: next.id, number: next.number, status, words: SHIPMENT_STATUS_WORDS[status], date: dayOrNull(next.shippedAt ?? next.packedAt), carrierName: next.carrierName }
+  const eta = customerEtaOf(next.status, next.expectedDeliveryAt)
+  return { id: next.id, number: next.number, status, words: SHIPMENT_STATUS_WORDS[status], date: dayOrNull(next.shippedAt ?? next.packedAt), carrierName: next.carrierName, expectedDeliveryAt: eta ? toUtcIso(eta) : null }
 }
 
 /**

@@ -41,7 +41,6 @@ import {
   readComplaints,
   readLines,
   readReturns,
-  requestFactsOf,
   RETURN_RECORD,
   sharedFilesOf,
   stagesReachedOf,
@@ -193,7 +192,6 @@ export async function returnReasons(db: Reader) {
 export async function returnRecord(db: Reader, place: Place, row: CaseRma, options: ViewOptions & { readonly mayRequest: boolean; readonly mayUpload: boolean }) {
   const status = row.status as ReturnStatus
   const lines = await readLines(db, [row.id])
-  const facts = (await requestFactsOf(db, [row.id])).get(row.id) ?? null
   const reasons = await reasonWords(db, RETURN_REASON_LIST)
   const tasks = await openTasksOn(db, place.partyId, [rmaRef(row)])
   const files = await sharedFilesOf(db, place.partyId, [rmaRef(row), ...lines.map((line) => ({ type: LINE_RECORD, id: line.id }))])
@@ -222,9 +220,10 @@ export async function returnRecord(db: Reader, place: Place, row: CaseRma, optio
     version: row.version,
     request: {
       opened: iso(row.requestedAt),
-      via: facts?.via ?? ('OFFICE' as const),
-      outcomeWanted: facts?.outcomeWanted ? { code: facts.outcomeWanted, words: OUTCOME_WANTED_WORDS[facts.outcomeWanted] } : null,
-      note: facts?.note ?? null,
+      // B-W2b-F13b (wave 23): the RMA's own columns (before them, the request's audit row said these).
+      via: row.channel,
+      outcomeWanted: row.outcomeWanted ? { code: row.outcomeWanted, words: OUTCOME_WANTED_WORDS[row.outcomeWanted] } : null,
+      note: row.customerNote,
       photos: files.filter((file) => file.recordType === RETURN_RECORD).map((file) => fileView(file, 'PHOTO')),
       lines: lines.map((line) => ({
         id: line.id,

@@ -23,7 +23,16 @@ const named = output({ code: z.string(), name: z.string() })
 const orderParams = input({ orderId: id() })
 const live = output({ events: z.array(z.string()) })
 
-const nextShipment = output({ id: id(), number: z.string(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: day.nullable(), carrierName: z.string().nullable() })
+const nextShipment = output({
+  id: id(),
+  number: z.string(),
+  status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
+  words,
+  date: day.nullable(),
+  carrierName: z.string().nullable(),
+  /** B-W2b-F14: when the carrier expects to deliver it (while packed or on the way); null: not said. */
+  expectedDeliveryAt: instant().nullable(),
+})
 
 const row = output({
   /** ORDER, or REQUEST: a portal order request sent and not decided yet (its number is the request's). */
@@ -182,9 +191,21 @@ const shipment = output({
   packedAt: instant().nullable(),
   shippedAt: instant().nullable(),
   deliveredAt: instant().nullable(),
+  /** B-W2b-F14: when the carrier expects to deliver it (while packed or on the way; none once delivered or returned). */
+  expectedDeliveryAt: instant().nullable(),
   ddt: output({ number: z.string(), date: day }).nullable(),
   milestones: z.array(output({ key: z.enum(SHIPMENT_MILESTONES), words, done: z.boolean(), at: instant().nullable() })),
-  parcels: z.array(output({ seq: z.number().int(), trackingNumber: z.string().nullable(), status: z.enum(TRACKING_STATUSES).nullable(), words: words.nullable(), lastEvent: trackingEvent.nullable() })),
+  parcels: z.array(
+    output({
+      seq: z.number().int(),
+      trackingNumber: z.string().nullable(),
+      /** B-W2b-F14: "Track on the carrier's site": the carrier's https tracking page and the link's words; null: none. */
+      trackingLink: output({ url: z.string(), words }).nullable(),
+      status: z.enum(TRACKING_STATUSES).nullable(),
+      words: words.nullable(),
+      lastEvent: trackingEvent.nullable(),
+    }),
+  ),
   events: z.array(trackingEvent),
   lines: z.array(output({ lineSeq: z.number().int(), style: named.nullable(), colourway: named.nullable(), size: z.string().nullable(), quantity: z.number().int() })),
   papers: z.array(output({ fileId: id(), name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), versionNo: z.number().int() })),
@@ -219,7 +240,11 @@ export const inTransitContract = defineContract({
           words,
           carrierName: z.string().nullable(),
           shippedAt: instant().nullable(),
+          /** B-W2b-F14: when the carrier expects to deliver it; null: not said. */
+          expectedDeliveryAt: instant().nullable(),
           trackingNumbers: z.array(z.string()),
+          /** B-W2b-F14: "Track on the carrier's site" per tracking number (https pages only). */
+          trackingLinks: z.array(output({ trackingNumber: z.string(), url: z.string(), words })),
           lastEvent: trackingEvent.nullable(),
         }),
       ),

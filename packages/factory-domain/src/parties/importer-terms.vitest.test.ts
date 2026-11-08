@@ -5,7 +5,7 @@ import { importRecordValues, partiesImporter, termsOfRow, TERMS_COLUMNS, type Im
 /** W2b (B-W2b-25; the B-W2a-49 gap): the commercial terms columns of the customers and suppliers import. Made-up parties only. */
 
 const party = (extra: Partial<ImportedParty> = {}): ImportedParty => ({
-  fields: { code: 'C-1', kind: 'ORGANISATION', legalName: 'Cliente Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null },
+  fields: { code: 'C-1', kind: 'ORGANISATION', legalName: 'Cliente Esempio S.r.l.', tradeName: null, roles: ['CUSTOMER'], country: 'IT', currency: 'EUR', language: 'it', paymentTerms: null, internalNote: null, website: null },
   status: 'ACTIVE',
   foreign: false,
   identity: null,

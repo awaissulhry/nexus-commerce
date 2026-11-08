@@ -31,8 +31,13 @@ export const DVR_AUTHOR_KINDS = ['CONSULTANT', 'IN_HOUSE'] as const
 export type DvrAuthorKind = (typeof DVR_AUTHOR_KINDS)[number]
 export const DVR_VERSION_STATUSES = ['AWAITING_SIGNATURES', 'SIGNED', 'WITHDRAWN'] as const
 export type DvrVersionStatus = (typeof DVR_VERSION_STATUSES)[number]
-/** How a signature was given (factory-db SafetySignMethod). This step writes OFFICE and PAPER; FLOOR_PIN is read. */
-export const DVR_SIGN_METHODS = ['OFFICE', 'FLOOR_PIN', 'PAPER'] as const
+/**
+ * How a signature was given (factory-db SafetySignMethod). This step writes OFFICE and PAPER; FLOOR_PIN is read. LINK
+ * (B-W2b-F13b, wave 23): an outside signer approved our approval request on the version (modules/safety/risk
+ * signature-link.ts writes it when the answer settles); a DVR signature only — the other registers never take LINK
+ * (safety/records/rules.ts SIGN_METHODS).
+ */
+export const DVR_SIGN_METHODS = ['OFFICE', 'FLOOR_PIN', 'PAPER', 'LINK'] as const
 export type DvrSignMethod = (typeof DVR_SIGN_METHODS)[number]
 
 export const MEASURE_STATUSES = ['PLANNED', 'IN_PROGRESS', 'DONE', 'VERIFIED', 'CANCELLED'] as const

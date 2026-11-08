@@ -50,6 +50,42 @@ written from the app. Data in, events out: none reads an API, none holds card da
   subtree takes the dark roles again (a dark pop-up re-declares the design system's dark tokens on itself). `tokens.css`
   and `tokens-global.css` unchanged.
 
+## Quality and floor parts — GateExplainer, SignOffPanel, LimitMeter (with ToleranceCell), FloorChecklist (B-W2b-78) — 2026-11-07
+
+Additive only: four new parts in new folders, each its own entry point with its stylesheet imported by the part (none in
+a barrel the web pulls into its pages, so no Commerce page carries their code or CSS). No existing part, token or
+barrel changed. Every part speaks through `labels?: Partial<XLabels>` (English `X_LABELS` beside it, `mergeLabels`);
+numbers, times and names come written from the app. Data in, events out: none reads an API. Sized by `--nds-density-*`
+(the console's sizes at standard, tablet and glove sizes inside `data-density="floor"`).
+- **`GateExplainer`** (`components/GateExplainer/`): a gate's answer in plain sentences — each check with ✓ / ✕ / ? / –
+  AND a word (or the gate's own, `stateLabel`: Covered / Not covered), the value now ("now: PENDING"), the reason, and
+  while not met who can clear it, how and its fix (a link, or a button held with its reason); a LawRef chip per check;
+  the override path while it holds (`override`, or `{ none }` when the law allows none); a frozen answer (`asOf`).
+  Forms: `full`, `compact` (one line), `popover` (the line as a button opening the full answer in a `DetailPopover`),
+  `list` (only what blocks, each with who and its fix). Blocked when a check is not met, held too when one is unknown,
+  blocked when nothing is listed (`gateVerdict`, `gateHeldReason` for a held button, `gateLine`). The verdict sits in a
+  polite live region.
+- **`SignOffPanel`** (`components/SignOffPanel/`): ordered sign-off steps — number, what, role, state (icon + word);
+  signed: by whom, how (PIN / code / typed name + the app's detail), when, the fingerprint; waiting: who may sign;
+  rejected: by whom and why — with separation-of-duties rules per step (maker check from scans, four-eyes,
+  author-cannot-approve, the app's own; met / not met / not known, in sentences). The step's action is held with the
+  first reason that applies (an earlier step, the step's own, a broken or unknown rule), on screen too; `sign` draws the
+  app's sign block (PinSignBlock on the floor) under the current step. The summary is a polite live region.
+- **`LimitMeter`** and **`ToleranceCell`** (`components/LimitMeter/`): a value against a limit (`rule` below / atMost /
+  atLeast / above; below by default, so at the limit fails) with the limit of quantification (`loq`) and a below-detection
+  state that passes a maximum only when the LOQ is within the limit, else "Not conclusive"; or against nominal ±
+  tolerance (or − / +) with "over by" / "under by" the deviation. A bar (limit line, dashed LOQ, hatched zone under the
+  LOQ, the tolerance band) hidden from screen readers, and the words ("1.2 mg/kg · limit 3 · ✓ Pass"). `variant="cell"`
+  for a grid or list cell ("1.2 / 3 mg/kg ✓", "53.3 ✕ over by 1.3 cm"); `LimitMeterCellRenderer` takes AG params
+  structurally (no AG import). Never colour alone; no value is "Not measured", no limit is "No limit set".
+- **`FloorChecklist`** (`floor/FloorChecklist/`): grouped pass / fail checks on a floor tablet — a group strip (name,
+  state icon AND word), one group's checks at a time with icon or example photo, hint, the answer in words (who and
+  when), Pass and Fail (`aria-pressed`); "Group passes" passes what is not answered (never a failed or held check) and
+  opens the next group not done; Fail asks the reason (`ReasonGrid` tiles of the check, group or checklist) then a photo
+  when asked (`photo`, or a reason marked `photoNeeded`; the app's camera in `renderPhoto`) before `onFail`; the main
+  action held until every required check is answered, with what is left on screen (`checklistHeld`); `heldReason` holds
+  every button with the reason on screen. Each tap said once in a polite region.
+
 ## Floor and people parts — FloorCard, FloorElapsed, FloorNamePicker, FloorList updates slot, PinSignBlock (D22), display tier (D26), read-aloud (D27), LawRef, LegalGate, PrivacyNote, ProtectedValue, DayStrip, DueCell, DocumentSeal (B-W2b-28) — 2026-10-31
 
 Additive only: thirteen new parts in new folders, each its own entry point with its stylesheet imported by the part

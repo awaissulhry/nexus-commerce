@@ -1,0 +1,143 @@
+{
+  "title": "Quality and floor design-system parts",
+  "subtitle": "The parts quality, compliance and the floor name in two or more areas, now in the design system. Made-up data.",
+  "section": {
+    "office": "Quality and compliance parts",
+    "floor": "Floor parts (floor tier)",
+    "floorNote": "Drawn at tablet and glove sizes, as on a floor tablet."
+  },
+  "part": {
+    "gate": "Gate explainer",
+    "gateCompact": "Gate in one line, and as a popover",
+    "gateList": "What blocks (list form)",
+    "signoff": "Sign-off with separation of duties",
+    "limits": "Results against a limit",
+    "tolerance": "Measurements against a tolerance",
+    "checklist": "Floor checklist",
+    "floorGate": "The gate on the floor",
+    "floorSign": "First-piece sign-off with the PIN"
+  },
+  "gate": {
+    "title": "Certificate gate",
+    "rule": "A garment may be labelled, released and shipped only when a valid certificate covers its style, colour and size on that day.",
+    "cert": "The certificate covers every size of the lot",
+    "covered": "Covered",
+    "notCovered": "Not covered",
+    "certOk": "Covered: CERT-0001 (EN 17092-4, class AA) covers JK-100 Black 46–56, valid until 12 Mar 2029.",
+    "certNo": "Size 58 is outside the covered range 46–56.",
+    "certWho": "Compliance lead",
+    "certHow": "ask the notified body to extend the certificate, or remove size 58 from the order",
+    "certFix": "Open the certificate",
+    "law": "Protective clothing may be sold only with the certificate of the notified body that tested it.",
+    "crvi": "Cr VI of the leather lots PASS",
+    "crviOk": "Lots L-0231 and L-0233: 1.2 and 0.8 mg/kg, below the limit of 3 mg/kg.",
+    "pending": "PENDING",
+    "crviWho": "Quality",
+    "crviFix": "Record the test result",
+    "crviFixHeld": "Only quality may record a test result",
+    "label": "The label template is active",
+    "labelOk": "LBL-JK100 revision 2.",
+    "four": "A second person releases",
+    "override": "Release under a concession, for this work order only, for at most 7 days.",
+    "overrideWho": "Plant manager",
+    "overrideHow": "a written reason and your authenticator code",
+    "overrideAction": "Override for WO-0142",
+    "overrideHeld": "Only the plant manager may override",
+    "asOf": "3 Nov 2026, 10:42",
+    "release": "Release 48 garments"
+  },
+  "list": {
+    "de": "JK-100 cannot ship to Germany: no user information in German.",
+    "deWho": "Compliance lead",
+    "deFix": "Add German",
+    "cert": "Certificate CERT-0001 expires in 28 days; 3 open orders depend on it.",
+    "certWho": "Compliance lead",
+    "certFix": "Start the renewal",
+    "certHeld": "Only the compliance lead may start a renewal",
+    "lot": "Lot L-0231 (black cowhide) has no Cr VI evidence; 6 work orders wait.",
+    "lotWho": "Quality",
+    "lotFix": "Record the test result"
+  },
+  "sign": {
+    "title": "Who signs",
+    "result": "Result signed",
+    "inspector": "Inspector",
+    "bench": "at bench 2",
+    "release": "Release by a second person",
+    "releaseAction": "Release 48 garments",
+    "whoMay": "Quality lead or plant manager",
+    "qualityLead": "Quality lead",
+    "maker": "Made by (from scans): 9 people on Line 2 — you are not among them",
+    "rejectedWhy": "The sample was drawn from one carton only: draw it again from the whole lot."
+  },
+  "limit": {
+    "crvi": "Cr VI, lot L-0231",
+    "crviFail": "Cr VI, lot L-0240",
+    "crviBelow": "Cr VI, lot L-0233 (lab: not detected)",
+    "crviInconclusive": "Cr VI, lot L-0235 (method above the limit)",
+    "tear": "Tear strength",
+    "ph": "pH",
+    "cellNote": "In a list cell:"
+  },
+  "measure": {
+    "chest": "Chest ½",
+    "waist": "Waist ½",
+    "sleeve": "Sleeve",
+    "back": "Back length"
+  },
+  "checklist": {
+    "title": "Final inspection · WO-0142",
+    "sign": "Sign the result",
+    "signed": "Ready to sign: the PIN step would open here.",
+    "held": "The work order is on hold: release the hold first.",
+    "photoNote": "The app’s camera goes here (PhotoCapture). This demo uses a made-up photo.",
+    "usePhoto": "Use the demo photo"
+  },
+  "group": {
+    "labels": "Labels",
+    "garment": "Garment",
+    "armour": "Armour",
+    "packaging": "Packaging & documents"
+  },
+  "item": {
+    "class": "EN 17092 class label",
+    "classHint": "Class AA, inside the collar",
+    "ce": "CE mark",
+    "care": "Care label",
+    "fibre": "Fibre composition",
+    "origin": "Origin claim",
+    "build": "Construction",
+    "zips": "Zips",
+    "reflective": "Reflective strips",
+    "fitted": "Protectors fitted",
+    "marked": "Protectors marked EN 1621",
+    "markedHint": "Size and type A or B",
+    "markedHeld": "Scan the protector lot first",
+    "leaflet": "User information in the right languages",
+    "hangtag": "Hangtags"
+  },
+  "reason": {
+    "missing": "Missing",
+    "wrong": "Wrong",
+    "unreadable": "Unreadable",
+    "stitching": "Stitching",
+    "zip": "Zip fault",
+    "damage": "Material damage",
+    "armourMissing": "Protector missing",
+    "armourSize": "Wrong size",
+    "leaflet": "Leaflet missing",
+    "hangtag": "Hangtag missing",
+    "other": "Other"
+  },
+  "floor": {
+    "title": "First-piece approval",
+    "firstPiece": "First piece approved",
+    "whoMay": "An inspector who did not sew it",
+    "maker": "Made by (from scans): Line 2, stations 3–7 — you are not among them",
+    "meaning": "By signing you confirm that the first piece of WO-0142 matches the approved sample, and the run may start.",
+    "wrong_one": "Wrong PIN. {count} try left.",
+    "wrong_other": "Wrong PIN. {count} tries left.",
+    "locked": "Locked until 10:47.",
+    "demo": "Demo PIN: {pin}"
+  }
+}

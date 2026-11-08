@@ -149,7 +149,7 @@ describe('the one task list (COL-043)', { timeout: SLOW_TEST_TIMEOUT_MS }, () =>
     expect(mine.body.items[0]).toMatchObject({ id: taskId, verb: { en: 'Upload', it: 'Carica' }, canMarkDone: true, canUndo: false, askedBy: 'sam sales' })
     expect(mine.body.items[0].link).toMatch(new RegExp(`^/p/P[0-9a-f]{6}/open/Party/${world.partyId}#task%3A${taskId}$`))
     expect(mine.body.badges).toEqual([expect.objectContaining({ area: 'documents', count: 1, words: { it: '1 richiesti', en: '1 requested' } })])
-    expect(mine.body.counts).toEqual({ open: 1, overdue: 0, dueSoon: 1 })
+    expect(mine.body.counts).toEqual({ open: 1, overdue: 0, dueSoon: 1, mine: 0 })
     const viewer = await signedIn(people.viewer)
     expect((await viewer.get('/portal/tasks')).body.items).toEqual([])
     const stranger = await signedIn(people.otherBuyer)

@@ -21,9 +21,9 @@ import { closeConfirmTasks } from '../portal-orders/tasks'
  *      names the order (goods came: cancel a line or close it short instead);
  *   2. the order as it stands, with the supplier's answer, kept in the audit row (what the next revision is compared with);
  *   3. its live confirm links stop working (the supplier answers the new revision on a new link);
- *   4. the order DRAFT as its next revision: no send time, no confirm-by, a confirmed one without its confirmation (the
- *      …_supply_w2a_guards trigger allows exactly that), then each open line without the old revision's confirmation
- *      and proposal (allowed while the order is DRAFT);
+ *   4. the order DRAFT as its next revision: no send time, no confirm-by, a confirmed one without its confirmation (its
+ *      portal person too: the …_portal_followups_w2b guard allows exactly that, and refuses the move otherwise), then
+ *      each open line without the old revision's confirmation and proposal (allowed while the order is DRAFT);
  *   5. purchase_order.revision_started.
  *
  * The buyer then edits the draft (header and lines, W1's routes; a line an earlier revision sent may also be cancelled)
@@ -58,7 +58,7 @@ export async function startRevisionInCommand(
       sentAt: null,
       sentById: null,
       confirmBy: null,
-      ...(from === 'CONFIRMED' ? { confirmedAt: null, confirmedVia: null, confirmLinkId: null, confirmedByName: null, supplierRef: null, confirmNote: null } : {}),
+      ...(from === 'CONFIRMED' ? { confirmedAt: null, confirmedVia: null, confirmLinkId: null, confirmedByUserId: null, confirmedByName: null, supplierRef: null, confirmNote: null } : {}),
       ...(input.counter ? { proposalDecision: 'REFUSED' as const, proposalDecidedAt: now, proposalDecidedById: input.actorId, proposalDecisionNote: input.counter.note } : {}),
     },
     select: { id: true },

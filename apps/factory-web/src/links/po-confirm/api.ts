@@ -60,7 +60,7 @@ export const linkOrderSchema = z.object({
     note: z.string().nullable(),
     sentAt: instant.nullable(),
     confirmedAt: instant.nullable(),
-    confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+    confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
     confirmedByName: z.string().nullable(),
     supplierRef: z.string().nullable(),
     confirmNote: z.string().nullable(),

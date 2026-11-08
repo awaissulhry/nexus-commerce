@@ -32,6 +32,11 @@ import type { ProtectedValueLabels } from '@nexus/ui/components/ProtectedValue/i
 import type { DayStripLabels } from '@nexus/ui/components/DayStrip/index'
 import type { DueCellLabels } from '@nexus/ui/components/DueCell/index'
 import type { DocumentSealLabels } from '@nexus/ui/components/DocumentSeal/index'
+// B-W2b-78: the quality and floor parts (each its own entry point).
+import type { GateExplainerLabels } from '@nexus/ui/components/GateExplainer/index'
+import type { SignOffPanelLabels } from '@nexus/ui/components/SignOffPanel/index'
+import type { LimitMeterLabels } from '@nexus/ui/components/LimitMeter/index'
+import type { FloorChecklistLabels } from '@nexus/ui/floor/FloorChecklist/index'
 // B-W2b-155: the portal and link parts (each its own entry point).
 import type { EndStateLabels } from '@nexus/ui/components/EndState/index'
 import type { CodeInputLabels } from '@nexus/ui/components/CodeInput/index'
@@ -114,6 +119,11 @@ export interface DsLabels {
   dayStrip: DayStripLabels
   dueCell: DueCellLabels
   documentSeal: DocumentSealLabels
+  // B-W2b-78
+  gateExplainer: GateExplainerLabels
+  signOffPanel: SignOffPanelLabels
+  limitMeter: LimitMeterLabels
+  floorChecklist: FloorChecklistLabels
   // B-W2b-155
   endState: EndStateLabels
   codeInput: CodeInputLabels
@@ -496,6 +506,7 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
       reading: t('cardList.reading'),
     },
     ...floorPeopleLabels(t),
+    ...qualityFloorLabels(t),
     ...portalLinkLabels(t),
   }
 }
@@ -847,6 +858,103 @@ function portalLinkLabels(t: Translate): Pick<
       atZero: sg('atZero'),
       atMax: (max) => sg('atMax', { max }),
       stackTotals: ({ colour, total, grand }) => sg('stackTotals', { colour, total, grand }),
+    },
+  }
+}
+
+/** B-W2b-78 — the quality and floor parts' words (`ds-words`: gateExplainer, signOffPanel, limitMeter, floorChecklist). */
+function qualityFloorLabels(t: Translate): Pick<DsLabels, 'gateExplainer' | 'signOffPanel' | 'limitMeter' | 'floorChecklist'> {
+  const k = (part: string) => (key: string, params?: Record<string, string | number>) => t(`${part}.${key}`, params)
+  const ge = k('gateExplainer')
+  const so = k('signOffPanel')
+  const lm = k('limitMeter')
+  const fc = k('floorChecklist')
+  const rule = (kind: string) => ({ met: so(`rules.${kind}.met`), broken: so(`rules.${kind}.broken`), unknown: so(`rules.${kind}.unknown`) })
+  return {
+    gateExplainer: {
+      states: { pass: ge('states.pass'), fail: ge('states.fail'), unknown: ge('states.unknown'), notNeeded: ge('states.notNeeded') },
+      verdicts: { open: ge('verdicts.open'), held: ge('verdicts.held'), unknown: ge('verdicts.unknown') },
+      summary: (passed, total) => ge('summary', { passed, total }),
+      who: (who) => ge('who', { who }),
+      how: (how) => ge('how', { how }),
+      override: ge('override'),
+      overrideWho: (who) => ge('overrideWho', { who }),
+      asOf: (when) => ge('asOf', { when }),
+      list: ge('list'),
+      fix: ge('fix'),
+      empty: ge('empty'),
+      showWhy: (line) => ge('showWhy', { line }),
+      none: ge('none'),
+      held: (count, names) => ge('held', { count, names: names.join(ge('namesJoin')) }),
+      unknownHeld: (count, names) => ge('unknownHeld', { count, names: names.join(ge('namesJoin')) }),
+      now: (value) => ge('now', { value }),
+      allMet: (count) => ge('allMet', { count }),
+      more: (count) => ge('more', { count }),
+    },
+    signOffPanel: {
+      title: so('title'),
+      states: { signed: so('states.signed'), waiting: so('states.waiting'), held: so('states.held'), rejected: so('states.rejected'), notNeeded: so('states.notNeeded') },
+      methods: { pin: so('methods.pin'), code: so('methods.code'), typed: so('methods.typed') },
+      ruleStates: { met: so('ruleStates.met'), broken: so('ruleStates.broken'), unknown: so('ruleStates.unknown') },
+      signedBy: (who, role) => (role ? so('signedByRole', { who, role }) : so('signedBy', { who })),
+      rejectedBy: (who) => so('rejectedBy', { who }),
+      whoMay: (who) => so('whoMay', { who }),
+      fingerprint: so('fingerprint'),
+      summary: (signed, total) => so('summary', { signed, total }),
+      complete: so('complete'),
+      rejectedSummary: so('rejectedSummary'),
+      steps: so('steps'),
+      step: (n) => so('step', { n }),
+      afterStep: (step, label) => so('afterStep', { step, label }),
+      rules: { maker: rule('maker'), fourEyes: rule('fourEyes'), authorNotApprover: rule('authorNotApprover'), other: rule('other') },
+    },
+    limitMeter: {
+      verdicts: {
+        pass: lm('verdicts.pass'),
+        fail: lm('verdicts.fail'),
+        belowDetection: lm('verdicts.belowDetection'),
+        inconclusive: lm('verdicts.inconclusive'),
+        notMeasured: lm('verdicts.notMeasured'),
+        noLimit: lm('verdicts.noLimit'),
+      },
+      tolerance: { pass: lm('tolerance.pass'), over: lm('tolerance.over'), under: lm('tolerance.under'), notMeasured: lm('tolerance.notMeasured') },
+      limit: (limit) => lm('limit', { limit }),
+      minimum: (limit) => lm('minimum', { limit }),
+      belowLoq: (loq) => lm('belowLoq', { loq }),
+      loq: (loq) => lm('loq', { loq }),
+      nominal: (nominal, minus, plus, symmetric) => (symmetric ? lm('nominalSymmetric', { nominal, plus }) : lm('nominalAsymmetric', { nominal, minus, plus })),
+      overBy: (by) => lm('overBy', { by }),
+      underBy: (by) => lm('underBy', { by }),
+      cellOf: (value, limit) => lm('cellOf', { value, limit }),
+    },
+    floorChecklist: {
+      groups: fc('groups'),
+      states: { open: fc('states.open'), partly: fc('states.partly'), passed: fc('states.passed'), failed: fc('states.failed') },
+      passed: fc('passed'),
+      failed: fc('failed'),
+      notChecked: fc('notChecked'),
+      failedBecause: (reason) => fc('failedBecause', { reason }),
+      withPhoto: fc('withPhoto'),
+      optional: fc('optional'),
+      pass: fc('pass'),
+      fail: fc('fail'),
+      groupPasses: fc('groupPasses'),
+      groupAnswered: fc('groupAnswered'),
+      progress: (done, total) => fc('progress', { done, total }),
+      checked: (answered, total) => fc('checked', { answered, total }),
+      failedCount: (count) => fc('failedCount', { count }),
+      whatIsWrong: (item) => fc('whatIsWrong', { item }),
+      reasons: fc('reasons'),
+      photo: (item) => fc('photo', { item }),
+      photoNeeded: fc('photoNeeded'),
+      skipPhoto: fc('skipPhoto'),
+      back: fc('back'),
+      cancel: fc('cancel'),
+      announcePass: (item) => fc('announcePass', { item }),
+      announceFail: (item) => fc('announceFail', { item }),
+      announceGroup: (group, count) => fc('announceGroup', { group, count }),
+      left: (count, names) => fc('left', { count, names: names.join(fc('namesJoin')) }),
+      none: fc('none'),
     },
   }
 }

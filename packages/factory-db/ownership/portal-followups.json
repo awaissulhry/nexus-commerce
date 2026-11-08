@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/portal-followups.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b schema wave 23 (B-W2b-F12): the documents and profile changes a supplier or workshop sends from its portal, as rows of their own (B-W2b-189 kept them as audit rows on the party). The office (factory_runtime; the API in the tenant's system context) reads and writes through apps/factory-api's modules/purchasing/portal-profile, always with command(): it marks an upload received, accepts or refuses it, approves or refuses a change request (the parties module applies each change in the same command). A portal session runs as factory_partner_runtime behind its party's wall (scopedBy party): it reads its own party's rows, inserts its own uploads and change requests (WAITING, OPEN), and withdraws an OPEN request of its own; it never reads which office user decided or wrote a row (hiddenColumns: the decider's name the supplier reads is a column of its own). The floor reads nothing here. No money column; nothing is deleted. The …_portal_followups_w2b_guards triggers hold the states and the partner's columns for every login. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SupplierDocumentUpload": {
+      "about": "A supplier's person (portal session) records the document it uploaded (WAITING): the file, what it says it is, the record it is for and the request it answers. The office (or the API in the system context) marks the file received and accepts it (the kind and expiry confirmed, the file in force) or refuses it with the reason the supplier reads. The partner reads its own party's uploads with the decision and the decider's name, never the decider's or the writer's id.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"], "hiddenColumns": ["decidedById", "createdById"] }
+      }
+    },
+    "PartyChangeRequest": {
+      "about": "A supplier's person (portal session) asks for changes of its own addresses and contacts (OPEN) and may withdraw an OPEN request; nothing changes on our side until the office approves it (applying each change in the same command) or refuses it with the reason the supplier reads. The partner reads its own party's requests with the decision and the decider's name, never the decider's or the writer's id.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["party"], "hiddenColumns": ["decidedById", "createdById"] }
+      }
+    }
+  }
+}

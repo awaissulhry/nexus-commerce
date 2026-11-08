@@ -290,6 +290,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
   the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
   `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
+  B-W2b-136 machines in depth (`machines/depth/`, catalogue `plant-machines`, CSS prefix `fw-md-`; `machines/dies/`, catalogue `plant-dies`,
+  its own section and API module so it drops in one cut if there is no clicking press): SCR-150 gains the section switch
+  `?section=machines|dies|wall`, the tiles Checks overdue / No CE declaration on file as filters (`?need=checks|ce`, `GET
+  /plant/machines/attention`), the columns Next check, CE on file, Tag printed (`GET /plant/machines/depth?ids=` for the rows on
+  screen), Print QR tags (`depth/use-tags.ts`, the ONE tags hook for the band, the bulk bar, `t` and the Tag tab: a label printer,
+  one print job per machine, Retry; Print on paper = the W2a tag sheet) and the StatusWall area part (`depth/view/StatusWall.tsx`,
+  also the window page SCR-150-wall `/plant/machines/wall?site=&show=`). SCR-150-record gains Documents & CE (`?tab=docs`),
+  Status & downtime (`?tab=status`: a DayStrip per day of the week), Tag (`?tab=tag`) and Change status (⋯; a release from
+  do-not-use asks the technician's fresh code through the plant's `useStepUp`, words in `depth/view/ReleaseStepUp.tsx`).
 - `src/areas/plant/incidents/` — Plant › Health & safety › Incidents (B-W2b-149 on B-W2b-125's API; catalogue `plant-incidents`,
   CSS prefix `fw-inc-`): SCR-210 `/plant/incidents?rows=INJURY|NEAR_MISS|HAZARD|INAIL_DUE&status=&from=&to=&q=&new=1` (the band's
   live chip = `counts.next`, the critical Banner + Countdown = `counts.deadline`, tiles = filters, the ANONYMISED list frame

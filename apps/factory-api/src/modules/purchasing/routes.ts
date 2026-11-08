@@ -491,13 +491,13 @@ export default defineRoutes('purchasing', manifest, async (app) => {
 
   app.get('/purchasing/supplier-documents', { schema: listSupplierDocumentsContract }, async (request) => listSupplierDocuments(request, request.query, appClock(app).now()))
 
-  app.post('/purchasing/supplier-documents/:fileId/accept', { schema: acceptDocumentContract }, async (request) => acceptDocument(request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
+  app.post('/purchasing/supplier-documents/:fileId/accept', { schema: acceptDocumentContract }, async (request) => acceptDocument(app, request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
 
-  app.post('/purchasing/supplier-documents/:fileId/refuse', { schema: refuseDocumentContract }, async (request) => refuseDocument(request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
+  app.post('/purchasing/supplier-documents/:fileId/refuse', { schema: refuseDocumentContract }, async (request) => refuseDocument(app, request, request.params.fileId, request.body, appClock(app).now(), idempotencyKeyFrom(request)))
 
   app.get('/purchasing/supplier-changes', { schema: listSupplierChangesContract }, async (request) => listSupplierChanges(request, request.query, appClock(app).now()))
 
-  app.post('/purchasing/supplier-changes/:requestId/approve', { schema: approveSupplierChangeContract }, async (request) => approveSupplierChange(request, request.params.requestId, idempotencyKeyFrom(request)))
+  app.post('/purchasing/supplier-changes/:requestId/approve', { schema: approveSupplierChangeContract }, async (request) => approveSupplierChange(app, request, request.params.requestId, idempotencyKeyFrom(request)))
 
-  app.post('/purchasing/supplier-changes/:requestId/refuse', { schema: refuseSupplierChangeContract }, async (request) => refuseSupplierChange(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/supplier-changes/:requestId/refuse', { schema: refuseSupplierChangeContract }, async (request) => refuseSupplierChange(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
 })

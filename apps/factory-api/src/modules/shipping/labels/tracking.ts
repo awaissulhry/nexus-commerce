@@ -1,7 +1,7 @@
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { latestByParcel, trackingMoveOf, trackingNews, type TrackingFact, type TrackingMove, type TrackingSource, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
+import { latestByParcel, trackingMoveOf, trackingNews, trackingPageOf, type TrackingFact, type TrackingMove, type TrackingSource, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { officeShipment } from '../shipments/shipments'
@@ -18,6 +18,10 @@ import { latestStatuses, readTracking, statusMap, type TrackingRow } from './sto
  *   move    every tracked parcel delivered → the SHIPPED shipment DELIVERED; every one returned → RETURNED (at the
  *           carrier's time of the last such event); partly delivered, partly returned, or not handed over yet: no move
  *   events  shipment.tracking_recorded (and shipment.status_changed on a move)
+ *   ETA     B-W2b-F14: the carrier's expected delivery as it says it now (the poll reads it with the events; a webhook
+ *           carries none) moves the shipment's `expectedDeliveryAt` while it is PACKED or SHIPPED and not moving to
+ *           DELIVERED or RETURNED in this command (the database lets the ETA move after the goods left); a carrier that
+ *           names no ETA leaves the kept one
  */
 
 export interface IncomingTracking {
@@ -33,6 +37,13 @@ export interface IncomingTracking {
 export interface TrackingOutcome {
   readonly recorded: number
   readonly move: TrackingMove
+  /** B-W2b-F14: the shipment's ETA moved to this (an ISO instant); null: it did not move. */
+  readonly etaMovedTo: string | null
+}
+
+export interface TrackingOptions {
+  /** B-W2b-F14: the carrier's expected delivery of the shipment now; undefined or null: the carrier said none. */
+  readonly expectedDeliveryAt?: Date | null
 }
 
 const factOf = (row: TrackingRow): TrackingFact & { recordedAt: Date } => ({
@@ -44,7 +55,7 @@ const factOf = (row: TrackingRow): TrackingFact & { recordedAt: Date } => ({
   recordedAt: row.recordedAt,
 })
 
-export async function recordTracking(tools: CommandTools, shipmentId: string, incoming: readonly IncomingTracking[], source: Exclude<TrackingSource, 'MANUAL'>): Promise<TrackingOutcome> {
+export async function recordTracking(tools: CommandTools, shipmentId: string, incoming: readonly IncomingTracking[], source: Exclude<TrackingSource, 'MANUAL'>, options: TrackingOptions = {}): Promise<TrackingOutcome> {
   const { tx } = tools
   // One recorder per shipment at a time (the webhooks' and the poll's commands).
   await tx.$queryRaw`SELECT 1 FROM "Shipment" WHERE "id" = ${shipmentId}::uuid FOR UPDATE`
@@ -99,7 +110,18 @@ export async function recordTracking(tools: CommandTools, shipmentId: string, in
   if (recorded > 0 && lastStatus !== null) {
     tools.emit({ type: 'shipment.tracking_recorded', subject: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId, number: shipment.number, events: recorded, status: lastStatus, source } })
   }
-  return { recorded, move }
+  // B-W2b-F14: the carrier moved its expected delivery (not once the goods arrived or came back).
+  const eta = options.expectedDeliveryAt ?? null
+  let etaMovedTo: string | null = null
+  if (eta !== null && move.kind !== 'move' && (shipment.status === 'PACKED' || shipment.status === 'SHIPPED')) {
+    const kept = await tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, select: { expectedDeliveryAt: true } })
+    if (kept.expectedDeliveryAt?.getTime() !== eta.getTime()) {
+      await tx.shipment.update({ where: { id: shipmentId }, data: { expectedDeliveryAt: eta, version: { increment: 1 } }, select: { id: true } })
+      etaMovedTo = toUtcIso(eta)
+      tools.audit({ action: 'shipping.etaMoved', recordType: 'Shipment', recordId: shipmentId, companyId: shipment.companyId, siteId: shipment.siteId, before: { expectedDeliveryAt: kept.expectedDeliveryAt ? toUtcIso(kept.expectedDeliveryAt) : null }, after: { expectedDeliveryAt: etaMovedTo, source } })
+    }
+  }
+  return { recorded, move, etaMovedTo }
 }
 
 // ---- reading ------------------------------------------------------------------------------------------------------------
@@ -109,7 +131,7 @@ export async function getTracking(caller: CommandCaller, shipmentId: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_VIEW)
   return caller.withClient(async (client) => {
     const events = await readTracking(client, shipment.id)
-    const parcels = await client.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, labelledAt: true }, orderBy: { seq: 'asc' } })
+    const parcels = await client.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, labelledAt: true }, orderBy: { seq: 'asc' } })
     const latest = latestStatuses(events)
     const seqOf = new Map(parcels.map((parcel) => [parcel.id, parcel.seq]))
     const move = trackingMoveOf(shipment.status, parcels.filter((parcel) => parcel.trackingNumber !== null), statusMap(latest))
@@ -123,10 +145,21 @@ export async function getTracking(caller: CommandCaller, shipmentId: string) {
         shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
         deliveredAt: shipment.deliveredAt ? toUtcIso(shipment.deliveredAt) : null,
         returnedAt: shipment.returnedAt ? toUtcIso(shipment.returnedAt) : null,
+        // B-W2b-F14: the carrier's expected delivery.
+        expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
       },
       parcels: parcels.map((parcel) => {
         const last = latest.get(parcel.id)
-        return { parcelId: parcel.id, seq: parcel.seq, trackingNumber: parcel.trackingNumber, labelledAt: parcel.labelledAt ? toUtcIso(parcel.labelledAt) : null, status: last?.status ?? null, lastEventAt: last ? toUtcIso(last.occurredAt) : null }
+        return {
+          parcelId: parcel.id,
+          seq: parcel.seq,
+          trackingNumber: parcel.trackingNumber,
+          // B-W2b-F14: the carrier's tracking page (https only).
+          trackingUrl: trackingPageOf(parcel.trackingUrl),
+          labelledAt: parcel.labelledAt ? toUtcIso(parcel.labelledAt) : null,
+          status: last?.status ?? null,
+          lastEventAt: last ? toUtcIso(last.occurredAt) : null,
+        }
       }),
       events: [...events].reverse().map((event) => ({
         id: event.id,

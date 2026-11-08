@@ -778,6 +778,9 @@ model SalesSettings {
   cancelCutoffStatus     SalesOrderStatus?
   cancelCutoffDays       Int?
   changeCutoffStatus     SalesOrderStatus?
+  /// W2b (schema wave 23, B-W2b-157/-183's option; design portal.customer.orders "Ask to cancel" "Fee 15%"): the fee a
+  /// customer's cancel request is charged, in percent of the cancelled lines' net value (0 to 100); null: free.
+  cancelFeePct           Decimal?            @db.Decimal(7, 4)
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)

@@ -1,23 +1,27 @@
-import type { FactoryClient } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import type { ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { DVR_SIGNER_ROLES } from '@nexus/factory-domain/safety/risk/rules'
+import { completion, DVR_SIGNER_ROLES, dvrSignatureId, dvrSignatureKey, type DvrSignerRole } from '@nexus/factory-domain/safety/risk/rules'
 import { SAFETY_RISK_MANAGE } from '@nexus/factory-domain/safety/risk/permissions'
-import type { CommandTx } from '../../../core/command'
-import { words, type ReadContext, type RecordAdapter } from '../../../platform/approvals-out/adapter'
+import type { CommandTools, CommandTx } from '../../../core/command'
+import { words, type ReadContext, type RecordAdapter, type RequestRef } from '../../../platform/approvals-out/adapter'
+import { dateOf, dayOf } from '../organisation/access'
 
 /**
  * Outside signers of a DVR version by link (B-W2b-184 with B-W2b-122; follow-up AP1:02; design plant.risk "Send for
  * signature", links.approve): the RSPP, the territorial RLS or the occupational doctor who is an OUTSIDE contact of a party
  * (SafetyAppointment.outsidePartyId) gets an approval request of kind SIGNATURE on the version AWAITING_SIGNATURES, with the
  * frozen PDF attached (its SHA-256 on the page): one request per outside signer (the request's party is the appointee's).
- * The signer answers by its APPROVAL link with the typed name (signed and timed, the link's evidence on the request).
+ * The signer answers by its APPROVAL link (or in the portal) with the typed name (signed and timed, the evidence on the
+ * request).
  *
- * NOT written yet: the RiskAssessmentSignature row. Its method is OFFICE, PAPER or FLOOR_PIN and its guard asks an office
- * signer or recorder for OFFICE and PAPER (…_safety_w2b_guards), so a link signature would be recorded as something it is
- * not (the seal prints "signed on paper (scan on file)"). Schema need: SafetySignMethod LINK + RiskAssessmentSignature
- * .approvalRequestId (LINK ⇔ the request, no office signer). Until then the answer stays on the request (the evidence) and
- * on the version's history (an audit row), and the office records the paper as before.
+ * B-W2b-F13b (wave 23): an APPROVED answer is the signature. The settle (the tenant's system scope, after the answer) writes
+ * the RiskAssessmentSignature row: method LINK, the approval request, the outside appointee's appointment for the role it
+ * signs, the name the signer typed, the Rome day of the answer and the answer's instant, the version's SHA-256 — and, when it
+ * was the last signature the version waited for, the version becomes SIGNED with its certain date in the same command (as
+ * an office signature does). The seal is kept by the office afterwards (POST /safety/risk/versions/:id/seal: no file store
+ * here). A refused answer, a version no longer waiting, or a role signed meanwhile (on paper) writes no row: the version's
+ * history says why (`safety.signatureByLink`, signatureWritten false). factory-db's guard holds the same rules.
  */
 
 const RECORD = 'RiskAssessmentVersion'
@@ -94,8 +98,11 @@ export const SIGNATURE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
     const signer = chosen[0]!
     return { ...base, partyId: signer.partyId, label: `${label} · ${signer.role}`, held: null }
   },
-  async fileRecords(_client, recordId) {
-    return [{ type: RECORD, id: recordId }]
+  async fileRecords(client, recordId) {
+    // The frozen PDF (autoFiles) is a file of the assessment the version freezes (versions.ts), not of the version: without
+    // it here every SIGNATURE ask was refused "Not a file of this record" (B-W2b-F13b, found by its live check).
+    const version = await client.riskAssessmentVersion.findUnique({ where: { id: recordId }, select: { assessmentId: true } })
+    return [{ type: RECORD, id: recordId }, ...(version ? [{ type: 'RiskAssessment', id: version.assessmentId }] : [])]
   },
   async autoFiles(client, recordId) {
     const version = await client.riskAssessmentVersion.findUnique({ where: { id: recordId }, select: { fileId: true } })
@@ -121,13 +128,66 @@ export const SIGNATURE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
     if (version?.status !== 'AWAITING_SIGNATURES') return words(locale, 'Questa versione del documento non attende più firme.', 'This version of the document takes no more signatures.')
     return (await roleOf(client, request.recordId, request.partyId, new Date())) ? null : words(locale, 'La vostra firma su questa versione non è più attesa.', 'Your signature on this version is no longer expected.')
   },
-  async settle(tools, request) {
-    const version = await tools.tx.riskAssessmentVersion.findUnique({ where: { id: request.recordId }, select: { id: true, companyId: true, siteId: true, versionNo: true } })
-    if (!version) return null
-    const role = await roleOf(tools.tx, version.id, request.partyId, request.answeredAt ?? tools.now)
-    // The version's history keeps the outside signer's answer (the evidence is the request's); the signature row waits for
-    // SafetySignMethod LINK (see above).
-    tools.audit({ action: 'safety.signatureByLink', recordType: RECORD, recordId: version.id, companyId: version.companyId, siteId: version.siteId, after: { versionNo: version.versionNo, role, status: request.status, approvalRequestId: request.id, signatureWritten: false } })
-    return { role, signatureWritten: false }
-  },
+  settle: settleSignature,
 })
+
+/** Why no signature row is written for an answer (the version's history says it), or null when it is. */
+type NotWritten = 'NOT_APPROVED' | 'NO_ANSWER' | 'VERSION_NOT_WAITING' | 'NOT_EXPECTED'
+
+/** The settle of an answered SIGNATURE request (inside the settle's command, the tenant's system scope). */
+async function settleSignature(tools: CommandTools, request: RequestRef): Promise<Prisma.InputJsonObject | null> {
+  const { tx, now } = tools
+  // The version's lock first: an office signature of the same version waits (versions.ts takes the same lock).
+  await tx.$queryRaw`SELECT "id" FROM "RiskAssessmentVersion" WHERE "id" = ${request.recordId}::uuid FOR UPDATE`
+  const version = await tx.riskAssessmentVersion.findUnique({ where: { id: request.recordId }, select: { ...VERSION, assessmentId: true, signatures: { select: { role: true, signedOn: true } } } })
+  if (!version) return null
+  const answeredAt = request.answeredAt
+  const signer = answeredAt ? (await outsideSigners(tx, version, answeredAt)).find((candidate) => candidate.partyId === request.partyId) ?? null : null
+  const role = signer?.role ?? null
+  const scope = { companyId: version.companyId, siteId: version.siteId }
+  const base = { versionNo: version.versionNo, role, status: request.status, approvalRequestId: request.id }
+  const why: NotWritten | null =
+    request.status !== 'APPROVED' ? 'NOT_APPROVED' : !answeredAt || !request.typedName?.trim() ? 'NO_ANSWER' : version.status !== 'AWAITING_SIGNATURES' ? 'VERSION_NOT_WAITING' : !signer ? 'NOT_EXPECTED' : null
+  if (why !== null || !signer || !answeredAt) {
+    tools.audit({ action: 'safety.signatureByLink', recordType: RECORD, recordId: version.id, ...scope, after: { ...base, signatureWritten: false, why } })
+    return { role, signatureWritten: false, why }
+  }
+  const signerRole = signer.role as DvrSignerRole
+  const signedOn = businessDate(answeredAt)
+  const signatureId = dvrSignatureId(version.id, signerRole)
+  const signerName = request.typedName!.trim()
+  await tx.riskAssessmentSignature.create({
+    data: {
+      id: signatureId,
+      ...scope,
+      versionId: version.id,
+      key: dvrSignatureKey(version.id, signerRole),
+      role: signerRole,
+      appointmentId: signer.appointmentId,
+      signerName,
+      signedOn: dateOf(signedOn),
+      // The instant the signer approved: the signature was given then (the settle may run later).
+      signedAt: answeredAt,
+      method: 'LINK',
+      approvalRequestId: request.id,
+      signatureSha256: version.sha256,
+      createdAt: now,
+    },
+    select: { id: true },
+  })
+  const done = completion(version.signersRequired as DvrSignerRole[], [...version.signatures.map((signature) => ({ role: signature.role as DvrSignerRole, signedOn: dayOf(signature.signedOn) })), { role: signerRole, signedOn }])
+  tools.audit({
+    action: 'safety.signatureByLink',
+    recordType: RECORD,
+    recordId: version.id,
+    ...scope,
+    after: { ...base, signatureWritten: true, signatureId, method: 'LINK', signerName, signedOn, appointmentId: signer.appointmentId, signatureSha256: version.sha256 },
+  })
+  tools.emit({ type: 'risk_signature.collected', subject: version.assessmentId, ...scope, payload: { assessmentId: version.assessmentId, versionId: version.id, role: signerRole, method: 'LINK', complete: done.complete } })
+  if (done.complete) {
+    await tx.riskAssessmentVersion.update({ where: { id: version.id }, data: { status: 'SIGNED', certainDateOn: dateOf(done.certainDateOn!), signedAt: now, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+    tools.audit({ action: 'safety.dvrSigned', recordType: RECORD, recordId: version.id, ...scope, before: { status: 'AWAITING_SIGNATURES' }, after: { status: 'SIGNED', certainDateOn: done.certainDateOn } })
+    tools.emit({ type: 'risk_assessment_version.changed', subject: version.assessmentId, ...scope, payload: { assessmentId: version.assessmentId, versionId: version.id, versionNo: version.versionNo, change: 'SIGNED', certainDateOn: done.certainDateOn } })
+  }
+  return { role, signatureWritten: true, signatureId, complete: done.complete }
+}

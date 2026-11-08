@@ -109,7 +109,7 @@ const orderView = output({
   /** B-W2a-52 (SCM-087): when the supplier is asked to answer by (set at the send; the office may move it). */
   confirmBy: instant().nullable(),
   confirmedAt: instant().nullable(),
-  confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+  confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
   confirmedByName: z.string().nullable(),
   supplierRef: z.string().nullable(),
   confirmNote: z.string().nullable(),
@@ -184,7 +184,7 @@ export const listOrdersContract = defineContract({
           sentAt: instant().nullable(),
           confirmBy: instant().nullable(),
           confirmedAt: instant().nullable(),
-          confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+          confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
           confirmedByName: z.string().nullable(),
           declinedAt: instant().nullable(),
           /** B-W2a-52: the next open line's expected day (confirmed, else needed) and where the deliveries stand. */
@@ -723,7 +723,7 @@ export const supplierViewContract = defineContract({
         note: z.string().nullable(),
         sentAt: instant().nullable(),
         confirmedAt: instant().nullable(),
-        confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
+        confirmedVia: z.enum(['LINK', 'OFFICE', 'PORTAL']).nullable(),
         confirmedByName: z.string().nullable(),
         supplierRef: z.string().nullable(),
         confirmNote: z.string().nullable(),

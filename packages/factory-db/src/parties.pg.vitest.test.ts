@@ -86,8 +86,9 @@ describe('a portal or link session', () => {
     const scope = partner(partiesA.customerId)
     await expect(sql(scope, 'SELECT id FROM "ViesCheck"')).rejects.toThrow(DENIED)
     for (const table of PARTY_TABLES) {
-      // W2b (wave 21/22): a MEASUREMENTS link session inserts the revision the rider sent (…_portal_sales_w2b_guards).
-      await expect(run(scope, `INSERT INTO "${table}" (id) VALUES (NULL)`), table).rejects.toThrow(table === 'MeasurementProfile' ? /null value|row-level security/ : DENIED)
+      // W2b (wave 21/22): a MEASUREMENTS link session inserts the revision the rider sent (…_portal_sales_w2b_guards); W2b schema
+      // wave 23: a portal session adds a delivery address that waits for the office's check (…_portal_followups_w2b_guards).
+      await expect(run(scope, `INSERT INTO "${table}" (id) VALUES (NULL)`), table).rejects.toThrow(table === 'MeasurementProfile' || table === 'PartyAddress' ? /null value|row-level security/ : DENIED)
       await expect(run(scope, `UPDATE "${table}" SET id = id WHERE false`), table).rejects.toThrow(DENIED)
       await expect(run(scope, `DELETE FROM "${table}" WHERE false`), table).rejects.toThrow(DENIED)
     }

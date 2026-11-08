@@ -532,8 +532,27 @@ export function fileLink(api: ApiClient, fileId: string): Promise<z.infer<typeof
 }
 
 export const trackingSchema = z.object({
-  shipment: z.object({ status, carrierName: z.string().nullable(), shippedAt: instant.nullable(), deliveredAt: instant.nullable(), returnedAt: instant.nullable() }),
-  parcels: z.array(z.object({ parcelId: z.string(), seq: z.number(), trackingNumber: z.string().nullable(), labelledAt: instant.nullable(), status: z.enum(TRACKING_STATUSES).nullable(), lastEventAt: instant.nullable() })),
+  shipment: z.object({
+    status,
+    carrierName: z.string().nullable(),
+    shippedAt: instant.nullable(),
+    deliveredAt: instant.nullable(),
+    returnedAt: instant.nullable(),
+    /** B-W2b-F14: when the carrier expects to deliver (said at the label's purchase, moved by its tracking). */
+    expectedDeliveryAt: instant.nullable().optional(),
+  }),
+  parcels: z.array(
+    z.object({
+      parcelId: z.string(),
+      seq: z.number(),
+      trackingNumber: z.string().nullable(),
+      /** B-W2b-F14: the carrier's tracking page (https only). */
+      trackingUrl: z.string().nullable().optional(),
+      labelledAt: instant.nullable(),
+      status: z.enum(TRACKING_STATUSES).nullable(),
+      lastEventAt: instant.nullable(),
+    }),
+  ),
   events: z.array(
     z.object({
       id: z.string(),

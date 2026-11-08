@@ -55,6 +55,10 @@ model PartnerTask {
   doneById    String?           @db.Uuid
   /// The last reminder mail about it (the reminder job's mark): only moves later.
   remindedAt  DateTime?         @db.Timestamptz(3)
+  /// W2b (schema wave 23, B-W2b-167's need): the colleague it was handed to ("open requests move to a chosen colleague": an
+  /// active partner user of this party); null: anyone of the party. Set and moved only while OPEN, by the office or the
+  /// API as the person (a partner session only marks a task done).
+  assigneeId  String?           @db.Uuid
   version     Int               @default(1)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -63,12 +67,19 @@ model PartnerTask {
   party   Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   doneBy  User?   @relation("PartnerTaskDoneBy", fields: [tenantId, doneById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (schema wave 23): the colleague it was handed to; the supplier uploads that answered it.
+  assignee User?  @relation("PartnerTaskAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierDocumentUploads SupplierDocumentUpload[]
 
   @@unique([tenantId, recordType, recordId, kind, sourceKey])
+  // W2b (schema wave 23): the target of a supplier upload's reference: the task it answers is of its own party.
+  @@unique([tenantId, partyId, id])
   // What waits for a party, due first (Home, the rail badges).
   @@index([tenantId, partyId, status, dueAt])
   // The reminder job: open tasks by due time, every party.
   @@index([tenantId, status, dueAt])
+  // W2b (schema wave 23): a person's own open requests.
+  @@index([tenantId, assigneeId, status])
 }
 
 /// What a task asks the partner to do (design portal.frame action-needed "Kinds"; the verb in the row).

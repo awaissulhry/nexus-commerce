@@ -3,8 +3,10 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { LineChange } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { portalAnswerSummary, portalCountsOf, portalLineOfStored } from '@nexus/factory-domain/purchasing/portal-orders/answer'
 import { proposedLineOf } from '@nexus/factory-domain/purchasing/confirm/proposal'
+import { PO_RECORD_TYPE } from '@nexus/factory-domain/purchasing/portal-orders/views'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
+import { tasksOfRecord } from '../../../platform/portal/tasks/store'
 import { confirmLinksOf } from '../confirm-links'
 import { dayOf, officeOrder, quantityText, readLines, type OrderRow, type Reader } from '../store'
 import { PROPOSAL_ORDER_COLUMNS, proposalLinesOf } from './decide'
@@ -12,22 +14,44 @@ import { PROPOSAL_ORDER_COLUMNS, proposalLinesOf } from './decide'
 /**
  * The office's "Supplier's answer" panel of a purchase order (B-W1-31; design plan-buy-pay, record › Confirmations &
  * changes; purchasing.view over the order's company, site and supplier): where the answer stands in words, the
- * confirmation (who typed which name on the link, their reference and note) or the decline with its reasons, the
+ * confirmation (who typed which name on the link, or which person of the supplier confirmed it in the portal (`via`
+ * PORTAL, B-W2b-F13a); their reference and note) or the decline with its reasons, the
  * supplier's latest proposal with the buyer's decision, per line what was asked against what the supplier proposed and
  * confirmed, the evidence rows of the order's links (the name typed, the server time,
  * the hashed client address, the browser) and the links' states. No price: this panel is about quantities and dates.
  */
 
+/**
+ * Where the answer stands, in Italian and English (B-W2b-F15: it/en). WAITING says where the supplier answers
+ * (`waitingOn`): its emailed link, the portal (its portal is on and the order's CONFIRM_PO request is open there), or both
+ * while the link is still open too.
+ */
 const ANSWER_WORDS = {
-  NOT_SENT: 'Not sent yet: the supplier answers once the order is sent.',
-  WAITING: 'Waiting for the supplier to answer its link.',
-  CONFIRMED: 'Confirmed by the supplier.',
-  DECLINED: 'Declined by the supplier: change the order and send it again, or cancel it.',
-  CHANGES_PROPOSED: 'The supplier proposed changes: accept or refuse them.',
-  CLOSED: 'The order is past its answer.',
+  NOT_SENT: { en: 'Not sent yet: the supplier answers once the order is sent.', it: "Non ancora inviato: il fornitore risponde quando l'ordine è inviato." },
+  CONFIRMED: { en: 'Confirmed by the supplier.', it: 'Confermato dal fornitore.' },
+  DECLINED: { en: 'Declined by the supplier: change the order and send it again, or cancel it.', it: "Rifiutato dal fornitore: modifica l'ordine e invialo di nuovo, oppure annullalo." },
+  CHANGES_PROPOSED: { en: 'The supplier proposed changes: accept or refuse them.', it: 'Il fornitore ha proposto modifiche: accettale o rifiutale.' },
+  CLOSED: { en: 'The order is past its answer.', it: "L'ordine ha superato la fase di risposta." },
 } as const
 
-type AnswerState = keyof typeof ANSWER_WORDS
+/** The contract's `waitingOn` (./contract.ts). */
+type WaitingOn = 'LINK' | 'PORTAL' | 'PORTAL_OR_LINK'
+
+const WAITING_WORDS: Readonly<Record<WaitingOn, { readonly en: string; readonly it: string }>> = Object.freeze({
+  LINK: { en: 'Waiting for the supplier to answer its link.', it: 'In attesa che il fornitore risponda dal suo link.' },
+  PORTAL: { en: 'Waiting for the supplier to answer in the portal.', it: 'In attesa che il fornitore risponda nel portale.' },
+  PORTAL_OR_LINK: { en: 'Waiting for the supplier to answer in the portal or by its link.', it: 'In attesa che il fornitore risponda nel portale o dal suo link.' },
+})
+
+type AnswerState = keyof typeof ANSWER_WORDS | 'WAITING'
+
+/** Where a sent order's answer can come from: the portal (on, with the order's request open there), its open link, or both. */
+async function waitingOnOf(db: Reader, order: Pick<OrderRow, 'id' | 'partyId'>, links: readonly { readonly state: string }[]): Promise<WaitingOn> {
+  const portalOn = (await db.portalSettings.findFirst({ where: { partyId: order.partyId }, select: { portalOn: true } }))?.portalOn === true
+  const inPortal = portalOn && (await tasksOfRecord(db, PO_RECORD_TYPE, order.id, { kinds: ['CONFIRM_PO'], status: 'OPEN' })).length > 0
+  if (!inPortal) return 'LINK'
+  return links.some((link) => link.state === 'LIVE') ? 'PORTAL_OR_LINK' : 'PORTAL'
+}
 
 function answerStateOf(order: Pick<OrderRow, 'status' | 'confirmedAt'>): AnswerState {
   switch (order.status) {
@@ -64,6 +88,7 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
   const links = await confirmLinksOf(db, order.id, now)
   const evidence = links.length === 0 ? [] : await db.linkEvidence.findMany({ where: { linkId: { in: links.map((link) => link.id) } }, orderBy: [{ at: 'asc' }, { id: 'asc' }], select: { linkId: true, action: true, at: true, useNumber: true, typedName: true, ipHash: true, userAgent: true } })
   const state = answerStateOf(order)
+  const waitingOn = state === 'WAITING' ? await waitingOnOf(db, order, links) : null
   const proposal = await db.purchaseOrder.findUniqueOrThrow({ where: { id: order.id }, select: PROPOSAL_ORDER_COLUMNS })
   // B-W2b-174 (SCM-086): with the substitute the supplier offers and whether the line waits for the buyer's yes.
   const extras = new Map((await db.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, proposedSubstituteItemId: true, proposedSubstituteNote: true, proposalNeedsBuyer: true } })).map((row) => [row.id, row]))
@@ -79,12 +104,15 @@ async function answerOf(db: Reader, order: OrderRow, now: Date) {
     number: order.number,
     status: order.status,
     answer: state,
-    words: ANSWER_WORDS[state],
+    waitingOn,
+    words: waitingOn !== null ? WAITING_WORDS[waitingOn] : ANSWER_WORDS[state as keyof typeof ANSWER_WORDS],
     confirmation: order.confirmedAt && order.confirmedVia ? { at: toUtcIso(order.confirmedAt), via: order.confirmedVia, linkId: order.confirmLinkId, byName: order.confirmedByName, supplierRef: order.supplierRef, note: order.confirmNote } : null,
     decline: order.declinedAt ? { at: toUtcIso(order.declinedAt), reason: order.declineReason } : null,
     proposal: proposal.proposedAt
       ? {
           at: toUtcIso(proposal.proposedAt),
+          // A proposal names exactly one of its link and its portal person (the …_portal_followups_w2b guard).
+          via: proposal.proposalLinkId ? ('LINK' as const) : ('PORTAL' as const),
           linkId: proposal.proposalLinkId,
           byName: proposal.proposedByName,
           supplierRef: proposal.proposalSupplierRef,
