@@ -1,0 +1,164 @@
+/*
+ * Portal access in the office (B-W2b-180): Customer › Portal access, Supplier › Portal access, Admin › Users "Partners" and
+ * User › Partner organisation — LAYOUT only. The page fills the main area (no max-width, Owner rule 2026-10-29): the
+ * Portal and What they see cards sit side by side on a wide screen, one under the other below 960 px. The controls are the
+ * design system's; semantic tokens only.
+ */
+.fw-pa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pa-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .fw-pa-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pa-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin-bottom: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pa-head-text,
+.fw-pa-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pa-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pa-hint,
+.fw-pa-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pa-text {
+  margin: 0;
+}
+
+.fw-pa-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pa-error {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pa-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.fw-pa-stack,
+.fw-pa-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pa-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-pa-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12);
+}
+
+.fw-pa-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+.fw-pa-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pa-list {
+  margin: 0 0 var(--nds-space-12);
+  padding-inline-start: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pa-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pa-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pa-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pa-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-pa-cards-wide {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}

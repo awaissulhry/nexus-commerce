@@ -170,6 +170,11 @@ export const userSchema = z.object({
   lastSignInAt: z.string().nullable(),
   invitationExpiresAt: z.string().nullable(),
   version: z.number(),
+  // B-W2b-180: who the person signs in as; a partner's organisation, portal and end of access (Admin › Users "Partners").
+  audience: z.enum(['OFFICE', 'PARTNER']).optional(),
+  partyId: z.string().nullable().optional(),
+  partnerKind: z.enum(['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR', 'GUEST']).nullable().optional(),
+  accessUntil: z.string().nullable().optional(),
 })
 export type User = z.infer<typeof userSchema>
 export type UserRole = z.infer<typeof userRole>

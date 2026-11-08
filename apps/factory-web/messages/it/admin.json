@@ -699,13 +699,17 @@
     }
   },
   "users": {
-    "intro": "Tutti quelli che accedono: persone d'ufficio (invitate per e-mail, con doppio fattore) e operatori di reparto (badge e PIN, senza e-mail).",
+    "intro": "Tutti quelli che accedono: persone d'ufficio (invitate per e-mail, con doppio fattore), operatori di reparto (badge e PIN, senza e-mail) e le persone delle organizzazioni partner (il loro portale, un codice per e-mail).",
     "addWorker": "Aggiungi operatore",
     "invite": {
       "action": "Invita persone",
       "title": "Invita persone",
       "hint": "Chi sono, cosa fanno e dove. L'invito arriva per e-mail.",
       "valid": "L'invito vale 7 giorni.",
+      "until": "Fino al (facoltativo)",
+      "untilHint": "I suoi ruoli finiscono alla fine di quel giorno; lascialo vuoto per nessuna scadenza.",
+      "untilNoRole": "Scegli prima un ruolo: la scadenza vale per i ruoli dell'invito.",
+      "untilClear": "Nessuna scadenza",
       "go_one": "Invita 1 persona",
       "go_other": "Invita {count} persone",
       "who": "Chi",
@@ -742,7 +746,9 @@
       "office": "Ufficio",
       "floor": "Reparto",
       "officeCount": "Ufficio ({count})",
-      "floorCount": "Reparto ({count})"
+      "floorCount": "Reparto ({count})",
+      "partners": "Partner",
+      "partnersCount": "Partner ({count})"
     },
     "search": "Cerca persone",
     "tile": {
@@ -813,7 +819,7 @@
       "floor": "Aggiungi gli operatori di reparto",
       "floorBody": "Nessuna e-mail: nome, stabilimento, badge e PIN."
     },
-    "later": "Gli utenti dei partner arrivano in W2b; gli agenti IA in W3. Dare un ruolo a più persone, stampare i badge e reinviare gli inviti in una volta arrivano più avanti.",
+    "later": "Gli agenti IA arrivano in W3. Dare un ruolo a più persone, stampare i badge e reinviare gli inviti in una volta arrivano più avanti.",
     "hrData": "I dati del personale (squadra, linea, contratto, uscita) sono in Persone › Dipendenti: questa pagina tiene l'accesso.",
     "hrDataLink": "Apri Persone › Dipendenti",
     "worker": {
@@ -888,6 +894,7 @@
     "tab": {
       "profile": "Profilo",
       "roles": "Ruoli e ambito",
+      "partner": "Organizzazione partner",
       "activity": "Attività"
     },
     "giveRole": "Dai un ruolo",
@@ -939,7 +946,8 @@
       "notActive": "Solo per una persona attiva.",
       "notSuspended": "Solo per una persona sospesa.",
       "deactivated": "Questa persona è disattivata.",
-      "lastAdmin": "Bloccato: è l'ultimo amministratore. Prima dai il ruolo di amministratore a un'altra persona."
+      "lastAdmin": "Bloccato: è l'ultimo amministratore. Prima dai il ruolo di amministratore a un'altra persona.",
+      "partnerRole": "Il ruolo di un partner è un ruolo fisso del portale: si cambia nella scheda Accesso al portale della sua organizzazione."
     },
     "canDo": "Cosa possono fare",
     "noRole": "Nessun ruolo: questa persona può accedere ma non vede nulla.",

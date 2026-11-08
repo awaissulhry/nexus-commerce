@@ -94,6 +94,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
   `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
   Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
+- `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
+  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
+  and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
+  tab: `admin/users/partners/preview.ts`), People with access (list frame; invite, change, resend, revoke, suspend,
+  reactivate, deactivate behind the step-up), the live line (`partner_user.signed_in`), Requests waiting for them (B-W2b-167).
+  `src/areas/admin/users/partners/` — the partner client and rules every partner screen shares (`api.ts`, `model.ts`:
+  the end of access as a site day, reaches, drafts, refusals in words), Admin › Users audience Partners (SCR-010-partners,
+  `use-partners.ts`) and User › Partner organisation (SCR-011-partner). Catalogue `portal-access`. The order studio's ⋯
+  "See it in the customer's portal" previews `/p/<code>/open/SalesOrder/<id>`.
 - `src/portal/customer/account/` — the customer's Account (B-W2b-196, SCR-188, `/p/<party>/account`; catalogue
   `portal-account`): `AccountRoute.tsx` (the gate: a customer with portal.colleagues.view), `AccountPage.tsx` (the container:
   each card reads on its own; profile and e-mail drafts with ⌘S and the frame's unsaved guard; the admin's colleague acts
