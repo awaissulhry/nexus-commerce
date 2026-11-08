@@ -344,3 +344,47 @@ describe('mail to partners goes out under the branding\'s sender name', () => {
     expect((await first(`SELECT "fromName" FROM "EmailOutbound" WHERE id = $1`, [plain.body.email.id])).fromName).toMatch(/ via Identity name C1$/)
   })
 })
+
+describe('B-W2b-164: the portal sign-in page reads whose portal it is before anything is typed', () => {
+  const head = async (query: string) => h.app.inject({ method: 'GET', url: `/branding/portal-sign-in?${query}` })
+
+  it('by the address of the invitation mail (tenant + company code), or by the company id of the mailed link: the same answer', async () => {
+    const byAddress = await head('tenant=brand-a&company=C1')
+    expect(byAddress.statusCode, byAddress.body).toBe(200)
+    const answer = byAddress.json().head
+    expect(answer).toMatchObject({
+      tenant: 'brand-a',
+      company: { id: companyA, code: 'C1', name: 'Esempio Moto' },
+      branding: { companyId: companyA, name: 'Esempio Moto', companyName: 'Esempio Moto', logoPath: null, logoDarkPath: null, accentColour: null },
+      // The company's default conversation address: whom a partner asks (the sign-in refusals name it too).
+      contact: { email: 'noreply@brand-a.example.com' },
+    })
+    // The legal block as the company's documents print it, in each language (c.c. art. 2250).
+    expect(answer.legal.it.name).toBe('Test company C1')
+    expect(answer.legal.it.lines.join(' | ')).toContain('IT00000000000')
+    expect(answer.legal.en.lines.join(' | ')).toContain('IT00000000000')
+    expect(answer.legal.it.lines).not.toEqual(answer.legal.en.lines)
+    // Public facts only: nothing but these five parts.
+    expect(Object.keys(answer).sort()).toEqual(['branding', 'company', 'contact', 'legal', 'tenant'])
+    const byId = await head(`companyId=${companyA}`)
+    expect(byId.statusCode, byId.body).toBe(200)
+    expect(byId.json().head).toEqual(answer)
+    // The slug in any case, as typed from a mail.
+    const second = await head('tenant=BRAND-A&company=C2')
+    expect(second.json().head).toMatchObject({ tenant: 'brand-a', company: { id: companyA2, code: 'C2', name: 'Test company C2' }, contact: { email: null } })
+    // A tenant with ONE active company: the code may be left out (as POST /portal/signin/start allows).
+    const only = await head('tenant=brand-b')
+    expect(only.statusCode, only.body).toBe(200)
+    expect(only.json().head).toMatchObject({ tenant: 'brand-b', company: { id: tenantB.companies[0]!.id, code: 'C1' } })
+  })
+
+  it('one 404 for every miss, and no address at all is refused', async () => {
+    for (const query of ['tenant=brand-a', 'tenant=nobody&company=C1', 'tenant=brand-a&company=C9', `tenant=brand-a&companyId=${tenantB.companies[0]!.id}`, `companyId=${newId()}`]) {
+      const answer = await head(query)
+      expect(answer.statusCode, query).toBe(404)
+      expect(answer.body, query).not.toContain('brand-b')
+    }
+    expect((await head('')).statusCode).toBe(400)
+    expect((await head('companyId=not-an-id')).statusCode).toBe(400)
+  })
+})

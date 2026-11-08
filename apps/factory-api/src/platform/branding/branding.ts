@@ -44,6 +44,8 @@ import { logoBytes, usableLogoFile, type LogoBytes } from './logo'
  *   GET  /branding/public/:companyId                  anyone: what the portal's sign-in page shows before anything is typed
  *   GET  /branding/public/:companyId/logo/:fileId     anyone: the picture, only while it is that company's logo
  *   GET  /link/branding                               a link session: its sender's branding (the link page's head)
+ *   GET  /branding/portal-sign-in                    anyone (B-W2b-164, portal-head.ts): the portal sign-in page's head by its
+ *                                                     address (tenant + company code) or company id; contact and legal block
  *
  * The later portal steps call `publicBrandingOf` with the company of their session (in the tenant's system scope: the
  * branding has no partner grant). An unbranded company keeps the design system's colours and shows its name.
@@ -256,7 +258,7 @@ export async function completeLogo(caller: CommandCaller, companyId: string, fil
 // ---- anyone, and link sessions --------------------------------------------------------------------------------------------
 
 /** A view of the request in another context (the platform's, a tenant's system), as the public privacy notice reads. */
-function asContext(request: FastifyRequest, context: RequestContext): FastifyRequest {
+export function asContext(request: FastifyRequest, context: RequestContext): FastifyRequest {
   const view = Object.create(request) as FastifyRequest
   view.factoryContext = context
   return view
