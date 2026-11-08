@@ -74,9 +74,11 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     badge: 'orders',
     phone: 'tab',
     key: 'o',
-    built: false,
+    // B-W2b-191: the customer's Orders & tracking.
+    built: true,
     pages: [
-      { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: false },
+      // B-W2b-191: the customer's Orders & tracking (SCR-184).
+      { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: true },
       { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: false },
     ],
   },
@@ -138,7 +140,8 @@ export interface PortalRecordPage {
 }
 
 export const RECORD_PAGES: readonly PortalRecordPage[] = [
-  { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: false },
+  // B-W2b-191: the customer's order (Status & progress first).
+  { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: true },
   { kinds: ['CUSTOMER'], type: 'Quote', href: (id) => `/quotes/${id}`, built: false },
   // B-W2b-179: the supplier's purchase order (its Lines tab first).
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },

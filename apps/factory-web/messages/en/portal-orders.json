@@ -1,0 +1,555 @@
+{
+  "state": {
+    "loading": "Loading…",
+    "stillLoading": "Still loading…",
+    "retry": "Try again"
+  },
+  "ref": {
+    "yours": "Your PO",
+    "ours": "Our order"
+  },
+  "prices": {
+    "none": "Prices are not part of your access."
+  },
+  "offline": {
+    "title": "No connection — showing what was loaded at {time}"
+  },
+  "notice": {
+    "hide": "Hide",
+    "changeSent": "Your change request was sent. We answer here and by e-mail.",
+    "cancelSent": "Your cancel request was sent. We answer here and by e-mail.",
+    "withdrawn": "Your request was withdrawn."
+  },
+  "noAccess": {
+    "title": "This page is not part of your access",
+    "ask": "To see your orders, ask your admin: {names}.",
+    "askAdmin": "To see your orders, ask the admin of your organisation.",
+    "home": "Go to Home"
+  },
+  "band": {
+    "updated": "Updated {time}",
+    "export": "Export this view (CSV)",
+    "print": "Print this list",
+    "change": "Ask for a change",
+    "reconfirm": "Re-confirm version {version}",
+    "cancel": "Ask to cancel…",
+    "pay": "Pay the deposit",
+    "history": "Promise date history",
+    "confirmation": "Order confirmation PDF"
+  },
+  "keys": {
+    "search": "Search your orders",
+    "open": "Open the order",
+    "rows": "Next / previous order",
+    "orders": "Next / previous order of the list",
+    "tabs": "Between the tabs",
+    "close": "Close the window"
+  },
+  "chips": {
+    "label": "Which orders",
+    "chip": "{name}: {count}",
+    "clear": "Clear filters"
+  },
+  "list": {
+    "title": "Orders & tracking",
+    "label": "Your orders",
+    "fileName": "orders",
+    "search": "Search your orders",
+    "searchHint": "Your PO, our order or a style code…",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "countOf": "{shown} of {count} orders",
+    "more": "Show more",
+    "failed": "Your orders could not be read",
+    "failedBody": "Nothing changed. Try again in a moment.",
+    "empty": "No orders yet.",
+    "emptyBody": "Your orders with us show here as soon as we confirm them.",
+    "noMatch": "No orders match these filters",
+    "noMatchSearch": "Nothing found for “{q}”.",
+    "noMatchChip": "No order is in this group right now.",
+    "clear": "Clear filters",
+    "requestWaits": "To be confirmed by us",
+    "asked": "date asked",
+    "moved": "was {date}",
+    "piecesShipped": "{shipped} of {ordered} shipped",
+    "piecesOpen_one": "{count} open",
+    "piecesOpen_other": "{count} open",
+    "allShipped": "All shipped",
+    "eta": "expected {date}"
+  },
+  "col": {
+    "order": "Order",
+    "yourPo": "Your PO",
+    "ourOrder": "Our order",
+    "orderedOn": "Ordered",
+    "status": "Status",
+    "promise": "Promised",
+    "pieces": "Pieces",
+    "ordered": "Ordered",
+    "shipped": "Shipped",
+    "open": "Open",
+    "value": "Net value",
+    "currency": "Currency",
+    "nextShipment": "Next shipment",
+    "actions": "Actions"
+  },
+  "row": {
+    "open": "Open the order",
+    "lines": "Lines",
+    "shipments": "Shipments & tracking",
+    "messages": "Messages",
+    "menu": "Actions for order {number}"
+  },
+  "bulk": {
+    "export": "Export {count}"
+  },
+  "held": {
+    "noRows": "Nothing to export in this view.",
+    "busy": "Sending…",
+    "offline": "No connection",
+    "preview": "An office preview cannot send anything.",
+    "previewFiles": "An office preview does not open documents.",
+    "mayAsk": "Only colleagues who may order can ask for changes: ask your admin.",
+    "mayApprove": "Only colleagues allowed to approve can re-confirm an order: ask your admin.",
+    "mayPay": "Only colleagues who pay invoices can pay online: ask your admin.",
+    "reading": "Reading what is possible…",
+    "verdict": "{words}"
+  },
+  "transit": {
+    "title": "On the way",
+    "failed": "The parcels on their way could not be read",
+    "shipment": "Shipment {number}",
+    "open": "Opens the shipments of order {number}",
+    "steps": "Shipment {number} progress"
+  },
+  "print": {
+    "title": "Print this list",
+    "toolbar": "Print",
+    "print": "Print",
+    "back": "Back to the list",
+    "held": "The list is still being read.",
+    "filters": "Shown: {chip}",
+    "filtersSearch": "Shown: {chip} · search “{q}”",
+    "chipOpen": "Open",
+    "printedBy": "Printed by {name} on {when}",
+    "capped": "The first {shown} of {count} orders."
+  },
+  "record": {
+    "title": "Order {number}",
+    "missing": "Order not found",
+    "missingBody": "It is not one of your orders, or it no longer exists.",
+    "toList": "Back to your orders",
+    "failed": "The order could not be read",
+    "failedBody": "Nothing changed. Try again in a moment."
+  },
+  "tabs": {
+    "label": "Order",
+    "status": "Status & progress",
+    "lines": "Lines",
+    "shipments": "Shipments & tracking",
+    "documents": "Documents",
+    "messages": "Messages",
+    "toConfirm": "to confirm"
+  },
+  "messages": {
+    "hint": "Ask us anything about this order. You can also answer our e-mails."
+  },
+  "unsaved": {
+    "change": "Your change request is not sent yet."
+  },
+  "tracker": {
+    "title": "Where your order is",
+    "label": "Order {number} progress",
+    "promise": "Promised for",
+    "firstPromised": "First promised for {date}",
+    "noPromise": "We give the delivery date when we confirm the order.",
+    "moved_one": "Date moved once",
+    "moved_other": "Date moved {count} times",
+    "cancelled": "This order was cancelled.",
+    "cancelledOn": "Cancelled on {date}"
+  },
+  "history": {
+    "title": "Promise date history",
+    "open_one": "The promise date moved once: see why",
+    "open_other": "The promise date moved {count} times: see why",
+    "move": "{on}: {from} → {to}",
+    "set": "{on}: set to {to}"
+  },
+  "requests": {
+    "title": "Your requests",
+    "failed": "Your requests could not be read",
+    "asked": "Asked {when}",
+    "askedByYou": "You asked {when}",
+    "withdraw": "Withdraw",
+    "ourAnswer": "Our answer: {answer}",
+    "acceptedOn": "Accepted on {date}",
+    "wholeOrder": "The whole order",
+    "lines": "Lines {lines}",
+    "fee": "Fee {fee}",
+    "cell": "Line {seq} · {size}: {old} → {new}",
+    "date": "Wanted by {date}",
+    "shipTo": "Deliver to {address}",
+    "note": "Your note: {note}"
+  },
+  "progress": {
+    "title": "Production progress",
+    "failed": "The progress could not be read",
+    "line": "Line {seq} · {style} {colour}",
+    "of": "{stage} {count} of {ordered}",
+    "notScanned": "{stage}: not counted here",
+    "sizes": "Per size",
+    "sizesOf": "{title}: per size",
+    "refresh": "Counted from the floor scans, at most once every {seconds} seconds."
+  },
+  "deposit": {
+    "title": "Deposit",
+    "gate": "Production starts when the deposit is received.",
+    "due": "Due",
+    "status": "Status",
+    "paidOn": "Paid on {date}",
+    "payCard": "Pay by card",
+    "kind": {
+      "ACCONTO": "Deposit (acconto)",
+      "CAPARRA": "Deposit (caparra)"
+    },
+    "state": {
+      "OPEN": "Open",
+      "PAID": "Paid",
+      "WAIVED": "Waived",
+      "CANCELLED": "Cancelled"
+    },
+    "card": {
+      "unavailable": "Paying by card is not available now: pay by bank transfer.",
+      "notPayable": "Nothing is left to pay online for this deposit."
+    }
+  },
+  "facts": {
+    "title": "Order facts",
+    "orderedOn": "Ordered on",
+    "requested": "Requested date",
+    "promise": "Promise date",
+    "shipTo": "Delivery address",
+    "paymentTerms": "Payment terms",
+    "withdrawal": "Right of withdrawal",
+    "noWithdrawal": "No right of withdrawal (made to measure)"
+  },
+  "revision": {
+    "label": "What changed in version {version}",
+    "line": "Line {seq} · {style} · {colour}",
+    "change": {
+      "ADDED": "Added",
+      "REMOVED": "Removed",
+      "CHANGED": "Changed"
+    },
+    "field": {
+      "customerRef": "Your PO",
+      "requestedDate": "Requested date"
+    },
+    "pieces": "Pieces",
+    "sizes": "Sizes",
+    "size": "{size}: {old} → {new}",
+    "amount": "Line amount",
+    "oldNew": "{old} → {new}",
+    "was": "Was",
+    "now": "Now",
+    "net": "Net total {old} → {new}",
+    "voids": "The net value changed: your earlier acceptance no longer holds until you confirm this version."
+  },
+  "reconfirm": {
+    "banner": "We revised this order (version {version}). Please review and confirm by {date}.",
+    "bannerSoon": "We revised this order. We will ask you to confirm the new version.",
+    "bannerNoAccess": "We revised this order and wait for your confirmation.",
+    "askColleague": "A colleague who may approve confirms it: ask your admin.",
+    "failed": "The revised order could not be read",
+    "review": "Review and confirm",
+    "whatChanged_one": "What changed (1 change)",
+    "whatChanged_other": "What changed ({count} changes)",
+    "title": "Re-confirm order version {version}",
+    "due": "{number} · please answer by {date}",
+    "why": "Why it changed: {reason}",
+    "choose": "Your answer",
+    "approve": "Confirm version {version}",
+    "approveHint": "The order goes ahead as revised.",
+    "decline": "Decline",
+    "declineHint": "Tell us why: we answer in Messages.",
+    "reason": "Why do you decline?",
+    "sign": "Sign your answer",
+    "legal": "By typing your name you confirm version {version} of the order for your organisation.",
+    "legalDecline": "By typing your name you decline version {version} for your organisation.",
+    "name": "Your name and surname",
+    "nameEmpty": "Type your name and surname",
+    "go": {
+      "choose": "Choose your answer first",
+      "APPROVED": "Confirm version {version}",
+      "REFUSED": "Decline and sign"
+    },
+    "problem": {
+      "choose": "Choose Confirm or Decline first.",
+      "why": "Tell us why you decline.",
+      "long": "Your words are too long: keep them under 4000 characters.",
+      "name": "Type your full name as you sign.",
+      "changed": "This request changed a moment ago: close and open it again."
+    },
+    "held": {
+      "answered": "This version was already answered.",
+      "closed": "This request no longer takes an answer."
+    },
+    "done": {
+      "APPROVED": "Version {version} confirmed",
+      "REFUSED": "Version {version} declined",
+      "signed": "Signed by {name} on {when}.",
+      "next": {
+        "APPROVED": "We go ahead with the order as revised. A copy reaches you by e-mail.",
+        "REFUSED": "We will contact you in this order’s Messages."
+      }
+    }
+  },
+  "lines": {
+    "title": "What you ordered",
+    "label": "The order’s lines",
+    "count_one": "{count} line · {pieces} pieces",
+    "count_other": "{count} lines · {pieces} pieces",
+    "col": {
+      "line": "Line",
+      "style": "Style",
+      "colour": "Colourway",
+      "pieces": "Pieces",
+      "open": "Open",
+      "price": "Unit price",
+      "amount": "Line amount",
+      "promise": "Line date"
+    },
+    "pieces": "{shipped} of {ordered} shipped",
+    "closedShort_one": "{count} piece closed short",
+    "closedShort_other": "{count} pieces closed short",
+    "asOrder": "As the order",
+    "mtm": "Made to measure: {rider} · rev. {revision}",
+    "mtmUnit": "One made-to-measure unit for {rider} (measurements rev. {revision}), base size {size}.",
+    "mtmUnitNone": "One made-to-measure unit.",
+    "menu": "Actions for line {seq}",
+    "showSizes": "Show the sizes",
+    "askChange": "Ask for a change on this line",
+    "sizesTitle": "Sizes of each line",
+    "sizesOf": "Line {seq} · {style} {colour}"
+  },
+  "sizes": {
+    "size": "Size",
+    "ordered": "Ordered",
+    "shipped": "Shipped",
+    "open": "Open",
+    "closedShort": "Closed short",
+    "price": "Unit price"
+  },
+  "totals": {
+    "title": "Totals",
+    "what": "What",
+    "amount": "Amount",
+    "net": "Net",
+    "vat": "VAT",
+    "gross": "Total incl. VAT",
+    "depositPaid": "Deposit paid",
+    "toPay": "To pay on the invoice"
+  },
+  "shipments": {
+    "failed": "The shipments could not be read",
+    "none": "Nothing shipped yet.",
+    "firstExpected": "Expected first shipment: {date}.",
+    "noneYet": "We tell you here as soon as a parcel leaves.",
+    "title": "Shipment {number}",
+    "ddt": "Delivery note (DDT)",
+    "ddtOf": "{number} of {date}",
+    "carrier": "Carrier",
+    "by": {
+      "SENDER": "Our own transport",
+      "RECIPIENT": "Collected by you",
+      "CARRIER": "A carrier"
+    },
+    "parcels": "Parcels",
+    "delivered": "Delivered",
+    "eta": "Expected delivery",
+    "shipped": "Shipped",
+    "steps": "Shipment {number} progress",
+    "parcelsOf": "Parcels of shipment {number}",
+    "parcel": "Parcel {seq}",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyOf": "Copy tracking number {number}",
+    "noTracking": "No tracking number",
+    "lastEvent": "Last: {what} · {when}",
+    "track": "Track on the carrier’s site",
+    "contents_one": "What it carries (1 piece)",
+    "contents_other": "What it carries ({count} pieces)",
+    "contentsOf": "What shipment {number} carries",
+    "events_one": "Tracking events (1)",
+    "events_other": "Tracking events ({count})",
+    "papers": "Papers",
+    "noPapers": "No papers shared for this shipment yet.",
+    "col": {
+      "line": "Line",
+      "style": "Style",
+      "colour": "Colourway",
+      "pieces": "Pieces"
+    }
+  },
+  "toShip": {
+    "title": "Still to ship",
+    "none": "Everything has shipped.",
+    "open": "Pieces open",
+    "expected": "Expected"
+  },
+  "docs": {
+    "label": "Documents of this order",
+    "failed": "The documents could not be read",
+    "none": "No documents yet.",
+    "noneBody": "Confirmations, delivery papers and certificates show here once we share them.",
+    "noAccess": "Documents are not part of your access",
+    "noAccessBody": "Ask your admin if you need them.",
+    "version": "Version {version}",
+    "versionPrint": "v{version} · {fingerprint}…",
+    "replacedBy": "Replaced by v{version}",
+    "new": "New",
+    "preview": "Preview",
+    "download": "Download",
+    "downloadOf": "Download {format}: {title}",
+    "format": {
+      "PDF": "PDF",
+      "XML": "XML",
+      "FILE": "File"
+    },
+    "previewFailed": "The document could not be opened",
+    "downloadFailed": "The document could not be downloaded. Try again in a moment.",
+    "withdrawn": "This version was replaced by a newer one: open the newest in Documents.",
+    "noConfirmation": "No order confirmation is shared for this order yet.",
+    "confirmation": "Order confirmation"
+  },
+  "dialog": {
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "discard": {
+    "title": "Discard your change?",
+    "body": "What you typed is not sent yet and will be lost.",
+    "stay": "Stay",
+    "go": "Discard"
+  },
+  "change": {
+    "title": "Ask for a change on {number}",
+    "editStep": "Step 1 of 2: what to change",
+    "reviewStep": "Step 2 of 2: check and send",
+    "failed": "What may change could not be read",
+    "hint": "Change the pieces per size, the date or the delivery address. We answer here and by e-mail.",
+    "line": "Line {seq} · {style} · {colour}",
+    "was": "Was {count}",
+    "date": "We would like it by",
+    "dateNow": "Requested now: {date}",
+    "dateNone": "Leave empty to keep the date.",
+    "shipTo": "Deliver to",
+    "shipToSame": "As agreed",
+    "shipToNow": "As agreed: {address}",
+    "newAddress": "A new address? Add it in Account first.",
+    "note": "Note",
+    "noteHint": "Anything we should know (optional).",
+    "review": "Review the change",
+    "back": "Back",
+    "send": "Send request",
+    "reviewHint": "This is what you ask. Nothing changes until we answer.",
+    "reviewLabel": "Your change, old → new",
+    "size": "Size {size}",
+    "pieces": "{delta} pieces",
+    "sendKeys": "⌘ Enter sends.",
+    "problem": {
+      "nothing": "Change a size, the date or the address first.",
+      "emptied": "A line would have no pieces left: ask to cancel that line instead.",
+      "long": "The note is too long: keep it under 2000 characters."
+    }
+  },
+  "cancel": {
+    "title": "Ask to cancel {number}",
+    "failed": "What may be cancelled could not be read",
+    "hint": "We check your request and answer here and by e-mail. Nothing is cancelled until we accept it.",
+    "what": "What to cancel",
+    "whole": "The whole order",
+    "some": "Some lines",
+    "someHint": "Choose the lines below.",
+    "lines": "Lines",
+    "lineFee": "fee {fee}",
+    "fee": "Fee {fee}",
+    "reason": "Reason",
+    "reasonPick": "Choose a reason",
+    "note": "Note",
+    "noteHint": "Anything we should know (optional).",
+    "noteNeeded": "Tell us a few words: this reason needs them.",
+    "send": "Send cancel request",
+    "problem": {
+      "lines": "Choose at least one line that may be cancelled.",
+      "reason": "Choose a reason.",
+      "note": "Tell us a few words about this reason.",
+      "long": "The note is too long: keep it under 2000 characters."
+    }
+  },
+  "problem": {
+    "changed": "The order changed a moment ago: see what is possible now.",
+    "forbidden": "Your access does not allow this: ask your admin.",
+    "missing": "This order is no longer there.",
+    "invalid": "Something in the request is not right: check it and try again.",
+    "rateLimited": "Too many tries: wait a minute and try again.",
+    "unavailable": "We cannot be reached right now: try again in a moment.",
+    "internal": "Something went wrong on our side. Nothing was sent.",
+    "verdict": {
+      "FREE": "The order changed a moment ago: see what is possible now.",
+      "NOT_ASKABLE": "This order has moved on: it can no longer be changed from the portal.",
+      "OPEN_REQUEST": "A request of yours on this order already waits for our answer.",
+      "STATUS": "Not possible at this stage of the order.",
+      "DAYS": "Not possible this close to the delivery date.",
+      "MADE_TO_MEASURE": "A made-to-measure order cannot be changed from the portal: write to us in Messages.",
+      "CLOSED_SHORT": "That line is already closed.",
+      "CUT": "Not possible: cutting has started.",
+      "LEATHER_CUT": "Not possible: the leather was cut.",
+      "WHOLE_ORDER_ONLY": "Only the whole order can be asked to be cancelled."
+    }
+  },
+  "pay": {
+    "title": "Pay the deposit",
+    "purpose": "Deposit for order {number}",
+    "fakeProvider": "the test payment provider",
+    "fakeNote": "Test payments only: no card is charged. Choose what the bank does.",
+    "method": {
+      "CARD": "Card",
+      "SEPA_DEBIT": "SEPA Direct Debit"
+    },
+    "methodHint": {
+      "CARD": "Visa, Mastercard and the like; your bank may ask you to confirm.",
+      "SEPA_DEBIT": "From your bank account; it takes a few days to arrive."
+    },
+    "scenario": {
+      "succeed": "The bank accepts",
+      "decline": "The bank declines",
+      "authenticate": "The bank asks to confirm",
+      "fail_authentication": "The confirmation fails",
+      "settle": "The money arrives"
+    },
+    "paid": "Paid. We confirm it by e-mail.",
+    "cancelled": "This payment was stopped. Start it again.",
+    "problem": {
+      "NOT_OPEN": "Nothing is left to pay for this deposit.",
+      "NO_PROVIDER": "Paying online is not available now: pay by bank transfer.",
+      "CURRENCY": "This deposit cannot be paid online in its currency: pay by bank transfer.",
+      "NOT_PAYABLE": "This deposit cannot be paid online: pay by bank transfer.",
+      "PROVIDER": "The payment provider did not answer: try again in a moment.",
+      "IN_PROGRESS": "A colleague is paying this deposit right now."
+    }
+  },
+  "size": {
+    "caption": "Pieces by size",
+    "colour": "Colourway",
+    "total": "Total",
+    "cellName": "{colour}, size {size}",
+    "notOffered": "not offered",
+    "empty": "No sizes.",
+    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
+    "notWhole": "{cell}: whole pieces only, 0 to {max}.",
+    "cutToMax": "{cell}: cut to {max}.",
+    "pasted": "{applied} pasted, {skipped} left out.",
+    "issues": "Check these sizes"
+  }
+}
