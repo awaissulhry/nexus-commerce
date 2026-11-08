@@ -699,13 +699,17 @@
     }
   },
   "users": {
-    "intro": "Everyone who signs in: office people (invited by e-mail, two-factor) and floor workers (a badge and a PIN, no e-mail).",
+    "intro": "Everyone who signs in: office people (invited by e-mail, two-factor), floor workers (a badge and a PIN, no e-mail) and the people of partner organisations (their portal, a code by e-mail).",
     "addWorker": "Add floor worker",
     "invite": {
       "action": "Invite people",
       "title": "Invite people",
       "hint": "Who they are, what they do and where. The invite comes by e-mail.",
       "valid": "The invite works for 7 days.",
+      "until": "Until (optional)",
+      "untilHint": "Their roles end at the end of that day; leave it empty for no end.",
+      "untilNoRole": "Pick a role first: the end applies to the roles of the invite.",
+      "untilClear": "No end",
       "go_one": "Invite 1 person",
       "go_other": "Invite {count} people",
       "who": "Who",
@@ -742,7 +746,9 @@
       "office": "Office",
       "floor": "Floor",
       "officeCount": "Office ({count})",
-      "floorCount": "Floor ({count})"
+      "floorCount": "Floor ({count})",
+      "partners": "Partners",
+      "partnersCount": "Partners ({count})"
     },
     "search": "Search people",
     "tile": {
@@ -813,7 +819,7 @@
       "floor": "Add the floor workers",
       "floorBody": "No e-mail needed: a name, a site, a badge and a PIN."
     },
-    "later": "Partner users come in W2b; AI agents in W3. Giving a role to many people, printing badges and resending invites in one go come later.",
+    "later": "AI agents come in W3. Giving a role to many people, printing badges and resending invites in one go come later.",
     "hrData": "HR data (team, line, contract, leaving) is kept in People › Employees: this page keeps the sign-in.",
     "hrDataLink": "Open People › Employees",
     "worker": {
@@ -888,6 +894,7 @@
     "tab": {
       "profile": "Profile",
       "roles": "Roles & scope",
+      "partner": "Partner organisation",
       "activity": "Activity"
     },
     "giveRole": "Give role",
@@ -939,7 +946,8 @@
       "notActive": "Only for an active person.",
       "notSuspended": "Only for a suspended person.",
       "deactivated": "This person is deactivated.",
-      "lastAdmin": "Held: the last administrator. Give another person the administrator role first."
+      "lastAdmin": "Held: the last administrator. Give another person the administrator role first.",
+      "partnerRole": "A partner's role is a fixed portal role: change it on their organisation's Portal access tab."
     },
     "canDo": "What they can do",
     "noRole": "No role: this person can sign in but sees nothing.",

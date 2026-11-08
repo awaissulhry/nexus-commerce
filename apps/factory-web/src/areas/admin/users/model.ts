@@ -2,6 +2,7 @@ import type { Role, User, UserRole, Worker } from '../shared/api'
 import { reachOf, type BulkReach } from '../shared/reach'
 import { grainsOf, matches, scopeWords, type Grain, type Loaded, type Notice, type ScopeChoice, type ScopeOption, type StepUpModel } from '../shared/model'
 import { isLastAdmin } from './record/model'
+import type { PartnersAudienceModel } from './partners/view/PartnersPeople'
 
 /**
  * SCR-010 Users (design 02 admin.users; PLT-014, PLT-015, PLT-018): everyone who signs in, by kind — office people
@@ -9,7 +10,8 @@ import { isLastAdmin } from './record/model'
  * roles). Pure: the tiles' filters, the rows, what money each person sees, the invite and add-worker checks.
  */
 
-export type Audience = 'office' | 'floor'
+// B-W2b-180: 'partners' = the people of the partner organisations (areas/admin/users/partners).
+export type Audience = 'office' | 'floor' | 'partners'
 export const OFFICE_TILES = ['invited', 'noTwoFactor', 'suspended', 'deactivated'] as const
 export const FLOOR_TILES = ['locked', 'noPin', 'noBadge', 'inactive'] as const
 export type OfficeTile = (typeof OFFICE_TILES)[number]
@@ -76,6 +78,8 @@ export interface UsersViewModel {
   /** The worker just added (the dialog shows what to do next). */
   workerMade?: Worker | null
   stepUp?: StepUpModel
+  /** B-W2b-180: the Partners audience (partners.view); null without the right. */
+  partners?: PartnersAudienceModel | null
 }
 
 export function officeTileMatch(tile: OfficeTile, user: User): boolean {
@@ -171,6 +175,8 @@ export interface InviteDraft {
   roleIds: string[]
   scope: ScopeChoice
   locale: string
+  /** B-W2b-180 (design pop:invite "until (optional, W2b)"): the last day the invite's roles last ('YYYY-MM-DD'; '' = no end). */
+  until?: string
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

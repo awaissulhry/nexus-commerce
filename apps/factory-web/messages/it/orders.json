@@ -249,7 +249,8 @@
     "closeLines": "Chiudi le righe rimaste…",
     "reopenLines": "Riapri righe…",
     "copyAsQuote": "Copia come nuovo preventivo…",
-    "cancel": "Annulla ordine…"
+    "cancel": "Annulla ordine…",
+    "portal": "Vedi nel portale del cliente"
   },
   "record": {
     "back": "Ordini",
@@ -319,7 +320,9 @@
     "closeLinesOnly": "Non è partito nulla ed è l'unica riga aperta: annulla l'ordine",
     "reopenState": "Un ordine chiuso o annullato tiene le righe chiuse",
     "reopenNone": "Nessuna riga è chiusa in anticipo",
-    "noQuotes": "Fare preventivi richiede il diritto commerciale di gestire i preventivi"
+    "noQuotes": "Fare preventivi richiede il diritto commerciale di gestire i preventivi",
+    "portalRight": "Serve il permesso di vedere in anteprima il portale di un partner.",
+    "portalOpening": "Apertura del portale del cliente…"
   },
   "summary": {
     "label": "L'ordine in sintesi",
@@ -1178,5 +1181,10 @@
     "problem": {
       "past": "Una data è oggi o dopo."
     }
+  },
+  "portal": {
+    "forbidden": "Non puoi vedere in anteprima il portale di questo cliente.",
+    "noKind": "Questo cliente non ha un portale: nei suoi ruoli non è né cliente né marchio.",
+    "failed": "Il portale del cliente non si è aperto. Riprova."
   }
 }
