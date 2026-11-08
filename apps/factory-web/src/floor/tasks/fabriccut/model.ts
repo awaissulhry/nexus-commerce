@@ -345,7 +345,8 @@ export function recutLayout(label: { readonly heading: string; readonly title: s
  */
 export function fabricScan(read: Exclude<ScanRead, { kind: 'badge' }>, raw: string): { readonly code: string; readonly label: LabelType | null; readonly misread: boolean; readonly ticketLike: boolean } {
   const misread = read.kind === 'otherFactory' || read.kind === 'typo'
-  const ticketLike = misread || (read.kind === 'label' && read.type === 'carton')
+  // B-W2b-F16: the reader names a cut ticket's number itself (a free code); a misread or carton read still counts.
+  const ticketLike = misread || (read.kind === 'label' && read.type === 'carton') || (read.kind === 'free' && read.cutTicket === true)
   return { code: ticketLike ? raw.trim() : read.code, label: read.kind === 'label' && !ticketLike ? read.type : null, misread, ticketLike }
 }
 

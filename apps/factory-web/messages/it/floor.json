@@ -451,6 +451,10 @@
     "hide": {
       "notUsable": "Non tagliare questa pelle: il suo lotto non è rilasciato."
     },
+    "cutTicket": {
+      "title": "Buono di taglio letto",
+      "body": "Si usa al tavolo di taglio: apri Taglio tessuto lì e scansionalo."
+    },
     "notOnFloor": {
       "title": "Etichetta {type} letta",
       "body": "La sua scheda non è ancora sul tablet. Chiedi all'ufficio."
@@ -526,7 +530,8 @@
     "workOrder": "Ordine di lavoro",
     "roll": "Rotolo",
     "remnant": "Ritaglio",
-    "machine": "Macchina"
+    "machine": "Macchina",
+    "cutTicket": "Buono di taglio"
   },
   "labelPlural": {
     "hide": "le pelli",

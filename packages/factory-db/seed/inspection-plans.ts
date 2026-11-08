@@ -270,7 +270,7 @@ export async function seed(context: SeedContext): Promise<InspectionPlansSeed> {
       })
       await tx.inspectionCheckResult.create({ data: { id: id('inspection-plans:result:final:CE_MARK'), siteId: siteA, inspectionId, planCheckId: checkIds.ce, outcome: InspectionCheckOutcome.PASS, ...recorded, ...by }, select: { id: true } })
       await tx.inspectionMeasurement.create({
-        data: { id: id('inspection-plans:measure:final:CHEST'), siteId: siteA, inspectionId, planCheckId: checkIds.chest, pointCode: 'CHEST-HALF', size: '52', nominal: '58.000', tolerance: '1.000', measured: '58.400', uom: Uom.CM, ...recorded, ...by },
+        data: { id: id('inspection-plans:measure:final:CHEST'), siteId: siteA, inspectionId, planCheckId: checkIds.chest, pointCode: 'CHEST', size: '52', nominal: '58.000', tolerance: '1.000', measured: '58.400', uom: Uom.CM, ...recorded, ...by },
         select: { id: true },
       })
 

@@ -171,9 +171,6 @@ export function decidedWords(kind: ApprovalKind, status: ApprovalStatus, typedNa
   return `${stateWords(status, locale)} — ${signed}. ${nextWords(kind, approved, locale)}`
 }
 
-/** A request as a portal row or an office row reads its due: "Answer by 7 Nov". */
-export const dueWords = (dueAt: Date, locale: ApprovalLocale): string => (locale === 'it' ? `Rispondere entro il ${shortDayOf(dueAt, locale)}` : `Answer by ${shortDayOf(dueAt, locale)}`)
-
 // ---- PLT-089: an office approval opened from its e-mail --------------------------------------------------------------
 
 /**

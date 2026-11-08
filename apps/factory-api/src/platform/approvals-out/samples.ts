@@ -7,7 +7,7 @@ import { PURCHASING_SUBCONTRACT_MANAGE } from '@nexus/factory-domain/purchasing/
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import type { CommandTx } from '../../core/command'
-import { words, type ApprovalRecord, type RecordAdapter } from './adapter'
+import { sameWords, words, type ApprovalRecord, type RecordAdapter } from './adapter'
 
 /**
  * Samples, colours, leathers and artworks (B-W2b-184; COL-064 "approval requests to partners (samples)"; design
@@ -44,7 +44,7 @@ function sampleAdapter(recordType: string, view: Permission, ask: Permission, ba
           : row.partyId === null
             ? `${row.label} is made for no customer or supplier: ask on its quote or order.`
             : row.closed
-      return { companyId: row.companyId ?? '', siteId: row.siteId, partyId: row.partyId, label: row.label, held, thread: { type: recordType, id: recordId } }
+      return { companyId: row.companyId ?? '', siteId: row.siteId, partyId: row.partyId, label: sameWords(row.label), held, thread: { type: recordType, id: recordId } }
     },
     async fileRecords(_client, recordId) {
       return [{ type: recordType, id: recordId }]

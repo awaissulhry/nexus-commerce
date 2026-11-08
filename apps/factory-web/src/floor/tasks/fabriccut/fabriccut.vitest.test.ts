@@ -125,7 +125,7 @@ describe('the steps of a lay', () => {
     }
     for (let n = 1; n <= 40; n++) {
       const number = `CTA-2026-${String(n).padStart(5, '0')}`
-      expect(scanned(number), number).toMatchObject({ code: number, label: null })
+      expect(scanned(number), number).toMatchObject({ code: number, label: null, misread: false, ticketLike: true })
     }
     const carton = formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 })
     expect(scanned(carton)).toMatchObject({ code: carton, label: null, ticketLike: true })
