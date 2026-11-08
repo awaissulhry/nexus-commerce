@@ -1,0 +1,153 @@
+/*
+ * DS — LineResponseList (B-W2b-155). A list of lines, each: what | asked | your answer | actions on a wide box; one
+ * column on a narrow one (a container query, so the link column and the portal's main area decide by their own width),
+ * the asked value and the answer stacked. Semantic tokens only; sizes read `--nds-density-*` (the console's sizes at
+ * standard, the portal's comfortable tier gives the big targets). An answer that changes something is marked on its
+ * left edge AND by its tags in words (never colour alone).
+ */
+.nds-lrl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-lrl / inline-size;
+}
+.nds-lrl-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+.nds-lrl-lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-lrl-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-lrl-line:first-child {
+  border-top: 0;
+}
+.nds-lrl-what,
+.nds-lrl-asked,
+.nds-lrl-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-lrl-answer {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-left: var(--nds-space-3) solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+}
+.nds-lrl-line:not([data-kind='AS_ASKED']) > .nds-lrl-answer {
+  border-left-color: var(--nds-warning);
+}
+.nds-lrl-line[data-kind='CANNOT'] > .nds-lrl-answer {
+  border-left-color: var(--nds-danger);
+}
+.nds-lrl-line[data-locked='true'] > .nds-lrl-answer {
+  border-left-color: var(--nds-success);
+}
+.nds-lrl-seq,
+.nds-lrl-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-lrl-title {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-lrl-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  overflow-wrap: anywhere;
+}
+.nds-lrl-value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-lrl-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-lrl-locked {
+  color: var(--nds-success-text);
+}
+.nds-lrl-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+.nds-lrl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.nds-lrl-review {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* A wide box: what | asked | your answer | actions, the actions at the right edge of the row. */
+@container nds-lrl (min-width: 720px) {
+  .nds-lrl-line {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.6fr) auto;
+    align-items: start;
+    gap: var(--nds-space-8) var(--nds-space-16);
+  }
+  .nds-lrl-actions {
+    justify-content: flex-end;
+  }
+}
+
+/* ---- the line's editor (inside the Modal; a bottom sheet on a phone) ---- */
+.nds-lrl-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  container: nds-lrl-form / inline-size;
+}
+.nds-lrl-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-lrl-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+@container nds-lrl-form (min-width: 380px) {
+  .nds-lrl-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.nds-lrl-delivery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}

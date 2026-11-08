@@ -37,6 +37,17 @@ import type { GateExplainerLabels } from '@nexus/ui/components/GateExplainer/ind
 import type { SignOffPanelLabels } from '@nexus/ui/components/SignOffPanel/index'
 import type { LimitMeterLabels } from '@nexus/ui/components/LimitMeter/index'
 import type { FloorChecklistLabels } from '@nexus/ui/floor/FloorChecklist/index'
+// B-W2b-155: the portal and link parts (each its own entry point).
+import type { EndStateLabels } from '@nexus/ui/components/EndState/index'
+import type { CodeInputLabels } from '@nexus/ui/components/CodeInput/index'
+import type { RefPairLabels } from '@nexus/ui/components/RefPair/index'
+import type { MilestoneTrackerLabels } from '@nexus/ui/components/MilestoneTracker/index'
+import type { PaymentPanelLabels } from '@nexus/ui/components/PaymentPanel/index'
+import type { ActionListLabels } from '@nexus/ui/patterns/ActionList/index'
+import type { PartnerThreadLabels } from '@nexus/ui/patterns/PartnerThread/index'
+import type { LineResponseListLabels } from '@nexus/ui/patterns/LineResponseList/index'
+import type { PortalActionBarLabels } from '@nexus/ui/patterns/PortalActionBar/index'
+import type { SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
 import { formatDateTime, formatNumber, DEFAULT_TIME_ZONE } from './format'
 import { INTL_LOCALE, type Locale } from './locales'
 import type { Translate } from './messages'
@@ -113,6 +124,18 @@ export interface DsLabels {
   signOffPanel: SignOffPanelLabels
   limitMeter: LimitMeterLabels
   floorChecklist: FloorChecklistLabels
+  // B-W2b-155
+  endState: EndStateLabels
+  codeInput: CodeInputLabels
+  refPair: RefPairLabels
+  milestoneTracker: MilestoneTrackerLabels
+  paymentPanel: PaymentPanelLabels
+  actionList: ActionListLabels
+  partnerThread: PartnerThreadLabels
+  lineResponseList: LineResponseListLabels
+  portalActionBar: PortalActionBarLabels
+  /** The stacked size grid's words: spread into the grid's `copy` with the area's own (`{ ...words, ...ds.sizeGridStacked }`). */
+  sizeGridStacked: Pick<SizeGridCopy, 'colourPicker' | 'colourTab' | 'sizeHeader' | 'leftHeader' | 'quantityHeader' | 'left' | 'less' | 'more' | 'atZero' | 'atMax' | 'stackTotals'>
 }
 
 const MINUTE = 60_000
@@ -484,6 +507,7 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     },
     ...floorPeopleLabels(t),
     ...qualityFloorLabels(t),
+    ...portalLinkLabels(t),
   }
 }
 
@@ -626,6 +650,214 @@ function floorPeopleLabels(t: Translate): Pick<
       copied: seal('copied'),
       copyFailed: seal('copyFailed'),
       region: seal('region'),
+    },
+  }
+}
+
+/** B-W2b-155 — the portal and link parts' words (`ds-words`: endState … lineResponseList, sizeGridStacked). */
+function portalLinkLabels(t: Translate): Pick<
+  DsLabels,
+  | 'endState' | 'codeInput' | 'refPair' | 'milestoneTracker' | 'paymentPanel' | 'actionList' | 'partnerThread' | 'lineResponseList'
+  | 'portalActionBar' | 'sizeGridStacked'
+> {
+  const k = (part: string) => (key: string, params?: Record<string, string | number>) => t(`${part}.${key}`, params)
+  const es = k('endState')
+  const ci = k('codeInput')
+  const rp = k('refPair')
+  const mt = k('milestoneTracker')
+  const pp = k('paymentPanel')
+  const al = k('actionList')
+  const pt = k('partnerThread')
+  const lr = k('lineResponseList')
+  const pab = k('portalActionBar')
+  const sg = k('sizeGridStacked')
+  return {
+    endState: {
+      next: es('next'),
+      receipt: es('receipt'),
+      reference: es('reference'),
+      copyReference: (value) => es('copyReference', { value }),
+      copied: es('copied'),
+      copyFailed: es('copyFailed'),
+      yourCopy: es('yourCopy'),
+      yourCopyNamed: (file) => es('yourCopyNamed', { file }),
+      contact: es('contact'),
+      emailTo: (name) => es('emailTo', { name }),
+      callTo: (name) => es('callTo', { name }),
+      busy: es('busy'),
+    },
+    codeInput: {
+      label: ci('label'),
+      hint: (length) => ci('hint', { length }),
+      triesLeft: (count) => ci('triesLeft', { count }),
+      checking: ci('checking'),
+      resendIn: (left) => ci('resendIn', { left }),
+      resend: ci('resend'),
+      resending: ci('resending'),
+      resent: ci('resent'),
+    },
+    refPair: {
+      theirs: rp('theirs'),
+      ours: rp('ours'),
+      copy: (value) => rp('copy', { value }),
+      copied: rp('copied'),
+      copyFailed: rp('copyFailed'),
+      pair: (theirs, ours) => rp('pair', { theirs, ours }),
+    },
+    milestoneTracker: {
+      list: mt('list'),
+      states: { done: mt('states.done'), partly: mt('states.partly'), current: mt('states.current'), todo: mt('states.todo'), skipped: mt('states.skipped') },
+      doneOn: (date) => mt('doneOn', { date }),
+      partlyOn: (date) => mt('partlyOn', { date }),
+      usually: (date) => mt('usually', { date }),
+      stepOf: (step, total) => mt('stepOf', { step, total }),
+      promised: (date) => mt('promised', { date }),
+      moved: (count) => mt('moved', { count }),
+      history: mt('history'),
+      move: (on, from, to) => mt('move', { on, from, to }),
+      set: (on, to) => mt('set', { on, to }),
+    },
+    paymentPanel: {
+      amount: pp('amount'),
+      method: pp('method'),
+      start: pp('start'),
+      pay: (amount) => pp('pay', { amount }),
+      pickMethod: pp('pickMethod'),
+      starting: pp('starting'),
+      paying: (provider) => (provider ? pp('payingTo', { provider }) : pp('paying')),
+      waiting: pp('waiting'),
+      busy: pp('busy'),
+      failedTitle: pp('failedTitle'),
+      retry: pp('retry'),
+      succeededTitle: pp('succeededTitle'),
+      fields: (provider) => (provider ? pp('fieldsBy', { provider }) : pp('fields')),
+      secure: (provider) => (provider ? pp('secureTo', { provider }) : pp('secure')),
+    },
+    actionList: {
+      empty: al('empty'),
+      groupCount: (count) => al('groupCount', { count }),
+      overdue: (date) => (date ? al('overdueSince', { date }) : al('overdue')),
+      dueIn: (left) => al('dueIn', { left }),
+      dueNow: al('dueNow'),
+      dueOn: (date) => al('dueOn', { date }),
+      undo: al('undo'),
+      busy: al('busy'),
+    },
+    partnerThread: {
+      title: pt('title'),
+      conversation: pt('conversation'),
+      you: pt('you'),
+      yourTeam: pt('yourTeam'),
+      channels: { email: pt('channels.email'), portal: pt('channels.portal'), app: pt('channels.app') },
+      messageFrom: (who, time) => pt('messageFrom', { who, time }),
+      attachments: pt('attachments'),
+      empty: pt('empty'),
+      loading: pt('loading'),
+      failed: pt('failed'),
+      retry: pt('retry'),
+      earlier: pt('earlier'),
+      reading: pt('reading'),
+      composer: pt('composer'),
+      send: pt('send'),
+      sending: pt('sending'),
+      emptyHeld: pt('emptyHeld'),
+      attach: pt('attach'),
+      attachHint: pt('attachHint'),
+      attached: (count) => pt('attached', { count }),
+    },
+    lineResponseList: {
+      list: lr('list'),
+      line: (seq) => lr('line', { seq }),
+      asked: lr('asked'),
+      yourAnswer: lr('yourAnswer'),
+      askedValue: (quantity, unit, date) => lr('askedValue', { quantity, unit, date }),
+      delivery: (quantity, unit, date) => lr('delivery', { quantity, unit, date }),
+      answerAsAsked: lr('answerAsAsked'),
+      answerOther: (quantity, unit, date) => lr('answerOther', { quantity, unit, date }),
+      answerSplit: (first, second) => lr('answerSplit', { first, second }),
+      answerCannot: lr('answerCannot'),
+      answerSubstitute: (what, delivery) => lr('answerSubstitute', { what, delivery }),
+      answerChange: lr('answerChange'),
+      reason: (reason) => lr('reason', { reason }),
+      changeSaid: (words) => lr('changeSaid', { words }),
+      changes: {
+        LATER: lr('changes.LATER'), EARLIER: lr('changes.EARLIER'), LESS: lr('changes.LESS'), MORE: lr('changes.MORE'),
+        SPLIT: lr('changes.SPLIT'), CANNOT: lr('changes.CANNOT'), SUBSTITUTE: lr('changes.SUBSTITUTE'), CHANGE: lr('changes.CHANGE'),
+      },
+      locked: lr('locked'),
+      change: lr('change'),
+      changeAria: (seq) => lr('changeAria', { seq }),
+      asAskedAgain: lr('asAskedAgain'),
+      asAskedAgainAria: (seq) => lr('asAskedAgainAria', { seq }),
+      allAsAsked: lr('allAsAsked'),
+      allAsAskedHeld: lr('allAsAskedHeld'),
+      review: (summary) => lr('review', { summary }),
+      summary: {
+        allAsAsked: (count) => lr('summary.allAsAsked', { count }),
+        asAsked: (count) => lr('summary.asAsked', { count }),
+        later: (count) => lr('summary.later', { count }),
+        earlier: (count) => lr('summary.earlier', { count }),
+        quantity: (count) => lr('summary.quantity', { count }),
+        split: (count) => lr('summary.split', { count }),
+        cannot: (count) => lr('summary.cannot', { count }),
+        substitute: (count) => lr('summary.substitute', { count }),
+        change: (count) => lr('summary.change', { count }),
+      },
+      summaryJoin: lr('summaryJoin'),
+      sheetTitle: (seq) => lr('sheetTitle', { seq }),
+      kind: lr('kind'),
+      kinds: {
+        AS_ASKED: lr('kinds.AS_ASKED'), OTHER: lr('kinds.OTHER'), SPLIT: lr('kinds.SPLIT'), CANNOT: lr('kinds.CANNOT'),
+        SUBSTITUTE: lr('kinds.SUBSTITUTE'), CHANGE: lr('kinds.CHANGE'),
+      },
+      kindHints: {
+        OTHER: lr('kindHints.OTHER'), SPLIT: lr('kindHints.SPLIT'), CANNOT: lr('kindHints.CANNOT'),
+        SUBSTITUTE: lr('kindHints.SUBSTITUTE'), CHANGE: lr('kindHints.CHANGE'),
+      },
+      quantity: (unit) => lr('quantity', { unit }),
+      date: lr('date'),
+      substituteKeep: lr('substituteKeep'),
+      first: lr('first'),
+      second: lr('second'),
+      substituteChoice: lr('substituteChoice'),
+      substituteChoiceNone: lr('substituteChoiceNone'),
+      substitute: lr('substitute'),
+      substituteHint: lr('substituteHint'),
+      reasonField: lr('reasonField'),
+      reasonOptional: lr('reasonOptional'),
+      changeField: lr('changeField'),
+      reasonHint: lr('reasonHint'),
+      save: lr('save'),
+      cancel: lr('cancel'),
+      problems: {
+        nothing: lr('problems.nothing'),
+        same: lr('problems.same'),
+        sameDay: lr('problems.sameDay'),
+        quantityNumber: lr('problems.quantityNumber'),
+        quantityPositive: lr('problems.quantityPositive'),
+        dateMissing: lr('problems.dateMissing'),
+        datePast: lr('problems.datePast'),
+        dateFar: lr('problems.dateFar'),
+        reasonMissing: lr('problems.reasonMissing'),
+        changeMissing: lr('problems.changeMissing'),
+        reasonLong: (max) => lr('problems.reasonLong', { max }),
+        substituteMissing: lr('problems.substituteMissing'),
+        substituteLong: (max) => lr('problems.substituteLong', { max }),
+      },
+    },
+    portalActionBar: { region: pab('region'), busy: pab('busy') },
+    sizeGridStacked: {
+      colourPicker: sg('colourPicker'),
+      colourTab: (colour, total) => sg('colourTab', { colour, total }),
+      sizeHeader: sg('sizeHeader'),
+      leftHeader: sg('leftHeader'),
+      quantityHeader: sg('quantityHeader'),
+      left: (count) => sg('left', { count }),
+      less: (cell) => sg('less', { cell }),
+      more: (cell) => sg('more', { cell }),
+      atZero: sg('atZero'),
+      atMax: (max) => sg('atMax', { max }),
+      stackTotals: ({ colour, total, grand }) => sg('stackTotals', { colour, total, grand }),
     },
   }
 }

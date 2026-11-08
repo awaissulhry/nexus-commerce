@@ -13,6 +13,8 @@ import type { ComponentType, ReactNode } from 'react'
 export type ScreenId = `SCR-${string}` | 'list-frame' | 'ds-words' | 'ds-parts' | 'ds-floor-parts'
   // B-W2b-78: the quality and floor DS parts' lab.
   | 'ds-quality-parts'
+  // B-W2b-155: the portal and link DS parts.
+  | 'ds-portal-parts'
 
 export interface DesignCase<M> {
   /** Unique in the screen; part of the frame's address (`/design/SCR-003/normal`). */

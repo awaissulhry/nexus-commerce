@@ -14,6 +14,10 @@
   --nds-brand-accent: var(--nds-primary);
 }
 
+[data-brand] .dark {
+  --nds-brand-accent: var(--nds-primary);
+}
+
 [data-brand~='primary-light']:not(.dark, .dark *) {
   --nds-primary: var(--nds-brand-primary-light);
   --nds-primary-hover: var(--nds-brand-primary-hover-light);
@@ -23,11 +27,11 @@
   --nds-brand-accent: var(--nds-brand-accent-light);
 }
 
-.dark [data-brand~='primary-dark'], .dark[data-brand~='primary-dark'] {
+.dark [data-brand~='primary-dark'], .dark[data-brand~='primary-dark'], [data-brand~='primary-dark'] .dark {
   --nds-primary: var(--nds-brand-primary-dark);
   --nds-primary-hover: var(--nds-brand-primary-hover-dark);
 }
 
-.dark [data-brand~='accent-dark'], .dark[data-brand~='accent-dark'] {
+.dark [data-brand~='accent-dark'], .dark[data-brand~='accent-dark'], [data-brand~='accent-dark'] .dark {
   --nds-brand-accent: var(--nds-brand-accent-dark);
 }

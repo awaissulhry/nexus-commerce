@@ -1,3 +1,55 @@
+## Portal and link parts — EndState, CodeInput, RefPair, MilestoneTracker, PaymentPanel, ActionList, PartnerThread, LineResponseList, PortalActionBar, the Modal phone sheet (R1), the stacked SizeGridEditor, branding for pop-ups (D24) (B-W2b-155) — 2026-11-07
+
+Additive only: nine new parts in new folders, each its own entry point with its stylesheet imported by the part (none in a
+barrel the web pulls into its pages), and three changes to existing parts that are OFF unless a screen asks, so Commerce
+renders as before: `Modal` `sheet` (default false), `SizeGridEditor` `layout` (default `table`; markup identical to
+before, held by a parity check against the previous source and a committed test), and `brandPortals` / the dark-surface
+branding rules (they act only inside a `[data-brand]` subtree; nothing in Commerce calls `brandPortals`). Every part
+speaks through `labels?: Partial<XLabels>` (English `X_LABELS` beside it, `mergeLabels`); dates, times and amounts come
+written from the app. Data in, events out: none reads an API, none holds card data.
+- **`EndState`** (`components/EndState/`): the one end of a link or portal task and every link state — icon by tone, the
+  headline (a heading that takes the focus when the end appears), what happened, what happens next (steps in order), the
+  receipt, the reference (copy), your copy (download), actions ("Ask for a new link": pressed once, held with its `done`
+  words), the page's extra (the deposit's bank details, a PaymentPanel) and whom to contact (mailto / tel).
+- **`CodeInput`** (`components/CodeInput/`): a one-time code — ONE input (`autocomplete="one-time-code"`, numeric) under
+  boxes drawn from its value, a pasted sentence gives its run of 6 digits, the last digit submits (`onComplete`), tries
+  left in words, held whole with the reason on screen (`heldReason`, `busy`), resend after a `Countdown`.
+- **`RefPair`** (`components/RefPair/`): the partner's reference first, ours second; each copyable ("Copied" said in a
+  polite region); a search match marked (case and accents ignored); inline or stacked. `useCopyText` (shared with EndState).
+- **`MilestoneTracker`** (`components/MilestoneTracker/`): customer-word steps with a date each (done / partly / now /
+  to come / skipped as a word and a mark), the current step `aria-current="step"`, estimates as "Usually by …", the promise
+  date with its from → to history and reasons; across from 40rem of its own width, down below; `compact` dots for a row.
+- **`PaymentPanel`** (`components/PaymentPanel/`): the payment provider's own fields (`fields`, or `mountFields` for its
+  script) inside a DS frame: amount, what it pays, the method (RadioCards), starting / paying / waiting ("don't close this
+  page") / failed (in our words, Try again) / succeeded; it never draws an input for card or bank data.
+- **`ActionList`** (`patterns/ActionList/`): what waits for a partner, grouped by kind, due as a `Countdown` (today, soon),
+  overdue with its date, the one verb inline (runs in place, then done + Undo), a signing verb opens the page's dialog
+  (`aria-haspopup`), a link verb is a real link; `actionListCounts` is the one model for the list and the rail badges.
+- **`PartnerThread`** (`patterns/PartnerThread/`): the partner side of a record's thread — shared messages only (there is
+  no internal-note kind), the body as plain text (never mail HTML), attachments as links, a composer with the record's
+  shared files, Send held while empty, "You can also answer our e-mails", the reason instead of the box when the person
+  may only read; earlier messages, loading and error states.
+- **`LineResponseList`** (`patterns/LineResponseList/`, lifted from W1's `links/po-confirm`): answer a request line by
+  line — "All as asked" in one tap, or per line another date or quantity, two deliveries, cannot, a substitute, another
+  change, each with its reason, the asked value beside the answer, the summary before sending; the line editor is a Modal
+  phone sheet; the model (`lineDraftProblems`, `lineResponseSummary`, `lineResponseOutcome`) lets the page hold its Send by
+  the same rules.
+- **`PortalActionBar`** (`patterns/PortalActionBar/`): on a phone (under 720 px) the band's primary action in a bar fixed
+  just above the BottomBar (and the safe area), with a measured spacer in the page's flow; held with its reason as a line
+  in the bar; nothing drawn from 720 px; `inline` in the flow.
+- **`Modal` `sheet`** (DS-GAPS R1; `components/modalSheet.css`): under 720 px a bottom sheet — full width, rounded top
+  corners, a grab handle (pulled past 72 px it closes, a held close stays held), safe-area padding, a 44 px Close, the
+  footer's buttons sharing the row. Ignored for `detail` and `full`. From 720 px nothing changes.
+- **`SizeGridEditor` `layout="stacked"`** (or `auto`: stacked under 760 px): one colourway at a time (tabs with swatch and
+  pieces), sizes as rows with − / + (held at 0 and at the max, with words), `left` counts beside each size, the totals in
+  words; same model, cell names, keys turned to the screen (↑ / ↓, Enter) and paste (`stackedPasteText`: a single column
+  lands down the sizes). New `SizeGridCopy` words (`colourPicker` … `stackTotals`), English by default.
+- **Branding for pop-ups** (D24, `tokens/branding.ts`, generated `styles/branding.css`): `brandPortals(branding)` puts the
+  subtree's `data-brand` and `--nds-brand-*` properties on `<body>` while a branded screen is shown (and returns the undo),
+  so every portalled surface (Modal, sheet, menu, tooltip, toast) draws the brand; a `.dark` surface inside a branded
+  subtree takes the dark roles again (a dark pop-up re-declares the design system's dark tokens on itself). `tokens.css`
+  and `tokens-global.css` unchanged.
+
 ## Quality and floor parts — GateExplainer, SignOffPanel, LimitMeter (with ToleranceCell), FloorChecklist (B-W2b-78) — 2026-11-07
 
 Additive only: four new parts in new folders, each its own entry point with its stylesheet imported by the part (none in

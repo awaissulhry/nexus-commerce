@@ -1,0 +1,160 @@
+/*
+ * DS — CodeInput (B-W2b-155). The boxes are drawn from the one input's value; the input lies over them, its text and
+ * caret transparent, so a tap anywhere on the boxes focuses it and the phone's code suggestion lands in it. The active
+ * box shows the caret bar while the field has the focus. At least 16 px type in the input (a phone never zooms into it).
+ * Colours are semantic tokens; sizes read `--nds-density-*` (the portal's comfortable tier: 44 px boxes).
+ */
+.nds-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-code-label {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-code-hint {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-code-boxes {
+  position: relative;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: var(--nds-space-4);
+}
+.nds-code-cells {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.nds-code-cellwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.nds-code-cell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--nds-density-control-h-primary) * 0.86);
+  min-width: var(--nds-space-32);
+  height: calc(var(--nds-density-control-h-primary) * 1.1);
+  min-height: var(--nds-space-40);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  font-size: calc(var(--nds-density-font-body) * 1.4);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-strong);
+}
+.nds-code-gap {
+  width: var(--nds-space-6);
+  height: var(--nds-space-2);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-border-strong);
+}
+.nds-code[data-focused='true'] .nds-code-cell[data-active='true'] {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+}
+.nds-code[data-focused='true'] .nds-code-cell[data-active='true']:not([data-filled])::after {
+  content: '';
+  width: var(--nds-space-2);
+  height: 45%;
+  background: var(--nds-text);
+  animation: nds-code-caret 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nds-code[data-focused='true'] .nds-code-cell[data-active='true']:not([data-filled])::after {
+    animation: none;
+  }
+}
+@keyframes nds-code-caret {
+  50% {
+    opacity: 0;
+  }
+}
+.nds-code[data-state='error'] .nds-code-cell {
+  border-color: var(--nds-danger);
+}
+.nds-code[data-state='held'] .nds-code-cell,
+.nds-code[data-state='busy'] .nds-code-cell {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+/* The real field, over the boxes: transparent text and caret, its own focus ring drawn round all the boxes. */
+.nds-code-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nds-density-radius);
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: max(16px, var(--nds-density-font-body));
+  letter-spacing: 0;
+  outline: none;
+  cursor: text;
+}
+.nds-code-input::selection {
+  background: transparent;
+  color: transparent;
+}
+.nds-code-input:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: calc(var(--nds-density-focus-offset) + var(--nds-space-2));
+}
+.nds-code-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.nds-code-lines:empty {
+  display: none;
+}
+.nds-code-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-code-error {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-code-tries {
+  color: var(--nds-text);
+}
+.nds-code-held {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-code-resend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  margin-top: var(--nds-space-4);
+}
+.nds-code-wait {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-code-sent {
+  color: var(--nds-success-text);
+}

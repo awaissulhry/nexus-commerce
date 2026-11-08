@@ -40,6 +40,15 @@
  * attributes on `<body>`, as `densityAttrs` does. The theme is the `.dark` class the tokens CSS uses (on `<html>` or any
  * ancestor). The logo and the name come back from `checkBranding` (`logoUrl` is dropped unless it is https, a path on
  * this site or an inline image) for the page's header to draw.
+ *
+ * ## Pop-ups (D24, B-W2b-155)
+ *
+ * A Modal, Menu, Tooltip, Toast or sheet renders into `<body>`, outside the subtree, so it drew the design system's
+ * primary. A screen that is one brand (a link page, the portal) calls `brandPortals(branding)` once it is shown (in an
+ * effect): `<body>` then carries the same `data-brand` and `--nds-brand-*` properties, every portalled surface draws the
+ * brand, and the returned function puts back what `<body>` had. A dark pop-up (`.dark` on the surface itself, which
+ * re-declares the design system's dark tokens) takes the dark roles again inside a branded subtree (`darkOnly` below).
+ * Nothing calls it unless a screen does: a page without branding keeps its pop-ups as they were.
  */
 import type { CSSProperties } from 'react'
 import { palette } from './colors'
@@ -296,8 +305,11 @@ export function brandingAttrs(branding: BrandingTokens | BrandingCheck): { 'data
 
 /** Matches an element in the light theme: not `.dark` and under no `.dark`. */
 const lightOnly = (selector: string) => `${selector}:not(.dark, .dark *)`
-/** Matches an element in the dark theme: under a `.dark`, or `.dark` itself. */
-const darkOnly = (selector: string) => `.dark ${selector}, .dark${selector}`
+/**
+ * Matches an element in the dark theme: under a `.dark`, or `.dark` itself — and a `.dark` surface inside the subtree (a
+ * dark pop-up re-declares the design system's dark tokens on itself, so the brand is set again there; D24).
+ */
+const darkOnly = (selector: string) => `.dark ${selector}, .dark${selector}, ${selector} .dark`
 
 /**
  * The rules of `styles/branding.css` (`tools/generate-tokens-css.ts` writes them). Each fires only for a role
@@ -311,9 +323,48 @@ export function brandBlocks(): ReadonlyArray<{ selector: string; vars: ReadonlyA
   ]
   return [
     { selector: '[data-brand]', vars: [{ section: 'Branding: decoration follows the subtree\'s primary unless the accent passed', name: '--nds-brand-accent', value: 'var(--nds-primary)' }] },
+    // D24: a dark surface inside the subtree (a dark pop-up) follows its own primary too, unless the dark accent passed.
+    { selector: '[data-brand] .dark', vars: [{ name: '--nds-brand-accent', value: 'var(--nds-primary)' }] },
     { selector: lightOnly("[data-brand~='primary-light']"), vars: primary('light') },
     { selector: lightOnly("[data-brand~='accent-light']"), vars: [{ name: '--nds-brand-accent', value: `var(${BRAND_VARS.light.accent})` }] },
     { selector: darkOnly("[data-brand~='primary-dark']"), vars: primary('dark') },
     { selector: darkOnly("[data-brand~='accent-dark']"), vars: [{ name: '--nds-brand-accent', value: `var(${BRAND_VARS.dark.accent})` }] },
   ]
+}
+
+// ── pop-ups (D24) ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The element a portalled surface renders into, as far as `brandPortals` needs it (`document.body`). */
+export interface BrandPortalTarget {
+  getAttribute(name: string): string | null
+  setAttribute(name: string, value: string): void
+  removeAttribute(name: string): void
+  style: { getPropertyValue(name: string): string; setProperty(name: string, value: string): void; removeProperty(name: string): string }
+}
+
+/**
+ * D24 (B-W2b-155) — a branded screen's pop-ups. Puts `brandingAttrs(branding)` on `<body>` (or `target`): its `data-brand`
+ * and its `--nds-brand-*` properties, every one of them cleared first so a role this colour failed keeps nothing from an
+ * earlier brand. Returns the undo, which puts back the attribute and the properties `<body>` had. No branding, or no
+ * document (a server render): nothing is changed and the undo does nothing.
+ *
+ *   useEffect(() => brandPortals(branding), [branding])
+ */
+export function brandPortals(branding: BrandingTokens | BrandingCheck | null | undefined, target?: BrandPortalTarget | null): () => void {
+  const el: BrandPortalTarget | null = target ?? (typeof document !== 'undefined' ? document.body : null)
+  if (!el || !branding) return () => {}
+  const attrs = brandingAttrs(branding)
+  const names = [...Object.values(BRAND_VARS.light), ...Object.values(BRAND_VARS.dark)]
+  const before = { brand: el.getAttribute('data-brand'), props: names.map((name) => [name, el.style.getPropertyValue(name)] as const) }
+  for (const name of names) el.style.removeProperty(name)
+  el.setAttribute('data-brand', attrs['data-brand'])
+  for (const [name, value] of Object.entries(attrs.style as Record<string, string>)) el.style.setProperty(name, value)
+  return () => {
+    if (before.brand === null) el.removeAttribute('data-brand')
+    else el.setAttribute('data-brand', before.brand)
+    for (const [name, value] of before.props) {
+      if (value) el.style.setProperty(name, value)
+      else el.style.removeProperty(name)
+    }
+  }
 }

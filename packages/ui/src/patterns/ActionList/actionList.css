@@ -1,0 +1,143 @@
+/*
+ * DS — ActionList (B-W2b-155). What waits for a partner, grouped by kind. Sizes read `--nds-density-*` (the portal's
+ * comfortable tier gives 44 px targets and 16 px type; the console's sizes at standard). A due is never colour alone:
+ * an icon AND a word, as `--nds-<tone>-text` on the row. A narrow list (a phone) puts the verb under the words, full
+ * width (container query).
+ */
+.nds-actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--nds-density-gap) * 1.5);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-actions / inline-size;
+}
+.nds-actions-empty {
+  margin: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  color: var(--nds-text-2);
+}
+.nds-actions-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+.nds-actions-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-actions-heading {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.05);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-actions-count {
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-actions-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-actions-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-actions-row:first-child {
+  border-top: 0;
+}
+.nds-actions-row[data-done='true'] {
+  background: var(--nds-surface-raised);
+}
+.nds-actions-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-actions-title {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-actions-record {
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.nds-actions-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-12);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+.nds-actions-due {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-actions-due[data-tone='danger'] {
+  color: var(--nds-danger-text);
+}
+.nds-actions-due[data-tone='warning'] {
+  color: var(--nds-warning-text);
+}
+.nds-actions-due[data-tone='info'] {
+  color: var(--nds-info-text);
+}
+.nds-actions-due-icon {
+  flex-shrink: 0;
+  width: calc(var(--nds-density-icon) * 0.85);
+  height: calc(var(--nds-density-icon) * 0.85);
+}
+.nds-actions-verb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+.nds-actions-verb .nds-btn {
+  min-height: var(--nds-density-control-h);
+}
+.nds-actions-done {
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@container nds-actions (max-width: 520px) {
+  .nds-actions-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nds-actions-verb {
+    justify-content: stretch;
+  }
+  .nds-actions-verb > .nds-btn,
+  .nds-actions-verb > .nds-tooltip {
+    flex: 1 1 auto;
+  }
+  .nds-actions-verb > .nds-tooltip > .nds-btn {
+    width: 100%;
+  }
+  .nds-actions-done {
+    flex: 1 1 100%;
+  }
+}

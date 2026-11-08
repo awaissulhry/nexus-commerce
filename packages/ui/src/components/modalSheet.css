@@ -1,0 +1,72 @@
+/*
+ * DS — Modal's phone sheet (B-W2b-155, DS-GAPS R1). Only a Modal opened with `sheet` carries `.sheet` (its backdrop and
+ * its dialog) and the grab handle; every other dialog draws as before. Under 720 px (the BottomBar's breakpoint) the dialog
+ * is a bottom sheet: the full width from the bottom edge, rounded top corners, a grab handle above the header, the foot
+ * padded by the safe area, a 44 px Close, the footer's buttons sharing its row for the thumb. From 720 px nothing here
+ * applies. The selectors reach through the backdrop so they outrank the size classes (`.nds-modal.md` …).
+ */
+.nds-modal-grab {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .nds-backdrop.sheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .nds-backdrop.sheet > .nds-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - var(--nds-space-24));
+    border-radius: var(--nds-radius-3xl) var(--nds-radius-3xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* The handle: a wide strip to grab (touch-action none, so the drag is ours), a short bar drawn in its middle. */
+  .nds-backdrop.sheet > .nds-modal > .nds-modal-grab {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    height: var(--nds-space-20);
+    margin-bottom: calc(-1 * var(--nds-space-8));
+    touch-action: none;
+    cursor: grab;
+  }
+  .nds-backdrop.sheet > .nds-modal > .nds-modal-grab::before {
+    content: '';
+    width: var(--nds-space-40);
+    height: var(--nds-space-4);
+    border-radius: var(--nds-radius-round);
+    background: var(--nds-border-strong);
+  }
+  .nds-backdrop.sheet > .nds-modal .nds-modal-x {
+    width: 44px;
+    height: 44px;
+    margin: -8px -8px -8px 0;
+  }
+  /* A footer button, or a held one inside its tooltip wrapper, takes its share of the row. */
+  .nds-backdrop.sheet > .nds-modal > .nds-modal-f > .nds-btn,
+  .nds-backdrop.sheet > .nds-modal > .nds-modal-f > .nds-tooltip {
+    flex: 1 1 auto;
+  }
+  .nds-backdrop.sheet > .nds-modal > .nds-modal-f > .nds-tooltip > .nds-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 719px) and (prefers-reduced-motion: no-preference) {
+  .nds-backdrop.sheet > .nds-modal {
+    animation: nds-sheet-up 180ms ease-out;
+  }
+}
+
+@keyframes nds-sheet-up {
+  from {
+    transform: translateY(var(--nds-space-48));
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

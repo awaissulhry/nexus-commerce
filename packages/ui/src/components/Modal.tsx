@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useId, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Size } from '../primitives/size'
@@ -11,6 +11,10 @@ import { opensDark } from '../lib/opens-dark'
 import { mergeLabels } from '../lib/labels'
 import { useHydrated } from './useHydrated'
 import { MODAL_LABELS, type ModalLabels } from './ModalLabels'
+import './modalSheet.css'
+
+/** B-W2b-155 — how far the grab handle of a phone sheet must be pulled down before the sheet closes. */
+const SHEET_CLOSE_PX = 72
 
 // Shared stack keeps background content out of keyboard and assistive-technology navigation. Bottom first: the last
 // dialog opened is on top, answers Esc and Tab, and everything else — the dialogs under it too — is inert (modalStack.ts).
@@ -108,6 +112,13 @@ export interface ModalProps {
   closeHeld?: string | null
   /** Its words in the person's language (B-W2b-04): the close button's name. Default English ("Close"). */
   labels?: Partial<ModalLabels>
+  /**
+   * The phone sheet (B-W2b-155, DS-GAPS R1): under 720 px the dialog is a bottom sheet — the full width from the bottom
+   * edge, rounded top corners, a grab handle (pull it down to close; Esc, Close and the backdrop as ever, and a held close
+   * stays held), the foot padded by the phone's safe area. From 720 px nothing changes. Default false: a dialog that does
+   * not ask draws exactly as before. Ignored with `size="detail"` (already a full-screen sheet on a phone) and `"full"`.
+   */
+  sheet?: boolean
 }
 
 /**
@@ -119,9 +130,10 @@ export interface ModalProps {
  */
 export function Modal({
   open, onClose, title, subtitle, footer, size = 'sm', children, readable = false, className, anchor, 'aria-label': ariaLabel,
-  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false, closeHeld = null, labels,
+  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false, closeHeld = null, labels, sheet = false,
 }: ModalProps) {
   const words = mergeLabels(MODAL_LABELS, labels)
+  const asSheet = sheet && size !== 'detail' && size !== 'full'
   const hydrated = useHydrated()
   const titleId = useId()
   const subtitleId = useId()
@@ -194,11 +206,42 @@ export function Modal({
     }
   }, [open, hydrated])
 
+  // The phone sheet's grab handle: pulled down past SHEET_CLOSE_PX it closes the sheet (unless the close is held).
+  const drag = useRef<{ pointer: number; from: number; by: number } | null>(null)
+  const moveSheet = (by: number) => {
+    const dialog = modalRef.current
+    if (dialog) dialog.style.transform = by > 0 ? `translateY(${by}px)` : ''
+  }
+  const grab = {
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      drag.current = { pointer: e.pointerId, from: e.clientY, by: 0 }
+      e.currentTarget.setPointerCapture?.(e.pointerId)
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      const d = drag.current
+      if (!d || d.pointer !== e.pointerId) return
+      d.by = Math.max(0, e.clientY - d.from)
+      moveSheet(d.by)
+    },
+    onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+      const d = drag.current
+      if (!d || d.pointer !== e.pointerId) return
+      drag.current = null
+      moveSheet(0)
+      if (d.by >= SHEET_CLOSE_PX && !closeHeldRef.current) closeRef.current()
+    },
+    onPointerCancel: () => {
+      drag.current = null
+      moveSheet(0)
+    },
+  }
+
   if (!open || !hydrated) return null
 
   return createPortal(
     <div
-      className={size === 'detail' ? 'nds-backdrop detail' : 'nds-backdrop'}
+      className={['nds-backdrop', size === 'detail' ? 'detail' : '', asSheet ? 'sheet' : ''].filter(Boolean).join(' ')}
       // Capture phase: a control inside that stops its own pointer events still counts as a press inside.
       onPointerDownCapture={(e) => backdropPress.down(e.target === e.currentTarget)}
       onPointerUpCapture={(e) => backdropPress.up(e.target === e.currentTarget)}
@@ -208,7 +251,7 @@ export function Modal({
         ref={modalRef}
         style={anchoredStyle}
         tabIndex={-1}
-        className={['nds-modal', readable ? 'nds-readable' : '', dark ? 'dark' : '', size === 'sm' ? '' : size, className ?? ''].filter(Boolean).join(' ')}
+        className={['nds-modal', readable ? 'nds-readable' : '', dark ? 'dark' : '', size === 'sm' ? '' : size, asSheet ? 'sheet' : '', className ?? ''].filter(Boolean).join(' ')}
         // A light modal is a light place: a modal, menu or editor opened from inside it stays light too (lib/opens-dark).
         data-nds-light={dark ? undefined : ''}
         role="dialog"
@@ -218,6 +261,7 @@ export function Modal({
         aria-label={title == null ? ariaLabel : undefined}
         onClick={(e) => e.stopPropagation()}
       >
+        {asSheet && <div className="nds-modal-grab" aria-hidden {...grab} />}
         <div className="nds-modal-h">
           <div className="nds-modal-hl">
             {title != null && <div className="t" id={titleId}>{title}</div>}
