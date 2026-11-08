@@ -174,6 +174,14 @@
     "UNPLANNED_GOOD_ONLY": {
       "message": "Un'operazione fuori ciclo conta solo i pezzi buoni.",
       "fix": "Qui conta i buoni; scarti e rilavorazioni vanno sulla prossima operazione del ciclo."
+    },
+    "FIRST_PIECE": {
+      "message": "In attesa dell'approvazione del primo capo: l'ordine di lavoro {number} parte in questa operazione quando il suo primo capo è approvato.",
+      "fix": "Lavora il primo fascio della serie, o chiedi al controllore o al tuo capo squadra di approvarne il primo capo."
+    },
+    "CHARGED_OPERATION_UNKNOWN": {
+      "message": "L'operazione a cui è attribuito il difetto non è dell'ordine di lavoro di questo fascio.",
+      "fix": "Scegli una delle operazioni del fascio, o Non so."
     }
   },
   "unknownCode": {
@@ -239,7 +247,8 @@
       "steps_one": "Resta {count} passo da spuntare",
       "steps_other": "Restano {count} passi da spuntare",
       "component": "Scansiona il lotto di {code}: coperti {covered} di {garments}",
-      "lotCount": "Di' quanti capi copre il lotto {code}"
+      "lotCount": "Di' quanti capi copre il lotto {code}",
+      "firstPiece": "In attesa dell'approvazione del primo capo"
     }
   },
   "fact": {
@@ -549,5 +558,13 @@
       "reason": "Scrivi perché serve.",
       "words": "Scrivi perché in poche parole."
     }
+  },
+  "firstPiece": {
+    "held": "In attesa dell'approvazione del primo capo.",
+    "rejected": "Primo capo respinto: si attende un nuovo primo capo.",
+    "why": "L'ordine di lavoro {number} parte in questa operazione quando un primo capo è approvato.",
+    "fix": "Lavora il primo fascio, o chiedi al controllore o al tuo capo squadra di approvarlo.",
+    "firstBundle": "Questo fascio è il primo capo: lavoralo, poi il controllore lo verifica.",
+    "lifted": "Primo capo approvato: la serie è libera in questa operazione."
   }
 }

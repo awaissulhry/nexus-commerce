@@ -1,0 +1,54 @@
+/*
+ * SCR-176 — In-line inspection (B-W2b-105): layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*`
+ * tokens, colours are semantic `--nds-*` roles (a done line takes the floor notice's tones). No raw colour. The one-job screen stays
+ * centred on the tablet (the frame's own column).
+ */
+
+.fw-in {
+  min-width: 0;
+}
+
+/* ── what was just recorded: words, then its ticks at the end of the line ───────────────────────────────────────────────── */
+.fw-in-done {
+  flex-wrap: wrap;
+}
+.fw-in-done-text {
+  flex: 1 1 16em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── an end-of-line defect: what it is about, one line ─────────────────────────────────────────────────────────────────── */
+.fw-in-subject {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* ── the roving light, a choice, a verdict: buttons side by side, wrapping to full rows on a phone ─────────────────────── */
+.fw-in-colours,
+.fw-in-choices,
+.fw-in-verdict {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  min-width: 0;
+}
+
+/* ── a first piece signed: what is signed beside the PIN pad on a tablet, one column when narrow ───────────────────────── */
+.fw-in-sign,
+.fw-in-sign-pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+@media (min-width: 900px) {
+  .fw-in-sign {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: calc(var(--nds-density-gap) * 2);
+  }
+}

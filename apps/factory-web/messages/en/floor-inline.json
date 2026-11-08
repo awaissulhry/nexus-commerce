@@ -1,0 +1,302 @@
+{
+  "title": "In-line inspection",
+  "busy": "Saving…",
+  "loading": "Reading {code}…",
+  "noPermission": {
+    "title": "In-line checks are not yours to record",
+    "body": "They are recorded by the inspector and the team leader. Ask your team leader."
+  },
+  "scan": {
+    "read": "Read {code}",
+    "type": "Type",
+    "camera": {
+      "start": "Camera",
+      "stop": "Stop camera",
+      "error": "The camera does not start. Scan or type the code."
+    },
+    "firstPiece": {
+      "label": "Scan the first bundle",
+      "hint": "The bundle the first piece is cut, sewn or made from."
+    },
+    "cutting": {
+      "label": "Scan a bundle of the lay",
+      "hint": "Its pieces are checked against the pattern."
+    },
+    "eol": {
+      "label": "Scan the bundle at the end of the line",
+      "hint": "Then Pass, or Defect to send it back.",
+      "next": "Scan the next bundle",
+      "nextHint": "Enter passes this one."
+    },
+    "wrong": {
+      "notBundle": "{code} is not a bundle ticket. Scan the bundle's ticket.",
+      "notFound": "{code} is not a bundle of this site.",
+      "notOnTablet": "{code} is not on this tablet. Check it when the network is back.",
+      "otherFactory": "{code} is another factory's label.",
+      "typo": "{code} was misread. Scan it again."
+    }
+  },
+  "defects": {
+    "loading": "Reading the defects…",
+    "offline": "The defects are not on this tablet: they come with the network.",
+    "error": "The defects did not load. Try again.",
+    "empty": "No defects are set up for this stage. Ask the office (Quality › Defects & dispositions).",
+    "critical": "Critical"
+  },
+  "kinds": {
+    "title": "Which check?",
+    "waiting_one": "{count} first piece waits for approval",
+    "waiting_other": "{count} first pieces wait for approval"
+  },
+  "kind": {
+    "FIRST_PIECE": "First piece",
+    "CUTTING": "Cutting",
+    "ROVING": "Roving",
+    "END_OF_LINE": "End of line"
+  },
+  "kindHint": {
+    "FIRST_PIECE": "The run waits until it is approved",
+    "CUTTING": "Pieces against the pattern",
+    "ROVING": "Green, amber or red per operation",
+    "END_OF_LINE": "Pass, or send a defect back"
+  },
+  "kindHeld": {
+    "online": "This needs the network: it is signed or recorded at once.",
+    "noLine": "This tablet shows no line: the office sets the line of this station."
+  },
+  "opCode": "Op {seq} · {code}",
+  "fp": {
+    "operation": {
+      "title": "Which operation waits for this first piece?",
+      "hint": "Until it is approved, no other bundle of the run is worked there.",
+      "all": "Every operation",
+      "allHint": "The whole run waits"
+    },
+    "held": {
+      "critical": "A critical check failed: {check}. Reject the first piece.",
+      "left_one": "{count} required check left",
+      "left_other": "{count} required checks left"
+    },
+    "reject": "Reject",
+    "approve": "Approve with PIN",
+    "next": "Next first piece",
+    "done": {
+      "approved": "First piece approved",
+      "rejected": "First piece rejected",
+      "approvedText": "The run is free at {operation}: the operation screens lift their hold now.",
+      "rejectedText": "The run keeps waiting. A new first piece is asked.",
+      "signed": "Signed · {fingerprint}"
+    },
+    "holds": "The run waits at this operation until the first piece is approved.",
+    "noPlan": "No inspection plan applies: look at the piece, then approve or reject it.",
+    "optional": "Optional",
+    "checks": "Checks",
+    "measures": "Key measurements",
+    "nominal": "{nominal} ± {tolerance} {uom}",
+    "result": {
+      "PASS": "Pass · {value}",
+      "FAIL": "Fail · {value}",
+      "NOT_APPLICABLE": "Does not apply"
+    },
+    "toMeasure": "To measure",
+    "office": "{check}: answered in the office (no typing on the floor)."
+  },
+  "sign": {
+    "approveTitle": "Approve the first piece",
+    "rejectTitle": "Reject the first piece",
+    "results": "Checks: {passed} pass, {failed} fail.",
+    "noPlan": "No plan: you looked at the piece.",
+    "approveMeaning": "You approve the first piece of work order {number} at {operation}: the run starts there.",
+    "rejectMeaning": "You reject the first piece of work order {number}: the run keeps waiting for a new one.",
+    "detail": "Inspection"
+  },
+  "cutting": {
+    "fail_one": "Fail · {count} to recut",
+    "fail_other": "Fail · {count} to recut",
+    "pass": "Pass",
+    "pieces": "Pieces looked at",
+    "rejected": "Pieces rejected",
+    "defect": "What is wrong?",
+    "recut_one": "{count} piece is recut: the cutting office makes the recut ticket.",
+    "recut_other": "{count} pieces are recut: the cutting office makes the recut ticket."
+  },
+  "roving": {
+    "loading": "Reading the line…",
+    "empty": {
+      "title": "Nothing runs on this line today",
+      "body": "Operations show here once a work order is allocated to the line or worked at its stations."
+    },
+    "title": "The line's operations",
+    "latest": "{colour} at {time}",
+    "none": "Not checked today",
+    "checks_one": "{count} check today",
+    "checks_other": "{count} checks today",
+    "record": "Record {colour}",
+    "held": {
+      "greenWithDefects": "Green means every piece is right: one wrong is amber, two or more red.",
+      "critical": "A critical defect is always red."
+    },
+    "perOperation": "Recorded for the operation, never for a person.",
+    "pieces": "Pieces looked at",
+    "defective": "Pieces wrong",
+    "defect": "What is wrong?",
+    "colour": "Result",
+    "suggested": "Suggested: {colour}"
+  },
+  "colour": {
+    "GREEN": "Green",
+    "AMBER": "Amber",
+    "RED": "Red"
+  },
+  "fact": {
+    "workOrder": "Work order",
+    "bundle": "Bundle",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "style": "Style",
+    "size": "Colour and size",
+    "operation": "Operation",
+    "plan": "Plan"
+  },
+  "eol": {
+    "defect": "Defect",
+    "sendBackOnline": "Sending back needs the network: it opens a rework order at once.",
+    "pass_one": "Pass · {count}",
+    "pass_other": "Pass · {count}",
+    "offline": "Offline: a pass is saved on this tablet and sent later.",
+    "next": "Next",
+    "held": {
+      "defect": "Pick the defect",
+      "operation": "Pick the operation that caused it",
+      "reason": "Pick why it is reworked"
+    },
+    "sendBack_one": "Send back {count}",
+    "sendBack_other": "Send back {count}",
+    "subject": "{defective} of {pieces}",
+    "to": "to {operation}",
+    "defective": "Pieces with the defect",
+    "whichDefect": "Which defect?",
+    "whichOperation": "Which operation caused it?",
+    "perOperation": "Charged to the operation, never to a person.",
+    "whyRework": "Why is it reworked?"
+  },
+  "line": {
+    "none": "This tablet shows no line: the DHU of a line shows on a line's tablet.",
+    "type": "Line · DHU today",
+    "dhu": "defects per 100 pieces",
+    "checks": "End-of-line checks",
+    "pieces": "Pieces",
+    "defects": "Defects",
+    "noChecks": "No end-of-line check today yet.",
+    "asOf": "From this tablet, as of {time}"
+  },
+  "asOfCard": "From this tablet, as of {time}",
+  "open": {
+    "none": "No first piece waits for approval.",
+    "title": "First pieces waiting",
+    "since": "since {time}",
+    "plan": "with a plan",
+    "noPlan": "no plan",
+    "count_one": "{count} first piece",
+    "count_other": "{count} first pieces"
+  },
+  "keys": {
+    "move": "Move between rows",
+    "open": "Open the row"
+  },
+  "class": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor",
+    "OTHER": "Checks"
+  },
+  "measure": {
+    "savePass": "Save · within tolerance",
+    "saveFail": "Save · out of tolerance",
+    "held": "Measure first",
+    "fail": "Fail",
+    "pass": "Pass"
+  },
+  "done": {
+    "pass": "{code} passed · {pieces} pieces",
+    "sentBack_one": "{code}: {count} piece sent back to {operation}",
+    "sentBack_other": "{code}: {count} pieces sent back to {operation}",
+    "defectKept_one": "{code}: {count} defect charged to {operation}.",
+    "defectKept_other": "{code}: {count} defects charged to {operation}.",
+    "roving": "{code}: {colour} recorded",
+    "cutting_one": "{code}: cutting recorded · {count} to recut",
+    "cutting_other": "{code}: cutting recorded · {count} to recut",
+    "reworkNotOpened": "The rework order did not open: tell your team leader."
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
+  },
+  "refusal": {
+    "FIRST_PIECE_OPEN": {
+      "message": "A first piece of this run is open already.",
+      "fix": "Open it from the list of first pieces waiting, decide it, or ask the office to cancel it."
+    },
+    "ALREADY_APPROVED": {
+      "message": "The first piece of this run is approved already: nothing waits for it.",
+      "fix": "Record a roving or end-of-line check instead."
+    },
+    "WORK_ORDER_NOT_RUNNING": {
+      "message": "This work order is not running.",
+      "fix": "Check a work order the line is running."
+    },
+    "NOT_OPEN": {
+      "message": "This check is decided or cancelled already: it never changes.",
+      "fix": "Open a new check."
+    },
+    "NO_PLAN": {
+      "message": "This check runs on no plan: it has no checklist to answer.",
+      "fix": "Approve or reject it."
+    },
+    "PLAN_RESULTS": {
+      "message": "The plan is not answered yet, or a critical check failed.",
+      "fix": "Answer the plan first, or reject the first piece."
+    },
+    "NOT_FOUND": {
+      "message": "This check is not found.",
+      "fix": "Go back and read the line again."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Checks are held at this site until its floor is ready.",
+      "fix": "Ask your team leader."
+    },
+    "BUNDLE_NOT_ACTIVE": {
+      "message": "This bundle is voided or replaced.",
+      "fix": "Scan the bundle's current ticket."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "More pieces than the bundle holds.",
+      "fix": "Send back at most the bundle's pieces."
+    },
+    "NOT_A_REWORK_REASON": {
+      "message": "That rework reason is not active.",
+      "fix": "Ask the office (Production › Floor rules & codes)."
+    },
+    "NOT_OF_CELL": {
+      "message": "The bundle is not of this colour and size.",
+      "fix": "Scan the bundle again."
+    },
+    "REWORK_AT_LATER": {
+      "message": "The rework is at an operation after the one that found it.",
+      "fix": "Pick an earlier operation."
+    },
+    "NEXT_REPORTED": {
+      "message": "The next operation has taken the bundle already.",
+      "fix": "Ask your team leader to open the rework."
+    }
+  },
+  "colourWord": {
+    "GREEN": "green",
+    "AMBER": "amber",
+    "RED": "red"
+  }
+}

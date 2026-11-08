@@ -378,6 +378,7 @@
     "labels": "Etichette capo",
     "pack": "Imballa",
     "final": "Collaudo finale",
+    "inline": "Controllo in linea",
     "scan": "Scansiona",
     "sds": "Schede di sicurezza",
     "hint": {
@@ -391,6 +392,7 @@
       "returnsin": "Scansiona l'RMA, ricevi e valuta i capi",
       "kits": "Invia un kit con il DDT, ricevi il rientro",
       "final": "Controlla, firma e rilascia i capi",
+      "inline": "Primo capo, taglio, itinerante, fine linea",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
       "machine": "Segnala un guasto; gli interventi del tecnico",

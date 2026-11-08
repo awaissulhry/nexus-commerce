@@ -1,0 +1,46 @@
+{
+  "title": "Sample and acceptance",
+  "reading": "Working out the sample…",
+  "retry": "Try again",
+  "table": "Accept and reject numbers per class",
+  "derivation": {
+    "one": "A lot of {lot} unit is inspected whole.",
+    "general": "Lot {lot} · general level {level} → code letter {letter} → inspect {sample}.",
+    "special": "Lot {lot} · special level {level} → code letter {letter} → inspect {sample}.",
+    "generalWhole": "Lot {lot} · general level {level} → code letter {letter} → inspect all {sample} (the whole lot).",
+    "specialWhole": "Lot {lot} · special level {level} → code letter {letter} → inspect all {sample} (the whole lot)."
+  },
+  "fact": {
+    "letter": "Code letter",
+    "sample": "Inspect",
+    "level": "Level"
+  },
+  "level": {
+    "general": "General {level}",
+    "special": "Special {level}"
+  },
+  "col": {
+    "class": "Class",
+    "aql": "AQL",
+    "accept": "Accept up to (Ac)",
+    "reject": "Rejects at (Re)"
+  },
+  "class": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor"
+  },
+  "lock": "Critical is always 0: one critical defect rejects the lot.",
+  "lockLaw": "A garment with a safety or compliance defect is never accepted.",
+  "line": {
+    "critical": "{klass}: never accepted — one rejects the lot (AQL {aql}, accept {accept}, reject at {reject}).",
+    "class": "{klass}, AQL {aql}: accept up to {accept}, rejects at {reject}."
+  },
+  "note": {
+    "arrowDown": "{klass}: Table 2-A points down from letter {letter} to {plan} (a sample of {n}).",
+    "arrowUp": "{klass}: Table 2-A points up from letter {letter} to {plan} (a sample of {n}).",
+    "stricter": "{klass}: its own plan asks {n}; it is judged on the whole sample of {sample}, which is stricter.",
+    "differ": "The classes' plans ask different samples: the largest, {sample}, is inspected.",
+    "whole": "The plan's sample is not smaller than the lot: all {lot} are inspected."
+  }
+}
