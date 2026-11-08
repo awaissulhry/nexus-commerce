@@ -152,6 +152,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)
       '/quality/defects': 'quality.defects.view', // GET /quality/defects (B-W2a-67)
       '/quality/settings': 'quality.rules.view', // GET /quality/rules (B-W2b-118)
+      '/quality/plans': 'quality.plans.view', // GET /quality/plans (B-W2b-104)
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
       '/quality/capa': 'quality.capa.view', // GET /quality/capa (B-W2b-119)
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
@@ -404,6 +405,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       labels: 'production.serials',
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
+      inline: 'quality.inprocess.record', // POST /quality/inprocess/checks (B-W2b-105 on B-W2b-99)
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
       myday: 'floor.work', // GET /people/myday (B-W2b-68)
@@ -422,10 +424,11 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-70: the Line view and Scan anything stay on the first page; B-W2b-73: the rest of a full home on the More tile's page.
       // B-W2b-137: Report an incident stays on the first page too, before the Line view (it must never fall off a full Home).
       // B-W2b-145: Training & PPE sign-off at every station mode (tile family Me, after My day).
+      // B-W2b-105: In-line inspection at the inspection bench (tile family Quality, after Final inspection).
       cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'inline', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
@@ -437,7 +440,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     // line tablet (the lead's own, B-W2b-67); the Line view on a lead's phone (wherever they sign in, B-W2b-70); no My work on
     // a phone (its rows open jobs that need a station). A subcontract station: Scan only.
     const onDevice = (device: string) => homeTiles(null, everything, false, device).map((tile) => tile.key)
-    expect(onDevice('LINE')).toEqual(['clock', 'training', 'incident', 'lineview', 'scan'])
+    // B-W2b-105: In-line inspection on a team leader's line tablet (design floor.inline Modes: supervisor).
+    expect(onDevice('LINE')).toEqual(['inline', 'clock', 'training', 'incident', 'lineview', 'scan'])
     expect(onDevice('PHONE')).toEqual(['clock', 'myday', 'incident', 'lineview', 'scan'])
     expect(onDevice('STATION')).toEqual(['scan'])
     for (const locale of LOCALES) {

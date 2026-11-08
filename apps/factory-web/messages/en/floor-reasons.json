@@ -52,5 +52,12 @@
   },
   "noteHeld": {
     "hold": "This reason needs a written note: quality places this hold in the office."
+  },
+  "cause": {
+    "title": "Which operation caused it?",
+    "hint": "Charged to the operation, never to a person.",
+    "notKnown": "Not known",
+    "here": "Op {seq} · {code} (this one)",
+    "op": "Op {seq} · {code}"
   }
 }

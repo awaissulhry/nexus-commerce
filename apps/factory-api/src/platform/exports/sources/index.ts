@@ -39,6 +39,8 @@ import { checkRegister } from './check-register'
 import { safetyChemicals } from './safety-chemicals'
 // B-W2b-149: Plant › Health & safety › Incidents (anonymised).
 import { incidents } from './incidents'
+// B-W2b-104: Quality › Settings › Inspection plans & AQL › Plans (the source is B-W2b-92's; its page is this step's).
+import { inspectionPlans } from './inspection-plans'
 // B-W2b-119: Quality › Problems › Corrective actions (B-W2b-108's source, registered with its page).
 import { capas } from './capas'
 
@@ -92,6 +94,8 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   safetyChemicals,
   // B-W2b-149: Plant › Health & safety › Incidents (anonymised).
   incidents,
+  // B-W2b-104: Quality › Settings › Inspection plans & AQL › Plans.
+  inspectionPlans,
   // B-W2b-119: Quality › Problems › Corrective actions.
   capas,
 ])

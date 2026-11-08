@@ -13,6 +13,8 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   'Payment', 'SupplierInvoice', 'Inspection', 'QualityHold', 'Nonconformance', 'Certificate', 'LabelTemplate', 'PpeRegisterEntry', 'StockCount', 'Location', 'Ddt', 'SubcontractOrder', 'Operation', 'SizeScale', 'Machine', 'MaintenanceJob',
   // B-W2b-149: an incident, near miss or hazard (by its number, anonymised).
   'Incident',
+  // B-W2b-104: an inspection plan (by its code).
+  'InspectionPlan',
   // B-W2b-119: a CAPA or an 8D (B-W2b-108's indexer).
   'Capa'] as const
 
@@ -129,6 +131,7 @@ export function statusTone(code: string | null): 'neutral' | 'info' | 'success' 
 export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['parties.view', 'quotes.view', 'orders.view', 'product.styles.view', 'product.materials.view', 'purchasing.view', 'workorders.view', 'inventory.stock.view', 'shipping.view', 'invoices.view', /* B-W2a-83 */ 'sales.returns.view', 'sales.repairs.view', 'quality.complaints.view',
   /* B-W2b-23 */ 'payments.view', 'payables.view', 'quality.inspections.view', 'quality.holds.view', 'quality.ncr.view', 'compliance.certificates.view', 'compliance.register.view', 'inventory.counts.view', 'inventory.locations.view', 'product.routing.view', 'plant.view',
   /* B-W2b-149 */ 'safety.incidents.view',
+  /* B-W2b-104 */ 'quality.plans.view',
   /* B-W2b-119 */ 'quality.capa.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

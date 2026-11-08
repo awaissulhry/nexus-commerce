@@ -10,7 +10,7 @@ import type { ScanRead } from '../scan/scan-model'
  * opens Scan anything. Pure, so the tests hold it.
  */
 
-export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine' | /* B-W2a-76 */ 'returnsin' | 'kits' | /* B-W2b-67 */ 'clock' | /* B-W2b-70 */ 'help' | 'lineview' | /* B-W2b-68 */ 'myday' | /* B-W2b-137 */ 'incident' | /* B-W2b-145 */ 'training'>
+export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine' | /* B-W2a-76 */ 'returnsin' | 'kits' | /* B-W2b-67 */ 'clock' | /* B-W2b-70 */ 'help' | 'lineview' | /* B-W2b-68 */ 'myday' | /* B-W2b-137 */ 'incident' | /* B-W2b-145 */ 'training' | /* B-W2b-105 */ 'inline'>
 
 export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   // SCR-089 (B-W2a-74): My work, the station's queue.
@@ -39,6 +39,8 @@ export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   incident: '/floor/incident',
   // SCR-231 (B-W2b-145): Training & PPE sign-off.
   training: '/floor/training',
+  // SCR-176 (B-W2b-105): In-line inspection.
+  inline: '/floor/inline',
 }
 
 /** The task a tile opens, or null (Scan anything has its own page; the rest are later steps). */
@@ -47,7 +49,7 @@ export function taskOfTile(key: TileKey): TaskKey | null {
 }
 
 /** The catalogues the floor app loads (the frame's and each task's). */
-export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits', /* B-W2b-66 */ 'line-board', /* B-W2b-70 */ 'floor-help', 'floor-lineview', /* B-W2b-67 */ 'floor-clock', /* B-W2b-68 */ 'floor-myday', /* B-W2b-137 */ 'floor-incident', /* B-W2b-145 */ 'floor-training'] as const
+export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits', /* B-W2b-66 */ 'line-board', /* B-W2b-70 */ 'floor-help', 'floor-lineview', /* B-W2b-67 */ 'floor-clock', /* B-W2b-68 */ 'floor-myday', /* B-W2b-137 */ 'floor-incident', /* B-W2b-145 */ 'floor-training', /* B-W2b-105 */ 'floor-inline'] as const
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),

@@ -25,6 +25,7 @@ import {
   TriangleAlert,
   Undo2,
   Unlink,
+  Workflow,
   Wrench,
 } from 'lucide-react'
 import { speechLang } from '@nexus/factory-domain/auth/floor/literacy'
@@ -40,7 +41,7 @@ import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import { TaskCard, TaskLine } from '../../shared/view/TaskParts'
-import { countedOf, doneHeld, MODE_OF, NOTE_IN_OFFICE, pickedOf, tilesOf, wordOf, type IconKey, type PickerPurpose, type PickerReason, type PickerState, type StandardIcon } from '../model'
+import { causeOf, causeValue, countedOf, doneHeld, MODE_OF, NOT_KNOWN, NOTE_IN_OFFICE, pickedOf, tilesOf, wordOf, type CauseModel, type IconKey, type PickerPurpose, type PickerReason, type PickerState, type StandardIcon } from '../model'
 import '../reasons.css'
 
 /**
@@ -76,9 +77,11 @@ export interface ReasonPickerModel {
   withPhotos?: boolean
   /** Why no tile may be picked now (the host's call needs the network), or null. */
   heldReason?: string | null
+  /** B-W2b-105 (MES-127): count mode, "Which operation caused it?" under the reasons, once a piece is counted. */
+  cause?: CauseModel | null
 }
 
-export type ReasonPickerAction = { type: 'pick'; id: string } | { type: 'count'; id: string; delta: 1 | -1 } | { type: 'retry' }
+export type ReasonPickerAction = { type: 'pick'; id: string } | { type: 'count'; id: string; delta: 1 | -1 } | { type: 'retry' } | { type: 'cause'; operationId: string | null }
 
 const STANDARD: Readonly<Record<StandardIcon, ReactNode>> = {
   flaw: <CircleDot />,
@@ -169,6 +172,7 @@ export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model:
         ) : null}
         {state === 'ready' && tiles.length > 0 ? <ReadAloudButton text={() => [question, ...tiles.map((tile) => tile.label)].join('. ')} lang={speechLang(locale)} size="sm" showVoice={false} labels={ds.readAloud} /> : null}
       </TaskCard>
+      {mode === 'count' && state === 'ready' && model.cause && model.cause.operations.length > 0 ? <CauseRow cause={model.cause} onPick={(operationId) => send({ type: 'cause', operationId })} /> : null}
       {model.problem === 'atMost' && model.of ? (
         <TaskLine tone="warning" icon={<TriangleAlert />} alert>
           {t('atMost', { count: model.of })}
@@ -208,6 +212,33 @@ export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model:
         </TaskLine>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * B-W2b-105 — "Which operation caused it?" (design floor.reasons "attribute"; MES-127, QHS-042): the bundle's operations (code and name,
+ * this one marked), Not known first and pressed by default — a charge is never guessed. One row of pressed buttons ABOVE the reasons,
+ * there from the start: the grid's big tiles put the reasons below the fold on a tablet, and a section appearing after the first tap
+ * would move the tiles under the finger. What is counted here is charged to the operation picked, never to a person; where the site's
+ * legal gate allows it, the worker sees it on My day and may dispute it.
+ */
+function CauseRow({ cause, onPick }: { cause: CauseModel; onPick: (operationId: string | null) => void }) {
+  const t = useT('floor-reasons')
+  const value = causeValue(cause)
+  const options = [{ id: NOT_KNOWN, label: t('cause.notKnown') }, ...cause.operations.map((operation) => ({ id: operation.id, label: `${operation.here ? t('cause.here', { seq: operation.seq, code: operation.code }) : t('cause.op', { seq: operation.seq, code: operation.code })} · ${operation.name}` }))]
+  return (
+    <section className="fw-floor-stack fw-reasons-cause" aria-labelledby="fw-reasons-cause-title">
+      <h2 id="fw-reasons-cause-title" className="fw-floor-subtitle">
+        {t('cause.title')} <span className="fw-floor-muted">{t('cause.hint')}</span>
+      </h2>
+      <div className="fw-reasons-cause-row" role="group" aria-labelledby="fw-reasons-cause-title">
+        {options.map((option) => (
+          <FloorButton key={option.id} size="md" block variant={option.id === value ? 'primary' : 'secondary'} icon={option.id === NOT_KNOWN ? <CircleHelp /> : <Workflow />} aria-pressed={option.id === value} onClick={() => onPick(causeOf(option.id))}>
+            {option.label}
+          </FloorButton>
+        ))}
+      </div>
+    </section>
   )
 }
 

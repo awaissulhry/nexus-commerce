@@ -176,10 +176,19 @@ export const dropLot = (lots: readonly LotLine[], code: string): readonly LotLin
 
 // ---- why Finish waits ----------------------------------------------------------------------------------------------------------
 
-export type WorkHold = { readonly key: 'steps'; readonly count: number } | { readonly key: 'component'; readonly code: string; readonly covered: number; readonly garments: number } | { readonly key: 'lotCount'; readonly code: string }
+export type WorkHold =
+  | { readonly key: 'steps'; readonly count: number }
+  | { readonly key: 'component'; readonly code: string; readonly covered: number; readonly garments: number }
+  | { readonly key: 'lotCount'; readonly code: string }
+  /** B-W2b-105 (QHS-039): the run waits for its first piece at this operation (first-piece.ts). */
+  | { readonly key: 'firstPiece' }
 
-/** What Finish waits for besides the counts: the required steps, the lots. Never anything for an operation without them (F3). */
-export function workHold(input: { readonly steps: OperationSteps | null; readonly asked: readonly AskedComponent[]; readonly lots: readonly LotLine[]; readonly counts: Counts; readonly expected: number }): WorkHold | null {
+/**
+ * What Finish waits for besides the counts: the first piece of the run (B-W2b-105), the required steps, the lots. Never anything
+ * for an operation without them (F3).
+ */
+export function workHold(input: { readonly steps: OperationSteps | null; readonly asked: readonly AskedComponent[]; readonly lots: readonly LotLine[]; readonly counts: Counts; readonly expected: number; readonly firstPiece?: boolean }): WorkHold | null {
+  if (input.firstPiece) return { key: 'firstPiece' }
   if (input.steps && input.steps.open > 0) return { key: 'steps', count: input.steps.open }
   const garments = garmentsOn(input.counts, input.expected)
   const missing = componentMissing(input.asked, input.lots, garments)

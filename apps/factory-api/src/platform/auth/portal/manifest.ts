@@ -13,6 +13,8 @@ export const manifest = defineManifest({
   'POST /portal/sign-out': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /portal/me': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'POST /portal/sessions/refresh': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
+  // B-W2b-173: the person's own language (the person menu); works before the first visit, like the session's own routes.
+  'POST /portal/me/locale': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'GET /portal/terms': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'POST /portal/first-visit': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'POST /portal/step-up/start': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },

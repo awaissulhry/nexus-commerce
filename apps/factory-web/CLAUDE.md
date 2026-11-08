@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router), the same Next and React versions as `apps/web`, built from the design system `@nexus/ui`
 (packages/ui, compiled here: `transpilePackages`). Four views as route groups: Office `(office)` (built), Links
-`(links)` (built), Floor `(floor)` (built: B-W0-29) and Portal `(portal)` (later steps); office sign-in `(auth)` (built:
+`(links)` (built), Floor `(floor)` (built: B-W0-29) and Portal `(portal)` (the frame: B-W2b-173); office sign-in `(auth)` (built:
 B-W0-26).
 
 ## Commands (from the repository root unless noted)
@@ -74,6 +74,18 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   always queue; an override and a picture only exist online (held with the reason). `floor/home/` shows the person's open work
   ("Unfinished on this tablet", `/production/terminal/open`; never carried to the next person on the tablet).
 - `src/floor/tasks/cutting/` — SCR-094 Cut a hide (W1 B-W1-40; B-W2b-110 on B-W2b-103's API): the hide check in depth on the card (`model.ts cardCheck`: the office's `checks` with the thickness measured at the table counted in; words from facts in `view/check-words.ts`, never the API's English); a warning no lead passed STOPS the card ("Cut anyway" instead of "+ 1 set"; the size buttons pick the first set); `view/AnywayDialog.tsx` = pop:hidecut.override (what differs, reason tile, lead's badge or name + PIN), online only (`api.ts cutAnyway`, the cut's client id as Idempotency-Key, never queued): the signature records ONE set at once, the rest of the hide queues as before; the photo of the hide (DS PhotoCapture via `view/HidePhoto.tsx`, online upload, the next cut names it) and the thickness pad (it goes with every cut of the hide this visit).
+- `src/app/(portal)/` + `src/portal/shell/` — the Portal view's frame (B-W2b-173, SCR-027, SCM-101): `/p/<party code>/…`
+  (`p/[party]/layout.tsx`: `GET /portal/me` with the PORTAL cookie only (`shell/server.ts`), the person's own language, the
+  company's branding; no session or the first visit's terms due → `/p/signin?next=<the whole address>` (B-W2b-164's page);
+  another organisation's address → a gate). `PortalShell.tsx` is the container (the one task list = badges and Home, the bell,
+  ONE live channel per tab `GET /portal/live`, the idle sign-out + "Still there?", notices, the pop-ups, keys `/` `?` `g`,
+  the unsaved guard, `brandPortals` + comfortable density on `<body>`); `view/` the frame and its pop-ups.
+  `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
+  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
+  `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,
+  guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
+  `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
+  Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -275,6 +287,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   its code) → size (a tap finishes the item) → how many → the person's PIN signs the receipt. ONLINE only (a PIN is never queued);
   a 401 on a signature is the badge or PIN unless `GET /floor/me` says the session ended (`api.ts signedOrWrong`). Closed or
   cancelled in the office: signing stops with the reason (live hints + a 30 s beat).
+  B-W2b-105: `floor/tasks/inline/` (SCR-176, `/floor/inline`, tile `inline` at the inspection bench and a lead's line tablet,
+  quality.inprocess.record; catalogue `floor-inline`; on B-W2b-99's API): the line and its DHU today on top, Which check? (four tiles,
+  the site's first pieces waiting); First piece = scan → which operation waits → the plan's checks (DS FloorChecklist, key
+  measurements with DS QuantityPad + LimitMeter, the verdict by the numbers) → Approve or Reject with the PIN (DS PinSignBlock, ONE
+  key per signature); Cutting and First piece online only; Roving and an end-of-line Pass online first, queued as
+  `quality.inprocess.record` (the try's key = `<device>.<client event id>`); Send back = the check charged to an operation, then the
+  rework loop (OTHER, else the reason asked), online only. Operation's first-piece hold: `tasks/scans/first-piece.ts` (the card's
+  `firstPiece`), Finish/Start/Resume held, `use-first-piece.ts` lifts it live; the reason picker's `cause` = "Which operation caused
+  it?" (`causedAtOperationId` on each scrap / rework line; Not known by default).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up

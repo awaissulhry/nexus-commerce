@@ -86,6 +86,7 @@
     "Machine": "Machine",
     "MaintenanceJob": "Maintenance job",
     "Incident": "Incident",
+    "InspectionPlan": "Inspection plan",
     "Capa": "Corrective action",
     "other": "Record"
   },
@@ -123,6 +124,7 @@
     "Machine": "Machines",
     "MaintenanceJob": "Maintenance jobs",
     "Incident": "Incidents",
+    "InspectionPlan": "Inspection plans",
     "Capa": "Corrective actions",
     "other": "Other records"
   },
