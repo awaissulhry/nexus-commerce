@@ -123,6 +123,8 @@ import { events as approvalsOut } from '../approvals-out/events'
 import { events as plantDies } from '../plant-dies/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
+// B-W2b-117: after the cut (a recut ticket, a secondary process, a trolley to sewing changed).
+import { events as productionCutissue } from '../production-cutissue/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -312,7 +314,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-136
   ...plantDies,
   // B-W2b-112
-  ...productionCutorders] as const satisfies readonly EventDefinition[]
+  ...productionCutorders,
+  // B-W2b-117
+  ...productionCutissue] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

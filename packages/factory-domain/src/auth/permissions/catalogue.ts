@@ -117,6 +117,8 @@ import { PORTAL_RETURNS_DEFINITIONS, PORTAL_RETURNS_PERMISSIONS } from '../../sa
 import { PARTNERS_APPROVALS_DEFINITIONS, PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_DEFINITIONS, PORTAL_APPROVALS_PERMISSIONS } from '../../approvals-out/permissions'
 // B-W2b-112: cut orders and cut tickets (production.cutorders.manage; reading is production.cutting.view, the table's scans production.cut).
 import { PRODUCTION_CUTORDERS_DEFINITIONS, PRODUCTION_CUTORDERS_PERMISSIONS } from '../../production/cutorders/permissions'
+// B-W2b-117: after the cut (production.recuts, production.secondary, production.trolleys; shared with the floor).
+import { PRODUCTION_CUTISSUE_DEFINITIONS, PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS, PRODUCTION_CUTISSUE_PERMISSIONS } from '../../production/cutissue/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -740,6 +742,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PORTAL_APPROVALS_DEFINITIONS,
   // B-W2b-112: cut orders and cut tickets (area `production`, declared above).
   PRODUCTION_CUTORDERS_DEFINITIONS,
+  // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (area `production`, declared above).
+  PRODUCTION_CUTISSUE_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -780,7 +784,9 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2b-107: the line's tablet records which protector lot a batch or garment holds (EN 1621).
   ...INVENTORY_ROLLS_FLOOR_PERMISSIONS,
   // B-W2b-126: the repair station's queue and its scans in and out at its own site.
-  ...PRODUCTION_REPAIR_FLOOR_PERMISSIONS])
+  ...PRODUCTION_REPAIR_FLOOR_PERMISSIONS,
+  // B-W2b-117: recuts asked at sewing or quality, secondary processes moved and trolleys loaded, sent and received.
+  ...PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -969,6 +975,8 @@ for (const name of PARTNERS_APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of PORTAL_APPROVALS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-112: cut orders and cut tickets.
 for (const name of PRODUCTION_CUTORDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-117: after the cut.
+for (const name of PRODUCTION_CUTISSUE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

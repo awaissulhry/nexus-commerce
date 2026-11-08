@@ -252,6 +252,14 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-125: the kind only (INJURY, NEAR_MISS, HAZARD); never the words, the place or a person.
     case 'safety.incident.report':
       return { code: text(p.kind, 20) }
+    // B-W2b-117: the trolley's label and the bundle scanned (load, unload), the bundles named missing at the line; never who.
+    case 'production.trolley.load':
+    case 'production.trolley.unload':
+      return { code: text(p.bundle), target: text(p.trolley, 40) }
+    case 'production.trolley.send':
+      return { target: text(p.trolley, 40) }
+    case 'production.trolley.receive':
+      return { target: text(p.trolley, 40), ...(Array.isArray(p.missing) ? { quantity: p.missing.length } : {}) }
   }
 }
 
