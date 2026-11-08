@@ -48,6 +48,8 @@ const defectOut = output({
   quantity: z.number().int(),
   workOrderSizeId: id().nullable(),
   note: z.string().nullable(),
+  /** B-W2b-127 (design ins-defects "cause code"): the cause code of the group's list (GET /quality/causes), or null. */
+  causeCodeId: id().nullable(),
 })
 /**
  * W2a (B-W2a-67; design qi-assign): who an inspection is assigned to before it is decided — an office user (by name) or a
@@ -318,6 +320,8 @@ export const putDefectsContract = defineContract({
           /** W2a: picked from the library (an active defect, not a category; `code` is its code) and its garment zone. */
           defectCodeId: id().nullable().optional(),
           zone: z.string().trim().max(40).nullable().optional(),
+          /** B-W2b-127: the cause code (an active one of the list; a line's own cause stays when retired). Left out: the stored cause stays. */
+          causeCodeId: id().nullable().optional(),
         }),
       )
       .max(MAX_DEFECT_LINES + 1),
@@ -359,6 +363,8 @@ export const listInspectionsContract = defineContract({
     assigned: z.enum(['me', 'none']).optional(),
     /** B-W2b-17: open and past its due time. */
     overdue: flag.optional(),
+    /** B-W2b-127 (design qi-grid "Amended results"): a correction of its signed result was countersigned. */
+    amended: flag.optional(),
     limit,
   }),
   response: {
@@ -397,6 +403,10 @@ export const listInspectionsContract = defineContract({
           version: z.number().int(),
           decidedAt: instant().nullable(),
           createdAt: instant(),
+          /** B-W2b-127 (design qi-grid "Plan + version", "Sample n of N", "Amended"): its plan version (null: W1's fixed checklist), the units counted on a plan, a countersigned correction. */
+          planVersion: output({ code: z.string(), number: z.number().int() }).nullable(),
+          inspected: z.number().int().nullable(),
+          amended: z.boolean(),
         }),
       ),
     }),

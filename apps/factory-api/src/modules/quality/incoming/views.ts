@@ -477,13 +477,20 @@ export async function listIncoming(caller: CommandCaller, query: ListQuery) {
         createdAt: true,
         subcontractReceiptId: true,
         workOrderId: true,
-        lot: { select: { id: true, code: true, qualityStatus: true, item: { select: { id: true, code: true, name: true } } } },
+        lot: { select: { id: true, code: true, qualityStatus: true, supplierId: true, item: { select: { id: true, code: true, name: true } } } },
         _count: { select: { hideResults: true, rollResults: true } },
+        // B-W2b-127 (design qi-grid "Plan + version", "Amended"): the plan version it runs on, a countersigned correction.
+        planVersion: { select: { number: true, plan: { select: { code: true } } } },
       },
       orderBy: { id: 'desc' },
       take: query.limit + 1,
     })
     const page = rows.slice(0, query.limit)
+    // B-W2b-127 (design qi-grid "Supplier (incoming)"): the lot's supplier, for the office only (a tablet reads no party).
+    const supplierIds = context.audience === 'office' ? [...new Set(page.map((row) => row.lot?.supplierId).filter((id): id is string => typeof id === 'string'))] : []
+    const suppliers = new Map((supplierIds.length ? await db.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, legalName: true, tradeName: true } }) : []).map((party) => [party.id, { id: party.id, name: party.tradeName?.trim() || party.legalName }]))
+    // Corrections are the office's (a tablet reads none): a countersigned one marks the row "amended".
+    const amendedIds = new Set(context.audience === 'office' && page.length ? (await db.inspectionAmendment.findMany({ where: { incomingInspectionId: { in: page.map((row) => row.id) }, kind: 'SIGNED' }, select: { incomingInspectionId: true }, distinct: ['incomingInspectionId'] })).map((row) => row.incomingInspectionId) : [])
     return {
       items: page.map((row) => ({
         id: row.id,
@@ -503,6 +510,9 @@ export async function listIncoming(caller: CommandCaller, query: ListQuery) {
         inspectorKind: row.inspectorWorkerId ? ('FLOOR' as const) : row.inspectorUserId ? ('OFFICE' as const) : null,
         dueAt: row.dueAt ? toUtcIso(row.dueAt) : null,
         createdAt: toUtcIso(row.createdAt),
+        supplier: row.lot?.supplierId ? (suppliers.get(row.lot.supplierId) ?? null) : null,
+        plan: { code: row.planVersion.plan.code, number: row.planVersion.number },
+        amended: amendedIds.has(row.id),
       })),
       nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
     }

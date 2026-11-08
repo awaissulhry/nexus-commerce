@@ -4,6 +4,8 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { inspectionLabel, inspectionOverdue, type InspectionStatus } from '@nexus/factory-domain/quality/final/rules'
 import { inspectionHold } from '@nexus/factory-domain/quality/release/rules'
+// B-W2b-127: the units counted on a plan (the counter's system entry).
+import { inspectedOf } from '@nexus/factory-domain/quality/final/plan'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeOf } from './access'
@@ -30,6 +32,8 @@ export interface InspectionQuery {
   readonly assigned?: 'me' | 'none' | undefined
   /** B-W2b-17: open and past its due time. */
   readonly overdue?: boolean | undefined
+  /** B-W2b-127: a correction of its signed result was countersigned (design qi-grid "Amended results"). */
+  readonly amended?: boolean | undefined
   readonly limit: number
 }
 
@@ -50,6 +54,7 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
     ...(query.assigned === 'me' ? { OR: [{ assignedInspectorId: context.actorId }, { assignedInspectorWorkerId: { in: await linkedWorkersOf(caller, context.actorId) } }] } : {}),
     ...(query.assigned === 'none' ? { status: 'OPEN', assignedInspectorId: null, assignedInspectorWorkerId: null } : {}),
     ...(query.overdue ? { status: 'OPEN', dueAt: { lt: new Date() } } : {}),
+    ...(query.amended ? { amendments: { some: { kind: 'SIGNED' } } } : {}),
   }
   const filtered = Boolean(query.onHold || query.waitingRelease || query.failedUndecided)
   return caller.withClient(async (db) => {
@@ -82,6 +87,10 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
       for (const link of links) if (live.has(link.ncrId)) addNcr(link.recordId, link.ncrId)
     }
     const names = await assigneeNames(db, rows)
+    // B-W2b-127: each row's plan version (code and number), and which rows have a countersigned correction.
+    const versionIds = [...new Set(rows.map((row) => row.planVersionId).filter((id): id is string => id !== null))]
+    const versions = new Map((versionIds.length ? await db.inspectionPlanVersion.findMany({ where: { id: { in: versionIds } }, select: { id: true, number: true, plan: { select: { code: true } } } }) : []).map((row) => [row.id, { code: row.plan.code, number: row.number }]))
+    const amendedIds = new Set(inspectionIds.length ? (await db.inspectionAmendment.findMany({ where: { inspectionId: { in: inspectionIds }, kind: 'SIGNED' }, select: { inspectionId: true }, distinct: ['inspectionId'] })).map((row) => row.inspectionId) : [])
     const out = []
     for (const row of rows) {
       const list = siblings.get(row.workOrderId) ?? []
@@ -127,6 +136,10 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
         version: row.version,
         decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
         createdAt: toUtcIso(row.createdAt),
+        // B-W2b-127: the plan version, the units counted on a plan (B-W2b-97's counter), a countersigned correction.
+        planVersion: row.planVersionId ? (versions.get(row.planVersionId) ?? null) : null,
+        inspected: row.planVersionId ? inspectedOf(row.checklist) : null,
+        amended: amendedIds.has(row.id),
       })
       if (out.length >= query.limit) break
     }

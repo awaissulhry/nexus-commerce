@@ -12,6 +12,9 @@ import { FollowersControl } from './FollowersControl'
 import { HistoryPanel } from './HistoryPanel'
 import { TasksPanel } from './TasksPanel'
 import { ThreadPanel } from './ThreadPanel'
+// B-W2b-188: the Approvals tab.
+import { ApprovalsPanel } from '../approvals/view/ApprovalsPanel'
+import { openCount } from '../approvals/model'
 import '../record-panels.css'
 
 export type { RecordPanelsViewModel } from '../model'
@@ -27,7 +30,7 @@ export type { RecordPanelsActions } from './actions'
  */
 export function RecordPanelsView({ model, actions }: { model: RecordPanelsViewModel; actions?: RecordPanelsActions }) {
   return (
-    <WithMessages namespaces={['records']}>
+    <WithMessages namespaces={['records', 'record-approvals']}>
       <Panels model={model} actions={actions} />
     </WithMessages>
   )
@@ -35,6 +38,7 @@ export function RecordPanelsView({ model, actions }: { model: RecordPanelsViewMo
 
 function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: RecordPanelsActions }) {
   const t = useT('records')
+  const approvalWords = useT('record-approvals')
   const idBase = useId()
   const [tab, setTab] = useState<PanelTab>(model.tab ?? 'thread')
   useEffect(() => setTab(model.tab ?? 'thread'), [model.tab])
@@ -48,6 +52,8 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
     ...(model.tasks ? [{ id: 'tasks', label: t('panels.tabs.tasks'), count: model.tasks.problem ? null : count(model.tasks.items) }] : []),
     // Files counts documents (a file and its earlier versions are one), as the list shows them.
     ...(model.can.readFiles ? [{ id: 'files', label: t('panels.tabs.files'), count: model.files.items === null ? null : fileGroups(model.files.items).length }] : []),
+    // B-W2b-188: the requests that still wait for the partner's answer.
+    ...(model.approvals ? [{ id: 'approvals', label: approvalWords('tab'), count: openCount(model.approvals) }] : []),
     { id: 'history', label: t('panels.tabs.history') },
   ]
   const active = tabs.some((item) => item.id === tab) ? tab : 'thread'
@@ -86,6 +92,11 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
         {model.can.readFiles && (
           <div {...tabPanelProps(idBase, 'files')} hidden={active !== 'files'} className="fw-rp-panel">
             <FilesPanel model={model} actions={actions} now={now} />
+          </div>
+        )}
+        {model.approvals && (
+          <div {...tabPanelProps(idBase, 'approvals')} hidden={active !== 'approvals'} className="fw-rp-panel">
+            <ApprovalsPanel model={model.approvals} actions={actions?.approvals} title={model.title} />
           </div>
         )}
         <div {...tabPanelProps(idBase, 'history')} hidden={active !== 'history'} className="fw-rp-panel">

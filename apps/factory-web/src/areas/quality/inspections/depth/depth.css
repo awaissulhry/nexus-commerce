@@ -1,0 +1,273 @@
+/*
+ * Inspections in depth (B-W2b-127): the parts quality.css and inspections.css do not lay out — the plan's check rows, the
+ * measurement chart's cells, the photo set's tiles, a correction's before → after, the report windows. Layout only, semantic
+ * tokens; no page max-width (the page fills .fw-office-main; a window page fills the window).
+ */
+
+.fw-qd-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-qd-two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-qd-refused {
+  font-weight: var(--nds-font-weight-semibold);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The plan's checks: a row per check — words, the unit's answer, where and when. */
+.fw-qd-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-qd-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-12);
+  align-items: center;
+  padding: var(--nds-space-8) var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-qd-check:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+@media (min-width: 1100px) {
+  .fw-qd-check {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1fr);
+  }
+}
+
+.fw-qd-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-qd-recorded {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-qd-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-qd-chain {
+  margin: 0;
+}
+
+/* The measurement chart: the table scrolls inside its card when the units do not fit (the page never scrolls sideways). */
+.fw-qd-chart {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.fw-qd-cell {
+  min-width: 7rem;
+}
+
+.fw-qd-value {
+  max-width: 6.5rem;
+}
+
+.fw-qd-out {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+/* The photo set: a tile per slot, the bench's photos as thumbnails that open full size. */
+.fw-qd-slots {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--nds-space-10);
+}
+
+.fw-qd-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  min-width: 0;
+}
+
+.fw-qd-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-qd-thumb {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.fw-qd-thumb:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+.fw-qd-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-qd-photo-full {
+  display: grid;
+  place-items: center;
+}
+
+.fw-qd-photo-full img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+/* A correction: before (struck through, still read aloud as one sentence) → after. */
+.fw-qd-change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+}
+
+.fw-qd-before {
+  text-decoration: line-through;
+  color: var(--nds-text-2);
+}
+
+.fw-qd-signoff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-qd-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+}
+
+/* The report windows (a new tab): the band, the PDF beside the versions and the share part on a wide screen. */
+.fw-qd-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qd-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-qd-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qd-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qd-report-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .fw-qd-report-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.fw-qd-report-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qd-versions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-qd-versions > li {
+  justify-content: space-between;
+}
+
+.fw-qd-bulk-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  break-before: page;
+}
+
+.fw-qd-bulk-item:first-of-type {
+  break-before: auto;
+}
+
+@media print {
+  .fw-qd-noprint {
+    display: none !important;
+  }
+
+  .fw-qd-report-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

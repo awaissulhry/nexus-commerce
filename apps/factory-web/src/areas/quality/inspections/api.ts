@@ -54,6 +54,10 @@ export const inspectionRowSchema = z.object({
   version: z.number(),
   decidedAt: z.string().nullable(),
   createdAt: z.string(),
+  // B-W2b-127 (design qi-grid "Plan + version", "Sample n of N", "Amended"): optional, so an older API still reads.
+  planVersion: z.object({ code: z.string(), number: z.number() }).nullable().optional().default(null),
+  inspected: z.number().nullable().optional().default(null),
+  amended: z.boolean().optional().default(false),
 })
 export type InspectionRow = z.infer<typeof inspectionRowSchema>
 
@@ -67,6 +71,8 @@ export interface InspectionQuery {
   readonly mine?: boolean
   /** B-W2b-17: open and past its due time. */
   readonly overdue?: boolean
+  /** B-W2b-127: a correction of its signed result was countersigned. */
+  readonly amended?: boolean
   readonly workOrderId?: string | null
   readonly limit?: number
 }
@@ -81,6 +87,7 @@ export async function listInspections(api: ApiClient, query: InspectionQuery, si
       ...(query.failedUndecided ? { failedUndecided: 'true' } : {}),
       ...(query.mine ? { assigned: 'me' } : {}),
       ...(query.overdue ? { overdue: 'true' } : {}),
+      ...(query.amended ? { amended: 'true' } : {}),
       ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}),
       limit: query.limit ?? 50,
     },
@@ -251,6 +258,8 @@ const defectSchema = z.object({
   quantity: z.number(),
   workOrderSizeId: z.string().nullable(),
   note: z.string().nullable(),
+  /** B-W2b-127: the cause code (design ins-defects "cause code"). */
+  causeCodeId: z.string().nullable().optional().default(null),
 })
 export type Defect = z.infer<typeof defectSchema>
 
@@ -289,6 +298,10 @@ export const inspectionSchema = z.object({
   note: z.string().nullable(),
   version: z.number(),
   createdAt: z.string(),
+  // B-W2b-97's fields, read by B-W2b-127: the plan version it runs on (null: W1's fixed checklist), the code letter, the units counted.
+  planVersion: z.object({ id: z.string(), planId: z.string(), code: z.string(), name: z.string(), number: z.number() }).nullable().optional().default(null),
+  codeLetter: z.string().nullable().optional().default(null),
+  inspected: z.number().nullable().optional().default(null),
 })
 export type Inspection = z.infer<typeof inspectionSchema>
 
@@ -326,7 +339,18 @@ export interface ChecklistAnswerBody {
 }
 
 /** `POST /quality/inspections`: opens one on a work order's finished garments (it takes its INSPECTION number); W2a: assigned at once. */
-export async function openInspection(api: ApiClient, body: PlanBody & { workOrderId: string; note?: string | null; assigneeId?: string | null; assigneeWorkerId?: string | null; /** B-W2b-17: by when it is due (office). */ dueAt?: string | null }, key: string): Promise<Inspection> {
+export async function openInspection(
+  api: ApiClient,
+  body: (PlanBody | (Partial<PlanBody> & { lotSize: number; /** B-W2b-127: on a plan (B-W2b-97): its sample comes from the plan; another plan than the one that applies says why. */ planId: string; planReason?: string | null })) & {
+    workOrderId: string
+    note?: string | null
+    assigneeId?: string | null
+    assigneeWorkerId?: string | null
+    /** B-W2b-17: by when it is due (office). */
+    dueAt?: string | null
+  },
+  key: string,
+): Promise<Inspection> {
   return (await api.post('/quality/inspections', { body, schema: inspectionAnswer, idempotencyKey: key })).inspection
 }
 
@@ -349,6 +373,8 @@ export interface DefectBody {
   /** W2a: picked from the library (its code is `code`), and its garment zone. */
   readonly defectCodeId?: string | null
   readonly zone?: string | null
+  /** B-W2b-127: the cause code of the group's list (left out: the stored cause stays). */
+  readonly causeCodeId?: string | null
 }
 
 /** `PUT /quality/inspections/:id/defects`: the whole defect list (one line per class and code). */
@@ -359,7 +385,8 @@ export async function putDefects(api: ApiClient, inspectionId: string, body: { v
 export interface DecideBody {
   readonly version: number
   readonly result: (typeof INSPECTION_RESULTS)[number]
-  readonly checklist: readonly ChecklistAnswerBody[]
+  /** W1's checklist; an inspection on a plan sends none (B-W2b-97). */
+  readonly checklist?: readonly ChecklistAnswerBody[]
   readonly notMakerStatement?: boolean
   readonly overrideReason?: string | null
   readonly note?: string | null

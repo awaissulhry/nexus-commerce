@@ -1,0 +1,269 @@
+{
+  "title": "{kind} · {label}",
+  "retry": "Riprova",
+  "arrow": "{before} → {after}",
+  "loading": {
+    "now": "Carichiamo la richiesta…",
+    "slow": "Ancora un momento…"
+  },
+  "what": {
+    "title": "Cosa vi chiediamo",
+    "kind": "Cosa approvare",
+    "record": "Riguarda",
+    "due": "Rispondere entro",
+    "dueIn": "mancano {left}",
+    "dueNow": "il tempo è scaduto",
+    "from": "Chi lo chiede",
+    "state": "A che punto è",
+    "dueAt": "Scadenza"
+  },
+  "panel": {
+    "proof": {
+      "title": "Bozza del design",
+      "hint": "Il design finale prima del taglio. Controllate nomi e numeri, colori e posizione dei loghi; ingrandite il PDF."
+    },
+    "signature": {
+      "title": "Il documento da firmare",
+      "hint": "Leggete tutto il documento prima di firmarlo. {company} conserva la vostra firma con questa versione."
+    },
+    "concession": {
+      "title": "Concessione",
+      "hint": "Una deviazione che {company} vi chiede di accettare: cosa è diverso, le foto affiancate e cosa propone."
+    },
+    "sample": {
+      "title": {
+        "SAMPLE": "Campione",
+        "COLOUR": "Colore",
+        "LEATHER": "Pellame",
+        "ARTWORK": "Grafica"
+      },
+      "hint": "Le foto e la scheda di ciò che {company} vi chiede di approvare. Aprite una foto a tutto schermo; segnatela per indicarci un punto."
+    },
+    "order": {
+      "title": "Ordine modificato {number} · revisione {revision}",
+      "lines": "Cosa è cambiato, riga per riga ({count})",
+      "noLines": "Nessuna riga è cambiata: solo i dati dell'ordine qui sotto.",
+      "line": "Riga {seq} · {style} · {colour}",
+      "change": {
+        "ADDED": "Aggiunta",
+        "REMOVED": "Tolta",
+        "CHANGED": "Cambiata"
+      },
+      "pieces": "Pezzi: {before} → {after}",
+      "size": "Taglia {size}",
+      "unitPrice": "Prezzo unitario",
+      "lineNet": "Importo riga (IVA esclusa)",
+      "net": "Totale netto (IVA esclusa)",
+      "gross": "Totale IVA inclusa",
+      "netMoved": "La vostra accettazione precedente decade se cambia il valore netto: approvando confermate il nuovo totale.",
+      "noPrices": "Gli importi non sono mostrati qui.",
+      "header": {
+        "customerRef": "Vostro riferimento",
+        "requestedDate": "Data richiesta"
+      }
+    }
+  },
+  "files": {
+    "label": "Foto e documenti",
+    "none": "Nessuna foto o documento accompagna questa richiesta.",
+    "open": "Apri {name} a tutto schermo",
+    "picture": "Foto",
+    "pdf": "PDF",
+    "other": "File",
+    "loading": "Carichiamo il file…",
+    "problem": "Questo file ora non si può mostrare. Potete comunque rispondere.",
+    "mark": "Segna la foto",
+    "markAgain": "Cambia i miei segni",
+    "first": "Prima foto",
+    "second": "Seconda foto",
+    "marked_one": "{count} segno",
+    "marked_other": "{count} segni"
+  },
+  "viewer": {
+    "count": "{n} di {count}",
+    "previous": "Precedente",
+    "next": "Successivo",
+    "first": "Questo è il primo file.",
+    "last": "Questo è l'ultimo file.",
+    "only": "C'è solo questo file.",
+    "picture": "Foto {name}",
+    "noPreview": "Questo file non si può mostrare nella pagina."
+  },
+  "mark": {
+    "title": "Segna la foto: {name}",
+    "introPicture": "Disegnate frecce e cerchi dove volete che guardiamo e aggiungete una nota. I segni partono con la vostra risposta quando la firmate.",
+    "introPdf": "Scegliete la pagina, disegnate frecce e cerchi e aggiungete una nota. I segni partono con la vostra risposta quando la firmate.",
+    "pages": "Pagine",
+    "previousPage": "Pagina precedente",
+    "nextPage": "Pagina successiva",
+    "page": "Pagina {page}",
+    "pageOf": "Pagina {page} di {pages}",
+    "note": "Nota (facoltativa)",
+    "noteHint": "Cosa dobbiamo guardare o cambiare?",
+    "loadingPicture": "Carichiamo la foto…",
+    "loadingPage": "Disegniamo la pagina…",
+    "problem": "Questa foto ora non si può segnare. Chiudete e riprovate.",
+    "surface": "Segni su {name}",
+    "add": "Aggiungi al mio commento",
+    "cancel": "Annulla",
+    "held": {
+      "none": "Disegnate prima almeno una freccia o un cerchio.",
+      "many": "Al massimo 200 segni.",
+      "firstPage": "Questa è la prima pagina.",
+      "lastPage": "Questa è l'ultima pagina."
+    }
+  },
+  "decision": {
+    "title": "La vostra decisione",
+    "legend": "Qual è la vostra risposta?",
+    "option": {
+      "APPROVED": {
+        "title": "Approva",
+        "body": "Va bene così: procedete."
+      },
+      "APPROVED_WITH_CHANGES": {
+        "title": "Approva con modifiche",
+        "body": "Procedete dopo le modifiche che scrivete qui sotto."
+      },
+      "REFUSED": {
+        "title": "Rifiuta",
+        "body": "Non procedete: diteci perché qui sotto."
+      }
+    },
+    "comment": {
+      "optional": "Commento (facoltativo)",
+      "what": "Cosa va cambiato",
+      "why": "Perché rifiutate",
+      "needed": "Necessario con questa risposta.",
+      "hint": "Quello che volete farci sapere."
+    },
+    "marked": "I vostri segni su {name}: {count}",
+    "markEdit": "Cambia",
+    "markRemove": "Togli i segni",
+    "markHint": "Per indicare un punto, usate Segna la foto su una foto qui sopra.",
+    "noPhotos": "Nessuna foto accompagna questa richiesta.",
+    "held": "Questa richiesta ora non accetta risposte.",
+    "problem": {
+      "choose": "Scegliete prima la risposta: approva, approva con modifiche o rifiuta.",
+      "why": "Dite perché rifiutate.",
+      "what": "Dite cosa volete cambiare.",
+      "long": "Il commento è troppo lungo: al massimo 4000 caratteri."
+    }
+  },
+  "sign": {
+    "title": "Firmate la risposta",
+    "summary": {
+      "none": "Scegliete la risposta qui sopra, poi scrivete il vostro nome per firmarla.",
+      "APPROVED": "Approvate {label} così come {company} l'ha inviato.",
+      "APPROVED_WITH_CHANGES": "Approvate {label} con le modifiche che avete scritto.",
+      "REFUSED": "Rifiutate {label}, per il motivo che avete scritto."
+    },
+    "legal": "Il nome che scrivete firma questa risposta; {company} la conserva con l'ora, la richiesta e quello che avete scritto. Si risponde una volta sola: poi questo link non apre più nulla. Vi mandiamo una copia per e-mail.",
+    "name": "Nome e cognome",
+    "nameHint": "Come firmate le vostre lettere: nome e cognome.",
+    "nameEmpty": "Scrivete nome e cognome per firmare.",
+    "choose": "Firma e invia",
+    "go": {
+      "APPROVED": "Approva e firma",
+      "APPROVED_WITH_CHANGES": "Approva con modifiche e firma",
+      "REFUSED": "Rifiuta e firma"
+    },
+    "busy": "Inviamo la vostra risposta…"
+  },
+  "done": {
+    "name": "Firmato da",
+    "at": "Alle",
+    "words": "Le vostre parole",
+    "marks": "Segni",
+    "marksValue": "Su una foto della richiesta",
+    "reference": "Riferimento",
+    "receiptSent": "Vi abbiamo mandato una copia per e-mail.",
+    "receiptFailed": "La copia per e-mail non è partita: tenete questa pagina come ricevuta.",
+    "closed": "Questo link ora non apre più nulla: la risposta è definitiva.",
+    "contact": "Domande su questa risposta"
+  },
+  "problem": {
+    "read": "Non siamo riusciti a leggere la richiesta.",
+    "readBody": "Non è stata inviata nessuna risposta. Controllate la connessione e riprovate.",
+    "gone": "Questa richiesta non accetta più risposte: ha già una risposta, è stata ritirata o il tempo è scaduto.",
+    "wrongPerson": "Questo link è per un'altra persona.",
+    "changed": "La richiesta è cambiata nel frattempo: l'abbiamo riletta. Controllatela e rispondete di nuovo.",
+    "name": "Scrivete nome e cognome (almeno 2 lettere) per firmare.",
+    "invalid": "Manca qualcosa nella risposta o è troppo lunga: controllate il commento e il nome.",
+    "rateLimited": "Troppi tentativi. Aspettate qualche minuto e riprovate.",
+    "unavailable": "Il servizio non risponde. Riprovate tra poco.",
+    "internal": "Qualcosa non ha funzionato. Riprovate."
+  },
+  "office": {
+    "title": "Approva dall'e-mail",
+    "checking": "Controlliamo se avete già fatto l'accesso…",
+    "opening": "Apriamo l'approvazione…",
+    "signIn": {
+      "title": "Accedete per aprire l'approvazione",
+      "body": "L'e-mail da sola non approva nulla: accedete all'ufficio come sempre e l'approvazione si apre dove la decidete.",
+      "company": "Azienda",
+      "companyHint": "Il nome di accesso della vostra azienda.",
+      "email": "E-mail",
+      "password": "Password",
+      "go": "Accedi e apri",
+      "busy": "Accesso in corso…",
+      "forgot": "Password dimenticata?"
+    },
+    "field": {
+      "company": "Scrivete il nome di accesso dell'azienda.",
+      "email": "Scrivete il vostro indirizzo e-mail.",
+      "password": "Scrivete la password."
+    },
+    "code": {
+      "title": "Il codice della vostra app",
+      "body": "Per accedere come {email} serve il codice di 6 cifre della vostra app di autenticazione.",
+      "label": "Codice",
+      "hint": "Incollatelo o scrivetelo: lo controlliamo appena è completo.",
+      "back": "Indietro",
+      "recovery": "Usa invece un codice di recupero"
+    },
+    "open": {
+      "title": "Apriamo {label}",
+      "body": "L'approvazione si apre in ufficio, dove la decidete.",
+      "go": "Apri"
+    },
+    "decided": {
+      "title": "Questa approvazione non aspetta più voi",
+      "body": "{label} è stata decisa o è cambiata nel frattempo.",
+      "go": "Apri"
+    },
+    "notValid": {
+      "title": "Questo link non è per questo account",
+      "body": "Si apre solo per la persona a cui è stato inviato, con il suo accesso. Tutto quello che aspetta voi è in Home › Approvazioni.",
+      "home": "Apri Home › Approvazioni",
+      "switch": "Esci e usa un altro account"
+    },
+    "missing": {
+      "title": "In questo indirizzo non c'è un'approvazione",
+      "body": "Riaprite il link dell'e-mail per intero, oppure accedete e aprite Home › Approvazioni.",
+      "go": "Accesso all'ufficio"
+    },
+    "change": {
+      "title": "Prima scegliete una nuova password",
+      "body": "L'amministratore ha chiesto una nuova password: impostatela nell'accesso all'ufficio, poi riaprite il link dell'e-mail.",
+      "go": "Accesso all'ufficio"
+    },
+    "setup": {
+      "title": "Prima attivate la verifica in due passaggi",
+      "body": "Il vostro ruolo accede con un codice dell'app di autenticazione. Attivatela, poi riaprite il link dell'e-mail.",
+      "go": "Attivala"
+    },
+    "error": {
+      "title": "Non siamo riusciti ad aprire l'approvazione.",
+      "body": "Controllate la connessione e riprovate."
+    },
+    "problem": {
+      "wrongCredentials": "Azienda, e-mail o password non sono giuste (o l'account è bloccato per un po').",
+      "wrongCode": "Il codice non è giusto. Scrivete quello attuale della vostra app.",
+      "suspended": "Questo account è sospeso: chiedete all'amministratore.",
+      "rateLimited": "Troppi tentativi. Aspettate qualche minuto e riprovate.",
+      "invalid": "Nel modulo manca qualcosa o non è valido.",
+      "unavailable": "Il servizio non risponde. Riprovate tra poco."
+    }
+  }
+}

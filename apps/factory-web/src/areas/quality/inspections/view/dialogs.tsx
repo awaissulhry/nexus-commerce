@@ -17,6 +17,10 @@ import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { dash, Facts } from '../../_shared/parts'
 import type { QualityCan, Read } from '../../_shared/model'
 import type { Inspectors, PartyPick, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, WorkOrderCells, WorkOrderPick } from '../api'
+// B-W2b-127: New inspection's In-line kind (design qi-new "In-line (W2b)") and the plan of a final one (B-W2b-97).
+import type { WorkOrderPlans } from '../depth/api'
+import { inlineKindHeld, inlineProblems, NEW_INLINE_KINDS, planPick, planProblems, type DepthCan } from '../depth/model'
+import { AqlSummary } from '../../_shared/aql/AqlSummary'
 import {
   DUE_MAX_DAYS,
   finishedOf,
@@ -96,6 +100,8 @@ export function NewInspectionModal({
   onReturnDraft,
   onGradeReturn,
   onClose,
+  depth,
+  plans = null,
 }: {
   open: boolean
   draft: NewDraft
@@ -119,21 +125,34 @@ export function NewInspectionModal({
   onReturnDraft: (draft: ReturnDraft) => void
   onGradeReturn: () => void
   onClose: () => void
+  /** B-W2b-127: the W2b rights (In-line) and the plans that apply to the picked work order (Final). */
+  depth?: DepthCan
+  plans?: Read<WorkOrderPlans> | null
 }) {
   const t = useT('quality')
+  const td = useT('inspections-depth')
   const [tried, setTried] = useState(false)
   useEffect(() => {
     if (open) setTried(false)
   }, [open])
   const finished = finishedOf(cells?.value ?? null)
-  const kindReason = kindHeld(draft.kind, can)
+  // B-W2b-127: In-line is open with quality.inprocess.record (its words are this step's catalogue).
+  const inlineHeld = inlineKindHeld(depth ?? { inprocessRecord: false }, can.workOrdersView)
+  const kindWords = (kind: (typeof NEW_KINDS)[number]): string | null => (kind === 'INLINE' ? (inlineHeld ? td(inlineHeld) : null) : kindHeld(kind, can) ? t(kindHeld(kind, can)!) : null)
+  const kindReason = kindWords(draft.kind)
   const pickedPerson = people?.value?.inspectors.find((person) => `${person.kind}:${person.id}` === draft.assignee) ?? null
   const personHeld = pickedPerson ? inspectorHeld(pickedPerson) : null
+  const planKeys = draft.kind === 'FINAL' && draft.workOrderId && !draft.typed ? (plans?.value ? planProblems(plans.value, draft.planId, draft.planReason) : plans?.problem ? ['new.plan.problem.failed'] : ['new.plan.problem.reading']) : []
   const problems = draft.kind === 'FINAL' ? newProblems(draft, finished) : draft.kind === 'RETURN' ? returnProblems(returnDraft, returnRecord?.value ?? null) : []
+  const inlineKeys = draft.kind === 'INLINE' ? inlineProblems(draft) : []
   const held = busy
     ? t('common.working')
     : kindReason
-      ? t(kindReason)
+      ? kindReason
+      : inlineKeys.length > 0
+        ? td(inlineKeys[0]!)
+        : planKeys.length > 0
+          ? td(planKeys[0]!)
       : draft.kind === 'LOT'
         ? t('new.kind.lotElsewhere')
         : personHeld
@@ -182,17 +201,16 @@ export function NewInspectionModal({
             <strong>{t('new.kind.label')}</strong>
           </legend>
           {NEW_KINDS.map((kind) => {
-            const reason = kindHeld(kind, can)
+            const reason = kindWords(kind)
             return (
               <RadioCard
                 key={kind}
                 name="new-kind"
                 checked={draft.kind === kind}
                 selected={draft.kind === kind}
-                disabled={kind === 'INLINE'}
                 onChange={() => set({ kind })}
                 title={t(`new.kind.${kind}`)}
-                description={reason && kind !== 'FINAL' ? t(reason) : t(`new.kind.${kind}Hint`)}
+                description={reason && kind !== 'FINAL' ? reason : kind === 'INLINE' ? td('new.inline.hint') : t(`new.kind.${kind}Hint`)}
               />
             )
           })}
@@ -205,6 +223,8 @@ export function NewInspectionModal({
             </Link>
           </Banner>
         )}
+
+        {draft.kind === 'INLINE' && !inlineHeld && <InlinePanel draft={draft} options={(workOrders.value ?? []).map((wo) => ({ value: wo.id, label: workOrderWords(wo), note: t(`woStatus.${wo.status}`, { site: wo.siteCode }) }))} reading={workOrders.value === null && !workOrders.problem} onPick={(workOrderId) => set({ workOrderId })} onDraft={set} />}
 
         {draft.kind === 'RETURN' && (
           <ReturnPanel returns={returns} record={returnRecord} draft={returnDraft} prefix={prefix} onPick={onPickReturn} onDraft={onReturnDraft} />
@@ -237,18 +257,34 @@ export function NewInspectionModal({
                       : t('new.finished', { count: finished, pieces: cells.value.pieces, style: `${cells.value.style.code} ${cells.value.style.name}` })}
               </div>
             )}
-            <div className="fw-q-form-three">
-              {field('lotSize', t('new.lotSize'), t('new.lotSizeHint'))}
-              {field('sampleSize', t('new.sampleSize'), t('new.sampleSizeHint'))}
-              {field('inspectionLevel', t('new.level'), t('new.levelHint'), 'text')}
-            </div>
-            <div className="fw-q-form-two">
-              {field('aqlMajor', t('new.aqlMajor'), t('new.aqlHint'), 'decimal')}
-              {field('acceptMajor', t('new.acceptMajor'), t('new.acceptHint'))}
-              {field('aqlMinor', t('new.aqlMinor'), t('new.aqlHint'), 'decimal')}
-              {field('acceptMinor', t('new.acceptMinor'), t('new.acceptHint'))}
-            </div>
-            <p className="fw-q-hint">{t('new.tablesLater')}</p>
+            {draft.typed || !draft.workOrderId ? (
+              <>
+                <div className="fw-q-form-three">
+                  {field('lotSize', t('new.lotSize'), t('new.lotSizeHint'))}
+                  {field('sampleSize', t('new.sampleSize'), t('new.sampleSizeHint'))}
+                  {field('inspectionLevel', t('new.level'), t('new.levelHint'), 'text')}
+                </div>
+                <div className="fw-q-form-two">
+                  {field('aqlMajor', t('new.aqlMajor'), t('new.aqlHint'), 'decimal')}
+                  {field('acceptMajor', t('new.acceptMajor'), t('new.acceptHint'))}
+                  {field('aqlMinor', t('new.aqlMinor'), t('new.aqlHint'), 'decimal')}
+                  {field('acceptMinor', t('new.acceptMinor'), t('new.acceptHint'))}
+                </div>
+                <p className="fw-q-hint">{td('new.plan.typedHint')}</p>
+                {draft.workOrderId && plans?.value?.plans.some((plan) => plan.usable) && (
+                  <span>
+                    <Button size="sm" onClick={() => set({ typed: false })}>
+                      {td('new.plan.usePlan')}
+                    </Button>
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="fw-q-form-three">{field('lotSize', t('new.lotSize'), t('new.lotSizeHint'))}</div>
+                <PlanPanel draft={draft} plans={plans} onDraft={set} />
+              </>
+            )}
             <Field label={t('new.inspector')} hint={t('new.inspectorHint')}>
               {!draft.workOrderId ? (
                 <p className="fw-q-hint">{t('new.inspectorAfterPick')}</p>
@@ -279,9 +315,105 @@ export function NewInspectionModal({
           </>
         )}
         {tried && <Problems keys={problems} />}
+        {tried && inlineKeys.length + planKeys.length > 0 && (
+          <Banner tone="warning" title={t('common.fixFirst')}>
+            <ul className="fw-q-lines">
+              {[...inlineKeys, ...planKeys].map((key) => (
+                <li key={key}>{td(key)}</li>
+              ))}
+            </ul>
+          </Banner>
+        )}
         {problem && <Problems keys={[problem]} lines={lines} title={t('new.refusedTitle')} />}
       </div>
     </Modal>
+  )
+}
+
+/**
+ * B-W2b-127 New inspection › In-line (design qi-new "In-line (W2b)"): which check (first piece, cutting, roving, end of line),
+ * the work order or a bundle's ticket (a first piece names its bundle: it holds the run until approved), a note. The check is
+ * answered on the line tablet (SCR-176); the office opens it here.
+ */
+function InlinePanel({ draft, options, reading, onPick, onDraft }: { draft: NewDraft; options: { value: string; label: string; note?: string }[]; reading: boolean; onPick: (workOrderId: string) => void; onDraft: (change: Partial<NewDraft>) => void }) {
+  const t = useT('quality')
+  const td = useT('inspections-depth')
+  return (
+    <>
+      <fieldset className="fw-q-choices fw-q-kinds">
+        <legend>
+          <strong>{td('new.inline.which')}</strong>
+        </legend>
+        {NEW_INLINE_KINDS.map((kind) => (
+          <RadioCard key={kind} name="new-inline-kind" checked={draft.inlineKind === kind} selected={draft.inlineKind === kind} onChange={() => onDraft({ inlineKind: kind })} title={td(`new.inline.kind.${kind}`)} description={td(`new.inline.kind.${kind}Hint`)} />
+        ))}
+      </fieldset>
+      <Field label={t('new.workOrder')} hint={td('new.inline.workOrderHint')}>
+        <Listbox size="sm" options={options} value={draft.workOrderId ?? undefined} onChange={onPick} placeholder={reading ? t('common.loading') : t('new.workOrderPick')} searchable searchPlaceholder={t('new.workOrderSearch')} ariaLabel={t('new.workOrder')} />
+      </Field>
+      <Field label={td('new.inline.bundle')} hint={td('new.inline.bundleHint')} required={draft.inlineKind === 'FIRST_PIECE'}>
+        <Input size="sm" value={draft.bundleCode} onChange={(event) => onDraft({ bundleCode: event.target.value })} />
+      </Field>
+      <Field label={t('new.note')}>
+        <Textarea value={draft.note} onChange={(event) => onDraft({ note: event.target.value })} rows={2} />
+      </Field>
+      <p className="fw-q-hint">{td('new.inline.after')}</p>
+    </>
+  )
+}
+
+/**
+ * B-W2b-127 New inspection › Final on a plan (design qi-new "Plan: picked by the trigger rules and explained"): the FINAL plans
+ * that apply to the work order (the API's suggestion first), another one with the reason kept, and the sample the plan gives
+ * for the lot (its fixed size, or ISO 2859-1 from the AQL profile — drawn by the area's AqlSummary, never computed here).
+ */
+function PlanPanel({ draft, plans, onDraft }: { draft: NewDraft; plans: Read<WorkOrderPlans> | null; onDraft: (change: Partial<NewDraft>) => void }) {
+  const td = useT('inspections-depth')
+  if (!plans || (plans.value === null && !plans.problem)) return <p className="fw-q-hint" role="status">{td('new.plan.reading')}</p>
+  if (plans.problem) return <Banner tone="warning" title={td('new.plan.failed')} />
+  const value = plans.value!
+  const usable = value.plans.filter((plan) => plan.usable)
+  const pick = planPick(value, draft.planId)
+  const sampling = value.sampling
+  return (
+    <>
+      {usable.length === 0 ? (
+        <Banner tone="info" title={td('new.plan.none')}>
+          <Button size="sm" onClick={() => onDraft({ typed: true })}>
+            {td('new.plan.typeIt')}
+          </Button>
+        </Banner>
+      ) : (
+        <fieldset className="fw-q-choices">
+          <legend>
+            <strong>{td('new.plan.heading')}</strong>
+          </legend>
+          {usable.map((plan) => (
+            <RadioCard
+              key={plan.id}
+              name="new-plan"
+              checked={pick.id === plan.id}
+              selected={pick.id === plan.id}
+              onChange={() => onDraft({ planId: plan.id })}
+              title={td('new.plan.option', { code: plan.code, number: plan.approved?.number ?? 0, name: plan.name })}
+              description={plan.suggested ? td('new.plan.applies') : plan.matches ? td('new.plan.matches') : td('new.plan.other')}
+            />
+          ))}
+        </fieldset>
+      )}
+      {(pick.other || (usable.length > 0 && value.suggestedId === null)) && (
+        <Field label={td('new.plan.reason')} hint={td('new.plan.reasonHint')} required>
+          <Textarea value={draft.planReason} onChange={(event) => onDraft({ planReason: event.target.value })} rows={2} />
+        </Field>
+      )}
+      {sampling && pick.id && (sampling.plan ? <AqlSummary plan={sampling.plan} compact /> : sampling.sampleSize !== null ? <p className="fw-q-hint">{td('new.plan.fixed', { sample: sampling.sampleSize })}</p> : null)}
+      {!sampling && pick.id && <p className="fw-q-hint">{td('new.plan.lotFirst')}</p>}
+      <span>
+        <Button size="sm" variant="quiet" onClick={() => onDraft({ typed: true })}>
+          {td('new.plan.typeIt')}
+        </Button>
+      </span>
+    </>
   )
 }
 

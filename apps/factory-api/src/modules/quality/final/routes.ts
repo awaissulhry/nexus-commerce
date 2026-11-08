@@ -69,7 +69,7 @@ export default defineRoutes('quality.final', manifest, async (app) => {
   )
 
   app.get('/quality/inspections', { schema: listInspectionsContract }, async (request) =>
-    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease), failedUndecided: flag(request.query.failedUndecided), overdue: flag(request.query.overdue) }),
+    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease), failedUndecided: flag(request.query.failedUndecided), overdue: flag(request.query.overdue), amended: flag(request.query.amended) }),
   )
 
   app.get('/quality/inspections/inspectors', { schema: inspectorsContract }, async (request) => listInspectors(request, request.query))

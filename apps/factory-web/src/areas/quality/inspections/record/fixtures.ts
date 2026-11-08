@@ -10,6 +10,22 @@ import { ANSWERED, CANCELLED, FAILED, FAILING_BY_COUNTS, FAILING_HARD, FINAL, FI
 import { answer, changedLine, checklistRows, defectKey, defectLinesOf, planDraftOf, releaseDraftOf, signDraftOf, withPicked, type DefectsTabModel, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
 import type { DefectBody, Inspection } from '../api'
 import { InspectionRecordView } from './view/InspectionRecordView'
+// B-W2b-127: the record's W2b parts (the plan's checks, Sample & AQL, Measurements, the photo set, Amendments, the gate).
+import { ROLE_PERMISSIONS } from '../../_shared/fixtures'
+import { AMENDMENTS, AMENDMENTS_MINE, AMENDMENTS_NONE, AQL, AQL_OPEN, AQL_W1, CAUSES, PLANNED, PLANNED_SIGNED, plannedRead, PROFILES, SHEET, SHEET_SIGNED } from '../depth/demo/fixtures'
+import { AMEND_DRAFT, depthCan, draftFor, fieldKey } from '../depth/model'
+import type { AmendmentsState } from '../depth/use-amendments'
+import type { FinalDepthState } from '../depth/use-final-depth'
+
+type Depth = NonNullable<InspectionRecordModel['depth']>
+
+/** The record's W2b state for a design case: the role's rights, nothing read for W1 unless a case says so. */
+const depthOf = (role: RoleCase, over: { final?: Partial<FinalDepthState>; amendments?: Partial<AmendmentsState>; chartFrom?: number } = {}): Depth => ({
+  can: depthCan(ROLE_PERMISSIONS[role]),
+  final: { sheet: null, aql: ready(AQL_W1), causes: ready(CAUSES), photoSrc: {}, unit: 1, marks: {}, profiles: null, profileDraft: null, profileBusy: false, profileProblem: null, ...over.final },
+  amendments: { read: null, dialog: null, draft: AMEND_DRAFT, refuseReason: '', busy: false, problem: null, lines: [], done: null, ...over.amendments },
+  chartFrom: over.chartFrom ?? 1,
+})
 
 /**
  * SCR-076 the inspection record — made-up data only. Each case is a state the Owner reviews: an open inspection being
@@ -41,6 +57,7 @@ const record = (over: Partial<InspectionRecordModel> = {}, role: RoleCase = 'own
       style: ready({ code: 'DEMO-JKT', name: 'Demo touring jacket' }),
       asOf: NOW,
       live: 'live',
+      depth: depthOf(role),
       ...over,
     },
   }
@@ -62,7 +79,7 @@ const defectsCase = (over: Partial<DefectsTabModel> = {}, extra: Partial<Inspect
 /** B-W2b-17: the inspection with the three lines saved (each with its id: they can be picked for an NCR). */
 const SAVED_DEFECTS: Inspection = {
   ...INSPECTION,
-  defects: WITH_DEFECTS.map((line, index) => ({ id: uid('7722', index + 1), defectClass: line.defectClass, code: line.code, defectCodeId: line.defectCodeId ?? null, zone: line.zone ?? null, description: null, quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, note: line.note ?? null })),
+  defects: WITH_DEFECTS.map((line, index) => ({ id: uid('7722', index + 1), defectClass: line.defectClass, code: line.code, defectCodeId: line.defectCodeId ?? null, zone: line.zone ?? null, description: null, quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, note: line.note ?? null, causeCodeId: line.causeCodeId ?? null })),
 }
 const picksCase = (selected: readonly string[], role: RoleCase = 'owner') => record({ read: readOf(SAVED_DEFECTS), tab: 'defects', defects: defectsOf(WITH_DEFECTS, { selected }) }, role)
 
@@ -76,6 +93,10 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
   const [drafts, setDrafts] = useState({ sign: initial?.signDraft, release: initial?.releaseDraft, plan: initial?.planDraft, cancel: initial?.cancelReason ?? '' })
   const [defects, setDefects] = useState(initial?.defects)
   const [assign, setAssign] = useState(initial?.assign ?? null)
+  const [depth, setDepth] = useState(initial?.depth)
+  useEffect(() => {
+    setDepth(initial?.depth)
+  }, [initial])
   useEffect(() => {
     setDialog(initial?.dialog ?? null)
     setChecklist(initial?.checklist ?? [])
@@ -105,7 +126,10 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
       cancelReason: drafts.cancel,
       defects: defects ?? defectsOf(defectLinesOf(inspection)),
       assign,
+      depth,
     }
+    const amend = (change: Partial<AmendmentsState>) => setDepth((current) => (current ? { ...current, amendments: { ...current.amendments, ...change } } : current))
+    const final = (change: Partial<FinalDepthState>) => setDepth((current) => (current ? { ...current, final: { ...current.final, ...change } } : current))
     page = createElement(InspectionRecordView, {
       model,
       stepUp: design.stepUp ?? STEP_UP_CLOSED,
@@ -121,6 +145,19 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
         onAssignValue: (value: string) => setAssign((current) => (current ? { ...current, value } : current)),
         onAssignClose: () => setAssign(null),
         onPickDefects: (keys: readonly string[]) => setDefects((current) => ({ ...(current ?? defectsOf([])), selected: [...keys] })),
+        depth: {
+          onUnit: (unit: number) => final({ unit }),
+          onChartPage: (chartFrom: number) => setDepth((current) => (current ? { ...current, chartFrom } : current)),
+          onOpenProfile: () => final({ profileDraft: { profileId: null, reason: '' }, profiles: ready(PROFILES) }),
+          onProfileDraft: (profileDraft) => final({ profileDraft }),
+          onOpen: (next) => {
+            const fields = depth?.amendments.read?.value?.fields.filter((field) => field.waiting === null) ?? []
+            amend({ dialog: next, problem: null, lines: [], draft: next?.kind === 'amend' && fields[0] ? draftFor(fields[0]) : AMEND_DRAFT, refuseReason: '' })
+          },
+          onDraft: (draft) => amend({ draft }),
+          onRefuseReason: (refuseReason: string) => amend({ refuseReason }),
+          onDismiss: () => amend({ done: null, problem: null, lines: [] }),
+        },
       },
     })
   }
@@ -211,5 +248,31 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'error', label: "The API didn't answer", model: { kind: 'state', role: 'owner', state: 'error' } },
     { id: 'release-state-failed', label: 'The release state could not be read (the rest works)', model: passed({ final: failedRead('problem.unavailable') }) },
     { id: 'release-state-loading', label: 'The release state still reading', model: passed({ final: reading() }) },
+    // ---- B-W2b-127: Inspections in depth (design rec:Inspection W2b parts, pop:ins-amend, the gate) ----
+    { id: 'w2b127-plan-checks', label: 'W2b-127 On a plan: the plan version’s checks for unit 1 (Pass / Fail / Not applicable, 1 2 3 on a row), the serial and batch check, the result in words', model: record({ read: plannedRead(), depth: depthOf('owner', { final: { sheet: ready(SHEET) } }) }), note: 'A failed check asks its note first; a critical "not applicable" asks the reason. A measurement is answered on the chart, a photo at the bench.' },
+    { id: 'w2b127-plan-unit2', label: 'W2b-127 On a plan, unit 2: the zip failed with its note; a value saving, another refused', model: record({ read: plannedRead(), depth: depthOf('owner', { final: { sheet: ready(SHEET), unit: 2, marks: { 'check:ZIP': { state: 'saving' }, 'check:ARMOUR': { state: 'refused', problem: 'checks.problem.conflict' } } } }) }) },
+    { id: 'w2b127-plan-read-only', label: 'W2b-127 On a plan, production manager: read only (held with the reason)', model: record({ read: plannedRead(), depth: depthOf('production', { final: { sheet: ready(SHEET) } }) }, 'production') },
+    { id: 'w2b127-plan-reading', label: 'W2b-127 On a plan: the sheet still reading', model: record({ read: plannedRead(), depth: depthOf('owner', { final: { sheet: reading() } }) }) },
+    { id: 'w2b127-plan-failed', label: 'W2b-127 On a plan: the sheet could not be read (Try again)', model: record({ read: plannedRead(), depth: depthOf('owner', { final: { sheet: failedRead('problem.unavailable') } }) }) },
+    { id: 'w2b127-aql', label: 'W2b-127 Sample & AQL: the derivation (AqlSummary), the result now per class in words, 3 of 5 inspected, the profile and where it comes from', model: record({ read: plannedRead(), tab: 'aql', depth: depthOf('owner', { final: { sheet: ready(SHEET), aql: ready(AQL) } }) }), note: 'Read only: the counts come from the bench. Change profile is held once counting starts.' },
+    { id: 'w2b127-aql-change', label: 'W2b-127 Sample & AQL › Change profile (before counting): the chain’s profile, or another with the reason', model: record({ read: plannedRead(), tab: 'aql', depth: depthOf('owner', { final: { sheet: ready(SHEET), aql: ready(AQL_OPEN), profiles: ready(PROFILES), profileDraft: { profileId: PROFILES[2]!.id, reason: '' } } }) }) },
+    { id: 'w2b127-aql-w1', label: 'W2b-127 Sample & AQL of a W1 inspection: its typed plan', model: record({ tab: 'aql', depth: depthOf('owner', { final: { aql: ready(AQL_W1) } }) }) },
+    { id: 'w2b127-aql-error', label: 'W2b-127 Sample & AQL could not be read', model: record({ read: plannedRead(), tab: 'aql', depth: depthOf('owner', { final: { aql: failedRead('problem.unavailable') } }) }) },
+    { id: 'w2b127-measurements', label: 'W2b-127 Measurements: points down, units across; values with "over by 0.8 cm" (never colour alone); Create defect on the out-of-tolerance value', model: record({ read: plannedRead(), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready(SHEET), marks: { 'cell:CHEST:52:3': { state: 'refused', problem: 'chart.problem.decimal' } } } }) }) },
+    { id: 'w2b127-measurements-signed', label: 'W2b-127 Measurements of a signed inspection: read only', model: record({ read: plannedRead(PLANNED_SIGNED), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready(SHEET_SIGNED) } }) }) },
+    { id: 'w2b127-measurements-none', label: 'W2b-127 Measurements: this plan takes none', model: record({ read: plannedRead(), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready({ ...SHEET, chart: { ...SHEET.chart, points: [], values: 0, outOfTolerance: 0 } }) } }) }) },
+    { id: 'w2b127-measurements-w1', label: 'W2b-127 Measurements of a W1 inspection: none (they come with a plan)', model: record({ tab: 'measurements' }) },
+    { id: 'w2b127-defects', label: 'W2b-127 Defects & photos: the Cause column (the group’s cause codes) and the required photo set (Front ✓ · Label missing, holds Sign result)', model: record({ read: plannedRead({ ...PLANNED, defects: SAVED_DEFECTS.defects.map((defect, index) => ({ ...defect, causeCodeId: index === 0 ? CAUSES[0]!.id : null })) }), tab: 'defects', defects: defectsOf(WITH_DEFECTS.map((line, index) => ({ ...line, causeCodeId: index === 0 ? CAUSES[0]!.id : null }))), depth: depthOf('owner', { final: { sheet: ready(SHEET) } }) }) },
+    { id: 'w2b127-amendments', label: 'W2b-127 Decision › Amendments: A1 countersigned, one waiting with its sign-off (asked by Marta Demo; you countersign)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS) } }) }) },
+    { id: 'w2b127-amend-dialog', label: 'W2b-127 Amend signed result: the field, the new value, the reason, before → after, who signs second', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS), dialog: { kind: 'amend' }, draft: { ...draftFor(AMENDMENTS.fields[3]!), value: '58.6', reason: '' } } }) }) },
+    { id: 'w2b127-amend-refused', label: 'W2b-127 Amend refused: the correction would change a verdict (reverse and inspect again)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS), dialog: { kind: 'amend' }, draft: { field: fieldKey(AMENDMENTS.fields[3]!), value: '59.8', reason: 'Read wrong at the bench.' }, problem: 'amend.refusal.VERDICT', lines: ['59.8 against 58 ± 1 cm would turn a pass into a fail.'] } }) }) },
+    { id: 'w2b127-amend-mine', label: 'W2b-127 A correction I asked: the countersign is held (another person signs)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS_MINE) } }) }) },
+    { id: 'w2b127-refuse', label: 'W2b-127 Refuse a correction: the reason; no code (a refusal changes nothing)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS), dialog: { kind: 'refuse', amendmentId: AMENDMENTS.corrections[1]!.id }, refuseReason: 'The note belongs on the NCR.' } }) }) },
+    { id: 'w2b127-countersign-code', label: 'W2b-127 Countersign: the fresh 6-digit code', model: { ...passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS), busy: true } }) }), stepUp: { open: true, busy: false, sentence: 'depth:amend.stepUp', problem: null } } as DesignModel },
+    { id: 'w2b127-amend-none', label: 'W2b-127 Amendments: none yet (Amend signed result open)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS_NONE), done: 'amend.done.refused' } }) }) },
+    { id: 'w2b127-amend-read-only', label: 'W2b-127 Amendments for read-only: seen, asking held with the reason', model: passed({ depth: depthOf('readOnly', { amendments: { read: ready({ ...AMENDMENTS, may: { request: false, sign: false } }) } }) }, 'readOnly') },
+    { id: 'w2b127-amendments-failed', label: 'W2b-127 Amendments could not be read', model: passed({ depth: depthOf('owner', { amendments: { read: failedRead('problem.unavailable') } }) }) },
+    { id: 'w2b127-gate', label: 'W2b-127 Release gate: each cell’s gate opens in words (GateExplainer: what is open, who can clear it)', model: passed({ depth: depthOf('owner', { amendments: { read: ready(AMENDMENTS_NONE) } }) }), note: 'Press "2 checks open" on BLK 54.' },
+    { id: 'w2b127-signed-plan', label: 'W2b-127 A signed inspection on a plan: Amended pill, the report and its share link in ⋯ (new tabs)', model: record({ read: plannedRead(PLANNED_SIGNED), depth: depthOf('owner', { final: { sheet: ready(SHEET_SIGNED) }, amendments: { read: ready(AMENDMENTS) } }) }) },
   ],
 })

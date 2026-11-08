@@ -65,6 +65,18 @@ export const FLOOR_SYNC_KINDS = [
   // "honest that it waits when offline"). One sent WITHOUT a name never goes through the queue (its ledger names the tablet):
   // the module refuses it here, the tablet sends it online.
   'safety.incident.report',
+  // B-W2b-116: a lay at the cutting table (design floor.fabriccut "Works offline": "Add a roll to the lay", "Check plies when both
+  // ends match"): a roll spread on it with its plies, splices, end loss and end returned, the last one undone, both ends counted.
+  'production.lay.roll',
+  'production.lay.undo',
+  'production.lay.count',
+  // B-W2b-117: a trolley to sewing kept offline (MES-048; design floor.fabriccut "Works offline", "Send a trolley to a line:
+  // scans → Send"): a bundle scanned onto a trolley or taken off, the trolley sent, the line's scan of its label. Each names the
+  // trolley by its label, never by an id the tablet could not know offline.
+  'production.trolley.load',
+  'production.trolley.unload',
+  'production.trolley.send',
+  'production.trolley.receive',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -122,6 +134,15 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.repair.scan': { kind: 'production.repair.scan', permission: 'production.repair', numbers: null, what: 'Scan a bundle in or out at a repair station' },
   // B-W2b-125: anyone at the station reports (floor.work, as a help call); the number is taken when the office records it.
   'safety.incident.report': { kind: 'safety.incident.report', permission: 'floor.work', numbers: null, what: 'Report an incident, a near miss or a hazard' },
+  // B-W2b-116: the cutting table's own right; the module checks again the lay, its started ticket and the rolls.
+  'production.lay.roll': { kind: 'production.lay.roll', permission: 'production.cut', numbers: null, what: 'Spread a roll on a lay' },
+  'production.lay.undo': { kind: 'production.lay.undo', permission: 'production.cut', numbers: null, what: 'Undo the last roll of a lay' },
+  'production.lay.count': { kind: 'production.lay.count', permission: 'production.cut', numbers: null, what: "Count a lay's plies at both ends" },
+  // B-W2b-117: the trolleys' own right; the module checks again the bundle, the trolley and the line as they stand on arrival.
+  'production.trolley.load': { kind: 'production.trolley.load', permission: 'production.trolleys', numbers: null, what: 'Scan a bundle onto a trolley to sewing' },
+  'production.trolley.unload': { kind: 'production.trolley.unload', permission: 'production.trolleys', numbers: null, what: 'Take a bundle off a trolley' },
+  'production.trolley.send': { kind: 'production.trolley.send', permission: 'production.trolleys', numbers: null, what: 'Send a trolley to a sewing line' },
+  'production.trolley.receive': { kind: 'production.trolley.receive', permission: 'production.trolleys', numbers: null, what: 'Confirm a trolley at the line' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
