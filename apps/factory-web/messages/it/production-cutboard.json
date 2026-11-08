@@ -1,0 +1,208 @@
+{
+  "board": {
+    "title": "Sala taglio",
+    "privacy": "Solo ordini di taglio, materassi e pelli: nessun tagliatore è nominato",
+    "openCutting": "Taglio",
+    "failed": "Non è stato possibile leggere la sala taglio",
+    "retry": "Riprova",
+    "loading": "Lettura…",
+    "noSite": "Nessuno stabilimento in cui puoi leggere la sala taglio.",
+    "siteLabel": "Sala taglio di {site}",
+    "asOfToday": "Oggi alle {time}",
+    "asOfDay": "{day}, letto alle {time}",
+    "unitsLabel": "Pelle per unità di superficie",
+    "unitRow_one": "{uom}: 1 pelle · {area} {uom} · resa {yield} ({variance} rispetto al piano)",
+    "unitRow_other": "{uom}: {count} pelli · {area} {uom} · resa {yield} ({variance} rispetto al piano)",
+    "waitingFabric_one": "1 materasso tagliato attende la conferma del tessuto usato al tavolo.",
+    "waitingFabric_other": "{count} materassi tagliati attendono la conferma del tessuto usato al tavolo."
+  },
+  "tile": {
+    "waiting": "Ordini di taglio in attesa",
+    "waitingHint": "Rilasciati ai tavoli: {released} · in pianificazione: {planned}",
+    "cutting": "In taglio ora",
+    "cuttingHint_one": "1 materasso steso su un tavolo",
+    "cuttingHint_other": "{count} materassi stesi sui tavoli",
+    "planToday": "Tagliato rispetto al piano oggi",
+    "planDay": "Tagliato rispetto al piano quel giorno",
+    "planNone_one": "Niente in scadenza: 1 capo tagliato in anticipo sul piano",
+    "planNone_other": "Niente in scadenza: {count} capi tagliati in anticipo sul piano",
+    "planAhead_one": "{pct} del piano · 1 capo tagliato in anticipo",
+    "planAhead_other": "{pct} del piano · {count} capi tagliati in anticipo",
+    "planMet": "{pct} del piano: in linea",
+    "planBehind": "{pct} del piano: in ritardo",
+    "hides": "Pelli usate oggi",
+    "hidesNone": "Nessuna pelle tagliata finora",
+    "hidesHint_one": "{area} {uom} · 1 pezzo",
+    "hidesHint_other": "{area} {uom} · {count} pezzi",
+    "hidesUnits_one": "1 pezzo · più unità di superficie sotto",
+    "hidesUnits_other": "{count} pezzi · più unità di superficie sotto",
+    "yield": "Resa pelle oggi",
+    "yieldNone": "Nessuna pelle tagliata finora",
+    "yieldUnknown": "Tagliate solo parti singole: nessun set intero da misurare",
+    "yieldPlan": "Piano {planned} · {variance}",
+    "yieldSeeBelow": "Più unità di superficie: vedi sotto",
+    "fabric": "Tessuto usato oggi",
+    "fabricNone": "Nessun materasso tagliato finora",
+    "fabricHint": "{difference} rispetto alla stima",
+    "fabricHintWaiting_one": "{difference} rispetto alla stima · 1 materasso da confermare",
+    "fabricHintWaiting_other": "{difference} rispetto alla stima · {count} materassi da confermare",
+    "late": "Ordini di taglio in ritardo",
+    "lateHint": "Oltre la data prevista, non tagliati"
+  },
+  "list": {
+    "label": "Ordini di taglio aperti",
+    "emptyTitle": "Nessun ordine di taglio aperto",
+    "emptyBody": "Gli ordini di taglio che l'ufficio pianifica e rilascia compaiono qui, prima quelli in taglio.",
+    "emptyAction": "Pianificane uno nella pagina Taglio",
+    "more_one": "+ 1 altro nella pagina Taglio",
+    "more_other": "+ altri {count} nella pagina Taglio",
+    "moreNoPage_one": "+ 1 altro ordine di taglio aperto",
+    "moreNoPage_other": "+ altri {count} ordini di taglio aperti"
+  },
+  "col": {
+    "cutOrder": "Ordine di taglio",
+    "material": "Materiale",
+    "garments": "Capi",
+    "progress": "Avanzamento",
+    "due": "Scadenza",
+    "workOrders": "Ordini di produzione"
+  },
+  "kind": {
+    "LEATHER": "Pelle, pelle per pelle",
+    "FABRIC": "Tessuto, a materassi"
+  },
+  "status": {
+    "PLANNED": "Pianificato",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In taglio",
+    "CUT": "Tagliato",
+    "RECONCILED": "Riconciliato",
+    "CANCELLED": "Annullato"
+  },
+  "row": {
+    "lays": "Materassi tagliati {cut} di {of}",
+    "noDue": "Senza scadenza",
+    "late": "In ritardo"
+  },
+  "yield": {
+    "title": "Taglio e resa",
+    "period": "{from} – {to}",
+    "periodLabel": "Periodo",
+    "days_one": "1 giorno",
+    "days_other": "{count} giorni",
+    "openCutting": "Taglio",
+    "openLots": "Lotti",
+    "privacy": "Per ordine di taglio, materiale, lotto e fornitore: mai per tagliatore.",
+    "failed": "Non è stato possibile leggere taglio e resa",
+    "emptyTitle": "Niente tagliato in questo periodo",
+    "emptyBody": "Qui compaiono gli ordini di taglio, i materassi e le pelli tagliati nel periodo.",
+    "tile": {
+      "cut": "Tagliato rispetto all'ordinato",
+      "cutNone": "Ancora nessun ordine di taglio con tutte le righe note",
+      "cutHint_one": "{pct} · {difference} capi · 1 ordine di taglio",
+      "cutHint_other": "{pct} · {difference} capi · {count} ordini di taglio",
+      "waiting": "In attesa di riconciliazione",
+      "waitingHint": "Ordini di taglio in pelle: il tagliato si conosce alla riconciliazione",
+      "waitingNone": "Nessuno",
+      "fabric": "Tessuto usato",
+      "fabricNone": "Nessun materasso tagliato e confermato",
+      "fabricHint_one": "{difference} rispetto a {estimated} m stimati · 1 materasso",
+      "fabricHint_other": "{difference} rispetto a {estimated} m stimati · {count} materassi",
+      "leather": "Resa pelle",
+      "leatherNone": "Nessuna pelle tagliata",
+      "leatherUnits": "Più unità di superficie: vedi sotto",
+      "leatherHint_one": "Piano {planned} · {variance} · 1 pelle, {area} {uom}",
+      "leatherHint_other": "Piano {planned} · {variance} · {count} pelli, {area} {uom}"
+    },
+    "chart": {
+      "label": "Resa della pelle per lotto, dal peggiore, rispetto a quanto prevede la distinta base",
+      "yield": "Resa",
+      "axis": "Resa (%)",
+      "planned": "Piano",
+      "caption": "Barre: la quota della superficie di ogni lotto diventata pezzi. Linea: quanto prevede la distinta base."
+    },
+    "suppliers": {
+      "title": "Per fornitore"
+    },
+    "lots": {
+      "title": "Per lotto di pelli"
+    },
+    "fabric": {
+      "title": "Tessuto per materiale",
+      "waiting_one": "1 materasso tagliato è escluso: il tessuto usato non è ancora confermato.",
+      "waiting_other": "{count} materassi tagliati sono esclusi: il tessuto usato non è ancora confermato."
+    },
+    "orders": {
+      "title": "Ordini di taglio tagliati nel periodo",
+      "more_one": "+ 1 altro ordine di taglio nel periodo (contato sopra)",
+      "more_other": "+ altri {count} ordini di taglio nel periodo (contati sopra)"
+    },
+    "col": {
+      "supplier": "Fornitore",
+      "lotsHides": "Lotti · pelli",
+      "used": "Superficie usata",
+      "yield": "Resa",
+      "planned": "Piano",
+      "lot": "Lotto",
+      "hides": "Pelli",
+      "material": "Materiale",
+      "lays": "Materassi",
+      "estimated": "Stimato",
+      "usedM": "Usato",
+      "difference": "Differenza",
+      "cutOn": "Tagliato il",
+      "ordered": "Ordinati",
+      "cutCol": "Tagliati"
+    },
+    "noSupplier": "Nessun fornitore registrato",
+    "lotsHides": "{lots} · {hides}",
+    "supplierLot": "lotto fornitore {ref}",
+    "reconciled": "Riconciliato",
+    "notReconciled": "Non riconciliato",
+    "waitsReconcile": "Noto alla riconciliazione",
+    "unknown": "Non misurata",
+    "below": "Sotto il piano",
+    "belowTitle": "{variance} rispetto al piano"
+  },
+  "leather": {
+    "title": "Pelle",
+    "rule": {
+      "ORDER": "Un lotto di tonalità per ordine",
+      "GARMENT": "Un lotto di tonalità per capo",
+      "OFF": "Nessuna regola di tonalità in questo stabilimento"
+    },
+    "failed": "Non è stato possibile leggere i lotti di tonalità della pelle ({why}).",
+    "verdict": {
+      "outOfShade": "Una pelle è fuori tono",
+      "NONE": "Ancora nessuna pelle: la prima fissa il lotto di tonalità",
+      "ONE": "Un lotto di tonalità: {lot}, tonalità {shade}",
+      "MIXED_one": "1 lotto di tonalità: contro la regola",
+      "MIXED_other": "{count} lotti di tonalità: contro la regola",
+      "mixedAllowed_one": "1 lotto di tonalità",
+      "mixedAllowed_other": "{count} lotti di tonalità, ammessi dalla regola"
+    },
+    "held_one": "1 in carico",
+    "held_other": "{count} in carico",
+    "reserved_one": "1 riservata",
+    "reserved_other": "{count} riservate",
+    "cut_one": "1 tagliata",
+    "cut_other": "{count} tagliate",
+    "hides": "Pelli in carico {held} · riservate {reserved} · tagliate {cut}",
+    "lotsLabel": "Lotti di tonalità di {material}",
+    "shade": "tonalità {shade}",
+    "unsorted": "non divisa per tonalità",
+    "supplierLot": "lotto fornitore {ref}",
+    "outOfShadeTag": "Fuori tono",
+    "breaksHint": "I capi di questo ordine potrebbero non combaciare: parlane con la sala taglio prima di tagliare la prossima pelle."
+  },
+  "photo": {
+    "title": "Foto della pelle",
+    "thickness": "Spessore misurato al tavolo: {mm} mm",
+    "none": "Al tavolo non è stata scattata nessuna foto di questa pelle.",
+    "loading": "Lettura della foto…",
+    "alt": "Pelle {hide} sul tavolo di taglio",
+    "caption": "Pelle {hide} · lotto {lot}, prima del taglio",
+    "forbidden": "Non puoi aprire i file: la foto non è mostrata.",
+    "failed": "Non è stato possibile mostrare la foto."
+  }
+}

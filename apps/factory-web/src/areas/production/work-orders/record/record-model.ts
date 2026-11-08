@@ -6,6 +6,8 @@ import type { DailyActions, DailyModel } from '../daily/model'
 import type { LabourModel } from '../labour/model'
 import type { SplitActions, SplitModel } from '../every-shift/use-split'
 import type { ExtraActions, ExtraModel } from '../extra/use-extra'
+// B-W2b-130: the Leather panel (one shade lot rule) and the cut entry's hide photo.
+import type { WorkOrderLeather } from './leather/api'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -74,6 +76,10 @@ export interface WorkOrderRecordModel {
   split?: SplitModel | null
   /** B-W2b-82: the unplanned operations of the work order, and the Add pop-up. */
   extra?: ExtraModel
+  /** B-W2b-130: Materials › Leather (the shade lots of each leather and the one shade lot rule); absent: not drawn. */
+  leather?: Part<WorkOrderLeather>
+  /** B-W2b-130: the open cut entry's hide photo (an address for an image while it lives), read when the entry opens. */
+  cutPhoto?: { entryId: string; url: string | null; problem: string | null } | null
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -82,7 +88,7 @@ export interface WorkOrderRecordModel {
 
 export interface WorkOrderRecordActions {
   onRetry?: () => void
-  onRetryPart?: (part: 'check' | 'wip' | 'cutLog' | 'bundles' | 'pick' | 'quality') => void
+  onRetryPart?: (part: 'check' | 'wip' | 'cutLog' | 'bundles' | 'pick' | 'quality' | 'leather') => void
   onReload?: () => void
   onDock?: () => void
   onDismissNotice?: () => void

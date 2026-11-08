@@ -11,7 +11,6 @@ import {
   correctCut,
   getBundles,
   getBundleScans,
-  getCutLog,
   getFinalState,
   getPickList,
   getReleaseCheck,
@@ -45,6 +44,9 @@ import { useExtra } from '../extra/use-extra'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
+// B-W2b-130: the cut log with its W2b facts (the hide photo), and Materials › Leather (the one shade lot rule).
+import { getCutLogW2b, hidePhotoAddress } from '../cutting/api'
+import { getWorkOrderLeather, type WorkOrderLeather } from './leather/api'
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -52,6 +54,8 @@ import { WorkOrderRecordView } from './view/WorkOrderRecordView'
  * WIP, cut log and bundles, the pick list (inventory.issue) and the quality state (quality.inspections.view) — and does
  * what the view asks, one write at a time, each with the work order's version as read (a 409 reads it again and says
  * so). Live: its workorder.* and production.* events read the parts again; with unsaved work the page says it changed.
+ * B-W2b-130: the leather's shade lots (GET /production/cutboard/work-orders/:id/leather, every state) and, when a cut entry opens,
+ * its hide photo (GET /files/:id/preview).
  */
 export function WorkOrderRecord({ workOrderId }: { workOrderId: string }) {
   return (
@@ -95,6 +99,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const [sizeLayer, setSizeLayer] = useState<SizeLayer>('finished')
   const [bundleOpen, setBundleOpen] = useState<{ bundleId: string; scans: Part<BundleScan[]> } | null>(null)
   const [cutOpen, setCutOpen] = useState<string | null>(null)
+  // B-W2b-130.
+  const [leather, setLeather] = useState<Part<WorkOrderLeather>>(PART_LOADING)
+  const [cutPhoto, setCutPhoto] = useState<WorkOrderRecordModel['cutPhoto']>(null)
   const dirty = useRef(new Set<'details' | 'sizes'>())
   const { dockOpen, toggleDock } = useThreadDock()
 
@@ -162,6 +169,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const loadParts = useCallback(
     async (wo: WorkOrder) => {
       loadDaily(wo)
+      getWorkOrderLeather(api, wo.id)
+        .then((value) => setLeather(part(value)))
+        .catch((error: unknown) => setLeather({ value: null, problem: readProblem(error) }))
       if (beforeRelease(wo)) {
         getReleaseCheck(api, wo.id)
           .then((value) => setCheck(part(value)))
@@ -171,7 +181,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       getWorkOrderWip(api, wo.id)
         .then((value) => setWip(part(value)))
         .catch((error: unknown) => setWip({ value: null, problem: readProblem(error) }))
-      getCutLog(api, wo.id)
+      getCutLogW2b(api, wo.id)
         .then((value) => setCutLog(part(value)))
         .catch((error: unknown) => setCutLog({ value: null, problem: readProblem(error) }))
       getBundles(api, wo.id)
@@ -205,6 +215,29 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // B-W2b-130: the open cut entry's hide photo, read when the entry opens (a presigned address lives a minute: read again on each open).
+  const photoFileId = cutOpen ? ((cutLog.value?.entries.find((entry) => entry.id === cutOpen) as { photoFileId?: string | null } | undefined)?.photoFileId ?? null) : null
+  const readsFiles = session.permissions.includes('files.read')
+  useEffect(() => {
+    if (!cutOpen || !photoFileId) {
+      setCutPhoto(null)
+      return
+    }
+    // Without files.read the API refuses the photo: say so without asking it.
+    if (!readsFiles) {
+      setCutPhoto({ entryId: cutOpen, url: null, problem: 'error.forbidden' })
+      return
+    }
+    let gone = false
+    setCutPhoto({ entryId: cutOpen, url: null, problem: null })
+    hidePhotoAddress(api, photoFileId)
+      .then((url) => !gone && setCutPhoto({ entryId: cutOpen, url, problem: url ? null : 'cutting.photo.notPicture' }))
+      .catch((error: unknown) => !gone && setCutPhoto({ entryId: cutOpen, url: null, problem: readProblem(error) }))
+    return () => {
+      gone = true
+    }
+  }, [api, cutOpen, photoFileId, readsFiles])
 
   // The site's label printers, once a reprint is asked (production.bundles).
   useEffect(() => {
@@ -326,6 +359,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     waitingAt,
     bundleOpen,
     cutOpen,
+    leather,
+    cutPhoto,
     daily: { ...daily, can: dcan, stepUp },
     labour: labour.model,
     extra: extra.model,

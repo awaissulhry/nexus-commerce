@@ -1,0 +1,378 @@
+{
+  "title": "Account",
+  "state": {
+    "loading": "Loading",
+    "slow": "Still loading…",
+    "failed": "We could not read this part. Nothing is lost: try again.",
+    "retry": "Try again",
+    "saving": "Saving…",
+    "sending": "Sending…"
+  },
+  "status": {
+    "saving": "Saving…",
+    "unsaved": "Changes not saved",
+    "saved": "Saved"
+  },
+  "keys": {
+    "save": "Save the card you are changing",
+    "cancel": "Close a pop-up (asks if you typed something)"
+  },
+  "unsaved": {
+    "profile": "Your profile changes are not saved yet.",
+    "emails": "Your e-mail settings are not saved yet.",
+    "address": "The delivery address you typed is not saved yet."
+  },
+  "receipt": {
+    "hide": "Hide",
+    "invited": "We e-mailed an invitation to {name} ({email}). It works until {date}.",
+    "roleChanged": "{name} is now {role}.",
+    "deactivated_one": "{names} can no longer sign in.",
+    "deactivated_other": "{names} can no longer sign in.",
+    "deactivatedNotMoved_one": "{names} can no longer sign in. 1 request could not move to the colleague you chose (their role does not answer it): it is back with everyone who can.",
+    "deactivatedNotMoved_other": "{names} can no longer sign in. {count} requests could not move to the colleague you chose (their role does not answer them): they are back with everyone who can.",
+    "addressAdded": "We received “{address}”. We check it before the first delivery; you can choose it for orders once it is checked.",
+    "addressDefault": "“{address}” is now your default delivery address.",
+    "addressRemoved_one": "The address was removed. Orders already sent keep it.",
+    "addressRemoved_other": "{count} addresses were removed. Orders already sent keep them.",
+    "endedOthers_one": "1 other session was signed out.",
+    "endedOthers_other": "{count} other sessions were signed out."
+  },
+  "failed": {
+    "conflict": "Someone changed this a moment ago. We read it again: check it and try once more.",
+    "forbidden": "Your access does not allow this.",
+    "gone": "This is no longer here. We read the list again.",
+    "invalid": "This was not accepted as it is. Check it and try again.",
+    "wait": "Too many tries in a short time. Wait a minute and try again.",
+    "signedOut": "Your session ended. Sign in again to go on.",
+    "network": "We could not reach the portal. Check your connection and try again."
+  },
+  "held": {
+    "preview": "This is a preview of the portal: nothing can be changed here.",
+    "loading": "Still reading your colleagues.",
+    "adminInvites": "Only your admin ({names}) invites colleagues.",
+    "adminInvitesNone": "Only your organisation's admin invites colleagues: ask us who it is.",
+    "seats": "Your portal holds at most {max} people. Deactivate someone first, or ask us for more.",
+    "noRoles": "No role is open to your organisation yet: ask us.",
+    "yourself": "You cannot change your own access: ask another admin, or us.",
+    "deactivated": "Already deactivated.",
+    "noneChosen": "Choose one or more rows first.",
+    "sameRole": "This is the role they have now.",
+    "handoverFirst": "We are reading their open requests first.",
+    "noOthers": "This is your only session.",
+    "defaultAlready": "This is the default already.",
+    "defaultWaiting": "It waits for our check: it can be the default once we have checked it.",
+    "defaultRemoved": "A removed or refused address cannot be the default.",
+    "removedAlready": "Already removed."
+  },
+  "profile": {
+    "title": "My profile",
+    "subtitle": "Your own details. Your colleagues see your name.",
+    "name": "Name",
+    "nameNeeded": "Type your name.",
+    "nameTooLong": "At most 120 characters.",
+    "email": "E-mail (your sign-in)",
+    "emailByAdmin": "Ask your admin ({names}) to change it: they invite the new address.",
+    "emailByAdminNone": "Ask your organisation's admin to change it: they invite the new address.",
+    "emailByUs": "It is how you sign in: ask us to change it.",
+    "language": "Language",
+    "languageHint": "The portal and our e-mails to you speak it.",
+    "theme": "Theme",
+    "themeHint": "On this device only. It changes at once.",
+    "themeMode": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "As the device"
+    },
+    "save": "Save profile"
+  },
+  "emails": {
+    "title": "E-mail settings",
+    "subtitle": "What reaches you by e-mail, and how often.",
+    "allOff": "No non-essential e-mails",
+    "allOffHint": "Order, delivery and invoice e-mails keep coming: you need them to run your orders.",
+    "frequency": {
+      "INSTANT": "As it happens",
+      "DAILY": "Daily summary",
+      "WEEKLY": "Weekly summary",
+      "OFF": "Off"
+    },
+    "frequencyOf": "How often: {topic}",
+    "save": "Save e-mail settings",
+    "failed": "We could not read your e-mail settings.",
+    "refused": "This change was not accepted: order, delivery and invoice e-mails stay on.",
+    "preview": "E-mail settings are each person's own: a preview does not show them."
+  },
+  "users": {
+    "title": "Colleagues",
+    "subtitle": "The people of your organisation in this portal.",
+    "subtitleAdmin": "You invite and remove your colleagues, within the limits we agreed with your organisation.",
+    "yourAdmin": "Your admin is {names}: ask them to invite a colleague or change a role.",
+    "tableLabel": "Colleagues",
+    "count_one": "1 person",
+    "count_other": "{count} people",
+    "seats": "{taken} of {max} places taken",
+    "seatsOpen_one": "1 place taken, no limit",
+    "seatsOpen_other": "{count} places taken, no limit",
+    "col": {
+      "name": "Name",
+      "email": "E-mail",
+      "role": "Role",
+      "prices": "Sees prices",
+      "lastSignIn": "Last sign-in",
+      "status": "Status",
+      "more": "More"
+    },
+    "prices": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "never": "Never",
+    "you": "You",
+    "admin": "Admin",
+    "status": {
+      "ACTIVE": "Active",
+      "INVITED": "Invited",
+      "SUSPENDED": "Paused",
+      "DEACTIVATED": "Deactivated"
+    },
+    "invitationEnds": "until {date}",
+    "invite": "Invite a colleague",
+    "changeRole": "Change role",
+    "deactivate": "Deactivate",
+    "deactivateN_one": "Deactivate 1",
+    "deactivateN_other": "Deactivate {count}",
+    "rowMenu": "More for {name}",
+    "onlyYou": "Only you so far.",
+    "onlyYouHint": "Invite the colleagues who order, pay or check quality with us.",
+    "failed": "We could not read your colleagues."
+  },
+  "role": {
+    "prices": {
+      "yes": "sees prices",
+      "no": "no prices"
+    },
+    "sees": {
+      "customer-buyer": "Orders, documents and approvals",
+      "customer-finance": "Invoices, payments and documents",
+      "customer-quality": "Quality, certificates and complaints",
+      "customer-designer": "Samples, the catalogue and approvals of designs",
+      "customer-viewer": "Orders and documents, read only",
+      "customer-admin": "Everything, and invites and removes colleagues",
+      "withPrices": "What the role covers",
+      "noPrices": "What the role covers"
+    }
+  },
+  "invite": {
+    "title": "Invite a colleague",
+    "subtitle": "We e-mail them a link to sign in. It works for 7 days.",
+    "name": "Name",
+    "email": "Work e-mail",
+    "emailHint": "They sign in with this address: a code arrives there each time.",
+    "role": "Role",
+    "language": "Language of the invitation",
+    "languageHint": "They can change it after signing in.",
+    "send": "Send invitation",
+    "problem": {
+      "name": "Type their name.",
+      "email": "Type a full e-mail address, with @ and the domain.",
+      "role": "Choose a role."
+    },
+    "failed": {
+      "address": "This address cannot be invited here: it is already in your portal, or it belongs to another account. Ask us if it should be yours.",
+      "seats": "We could not invite them now: every place of your portal may be taken, or the role is not ready. Ask us.",
+      "invalid": "This role is not open to your organisation, or a field was refused. Check and try again."
+    }
+  },
+  "roleDialog": {
+    "title": "Change {name}'s role",
+    "subtitle": "Each role says what it sees before you choose.",
+    "current": "{role} (now)",
+    "save": "Change role"
+  },
+  "raise": {
+    "title": "Make {name} an admin?",
+    "what": "Admins invite and remove colleagues and change their roles.",
+    "prices": "Admins see prices.",
+    "stepUp": "We ask for a code by e-mail first.",
+    "confirm": "Make admin",
+    "back": "Change the role back at any time"
+  },
+  "deactivate": {
+    "title": "Deactivate {name}?",
+    "titleN": "Deactivate {count} colleagues?",
+    "noSignIn": "{name} can no longer sign in, from now on.",
+    "noSignInN": "{names} can no longer sign in, from now on.",
+    "moveTo_one": "1 request handed to them moves to:",
+    "moveTo_other": "{count} requests handed to them move to:",
+    "moveHint": "Their other open requests stay with your organisation: whoever can answer them sees them.",
+    "everyone": "Everyone who can answer them",
+    "stay_one": "Their 1 open request stays with your organisation: whoever can answer it sees it.",
+    "stay_other": "Their {count} open requests stay with your organisation: whoever can answer them sees them.",
+    "nothingOpen": "No open request waits for them.",
+    "aloneTitle_one": "Only they could answer 1 request",
+    "aloneTitle_other": "Only they could answer {count} requests",
+    "aloneHint": "Give a colleague the role it needs first, or ask us.",
+    "handoverFailed": "We could not read their open requests.",
+    "confirm": "Deactivate",
+    "confirmN": "Deactivate {count}"
+  },
+  "addresses": {
+    "title": "Delivery addresses",
+    "subtitle": "Where we deliver your orders. Your admin adds new ones.",
+    "subtitleAdmin": "Where we deliver your orders. We check every new address before the first delivery.",
+    "tableLabel": "Delivery addresses",
+    "count_one": "1 address",
+    "count_other": "{count} addresses",
+    "waitingCount_one": "1 waits for our check",
+    "waitingCount_other": "{count} wait for our check",
+    "col": {
+      "address": "Address",
+      "contact": "Contact",
+      "status": "Status",
+      "added": "Added by",
+      "more": "More"
+    },
+    "default": "Default",
+    "state": {
+      "APPROVED": "Approved",
+      "OURS": "Approved",
+      "WAITING": "Waiting for our check",
+      "REFUSED": "Not accepted",
+      "REMOVED": "Removed"
+    },
+    "reason": "Why: {reason}",
+    "askedOn": "Asked on {date}; not for orders until checked",
+    "checkedOn": "Checked on {date}",
+    "addedByUs": "Us",
+    "addedByYou": "You",
+    "addedBy": "{name}",
+    "add": "Add an address",
+    "makeDefault": "Make default",
+    "remove": "Remove",
+    "removeN_one": "Remove 1",
+    "removeN_other": "Remove {count}",
+    "rowMenu": "More for {name}",
+    "empty": "No delivery addresses yet.",
+    "emptyHint": "Add the places where your goods should arrive.",
+    "failed": "We could not read your delivery addresses."
+  },
+  "address": {
+    "title": "Delivery address",
+    "subtitle": "A new place where we deliver your orders.",
+    "check": "We check new or changed addresses before the next delivery. Until then the address is not offered for orders.",
+    "name": "Name of the place",
+    "nameHint": "For example “Warehouse Milan”.",
+    "line1": "Street and number",
+    "line2": "More (floor, building)",
+    "postalCode": "Postcode",
+    "city": "City",
+    "province": "Province",
+    "country": "Country",
+    "countryHint": "Two letters: IT, FR, DE …",
+    "contactName": "Who receives the goods",
+    "phone": "Phone",
+    "notes": "Notes for the carrier",
+    "notesHint": "Opening hours, dock, access.",
+    "save": "Save address",
+    "problem": {
+      "line1": "Type the street and number.",
+      "postalCode": "Type the postcode.",
+      "capIt": "An Italian postcode has 5 digits.",
+      "city": "Type the city.",
+      "country": "Two letters, for example IT.",
+      "tooLong": "This is too long."
+    },
+    "failed": {
+      "invalid": "The address was not accepted as it is. Check the fields and try again."
+    }
+  },
+  "remove": {
+    "title_one": "Remove this delivery address?",
+    "title_other": "Remove {count} delivery addresses?",
+    "sent": "Orders already sent keep their address; new orders cannot choose it.",
+    "confirm_one": "Remove address",
+    "confirm_other": "Remove {count} addresses",
+    "back": "To use it again, add it again (we check it again)."
+  },
+  "company": {
+    "title": "Company data",
+    "subtitle": "What we hold for your invoices. Read only.",
+    "legalName": "Legal name",
+    "tradeName": "Trade name",
+    "vatNumber": "VAT number",
+    "fiscalCode": "Tax code",
+    "sdiCode": "SDI recipient code",
+    "pec": "PEC",
+    "invoiceAddress": "Invoice address",
+    "registeredOffice": "Registered office",
+    "paymentTerms": "Payment terms",
+    "currency": "Currency",
+    "wrong": "Something wrong?",
+    "ask": "Ask us",
+    "failed": "We could not read your company data.",
+    "noAccess": "Your role does not show the company data. Ask your admin."
+  },
+  "security": {
+    "title": "Sign-in and sessions",
+    "subtitle": "Where you are signed in to this portal.",
+    "sessions": "Your sessions",
+    "col": {
+      "device": "Device",
+      "started": "Signed in",
+      "lastSeen": "Last active"
+    },
+    "device": "{browser} on {system}",
+    "browser": {
+      "chrome": "Chrome",
+      "edge": "Edge",
+      "firefox": "Firefox",
+      "safari": "Safari",
+      "opera": "Opera",
+      "other": "A browser"
+    },
+    "system": {
+      "windows": "Windows",
+      "mac": "Mac",
+      "ios": "iPhone or iPad",
+      "android": "Android",
+      "linux": "Linux",
+      "other": "another device"
+    },
+    "thisOne": "This device",
+    "now": "Now",
+    "timeouts": "A session ends after 30 minutes without use, and always after 12 hours. Each sign-in asks for a code we e-mail you.",
+    "endOthers": "Sign out the others",
+    "twoStep": "Two-step sign-in with an authenticator app",
+    "twoStepHeld": "Not offered yet: every sign-in already asks for a new code we e-mail you.",
+    "failed": "We could not read your sessions.",
+    "preview": "Sessions are each person's own: a preview does not show them."
+  },
+  "endOthers": {
+    "title_one": "Sign out your other session?",
+    "title_other": "Sign out your {count} other sessions?",
+    "what_one": "The other device is signed out at once: it needs a new code to come back.",
+    "what_other": "The other {count} devices are signed out at once: each needs a new code to come back.",
+    "stay": "This device stays signed in.",
+    "confirm": "Sign out the others",
+    "back": "Sign in again on that device with a new code"
+  },
+  "stepUp": {
+    "title": "Confirm it's you",
+    "sentence": "We sent a 6-digit code to {email}. It confirms it's you for the next 5 minutes.",
+    "confirm": "Confirm",
+    "wrong": "That code is not right. Check the latest e-mail and try again.",
+    "triedOut": "Too many wrong codes. Close this and start again: we send a new code.",
+    "expired": "This code no longer works. Close this and start again: we send a new code.",
+    "wait": "We sent a code a moment ago: wait a minute before asking for a new one.",
+    "sendFailed": "We could not send the code. Close this and try again."
+  },
+  "dialog": {
+    "cancel": "Cancel"
+  },
+  "closed": {
+    "title": "Your access does not include the Account page.",
+    "askAdmin": "Your admin ({names}) can tell you more.",
+    "askUs": "Ask us if you need it.",
+    "home": "Back to Home"
+  }
+}

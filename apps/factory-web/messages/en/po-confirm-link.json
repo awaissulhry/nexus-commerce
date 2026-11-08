@@ -41,28 +41,7 @@
     "hides_one": "about {count} hide",
     "hides_other": "about {count} hides",
     "crVi": "Cr VI test report needed with each lot",
-    "confirmed": "Confirmed: {quantity} {unit} by {date}",
-    "yourAnswer": "Your answer",
-    "change": "Change",
-    "changeAria": "Change your answer to line {seq}",
-    "asAskedAgain": "As asked",
-    "asAskedAgainAria": "Line {seq} as asked again",
-    "reason": "Your reason: {reason}",
-    "answer": {
-      "AS_ASKED": "As asked",
-      "OTHER": "{quantity} {unit} by {date}",
-      "SPLIT": "Two deliveries: {first} and {second}",
-      "CANNOT_DELIVER": "You cannot deliver it"
-    },
-    "delivery": "{quantity} {unit} by {date}",
-    "changes": {
-      "LATER": "Later date",
-      "EARLIER": "Earlier date",
-      "LESS": "Less",
-      "MORE": "More",
-      "SPLIT": "Two deliveries",
-      "CANNOT_DELIVER": "Cannot deliver"
-    }
+    "confirmed": "Confirmed: {quantity} {unit} by {date}"
   },
   "answer": {
     "title": "Your answer",
@@ -94,22 +73,6 @@
       "note": "The note is at most 1000 characters."
     }
   },
-  "summary": {
-    "allAsAsked_one": "the line as asked",
-    "allAsAsked_other": "all {count} lines as asked",
-    "asAsked_one": "{count} line as asked",
-    "asAsked_other": "{count} lines as asked",
-    "later_one": "{count} later date",
-    "later_other": "{count} later dates",
-    "earlier_one": "{count} earlier date",
-    "earlier_other": "{count} earlier dates",
-    "quantity_one": "{count} other quantity",
-    "quantity_other": "{count} other quantities",
-    "split_one": "{count} line in two deliveries",
-    "split_other": "{count} lines in two deliveries",
-    "cannot_one": "{count} line you cannot deliver",
-    "cannot_other": "{count} lines you cannot deliver"
-  },
   "file": {
     "title": "Your confirmation PDF",
     "hint": "Optional: your own confirmation as a PDF, at most 20 MB. It goes with your answer.",
@@ -128,58 +91,6 @@
     },
     "kb": "{size} KB",
     "mb": "{size} MB"
-  },
-  "sheet": {
-    "title": "Line {seq} — your answer",
-    "asked": "Asked",
-    "askedValue": "{quantity} {unit} by {date}",
-    "kind": "What can you do?",
-    "kinds": {
-      "AS_ASKED": {
-        "title": "As asked",
-        "body": "{quantity} {unit} by {date}"
-      },
-      "OTHER": {
-        "title": "Another date or quantity",
-        "body": "One delivery, at another date, of another quantity, or both."
-      },
-      "SPLIT": {
-        "title": "In two deliveries",
-        "body": "Part now, the rest later: each with its quantity and date."
-      },
-      "CANNOT_DELIVER": {
-        "title": "I cannot deliver this line",
-        "body": "Nothing of this line. The other lines keep your answer."
-      }
-    },
-    "quantity": "Quantity ({unit})",
-    "date": "By",
-    "first": "First delivery",
-    "second": "Second delivery",
-    "reason": "Why",
-    "reasonHint": "A few words for {buyer}.",
-    "save": "Save",
-    "cancel": "Cancel",
-    "problem": {
-      "whole": {
-        "nothing": "Give another quantity, another date, or both.",
-        "same": "That is what was asked: choose “As asked”.",
-        "sameDay": "The two deliveries are on two different days."
-      },
-      "quantity": {
-        "number": "Give the quantity as a number, with at most four decimals.",
-        "positive": "Give a quantity above 0, or choose “I cannot deliver this line”."
-      },
-      "date": {
-        "missing": "Give the date.",
-        "past": "Give a date from today on.",
-        "far": "Give a date within two years."
-      },
-      "reason": {
-        "missing": "Say why, in a few words.",
-        "long": "At most 500 characters."
-      }
-    }
   },
   "decline": {
     "title": "Decline this order",
@@ -297,5 +208,9 @@
     "ROLL": "rolls",
     "CONE": "cones",
     "BOX": "boxes"
+  },
+  "propose": {
+    "hint": "Not as asked? Change a line: another date or quantity, two deliveries, or a line you cannot deliver. {buyer} accepts or refuses every change.",
+    "hintAll": "Not as asked? Change a line: another date or quantity, two deliveries, a substitute article, another change, or a line you cannot deliver. {buyer} accepts or refuses every change; an accepted change makes a new version of the order and a new link."
   }
 }

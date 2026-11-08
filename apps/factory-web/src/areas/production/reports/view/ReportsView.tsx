@@ -12,6 +12,9 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import type { DailyLane, DailyReport, Subscription } from '../api'
 import { anythingRecorded, chartData, lineHref, pctText, printHref, siteEfficiency, styleHref, weekdaysPhrase, type ReportAddress, type ReportsCan } from '../model'
 import { SubscribeDialog, type SubscribeActions, type SubscribeModel } from './SubscribeDialog'
+// B-W2b-130: Cutting and yield (prr-yield).
+import { YieldPanel, type YieldPanelModel } from '../yield/view/YieldPanel'
+import type { YieldPeriod } from '../yield/model'
 import '../reports.css'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
@@ -29,6 +32,8 @@ export interface ReportsModel {
   readonly now: number
   /** The "Email me this report" dialog, when open. */
   readonly dialog: SubscribeModel | null
+  /** B-W2b-130: Cutting and yield; absent: not drawn. */
+  readonly cutYield?: YieldPanelModel
 }
 
 export interface ReportsActions extends SubscribeActions {
@@ -36,6 +41,9 @@ export interface ReportsActions extends SubscribeActions {
   onDay?: (date: string) => void
   onRetry?: () => void
   onOpenSubscribe?: () => void
+  /** B-W2b-130. */
+  onYieldDays?: (days: YieldPeriod) => void
+  onRetryYield?: () => void
 }
 
 /**
@@ -44,12 +52,12 @@ export interface ReportsActions extends SubscribeActions {
  * production: the day's tiles (good, scrap, rework, the lines' efficiency), bars per lane (good, scrap and rework
  * stacked; a line's efficiency on the right axis), and per lane its table by style and size, each style opening its work
  * orders and each line opening Floor now on it. Per line, work centre, style and size only, never per person
- * (Statuto dei Lavoratori art. 4), and the page says so. Cutting & yield, WIP ageing (W2b) and machine OEE (W3) come
- * with their waves.
+ * (Statuto dei Lavoratori art. 4), and the page says so. B-W2b-130: Cutting and yield (cut vs ordered, material used, yield
+ * per hide lot and supplier; MES-302). WIP ageing (W2b-6) and machine OEE (W3) come with their waves.
  */
 export function ReportsView({ model, actions }: { model: ReportsModel; actions?: ReportsActions }) {
   return (
-    <WithMessages namespaces={['production-reports']}>
+    <WithMessages namespaces={['production-reports', 'production-cutboard']}>
       <Reports model={model} actions={actions} />
     </WithMessages>
   )
@@ -145,6 +153,12 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
           <DailyPanel daily={daily} prefix={model.prefix} can={model.can} />
         )}
       </Card>
+
+      {model.cutYield && (
+        <Card padded className="fw-prr-card">
+          <YieldPanel model={model.cutYield} actions={{ onDays: actions?.onYieldDays, onRetry: actions?.onRetryYield }} />
+        </Card>
+      )}
 
       {model.dialog && <SubscribeDialog model={model.dialog} actions={actions} />}
     </div>

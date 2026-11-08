@@ -41,28 +41,7 @@
     "hides_one": "circa {count} pelle",
     "hides_other": "circa {count} pelli",
     "crVi": "Serve il rapporto di prova Cr VI con ogni lotto",
-    "confirmed": "Confermato: {quantity} {unit} entro il {date}",
-    "yourAnswer": "La tua risposta",
-    "change": "Modifica",
-    "changeAria": "Modifica la risposta alla riga {seq}",
-    "asAskedAgain": "Come richiesto",
-    "asAskedAgainAria": "Riga {seq} di nuovo come richiesto",
-    "reason": "Il tuo motivo: {reason}",
-    "answer": {
-      "AS_ASKED": "Come richiesto",
-      "OTHER": "{quantity} {unit} entro il {date}",
-      "SPLIT": "Due consegne: {first} e {second}",
-      "CANNOT_DELIVER": "Non puoi consegnarla"
-    },
-    "delivery": "{quantity} {unit} entro il {date}",
-    "changes": {
-      "LATER": "Data più tardi",
-      "EARLIER": "Data prima",
-      "LESS": "Meno",
-      "MORE": "Di più",
-      "SPLIT": "Due consegne",
-      "CANNOT_DELIVER": "Non consegnabile"
-    }
+    "confirmed": "Confermato: {quantity} {unit} entro il {date}"
   },
   "answer": {
     "title": "La tua risposta",
@@ -94,22 +73,6 @@
       "note": "La nota ha al massimo 1000 caratteri."
     }
   },
-  "summary": {
-    "allAsAsked_one": "la riga come richiesto",
-    "allAsAsked_other": "tutte le {count} righe come richiesto",
-    "asAsked_one": "{count} riga come richiesto",
-    "asAsked_other": "{count} righe come richiesto",
-    "later_one": "{count} data più tardi",
-    "later_other": "{count} date più tardi",
-    "earlier_one": "{count} data prima",
-    "earlier_other": "{count} date prima",
-    "quantity_one": "{count} quantità diversa",
-    "quantity_other": "{count} quantità diverse",
-    "split_one": "{count} riga in due consegne",
-    "split_other": "{count} righe in due consegne",
-    "cannot_one": "{count} riga che non puoi consegnare",
-    "cannot_other": "{count} righe che non puoi consegnare"
-  },
   "file": {
     "title": "Il tuo PDF di conferma",
     "hint": "Facoltativo: la tua conferma in PDF, al massimo 20 MB. Va con la tua risposta.",
@@ -128,58 +91,6 @@
     },
     "kb": "{size} KB",
     "mb": "{size} MB"
-  },
-  "sheet": {
-    "title": "Riga {seq} — la tua risposta",
-    "asked": "Richiesto",
-    "askedValue": "{quantity} {unit} entro il {date}",
-    "kind": "Che cosa puoi fare?",
-    "kinds": {
-      "AS_ASKED": {
-        "title": "Come richiesto",
-        "body": "{quantity} {unit} entro il {date}"
-      },
-      "OTHER": {
-        "title": "Un'altra data o quantità",
-        "body": "Una consegna, in un'altra data, di un'altra quantità, o entrambe."
-      },
-      "SPLIT": {
-        "title": "In due consegne",
-        "body": "Una parte ora, il resto dopo: ognuna con quantità e data."
-      },
-      "CANNOT_DELIVER": {
-        "title": "Non posso consegnare questa riga",
-        "body": "Niente di questa riga. Le altre righe tengono la tua risposta."
-      }
-    },
-    "quantity": "Quantità ({unit})",
-    "date": "Entro il",
-    "first": "Prima consegna",
-    "second": "Seconda consegna",
-    "reason": "Perché",
-    "reasonHint": "Due parole per {buyer}.",
-    "save": "Salva",
-    "cancel": "Annulla",
-    "problem": {
-      "whole": {
-        "nothing": "Indica un'altra quantità, un'altra data, o entrambe.",
-        "same": "È quanto richiesto: scegli “Come richiesto”.",
-        "sameDay": "Le due consegne sono in due giorni diversi."
-      },
-      "quantity": {
-        "number": "Scrivi la quantità come numero, con al massimo quattro decimali.",
-        "positive": "Indica una quantità sopra 0, oppure scegli “Non posso consegnare questa riga”."
-      },
-      "date": {
-        "missing": "Indica la data.",
-        "past": "Indica una data da oggi in poi.",
-        "far": "Indica una data entro due anni."
-      },
-      "reason": {
-        "missing": "Di' perché, in poche parole.",
-        "long": "Al massimo 500 caratteri."
-      }
-    }
   },
   "decline": {
     "title": "Rifiuta questo ordine",
@@ -297,5 +208,9 @@
     "ROLL": "rotoli",
     "CONE": "coni",
     "BOX": "scatole"
+  },
+  "propose": {
+    "hint": "Non come richiesto? Modifica una riga: un’altra data o quantità, due consegne, o una riga che non puoi consegnare. {buyer} accetta o rifiuta ogni modifica.",
+    "hintAll": "Non come richiesto? Modifica una riga: un’altra data o quantità, due consegne, un articolo sostitutivo, un’altra modifica, o una riga che non puoi consegnare. {buyer} accetta o rifiuta ogni modifica; una modifica accettata crea una nuova versione dell’ordine e un nuovo link."
   }
 }
