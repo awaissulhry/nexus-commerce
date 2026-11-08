@@ -36,6 +36,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   DefectCode: '/quality/defects?open=[id]',
   // B-W2a-68: Quality › Nonconformances (SCR-145): an NCR's record (problem, containment, disposition, linked, activity).
   Nonconformance: '/quality/ncr/[id]',
+  // B-W2b-119: Quality › Corrective actions (SCR-146): a CAPA's or an 8D's record (problem, actions, report, activity).
+  Capa: '/quality/capa/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
   // B-W2b-118: a quality alert rule (a test of it rings the bell) opens on Quality rules in its dialog.
@@ -199,6 +201,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).
   '/quality/ncr': '/quality/ncr',
+  // B-W2b-119: the CAPA list and board (`?view=`, `?type=`, `?priority=`, `?q=`, `?mode=board`, New CAPA `?new=1&from=&ids=`).
+  '/quality/capa': '/quality/capa',
   // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
   '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',

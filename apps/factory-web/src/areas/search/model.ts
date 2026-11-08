@@ -12,7 +12,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-23: every other W1 and W2a record type.
   'Payment', 'SupplierInvoice', 'Inspection', 'QualityHold', 'Nonconformance', 'Certificate', 'LabelTemplate', 'PpeRegisterEntry', 'StockCount', 'Location', 'Ddt', 'SubcontractOrder', 'Operation', 'SizeScale', 'Machine', 'MaintenanceJob',
   // B-W2b-149: an incident, near miss or hazard (by its number, anonymised).
-  'Incident'] as const
+  'Incident',
+  // B-W2b-119: a CAPA or an 8D (B-W2b-108's indexer).
+  'Capa'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -28,6 +30,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'APPLIED', 'SIGNED_OFF', 'AT_WORKSHOP', 'RUNNING', 'DOWN', 'UNDER_MAINTENANCE', 'DO_NOT_USE', 'PLANNED', 'WAITING_PARTS', 'HANDED_BACK',
   // A quality hold in force (its indexer says ACTIVE as HELD).
   'HELD',
+  // B-W2b-119: a CAPA's and an 8D's stages (CLOSED and CANCELLED are above).
+  'PLAN', 'ACT', 'CHECK', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -124,6 +128,7 @@ export function statusTone(code: string | null): 'neutral' | 'info' | 'success' 
 /** The view permissions of the record types the index holds: a person who holds none of them has nothing to search. */
 export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['parties.view', 'quotes.view', 'orders.view', 'product.styles.view', 'product.materials.view', 'purchasing.view', 'workorders.view', 'inventory.stock.view', 'shipping.view', 'invoices.view', /* B-W2a-83 */ 'sales.returns.view', 'sales.repairs.view', 'quality.complaints.view',
   /* B-W2b-23 */ 'payments.view', 'payables.view', 'quality.inspections.view', 'quality.holds.view', 'quality.ncr.view', 'compliance.certificates.view', 'compliance.register.view', 'inventory.counts.view', 'inventory.locations.view', 'product.routing.view', 'plant.view',
-  /* B-W2b-149 */ 'safety.incidents.view'])
+  /* B-W2b-149 */ 'safety.incidents.view',
+  /* B-W2b-119 */ 'quality.capa.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

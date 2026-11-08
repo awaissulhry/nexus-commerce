@@ -344,6 +344,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [
           { id: 'quality.ncr', title: 'Nonconformances', titleIt: 'Non conformità', wave: 'W2a', href: '/quality/ncr' },
+          // W2b: B-W2b-119 Corrective actions (SCR-146), between Nonconformances and Complaints (the tree's order).
+          { id: 'quality.capa', title: 'Corrective actions', titleIt: 'Azioni correttive', wave: 'W2b', href: '/quality/capa' },
           { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
         ],
       },
