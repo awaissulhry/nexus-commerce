@@ -13,6 +13,8 @@ import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
 // B-W2b-188: an APPROVAL link's request (SCR-198).
 import { Approve } from '../../links/approve/Approve'
+// B-W2b-198: a CLAIM link's report-a-problem page (SCR-197).
+import { ReportProblem } from '../../links/claim/ReportProblem'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -102,6 +104,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-188
     case 'approve':
       return <Approve api={task.api} />
+    // B-W2b-198
+    case 'report-problem':
+      return <ReportProblem api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }
