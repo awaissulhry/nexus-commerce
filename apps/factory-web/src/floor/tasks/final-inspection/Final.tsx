@@ -61,6 +61,64 @@ import {
   type PlanField,
 } from './model'
 import { FinalView, type BenchRowModel, type CellModel, type FinalAction, type FinalStep, type HoldDialogModel, type InspectionModel, type JobModel, type OrderModel } from './view/FinalView'
+// B-W2b-109: the bench on its plan (AQL sample, checks, measurements, serial or batch check, photo set) and scan to start.
+import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
+import { useLiveChanges } from '../../../record-panels/live'
+import { queuedView } from '../shared/queued'
+import {
+  decideOnPlan,
+  fetchFinalDefects,
+  keepModel,
+  keptFinalDefects,
+  keptModel,
+  keptModelByNumber,
+  openOnPlan,
+  readPlans,
+  readRecord,
+  readSheet,
+  recordOrKeep,
+  scanChoices,
+  scanToStart,
+  uploadResultPhoto,
+  type BenchPayload,
+  type FinalDefect,
+  type RecordModel,
+  type Sheet,
+} from './plan/api'
+import {
+  applyKept,
+  classTakeBack,
+  countPayload,
+  defectLinesOf,
+  defectsPayload,
+  defectWords,
+  failNote,
+  failPayload,
+  firstOpenSection,
+  firstResult,
+  isPlusKey,
+  measureDraft,
+  measureHeld,
+  measurePayload,
+  passPayload,
+  photoTargets,
+  sampleOf,
+  signDecision,
+  signHeld,
+  slotResultPayload,
+  startsAtBench,
+  suggestedPlanOf,
+  takeBackPayload,
+  valuePayload,
+  waitingWrites,
+  identityAdd,
+  identityRemove,
+  countText,
+  withDefectDelta,
+  type BenchSection,
+  type MeasureDraft,
+} from './plan/model'
+import type { BenchAction, BenchModel, ChoiceModel } from './plan/view/PlanBench'
 
 /**
  * The live SCR-097 (`/floor/final`): the inspection bench. It reads the site's work orders to inspect (or the one a
@@ -80,13 +138,22 @@ type Stage =
   | { kind: 'release'; cellId: string; quantity: number; signing: boolean; refused: Check[]; key: string }
   | { kind: 'labels'; cellId: string; jobs: PrintJob[]; refused: string | null; key: string; from: 'gate' | 'release' }
   | { kind: 'done'; cell: string; quantity: number; releaseNumber: string | null; secondPerson: boolean }
+  // B-W2b-109: open on the plan that applies; the bench on its plan; its signature; a code that leads to several.
+  | { kind: 'planOpen'; planId: string; plan: { code: string; number: number; name: string }; lotSize: number; maxLot: number; sample: ReturnType<typeof sampleOf>; editing: boolean; key: string }
+  | { kind: 'bench'; section: BenchSection; pick: BenchModel['pick']; value: BenchModel['value']; measure: MeasureDraft | null; photo: string | null }
+  | { kind: 'benchSign'; decision: 'PASS' | 'FAIL'; statement: boolean; key: string }
+  | { kind: 'choose'; code: string; choices: ChoiceModel[] }
 
 interface Loaded {
   readonly row: BenchRow
   readonly final: FinalState
   /** The work order's OPEN inspection as this person reads it, or null. */
   readonly read: InspectionRead | null
+  /** B-W2b-109: the bench sheet when the open inspection runs on a plan (B-W2b-97), else null. */
+  readonly sheet?: Sheet | null
 }
+
+const benchStage = (sheet: Sheet, section?: BenchSection): Extract<Stage, { kind: 'bench' }> => ({ kind: 'bench', section: section ?? firstOpenSection(sheet), pick: null, value: null, measure: null, photo: null })
 
 const memory = new AsOfMemory<Loaded>(30)
 const listMemory = new AsOfMemory<BenchRow[]>(1)
@@ -99,6 +166,7 @@ export function FloorFinal() {
   const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const t = useT('floor-final')
+  const tp = useT('floor-final-plan')
   const { frame, onFrame } = store.frame('tile.final', { showHome: true })
   const { api, me, online, sessionEnded, locale } = store
   const permissions = useMemo(() => new Set(me?.permissions ?? []), [me?.permissions])
@@ -119,7 +187,20 @@ export function FloorFinal() {
   const [reasons, setReasons] = useState<PickerList>(() => listBeforeRead(HOLD_LISTS))
   const [held, setHeld] = useState<{ reason: string; ncr: string } | null>(null)
   const taken = useRef(false)
+  // B-W2b-109: the bench on its plan — the last write kept on the tablet, its busy flag, the FINAL defects, a photo just added.
+  const [kept, setKept] = useState<string | null>(null)
+  const [benchBusy, setBenchBusy] = useState(false)
+  const [defects, setDefects] = useState<{ list: readonly FinalDefect[]; state: BenchModel['defects']['state'] }>({ list: [], state: 'loading' })
+  const [photoAdded, setPhotoAdded] = useState<string | null>(null)
+  const [sheetAsOf, setSheetAsOf] = useState<string | null>(null)
+  const loadedRef = useRef<Loaded | null>(null)
+  const stageRef = useRef<Stage>(stage)
+  stageRef.current = stage
+  const deviceId = store.device?.device.id ?? null
+  /** B-W2b-109: scan to start, read through a ref so the scan handler always runs the latest one. */
+  const startRef = useRef<(code: string, fromHome: boolean) => Promise<void>>(async () => undefined)
 
+  loadedRef.current = loaded
   const fresh = () => steppedUp(until, new Date()) || steppedUp(me?.session.stepUpUntil, new Date())
   const ended = (outcome: { ok: false; problem: TaskProblem }) => {
     if (outcome.problem.kind === 'signedOut') void sessionEnded()
@@ -164,13 +245,18 @@ export function FloorFinal() {
       }
       const open = [...final.value.inspections].reverse().find((entry) => entry.status === 'OPEN')
       const read = open ? await readInspection(api, open.id) : null
-      const next: Loaded = { row, final: final.value, read: read?.ok ? read.value : null }
+      // B-W2b-109: an inspection on a plan reads its bench sheet (kept for the visit: offline, the bench goes on from it).
+      const sheet = read?.ok && read.value.inspection.planVersion ? await readSheet(api, read.value.inspection.id, locale) : null
+      if (read?.ok && sheet?.ok) keepModel(read.value.inspection.id, { final: read.value, sheet: sheet.value })
+      const keptSheet = read?.ok && read.value.inspection.planVersion && !sheet?.ok ? (keptModel(read.value.inspection.id)?.value.sheet ?? null) : null
+      const next: Loaded = { row, final: final.value, read: read?.ok ? read.value : null, sheet: sheet?.ok ? sheet.value : keptSheet }
       memory.keep(row.id, next)
       setLoaded(next)
       setAsOf(null)
+      setSheetAsOf(keptSheet && read?.ok ? (keptModel(read.value.inspection.id)?.asOf ?? null) : null)
       return next
     },
-    [api, sessionEnded],
+    [api, sessionEnded, locale],
   )
 
   const reload = useCallback(async () => (loaded ? loadOrder(loaded.row) : null), [loaded, loadOrder])
@@ -196,7 +282,9 @@ export function FloorFinal() {
         if (await store.switchTo(read.code)) feedback('error')
         return
       }
-      // Another kind of label (a bundle, a serial, a hide …): Scan anything opens its card.
+      // B-W2b-109 (QHS-065): a lot, a batch, a bundle, a garment's serial or a carton opens the right inspection, or starts it.
+      if (startsAtBench(read)) return void startRef.current(read.code, fromHome)
+      // Another kind of label (a hide, a place …): Scan anything opens its card.
       if (read.kind === 'label' && read.type !== 'workOrder') return store.openScan(code)
       setBusy(true)
       const answer = await listBench(api, read.code)
@@ -209,11 +297,8 @@ export function FloorFinal() {
         return setProblem({ problem: answer.problem, code: read.code })
       }
       const row = answer.value.workOrders.find((entry) => codeKey(entry.number) === codeKey(read.code)) ?? answer.value.workOrders[0]
-      if (!row) {
-        if (fromHome) return store.openScan(code)
-        feedback('error')
-        return setScanned({ code: read.code, why: 'notFound' })
-      }
+      // B-W2b-109: not a work order of the bench: an inspection's number, a carton, a lot typed by hand … the queue's scan says.
+      if (!row) return void startRef.current(read.code, fromHome)
       if (!['RELEASED', 'IN_PROGRESS', 'COMPLETED'].includes(row.status)) {
         feedback('warning')
         setStage({ kind: 'pick' })
@@ -381,6 +466,7 @@ export function FloorFinal() {
     setPin(null)
     setUntil(answer.until)
     if (stage.kind === 'sign') await runDecide(stage)
+    else if (stage.kind === 'benchSign') await runBenchDecide(stage)
     else if (stage.kind === 'release') await runRelease({ ...stage, signing: false })
   }
 
@@ -402,6 +488,431 @@ export function FloorFinal() {
     setStage({ ...labels, jobs, refused })
     await reload()
   }
+
+
+  // ---- B-W2b-109: the bench on its plan ----------------------------------------------------------------------------------
+
+  /** The record's model the office answered (W1's view and the sheet) on screen, kept for the visit. */
+  const commitModel = (model: RecordModel) => {
+    const current = loadedRef.current
+    if (!current) return
+    const next: Loaded = { ...current, read: model.final ?? current.read, sheet: model.sheet ?? current.sheet ?? null }
+    if (model.final) keepModel(model.final.inspection.id, model)
+    memory.keep(current.row.id, next)
+    loadedRef.current = next
+    setLoaded(next)
+    setSheetAsOf(null)
+  }
+
+  /** The FINAL defects in the worker's language (a class's + asks which one; a failed check's reasons). */
+  const readDefects = useCallback(async () => {
+    const kept = keptFinalDefects(locale)
+    if (kept) setDefects({ list: kept.value, state: 'ready' })
+    if (!online) return void (kept ? undefined : setDefects({ list: [], state: 'offline' }))
+    const answer = await fetchFinalDefects(api, locale)
+    if (answer.ok) return setDefects({ list: answer.value, state: 'ready' })
+    if (answer.problem.kind === 'signedOut') return void sessionEnded()
+    if (!kept) setDefects({ list: [], state: answer.problem.kind === 'offline' ? 'offline' : 'error' })
+  }, [api, locale, online, sessionEnded])
+
+  /** Opens the bench on the loaded inspection's sheet (the first section not done). */
+  const toBench = (sheet: Sheet, section?: BenchSection) => {
+    setKept(null)
+    setPhotoAdded(null)
+    setStage(benchStage(sheet, section))
+    void readDefects()
+  }
+
+  /**
+   * One bench write ONLINE FIRST (B-W2b-106 `quality.final.record`): the office's answer is the record's model; a network
+   * failure keeps the same payload on the tablet under the try's id and the sheet on screen moves at once (`applyKept`).
+   */
+  const benchWrite = async (payload: BenchPayload): Promise<RecordModel | 'kept' | null> => {
+    const current = loadedRef.current
+    if (!current?.sheet || benchBusy) return null
+    setBenchBusy(true)
+    setNotice(null)
+    setPhotoAdded(null)
+    try {
+      const outcome = await recordOrKeep(api, store.queue, online, deviceId, payload)
+      if (outcome.kept) {
+        const now = loadedRef.current ?? current
+        const sheet = applyKept(now.sheet ?? current.sheet, payload, new Date().toISOString())
+        const read = payload.what === 'DEFECTS' && now.read ? { ...now.read, inspection: { ...now.read.inspection, defects: payload.defects.map((line, index) => ({ id: `kept:${index}`, defectClass: line.defectClass, code: line.code, description: null, quantity: line.quantity, workOrderSizeId: null, note: null })) } } : now.read
+        const next: Loaded = { ...now, read, sheet }
+        loadedRef.current = next
+        setLoaded(next)
+        setKept(outcome.kept.clientEventId)
+        feedback('success')
+        return 'kept'
+      }
+      const answer = outcome.answer
+      if (answer.ok) {
+        commitModel(answer.value.model)
+        setKept(null)
+        feedback('success')
+        return answer.value.model
+      }
+      ended(answer)
+      feedback('error')
+      setNotice(answer.problem)
+      if (answer.problem.kind === 'conflict' || answer.problem.kind === 'refused') await reload()
+      return null
+    } finally {
+      setBenchBusy(false)
+    }
+  }
+
+  /** A photo onto a result (online only): announced, PUT to the store, confirmed; then the sheet again. */
+  const addPhoto = async (inspectionId: string, resultId: string, photo: CapturedPhoto, label: string): Promise<boolean> => {
+    setBenchBusy(true)
+    const blob = photo.marked ?? photo.photo
+    const answer = await uploadResultPhoto(api, inspectionId, resultId, blob, `${label}.jpg`.replace(/[^\w.-]+/g, '-'))
+    setBenchBusy(false)
+    if (!answer.ok) {
+      ended(answer)
+      feedback('error')
+      setNotice(answer.problem)
+      return false
+    }
+    const sheet = await readSheet(api, inspectionId, locale)
+    if (sheet.ok) commitModel({ final: loadedRef.current?.read ?? null, sheet: sheet.value })
+    feedback('success')
+    setPhotoAdded(label)
+    return true
+  }
+
+  /** The first unit's result of a check in a sheet (a slot's photo hangs on it). */
+  const resultIdOf = (sheet: Sheet | null | undefined, checkCode: string): string | null => {
+    const check = sheet?.checks.find((entry) => entry.code === checkCode)
+    return check ? (firstResult(check)?.id ?? null) : null
+  }
+
+  const onBench = async (action: BenchAction) => {
+    const current = loadedRef.current
+    const sheet = current?.sheet
+    if (stage.kind !== 'bench' || !current || !sheet) return
+    const id = sheet.inspection.id
+    const lines = defectLinesOf(current.read?.inspection.defects ?? [])
+    const set = (patch: Partial<Extract<Stage, { kind: 'bench' }>>) => setStage((now) => (now.kind === 'bench' ? { ...now, ...patch } : now))
+    switch (action.type) {
+      case 'section':
+        setPhotoAdded(null)
+        return set({ section: action.section, pick: null, value: null, measure: null, photo: null })
+      case 'close':
+        setNotice(null)
+        return set({ pick: null, value: null, measure: null, photo: null })
+      case 'count':
+        if (action.add !== 0) await benchWrite(countPayload(id, action.add))
+        return
+      case 'classAdd':
+        if (defects.state !== 'ready') void readDefects()
+        return set({ pick: { kind: 'add', defectClass: action.defectClass } })
+      case 'classRemove': {
+        const back = classTakeBack(lines, action.defectClass)
+        if (back.kind === 'one') return void benchWrite(defectsPayload(id, withDefectDelta(lines, back.line, -1)))
+        if (back.kind === 'pick') return set({ pick: { kind: 'remove', defectClass: action.defectClass } })
+        return
+      }
+      case 'pick': {
+        if (!stage.pick) return
+        const saved = await benchWrite(defectsPayload(id, withDefectDelta(lines, { defectClass: stage.pick.defectClass, code: action.code }, stage.pick.kind === 'add' ? 1 : -1)))
+        if (saved) set({ pick: null })
+        return
+      }
+      case 'pickClose':
+        return set({ pick: null })
+      case 'line':
+        return void benchWrite(defectsPayload(id, withDefectDelta(lines, { defectClass: action.defectClass, code: action.code }, action.delta)))
+      case 'pass':
+        if (action.codes.length > 0) await benchWrite(passPayload(id, action.codes))
+        return
+      case 'fail': {
+        const words = action.reasonId ? defectWords(defects.list, action.reasonId) : tp('checks.failNote')
+        const saved = await benchWrite(failPayload(id, action.code, failNote(words, action.reasonId ?? null)))
+        // The photo taken with the fail goes onto the result the office just made (online only; offline it waits in Photos).
+        if (saved && saved !== 'kept' && action.photo) {
+          const resultId = resultIdOf(saved.sheet, action.code)
+          const check = saved.sheet?.checks.find((entry) => entry.code === action.code)
+          if (resultId) await addPhoto(id, resultId, action.photo as CapturedPhoto, check?.code ?? action.code)
+        }
+        return
+      }
+      case 'valueOpen': {
+        const check = sheet.checks.find((entry) => entry.code === action.code)
+        const result = check ? firstResult(check) : null
+        return set({ value: { code: action.code, value: check?.type === 'COUNT' && result?.value ? Number(result.value) : null, choice: check?.type === 'CHOICE' ? (result?.value ?? null) : null } })
+      }
+      case 'valueNumber':
+        return stage.value ? set({ value: { ...stage.value, value: action.value } }) : undefined
+      case 'valueChoice':
+        return stage.value ? set({ value: { ...stage.value, choice: action.value } }) : undefined
+      case 'valueSave': {
+        if (!stage.value) return
+        const check = sheet.checks.find((entry) => entry.code === stage.value!.code)
+        const text = check?.type === 'CHOICE' ? stage.value.choice : stage.value.value === null ? null : countText(stage.value.value)
+        if (!check || text === null) return feedback('warning')
+        const saved = await benchWrite(valuePayload(id, check.code, text, action.outcome, tp('checks.failValue', { value: text })))
+        if (saved) set({ value: null })
+        return
+      }
+      case 'measureOpen': {
+        const point = sheet.chart.points.find((entry) => entry.pointCode === action.pointCode)
+        return point ? set({ measure: measureDraft(point, sheet.counter.sampleSize, sizesOf(current)) }) : undefined
+      }
+      case 'measureField':
+        return stage.measure ? set({ measure: { ...stage.measure, field: action.field } }) : undefined
+      case 'measureSize':
+        return stage.measure ? set({ measure: { ...stage.measure, size: action.size } }) : undefined
+      case 'measureNumber':
+        return stage.measure ? set({ measure: { ...stage.measure, [stage.measure.field]: action.value } }) : undefined
+      case 'measureSave': {
+        const draft = stage.measure
+        const point = draft ? sheet.chart.points.find((entry) => entry.pointCode === draft.pointCode) : null
+        if (!draft || !point || measureHeld(point, draft)) return feedback('warning')
+        const saved = await benchWrite(measurePayload(id, point, draft))
+        if (!saved) return
+        // The next unit of the same point, the typed nominal and tolerance kept (the inspector measures garment after garment).
+        const after = loadedRef.current?.sheet?.chart.points.find((entry) => entry.pointCode === draft.pointCode) ?? point
+        const next = measureDraft(after, sheet.counter.sampleSize, sizesOf(current))
+        return set({ measure: { ...next, size: draft.size, nominal: draft.nominal, tolerance: draft.tolerance, field: 'value' } })
+      }
+      case 'measureTakeBack': {
+        const point = sheet.chart.points.find((entry) => entry.pointCode === action.pointCode)
+        if (point) await benchWrite(takeBackPayload(id, point, { size: action.size, sampleIndex: action.sampleIndex }))
+        return
+      }
+      case 'serial':
+        await benchWrite(identityAdd(id, action.code))
+        return
+      case 'serialRemove':
+        await benchWrite(identityRemove(id, action.code))
+        return
+      case 'photoOpen':
+        setPhotoAdded(null)
+        return set({ photo: action.key })
+      case 'photoTaken': {
+        const target = stage.photo ? photoTargets(sheet, locale).find((entry) => entry.key === stage.photo) : null
+        if (!target || !online) return feedback('warning')
+        let resultId = target.resultId
+        // A slot's photo hangs on its PHOTO check's result: recorded first (online), then the photo goes onto it.
+        if (!resultId && target.kind === 'slot') {
+          const saved = await benchWrite(slotResultPayload(id, target.checkCode))
+          if (!saved || saved === 'kept') return
+          resultId = resultIdOf(saved.sheet, target.checkCode)
+        }
+        if (!resultId) return feedback('warning')
+        if (await addPhoto(id, resultId, action.photo, target.label)) set({ photo: null })
+        return
+      }
+      case 'retryDefects':
+        return void readDefects()
+    }
+  }
+
+  /** The work order's sizes (a point of measure names its size when there are several). */
+  const sizesOf = (current: Loaded): string[] => [...new Set(current.final.cells.map((cell) => cell.size))]
+
+  /** Scan to start (QHS-065, B-W2b-106): the code opens the right inspection, or starts it on its plan; CHOOSE asks which. */
+  const startFrom = async (code: string, fromHome: boolean) => {
+    if (!online) {
+      // Offline (QHS-062): an open inspection this tablet kept (the offline pack, or read in this visit) opens from what it holds.
+      const kept = keptModelByNumber(code)
+      const read = kept?.value.final ?? null
+      const row = read ? (listMemory.get('rows')?.value.find((entry) => entry.id === read.workOrder.id) ?? null) : null
+      const order = row ? memory.get(row.id) : null
+      if (kept && read && order) {
+        const next: Loaded = { ...order.value, read, sheet: kept.value.sheet }
+        loadedRef.current = next
+        setLoaded(next)
+        setAsOf(order.asOf)
+        setSheetAsOf(kept.asOf)
+        if (kept.value.sheet) return toBench(kept.value.sheet)
+        return setStage({ kind: 'checklist', group: nextGroup(read.inspection.checklist), failing: null })
+      }
+      feedback('warning')
+      return setProblem({ problem: { kind: 'offline' }, code })
+    }
+    setBusy(true)
+    setProblem(null)
+    setNotice(null)
+    const answer = await scanToStart(api, code, freshKey())
+    if (!answer.ok) {
+      setBusy(false)
+      ended(answer)
+      if (answer.problem.kind === 'refused' && answer.problem.code === 'CHOOSE') {
+        const choices = await scanChoices(api, code)
+        if (choices.ok) {
+          const open = choices.value.choices.filter((choice): choice is typeof choice & { id: string } => choice.id !== null)
+          feedback('warning')
+          return setStage({ kind: 'choose', code, choices: open.map((choice) => ({ id: choice.id, number: choice.number, words: locale === 'it' ? choice.words.it : choice.words.en })) })
+        }
+      }
+      if (answer.problem.kind === 'notFound' && fromHome) return store.openScan(code)
+      feedback('error')
+      if (answer.problem.kind === 'notFound') return setScanned({ code, why: 'notFound' })
+      return setProblem({ problem: answer.problem, code })
+    }
+    await openStarted(answer.value.model, code)
+  }
+  startRef.current = startFrom
+
+  /** An inspection the queue's scan opened or started: its work order on the bench, then the bench on its plan. */
+  const openStarted = async (model: RecordModel, code: string) => {
+    const read = model.final
+    if (!read) {
+      setBusy(false)
+      return setScanned({ code, why: 'notFound' })
+    }
+    const list = await listBench(api, read.workOrder.number)
+    const row = list.ok ? (list.value.workOrders.find((entry) => entry.id === read.workOrder.id) ?? null) : null
+    const final = row ? await readFinal(api, row.id) : null
+    setBusy(false)
+    if (!row || !final?.ok) {
+      if (list.ok || !final) feedback('error')
+      return setProblem({ problem: final && !final.ok ? final.problem : list.ok ? { kind: 'notFound' } : list.problem, code })
+    }
+    const next: Loaded = { row, final: final.value, read, sheet: model.sheet }
+    keepModel(read.inspection.id, model)
+    memory.keep(row.id, next)
+    loadedRef.current = next
+    setLoaded(next)
+    setSheetAsOf(null)
+    setScanned(null)
+    feedback('success')
+    if (model.sheet) return toBench(model.sheet)
+    setStage({ kind: 'checklist', group: nextGroup(read.inspection.checklist), failing: null })
+  }
+
+  /** A choice of a code that leads to several open inspections. */
+  const openChosen = async (inspectionId: string, code: string) => {
+    setBusy(true)
+    const read = await readRecord(api, inspectionId)
+    const sheet = read.ok && read.value.inspection.planVersion ? await readSheet(api, inspectionId, locale) : null
+    if (!read.ok) {
+      setBusy(false)
+      ended(read)
+      return setProblem({ problem: read.problem, code })
+    }
+    await openStarted({ final: read.value, sheet: sheet?.ok ? sheet.value : null }, code)
+  }
+
+  /** Start: the plan that applies (B-W2b-97), with the sample of the lot from the API; none applies: W1's typed plan. */
+  const startOnPlan = async (current: Loaded): Promise<boolean> => {
+    if (!online) return false
+    const lotSize = suggestedLot(current.row)
+    setBusy(true)
+    const answer = await readPlans(api, current.row.id, lotSize)
+    setBusy(false)
+    if (!answer.ok) {
+      ended(answer)
+      return false
+    }
+    const plan = suggestedPlanOf(answer.value)
+    if (!plan?.approved) return false
+    setStage({ kind: 'planOpen', planId: plan.id, plan: { code: plan.code, number: plan.approved.number, name: plan.name }, lotSize, maxLot: Math.max(1, Math.min(current.row.pieces, current.row.finished ?? 0) - current.row.released), sample: sampleOf(answer.value), editing: false, key: freshKey() })
+    return true
+  }
+
+  /** The lot changed: its sample is read again (the API's, never computed here); the last answer for this lot wins. */
+  const planLot = async (value: number) => {
+    if (stage.kind !== 'planOpen' || !loaded) return
+    const lotSize = Math.max(1, Math.min(stage.maxLot, Math.round(value)))
+    setStage({ ...stage, lotSize, sample: null })
+    const answer = await readPlans(api, loaded.row.id, lotSize)
+    setStage((now) => (now.kind === 'planOpen' && now.lotSize === lotSize ? { ...now, sample: answer.ok ? sampleOf(answer.value) : null } : now))
+  }
+
+  const openOnPlanNow = async () => {
+    if (stage.kind !== 'planOpen' || !loaded || !online || busy) return
+    setBusy(true)
+    setNotice(null)
+    const opened = await openOnPlan(api, { workOrderId: loaded.row.id, lotSize: stage.lotSize, planId: stage.planId }, stage.key)
+    if (!opened.ok) {
+      setBusy(false)
+      ended(opened)
+      feedback('error')
+      return setNotice(opened.problem)
+    }
+    const [read, sheet] = await Promise.all([readRecord(api, opened.value.inspection.id), readSheet(api, opened.value.inspection.id, locale)])
+    const final = await readFinal(api, loaded.row.id)
+    setBusy(false)
+    if (!read.ok || !sheet.ok) {
+      feedback('error')
+      return setNotice(!read.ok ? read.problem : !sheet.ok ? sheet.problem : null)
+    }
+    commitModel({ final: read.value, sheet: sheet.value })
+    if (final.ok && loadedRef.current) {
+      const next = { ...loadedRef.current, final: final.value }
+      loadedRef.current = next
+      setLoaded(next)
+    }
+    feedback('success')
+    toBench(sheet.value)
+  }
+
+  /** Signs the result on a plan with the PIN: the sheet read first (its version), never while answers wait on the tablet. */
+  const runBenchDecide = async (signing: Extract<Stage, { kind: 'benchSign' }>) => {
+    const current = loadedRef.current
+    if (!current?.sheet || !online) return
+    setBusy(true)
+    setNotice(null)
+    const sheet = await readSheet(api, current.sheet.inspection.id, locale)
+    if (!sheet.ok) {
+      setBusy(false)
+      ended(sheet)
+      return setNotice(sheet.problem)
+    }
+    const answer = await decideOnPlan(api, sheet.value.inspection.id, { version: sheet.value.inspection.version, result: signing.decision, ...(current.read?.statementNeeded ? { notMakerStatement: signing.statement } : {}) }, signing.key)
+    setBusy(false)
+    if (answer.ok) {
+      feedback('success')
+      setPin(null)
+      await reload()
+      return setStage({ kind: 'gate' })
+    }
+    ended(answer)
+    if (answer.problem.kind === 'stepUp') return setStage(signing)
+    feedback('error')
+    setNotice(answer.problem)
+    commitModel({ final: current.read, sheet: sheet.value })
+  }
+
+  // Live (design "Another inspector opens the same lot"; two tablets add up): a write elsewhere on this inspection reads the sheet again.
+  const benchId = stage.kind === 'bench' ? (loaded?.sheet?.inspection.id ?? null) : null
+  useLiveChanges(
+    {
+      onChange: (change) => {
+        if (change.type !== 'final_inspection.recorded' || !benchId || change.fields.inspectionId !== benchId || benchBusy) return
+        void readSheet(api, benchId, locale).then((answer) => (answer.ok ? commitModel({ final: loadedRef.current?.read ?? null, sheet: answer.value }) : undefined))
+      },
+      onReconnect: () => {
+        if (benchId) void readSheet(api, benchId, locale).then((answer) => (answer.ok ? commitModel({ final: loadedRef.current?.read ?? null, sheet: answer.value }) : undefined))
+      },
+    },
+    Boolean(benchId) && online,
+  )
+
+  const onBenchRef = useRef(onBench)
+  onBenchRef.current = onBench
+  // "+" counts one piece on the AQL counter (design floor.final keyboard), never while a field or the PIN pad has the focus.
+  useEffect(() => {
+    if (stage.kind !== 'bench' || stage.section !== 'aql' || stage.pick) return
+    const onKey = (event: KeyboardEvent) => {
+      if (!isPlusKey(event.key) || event.ctrlKey || event.metaKey || event.altKey) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active?.closest('[aria-modal="true"]')) return
+      const sheet = loadedRef.current?.sheet
+      if (!sheet || !sheet.may.record || sheet.counter.inspected >= sheet.counter.sampleSize) return
+      event.preventDefault()
+      void onBenchRef.current({ type: 'count', add: 1 })
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [stage])
+
+  // The last write kept on this tablet: where it stands (saved here → recorded by the office, or refused when sent).
+  const keptView = kept ? queuedView(store.queueSnapshot, kept) : null
 
   // ---- the actions ------------------------------------------------------------------------------------------------------
 
@@ -429,6 +940,17 @@ export function FloorFinal() {
         return stage.signing ? setStage({ ...stage, signing: false }) : setStage({ kind: 'gate' })
       case 'labels':
         return stage.from === 'release' ? setStage({ kind: 'release', cellId: stage.cellId, quantity: releasableOf(stage.cellId), signing: false, refused: [], key: freshKey() }) : setStage({ kind: 'gate' })
+      // B-W2b-109
+      case 'planOpen':
+        return setStage({ kind: 'gate' })
+      case 'bench':
+        if (stage.pick || stage.value || stage.measure || stage.photo) return setStage({ ...stage, pick: null, value: null, measure: null, photo: null })
+        setKept(null)
+        return setStage({ kind: 'gate' })
+      case 'benchSign':
+        return loaded?.sheet ? setStage(benchStage(loaded.sheet)) : setStage({ kind: 'gate' })
+      case 'choose':
+        return setStage({ kind: 'pick' })
     }
   }
 
@@ -459,7 +981,12 @@ export function FloorFinal() {
         return void loadList()
       case 'start': {
         if (!order || !loaded) return
+        // B-W2b-109: an inspection on its plan continues on the bench; a new one opens on the plan that applies (none: W1's).
+        if (order.main === 'continue' && loaded.sheet) return toBench(loaded.sheet)
+        // On a plan without its sheet (not read, none kept): W1's checklist would be refused (PLAN_CHECKS); say why instead.
+        if (order.main === 'continue' && inspection?.planVersion) return setProblem({ problem: { kind: online ? 'unavailable' : 'offline' }, code: inspection.inspectionNumber ?? loaded.row.number })
         if (order.main === 'continue' && inspection) return setStage({ kind: 'checklist', group: nextGroup(inspection.checklist), failing: null })
+        if (order.main === 'start' && (await startOnPlan(loaded))) return
         if (order.main === 'start') return setStage({ kind: 'plan', plan: suggestedPlan(suggestedLot(loaded.row)), field: null, key: freshKey() })
         if (order.main === 'release') {
           const cell = order.cells.find((entry) => entry.held === null) ?? order.cells.find((entry) => entry.releasable > 0)
@@ -523,6 +1050,7 @@ export function FloorFinal() {
         return
       }
       case 'statement':
+        if (stage.kind === 'benchSign') return setStage({ ...stage, statement: action.value })
         return stage.kind === 'sign' ? setStage({ ...stage, statement: action.value }) : undefined
       case 'pin':
         return onPin(action.pin)
@@ -550,6 +1078,31 @@ export function FloorFinal() {
         return setStage({ kind: 'labels', cellId: action.cellId, jobs: [], refused: null, key: freshKey(), from: stage.kind === 'release' ? 'release' : 'gate' })
       case 'print':
         return stage.kind === 'labels' ? print(stage) : undefined
+      // B-W2b-109: the bench on its plan.
+      case 'bench':
+        return onBench(action.action)
+      case 'plan-lot':
+        return planLot(action.value)
+      case 'plan-edit':
+        return stage.kind === 'planOpen' ? setStage({ ...stage, editing: action.editing }) : undefined
+      case 'open-on-plan':
+        return openOnPlanNow()
+      case 'bench-sign': {
+        const sheet = loaded?.sheet
+        if (!sheet || stage.kind !== 'bench' || !online) return
+        const decision = signDecision(sheet)
+        if (signHeld(sheet, decision).length > 0 || waitingWrites(store.queueSnapshot.items, sheet.inspection.id) > 0 || !sheet.may.record) return feedback('warning')
+        const signing: Extract<Stage, { kind: 'benchSign' }> = { kind: 'benchSign', decision, statement: false, key: freshKey() }
+        setNotice(null)
+        setPin(null)
+        // The PIN is the signature (design floor.final "Release → 6 PIN digits"; B-W2b-105): always asked on its own step, never a
+        // silent sign inside the step-up window.
+        return setStage(signing)
+      }
+      case 'choose': {
+        if (stage.kind !== 'choose') return
+        return openChosen(action.id, stage.code)
+      }
       case 'retry-job': {
         if (stage.kind !== 'labels') return
         const job = stage.jobs.find((entry) => entry.id === action.jobId)
@@ -579,6 +1132,8 @@ export function FloorFinal() {
         return stage.signing ? null : { type: 'release-confirm' }
       case 'done':
         return { type: 'next' }
+      case 'planOpen':
+        return stage.editing ? null : { type: 'open-on-plan' }
       default:
         return null
     }
@@ -603,11 +1158,21 @@ export function FloorFinal() {
     ? { kind: 'noPermission' }
     : problem
       ? { kind: 'problem', problem: problem.problem, code: problem.code ?? null }
-      : stage.kind === 'pick' || !order
-        ? rows === null
-          ? { kind: 'loading' }
-          : { kind: 'pick', rows: rows.map(benchRowModel), scanned }
-        : stepOf(stage, order, loaded!)
+      : stage.kind === 'choose'
+        ? { kind: 'choose', code: stage.code, choices: stage.choices }
+        : stage.kind === 'pick' || !order
+          ? rows === null
+            ? { kind: 'loading' }
+            : { kind: 'pick', rows: rows.map(benchRowModel), scanned }
+          : stepOf(stage, order, loaded!, {
+              defects,
+              kept: keptView ? { ticks: keptView.ticks, refusal: keptView.refusal?.code ?? null } : null,
+              busy: benchBusy,
+              asOf: sheetAsOf ?? (asOf && loaded?.sheet ? asOf : null),
+              waiting: loaded?.sheet ? waitingWrites(store.queueSnapshot.items, loaded.sheet.inspection.id) : 0,
+              photoAdded,
+              signer: me.worker.displayName,
+            })
 
   return (
     <FinalView
@@ -692,7 +1257,19 @@ export function inspectionModel(read: InspectionRead): InspectionModel {
 
 const jobModel = (job: PrintJob): JobModel => ({ id: job.id, status: job.status, copies: job.copies, detail: job.lastError })
 
-function stepOf(stage: Stage, order: OrderModel, loaded: Loaded): FinalStep {
+/** B-W2b-109: what the bench on its plan shows beside the sheet (the container's state). */
+interface BenchContext {
+  readonly defects: BenchModel['defects']
+  readonly kept: BenchModel['kept']
+  readonly busy: boolean
+  readonly asOf: string | null
+  readonly waiting: number
+  readonly photoAdded: string | null
+  /** The signer's name on the PIN block (the person signed in: their own name only). */
+  readonly signer: string
+}
+
+function stepOf(stage: Stage, order: OrderModel, loaded: Loaded, bench: BenchContext): FinalStep {
   const cellOf = (id: string) => order.cells.find((cell) => cell.id === id)
   switch (stage.kind) {
     case 'pick':
@@ -714,5 +1291,35 @@ function stepOf(stage: Stage, order: OrderModel, loaded: Loaded): FinalStep {
     }
     case 'done':
       return { kind: 'done', order, cell: stage.cell, quantity: stage.quantity, releaseNumber: stage.releaseNumber, secondPerson: stage.secondPerson }
+    // B-W2b-109
+    case 'planOpen':
+      return { kind: 'planOpen', order, open: { plan: stage.plan, lotSize: stage.lotSize, maxLot: stage.maxLot, sample: stage.sample, editing: stage.editing } }
+    case 'bench':
+      return loaded.sheet
+        ? {
+            kind: 'bench',
+            order,
+            bench: {
+              sheet: loaded.sheet,
+              section: stage.section,
+              lines: defectLinesOf(loaded.read?.inspection.defects ?? []),
+              defects: bench.defects,
+              pick: stage.pick,
+              value: stage.value,
+              measure: stage.measure,
+              photo: stage.photo,
+              sizes: [...new Set(loaded.final.cells.map((cell) => cell.size))],
+              kept: bench.kept,
+              photoAdded: bench.photoAdded,
+              busy: bench.busy,
+              asOf: bench.asOf,
+              waiting: bench.waiting,
+            },
+          }
+        : { kind: 'gate', order }
+    case 'benchSign':
+      return loaded.sheet ? { kind: 'benchSign', order, sheet: loaded.sheet, decision: stage.decision, statementNeeded: loaded.read?.statementNeeded ?? false, statement: stage.statement, signer: bench.signer } : { kind: 'gate', order }
+    case 'choose':
+      return { kind: 'gate', order }
   }
 }

@@ -1,0 +1,291 @@
+{
+  "head": {
+    "plan": "Piano {code} v{number} · {name}",
+    "sample": "Campione di {sample} su un lotto di {lot}",
+    "sampleLetter": "Campione di {sample} su un lotto di {lot} · lettera codice {letter}"
+  },
+  "result": {
+    "pass": "Esito per ora: CONFORME.",
+    "fail": "Esito per ora: NON CONFORME.",
+    "failedChecks": "Non conformi: {names}.",
+    "outOfTolerance_one": "{count} valore fuori tolleranza.",
+    "outOfTolerance_other": "{count} valori fuori tolleranza.",
+    "identity": "Il controllo di matricola o lotto non è conforme.",
+    "class": {
+      "CRITICAL": "Un difetto critico non è mai accettato ({found} trovati).",
+      "MAJOR": "Difetti maggiori {found}, si accetta fino a {accept}.",
+      "MINOR": "Difetti minori {found}, si accetta fino a {accept}."
+    }
+  },
+  "sections": "Parti del collaudo",
+  "section": {
+    "aql": "Campione AQL",
+    "checks": "Controlli",
+    "measure": "Misure",
+    "serial": "Matricola o lotto",
+    "photos": "Foto"
+  },
+  "state": {
+    "open": "Da fare",
+    "partly": "In corso",
+    "done": "Fatto",
+    "failed": "Non conforme"
+  },
+  "held": {
+    "noRecord": "Registra questo collaudo solo l'ispettore che lo ha aperto."
+  },
+  "busy": "Invio all'ufficio…",
+  "asOf": "Da questo tablet, aggiornato alle {time}: ciò che registri resta qui e parte quando torna la rete.",
+  "kept": {
+    "saved": "Salvato su questo tablet: arriva all'ufficio quando torna la rete.",
+    "recorded": "Registrato dall'ufficio.",
+    "refused": "L'ufficio ha rifiutato ciò che il tablet teneva: vedi In attesa di invio."
+  },
+  "class": {
+    "CRITICAL": "Critici",
+    "MAJOR": "Maggiori",
+    "MINOR": "Minori",
+    "OTHER": "Altri controlli"
+  },
+  "defect": {
+    "which": "Quale difetto ({klass})?",
+    "whichBack": "Quale difetto ({klass}) togli?",
+    "otherOf": "Altro difetto ({klass})",
+    "count_one": "{count} trovato",
+    "count_other": "{count} trovati",
+    "list": {
+      "loading": "Lettura dei difetti…",
+      "offline": "Il tablet non ha ancora letto i difetti: c'è solo la casella generica.",
+      "error": "L'ufficio non ha inviato i difetti: c'è solo la casella generica."
+    },
+    "cancel": "Annulla",
+    "found": "Difetti trovati",
+    "less": "Un {defect} in meno",
+    "more": "Un {defect} in più"
+  },
+  "aql": {
+    "label": "AQL {major} maggiori · {minor} minori · campione {sample}",
+    "inspected": "Controllati",
+    "of": "{inspected} di {sample} controllati",
+    "threshold": "Accetta fino a {accept} · rifiuta da {reject}",
+    "verdict": {
+      "open": "In corso",
+      "accept": "Accettato",
+      "reject": "Rifiutato"
+    },
+    "classState": {
+      "ok": "Nei limiti",
+      "limit": "Ancora uno e si rifiuta",
+      "reject": "Rifiuta il lotto"
+    },
+    "add": "+ un capo",
+    "remove": "Un capo in meno",
+    "addDefect": "Un difetto in più ({klass})",
+    "removeDefect": "Un difetto in meno ({klass})",
+    "sampleDone": "Tutto il campione è controllato.",
+    "nothing": "Già a zero.",
+    "criticalCheck": "Un controllo critico non è conforme: il lotto è rifiutato.",
+    "stop": {
+      "on": "Il collaudo può fermarsi appena una classe arriva al numero di rifiuto.",
+      "off": "Si controlla tutto il campione, anche dopo un rifiuto.",
+      "source": {
+        "PLAN": "(regola del piano)",
+        "COMPANY": "(regola dell'azienda)",
+        "TENANT": "(regola dello stabilimento)",
+        "DEFAULT": "(regola predefinita)"
+      }
+    },
+    "keys": "Da tastiera, + conta un capo."
+  },
+  "checks": {
+    "title": "I controlli del piano",
+    "optional": "facoltativo",
+    "photoNeeded": "va con una foto",
+    "photoLater": "la foto si scatta quando torna la rete",
+    "values": "Conteggi e scelte",
+    "answer": {
+      "PASS": "conforme {value}",
+      "FAIL": "non conforme {value}",
+      "NOT_APPLICABLE": "non applicabile"
+    },
+    "outcome": {
+      "PASS": "Conforme",
+      "FAIL": "Non conforme",
+      "NOT_APPLICABLE": "Non applicabile"
+    },
+    "toAnswer": "da rispondere",
+    "notYet": "Non ancora",
+    "office": "{check}: si risponde in ufficio (niente da scrivere in reparto).",
+    "failNote": "Non come dovrebbe",
+    "failValue": "Valore {value} non come dovrebbe"
+  },
+  "value": {
+    "held": "Prima scrivi il numero o scegli una risposta.",
+    "pass": "Conforme",
+    "fail": "Non conforme"
+  },
+  "photo": {
+    "ofFail": "Foto di ciò che non va: {check}",
+    "offline": "Le foto partono subito: aspettano la rete.",
+    "added": "Foto aggiunta: {slot}.",
+    "forResult": "Il suo esito aspetta questa foto",
+    "state": {
+      "TAKEN": "Scattata",
+      "MISSING": "Mancante",
+      "NOT_APPLICABLE": "Non applicabile",
+      "OPEN": "Facoltativa"
+    },
+    "count_one": "{count} foto",
+    "count_other": "{count} foto",
+    "notApplicable": "L'ufficio l'ha segnata non applicabile."
+  },
+  "uom": {
+    "CM": "cm",
+    "MM": "mm",
+    "M": "m"
+  },
+  "measure": {
+    "spec": {
+      "plan": "{nominal} ± {tolerance} {unit}",
+      "profile": "{nominal} {unit} dal profilo del pilota · scrivi la tolleranza",
+      "chart": "Dalla tabella taglie · scrivi il valore nominale e la tolleranza"
+    },
+    "mtm": "Su misura: confronto con il profilo misure del pilota (revisione {revision}, taglia {size}).",
+    "mtmWithout_one": "{count} punto del modello non ha un valore nel profilo.",
+    "mtmWithout_other": "{count} punti del modello non hanno un valore nel profilo.",
+    "size": "taglia {size}",
+    "out_one": "{count} fuori",
+    "out_other": "{count} fuori",
+    "in": "Nei limiti",
+    "notYet": "Non ancora",
+    "measured_one": "{count} di {sample} capi misurati",
+    "measured_other": "{count} di {sample} capi misurati",
+    "summary_one": "{out} su {count} valore fuori tolleranza",
+    "summary_other": "{out} su {count} valori fuori tolleranza",
+    "unit": "capo {unit} di {sample}",
+    "whichSize": "Quale taglia?",
+    "fields": "Cosa scrivi",
+    "field": {
+      "nominal": "Nominale {value}",
+      "tolerance": "Tolleranza ± {value}",
+      "value": "Misurato {value}"
+    },
+    "held": {
+      "size": "Prima scegli la taglia del capo.",
+      "nominal": "Prima scrivi il nominale dalla tabella taglie.",
+      "tolerance": "Prima scrivi la tolleranza.",
+      "value": "Prima scrivi il valore misurato."
+    },
+    "save": "Salva",
+    "savePass": "Salva · nei limiti",
+    "saveFail": "Salva · fuori tolleranza",
+    "values": "Valori misurati",
+    "valueIn": "Capo {unit} · taglia {size}: {measured} {uom}, nei limiti di {nominal} ± {tolerance}",
+    "valueOut": "Capo {unit} · taglia {size}: {measured} {uom}, fuori da {nominal} ± {tolerance}",
+    "takeBack": "Togli"
+  },
+  "serial": {
+    "scanSerial": "Scansiona la matricola di ogni capo",
+    "scanBatch": "Scansiona l'etichetta del lotto ({batch})",
+    "hintSerial": "Una spunta per capo. Un capo senza numero leggibile rende il controllo non conforme.",
+    "hintBatch": "Una volta per il lotto: il numero sull'etichetta deve essere il lotto dell'ordine di lavoro.",
+    "read": "Letto {code}",
+    "ticks": "{matched} di {target} capi controllati",
+    "noNumber": "Questo capo non ha un numero leggibile",
+    "unknown_one": "{count} numero non è di questo ordine di lavoro",
+    "unknown_other": "{count} numeri non sono di questo ordine di lavoro",
+    "takeBack": "Togli",
+    "noNumberCount_one": "{count} capo senza numero leggibile",
+    "noNumberCount_other": "{count} capi senza numero leggibile",
+    "missing_one": "{count} matricola non ancora scansionata:",
+    "missing_other": "{count} matricole non ancora scansionate:",
+    "andMore_one": "e {count} altra",
+    "andMore_other": "e altre {count}",
+    "batch": {
+      "open": "Lotto {batch}: scansiona la sua etichetta.",
+      "done": "Lotto {batch}: controllato.",
+      "wrong": "Il numero letto non è il lotto {batch}: il controllo non è conforme."
+    },
+    "serial": {
+      "open": "{matched} di {target} capi controllati.",
+      "done": "Tutti i {target} capi controllati.",
+      "wrong": "Controllo non conforme: {matched} di {target} controllati, {unknown} non di questo ordine, {noNumber} senza numero, {missing} mancanti."
+    }
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Cancella l'ultima cifra",
+    "empty": "Niente scritto",
+    "range": "Da {min} a {max}"
+  },
+  "open": {
+    "title": "Apri il collaudo sul suo piano",
+    "plan": "Piano",
+    "sample": "da controllare",
+    "name": "Nome",
+    "lot": "Lotto",
+    "letter": "Lettera codice",
+    "level": "Livello",
+    "class": "{klass}: AQL {aql}, accetta fino a {accept}, rifiuta da {reject}",
+    "reading": "Lettura del campione di questo lotto dall'ufficio…",
+    "lead": "Il campione e i numeri di accettazione e rifiuto vengono dal piano e dal profilo AQL del cliente. Il lotto sono tutti i capi finiti non ancora rilasciati: cambialo se ne controlli meno.",
+    "lotButton_one": "Lotto: {count} capo",
+    "lotButton_other": "Lotto: {count} capi",
+    "done": "Fatto",
+    "action": "Apri il collaudo",
+    "held": "Il campione di questo lotto non è ancora noto."
+  },
+  "sign": {
+    "actionPass": "Firma CONFORME",
+    "actionFail": "Firma NON CONFORME",
+    "titlePass": "Firma l'esito: CONFORME",
+    "titleFail": "Firma l'esito: NON CONFORME",
+    "meaningPass": "Con il tuo PIN confermi di aver controllato questo campione sul suo piano e che è conforme.",
+    "meaningFail": "Con il tuo PIN confermi di aver controllato questo campione sul suo piano e che non è conforme: il lotto passa alla qualità.",
+    "detail": "Collaudo finale sul piano",
+    "checks": "Controlli risposti: {answered} di {asked}",
+    "class": "{klass} {found} (accetta fino a {accept})",
+    "photos": "Foto: {taken} di {slots}",
+    "held": {
+      "decided": "Questo collaudo è già firmato.",
+      "waiting_one": "{count} risposta aspetta ancora su questo tablet: parte prima.",
+      "waiting_other": "{count} risposte aspettano ancora su questo tablet: partono prima.",
+      "photosWaiting_one": "{count} esito aspetta la sua foto.",
+      "photosWaiting_other": "{count} esiti aspettano la loro foto.",
+      "checks_one": "Manca la risposta a {count} controllo obbligatorio.",
+      "checks_other": "Manca la risposta a {count} controlli obbligatori.",
+      "photoSet_one": "Manca {count} foto della serie.",
+      "photoSet_other": "Mancano {count} foto della serie.",
+      "serials": "Il controllo delle matricole non è finito ({matched} di {target}).",
+      "batch": "L'etichetta del lotto non è ancora scansionata.",
+      "sample": "Per CONFORME serve tutto il campione: {inspected} di {sample} controllati.",
+      "sampleFail": "Si controlla tutto il campione prima di firmare NON CONFORME: {inspected} di {sample}.",
+      "sampleStop": "Il campione non rifiuta ancora: controlla il resto ({inspected} di {sample}).",
+      "office": "L'ufficio non accetta ancora la firma: rileggi le parti del collaudo."
+    }
+  },
+  "choose": {
+    "title": "{code} porta a più di un collaudo",
+    "open": "Apri"
+  },
+  "refusal": {
+    "OTHER_BENCH": {
+      "message": "Questo codice è di un altro banco.",
+      "fix": "Scansiona un lotto, un fascio, una matricola, un collo o un ordine di lavoro del collaudo finale."
+    },
+    "NOTHING_TO_INSPECT": {
+      "message": "Niente da collaudare qui: nessun capo finito aspetta, o il suo collaudo aperto è di un altro ispettore.",
+      "fix": "Scegli un ordine di lavoro dall'elenco, o chiedi al tuo capo reparto."
+    },
+    "LABEL": {
+      "message": "Questa etichetta non è tra quelle che legge il banco di collaudo.",
+      "fix": "Scansiona la matricola del capo, il cartellino del fascio, il collo o la scheda dell'ordine di lavoro."
+    },
+    "CHOOSE": {
+      "message": "Questo codice porta a più di un collaudo.",
+      "fix": "Scegli quello che stai controllando."
+    }
+  }
+}

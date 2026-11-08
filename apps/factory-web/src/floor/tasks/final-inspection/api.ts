@@ -103,6 +103,8 @@ export const inspectionSchema = z.object({
   notMakerStatement: z.boolean(),
   decidedAt: z.string().nullable(),
   version: z.number(),
+  /** B-W2b-97: the plan version it runs on (null or left out: W1's fixed checklist); B-W2b-109 runs the plan bench on it. */
+  planVersion: z.object({ id: z.string(), planId: z.string(), code: z.string(), name: z.string(), number: z.number() }).nullable().optional(),
 })
 export type Inspection = z.infer<typeof inspectionSchema>
 const inspectionAnswer = z.object({ inspection: inspectionSchema })
