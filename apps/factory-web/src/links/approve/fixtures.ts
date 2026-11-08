@@ -40,14 +40,11 @@ function page(overrides: Partial<Omit<ApprovalPage, 'request'>> & { request?: Pa
     request: {
       id: id(100),
       kind: 'SAMPLE',
-      kindName: 'Campione',
-      label: 'SO-2026-0042',
+      words: { it: 'SO-2026-0042', en: 'SO-2026-0042' },
       question: 'Vi mandiamo le foto del campione della giacca in pelle nera, taglia 48. Va bene così per la produzione?',
       from: { companyName: 'Officina Demo' },
       dueAt: '2026-11-15T17:00:00.000Z',
-      dueWords: 'Rispondere entro il 15 nov',
       status: 'OPEN',
-      stateWords: 'In attesa di risposta',
       decided: null,
       answer: null,
       version: 1,
@@ -64,7 +61,7 @@ function model(overrides: Partial<ApproveViewModel> = {}): ApproveViewModel {
 
 const PROOF_FILES = [file(10, 'bozza-ROSSI-46.pdf', 'application/pdf', 96_000), file(11, 'posizione-logo.png', 'image/png')]
 const PROOF = page({
-  request: { kind: 'PROOF', kindName: 'Bozza del design', label: 'SO-2026-0042 · riga 10', question: 'Ecco la bozza finale della tuta su misura: nome, numero e logo. Controllate prima che iniziamo il taglio.', dueWords: 'Rispondere entro il 13 nov', dueAt: '2026-11-13T17:00:00.000Z' },
+  request: { kind: 'PROOF', words: { it: 'SO-2026-0042 · riga 10', en: 'SO-2026-0042 · line 10' }, question: 'Ecco la bozza finale della tuta su misura: nome, numero e logo. Controllate prima che iniziamo il taglio.', dueAt: '2026-11-13T17:00:00.000Z' },
   content: {
     facts: [
       { label: 'Ordine', value: 'SO-2026-0042 · riga 10' },
@@ -79,7 +76,7 @@ const PROOF_READ = { [id(10)]: { src: PROOF_PDF, problem: false }, [id(11)]: { s
 
 const CONCESSION_FILES = [file(20, 'standard-colore.jpg', 'image/jpeg'), file(21, 'prodotto-colore.jpg', 'image/jpeg')]
 const CONCESSION = page({
-  request: { kind: 'CONCESSION', kindName: 'Concessione', label: 'NCR-2026-0007 · concessione 1', question: 'La tonalità è leggermente più scura dello standard (ΔE 1,8) su 40 giacche del lotto L-0311. Vi chiediamo di accettarla.', dueWords: 'Rispondere entro il 14 nov', dueAt: '2026-11-14T17:00:00.000Z' },
+  request: { kind: 'CONCESSION', words: { it: 'NCR-2026-0007 · concessione 1', en: 'NCR-2026-0007 · concession 1' }, question: 'La tonalità è leggermente più scura dello standard (ΔE 1,8) su 40 giacche del lotto L-0311. Vi chiediamo di accettarla.', dueAt: '2026-11-14T17:00:00.000Z' },
   content: {
     facts: [
       { label: 'Non conformità', value: 'NCR-2026-0007 — Tonalità più scura' },
@@ -93,7 +90,7 @@ const CONCESSION = page({
 const CONCESSION_READ = { [id(20)]: { src: STANDARD, problem: false }, [id(21)]: { src: ACTUAL, problem: false } }
 
 const REVISED = page({
-  request: { kind: 'REVISED_ORDER', kindName: 'Ordine modificato', label: 'SO-2026-0042 · revisione 2', question: 'Abbiamo aggiornato l’ordine come richiesto: confermate la nuova versione?', dueWords: 'Rispondere entro il 14 nov', dueAt: '2026-11-14T17:00:00.000Z' },
+  request: { kind: 'REVISED_ORDER', words: { it: 'SO-2026-0042 · revisione 2', en: 'SO-2026-0042 · revision 2' }, question: 'Abbiamo aggiornato l’ordine come richiesto: confermate la nuova versione?', dueAt: '2026-11-14T17:00:00.000Z' },
   may: { answer: true, withChanges: false, held: null },
   files: [],
   content: {
@@ -127,7 +124,7 @@ const REVISED = page({
 })
 
 const SIGNATURE = page({
-  request: { kind: 'SIGNATURE', kindName: 'Firma', label: 'DVR Officina Demo — versione 3 · RSPP', question: 'Vi chiediamo di firmare come RSPP la versione 3 del documento di valutazione dei rischi.', dueWords: 'Rispondere entro il 24 nov', dueAt: '2026-11-24T17:00:00.000Z' },
+  request: { kind: 'SIGNATURE', words: { it: 'DVR Officina Demo — versione 3 · RSPP', en: 'DVR Officina Demo — version 3 · RSPP' }, question: 'Vi chiediamo di firmare come RSPP la versione 3 del documento di valutazione dei rischi.', dueAt: '2026-11-24T17:00:00.000Z' },
   may: { answer: true, withChanges: false, held: null },
   content: {
     facts: [
@@ -148,7 +145,6 @@ const MARKS = [
 const APPROVED = page({
   request: {
     status: 'APPROVED_WITH_CHANGES',
-    stateWords: 'Approvato con modifiche',
     decided: 'Approvato con modifiche — firmato da Anna Esempio alle 10:42 del 10 nov. Procediamo con quanto approvato.',
     answer: { at: '2026-11-10T09:42:00.000Z', typedName: 'Anna Esempio', words: 'La cucitura sulla spalla va rifinita meglio, il resto va bene.', markupFileId: id(2) },
     version: 2,
@@ -160,10 +156,8 @@ const APPROVED = page({
 const REFUSED = page({
   request: {
     kind: 'PROOF',
-    kindName: 'Bozza del design',
-    label: 'SO-2026-0042 · riga 10',
+    words: { it: 'SO-2026-0042 · riga 10', en: 'SO-2026-0042 · line 10' },
     status: 'REFUSED',
-    stateWords: 'Rifiutato',
     decided: 'Rifiutato — firmato da Anna Esempio alle 16:05 del 10 nov. Vi ricontattiamo per decidere insieme come procedere.',
     answer: { at: '2026-11-10T15:05:00.000Z', typedName: 'Anna Esempio', words: 'Il numero è 64, non 46.', markupFileId: null },
     version: 2,

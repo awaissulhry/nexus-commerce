@@ -42,7 +42,7 @@ export const PROOF_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
   async read(client, recordId) {
     const line = await client.salesOrderLine.findUnique({ where: { id: recordId }, select: LINE })
     if (!line) return null
-    const label = `${line.order.number} · line ${line.seq}`
+    const label = { it: `${line.order.number} · riga ${line.seq}`, en: `${line.order.number} · line ${line.seq}` }
     const held =
       line.kind !== 'MADE_TO_MEASURE'
         ? `Line ${line.seq} of ${line.order.number} is not made to measure: a design proof is asked on a made-to-measure line.`

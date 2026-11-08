@@ -1,8 +1,8 @@
 import { isAnswered, KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
-import { answerHeld, decidedWords, dueWords, stateWords } from '@nexus/factory-domain/approvals-out/rules'
+import { answerHeld, decidedWords } from '@nexus/factory-domain/approvals-out/rules'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../core/command'
-import type { ApprovalContent } from './adapter'
+import { sameWords, type ApprovalContent } from './adapter'
 import { adapterOf } from './records'
 import { filesOf, refOf, type PartnerRow } from './store'
 
@@ -26,7 +26,7 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
     const company = await client.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
     const files = await filesOf(client, row.id)
     const recordHeld = status === 'OPEN' && adapter?.answerHeld ? await adapter.answerHeld(client, ref, locale) : null
-    return { label: record?.label ?? '', content, company, files, recordHeld }
+    return { label: record?.label ?? sameWords(''), content, company, files, recordHeld }
   })
   const held = answerHeld({ status, dueAt: row.dueAt, answeredAt: row.answeredAt, withdrawnAt: row.withdrawnAt }, now, locale) ?? facts.recordHeld
   const order = facts.content.revisedOrder
@@ -34,14 +34,13 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
     request: {
       id: row.id,
       kind,
-      kindName: KIND_RULES[kind].name[locale],
-      label: facts.label,
+      // B-W2b-F16: the record's label in both languages; `label` (English) stays while B-W2b-187's pop-up reads it.
+      words: facts.label,
+      label: facts.label.en,
       question: row.question,
       from: { companyName: facts.company?.tradeName ?? facts.company?.legalName ?? '' },
       dueAt: toUtcIso(row.dueAt),
-      dueWords: dueWords(row.dueAt, locale),
       status,
-      stateWords: stateWords(status, locale),
       decided: isAnswered(status) ? decidedWords(kind, status, row.typedName, row.answeredAt, locale) : null,
       answer: row.answeredAt ? { at: toUtcIso(row.answeredAt), typedName: row.typedName ?? '', words: row.answer, markupFileId: row.markupFileId } : null,
       version: row.version,

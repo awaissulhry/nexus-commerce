@@ -112,7 +112,7 @@ function RequestRow({ request, model, actions }: { request: OfficeRequest; model
   return (
     <li className="fw-ra-item">
       <div className="fw-ra-item-head">
-        {/* The kind and state in the reader's language (the office read answers them in English). */}
+        {/* The kind and state in the reader's language, from the API's codes. */}
         <strong>{KIND_RULES[request.kind].name[locale]}</strong>
         <Tag tone={statusTone(request.status)}>{t(`status.${request.status}`)}</Tag>
         {request.status === 'OPEN' && <span className="fw-ra-muted">{t('row.dueBy', { date: formatDate(request.dueAt, { locale, timeZone: model.timeZone }) })}</span>}

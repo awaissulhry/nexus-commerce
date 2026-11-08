@@ -12,6 +12,7 @@ import { isBadgeCode } from '../model'
  *   machine      GET /plant/floor/machines?code=               plant.report            the machine card (B-W2a-73: its QR
  *                                                                                      tag holds the asset number)
  *   bundle, lot, batch, serial, carton                                                  named, "not on this tablet yet"
+ *   cut ticket   (B-W2b-112's number: Fabric cutting opens it at the cutting table)      named, where it is used
  *
  * A code that is no label code (an office number such as a work order's, a tag printed before label codes, a location
  * code, a machine's asset number) is looked up in that order by what it is: hide tag, work order number, location code,
@@ -47,12 +48,29 @@ export type ScanRead =
   | { readonly kind: 'typo'; readonly code: string }
   /** A worker's badge. */
   | { readonly kind: 'badge'; readonly code: string }
-  /** Anything else: a tag, a number or a code as the office prints it. */
-  | { readonly kind: 'free'; readonly code: string }
+  /**
+   * Anything else: a tag, a number or a code as the office prints it. `cutTicket`: a cut ticket's number (B-W2b-112), which
+   * only Fabric cutting opens; every other screen takes it as the free code it is.
+   */
+  | { readonly kind: 'free'; readonly code: string; readonly cutTicket?: true }
+
+/**
+ * A cut ticket's number (B-W2b-112: the CUT_TICKET series, whose number is the ticket's scan code): `CT-2026-00001` (the
+ * kind's default pattern) or `CTA-2026-00001` (a company's own prefix, as the seed's). It starts with CT, the carton label's
+ * type code, so it is read BEFORE the label rule, by its own shape — CT and up to four more capitals or digits, the year,
+ * the counter — which no label code has (`CT-<tag>-<reference>-<check>`, four parts). A ticket series set up with a pattern
+ * of another shape is not recognised (it reads as before).
+ */
+const CUT_TICKET_NUMBER = /^CT[A-Z0-9]{0,4}-2\d{3}-\d{1,10}$/
+
+/** Is this code a cut ticket's number (any case, spaces around it dropped)? */
+export const isCutTicketNumber = (raw: string): boolean => CUT_TICKET_NUMBER.test(raw.trim().toUpperCase())
 
 /** What a scanned or typed code is, before anything is asked. */
 export function readScan(raw: string, scanTag: string | null): ScanRead {
   const code = raw.trim()
+  // B-W2b-F16: a cut ticket's number shares the carton label's CT: read it first, or it reads as a misread carton.
+  if (isCutTicketNumber(code)) return { kind: 'free', code: code.toUpperCase(), cutTicket: true }
   const parsed = parseScanId(code, scanTag ? { tenantTag: scanTag } : {})
   if (parsed.ok) return { kind: 'label', type: TYPE_OF[parsed.type], code: parsed.text }
   if (parsed.problem === 'tenant') return { kind: 'otherFactory', code: code.toUpperCase() }
@@ -77,6 +95,8 @@ export type ScanPlan =
   | { readonly kind: 'notOnFloor'; readonly type: LabelType }
   /** The person may not open this type here (fail closed). */
   | { readonly kind: 'noPermission'; readonly type: LabelType }
+  /** A cut ticket's number: no lookup here; the card says where it is used (Fabric cutting, at the cutting table). */
+  | { readonly kind: 'cutTicket' }
   | { readonly kind: 'unknown'; readonly reason: 'otherFactory' | 'typo' }
   | { readonly kind: 'badge' }
 
@@ -97,6 +117,7 @@ export function planScan(read: ScanRead, permissions: readonly string[]): ScanPl
       return { kind: 'notOnFloor', type: read.type }
     }
     case 'free': {
+      if (read.cutTicket) return { kind: 'cutTicket' }
       const all: Lookup[] = ['hide', 'workOrder', 'location', 'machine']
       return { kind: 'ask', lookups: all.filter(may), denied: all.filter((lookup) => !may(lookup)) }
     }
@@ -171,6 +192,8 @@ export type ScanResult =
   /** A label the floor names but cannot open yet. */
   | { readonly kind: 'notOnFloor'; readonly type: LabelType; readonly code: string }
   | { readonly kind: 'noPermission'; readonly type: LabelType; readonly code: string }
+  /** A cut ticket scanned away from Fabric cutting: what it is and where it is used. */
+  | { readonly kind: 'cutTicket'; readonly code: string }
   /** Nothing of this factory answers to it (`badge`: a badge that does not open this tablet; its code is not shown). */
   | { readonly kind: 'unknown'; readonly code: string; readonly reason: 'otherFactory' | 'typo' | 'notFound' | 'badge' }
   /** The server did not answer. */
@@ -186,8 +209,8 @@ export function resultCode(result: ScanResult): string {
   }
 }
 
-/** What a card is: a label type, or a machine (its tag is a free code, no label type). */
-export type CardType = LabelType | 'machine'
+/** What a card is: a label type, a machine (its tag is a free code, no label type) or a cut ticket (an office number). */
+export type CardType = LabelType | 'machine' | 'cutTicket'
 
 /** The type a result stands for (the icon and the word in the recent list); null when nothing was found. */
 export function resultType(result: ScanResult): CardType | null {
@@ -196,6 +219,7 @@ export function resultType(result: ScanResult): CardType | null {
     case 'workOrder':
     case 'location':
     case 'machine':
+    case 'cutTicket':
       return result.kind
     case 'notOnFloor':
     case 'noPermission':

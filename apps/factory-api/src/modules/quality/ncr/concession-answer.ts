@@ -48,7 +48,7 @@ export const CONCESSION_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
           : row.ncr.stage === 'CLOSED' || row.ncr.stage === 'CANCELLED'
             ? `${row.ncr.number} is ${row.ncr.stage.toLowerCase()}: no concession is asked any more.`
             : null
-    return { companyId: row.ncr.companyId, siteId: row.ncr.siteId, partyId: row.partyId, label: `${row.ncr.number} · concession ${row.seq}`, held, thread: { type: 'Nonconformance', id: row.ncrId } }
+    return { companyId: row.ncr.companyId, siteId: row.ncr.siteId, partyId: row.partyId, label: { it: `${row.ncr.number} · concessione ${row.seq}`, en: `${row.ncr.number} · concession ${row.seq}` }, held, thread: { type: 'Nonconformance', id: row.ncrId } }
   },
   async fileRecords(client, recordId) {
     const row = await client.ncrConcession.findUnique({ where: { id: recordId }, select: { id: true, ncrId: true } })

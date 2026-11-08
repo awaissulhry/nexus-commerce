@@ -1,5 +1,5 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import type { ApprovalKind, ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
+import type { ApprovalKind, ApprovalLocale, Words } from '@nexus/factory-domain/approvals-out/kinds'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import type { CommandTools, CommandTx } from '../../core/command'
 import type { diffView } from '../../modules/sales/orders/amend'
@@ -29,8 +29,11 @@ export interface ApprovalRecord {
   readonly siteId: string | null
   /** The customer, supplier or outside signer asked; null: the record has no partner to ask (held). */
   readonly partyId: string | null
-  /** The record as both sides read it ("SO-2026-0042 · revision 2"). */
-  readonly label: string
+  /**
+   * The record as both sides read it, in both languages ("SO-2026-0042 · revisione 2" / "SO-2026-0042 · revision 2"): the
+   * screens show the reader's (B-W2b-F16: `words` in the API), a mail and a thread message the party's.
+   */
+  readonly label: Words
   /** Why it may not be asked now, in words (null: it may). */
   readonly held: string | null
   /** The record whose thread keeps the answer (its own, or the order of a line, the NCR of a concession); null: the request's own. */
@@ -101,3 +104,6 @@ export interface RecordAdapter {
 
 /** The office's (or the system's) answer-time reads: the record's party language for the mails. */
 export const words = (locale: ApprovalLocale, it: string, en: string): string => (locale === 'it' ? it : en)
+
+/** A label with no words in it (a number, a code and a name): the same in both languages. */
+export const sameWords = (text: string): Words => ({ it: text, en: text })

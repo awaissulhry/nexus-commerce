@@ -52,6 +52,8 @@ export function FloorScan() {
       if (plan.kind === 'unknown') found = { kind: 'unknown', code: read.code, reason: plan.reason }
       else if (plan.kind === 'notOnFloor') found = { kind: 'notOnFloor', type: plan.type, code: read.code }
       else if (plan.kind === 'noPermission') found = { kind: 'noPermission', type: plan.type, code: read.code }
+      // B-W2b-F16: a cut ticket away from Fabric cutting: what it is and where it is used.
+      else if (plan.kind === 'cutTicket') found = { kind: 'cutTicket', code: read.code }
       else {
         setLoading(read.code)
         found = { kind: 'unknown', code: read.code, reason: 'notFound' }
@@ -70,7 +72,7 @@ export function FloorScan() {
           setLoading(null)
         }
       }
-      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' || found.kind === 'machine' ? 'success' : found.kind === 'notOnFloor' ? 'warning' : 'error')
+      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' || found.kind === 'machine' ? 'success' : found.kind === 'notOnFloor' || found.kind === 'cutTicket' ? 'warning' : 'error')
       setResult(found)
       setRecent((current) => [{ code: resultCode(found) || read.code, type: resultType(found), at: new Date().toISOString() }, ...current].slice(0, MAX_RECENT))
     },

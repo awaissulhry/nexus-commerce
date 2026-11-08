@@ -88,6 +88,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   another organisation's address → a gate). `PortalShell.tsx` is the container (the one task list = badges and Home, the bell,
   ONE live channel per tab `GET /portal/live`, the idle sign-out + "Still there?", notices, the pop-ups, keys `/` `?` `g`,
   the unsaved guard, `brandPortals` + comfortable density on `<body>`); `view/` the frame and its pop-ups.
+  B-W2b-F16: a session that ends sends `signInHref(next, ended)` (`model.ts sessionEndOf`: the idle clock → `ended=idle`; a 401 before it,
+  or the 12 hours → `ended=revoked`); a chosen sign-out sends none. A cut ticket's number (`CT…-YYYY-N`) is read before the carton rule
+  (`floor/scan/scan-model.ts isCutTicketNumber`: a free code with `cutTicket`): Home opens Fabric cutting with it at a cutting table.
   `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
   `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
   `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,

@@ -6,7 +6,8 @@ import type { ScanRead } from '../scan/scan-model'
  * scanRouter): a label scanned on Home opens the job for this station and person with the label loaded — a bundle at a
  * sewing station opens Operation, a hide at a cutting table opens Cut a hide, a bundle there opens Bundles (to fix its
  * ticket), a work order's label opens Pick & issue at the warehouse and Final inspection at the bench, a garment's serial
- * or a shipment's pack slip opens the packing bench (SCR-098) at a packing station. Anything else
+ * or a shipment's pack slip opens the packing bench (SCR-098) at a packing station, a cut ticket's number opens Fabric
+ * cutting at a cutting table (B-W2b-F16; elsewhere Scan anything says what it is and where it is used). Anything else
  * opens Scan anything. Pure, so the tests hold it.
  */
 
@@ -64,7 +65,10 @@ export function taskForScan(mode: FloorMode | null, read: ScanRead, tiles: reado
   const pick = (key: TaskKey): TaskKey | null => (open(key) ? key : null)
   // A work order's traveller carries its office number (a free code): at the warehouse and the bench the task looks it
   // up as a work order number and, when it is none, hands the code on to Scan anything (`store.openScan`).
-  const workOrder = (read.kind === 'label' && read.type === 'workOrder') || read.kind === 'free'
+  // A cut ticket's number is a free code only Fabric cutting opens (B-W2b-F16).
+  const cutTicket = read.kind === 'free' && read.cutTicket === true
+  const free = read.kind === 'free' && !cutTicket
+  const workOrder = (read.kind === 'label' && read.type === 'workOrder') || free
   switch (mode) {
     case 'sewing':
       return read.kind === 'label' && read.type === 'bundle' ? pick('operation') : null
@@ -72,12 +76,14 @@ export function taskForScan(mode: FloorMode | null, read: ScanRead, tiles: reado
       // A bundle is still reported at its packing operation; a garment's serial label or a free code (a shipment's
       // pack slip, a batch number) opens the packing bench with it.
       if (read.kind === 'label' && read.type === 'bundle') return pick('operation')
-      if ((read.kind === 'label' && read.type === 'serial') || read.kind === 'free') return pick('pack')
+      if ((read.kind === 'label' && read.type === 'serial') || free) return pick('pack')
       return null
     case 'cutting':
       // A bundle at the cutting table opens Bundles (to fix its ticket); its cutting operation is reported from the tile.
       if (read.kind === 'label' && read.type === 'hide') return pick('cut')
       if (read.kind === 'label' && read.type === 'bundle') return pick('bundles')
+      // B-W2b-F16: a cut ticket opens Fabric cutting with it (B-W2b-121's page opens the ticket it is handed).
+      if (cutTicket) return pick('fabriccut')
       return null
     case 'warehouse':
       return workOrder ? pick('pick') : null

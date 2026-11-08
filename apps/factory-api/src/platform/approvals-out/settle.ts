@@ -57,7 +57,7 @@ export async function settleRequest(system: CommandCaller, requestId: string, cl
       const file = row.markupFileId ? await tx.storedFile.findUnique({ where: { id: row.markupFileId }, select: { originalName: true } }) : null
       const locale = answeredIn ?? localeOf(await answererLocale(tx, row))
       const text = [
-        `${KIND_RULES[kind].name[locale]} · ${record?.label ?? ''}`,
+        `${KIND_RULES[kind].name[locale]} · ${record?.label[locale] ?? ''}`,
         decidedWords(kind, status, row.typedName, row.answeredAt, locale),
         ...(row.answer ? ['', row.answer] : []),
         ...(file ? ['', locale === 'it' ? `Segni sulla foto: ${file.originalName}` : `Marked on the photo: ${file.originalName}`] : []),
@@ -71,7 +71,7 @@ export async function settleRequest(system: CommandCaller, requestId: string, cl
       let body: string | null = null
       if (to && row.answeredAt && row.typedName) {
         const company = await tx.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
-        const mail = receiptMail(locale, { companyName: company?.tradeName ?? company?.legalName ?? '', kind, label: record?.label ?? '', status, typedName: row.typedName, answeredAt: row.answeredAt, answer: row.answer })
+        const mail = receiptMail(locale, { companyName: company?.tradeName ?? company?.legalName ?? '', kind, label: record?.label[locale] ?? '', status, typedName: row.typedName, answeredAt: row.answeredAt, answer: row.answer })
         outboundId = await queueMail(tools, { companyId: row.companyId, record: { type: RECORD, id: requestId }, template: APPROVAL_MAIL_TEMPLATES.receipt, to, locale, subject: mail.subject, sender: null })
         body = mail.body
       }

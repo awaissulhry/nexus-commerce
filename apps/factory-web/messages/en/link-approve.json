@@ -17,6 +17,24 @@
     "state": "Where it stands",
     "dueAt": "Due at"
   },
+  "kind": {
+    "CONCESSION": "Concession",
+    "SAMPLE": "Sample",
+    "COLOUR": "Colour",
+    "LEATHER": "Leather",
+    "ARTWORK": "Artwork",
+    "PROOF": "Design proof",
+    "REVISED_ORDER": "Revised order",
+    "SIGNATURE": "Signature"
+  },
+  "state": {
+    "OPEN": "Waiting for the answer",
+    "APPROVED": "Approved",
+    "APPROVED_WITH_CHANGES": "Approved with changes",
+    "REFUSED": "Refused",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired without an answer"
+  },
   "panel": {
     "proof": {
       "title": "Design proof",
