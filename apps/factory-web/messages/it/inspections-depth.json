@@ -1,0 +1,790 @@
+{
+  "text": "{text}",
+  "none": "—",
+  "common": {
+    "working": "In corso…"
+  },
+  "kind": {
+    "label": "Tipo",
+    "FINAL": "Finale",
+    "INCOMING": "In arrivo",
+    "INLINE": "In linea",
+    "none": "Nessuna ispezione {kind} in questa vista.",
+    "held": {
+      "final": "Le ispezioni finali richiedono quality.inspections.view.",
+      "incoming": "Le ispezioni in arrivo richiedono quality.incoming.view.",
+      "inline": "I controlli in linea richiedono quality.inprocess.view.",
+      "view": "Questa vista riguarda le ispezioni finali: quelle in arrivo e in linea compaiono in Tutte le ispezioni e Aperte."
+    }
+  },
+  "col": {
+    "number": "Numero",
+    "kind": "Tipo",
+    "subject": "Oggetto",
+    "supplier": "Fornitore",
+    "lot": "Lotto o partita",
+    "sample": "Campione",
+    "plan": "Piano"
+  },
+  "subject": {
+    "label": "Ordine di produzione",
+    "workOrder": "{workOrder}",
+    "lot": "Lotto {lot} · {item}",
+    "workshop": "Merce di ritorno da un laboratorio",
+    "bundle": "Fascio {bundle} · {workOrder}",
+    "line": "Linea {line}"
+  },
+  "lot": {
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "pieces_one": "{count} pezzo controllato",
+    "pieces_other": "{count} pezzi controllati"
+  },
+  "uom": {
+    "HIDE_one": "{count} pelle",
+    "HIDE_other": "{count} pelli",
+    "PCS_one": "{count} pezzo",
+    "PCS_other": "{count} pezzi",
+    "PAIR_one": "{count} paio",
+    "PAIR_other": "{count} paia",
+    "M": "{count} m",
+    "M2": "{count} m²",
+    "DM2": "{count} dm²",
+    "FT2": "{count} ft²",
+    "KG": "{count} kg",
+    "other": "{count} {uom}"
+  },
+  "sample": {
+    "nOf": "{done} su {sample}",
+    "only": "Campione {sample}"
+  },
+  "plan": {
+    "label": "Piano",
+    "version": "{code} v{number}",
+    "w1": "Checklist W1",
+    "onPlan": "Su un piano",
+    "none": "Nessun piano",
+    "letter": "Lettera codice",
+    "bound": "Su un piano il campione viene dal piano: cambia il suo profilo in Campione e AQL."
+  },
+  "status": {
+    "OPEN": "Aperta",
+    "CANCELLED": "Annullata",
+    "DECIDED_PASS": "Decisa · conforme",
+    "DECIDED_FAIL": "Decisa · non conforme",
+    "AMENDED": "Rettificata"
+  },
+  "outcome": {
+    "APPROVED": "Approvato",
+    "REJECTED": "Respinto",
+    "PASS": "Conforme",
+    "FAIL": "Non conforme",
+    "GREEN": "Verde",
+    "AMBER": "Giallo",
+    "RED": "Rosso",
+    "none": "Deciso"
+  },
+  "decision": {
+    "split": "Accettati {accepted} · respinti {rejected} · da selezionare {toSort}"
+  },
+  "who": {
+    "bench": "Al banco",
+    "office": "In ufficio",
+    "nobody": "Ancora nessuno"
+  },
+  "view": {
+    "amended": "Esiti rettificati",
+    "amendedNone": "Nessuna ispezione ha una rettifica controfirmata."
+  },
+  "failed": {
+    "incoming": "Non è stato possibile leggere le ispezioni in arrivo.",
+    "inline": "Non è stato possibile leggere i controlli in linea."
+  },
+  "capped": {
+    "inline": "Si leggono solo i 500 controlli in linea più recenti: Mostra altri non va oltre per questi."
+  },
+  "row": {
+    "report": "Rapporto PDF",
+    "share": "Condividi link al rapporto…"
+  },
+  "bulk": {
+    "print_one": "Stampa {count} rapporto",
+    "print_other": "Stampa {count} rapporti",
+    "finalOnly": "Vale solo per le ispezioni finali: togli dalla selezione le righe in arrivo e in linea.",
+    "title_one": "{count} rapporto di ispezione",
+    "title_other": "{count} rapporti di ispezione",
+    "reading_one": "Preparo {count} rapporto…",
+    "reading_other": "Preparo {count} rapporti…",
+    "readingOne": "Preparo il rapporto di {number}…",
+    "failed": "Non è stato possibile preparare il rapporto di {number}.",
+    "printAll": "Stampa tutti",
+    "held": {
+      "reading_one": "{count} rapporto è ancora in preparazione.",
+      "reading_other": "{count} rapporti sono ancora in preparazione."
+    },
+    "none": "Nessuna ispezione scelta",
+    "noneHint": "Scegli ispezioni finali firmate in Qualità › Ispezioni, poi Stampa rapporti.",
+    "unnamed": "Ispezione"
+  },
+  "inline": {
+    "label": {
+      "FIRST_PIECE": "Primo capo · {where}",
+      "CUTTING": "Controllo taglio · {where}",
+      "ROVING": "Controllo itinerante · {where}",
+      "END_OF_LINE": "Fine linea · {where}"
+    },
+    "dhu": "DHU {dhu}",
+    "dhuLabel": "Difetti per cento (DHU)",
+    "tab": {
+      "check": "Controllo e risultati",
+      "decision": "Decisione e firma"
+    },
+    "facts": "Cosa è stato controllato",
+    "kind": "Controllo",
+    "line": "Linea",
+    "pieces": "Pezzi controllati",
+    "defective": "Pezzi difettosi",
+    "defects": "Difetti",
+    "defect": "Difetto",
+    "suggested": "Semaforo suggerito",
+    "operation": "Operazione {seq} · {name}",
+    "bundle": "Fascio {code}",
+    "holdsRun": "Blocca la produzione",
+    "openFirstPiece": "Aperto: la produzione aspetta che questo primo capo sia approvato sul tablet di linea (Ispezione in linea).",
+    "openOnLine": "Aperto: si compila sul tablet di linea (Ispezione in linea).",
+    "sample": "{profile} · lettera {letter} · campione {sample}",
+    "inspector": "Controllato da",
+    "inspectorHidden": "Un operatore (nominato solo dove la base legale del sito lo consente)",
+    "operator": "Operatore",
+    "operatorHidden": "Non nominato (la base legale del sito non c'è)",
+    "checks": "I controlli del piano",
+    "noChecks": "Questo controllo non segue un piano: un esito, nessuna checklist.",
+    "col": {
+      "check": "Controllo",
+      "class": "Classe",
+      "answers": "Risposte"
+    },
+    "answer": "Unità {unit}: {answer}",
+    "decisionHeading": "Decisione",
+    "notDecided": "Non ancora deciso.",
+    "outcome": "Esito",
+    "noSignature": "Non firmato (si firma solo il primo capo)",
+    "note": "Nota"
+  },
+  "class": {
+    "CRITICAL": "Critico",
+    "MAJOR": "Maggiore",
+    "MINOR": "Minore"
+  },
+  "tab": {
+    "aql": "Campione e AQL",
+    "measurements": "Misure"
+  },
+  "report": {
+    "title": "Rapporto di ispezione {number}",
+    "titlePlain": "Rapporto di ispezione",
+    "preview": "Preparato ora e non conservato finché non tieni una versione (lo dice la sua fascia).",
+    "language": "Lingua del rapporto",
+    "it": "Italiano",
+    "en": "English",
+    "keep": "Tieni una versione",
+    "print": "Stampa",
+    "reading": "Preparo il rapporto…",
+    "failed": "Non è stato possibile leggere le versioni del rapporto.",
+    "pdfFailed": "Non è stato possibile preparare il rapporto.",
+    "keepFailed": "Non è stato possibile tenere la versione.",
+    "kept": "Versione {version} tenuta ({language}).",
+    "keptSame": "Stesso contenuto: resta la versione {version} ({language}).",
+    "noAccess": {
+      "title": "Non puoi aprire questo rapporto",
+      "body": "I rapporti di ispezione richiedono quality.inspections.view. Lo concede il tuo amministratore."
+    },
+    "held": {
+      "kind": "I rapporti si fanno delle ispezioni finali.",
+      "notSigned": "Il rapporto si prepara quando l'esito è firmato.",
+      "none": "Scegli le ispezioni firmate da stampare.",
+      "tooMany": "Al massimo 20 rapporti alla volta.",
+      "kindSome": "Solo le ispezioni finali hanno un rapporto: togli le altre dalla selezione.",
+      "notSignedSome": "Alcune ispezioni scelte non sono ancora firmate: il loro rapporto viene dopo la firma.",
+      "noMake": "Tenere un rapporto richiede quality.documents.make.",
+      "reading": "Il rapporto è in preparazione."
+    }
+  },
+  "versions": {
+    "heading": "Versioni tenute",
+    "none": "Nessuna versione tenuta.",
+    "line": "v{version} · {language} · {date}",
+    "by": "Tenuta da {name}",
+    "byUnknown": "Tenuta in ufficio",
+    "download": "Scarica",
+    "downloadOne": "Scarica la versione {version}"
+  },
+  "share": {
+    "heading": "Condividi link al rapporto",
+    "sub": "Una copia va su una spedizione che porta questi capi; il cliente la apre dal link documenti della spedizione. Una versione più nuova toglie la copia vecchia dal link (resta come prova).",
+    "shipments": "Spedizione",
+    "shipment": "{number} · {customer}",
+    "notShareable": "{status}: non ancora imballata",
+    "version": "Versione da condividere",
+    "send": "e invia il link al cliente",
+    "sendHeld": "Inviare il link richiede shipping.manage (l'invio link della spedizione)",
+    "go": "Condividi",
+    "done": "Versione {version} condivisa su {shipment}.",
+    "doneSent": "Versione {version} condivisa su {shipment}; il link è stato inviato.",
+    "withdrewOlder_one": "{count} copia più vecchia è stata tolta dal link.",
+    "withdrewOlder_other": "{count} copie più vecchie sono state tolte dal link.",
+    "noShipment": "Nessuna spedizione porta ancora questi capi: condividi quando sono imballati.",
+    "refused": "Il rapporto non è stato condiviso.",
+    "where": "Dove è condiviso",
+    "live": "Sul link",
+    "withdrawn": "Tolta (prova)",
+    "col": {
+      "shipment": "Spedizione",
+      "version": "Versione",
+      "state": "Stato",
+      "at": "Condivisa"
+    },
+    "status": {
+      "DRAFT": "Bozza",
+      "PACKED": "Imballata",
+      "SHIPPED": "Spedita",
+      "DELIVERED": "Consegnata",
+      "RETURNED": "Tornata indietro",
+      "CANCELLED": "Annullata"
+    },
+    "held": {
+      "pick": "Scegli prima la spedizione.",
+      "noRight": "Condividere un rapporto richiede quality.documents.share.",
+      "noVersion": "Tieni prima una versione: si condivide la copia di una versione tenuta.",
+      "notShareable": "Questa spedizione non è ancora imballata (o è annullata): non può portare il rapporto.",
+      "NOT_ON_SHIPMENT": "Questa spedizione non porta capi di questo ordine di produzione.",
+      "NO_VERSION": "Nessuna versione tenuta: tienine prima una.",
+      "NO_SUCH_VERSION": "Quella versione non esiste più: rileggi le versioni.",
+      "NO_SHIPMENT": "Spedizione non trovata."
+    }
+  },
+  "checks": {
+    "heading": "Controlli di {code} v{number}",
+    "headingReading": "I controlli del piano",
+    "now": "{answered} su {total} controllati · {failed} non conformi · critici non conformi: {critical}",
+    "criticalNone": "nessuno",
+    "openPlan": "Apri il piano",
+    "unitPick": "Unità del campione",
+    "unitOf": "Unità {unit} su {sample}",
+    "mandatoryMissing": "Obbligatori, non ancora risposti: {checks}",
+    "empty": "Questo piano non ha ancora controlli: li deve aggiungere il responsabile del piano.",
+    "failed": "Non è stato possibile leggere i controlli del piano.",
+    "mandatory": "Obbligatorio",
+    "photoRequired": "Foto richiesta",
+    "counts": "{pass} conformi · {fail} non conformi · {na} non applicabili · {open} non controllati",
+    "instruction": "un'istruzione: nessuna risposta",
+    "onChart": "Misurato nella tabella misure",
+    "photoBench": "Una foto, scattata al banco",
+    "answerFor": "Risposta per {check}, unità {unit}",
+    "valueFor": "Valore di {check}, unità {unit}",
+    "noteFor": "Nota di {check}, unità {unit}",
+    "notePlaceholder": "Cosa non va",
+    "noValue": "Nessun valore",
+    "pass": "Conforme",
+    "fail": "Non conforme",
+    "na": "Non applicabile",
+    "notChecked": "Non controllato",
+    "answer": {
+      "PASS": "Conforme",
+      "FAIL": "Non conforme",
+      "NOT_APPLICABLE": "Non applicabile",
+      "none": "Non controllato"
+    },
+    "needNote": "Un controllo non conforme dice cosa non va: scrivi la nota, poi si salva.",
+    "needReason": "Un controllo critico è non applicabile solo con il motivo: scrivilo, poi si salva.",
+    "recorded": "{where} · {at} · {photos} foto",
+    "where": {
+      "FLOOR": "Al banco",
+      "OFFICE": "In ufficio"
+    },
+    "keys": "Su una riga attiva: 1 Conforme · 2 Non conforme · 3 Non applicabile.",
+    "type": {
+      "PASS_FAIL": "conforme o no",
+      "MEASUREMENT": "una misura",
+      "COUNT": "un conteggio",
+      "CHOICE": "una delle scelte",
+      "FREE_TEXT": "parole",
+      "PHOTO": "una foto",
+      "SIGNATURE": "una firma",
+      "INSTRUCTION": "un'istruzione"
+    },
+    "held": {
+      "reading": "Leggo i controlli del piano…",
+      "signed": "Firmata: le risposte sono in sola lettura.",
+      "mayNot": "Solo il suo ispettore o l'assegnatario registra le risposte."
+    },
+    "problem": {
+      "count": "Un numero intero.",
+      "choice": "Una delle scelte.",
+      "conflict": "Qualcun altro ha cambiato questa ispezione: è stata riletta.",
+      "refused": "Non salvato:"
+    }
+  },
+  "identity": {
+    "heading": "Controllo seriali e lotto",
+    "serials": "Attesi {expected} · scansionati {scanned} · mancanti {missing} · sconosciuti {unknown} · senza numero {noNumber}",
+    "batchDone": "Lotto {batch} controllato una volta.",
+    "batchOpen": "L'etichetta del lotto non è ancora controllata.",
+    "ok": "Pulito: ogni capo controllato è di questo lotto.",
+    "fail": "Il controllo boccia il lotto: un numero mancante o sconosciuto.",
+    "open": "Non ancora fatto: trattiene un esito conforme.",
+    "missing": "Mancanti: {list}",
+    "unknown": "Non di questo ordine di produzione: {list}",
+    "listMore_one": "{list} e altri {count}",
+    "listMore_other": "{list} e altri {count}",
+    "bench_one": "{count} scansione al banco (Ispezione finale).",
+    "bench_other": "{count} scansioni al banco (Ispezione finale).",
+    "workOrder": "Apri i fasci dell'ordine di produzione",
+    "w1": "La checklist W1 non ha controllo seriali o lotto: un'ispezione su un piano ce l'ha."
+  },
+  "hold": {
+    "signPass": "Un esito conforme aspetta: {holds}",
+    "mandatory_one": "{count} controllo obbligatorio senza risposta: {checks}",
+    "mandatory_other": "{count} controlli obbligatori senza risposta: {checks}",
+    "serials": "il controllo seriali non è fatto",
+    "batch": "l'etichetta del lotto non è controllata",
+    "identityFails": "il controllo seriali boccia il lotto",
+    "photos_one": "{count} foto richiesta manca: {slots}",
+    "photos_other": "{count} foto richieste mancano: {slots}",
+    "sample": "{remaining} unità su {sample} ancora da controllare"
+  },
+  "result": {
+    "plan": {
+      "PASS": "Ad ora: conforme",
+      "FAIL": "Ad ora: non conforme"
+    },
+    "short": {
+      "PASS": "Conforme",
+      "FAIL": "Non conforme"
+    }
+  },
+  "aql": {
+    "heading": "Come è stato scelto il campione",
+    "derivation": "ISO 2859-1, campionamento semplice",
+    "readOnly": "Sola lettura: i conteggi arrivano dal banco.",
+    "failed": "Non è stato possibile leggere Campione e AQL.",
+    "fixedWords": "Un campione fisso del piano: {sample} su {lot}.",
+    "typedWords": "Scritto a mano (W1): i numeri qui sotto sono dell'ispettore.",
+    "now": "L'esito ora",
+    "progress": "{inspected} su {sample} controllati",
+    "bench": "I conteggi arrivano dal banco (il contatore di Ispezione finale); l'ufficio non li modifica mai.",
+    "col": {
+      "class": "Classe",
+      "aql": "AQL",
+      "accept": "Accetta (Ac)",
+      "reject": "Respinge (Re)",
+      "found": "Trovati",
+      "verdict": "Verdetto"
+    },
+    "state": {
+      "ok": "Passa",
+      "limit": "Al limite",
+      "reject": "Respinge"
+    },
+    "verdict": {
+      "open": "Non completo",
+      "accept": "Accetta il lotto",
+      "reject": "Respinge il lotto"
+    },
+    "line": {
+      "ok": "{klass}: {found} trovati, accetta fino a {accept} - passa.",
+      "limit": "{klass}: {found} trovati, accetta fino a {accept} - passa. Uno in più respinge il lotto.",
+      "reject": "{klass}: {found} trovati, respinge a {reject} - il lotto non passa."
+    },
+    "stop": {
+      "on": "Si ferma al numero di rifiuto ({source}).",
+      "off": "Si controlla tutto il campione ({source}).",
+      "source": {
+        "PLAN": "la regola del piano",
+        "COMPANY": "l'impostazione qualità dell'azienda",
+        "TENANT": "l'impostazione di tutte le aziende",
+        "DEFAULT": "il valore predefinito"
+      }
+    },
+    "profile": {
+      "heading": "Profilo AQL",
+      "named": "Profilo {code} · {name}",
+      "typed": "Scritto a mano (W1): nessun profilo",
+      "fixed": "Un campione fisso: nessun profilo AQL",
+      "inForce": "Profilo di questa ispezione",
+      "appliesNow": "Il profilo che vale ora",
+      "noneNow": "Nessuno (non vale alcun profilo)",
+      "from": "Da dove viene",
+      "letter": "Lettera codice",
+      "chain": "Dove si cerca un profilo, in ordine",
+      "stepNone": "nessuno",
+      "differs": "Il campione registrato non è quello che il suo profilo dà oggi (il profilo è cambiato dopo l'apertura).",
+      "refused": "Il profilo non è stato cambiato."
+    },
+    "source": {
+      "PLAN_VERSION": "La versione del piano",
+      "STYLE_CUSTOMER": "Questo modello per questo cliente",
+      "STYLE": "Il modello",
+      "CUSTOMER": "Il cliente",
+      "COMPANY_DEFAULT": "Il predefinito dell'azienda",
+      "NAMED": "Scelto da una persona, con il motivo",
+      "NONE": "Nessun profilo"
+    },
+    "change": {
+      "open": "Cambia profilo…",
+      "title": "Cambia profilo",
+      "subtitle": "Solo prima che si conti la prima unità. Il campione e i numeri di accettazione seguono il profilo.",
+      "which": "Profilo",
+      "chain": "Il profilo che vale ora: {profile}",
+      "other": "Un altro profilo (con il motivo)",
+      "otherHeld": "Un altro profilo: per elencarli serve quality.aql.view",
+      "profile": "Profilo",
+      "option": "{code} · {name} · livello {level} · maggiori {major} · minori {minor}",
+      "reason": "Perché un altro profilo (obbligatorio)",
+      "reasonHint": "Resta con l'ispezione.",
+      "reasonNeeded": "Di' perché un altro profilo, in almeno 3 caratteri.",
+      "after": "Il profilo si blocca quando inizia il conteggio.",
+      "apply": "Cambia profilo"
+    },
+    "held": {
+      "noRight": "Cambiare il profilo richiede quality.inspections.record.",
+      "fixed": "Il piano controlla un numero fisso di unità: non vale alcun profilo AQL.",
+      "frozen": "Il profilo si blocca quando inizia il conteggio.",
+      "signed": "Firmata: il campione resta come è stato controllato.",
+      "mayNot": "Solo il suo ispettore cambia il profilo, finché è aperta."
+    }
+  },
+  "chart": {
+    "heading": "Tabella misure",
+    "words": "{out} valori su {values} fuori tolleranza",
+    "none": "Questo piano non prende misure.",
+    "w1": "Le misure arrivano con un piano di ispezione: la checklist W1 non ne prende.",
+    "failed": "Non è stato possibile leggere la tabella.",
+    "pages": "Unità mostrate",
+    "range": "Unità {from}–{to}",
+    "col": {
+      "point": "Punto di misura",
+      "spec": "Nominale ± tolleranza"
+    },
+    "unit": "Unità {unit}",
+    "size": "Taglia {size} ·",
+    "spec": "{nominal} ± {tolerance} {uom}",
+    "specTyped": "scritto per intero",
+    "source": {
+      "PLAN": "il piano",
+      "SIZE_CHART": "la tabella taglie",
+      "PROFILE": "il profilo del cliente",
+      "TYPED": "scritto"
+    },
+    "cellFor": "{point}, unità {unit}",
+    "over": "oltre di {by} {uom}",
+    "under": "sotto di {by} {uom}",
+    "keys": "Un valore si salva quando lo lasci; le frecce spostano tra le celle; una cella vuota toglie il valore.",
+    "mtm": "Su misura: {garment} revisione {revision}, taglia {size}.",
+    "mtmWithout": "Nessun valore del profilo per: {points}",
+    "outHeading_one": "{count} valore fuori tolleranza",
+    "outHeading_other": "{count} valori fuori tolleranza",
+    "outTag": "Fuori tolleranza",
+    "outLine": "{point}, unità {unit}: {measured} {uom} ({words})",
+    "defectNote": "{point}, unità {unit}: {measured} {uom} ({words})",
+    "createDefect": "Crea difetto",
+    "problem": {
+      "decimal": "Un numero, come 58,4."
+    },
+    "held": {
+      "record": "Qui in sola lettura: solo il suo ispettore registra i valori finché è aperta.",
+      "defects": "Qui i difetti sono in sola lettura."
+    },
+    "sizePick": "Taglia misurata",
+    "sizeNone": "Scegli la taglia",
+    "sizeOption": "Taglia {size}",
+    "sizeFirst": "Scegli la taglia misurata: il lotto ha più taglie."
+  },
+  "photos": {
+    "heading": "Foto richieste",
+    "summary": "{taken} su {total} scattate · {missing} mancanti",
+    "empty": "Questo piano non chiede foto.",
+    "w1": "La checklist W1 non chiede foto: un'ispezione su un piano le chiede.",
+    "required": "Richiesta",
+    "state": {
+      "TAKEN": "Scattata",
+      "MISSING": "Mancante",
+      "NOT_APPLICABLE": "Non applicabile",
+      "OPEN": "Non ancora scattata"
+    },
+    "holds": "Una foto richiesta mancante trattiene Firma l'esito.",
+    "quarantined_one": "{count} foto aspetta il controllo antivirus",
+    "quarantined_other": "{count} foto aspettano il controllo antivirus",
+    "open": "Apri la foto {n} di {slot}",
+    "photoOf": "{slot} · foto {n}",
+    "count": "{n} di {count}",
+    "previous": "Foto precedente",
+    "next": "Foto successiva",
+    "first": "Questa è la prima foto.",
+    "last": "Questa è l'ultima foto.",
+    "only": "Questa è l'unica foto.",
+    "loading": "Ancora in caricamento…"
+  },
+  "defects": {
+    "cause": "Causa",
+    "causeFor": "Causa di {code}",
+    "causeNone": "Nessuna causa",
+    "causeUnknown": "Una causa non più in elenco",
+    "causesFailed": "Non è stato possibile leggere i codici causa.",
+    "retired": "ritirata"
+  },
+  "gate": {
+    "title": "Cancello di rilascio · {cell}",
+    "rule": "I capi si rilasciano quando ogni verifica è a posto; si dice chi può sbloccare ciascuna.",
+    "state": {
+      "pass": "A posto",
+      "fail": "Aperta",
+      "notNeeded": "Non serve",
+      "unknown": "Non nota"
+    },
+    "open": {
+      "WORK_ORDER": "L'ordine di produzione non è pronto al rilascio.",
+      "INSPECTION": "Non c'è un'ispezione conforme di questi capi.",
+      "QUANTITY": "In questa cella non resta nulla da rilasciare.",
+      "SERIALS": "I seriali dei capi non sono tutti pronti.",
+      "LABELS": "Le etichette non sono stampate per ogni capo.",
+      "CERTIFICATE": "Nessun certificato valido copre questo modello, colore e taglia.",
+      "DOCUMENTS": "Manca la Dichiarazione di conformità o la nota informativa.",
+      "LOTS": "Un lotto di materiale usato non è rilasciato (prove o documenti in attesa).",
+      "MAKER": "Hai fatto alcuni di questi capi: li rilascia un ispettore che non ne ha fatto nessuno.",
+      "SECOND_PERSON": "Questi capi li deve rilasciare una seconda persona."
+    },
+    "who": {
+      "WORK_ORDER": "Produzione",
+      "INSPECTION": "Un ispettore (firma un'ispezione conforme)",
+      "QUANTITY": "—",
+      "SERIALS": "Produzione (finire e scansionare i capi)",
+      "LABELS": "Produzione (stampare le etichette)",
+      "CERTIFICATE": "Il responsabile conformità",
+      "DOCUMENTS": "Il responsabile conformità",
+      "LOTS": "Qualità (Prove e sostanze)",
+      "MAKER": "Un altro ispettore",
+      "SECOND_PERSON": "Un altro ispettore o il responsabile qualità"
+    }
+  },
+  "amend": {
+    "heading": "Rettifiche",
+    "sub": "Correzioni dopo la firma",
+    "waitingCount_one": "{count} rettifica aspetta la seconda firma",
+    "waitingCount_other": "{count} rettifiche aspettano la seconda firma",
+    "menu": "Rettifica esito firmato…",
+    "locked": "Gli esiti firmati non si modificano; una correzione è una rettifica con una seconda firma.",
+    "none": "Nessuna rettifica.",
+    "notSigned": "Le rettifiche si chiedono quando l'esito è firmato.",
+    "failed": "Non è stato possibile leggere le rettifiche.",
+    "someone": "Qualcuno in ufficio",
+    "empty": "(vuoto)",
+    "change": "Da {from} a {to}",
+    "reasonWas": "Perché: {reason}",
+    "col": {
+      "ref": "Rif.",
+      "field": "Campo",
+      "change": "Da → a",
+      "reason": "Motivo",
+      "asked": "Chiesta da",
+      "second": "Seconda firma",
+      "state": "Stato"
+    },
+    "state": {
+      "WAITING": "Aspetta la seconda firma",
+      "SIGNED": "Controfirmata",
+      "REFUSED": "Rifiutata"
+    },
+    "signOff": "Rettifica di {field}",
+    "step": {
+      "asked": "Rettifica chiesta",
+      "second": "Seconda firma",
+      "secondRole": "Un altro ispettore o il responsabile qualità"
+    },
+    "method": {
+      "session": "firmata in ufficio"
+    },
+    "whoMay": "Controfirma un altro ispettore o il responsabile qualità con un codice nuovo; chi l'ha chiesta mai.",
+    "rule": {
+      "mine": "Hai chiesto tu questa rettifica: controfirma un altro ispettore o il responsabile qualità.",
+      "other": "L'ha chiesta {name}: tu sei un'altra persona."
+    },
+    "sign": "Controfirma…",
+    "refuse": "Rifiuta…",
+    "refuseTitle": "Rifiuta la rettifica",
+    "refuseSub": "Ciò che è firmato resta com'è. Non si chiede codice: un rifiuto non cambia nulla.",
+    "refuseReason": "Perché (obbligatorio)",
+    "stepUp": "Controfirma la rettifica: poi vale sull'esito firmato.",
+    "value": "Nuovo valore",
+    "causesReading": "Leggo i codici causa…",
+    "dialog": {
+      "title": "Rettifica esito firmato",
+      "field": "Campo",
+      "fieldOnRow": "{field} · {row}",
+      "value": "Nuovo valore",
+      "amendedBefore": "Già rettificato: vale quella rettifica.",
+      "preview": "Prima → dopo",
+      "reason": "Perché (obbligatorio)",
+      "reasonHint": "Resta con la rettifica ed è stampato nel rapporto.",
+      "second": "Aspetta una seconda firma",
+      "request": "Chiedi la rettifica"
+    },
+    "done": {
+      "requested": "La rettifica aspetta la seconda firma.",
+      "signed": "Controfirmata: la rettifica vale.",
+      "refused": "Rifiutata: il valore resta come firmato."
+    },
+    "held": {
+      "noRight": "Chiedere una rettifica richiede quality.amendments.request.",
+      "reading": "Leggo le rettifiche…",
+      "notSigned": "Le rettifiche si chiedono quando l'esito è firmato.",
+      "allWaiting": "Ogni campo rettificabile aspetta già la seconda firma.",
+      "answered": "Questa rettifica ha già una risposta.",
+      "mine": "Hai chiesto tu questa rettifica: controfirma un altro ispettore o il responsabile qualità.",
+      "noSign": "Controfirmare richiede quality.amendments.sign."
+    },
+    "problem": {
+      "field": "Scegli il campo.",
+      "empty": "Questo campo non può essere vuoto.",
+      "decimal": "Un numero, come 58,4.",
+      "same": "È già questo il valore.",
+      "reason": "Di' perché, in almeno 3 caratteri.",
+      "refused": "La rettifica è stata respinta:",
+      "conflict": "Qualcun altro ha risposto o cambiato: è stata riletta.",
+      "codeCancelled": "Non controfirmata: il codice non è stato inserito.",
+      "unknown": "Qualcosa è andato storto: riprova."
+    },
+    "refusal": {
+      "NOT_SIGNED": "Il documento non è ancora firmato.",
+      "VERDICT": "Questa rettifica cambierebbe se una riga è conforme: invece annulla il rilascio e ispeziona di nuovo.",
+      "WAITING": "Una rettifica di questo campo aspetta già la seconda firma.",
+      "SAME_PERSON": "Chi chiede una rettifica non la controfirma mai.",
+      "STALE": "Il valore è cambiato da quando è stata chiesta: chiedila di nuovo.",
+      "ANSWERED": "Questa rettifica ha già una risposta."
+    }
+  },
+  "incoming": {
+    "title": "Ispezione in arrivo {number}",
+    "workshopOf": "{workOrder} di ritorno da {workshop}",
+    "tab": {
+      "units": "Campione e pelli",
+      "decision": "Decisione e firma"
+    },
+    "openOnFloor": "Aperta: si registra pelle per pelle sul tablet (Ispezione in arrivo).",
+    "facts": "Cosa si ispeziona",
+    "lot": "Lotto",
+    "material": "Materiale",
+    "inspector": "Ispettore",
+    "inspectorHidden": "Un operatore (nominato solo dove la base legale del sito lo consente)",
+    "due": "Entro",
+    "method": {
+      "AQL": "ISO 2859-1 dal profilo AQL",
+      "FIXED": "Un campione fisso del piano",
+      "WHOLE": "Tutto il lotto"
+    },
+    "hides": "Pelle per pelle",
+    "hidesSub": "{done} su {sample} fatte · accettate {accepted} · respinte {rejected} · da selezionare {toSort}",
+    "noHides": "Nessuna pelle registrata.",
+    "col": {
+      "hide": "Pelle",
+      "area": "Superficie",
+      "check": "Rispetto alla conceria",
+      "shade": "Tono",
+      "grade": "Scelta",
+      "worst": "Difetto peggiore",
+      "decision": "Decisione"
+    },
+    "area": "{area} {uom}",
+    "measuredHere": "misurata qui",
+    "received": "come ricevuta",
+    "areaCheck": {
+      "WITHIN": "Entro ({percent} %)",
+      "SHORT": "Scarsa ({percent} %)",
+      "OVER": "Oltre ({percent} %)"
+    },
+    "outOfShade": "fuori tono",
+    "noDefect": "Nessuno",
+    "decision": {
+      "ACCEPTED": "Accettata",
+      "REJECTED": "Respinta",
+      "TO_SORT": "Da selezionare"
+    },
+    "lotArea": {
+      "WITHIN": "La superficie del lotto è in tolleranza: {percent} % su {tolerance} % ({hides} pelli misurate).",
+      "SHORT": "La superficie del lotto è scarsa: {percent} % con una tolleranza di {tolerance} % ({hides} pelli misurate).",
+      "OVER": "La superficie del lotto è in eccesso: {percent} % ({hides} pelli misurate)."
+    },
+    "claim": "Gli acquisti possono aprire un reclamo al fornitore.",
+    "checks": "I controlli del piano",
+    "answers": "{pass} conformi · {fail} non conformi · {na} non applicabili",
+    "decisionHeading": "Decisione",
+    "notDecided": "Non ancora decisa.",
+    "cancelled": "Annullata: {reason}",
+    "computed": "Esito calcolato",
+    "split": "Decisione",
+    "override": "Contro l'esito calcolato perché",
+    "signedAt": "Firmata",
+    "signature": "Firma",
+    "next": "Passo successivo",
+    "nextAfter": "Il passo successivo si dice quando è decisa.",
+    "rejectedHides": "Respinte: {hides}",
+    "toSortHides": "Da selezionare: {hides}",
+    "placeHold_one": "Metti in blocco {count} pelle…",
+    "placeHold_other": "Metti in blocco {count} pelli…",
+    "lotRelease": "Apri il lotto (il rilascio è del laboratorio)",
+    "held": {
+      "noHides": "Nessuna pelle respinta o da selezionare da bloccare."
+    }
+  },
+  "new": {
+    "inline": {
+      "hint": "Durante la produzione: primo capo, taglio, itinerante, fine linea.",
+      "which": "Quale controllo",
+      "kind": {
+        "FIRST_PIECE": "Primo capo",
+        "FIRST_PIECEHint": "Blocca la produzione finché non è approvato in linea.",
+        "CUTTING": "Taglio",
+        "CUTTINGHint": "I pezzi tagliati rispetto al modello.",
+        "ROVING": "Itinerante",
+        "ROVINGHint": "Un controllo a un'operazione durante la produzione.",
+        "END_OF_LINE": "Fine linea",
+        "END_OF_LINEHint": "Ogni fascio quando lascia la linea."
+      },
+      "workOrderHint": "L'ordine di produzione in linea.",
+      "bundle": "Cartellino del fascio",
+      "bundleHint": "Scansionalo o scrivilo; un primo capo nomina il fascio da cui è fatto.",
+      "after": "Si compila sul tablet di linea (Ispezione in linea); qui si apre la sua scheda.",
+      "held": {
+        "noRight": "Aprire controlli in linea richiede quality.inprocess.record.",
+        "noWorkOrders": "Scegliere l'ordine di produzione richiede workorders.view."
+      },
+      "problem": {
+        "workOrder": "Scegli l'ordine di produzione o scrivi un fascio.",
+        "bundle": "Un primo capo nomina il fascio da cui è fatto."
+      }
+    },
+    "plan": {
+      "heading": "Piano",
+      "reading": "Leggo i piani che valgono…",
+      "failed": "Non è stato possibile leggere i piani: scrivi il campione a mano o riprova.",
+      "none": "Nessun piano finale vale per questo ordine di produzione: scrivi il campione a mano (W1).",
+      "option": "{code} v{number} · {name}",
+      "applies": "Vale per questo ordine di produzione",
+      "matches": "Vale anche questo",
+      "other": "Un altro piano (di' perché)",
+      "reason": "Perché un altro piano (obbligatorio)",
+      "reasonHint": "Resta con l'ispezione.",
+      "fixed": "Un campione fisso di {sample} unità.",
+      "lotFirst": "Scrivi la dimensione del lotto: il campione segue dal piano.",
+      "typeIt": "Scrivi invece il campione a mano",
+      "usePlan": "Usa il piano che vale",
+      "typedHint": "Scritto a mano (W1): scrivi i numeri di accettazione dalla tua tabella di campionamento.",
+      "problem": {
+        "none": "Scegli un piano o scrivi il campione a mano.",
+        "reason": "Di' perché un altro piano, in almeno 3 caratteri.",
+        "reading": "I piani sono in lettura.",
+        "failed": "Non è stato possibile leggere i piani."
+      }
+    }
+  }
+}

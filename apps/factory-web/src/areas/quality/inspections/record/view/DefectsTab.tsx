@@ -15,6 +15,10 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { Section } from '../../../_shared/parts'
 import { GarmentZoneMap, zoneWords } from '../../../defects/zones/GarmentZoneMap'
 import type { DefectBody, FinalCell, PickedDefect } from '../../api'
+// B-W2b-127 (design ins-defects "cause code (W2b)"): the cause of each line, from the group's cause codes.
+import type { Read } from '../../../_shared/model'
+import type { Cause } from '../../depth/api'
+import { labelIn } from '../../depth/model'
 import { changedLine, defectKey, defectWords, ncrFromDefectsHeld, photosOf, pickedDefectIds, withoutLine, withPicked, type DefectsTabModel } from '../../model'
 import '../../inspections.css'
 
@@ -50,6 +54,7 @@ export function DefectsTab({
   saved,
   dialog,
   actions,
+  causes,
 }: {
   model: DefectsTabModel
   cells: readonly FinalCell[]
@@ -61,16 +66,19 @@ export function DefectsTab({
   saved?: Readonly<Record<string, string>>
   dialog: { kind: 'pick' } | { kind: 'zone'; index: number } | { kind: 'photo'; index: number } | null
   actions?: DefectsTabActions
+  /** B-W2b-127: the cause codes (null: not read, e.g. a design case of W2a). */
+  causes?: Read<readonly Cause[]> | null
 }) {
   return (
-    <WithMessages namespaces={[PHOTO_KIT_NAMESPACE, 'defects']}>
-      <Tab model={model} cells={cells} sampleSize={sampleSize} held={held} canRaise={canRaise} saved={saved} dialog={dialog} actions={actions} />
+    <WithMessages namespaces={[PHOTO_KIT_NAMESPACE, 'defects', 'inspections-depth']}>
+      <Tab model={model} cells={cells} sampleSize={sampleSize} held={held} canRaise={canRaise} saved={saved} dialog={dialog} actions={actions} causes={causes} />
     </WithMessages>
   )
 }
 
-function Tab({ model, cells, sampleSize, held, canRaise, saved = {}, dialog, actions }: Parameters<typeof DefectsTab>[0]) {
+function Tab({ model, cells, sampleSize, held, canRaise, saved = {}, dialog, actions, causes = null }: Parameters<typeof DefectsTab>[0]) {
   const t = useT('quality')
+  const td = useT('inspections-depth')
   const locale = useLocale()
   const editable = held === null
   const library = model.library.value
@@ -173,6 +181,26 @@ function Tab({ model, cells, sampleSize, held, canRaise, saved = {}, dialog, act
         </span>
       )
     }
+    // B-W2b-127: the line's cause (an active code of the list; a retired one stays where it is, said so).
+    const CauseCell = ({ data }: ICellRendererParams<Row>) => {
+      if (!data) return null
+      const list = causes?.value ?? null
+      const current = data.causeCodeId ? (list?.find((cause) => cause.id === data.causeCodeId) ?? null) : null
+      const words = current ? `${current.code} · ${labelIn(current, locale)}${current.active ? '' : ` (${td('defects.retired')})`}` : data.causeCodeId ? td('defects.causeUnknown') : td('defects.causeNone')
+      if (!editable || !list) return <span className={current ? undefined : 'fw-q-hint'}>{causes?.problem && !current ? td('defects.causesFailed') : words}</span>
+      return (
+        <Select size="xs" aria-label={td('defects.causeFor', { code: data.code })} value={data.causeCodeId ?? ''} onChange={(event) => change(data.index, { causeCodeId: event.target.value || null })}>
+          <option value="">{td('defects.causeNone')}</option>
+          {list
+            .filter((cause) => cause.active || cause.id === data.causeCodeId)
+            .map((cause) => (
+              <option key={cause.id} value={cause.id}>
+                {`${cause.code} · ${labelIn(cause, locale)}`}
+              </option>
+            ))}
+        </Select>
+      )
+    }
     const NoteCell = ({ data }: ICellRendererParams<Row>) => {
       if (!data) return null
       if (!editable) return <span className="fw-q-hint">{data.note ?? ''}</span>
@@ -216,12 +244,13 @@ function Tab({ model, cells, sampleSize, held, canRaise, saved = {}, dialog, act
       column('zone', t('defects.zone'), ZoneCell, { flex: 1.1, minWidth: 140 }, (row) => row.zone ?? ''),
       column('quantity', t('defects.quantity'), QuantityCell, { width: 110, minWidth: 100 }, (row) => String(row.quantity)),
       column('cell', t('defects.cell'), CellCell, { flex: 1, minWidth: 130 }, (row) => row.workOrderSizeId ?? ''),
+      column('cause', td('defects.cause'), CauseCell, { flex: 1.2, minWidth: 160 }, (row) => `${row.causeCodeId ?? ''}|${causes?.value ? 'r' : ''}`),
       column('photo', t('defects.photo'), PhotoCell, { flex: 1.1, minWidth: 150 }, (row) => `${row.photoCount}|${row.photoSrc ?? ''}`),
       column('note', t('defects.note'), NoteCell, { flex: 1.5, minWidth: 170 }, (row) => row.note ?? ''),
       ...(editable ? [{ ...column('actions', t('col.actions'), ActionsCell, { width: 72, minWidth: 72 }, (row) => `${row.index}`), suppressHeaderMenuButton: true }] : []),
     ]
     // The cells read the latest model through the ref; the words, the cells and the right rebuild them.
-  }, [t, locale, editable, cells])
+  }, [t, td, locale, editable, cells, causes])
 
   const raiseHeld = !canRaise ? t('raiseNcr.held.noRight') : null
   // B-W2b-17 ("Create NCR from N defects", design ins-defects): the picked lines; only saved ones can be picked.

@@ -31,6 +31,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
+  // B-W2b-127: the incoming inspections and in-process checks listed with the final ones open their own record pages.
+  IncomingInspection: '/quality/inspections/incoming/[id]',
+  InProcessCheck: '/quality/inspections/inline/[id]',
   // B-W2a-67: a hold is reviewed in its DetailModal on Quality › Holds (SCR-078, design §2.3); a library code in its drawer (SCR-079).
   QualityHold: '/quality/holds?open=[id]',
   DefectCode: '/quality/defects?open=[id]',

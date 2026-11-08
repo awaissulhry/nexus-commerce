@@ -50,7 +50,8 @@ export const INSPECTION_COLUMNS = {
 } as const satisfies Prisma.InspectionSelect
 export type InspectionRow = Prisma.InspectionGetPayload<{ select: typeof INSPECTION_COLUMNS }>
 
-export const DEFECT_COLUMNS = { id: true, inspectionId: true, defectClass: true, code: true, defectCodeId: true, zone: true, description: true, quantity: true, workOrderSizeId: true, note: true } as const satisfies Prisma.InspectionDefectSelect
+// B-W2b-127: + causeCodeId (design ins-defects "cause code").
+export const DEFECT_COLUMNS = { id: true, inspectionId: true, defectClass: true, code: true, defectCodeId: true, zone: true, description: true, quantity: true, workOrderSizeId: true, note: true, causeCodeId: true } as const satisfies Prisma.InspectionDefectSelect
 export type DefectRow = Prisma.InspectionDefectGetPayload<{ select: typeof DEFECT_COLUMNS }>
 
 export const RELEASE_COLUMNS = {

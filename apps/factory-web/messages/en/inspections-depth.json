@@ -1,0 +1,790 @@
+{
+  "text": "{text}",
+  "none": "—",
+  "common": {
+    "working": "Working…"
+  },
+  "kind": {
+    "label": "Kind",
+    "FINAL": "Final",
+    "INCOMING": "Incoming",
+    "INLINE": "In-line",
+    "none": "No {kind} inspection in this view.",
+    "held": {
+      "final": "Final inspections need quality.inspections.view.",
+      "incoming": "Incoming inspections need quality.incoming.view.",
+      "inline": "In-line checks need quality.inprocess.view.",
+      "view": "This view is about final inspections: incoming and in-line ones join Every inspection and Open."
+    }
+  },
+  "col": {
+    "number": "Number",
+    "kind": "Kind",
+    "subject": "Subject",
+    "supplier": "Supplier",
+    "lot": "Lot or batch size",
+    "sample": "Sample",
+    "plan": "Plan"
+  },
+  "subject": {
+    "label": "Work order",
+    "workOrder": "{workOrder}",
+    "lot": "Lot {lot} · {item}",
+    "workshop": "Goods back from a workshop",
+    "bundle": "Bundle {bundle} · {workOrder}",
+    "line": "Line {line}"
+  },
+  "lot": {
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "pieces_one": "{count} piece looked at",
+    "pieces_other": "{count} pieces looked at"
+  },
+  "uom": {
+    "HIDE_one": "{count} hide",
+    "HIDE_other": "{count} hides",
+    "PCS_one": "{count} piece",
+    "PCS_other": "{count} pieces",
+    "PAIR_one": "{count} pair",
+    "PAIR_other": "{count} pairs",
+    "M": "{count} m",
+    "M2": "{count} m²",
+    "DM2": "{count} dm²",
+    "FT2": "{count} ft²",
+    "KG": "{count} kg",
+    "other": "{count} {uom}"
+  },
+  "sample": {
+    "nOf": "{done} of {sample}",
+    "only": "Sample {sample}"
+  },
+  "plan": {
+    "label": "Plan",
+    "version": "{code} v{number}",
+    "w1": "W1 checklist",
+    "onPlan": "On a plan",
+    "none": "No plan",
+    "letter": "Code letter",
+    "bound": "On a plan the sample comes from the plan: change its profile on Sample & AQL."
+  },
+  "status": {
+    "OPEN": "Open",
+    "CANCELLED": "Cancelled",
+    "DECIDED_PASS": "Decided · passed",
+    "DECIDED_FAIL": "Decided · failed",
+    "AMENDED": "Amended"
+  },
+  "outcome": {
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "PASS": "Passed",
+    "FAIL": "Failed",
+    "GREEN": "Green",
+    "AMBER": "Amber",
+    "RED": "Red",
+    "none": "Decided"
+  },
+  "decision": {
+    "split": "Accepted {accepted} · rejected {rejected} · to sort {toSort}"
+  },
+  "who": {
+    "bench": "At the bench",
+    "office": "In the office",
+    "nobody": "Nobody yet"
+  },
+  "view": {
+    "amended": "Amended results",
+    "amendedNone": "No inspection has a countersigned correction."
+  },
+  "failed": {
+    "incoming": "Incoming inspections could not be read.",
+    "inline": "In-line checks could not be read."
+  },
+  "capped": {
+    "inline": "Only the newest 500 in-line checks are read: Show more reads no further for them."
+  },
+  "row": {
+    "report": "Report PDF",
+    "share": "Share report link…"
+  },
+  "bulk": {
+    "print_one": "Print {count} report",
+    "print_other": "Print {count} reports",
+    "finalOnly": "Only final inspections take this: take the incoming and in-line rows out of the selection.",
+    "title_one": "{count} inspection report",
+    "title_other": "{count} inspection reports",
+    "reading_one": "Making {count} report…",
+    "reading_other": "Making {count} reports…",
+    "readingOne": "Making the report of {number}…",
+    "failed": "The report of {number} could not be made.",
+    "printAll": "Print all",
+    "held": {
+      "reading_one": "{count} report is still being made.",
+      "reading_other": "{count} reports are still being made."
+    },
+    "none": "No inspection picked",
+    "noneHint": "Pick signed final inspections on Quality › Inspections, then Print reports.",
+    "unnamed": "Inspection"
+  },
+  "inline": {
+    "label": {
+      "FIRST_PIECE": "First piece · {where}",
+      "CUTTING": "Cutting check · {where}",
+      "ROVING": "Roving check · {where}",
+      "END_OF_LINE": "End of line · {where}"
+    },
+    "dhu": "DHU {dhu}",
+    "dhuLabel": "Defects per hundred (DHU)",
+    "tab": {
+      "check": "Check & results",
+      "decision": "Decision & signature"
+    },
+    "facts": "What was checked",
+    "kind": "Check",
+    "line": "Line",
+    "pieces": "Pieces looked at",
+    "defective": "Defective pieces",
+    "defects": "Defects",
+    "defect": "Defect",
+    "suggested": "Light suggested",
+    "operation": "Operation {seq} · {name}",
+    "bundle": "Bundle {code}",
+    "holdsRun": "Holds the run",
+    "openFirstPiece": "Open: the run waits for this first piece to be approved on the line tablet (In-line inspection).",
+    "openOnLine": "Open: it is answered on the line tablet (In-line inspection).",
+    "sample": "{profile} · letter {letter} · sample {sample}",
+    "inspector": "Checked by",
+    "inspectorHidden": "A worker (named only where the site's legal basis allows it)",
+    "operator": "Operator",
+    "operatorHidden": "Not named (the site's legal basis is not in place)",
+    "checks": "The plan's checks",
+    "noChecks": "This check runs on no plan: one result, no checklist.",
+    "col": {
+      "check": "Check",
+      "class": "Class",
+      "answers": "Answers"
+    },
+    "answer": "Unit {unit}: {answer}",
+    "decisionHeading": "Decision",
+    "notDecided": "Not decided yet.",
+    "outcome": "Outcome",
+    "noSignature": "Not signed (only a first piece is signed)",
+    "note": "Note"
+  },
+  "class": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor"
+  },
+  "tab": {
+    "aql": "Sample & AQL",
+    "measurements": "Measurements"
+  },
+  "report": {
+    "title": "Inspection report {number}",
+    "titlePlain": "Inspection report",
+    "preview": "Made now and kept nowhere until you keep a version (its banner says so).",
+    "language": "Language of the report",
+    "it": "Italiano",
+    "en": "English",
+    "keep": "Keep a version",
+    "print": "Print",
+    "reading": "Making the report…",
+    "failed": "The report's versions could not be read.",
+    "pdfFailed": "The report could not be made.",
+    "keepFailed": "The version could not be kept.",
+    "kept": "Version {version} kept ({language}).",
+    "keptSame": "The same contents: version {version} ({language}) stands.",
+    "noAccess": {
+      "title": "You cannot open this report",
+      "body": "Inspection reports need quality.inspections.view. Your administrator gives it."
+    },
+    "held": {
+      "kind": "Reports are made of final inspections.",
+      "notSigned": "The report is made once the result is signed.",
+      "none": "Pick the signed inspections to print.",
+      "tooMany": "At most 20 reports at once.",
+      "kindSome": "Only final inspections have a report: take the others out of the selection.",
+      "notSignedSome": "Some picked inspections are not signed yet: their report comes after the signature.",
+      "noMake": "Keeping a report needs quality.documents.make.",
+      "reading": "The report is being made."
+    }
+  },
+  "versions": {
+    "heading": "Kept versions",
+    "none": "No version kept yet.",
+    "line": "v{version} · {language} · {date}",
+    "by": "Kept by {name}",
+    "byUnknown": "Kept in the office",
+    "download": "Download",
+    "downloadOne": "Download version {version}"
+  },
+  "share": {
+    "heading": "Share report link",
+    "sub": "A copy goes on a shipment that carries these garments; its customer opens it through the shipment's documents link. A newer version takes the older copy off the link (it stays as evidence).",
+    "shipments": "Shipment",
+    "shipment": "{number} · {customer}",
+    "notShareable": "{status}: not packed yet",
+    "version": "Version to share",
+    "send": "and mail the link to the customer",
+    "sendHeld": "Mailing the link needs shipping.manage (the shipment's own Send link)",
+    "go": "Share",
+    "done": "Version {version} shared on {shipment}.",
+    "doneSent": "Version {version} shared on {shipment}; the link was mailed.",
+    "withdrewOlder_one": "{count} older copy was taken off the link.",
+    "withdrewOlder_other": "{count} older copies were taken off the link.",
+    "noShipment": "No shipment carries these garments yet: share once they are packed.",
+    "refused": "The report was not shared.",
+    "where": "Where it is shared",
+    "live": "On the link",
+    "withdrawn": "Taken off (evidence)",
+    "col": {
+      "shipment": "Shipment",
+      "version": "Version",
+      "state": "State",
+      "at": "Shared"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "PACKED": "Packed",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered",
+      "RETURNED": "Returned",
+      "CANCELLED": "Cancelled"
+    },
+    "held": {
+      "pick": "Pick the shipment first.",
+      "noRight": "Sharing a report needs quality.documents.share.",
+      "noVersion": "Keep a version first: a copy of a kept version is shared.",
+      "notShareable": "This shipment is not packed yet (or cancelled): it cannot carry the report.",
+      "NOT_ON_SHIPMENT": "This shipment carries no garment of this work order.",
+      "NO_VERSION": "No version is kept yet: keep one first.",
+      "NO_SUCH_VERSION": "That version does not exist any more: read the versions again.",
+      "NO_SHIPMENT": "The shipment was not found."
+    }
+  },
+  "checks": {
+    "heading": "Checks of {code} v{number}",
+    "headingReading": "The plan's checks",
+    "now": "{answered} of {total} checked · {failed} failed · critical failed: {critical}",
+    "criticalNone": "none",
+    "openPlan": "Open the plan",
+    "unitPick": "Unit of the sample",
+    "unitOf": "Unit {unit} of {sample}",
+    "mandatoryMissing": "Mandatory, not answered yet: {checks}",
+    "empty": "This plan has no checks yet - the plan owner must add them.",
+    "failed": "The plan's checks could not be read.",
+    "mandatory": "Mandatory",
+    "photoRequired": "Photo required",
+    "counts": "{pass} passed · {fail} failed · {na} not applicable · {open} not checked",
+    "instruction": "an instruction: no answer",
+    "onChart": "Measured on the chart",
+    "photoBench": "A photo, taken at the bench",
+    "answerFor": "Answer for {check}, unit {unit}",
+    "valueFor": "Value of {check}, unit {unit}",
+    "noteFor": "Note of {check}, unit {unit}",
+    "notePlaceholder": "What is wrong",
+    "noValue": "No value",
+    "pass": "Pass",
+    "fail": "Fail",
+    "na": "Not applicable",
+    "notChecked": "Not checked",
+    "answer": {
+      "PASS": "Passed",
+      "FAIL": "Failed",
+      "NOT_APPLICABLE": "Not applicable",
+      "none": "Not checked"
+    },
+    "needNote": "A failed check says what is wrong: write the note, then it saves.",
+    "needReason": "A critical check is not applicable only with the reason: write it, then it saves.",
+    "recorded": "{where} · {at} · {photos} photos",
+    "where": {
+      "FLOOR": "At the bench",
+      "OFFICE": "In the office"
+    },
+    "keys": "On a focused row: 1 Pass · 2 Fail · 3 Not applicable.",
+    "type": {
+      "PASS_FAIL": "pass or fail",
+      "MEASUREMENT": "a measurement",
+      "COUNT": "a count",
+      "CHOICE": "one of the choices",
+      "FREE_TEXT": "words",
+      "PHOTO": "a photo",
+      "SIGNATURE": "a signature",
+      "INSTRUCTION": "an instruction"
+    },
+    "held": {
+      "reading": "Reading the plan's checks…",
+      "signed": "Signed: the answers are read only.",
+      "mayNot": "Only its inspector or assignee records the answers."
+    },
+    "problem": {
+      "count": "A whole number.",
+      "choice": "One of the choices.",
+      "conflict": "Someone else changed this inspection: it was read again.",
+      "refused": "Not saved:"
+    }
+  },
+  "identity": {
+    "heading": "Serial and batch check",
+    "serials": "Expected {expected} · scanned {scanned} · missing {missing} · unknown {unknown} · without a number {noNumber}",
+    "batchDone": "Batch {batch} checked once.",
+    "batchOpen": "The batch label is not checked yet.",
+    "ok": "Clean: every garment checked is of this lot.",
+    "fail": "The check fails the lot: a missing or unknown number.",
+    "open": "Not done yet: it holds a pass.",
+    "missing": "Missing: {list}",
+    "unknown": "Not of this work order: {list}",
+    "listMore_one": "{list} and {count} more",
+    "listMore_other": "{list} and {count} more",
+    "bench_one": "{count} scan at the bench (Final inspection).",
+    "bench_other": "{count} scans at the bench (Final inspection).",
+    "workOrder": "Open the work order's bundles",
+    "w1": "W1's checklist has no serial or batch check: an inspection on a plan has one."
+  },
+  "hold": {
+    "signPass": "A pass waits for: {holds}",
+    "mandatory_one": "{count} mandatory check not answered: {checks}",
+    "mandatory_other": "{count} mandatory checks not answered: {checks}",
+    "serials": "the serial check is not done",
+    "batch": "the batch label is not checked",
+    "identityFails": "the serial check fails the lot",
+    "photos_one": "{count} required photo missing: {slots}",
+    "photos_other": "{count} required photos missing: {slots}",
+    "sample": "{remaining} of {sample} units still to inspect"
+  },
+  "result": {
+    "plan": {
+      "PASS": "As it stands: pass",
+      "FAIL": "As it stands: fail"
+    },
+    "short": {
+      "PASS": "Pass",
+      "FAIL": "Fail"
+    }
+  },
+  "aql": {
+    "heading": "How the sample was chosen",
+    "derivation": "ISO 2859-1, single sampling",
+    "readOnly": "Read only: the counts come from the bench.",
+    "failed": "Sample & AQL could not be read.",
+    "fixedWords": "A fixed sample of the plan: {sample} of {lot}.",
+    "typedWords": "Typed by hand (W1): the numbers below are the inspector's.",
+    "now": "The result now",
+    "progress": "{inspected} of {sample} inspected",
+    "bench": "Counts arrive from the bench (the counter on Final inspection); the office never edits them.",
+    "col": {
+      "class": "Class",
+      "aql": "AQL",
+      "accept": "Accept (Ac)",
+      "reject": "Reject (Re)",
+      "found": "Found",
+      "verdict": "Verdict"
+    },
+    "state": {
+      "ok": "Passes",
+      "limit": "At the limit",
+      "reject": "Rejects"
+    },
+    "verdict": {
+      "open": "Not complete",
+      "accept": "Accepts the lot",
+      "reject": "Rejects the lot"
+    },
+    "line": {
+      "ok": "{klass}: {found} found, accept up to {accept} - passes.",
+      "limit": "{klass}: {found} found, accept up to {accept} - passes. One more rejects the lot.",
+      "reject": "{klass}: {found} found, rejects at {reject} - the lot fails."
+    },
+    "stop": {
+      "on": "Stops at the reject number ({source}).",
+      "off": "The whole sample is inspected ({source}).",
+      "source": {
+        "PLAN": "the plan's rule",
+        "COMPANY": "the company's quality setting",
+        "TENANT": "every company's setting",
+        "DEFAULT": "the default"
+      }
+    },
+    "profile": {
+      "heading": "AQL profile",
+      "named": "Profile {code} · {name}",
+      "typed": "Typed by hand (W1): no profile",
+      "fixed": "A fixed sample: no AQL profile",
+      "inForce": "Profile of this inspection",
+      "appliesNow": "The profile that applies now",
+      "noneNow": "None (no profile applies)",
+      "from": "Where it comes from",
+      "letter": "Code letter",
+      "chain": "Where a profile is looked for, in order",
+      "stepNone": "none",
+      "differs": "The stored sample is not the one its profile gives today (the profile changed after it was opened).",
+      "refused": "The profile was not changed."
+    },
+    "source": {
+      "PLAN_VERSION": "The plan version",
+      "STYLE_CUSTOMER": "This style for this customer",
+      "STYLE": "The style",
+      "CUSTOMER": "The customer",
+      "COMPANY_DEFAULT": "The company default",
+      "NAMED": "Named by a person, with the reason",
+      "NONE": "No profile"
+    },
+    "change": {
+      "open": "Change profile…",
+      "title": "Change profile",
+      "subtitle": "Before the first unit is counted only. The sample and the acceptance numbers follow the profile.",
+      "which": "Profile",
+      "chain": "The profile that applies now: {profile}",
+      "other": "Another profile (with the reason)",
+      "otherHeld": "Another profile: needs quality.aql.view to list them",
+      "profile": "Profile",
+      "option": "{code} · {name} · level {level} · major {major} · minor {minor}",
+      "reason": "Why another profile (required)",
+      "reasonHint": "It is kept with the inspection.",
+      "reasonNeeded": "Say why another profile, in at least 3 characters.",
+      "after": "The profile is frozen once counting starts.",
+      "apply": "Change profile"
+    },
+    "held": {
+      "noRight": "Changing the profile needs quality.inspections.record.",
+      "fixed": "The plan samples a fixed number of units: no AQL profile applies.",
+      "frozen": "The profile is frozen once counting starts.",
+      "signed": "Signed: the sample stays as it was inspected.",
+      "mayNot": "Only its inspector changes the profile, while it is open."
+    }
+  },
+  "chart": {
+    "heading": "Measurement chart",
+    "words": "{out} of {values} values out of tolerance",
+    "none": "This plan takes no measurements.",
+    "w1": "Measurements come with an inspection plan: W1's checklist takes none.",
+    "failed": "The chart could not be read.",
+    "pages": "Units shown",
+    "range": "Units {from}–{to}",
+    "col": {
+      "point": "Point of measure",
+      "spec": "Nominal ± tolerance"
+    },
+    "unit": "Unit {unit}",
+    "size": "Size {size} ·",
+    "spec": "{nominal} ± {tolerance} {uom}",
+    "specTyped": "typed whole",
+    "source": {
+      "PLAN": "the plan",
+      "SIZE_CHART": "the size chart",
+      "PROFILE": "the rider's profile",
+      "TYPED": "typed"
+    },
+    "cellFor": "{point}, unit {unit}",
+    "over": "over by {by} {uom}",
+    "under": "under by {by} {uom}",
+    "keys": "A value saves when you leave it; arrows move between the cells; an empty cell takes the value back.",
+    "mtm": "Made to measure: {garment} revision {revision}, size {size}.",
+    "mtmWithout": "No profile value for: {points}",
+    "outHeading_one": "{count} value out of tolerance",
+    "outHeading_other": "{count} values out of tolerance",
+    "outTag": "Out of tolerance",
+    "outLine": "{point}, unit {unit}: {measured} {uom} ({words})",
+    "defectNote": "{point}, unit {unit}: {measured} {uom} ({words})",
+    "createDefect": "Create defect",
+    "problem": {
+      "decimal": "A number, like 58,4."
+    },
+    "held": {
+      "record": "Read only here: only its inspector records the values while it is open.",
+      "defects": "The defects are read only here."
+    },
+    "sizePick": "Size measured",
+    "sizeNone": "Pick the size",
+    "sizeOption": "Size {size}",
+    "sizeFirst": "Pick the size measured: the lot has several sizes."
+  },
+  "photos": {
+    "heading": "Required photo set",
+    "summary": "{taken} of {total} taken · {missing} missing",
+    "empty": "This plan asks for no photos.",
+    "w1": "W1's checklist asks for no photo set: an inspection on a plan has one.",
+    "required": "Required",
+    "state": {
+      "TAKEN": "Taken",
+      "MISSING": "Missing",
+      "NOT_APPLICABLE": "Not applicable",
+      "OPEN": "Not taken yet"
+    },
+    "holds": "A missing required photo holds Sign result.",
+    "quarantined_one": "{count} photo waits for the virus check",
+    "quarantined_other": "{count} photos wait for the virus check",
+    "open": "Open the photo {n} of {slot}",
+    "photoOf": "{slot} · photo {n}",
+    "count": "{n} of {count}",
+    "previous": "Previous photo",
+    "next": "Next photo",
+    "first": "This is the first photo.",
+    "last": "This is the last photo.",
+    "only": "This is the only photo.",
+    "loading": "Still loading…"
+  },
+  "defects": {
+    "cause": "Cause",
+    "causeFor": "Cause of {code}",
+    "causeNone": "No cause",
+    "causeUnknown": "A cause no longer listed",
+    "causesFailed": "The cause codes could not be read.",
+    "retired": "retired"
+  },
+  "gate": {
+    "title": "Release gate · {cell}",
+    "rule": "Garments are released when every check holds; who can clear each one is said.",
+    "state": {
+      "pass": "Holds",
+      "fail": "Open",
+      "notNeeded": "Not needed",
+      "unknown": "Unknown"
+    },
+    "open": {
+      "WORK_ORDER": "The work order is not ready to release.",
+      "INSPECTION": "No passed inspection of these garments stands.",
+      "QUANTITY": "Nothing is left to release in this cell.",
+      "SERIALS": "The garments' serials are not all ready.",
+      "LABELS": "The garment labels are not printed for every garment.",
+      "CERTIFICATE": "No valid certificate covers this style, colour and size.",
+      "DOCUMENTS": "The Declaration of Conformity or the user information is missing.",
+      "LOTS": "A material lot used is not released (tests or documents pending).",
+      "MAKER": "You made some of these garments: an inspector who made none releases them.",
+      "SECOND_PERSON": "A second person must release these garments."
+    },
+    "who": {
+      "WORK_ORDER": "Production",
+      "INSPECTION": "An inspector (sign a passed inspection)",
+      "QUANTITY": "—",
+      "SERIALS": "Production (finish and scan the garments)",
+      "LABELS": "Production (print the labels)",
+      "CERTIFICATE": "The compliance lead",
+      "DOCUMENTS": "The compliance lead",
+      "LOTS": "Quality (Tests & substances)",
+      "MAKER": "Another inspector",
+      "SECOND_PERSON": "Another inspector or the quality manager"
+    }
+  },
+  "amend": {
+    "heading": "Amendments",
+    "sub": "Corrections after signing",
+    "waitingCount_one": "{count} correction waits for its second signature",
+    "waitingCount_other": "{count} corrections wait for their second signature",
+    "menu": "Amend signed result…",
+    "locked": "Signed results cannot be edited; a correction is an amendment with a second signature.",
+    "none": "No amendments.",
+    "notSigned": "Corrections are asked once the result is signed.",
+    "failed": "The amendments could not be read.",
+    "someone": "Someone in the office",
+    "empty": "(empty)",
+    "change": "From {from} to {to}",
+    "reasonWas": "Why: {reason}",
+    "col": {
+      "ref": "Ref",
+      "field": "Field",
+      "change": "From → to",
+      "reason": "Reason",
+      "asked": "Asked by",
+      "second": "Second signature",
+      "state": "State"
+    },
+    "state": {
+      "WAITING": "Waiting for the second signature",
+      "SIGNED": "Countersigned",
+      "REFUSED": "Refused"
+    },
+    "signOff": "Correction of {field}",
+    "step": {
+      "asked": "Correction asked",
+      "second": "Second signature",
+      "secondRole": "Another inspector or the quality manager"
+    },
+    "method": {
+      "session": "signed in the office"
+    },
+    "whoMay": "Another inspector or the quality manager countersigns with a fresh code; who asked never does.",
+    "rule": {
+      "mine": "You asked for this correction: another inspector or the quality manager countersigns.",
+      "other": "{name} asked: you are another person."
+    },
+    "sign": "Countersign…",
+    "refuse": "Refuse…",
+    "refuseTitle": "Refuse the correction",
+    "refuseSub": "What was signed stays as it is. No code is asked: a refusal changes nothing.",
+    "refuseReason": "Why (required)",
+    "stepUp": "Countersign the correction: it then stands on the signed result.",
+    "value": "New value",
+    "causesReading": "Reading the cause codes…",
+    "dialog": {
+      "title": "Amend signed result",
+      "field": "Field",
+      "fieldOnRow": "{field} · {row}",
+      "value": "New value",
+      "amendedBefore": "Corrected before: what stands now is that correction.",
+      "preview": "Before → after",
+      "reason": "Why (required)",
+      "reasonHint": "It is kept with the correction and printed on the report.",
+      "second": "It waits for a second signature",
+      "request": "Request amendment"
+    },
+    "done": {
+      "requested": "The correction waits for the second signature.",
+      "signed": "Countersigned: the correction stands.",
+      "refused": "Refused: the value stays as signed."
+    },
+    "held": {
+      "noRight": "Asking a correction needs quality.amendments.request.",
+      "reading": "Reading the amendments…",
+      "notSigned": "Corrections are asked once the result is signed.",
+      "allWaiting": "Every field a correction may take waits for its second signature.",
+      "answered": "This correction is answered.",
+      "mine": "You asked for this correction: another inspector or the quality manager countersigns.",
+      "noSign": "Countersigning needs quality.amendments.sign."
+    },
+    "problem": {
+      "field": "Pick the field.",
+      "empty": "This field cannot be empty.",
+      "decimal": "A number, like 58,4.",
+      "same": "That is the value already.",
+      "reason": "Say why, in at least 3 characters.",
+      "refused": "The correction was refused:",
+      "conflict": "Someone else answered or changed it: it was read again.",
+      "codeCancelled": "Not countersigned: the code was not entered.",
+      "unknown": "Something went wrong: try again."
+    },
+    "refusal": {
+      "NOT_SIGNED": "The record is not signed yet.",
+      "VERDICT": "This correction would change whether a line passes: reverse the release and inspect again instead.",
+      "WAITING": "A correction of this field already waits for its second signature.",
+      "SAME_PERSON": "Who asked for a correction never countersigns it.",
+      "STALE": "The value moved since the correction was asked: ask again.",
+      "ANSWERED": "This correction is answered already."
+    }
+  },
+  "incoming": {
+    "title": "Incoming inspection {number}",
+    "workshopOf": "{workOrder} back from {workshop}",
+    "tab": {
+      "units": "Sample & hides",
+      "decision": "Decision & signature"
+    },
+    "openOnFloor": "Open: it is recorded hide by hide on the tablet (Incoming inspection).",
+    "facts": "What is inspected",
+    "lot": "Lot",
+    "material": "Material",
+    "inspector": "Inspector",
+    "inspectorHidden": "A worker (named only where the site's legal basis allows it)",
+    "due": "Due",
+    "method": {
+      "AQL": "ISO 2859-1 from the AQL profile",
+      "FIXED": "A fixed sample of the plan",
+      "WHOLE": "The whole lot"
+    },
+    "hides": "Hide by hide",
+    "hidesSub": "{done} of {sample} done · accepted {accepted} · rejected {rejected} · to sort {toSort}",
+    "noHides": "No hide recorded yet.",
+    "col": {
+      "hide": "Hide",
+      "area": "Area",
+      "check": "Against the tannery",
+      "shade": "Shade",
+      "grade": "Grade",
+      "worst": "Worst defect",
+      "decision": "Decision"
+    },
+    "area": "{area} {uom}",
+    "measuredHere": "measured here",
+    "received": "as received",
+    "areaCheck": {
+      "WITHIN": "Within ({percent} %)",
+      "SHORT": "Short ({percent} %)",
+      "OVER": "Over ({percent} %)"
+    },
+    "outOfShade": "out of shade",
+    "noDefect": "None",
+    "decision": {
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "TO_SORT": "To sort"
+    },
+    "lotArea": {
+      "WITHIN": "The lot's area is within the tolerance: {percent} % against {tolerance} % ({hides} hides measured).",
+      "SHORT": "The lot's area is short: {percent} % against a tolerance of {tolerance} % ({hides} hides measured).",
+      "OVER": "The lot's area is over: {percent} % ({hides} hides measured)."
+    },
+    "claim": "Purchasing may open a claim to the supplier.",
+    "checks": "The plan's checks",
+    "answers": "{pass} passed · {fail} failed · {na} not applicable",
+    "decisionHeading": "Decision",
+    "notDecided": "Not decided yet.",
+    "cancelled": "Cancelled: {reason}",
+    "computed": "Computed result",
+    "split": "Decision",
+    "override": "Over the computed result because",
+    "signedAt": "Signed",
+    "signature": "Signature",
+    "next": "Next step",
+    "nextAfter": "The next step is said once it is decided.",
+    "rejectedHides": "Rejected: {hides}",
+    "toSortHides": "To sort: {hides}",
+    "placeHold_one": "Place hold on {count} hide…",
+    "placeHold_other": "Place hold on {count} hides…",
+    "lotRelease": "Open the lot (its release is the lab's)",
+    "held": {
+      "noHides": "No rejected or to-sort hide to hold."
+    }
+  },
+  "new": {
+    "inline": {
+      "hint": "During production: first piece, cutting, roving, end of line.",
+      "which": "Which check",
+      "kind": {
+        "FIRST_PIECE": "First piece",
+        "FIRST_PIECEHint": "Holds the run until it is approved on the line.",
+        "CUTTING": "Cutting",
+        "CUTTINGHint": "Cut pieces against the pattern.",
+        "ROVING": "Roving",
+        "ROVINGHint": "A check at an operation during the run.",
+        "END_OF_LINE": "End of line",
+        "END_OF_LINEHint": "Each bundle as it leaves the line."
+      },
+      "workOrderHint": "The work order running on the line.",
+      "bundle": "Bundle ticket",
+      "bundleHint": "Scan or type it; a first piece names the bundle it is made from.",
+      "after": "It is answered on the line tablet (In-line inspection); this opens its record.",
+      "held": {
+        "noRight": "Opening in-line checks needs quality.inprocess.record.",
+        "noWorkOrders": "Picking the work order needs workorders.view."
+      },
+      "problem": {
+        "workOrder": "Pick the work order or type a bundle.",
+        "bundle": "A first piece names the bundle it is made from."
+      }
+    },
+    "plan": {
+      "heading": "Plan",
+      "reading": "Reading the plans that apply…",
+      "failed": "The plans could not be read: type the sample by hand, or try again.",
+      "none": "No final plan applies to this work order: type the sample by hand (W1).",
+      "option": "{code} v{number} · {name}",
+      "applies": "Applies to this work order",
+      "matches": "Applies too",
+      "other": "Another plan (say why)",
+      "reason": "Why another plan (required)",
+      "reasonHint": "It is kept with the inspection.",
+      "fixed": "A fixed sample of {sample} units.",
+      "lotFirst": "Type the lot size: the sample follows from the plan.",
+      "typeIt": "Type the sample by hand instead",
+      "usePlan": "Use the plan that applies",
+      "typedHint": "Typed by hand (W1): type the acceptance numbers from your sampling table.",
+      "problem": {
+        "none": "Pick a plan, or type the sample by hand.",
+        "reason": "Say why another plan, in at least 3 characters.",
+        "reading": "The plans are being read.",
+        "failed": "The plans could not be read."
+      }
+    }
+  }
+}

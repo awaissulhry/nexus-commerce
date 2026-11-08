@@ -46,6 +46,10 @@ const row = (n: number, over: Partial<InspectionRow>): InspectionRow => ({
   version: 3,
   decidedAt: at(27, 10, 42),
   createdAt: at(27, 9, 15),
+  // B-W2b-127: W1's fixed checklist unless a case says otherwise.
+  planVersion: null,
+  inspected: null,
+  amended: false,
   ...over,
 })
 
@@ -222,7 +226,7 @@ export const INSPECTION: Inspection = {
   plan: { lotSize: 24, sampleSize: 5, inspectionLevel: 'II', aqlMajor: '2.500', aqlMinor: '4.000', acceptMajor: 0, acceptMinor: 1, hundredPercent: false },
   checklist: answers(7),
   defects: [
-    { id: uid('7721', 1), defectClass: 'MINOR', code: 'THREAD-END', defectCodeId: uid('7731', 1), zone: 'COLLAR', description: null, quantity: 1, workOrderSizeId: CELL.a50, note: 'Loose thread end at the collar.' },
+    { id: uid('7721', 1), defectClass: 'MINOR', code: 'THREAD-END', defectCodeId: uid('7731', 1), zone: 'COLLAR', description: null, quantity: 1, workOrderSizeId: CELL.a50, note: 'Loose thread end at the collar.', causeCodeId: null },
   ],
   counts: { critical: 0, major: 0, minor: 1 },
   computed: { result: 'PASS', words: 'x' },
@@ -238,6 +242,10 @@ export const INSPECTION: Inspection = {
   note: null,
   version: 4,
   createdAt: at(29, 8, 40),
+  // B-W2b-127: W1's fixed checklist (no plan version, letter or counter).
+  planVersion: null,
+  codeLetter: null,
+  inspected: null,
 }
 
 export const readOf = (inspection: Inspection, over: Partial<InspectionRead> = {}): InspectionRead => ({
@@ -250,7 +258,7 @@ export const readOf = (inspection: Inspection, over: Partial<InspectionRead> = {
 })
 
 export const ANSWERED: Inspection = { ...INSPECTION, checklist: answers(12), version: 9 }
-export const FAILING_BY_COUNTS: Inspection = { ...ANSWERED, defects: [{ id: uid('7721', 2), defectClass: 'MAJOR', code: 'STITCH-SKIP', defectCodeId: uid('7731', 2), zone: 'SLEEVE_L', description: null, quantity: 2, workOrderSizeId: CELL.a52, note: null }], counts: { critical: 0, major: 2, minor: 0 }, computed: { result: 'FAIL', words: 'x' } }
+export const FAILING_BY_COUNTS: Inspection = { ...ANSWERED, defects: [{ id: uid('7721', 2), defectClass: 'MAJOR', code: 'STITCH-SKIP', defectCodeId: uid('7731', 2), zone: 'SLEEVE_L', description: null, quantity: 2, workOrderSizeId: CELL.a52, note: null, causeCodeId: null }], counts: { critical: 0, major: 2, minor: 0 }, computed: { result: 'FAIL', words: 'x' } }
 export const FAILING_HARD: Inspection = { ...ANSWERED, checklist: answers(12, ['FIBRE_COMPOSITION']), computed: { result: 'FAIL', words: 'x' } }
 export const PASSED: Inspection = { ...ANSWERED, id: uid('7701', 10), inspectionNumber: 'DEMO-INS-0010', label: 'DEMO-INS-0010', workOrderId: WO.a, status: 'PASSED', plan: { ...ANSWERED.plan, lotSize: 48, sampleSize: 8 }, decidedAt: at(28, 16, 5), signatureSha256: 'b7e6d5c4b3a291807f6e5d4c3b2a1908f7e6d5c4b3a2918070f6e5d4c3b2a190', version: 11, createdAt: at(28, 15, 0) }
 export const FAILED: Inspection = { ...FAILING_HARD, id: uid('7701', 9), inspectionNumber: 'DEMO-INS-0009', label: 'DEMO-INS-0009', status: 'FAILED', decidedAt: at(28, 11, 20), signatureSha256: 'c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2', inspector: floor }
