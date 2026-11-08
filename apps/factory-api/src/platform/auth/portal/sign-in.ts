@@ -259,7 +259,7 @@ async function openSession(p: PortalServices, request: FastifyRequest, reply: Fa
       input: { companyId: company.id, method },
       ...(invited ? { record: { type: 'User' as const, id: person.id, transition: { machine: userStatus, to: 'ACTIVE' as const } } } : {}),
     },
-    async ({ tx, now, audit }) => {
+    async ({ tx, now, audit, emit }) => {
       let accepted: { readonly invitationId: string; readonly roleKeysGiven: string[]; readonly roleKeysMissing: string[] } | null = null
       if (invited) {
         const invitation = await openInvitation(tx, person.id, now)
@@ -285,6 +285,8 @@ async function openSession(p: PortalServices, request: FastifyRequest, reply: Fa
       await tx.user.update({ where: { id: person.id }, data: { lastSignInAt: now }, select: { id: true } })
       const session = await createPortalSession(tx, { userId: person.id, partyId: person.partyId, companyId: company.id, tokenHash, now, ipHash: p.auth.secrets.ipHash(request.ip), userAgent: request.headers['user-agent'] })
       audit({ action: 'portal.signIn', recordType: 'Session', recordId: session.id, companyId: company.id, after: { userId: person.id, partyId: person.partyId, method, invitationAccepted: accepted !== null } })
+      // B-W2b-180: the office's Portal access tab says "… signed in" live (and the person turns Active there).
+      emit({ type: 'partner_user.signed_in', subject: person.id, companyId: company.id, payload: { userId: person.id, partyId: person.partyId, firstSignIn: accepted !== null } })
       return session
     },
   )

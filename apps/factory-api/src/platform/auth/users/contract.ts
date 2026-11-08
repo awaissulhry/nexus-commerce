@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { UserStatus } from '@nexus/factory-db'
+import { PARTNER_KINDS } from '@nexus/factory-domain/auth/partners/kinds'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 
 /** The user list and the lifecycle commands (features PLT-015, PLT-016, PLT-070). */
@@ -31,6 +32,14 @@ export const userView = output({
   lastSignInAt: instant().nullable(),
   /** The open invitation's expiry, for an invited user. */
   invitationExpiresAt: instant().nullable(),
+  /** B-W2b-180: OFFICE, or PARTNER (a person of one partner organisation, who signs in to its portal). */
+  audience: z.enum(['OFFICE', 'PARTNER']),
+  /** B-W2b-180: a partner's organisation (null for the office). */
+  partyId: id().nullable(),
+  /** B-W2b-180: which portal a partner sees (null for the office). */
+  partnerKind: z.enum(PARTNER_KINDS).nullable(),
+  /** B-W2b-180: a partner's end of access (PLT-022); null: none. */
+  accessUntil: instant().nullable(),
   version: z.number().int(),
 })
 

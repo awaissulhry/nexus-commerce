@@ -5,6 +5,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { PartnerOrganisation } from '../partners/organisation/PartnerOrganisation'
 import { changeUser, endAssignment, giveRole, listAssignments, listCompanies, listRoles, listUsers, type Assignment, type Role, type User } from '../../shared/api'
 import { runBulk } from '../../shared/bulk'
 import { bulkNotice } from '../../shared/reach'
@@ -109,6 +110,9 @@ export function UserRecord({ userId }: { userId: string }) {
         dockOpen,
       }}
       panels={user ? <RecordPanels record={{ type: 'User', id: user.id, companyId: null }} title={user.displayName} /> : null}
+      // B-W2b-180: a partner's organisation (partners.view), read and changed through the partner routes.
+      // (an element mounts only when its tab draws it).
+      partner={user?.audience === 'PARTNER' && user.partyId && held.has('partners.view') ? <PartnerOrganisation userId={user.id} partyId={user.partyId} onChanged={() => void load()} /> : null}
       actions={{
         onDialog: (next) => {
           setDialog(next)

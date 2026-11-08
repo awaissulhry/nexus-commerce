@@ -48,6 +48,8 @@ import { amendLines, draftOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
+import { openPreview } from '../../../admin/users/partners/preview'
 import { useScheduleSteps } from './schedule/use-schedule-steps'
 
 /**
@@ -335,6 +337,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
     stepUp: { ensureFresh, guard },
   })
   const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
+  // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
+  const [portalOpening, setPortalOpening] = useState(false)
+  const portal = session.permissions.includes('partners.preview') ? { held: null, opening: portalOpening } : { held: { key: 'held.portalRight' }, opening: false }
 
   const model: OrderRecordModel = {
     prefix,
@@ -367,6 +372,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     copied,
     margin: margin.model,
     scheduleSteps: scheduleSteps.model,
+    portal,
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -376,6 +382,17 @@ function RecordContainer({ orderId }: { orderId: string }) {
       model={model}
       panels={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
       actions={{
+        onPortal: () => {
+          const current = order.status === 'ready' ? order.value : null
+          if (!current?.party || portalOpening) return
+          setPortalOpening(true)
+          openPreview(api, current.partyId, portalAddress(current.party.code, { type: 'SalesOrder', id: current.id }))
+            .catch((error: unknown) => {
+              const problem = partnerProblem(error)
+              setNotice({ tone: 'danger', words: { key: problem === 'problem.forbidden' ? 'portal.forbidden' : problem === 'problem.noKind' ? 'portal.noKind' : 'portal.failed' } })
+            })
+            .finally(() => setPortalOpening(false))
+        },
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
         scheduleSteps: scheduleSteps.actions,

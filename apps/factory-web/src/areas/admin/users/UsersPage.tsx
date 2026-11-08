@@ -11,6 +11,8 @@ import { runBulk, type BulkResult } from '../shared/bulk'
 import { bulkNotice } from '../shared/reach'
 import { adminHref, failed, loaded, loading, problemKey, type Loaded, type Notice, type ScopeOption } from '../shared/model'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
+import { endOfDay, isPartnerUser } from './partners/model'
+import { usePartnersAudience } from './partners/use-partners'
 import { invitees, type Audience, type FloorAction, type FloorTile, type InviteDraft, type InviteResult, type OfficeAction, type OfficeTile, type SiteOption, type UsersDialog, type WorkerDraft } from './model'
 import { UsersView } from './view/UsersView'
 
@@ -40,8 +42,12 @@ export function UsersPage() {
     reactivate: held.has('users.reactivate'),
     deactivate: held.has('users.deactivate'),
   }
-  const [audience, setAudience] = useState<Audience>(params?.get('audience') === 'floor' || !can.viewUsers ? 'floor' : 'office')
+  const [audience, setAudience] = useState<Audience>(
+    params?.get('audience') === 'partners' && held.has('partners.view') ? 'partners' : params?.get('audience') === 'floor' || !can.viewUsers ? 'floor' : 'office',
+  )
   const [users, setUsers] = useState<Loaded<User>>(loading())
+  // B-W2b-180: the people of the partner organisations (audience PARTNER) are the Partners audience, never office people.
+  const [partnerUsers, setPartnerUsers] = useState<Loaded<User>>(loading())
   const [workers, setWorkers] = useState<Loaded<Worker>>(loading())
   const [roles, setRoles] = useState<Role[] | null>(null)
   const [companies, setCompanies] = useState<ScopeOption[]>([])
@@ -66,8 +72,14 @@ export function UsersPage() {
     if (held.has('users.view'))
       reads.push(
         listUsers(api).then(
-          (items) => setUsers(loaded(items)),
-          (error: unknown) => setUsers(failed(problemKey(error))),
+          (items) => {
+            setUsers(loaded(items.filter((user) => !isPartnerUser(user))))
+            setPartnerUsers(loaded(items.filter(isPartnerUser)))
+          },
+          (error: unknown) => {
+            setUsers(failed(problemKey(error)))
+            setPartnerUsers(failed(problemKey(error)))
+          },
         ),
       )
     if (held.has('workers.view'))
@@ -94,6 +106,7 @@ export function UsersPage() {
   useEffect(() => {
     void load()
   }, [load])
+  const partners = usePartnersAudience({ api, permissions: session.permissions, prefix, users: partnerUsers, query, guard, reload: () => void load() })
 
   const closeDialog = () => {
     setDialogProblem(null)
@@ -107,7 +120,9 @@ export function UsersPage() {
   const onInvite = async (draft: InviteDraft): Promise<boolean> => {
     setBusy(true)
     setDialogProblem(null)
-    const roleInputs = draft.roleIds.map((roleId) => ({ roleId, allCompanies: draft.scope.allCompanies, companyIds: draft.scope.allCompanies ? [] : draft.scope.companyIds, siteIds: draft.scope.allCompanies ? [] : draft.scope.siteIds }))
+    // B-W2b-180: "until" ends every role of the invite at the end of that day (the site's zone).
+    const until = draft.until ? { validTo: endOfDay(draft.until) } : {}
+    const roleInputs = draft.roleIds.map((roleId) => ({ roleId, allCompanies: draft.scope.allCompanies, companyIds: draft.scope.allCompanies ? [] : draft.scope.companyIds, siteIds: draft.scope.allCompanies ? [] : draft.scope.siteIds, ...until }))
     const results: InviteResult[] = []
     try {
       for (const person of invitees(draft)) {
@@ -190,7 +205,7 @@ export function UsersPage() {
 
   return (
     <UsersView
-      model={{ prefix, audience, users, workers, roles, companies, sites, tile, query, pages, asOf, me: session.user.id, can, notice, dialog, busy, dialogProblem, inviteResults, workerMade, stepUp }}
+      model={{ prefix, audience, users, workers, roles, companies, sites, tile, query, pages, asOf, me: session.user.id, can, notice, dialog, busy, dialogProblem, inviteResults, workerMade, stepUp, partners: partners.model }}
       actions={{
         onAudience: (next) => {
           setAudience(next)
@@ -223,6 +238,7 @@ export function UsersPage() {
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
         onDismissNotice: () => setNotice(null),
+        partners: partners.actions,
       }}
     />
   )
