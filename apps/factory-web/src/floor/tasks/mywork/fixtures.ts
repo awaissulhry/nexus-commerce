@@ -1,4 +1,6 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
+// B-W2b-109: the inspector queue.
+import { inspectionCases } from './inspections/fixtures'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { PickerReason } from '../reasons/model'
 import type { DispatchEntry, DispatchList, MyMessages, PutLast, WorkMessage } from './model'
@@ -306,5 +308,6 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
     { id: 'repair-offline-none', label: 'W2b: the repair list never read, offline', model: model({ frame: frame({ online: false }), step: { kind: 'repair' }, repair: null, repairProblem: 'offline' }) },
     { id: 'repair-error', label: 'W2b: the repair list could not be read', model: model({ step: { kind: 'repair' }, repair: null, repairProblem: 'error' }) },
     { id: 'repair-loading', label: 'W2b: reading the repair list', model: model({ step: { kind: 'repair' }, repair: null }) },
+    ...inspectionCases(model, frame),
   ],
 })

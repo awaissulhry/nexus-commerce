@@ -284,6 +284,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   rework loop (OTHER, else the reason asked), online only. Operation's first-piece hold: `tasks/scans/first-piece.ts` (the card's
   `firstPiece`), Finish/Start/Resume held, `use-first-piece.ts` lifts it live; the reason picker's `cause` = "Which operation caused
   it?" (`causedAtOperationId` on each scrap / rework line; Not known by default).
+  B-W2b-109: the final bench on its plan, `floor/tasks/final-inspection/plan/` (SCR-097's W2b cases `w2b-*`, catalogue `floor-final-plan`; on
+  B-W2b-97's and B-W2b-106's API): an inspection whose W1 read has `planVersion` reads its sheet (`GET …/sheet`) and runs the bench — a
+  strip of sections (AQL sample = DS AqlCounter, "+ one piece" and the `+` key, a class's + asks which FINAL defect, − and + per defect line;
+  Checks = DS FloorChecklist by class, a fail asks a FINAL defect and, where the plan asks, a photo; Measurements one point per step with DS
+  QuantityPad + LimitMeter; Serial or batch = DS ScanInput; Photos = DS PhotoCapture in the slots) — every write ONLINE FIRST as one
+  `quality.final.record` payload (`plan/api.ts recordOrKeep`: POST /quality/queue/record, the same payload queued under the try's id; a kept
+  write moves the sheet at once, `model.ts applyKept`); photos and the PIN signature (DS PinSignBlock, `decide` with no checklist) online
+  only, the signature held while the tablet still holds writes of it. Start opens on the plan that applies (`readPlans` with the lot: the
+  sample and Ac/Re from the API, never computed here); a lot, batch, bundle, serial or carton label (or a code that is no work order)
+  goes to POST /quality/queue/scan (QHS-065; CHOOSE lists the open inspections). My work's inspector queue, `floor/tasks/mywork/inspections/`
+  (SCR-089 `w2b-insp*`, catalogue `floor-myinspections`): GET /quality/queue?scope=mine, the list at an inspection bench (a For your work
+  tile elsewhere), a row's card opens the final bench or In-line with its code; the offline pack (GET /quality/queue/offline) keeps my
+  open final inspections' models for the visit (`keepModel`, by id and by number).
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
