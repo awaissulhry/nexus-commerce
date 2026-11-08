@@ -615,6 +615,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'warehouse', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
+  // B-W2b-121: Fabric cutting (SCR-182), after Cut a hide (tile family Cutting).
+  { id: 'floor.fabriccut', title: 'Fabric cutting', titleIt: 'Taglio tessuto', tile: 'fabriccut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
   { id: 'floor.receive', title: 'Receive goods', titleIt: 'Ricevi merce', tile: 'receive', modes: ['warehouse'] },
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },

@@ -370,6 +370,7 @@
     "mywork": "Il mio lavoro",
     "operation": "Operazione",
     "cut": "Taglia una pelle",
+    "fabriccut": "Taglio tessuto",
     "bundles": "Fasci",
     "receive": "Ricevi",
     "pick": "Preleva e consegna",
@@ -386,6 +387,7 @@
       "scan": "Qualsiasi etichetta della fabbrica",
       "operation": "Segnala un fascio alla tua operazione",
       "cut": "Controlla una pelle e registra il taglio",
+      "fabriccut": "Buono, materasso, conteggio, taglio, etichette, ritagli, al cucito",
       "bundles": "Crea i fasci e stampa i cartellini",
       "receive": "Ricevi la merce e stampa i cartellini delle pelli",
       "pick": "Consegna i materiali a un ordine di lavoro",
@@ -726,7 +728,14 @@
       "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni",
       "progress": "Avanzamento di una segnalazione guasto",
       "repair": "Scansione di riparazione di {code}",
-      "incident": "Segnalazione di sicurezza"
+      "incident": "Segnalazione di sicurezza",
+      "layRoll": "Rotolo {code} sul materasso",
+      "layUndo": "Ultimo rotolo del materasso tolto",
+      "layCount": "Materasso contato ai due capi",
+      "trolleyLoad": "Fascio {code} sul carrello",
+      "trolleyUnload": "Fascio {code} tolto dal carrello",
+      "trolleySend": "Carrello inviato al cucito",
+      "trolleyReceive": "Carrello ricevuto in linea"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
