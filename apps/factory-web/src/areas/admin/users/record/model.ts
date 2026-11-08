@@ -10,7 +10,8 @@ import type { RevealModel } from '../../shared/view/OneTimeReveal'
  * partner organisation come in W2b. Pure: the last-administrator rule, the give-role summary, the worker's form.
  */
 
-export const USER_TABS = ['profile', 'roles', 'activity'] as const
+// B-W2b-180: 'partner' = Partner organisation (a person of a partner organisation: areas/admin/users/partners/organisation).
+export const USER_TABS = ['profile', 'roles', 'partner', 'activity'] as const
 export type UserTab = (typeof USER_TABS)[number]
 export const WORKER_TABS = ['profile', 'badge', 'activity'] as const
 export type WorkerTab = (typeof WORKER_TABS)[number]

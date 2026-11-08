@@ -18,6 +18,9 @@
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
   Party: '/sales/customers/[id]',
+  // B-W2b-180: a party's portal settings (audit rows, partner events; one row per party, its id the party's) open its
+  // Portal access tab (a supplier's opens on the Customers record page, as Party does).
+  PortalSettings: '/sales/customers/[id]?tab=portal',
   Quote: '/sales/quotes/[id]',
   SalesOrder: '/sales/orders/[id]',
   Style: '/products/styles/[id]',

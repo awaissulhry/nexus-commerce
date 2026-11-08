@@ -134,6 +134,7 @@
       "tax": "Fisco e condizioni",
       "orders": "Preventivi e ordini",
       "documents": "Documenti",
+      "portal": "Accesso al portale",
       "activity": "Attività"
     },
     "side": {
@@ -209,6 +210,7 @@
       "contacts": "Contatti",
       "items": "Articoli e prezzi",
       "orders": "Ordini",
+      "portal": "Accesso al portale",
       "activity": "Attività"
     },
     "side": {

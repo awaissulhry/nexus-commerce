@@ -342,6 +342,9 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   sign-in page by mail, no token; GATE-PRIVACY `requirePortalTerms`; seats = ACTIVE + SUSPENDED + openly INVITED), resend,
   revoke, change (role, capabilities, end of access), suspend/reactivate/deactivate, preview (a PARTNER Session marked as
   the office person's preview, 1 h, the portal cookie in the office browser; audited `partners.preview`), organisations.
+- B-W2b-180 (office screens): `GET /auth/users` also says `audience`, `partyId`, `partnerKind`, `accessUntil` (Admin › Users
+  keeps partner people out of Office and lists them under Partners); every portal sign-in emits `partner_user.signed_in`
+  {userId, partyId, firstSignIn} (live partners.view: the Portal access tab's live line).
 - Portal (`/portal/access`, `/portal/colleagues…`): the admin (portal.colleagues.manage + `requirePortalStepUp`) invites,
   changes and deactivates colleagues of its own kind only, never itself; a colleague gets the admin's end of access.
   Commands run as the partner person in the office scope (`byPartner` in audit and events); the first sign-in accepts the
