@@ -87,6 +87,7 @@
     "MaintenanceJob": "Maintenance job",
     "Incident": "Incident",
     "InspectionPlan": "Inspection plan",
+    "Capa": "Corrective action",
     "other": "Record"
   },
   "chip": {
@@ -124,6 +125,7 @@
     "MaintenanceJob": "Maintenance jobs",
     "Incident": "Incidents",
     "InspectionPlan": "Inspection plans",
+    "Capa": "Corrective actions",
     "other": "Other records"
   },
   "status": {
@@ -197,6 +199,17 @@
     "PLANNED": "Planned",
     "WAITING_PARTS": "Waiting for parts",
     "HANDED_BACK": "Handed back",
-    "HELD": "On hold"
+    "HELD": "On hold",
+    "PLAN": "Plan",
+    "ACT": "Act",
+    "CHECK": "Check",
+    "D1": "D1 team",
+    "D2": "D2 problem",
+    "D3": "D3 containment",
+    "D4": "D4 root cause",
+    "D5": "D5 corrective actions",
+    "D6": "D6 actions in place",
+    "D7": "D7 prevention",
+    "D8": "D8 closure"
   }
 }

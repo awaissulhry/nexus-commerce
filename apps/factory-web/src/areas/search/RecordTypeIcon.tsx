@@ -78,6 +78,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   Incident: Siren,
   // B-W2b-104
   InspectionPlan: ListTodo,
+  // B-W2b-119
+  Capa: ListChecks,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
