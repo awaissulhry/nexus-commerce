@@ -13,5 +13,7 @@ export const manifest = defineManifest({
   'POST /branding/:companyId/logo/:fileId/complete': { audiences: ['office'], permission: 'documents.branding.manage', scope: 'record' },
   'GET /branding/public/:companyId': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /branding/public/:companyId/logo/:fileId': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2b-164: the portal's sign-in head (whose portal, its branding, whom to ask, the legal block) before anything is typed.
+  'GET /branding/portal-sign-in': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /link/branding': { audiences: ['link'], permission: 'links.open', scope: 'party' },
 })
