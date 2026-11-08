@@ -308,6 +308,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-60: Production › Cutting room › Cutting (SCR-238) and a cut; Floor control › Scrap & rework (SCR-140).
   '/production/cutting',
   '/production/cutting/[id]',
+  // B-W2b-129: a cut order of several work orders (SCR-238-order) and its lay sheet / cut ticket on paper (a new tab).
+  '/production/cutting/orders/[id]',
+  '/production/cutting/sheet',
   '/production/scrap',
   // B-W2b-58: Production › Floor control › Help calls (SCR-142).
   '/production/calls',
@@ -439,7 +442,8 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due', /* B-W2b-136 */ '/plant/machines/wall', /* B-W2b-104 */ '/quality/plans/print', /* B-W2b-119 */ '/quality/capa/report', /* B-W2b-127 */ '/quality/inspections/report', '/quality/inspections/reports'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due', /* B-W2b-136 */ '/plant/machines/wall', /* B-W2b-104 */ '/quality/plans/print', /* B-W2b-119 */ '/quality/capa/report', /* B-W2b-127 */ '/quality/inspections/report', '/quality/inspections/reports',
+  /* B-W2b-129 */ '/production/cutting/sheet'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

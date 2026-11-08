@@ -1,0 +1,662 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "noReason": "no reason given"
+  },
+  "noAccess": {
+    "title": "You cannot open this",
+    "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+  },
+  "live": {
+    "connecting": "Connecting to live updates",
+    "live": "Live",
+    "offline": "Offline: figures as last read"
+  },
+  "kind": {
+    "LEATHER": "Leather",
+    "FABRIC": "Fabric"
+  },
+  "status": {
+    "PLANNED": "Planned",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "Cutting",
+    "CUT": "Cut",
+    "RECONCILED": "Reconciled",
+    "CANCELLED": "Cancelled"
+  },
+  "layStatus": {
+    "PLANNED": "Planned",
+    "SPREADING": "Spreading",
+    "CHECKED": "Counted",
+    "CUT": "Cut",
+    "CANCELLED": "Cancelled"
+  },
+  "ticketStatus": {
+    "OPEN": "Not started",
+    "STARTED": "Started",
+    "DONE": "Done",
+    "VOID": "Void"
+  },
+  "reason": {
+    "PLIES_SHORT": "Fewer plies spread than planned",
+    "FABRIC_SHORT": "The fabric ran out",
+    "ROLL_FAULT": "A fault in the roll",
+    "MISCUT": "Cut wrong",
+    "OVERCUT": "Cut more than ordered",
+    "OTHER": "Other (say why)"
+  },
+  "warning": {
+    "WIDTH_UNKNOWN": "A roll's width is not known: check it fits the marker.",
+    "SHRINKAGE_UNKNOWN": "A roll's shrinkage is not known.",
+    "SHADE_UNKNOWN": "A roll's shade is not known: the lay may mix shades.",
+    "LOT_NOT_RELEASED": "A roll's lot is still in quarantine.",
+    "SHADES_ACROSS_LAYS": "The lays are cut from different shade groups: keep each lay's garments together when bundling.",
+    "SHRINKAGE_ACROSS_LAYS": "The lays are cut from different shrinkage groups: keep each lay's garments together when bundling."
+  },
+  "refusal": {
+    "NOT_PLANNED": "The plan changes only while the cut order is planned (send it back to planning first).",
+    "NOT_AT_TABLE": "This cut order is not released to the cutting table.",
+    "NOT_OPEN": "This cut order is cut, reconciled or cancelled: it does not change any more.",
+    "TICKET_SCANNED": "A ticket of this cut order was scanned at the table already: it cannot go back to planning or be cancelled.",
+    "NO_LINE": "This cut order has no work order size yet.",
+    "NO_MARKER": "A fabric cut order is released with its marker (name and length).",
+    "LAYS_PLIES": "The lays' plies do not add up to the marker's plies: plan the lays again.",
+    "WORK_ORDER_NOT_OPEN": "A work order picked is not released or running any more.",
+    "WORK_ORDER_ON_HOLD": "A work order picked is on hold: nothing is cut for it.",
+    "WORK_ORDER_OTHER_SITE": "A work order picked is of another site than the cut order.",
+    "NOT_THE_MATERIAL": "A size picked does not take this material and colour.",
+    "NOT_A_CUT_MATERIAL": "This material is not cut by hide or by length.",
+    "CELL_FULL": "Another cut order took garments of a size meanwhile: fewer are left than asked. The sizes were read again.",
+    "ROLL_NOT_IN_STOCK": "This roll is not in stock here.",
+    "ROLL_OTHER_MATERIAL": "This roll is of another material or colour.",
+    "ROLL_TOO_NARROW": "This roll is narrower than the marker.",
+    "ROLL_REJECTED": "This roll was rejected at incoming inspection.",
+    "LOT_HELD": "This roll's lot is on hold.",
+    "LOT_NOT_USABLE": "This roll's lot is rejected or blocked.",
+    "ROLL_SHORT": "Not even one whole ply is left on this roll.",
+    "MIXED_SHADE": "One lay is cut from one shade group: this roll's shade differs from the lay's other rolls.",
+    "MIXED_SHRINKAGE": "One lay is cut from one shrinkage group: this roll's group differs from the lay's other rolls.",
+    "LAY_FULL": "The lay has all its plies already.",
+    "LAY_NOT_PLANNED": "This lay is at the table already: its rolls are changed there.",
+    "ROLL_TWICE": "A roll is named twice.",
+    "TICKET_VOID": "This ticket is void.",
+    "TICKET_DONE": "This ticket is done: its cut is finished.",
+    "TICKET_STARTED": "This ticket was started already.",
+    "TICKET_NOT_STARTED": "This ticket was not started at the table.",
+    "TICKET_IS_RECUT": "This is a recut ticket: it is handled with the recuts.",
+    "CUT_ORDER_NOT_RELEASED": "The cut order is not released: its tickets are not cut now.",
+    "PLIES_NOT_COUNTED": "The lay's plies were not counted at both ends yet.",
+    "NOT_CUT": "A cut order is reconciled once it is cut.",
+    "FABRIC_NOT_CONFIRMED": "The fabric used on a cut lay is not confirmed at the table yet: it is confirmed first (that issues the fabric to the work orders).",
+    "FLOOR_NOT_READY": "This site's floor is not ready for real work yet."
+  },
+  "problem": {
+    "read": "The read failed. Try again.",
+    "forbidden": "You may not do or see this.",
+    "gone": "This no longer exists.",
+    "offline": "The factory server cannot be reached. Check the connection and try again.",
+    "write": "This was not saved. Try again.",
+    "changed": "Someone changed this meanwhile. It was read again: check and try again.",
+    "invalid": "The request was refused as it is. Check the fields.",
+    "field": {
+      "ratio": "A size's ratio is not right (whole garments in one ply).",
+      "quantity": "A size's garments are not right.",
+      "reason": "Say why (a reason).",
+      "note": "Other: say why in words.",
+      "lines": "A size picked is not right any more: read the sizes again.",
+      "marker": "The marker's name, length or width is not right.",
+      "plies": "The plies are not right.",
+      "lays": "The lays' plies are not right.",
+      "station": "The table is not a station of this site.",
+      "printer": "Pick a label printer of this site (several are there), or show the label only.",
+      "rolls": "A roll picked is not right any more: read the rolls again."
+    }
+  },
+  "held": {
+    "permission": "This needs the permission {permission}.",
+    "busy": "Working…",
+    "loading": "Still loading",
+    "reason": "Say why in at least 3 characters.",
+    "release": {
+      "status": "Only a planned cut order is released."
+    },
+    "back": {
+      "status": "Only a released cut order goes back to planning.",
+      "started": "A ticket was scanned or a lay is at the table: it cannot go back to planning."
+    },
+    "cancel": {
+      "status": "Only a planned or released cut order is cancelled.",
+      "started": "A ticket was scanned at the table: it cannot be cancelled."
+    },
+    "reconcile": {
+      "notCut": "A cut order is reconciled once every lay is cut.",
+      "done": "This cut order is reconciled already."
+    },
+    "rolls": {
+      "leather": "Leather is cut hide by hide: hides are allocated to each work order.",
+      "notReleased": "Rolls are allocated once the cut order is released.",
+      "layAtTable": "Lay {seq} is at the table: its rolls are changed there.",
+      "layFull": "Lay {seq} has all its plies."
+    },
+    "ticket": {
+      "void": "This ticket is void.",
+      "done": "This ticket is done: its cut is finished."
+    }
+  },
+  "plan": {
+    "fabric": "{lays} lays · {plies} plies · {garments} garments",
+    "leather_one": "{count} garment",
+    "leather_other": "{count} garments"
+  },
+  "tile": {
+    "withFabric_one": "with {count} fabric cut order",
+    "withFabric_other": "with {count} fabric cut orders"
+  },
+  "col": {
+    "hidesOrPlies": "Hides or plies",
+    "date": "Date"
+  },
+  "list": {
+    "laysCut": "{cut} of {count} lays cut",
+    "tickets": "{done} of {count} tickets done",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "byHide": "by hide",
+    "yieldOnRecord": "on the record",
+    "ordersFailed": "The cut orders could not be read"
+  },
+  "csv": {
+    "cut": "Cut",
+    "kind": "Kind",
+    "workOrders": "Work orders",
+    "style": "Style",
+    "material": "Material and colour",
+    "lot": "Shade lot",
+    "state": "Status",
+    "planned": "Planned (pieces or garments)",
+    "piecesCut": "Pieces cut",
+    "plies": "Plies",
+    "hides": "Hides",
+    "area": "Area used",
+    "yieldPct": "Yield %",
+    "table": "Table",
+    "date": "Date"
+  },
+  "newOrder": {
+    "title": "New cut order",
+    "body": "Work orders of one material and colour, cut together at one table: fabric in lays from one marker, leather hide by hide.",
+    "failed": "The work orders waiting could not be read",
+    "reading": "Reading the work orders waiting…",
+    "empty": {
+      "title": "Nothing waits for a cut order",
+      "body": "Every released work order's size is already on a cut order of its material."
+    },
+    "material": "Material and colour",
+    "materialHint": "One material and colour at one site: its sizes of every work order waiting.",
+    "pickMaterial": "Pick a material…",
+    "group": "{kind} · {material} {name} — {left} garments left · work orders: {workOrders}",
+    "cells": "Sizes waiting",
+    "cellsCount_one": "{count} size waiting",
+    "cellsCount_other": "{count} sizes waiting",
+    "picked_one": "{count} size picked",
+    "picked_other": "{count} sizes picked",
+    "leftOf": "{left} of {quantity}",
+    "col": {
+      "workOrder": "Work order",
+      "style": "Style",
+      "cell": "Colour and size",
+      "left": "Left",
+      "due": "Due",
+      "ratio": "In one ply",
+      "garments": "Garments",
+      "onOrder": "On this order"
+    },
+    "markerName": "Marker",
+    "markerLength": "Marker length (m)",
+    "markerLengthHint": "One ply's length on the table, at most 50 m.",
+    "markerWidth": "Usable width (cm)",
+    "markerWidthHint": "A roll narrower than this is refused.",
+    "plies": "Plies",
+    "pliesHint": "Every size of the marker is cut on every ply.",
+    "lays": "Lays",
+    "laysHint": "How many lays the plies are split in.",
+    "laysSplit": "Plies per lay: {split}",
+    "leather": "Leather is cut hide by hide: type each size's garments (empty: what is left). The hides are allocated to each work order afterwards.",
+    "lines": "On this cut order",
+    "ratioOf": "Garments of {cell} in one ply",
+    "garmentsOf": "Garments of {cell}",
+    "ratioLine": "Sizes in the marker: {ratio}",
+    "table": "Cutting table",
+    "tableHint": "Optional: the ticket prints on its label printer.",
+    "tableNoRight": "Picking a table needs print.view; it can be left empty.",
+    "noTable": "No table yet",
+    "due": "Due",
+    "dueHint": "Optional.",
+    "total_one": "{count} garment on this cut order",
+    "total_other": "{count} garments on this cut order",
+    "go": "Create cut order",
+    "why": {
+      "full": "Nothing is left of this size: other cut orders of this material cut all of it."
+    },
+    "held": {
+      "group": "Pick a material and colour first.",
+      "cells": "Tick the sizes to cut.",
+      "tooMany": "At most {max} sizes on one cut order.",
+      "markerName": "Name the marker.",
+      "markerLength": "The marker's length in metres, above 0 and at most {max}.",
+      "markerWidth": "The usable width in cm, above 0 and at most {max}.",
+      "plies": "The plies, from 1 to {max}.",
+      "lays": "The lays, from 1 to {max} (no lay without a ply).",
+      "layTooHigh": "A lay holds at most {max} plies: split them in more lays.",
+      "ratio": "{cell}: the garments in one ply, a whole number from 1 to {max}.",
+      "beyond": "{cell}: {garments} garments asked, {left} left.",
+      "quantity": "{cell}: the garments, a whole number from 1.",
+      "due": "The due day is not a day."
+    }
+  },
+  "record": {
+    "back": "Cutting",
+    "backToList": "Back to Cutting",
+    "title": "Cut order",
+    "titleOf": "Cut order · {number}",
+    "tabs": "Sections of the cut order",
+    "loading": "Reading the cut order…",
+    "more": "More actions",
+    "copyNumber": "Copy the number",
+    "due": "due {date}",
+    "workOrders": "Work orders {list} · styles {styles}",
+    "sheet": "Lay sheet / ticket PDF",
+    "release": "Release",
+    "reconcile": "Reconcile cut",
+    "toPlanning": "Back to planning…",
+    "cancelAction": "Cancel the cut order…",
+    "cancelled": {
+      "title": "Cancelled",
+      "body": "Why: {reason}."
+    },
+    "held": {
+      "title_one": "{count} work order on hold: the table cuts nothing for it",
+      "title_other": "{count} work orders on hold: the table cuts nothing for them",
+      "line": "{number}: {reason}"
+    },
+    "state": {
+      "forbidden": {
+        "title": "You cannot open this cut order",
+        "body": "It belongs to a company or site you may not see."
+      },
+      "missing": {
+        "title": "This cut order does not exist",
+        "body": "It was not found. It may belong to another company."
+      },
+      "error": {
+        "title": "The cut order could not be read",
+        "body": "Try again in a moment."
+      }
+    }
+  },
+  "tab": {
+    "lay": "Lay or hides",
+    "pieces": "Pieces",
+    "yield": "Yield",
+    "tickets": "Tickets"
+  },
+  "part": {
+    "failed": "{part} could not be read",
+    "loading": "Reading {part}…"
+  },
+  "marker": {
+    "title": "Marker",
+    "name": "Marker",
+    "length": "Length",
+    "width": "Usable width",
+    "sizes": "Sizes in the marker",
+    "perPly": "One ply cuts",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "plies": "Plies",
+    "none": "No marker yet: a fabric cut order is released with its marker.",
+    "cad": "The marker is typed (name, length, width); importing a CAD marker file comes later."
+  },
+  "lays": {
+    "title": "Lays",
+    "count_one": "{count} lay",
+    "count_other": "{count} lays",
+    "layOf": "Lay {seq} of {of}",
+    "ticket": "Ticket {number} · {status}",
+    "noTicket": "No ticket yet (made at release)",
+    "width": "width {width} cm",
+    "widthUnknown": "width not given",
+    "plies_one": "{count} ply",
+    "plies_other": "{count} plies",
+    "counted": "counted {count} at both ends",
+    "allocated": "rolls give {allocated} of {plies}",
+    "noRolls": "No roll yet",
+    "groups": "shade {shade} · shrinkage {shrinkage}",
+    "rowMenu": "Actions for lay {seq}",
+    "allocate": "Rolls…",
+    "sheet": "Lay sheet (new tab)",
+    "col": {
+      "lay": "Lay",
+      "marker": "Marker",
+      "sizes": "Sizes in the marker",
+      "plies": "Plies",
+      "length": "Length",
+      "rolls": "Rolls",
+      "more": "More"
+    },
+    "empty": {
+      "title": "No lay",
+      "body": "A fabric cut order splits its plies into lays when it is planned."
+    },
+    "hint": "Each lay is spread from one shade and one shrinkage group; its ticket is scanned at the start and at the end of cutting.",
+    "cancelled_one": "{count} lay was cancelled when the plan changed.",
+    "cancelled_other": "{count} lays were cancelled when the plan changed.",
+    "allocateHint": "Open a lay to allocate its rolls: the proposal fills each lay from one shade group, ends and part rolls first."
+  },
+  "lines": {
+    "title": "Work orders and sizes",
+    "garmentsOf": "{garments} of {cell}",
+    "notReleased": "not released yet",
+    "col": {
+      "workOrder": "Work order",
+      "style": "Style",
+      "cell": "Colour and size",
+      "ratio": "In one ply",
+      "garments": "Garments"
+    },
+    "hint": "Every size of the marker is cut on every ply: a size's garments = its ratio × the plies. Released: {when}."
+  },
+  "hides": {
+    "title": "Hides",
+    "body": "Leather is cut hide by hide for each work order: the hides allocated and cut, their area and the same shade lot check are on each work order's cut.",
+    "ofWorkOrder": "Hides of {number}",
+    "garments_one": "{count} garment on this cut order",
+    "garments_other": "{count} garments on this cut order"
+  },
+  "pieces": {
+    "bySize": "Ordered and cut per size",
+    "byLine": "Per work order and size",
+    "sum": "{ordered} ordered · {cut} cut ({difference})",
+    "col": {
+      "size": "Size",
+      "ordered": "Ordered",
+      "cut": "Cut",
+      "recut": "Recut",
+      "difference": "Difference",
+      "reason": "Reason"
+    },
+    "asOrdered": "As ordered",
+    "toExplain": "To explain at Reconcile cut",
+    "hintFabric": "Cut = the size's ratio × the plies counted on the lays already cut; recut = recut tickets done since the release.",
+    "hintLeather": "Cut = the work order's cut log for the size, less what earlier leather cut orders reconciled."
+  },
+  "yield": {
+    "title": "Yield",
+    "balance": "Issued, used and returned",
+    "perLay": "Per lay",
+    "never": "Per lay and roll; never by cutter.",
+    "leather": "Leather's yield is per hide: each work order's cut has its yield per hide, lot and supplier.",
+    "ofWorkOrder": "Yield of {number}",
+    "none": {
+      "title": "No lay cut yet",
+      "body": "The fabric used appears here once a lay is cut and its fabric is confirmed at the table."
+    }
+  },
+  "material": {
+    "issued": "Issued",
+    "used": "Used",
+    "returned": "Ends returned",
+    "estimated": "Estimate",
+    "recorded": "Lay report",
+    "endLoss": "End loss",
+    "endBits": "End bits",
+    "col": {
+      "lay": "Lay",
+      "plies": "Plies"
+    },
+    "lay": "Lay {seq}",
+    "sum": "Total",
+    "notConfirmed": "not confirmed",
+    "unconfirmed_one": "The fabric used on lay {lays} is not confirmed yet: it counts at the lay report's figure.",
+    "unconfirmed_other": "The fabric used on lays {lays} is not confirmed yet: they count at the lay report's figures.",
+    "hint": "Issued = posted to the work orders at the confirmation; used = the cutter's confirmed figure; ends returned stay on their roll in stock.",
+    "asEstimated": "As estimated",
+    "more": "{metres} m more than the estimate (+{pct} %)",
+    "less": "{metres} m less than the estimate (−{pct} %)"
+  },
+  "tickets": {
+    "title": "Cut tickets",
+    "count_one": "{count} ticket",
+    "count_other": "{count} tickets",
+    "lay": "Lay {seq}",
+    "leather": "Leather",
+    "printedAt": "printed {at}",
+    "notPrinted": "not printed yet",
+    "rowMenu": "Actions for {number}",
+    "print": "Print…",
+    "void": "Void…",
+    "printMany_one": "Print {count}",
+    "printMany_other": "Print {count}",
+    "col": {
+      "number": "Ticket",
+      "status": "Status",
+      "started": "Started",
+      "done": "Done"
+    },
+    "empty": {
+      "title": "No ticket",
+      "body": "Every ticket of this cut order was voided.",
+      "planned": "Tickets are made when the cut order is released: one per lay, one for leather."
+    },
+    "hint": "A lost ticket is voided with the reason and a new one made for the same lay; a void ticket never scans again.",
+    "held": {
+      "none": "Select the tickets to print."
+    },
+    "shown": "Ticket {number}",
+    "code": "Barcode {code}"
+  },
+  "print": {
+    "title_one": "Print {count} ticket",
+    "title_other": "Print {count} tickets",
+    "body": "Tickets: {list}.",
+    "printer": "Label printer",
+    "printerHint": "Default: the table's label printer, else the site's only one.",
+    "default": "Default printer",
+    "showOnly": "Show the label only (do not print)",
+    "language": "Language of the ticket",
+    "go_one": "Print {count}",
+    "go_other": "Print {count}",
+    "show": "Show the label",
+    "held": {
+      "showOne": "Show one label at a time."
+    }
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "void": {
+    "title": "Void {number}",
+    "body": "The ticket will never scan again. The lay keeps its rolls and plies.",
+    "reason": "Why",
+    "replace": "Make a new ticket for the same lay",
+    "go": "Void the ticket"
+  },
+  "back": {
+    "title": "{number} back to planning",
+    "body": "Its open tickets are voided and its rolls taken off the lays; the plan can then change.",
+    "go": "Back to planning"
+  },
+  "cancel": {
+    "title": "Cancel {number}",
+    "body": "Its open tickets are voided and its lays cancelled; its work orders' sizes are free for another cut order.",
+    "go": "Cancel the cut order"
+  },
+  "rolls": {
+    "title": "Rolls for lay {seq} · {number}",
+    "body": "Lay {seq} takes {plies} plies; its rolls give {allocated}. Tick rolls of one shade and one shrinkage group.",
+    "onLay": "On lay {seq}",
+    "noneOnLay": "No roll on this lay yet.",
+    "onLayLine": "lot {lot} · shade {shade} · shrinkage {shrinkage} · {plies} plies",
+    "remove": "Remove",
+    "removeOf": "Remove {code} from the lay",
+    "candidates": "Rolls of this fabric",
+    "useProposal": "Use the proposal",
+    "noProposal": "No proposal for this lay: no group of rolls fits it.",
+    "perPly": "One ply takes {metres} m off a roll (allowance {allowance} cm).",
+    "count_one": "{count} roll",
+    "count_other": "{count} rolls",
+    "picked": "{count} picked · {plies} plies",
+    "shadeUnknown": "shade not known",
+    "outOfShade": "out of shade",
+    "plannedElsewhere": "{length} {uom} planned on other lays",
+    "free": "free",
+    "col": {
+      "roll": "Roll",
+      "shade": "Shade",
+      "shrinkage": "Shrinkage",
+      "width": "Width",
+      "left": "Length left",
+      "plies": "Plies it gives",
+      "take": "Taken"
+    },
+    "empty": {
+      "title": "No roll of this fabric here",
+      "body": "No roll of this fabric and colour is in stock at the cut order's site."
+    },
+    "give": "The rolls picked give {given} of the {need} plies still needed.",
+    "go_one": "Allocate {count} roll",
+    "go_other": "Allocate {count} rolls",
+    "held": {
+      "none": "Tick at least one roll."
+    },
+    "why": {
+      "mine": "Already on lay {seq}.",
+      "shade": "Lay {seq} is cut from shade {lay}: this roll is shade {roll}. One shade group per lay.",
+      "shrinkage": "Lay {seq} is cut from shrinkage group {lay}: this roll is group {roll}. One shrinkage group per lay.",
+      "full": "Lay {seq} has all its plies with the rolls picked."
+    },
+    "rule": "Allocating moves no stock: the fabric is issued when the lay is cut and its fabric used is confirmed at the table."
+  },
+  "reconcile": {
+    "title": "Reconcile cut · {number}",
+    "figures": "the cut against the order",
+    "sum": "{ordered} garments ordered · {cut} cut ({difference}).",
+    "sizes": "Planned against cut per size",
+    "material": "Fabric issued, used and returned",
+    "lines": "Each size of each work order",
+    "allDone": "Every line is reconciled.",
+    "col": {
+      "reason": "Reason",
+      "note": "In words (needed for Other)"
+    },
+    "reasonOf": "Reason for {cell}",
+    "noteOf": "Words for {cell}",
+    "pickReason": "Pick a reason…",
+    "asOrdered": "Cut as ordered",
+    "held": {
+      "reason": "Line {seq} cut {cut} of {ordered}: pick a reason.",
+      "note": "Line {seq}: Other needs the reason in words."
+    },
+    "hint": "Reconciled, the cut order is closed: its figures feed the yield and the work orders' progress.",
+    "go": "Reconcile"
+  },
+  "notice": {
+    "released_one": "{number} released: {count} ticket to print.",
+    "released_other": "{number} released: {count} tickets to print.",
+    "back": "{number} is back in planning.",
+    "cancelled": "{number} is cancelled.",
+    "allocated_one": "{count} roll allocated to lay {seq} ({plies} plies).",
+    "allocated_other": "{count} rolls allocated to lay {seq} ({plies} plies).",
+    "removed": "{code} taken off lay {seq}.",
+    "printed_one": "{count} ticket sent to the printer.",
+    "printed_other": "{count} tickets sent to the printer.",
+    "notPrinted_one": "{count} ticket was not printed: its label is shown below.",
+    "notPrinted_other": "{count} tickets were not printed: the last label is shown below.",
+    "voided": "{number} is void.",
+    "voidedReplaced": "{number} is void; {replacement} was made for the same lay.",
+    "reconciled": "{number} reconciled: {ordered} ordered, {cut} cut."
+  },
+  "sheet": {
+    "title": "Lay sheet",
+    "titleOf": "Lay sheet · {number}",
+    "back": "Back to the cut order",
+    "reading": "Reading the cut order…",
+    "failed": "The cut order could not be read",
+    "nothing": "No cut order asked",
+    "nothingBody": "Open the lay sheet from a cut order.",
+    "noDue": "no due day",
+    "lay": "Lay",
+    "planned": "Planned: the tickets are made at release, so this sheet has no barcode yet.",
+    "cancelled": "This cut order is cancelled: its sheet is not for the table.",
+    "leather": "Leather: hide by hide",
+    "noLay": "No lay to print",
+    "noLayBody": "This cut order has no lay left.",
+    "layTitle": "Lay {seq} of {of} · {plies} plies",
+    "layLength": "Lay length",
+    "shade": "Shade group",
+    "shrinkage": "Shrinkage group",
+    "noRolls": "no roll allocated yet",
+    "rolls": "Rolls to spread",
+    "col": {
+      "lot": "Lot",
+      "planned": "Plies planned",
+      "spread": "Plies spread",
+      "splices": "Splices",
+      "endLoss": "End loss (cm)",
+      "endBack": "End back (cm)",
+      "garments": "Garments in this lay"
+    },
+    "rule": "One shade and one shrinkage group per lay. Write a roll the table adds on an empty line; the table records the report on its tablet.",
+    "countLeft": "Plies counted, left end",
+    "countRight": "Plies counted, right end",
+    "cutAt": "Cut at (time)",
+    "table": "Table",
+    "ticketStart": "Ticket scanned at the start",
+    "ticketEnd": "Ticket scanned at the end",
+    "noTicket": "No ticket yet: made at release.",
+    "footer": "Paper for the cutting table: the tablet's scans and counts are the record."
+  },
+  "shadeLot": {
+    "none": "No hide cut or allocated yet: the first hide sets the shade lot.",
+    "one": "One shade lot",
+    "lot_one": "lot {lot}, shade {shade}: {count} hide",
+    "lot_other": "lot {lot}, shade {shade}: {count} hides",
+    "unknown": "not known",
+    "many": "Hides of {count} shade lots",
+    "rule": "One shade lot per order: the cutting table warns and a lead signs Cut anyway; another lot is reserved only with inventory.shade.override."
+  },
+  "ofWorkOrder": {
+    "title": "Cut orders and lays",
+    "none": "No cut order names this work order: its fabric is cut on a cut order with its lays.",
+    "hint": "A cut order groups work orders of one material and colour: fabric is cut in lays from one marker; the lays, rolls and tickets are on the cut order."
+  },
+  "balance": {
+    "title": "Issued, used and returned",
+    "none": "Nothing was issued to this work order yet.",
+    "col": {
+      "unit": "Unit",
+      "hides": "Hides",
+      "issued": "Issued",
+      "used": "Cut",
+      "waste": "Waste",
+      "returned": "Back to stock",
+      "left": "Still on the hide"
+    },
+    "hint": "Each hide issued to this work order: what was cut, wasted, sent back to stock and is still on it. Areas of different units are never added."
+  },
+  "feedback": {
+    "col": {
+      "plan": "Against plan",
+      "action": "To the supplier"
+    },
+    "points": "{points} points",
+    "raise": "Raise with the supplier",
+    "held": {
+      "noSupplier": "This lot names no supplier."
+    },
+    "hint": "A lot far below the plan is raised with its supplier as a claim on the lot: the supplier's quality and rating count it."
+  }
+}

@@ -207,8 +207,56 @@ p.fw-ct-hint[role='status'] {
   min-width: 0;
 }
 
+/* ---- B-W2b-129: cut orders (New cut order's fields, the record's sub-headings, the lay sheet) ---- */
+.fw-ct-h3 {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-ct-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--nds-space-10) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ct-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ct-sheet-head {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-ct-sheet-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
 @media (max-width: 720px) {
   .fw-ct-head {
     align-items: flex-start;
   }
+
+  .fw-ct-sheet-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* B-W2b-129: Reconcile cut — a line's reason and its words, one under the other, inside its cell. */
+.fw-ct-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
 }

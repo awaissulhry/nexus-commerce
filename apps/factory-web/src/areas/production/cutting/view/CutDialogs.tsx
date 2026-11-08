@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Layers, Scissors } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { Banner, EmptyState, Field } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Select, Spinner, Tag } from '@nexus/ui/primitives'
@@ -11,90 +11,12 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Availability } from '../../work-orders/daily/api'
 import { hideHeld, type AvailableHide } from '../../work-orders/daily/model'
 import type { CutRow } from '../api'
-import { allocateHeld, areaNumber, CUTTING_NAMESPACE, materialLine, newCutHeld, newCutRowHeld, unitWord, type CuttingCan, type Part, type Phrase } from '../model'
+import { allocateHeld, areaNumber, CUTTING_NAMESPACE, unitWord, type CuttingCan, type Part, type Phrase } from '../model'
 import type { CuttingActions } from './CuttingView'
 
 /** A phrase in the catalogue's words (null stays null: a button that is not held). */
 export function say(t: (key: string, params?: Record<string, string | number>) => string, words: Phrase | null): string | null {
   return words ? t(words.key, words.params) : null
-}
-
-export interface NewCutModel {
-  /** The work orders New cut order offers (waiting, nothing allocated); null while they are read. */
-  readonly choices: readonly CutRow[] | null
-  readonly problem: string | null
-  readonly busy: boolean
-  /** Design cases: the work orders ticked. */
-  readonly picked?: readonly string[]
-}
-
-/**
- * pop:ct-new — New cut order (design production.cutting, "band primary"; Esc closes, the focus returns to the opener):
- * the released work orders with nothing cut and no hide allocated, with their material and colour, garments and pieces.
- * W2a cuts one work order at a time — one leather and colour, by hide —, so Create cut order takes one work order and
- * opens Allocate hides for it (the hides reserved whole for the work order: the cut that the cutting table then logs).
- * A second work order of another material cannot be ticked, with why; two of the same material are held: a cut order of
- * several work orders comes with fabric lays (MES-034, W2b). The table is the tablet's own station: every cut records
- * the table it was cut at.
- */
-export function NewCutDialog({ model, can, actions }: { model: NewCutModel; can: CuttingCan; actions?: CuttingActions }) {
-  const t = useT(CUTTING_NAMESPACE)
-  const [selected, setSelected] = useState<readonly string[]>(model.picked ?? [])
-  const choices = model.choices
-  const picked = (choices ?? []).filter((row) => selected.includes(row.workOrder.id))
-  const held = say(t, newCutHeld(picked, can, model.busy))
-  const columns = useMemo<ColDef<CutRow>[]>(
-    () => [
-      { colId: 'cut', headerName: t('col.workOrder'), minWidth: 120, flex: 1, valueGetter: (params) => params.data?.workOrder.number ?? '' },
-      { colId: 'style', headerName: t('col.style'), minWidth: 120, flex: 1, valueGetter: (params) => params.data?.style.code ?? '' },
-      { colId: 'material', headerName: t('col.material'), minWidth: 160, flex: 1.4, valueGetter: (params) => (params.data ? materialLine(params.data) : '') },
-      { colId: 'garments', headerName: t('col.garments'), minWidth: 90, flex: 0.6, type: 'rightAligned', valueGetter: (params) => params.data?.garments.planned ?? 0 },
-      { colId: 'pieces', headerName: t('col.piecesPlanned'), minWidth: 90, flex: 0.6, type: 'rightAligned', valueGetter: (params) => params.data?.pieces.planned ?? 0 },
-    ],
-    [t],
-  )
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onNew?.(false)}
-      title={t('newCut.title')}
-      size="lg"
-      footer={
-        <>
-          <span className="grow" />
-          <Button size="sm" onClick={() => actions?.onNew?.(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button size="sm" variant="primary" heldReason={held} onClick={() => picked[0] && actions?.onCreateCut?.(picked[0].workOrder.id)}>
-            {model.busy ? <Spinner size={12} /> : <Scissors size={13} aria-hidden />} {t('newCut.go')}
-          </Button>
-        </>
-      }
-    >
-      <div className="fw-ct-dialog">
-        <p>{t('newCut.body')}</p>
-        <ListFrame<CutRow>
-          label={t('newCut.tableLabel')}
-          rows={model.problem ? [] : choices}
-          rowId={(row) => row.workOrder.id}
-          columns={columns}
-          count={choices ? t('newCut.count', { count: choices.length }) : '—'}
-          selection={{ selected, onChange: setSelected, actions: <SelectionLabel>{t('newCut.picked', { count: picked.length })}</SelectionLabel> }}
-          isRowSelectable={(row) => say(t, newCutRowHeld(row, picked))}
-          listKey={null}
-          state={
-            model.problem ? (
-              <EmptyState title={t('list.failed')} description={t(model.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
-            ) : choices && choices.length === 0 ? (
-              <EmptyState title={t('newCut.empty.title')} description={t('newCut.empty.body')} />
-            ) : undefined
-          }
-        />
-        <p className="fw-ct-hint">{t('newCut.table')}</p>
-        <p className="fw-ct-hint">{t('newCut.fabric')}</p>
-      </div>
-    </Modal>
-  )
 }
 
 export interface AllocModel {
