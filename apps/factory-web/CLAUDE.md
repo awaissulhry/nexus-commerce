@@ -100,6 +100,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
   chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
   design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+- `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
+  `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
+  (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
+  re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
+  record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

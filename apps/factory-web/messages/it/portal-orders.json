@@ -1,0 +1,555 @@
+{
+  "state": {
+    "loading": "Caricamento…",
+    "stillLoading": "Ancora in caricamento…",
+    "retry": "Riprova"
+  },
+  "ref": {
+    "yours": "Vs. ordine",
+    "ours": "Ns. ordine"
+  },
+  "prices": {
+    "none": "I prezzi non fanno parte del tuo accesso."
+  },
+  "offline": {
+    "title": "Nessuna connessione — vedi quanto caricato alle {time}"
+  },
+  "notice": {
+    "hide": "Nascondi",
+    "changeSent": "La tua richiesta di modifica è stata inviata. Rispondiamo qui e via e-mail.",
+    "cancelSent": "La tua richiesta di annullamento è stata inviata. Rispondiamo qui e via e-mail.",
+    "withdrawn": "La tua richiesta è stata ritirata."
+  },
+  "noAccess": {
+    "title": "Questa pagina non fa parte del tuo accesso",
+    "ask": "Per vedere i tuoi ordini chiedi al tuo amministratore: {names}.",
+    "askAdmin": "Per vedere i tuoi ordini chiedi all’amministratore della tua organizzazione.",
+    "home": "Vai alla Home"
+  },
+  "band": {
+    "updated": "Aggiornato alle {time}",
+    "export": "Esporta questa vista (CSV)",
+    "print": "Stampa questo elenco",
+    "change": "Chiedi una modifica",
+    "reconfirm": "Riconferma la versione {version}",
+    "cancel": "Chiedi di annullare…",
+    "pay": "Paga l’acconto",
+    "history": "Storia della data promessa",
+    "confirmation": "PDF della conferma d’ordine"
+  },
+  "keys": {
+    "search": "Cerca nei tuoi ordini",
+    "open": "Apri l’ordine",
+    "rows": "Ordine successivo / precedente",
+    "orders": "Ordine successivo / precedente dell’elenco",
+    "tabs": "Tra le schede",
+    "close": "Chiudi la finestra"
+  },
+  "chips": {
+    "label": "Quali ordini",
+    "chip": "{name}: {count}",
+    "clear": "Togli i filtri"
+  },
+  "list": {
+    "title": "Ordini e tracciamento",
+    "label": "I tuoi ordini",
+    "fileName": "ordini",
+    "search": "Cerca nei tuoi ordini",
+    "searchHint": "Vostro ordine, nostro ordine o codice modello…",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "countOf": "{shown} di {count} ordini",
+    "more": "Mostra altri",
+    "failed": "Non è stato possibile leggere i tuoi ordini",
+    "failedBody": "Non è cambiato nulla. Riprova tra poco.",
+    "empty": "Nessun ordine per ora.",
+    "emptyBody": "I tuoi ordini compaiono qui appena li confermiamo.",
+    "noMatch": "Nessun ordine con questi filtri",
+    "noMatchSearch": "Nessun risultato per «{q}».",
+    "noMatchChip": "Al momento nessun ordine è in questo gruppo.",
+    "clear": "Togli i filtri",
+    "requestWaits": "Da confermare da noi",
+    "asked": "data richiesta",
+    "moved": "era il {date}",
+    "piecesShipped": "{shipped} di {ordered} spediti",
+    "piecesOpen_one": "{count} aperto",
+    "piecesOpen_other": "{count} aperti",
+    "allShipped": "Tutto spedito",
+    "eta": "previsto il {date}"
+  },
+  "col": {
+    "order": "Ordine",
+    "yourPo": "Vostro ordine",
+    "ourOrder": "Nostro ordine",
+    "orderedOn": "Ordinato",
+    "status": "Stato",
+    "promise": "Promessa",
+    "pieces": "Pezzi",
+    "ordered": "Ordinati",
+    "shipped": "Spediti",
+    "open": "Aperti",
+    "value": "Valore netto",
+    "currency": "Valuta",
+    "nextShipment": "Prossima spedizione",
+    "actions": "Azioni"
+  },
+  "row": {
+    "open": "Apri l’ordine",
+    "lines": "Righe",
+    "shipments": "Spedizioni e tracciamento",
+    "messages": "Messaggi",
+    "menu": "Azioni per l’ordine {number}"
+  },
+  "bulk": {
+    "export": "Esporta {count}"
+  },
+  "held": {
+    "noRows": "Niente da esportare in questa vista.",
+    "busy": "Invio in corso…",
+    "offline": "Nessuna connessione",
+    "preview": "Un’anteprima dell’ufficio non può inviare nulla.",
+    "previewFiles": "Un’anteprima dell’ufficio non apre i documenti.",
+    "mayAsk": "Solo i colleghi che possono ordinare chiedono modifiche: chiedi al tuo amministratore.",
+    "mayApprove": "Solo i colleghi autorizzati ad approvare possono riconfermare un ordine: chiedi al tuo amministratore.",
+    "mayPay": "Solo i colleghi che pagano le fatture possono pagare online: chiedi al tuo amministratore.",
+    "reading": "Verifica di cosa è possibile…",
+    "verdict": "{words}"
+  },
+  "transit": {
+    "title": "In viaggio",
+    "failed": "Non è stato possibile leggere i colli in viaggio",
+    "shipment": "Spedizione {number}",
+    "open": "Apre le spedizioni dell’ordine {number}",
+    "steps": "Avanzamento della spedizione {number}"
+  },
+  "print": {
+    "title": "Stampa questo elenco",
+    "toolbar": "Stampa",
+    "print": "Stampa",
+    "back": "Torna all’elenco",
+    "held": "L’elenco è ancora in lettura.",
+    "filters": "Mostrati: {chip}",
+    "filtersSearch": "Mostrati: {chip} · ricerca «{q}»",
+    "chipOpen": "Aperti",
+    "printedBy": "Stampato da {name} il {when}",
+    "capped": "I primi {shown} di {count} ordini."
+  },
+  "record": {
+    "title": "Ordine {number}",
+    "missing": "Ordine non trovato",
+    "missingBody": "Non è uno dei tuoi ordini, o non esiste più.",
+    "toList": "Torna ai tuoi ordini",
+    "failed": "Non è stato possibile leggere l’ordine",
+    "failedBody": "Non è cambiato nulla. Riprova tra poco."
+  },
+  "tabs": {
+    "label": "Ordine",
+    "status": "Stato e avanzamento",
+    "lines": "Righe",
+    "shipments": "Spedizioni e tracciamento",
+    "documents": "Documenti",
+    "messages": "Messaggi",
+    "toConfirm": "da confermare"
+  },
+  "messages": {
+    "hint": "Chiedici qualsiasi cosa su questo ordine. Puoi anche rispondere alle nostre e-mail."
+  },
+  "unsaved": {
+    "change": "La tua richiesta di modifica non è ancora inviata."
+  },
+  "tracker": {
+    "title": "A che punto è il tuo ordine",
+    "label": "Avanzamento dell’ordine {number}",
+    "promise": "Promesso per il",
+    "firstPromised": "Promesso all’inizio per il {date}",
+    "noPromise": "Diamo la data di consegna quando confermiamo l’ordine.",
+    "moved_one": "Data spostata una volta",
+    "moved_other": "Data spostata {count} volte",
+    "cancelled": "Questo ordine è stato annullato.",
+    "cancelledOn": "Annullato il {date}"
+  },
+  "history": {
+    "title": "Storia della data promessa",
+    "open_one": "La data promessa è stata spostata una volta: vedi perché",
+    "open_other": "La data promessa è stata spostata {count} volte: vedi perché",
+    "move": "{on}: {from} → {to}",
+    "set": "{on}: fissata al {to}"
+  },
+  "requests": {
+    "title": "Le tue richieste",
+    "failed": "Non è stato possibile leggere le tue richieste",
+    "asked": "Chiesta il {when}",
+    "askedByYou": "Hai chiesto il {when}",
+    "withdraw": "Ritira",
+    "ourAnswer": "La nostra risposta: {answer}",
+    "acceptedOn": "Accettata il {date}",
+    "wholeOrder": "Tutto l’ordine",
+    "lines": "Righe {lines}",
+    "fee": "Penale {fee}",
+    "cell": "Riga {seq} · {size}: {old} → {new}",
+    "date": "Desiderato entro il {date}",
+    "shipTo": "Consegna a {address}",
+    "note": "La tua nota: {note}"
+  },
+  "progress": {
+    "title": "Avanzamento della produzione",
+    "failed": "Non è stato possibile leggere l’avanzamento",
+    "line": "Riga {seq} · {style} {colour}",
+    "of": "{stage} {count} su {ordered}",
+    "notScanned": "{stage}: non contato qui",
+    "sizes": "Per taglia",
+    "sizesOf": "{title}: per taglia",
+    "refresh": "Contato dalle scansioni in reparto, al massimo ogni {seconds} secondi."
+  },
+  "deposit": {
+    "title": "Acconto",
+    "gate": "La produzione parte quando riceviamo l’acconto.",
+    "due": "Scadenza",
+    "status": "Stato",
+    "paidOn": "Pagato il {date}",
+    "payCard": "Paga con carta",
+    "kind": {
+      "ACCONTO": "Acconto",
+      "CAPARRA": "Caparra"
+    },
+    "state": {
+      "OPEN": "Da pagare",
+      "PAID": "Pagato",
+      "WAIVED": "Non richiesto",
+      "CANCELLED": "Annullato"
+    },
+    "card": {
+      "unavailable": "Il pagamento con carta non è disponibile ora: paga con bonifico.",
+      "notPayable": "Per questo acconto non resta nulla da pagare online."
+    }
+  },
+  "facts": {
+    "title": "Dati dell’ordine",
+    "orderedOn": "Ordinato il",
+    "requested": "Data richiesta",
+    "promise": "Data promessa",
+    "shipTo": "Indirizzo di consegna",
+    "paymentTerms": "Termini di pagamento",
+    "withdrawal": "Diritto di recesso",
+    "noWithdrawal": "Nessun diritto di recesso (su misura)"
+  },
+  "revision": {
+    "label": "Cosa cambia nella versione {version}",
+    "line": "Riga {seq} · {style} · {colour}",
+    "change": {
+      "ADDED": "Aggiunta",
+      "REMOVED": "Tolta",
+      "CHANGED": "Cambiata"
+    },
+    "field": {
+      "customerRef": "Vostro ordine",
+      "requestedDate": "Data richiesta"
+    },
+    "pieces": "Pezzi",
+    "sizes": "Taglie",
+    "size": "{size}: {old} → {new}",
+    "amount": "Importo della riga",
+    "oldNew": "{old} → {new}",
+    "was": "Era",
+    "now": "Ora",
+    "net": "Totale netto {old} → {new}",
+    "voids": "Il valore netto è cambiato: la tua accettazione precedente non vale più finché non confermi questa versione."
+  },
+  "reconfirm": {
+    "banner": "Abbiamo rivisto questo ordine (versione {version}). Controllalo e confermalo entro il {date}.",
+    "bannerSoon": "Abbiamo rivisto questo ordine. Ti chiederemo di confermare la nuova versione.",
+    "bannerNoAccess": "Abbiamo rivisto questo ordine e aspettiamo la vostra conferma.",
+    "askColleague": "La conferma un collega autorizzato ad approvare: chiedi al tuo amministratore.",
+    "failed": "Non è stato possibile leggere l’ordine rivisto",
+    "review": "Controlla e conferma",
+    "whatChanged_one": "Cosa cambia (1 modifica)",
+    "whatChanged_other": "Cosa cambia ({count} modifiche)",
+    "title": "Riconferma l’ordine, versione {version}",
+    "due": "{number} · rispondi entro il {date}",
+    "why": "Perché è cambiato: {reason}",
+    "choose": "La tua risposta",
+    "approve": "Conferma la versione {version}",
+    "approveHint": "L’ordine procede come rivisto.",
+    "decline": "Rifiuta",
+    "declineHint": "Dicci perché: rispondiamo nei Messaggi.",
+    "reason": "Perché rifiuti?",
+    "sign": "Firma la tua risposta",
+    "legal": "Scrivendo il tuo nome confermi la versione {version} dell’ordine per la tua organizzazione.",
+    "legalDecline": "Scrivendo il tuo nome rifiuti la versione {version} per la tua organizzazione.",
+    "name": "Nome e cognome",
+    "nameEmpty": "Scrivi nome e cognome",
+    "go": {
+      "choose": "Prima scegli la tua risposta",
+      "APPROVED": "Conferma la versione {version}",
+      "REFUSED": "Rifiuta e firma"
+    },
+    "problem": {
+      "choose": "Prima scegli Conferma o Rifiuta.",
+      "why": "Dicci perché rifiuti.",
+      "long": "Il testo è troppo lungo: resta sotto i 4000 caratteri.",
+      "name": "Scrivi il tuo nome completo come firmi.",
+      "changed": "Questa richiesta è appena cambiata: chiudi e riaprila."
+    },
+    "held": {
+      "answered": "Questa versione ha già una risposta.",
+      "closed": "Questa richiesta non accetta più risposte."
+    },
+    "done": {
+      "APPROVED": "Versione {version} confermata",
+      "REFUSED": "Versione {version} rifiutata",
+      "signed": "Firmato da {name} il {when}.",
+      "next": {
+        "APPROVED": "Procediamo con l’ordine come rivisto. Una copia ti arriva via e-mail.",
+        "REFUSED": "Ti contatteremo nei Messaggi di questo ordine."
+      }
+    }
+  },
+  "lines": {
+    "title": "Cosa hai ordinato",
+    "label": "Le righe dell’ordine",
+    "count_one": "{count} riga · {pieces} pezzi",
+    "count_other": "{count} righe · {pieces} pezzi",
+    "col": {
+      "line": "Riga",
+      "style": "Modello",
+      "colour": "Variante colore",
+      "pieces": "Pezzi",
+      "open": "Aperti",
+      "price": "Prezzo unitario",
+      "amount": "Importo riga",
+      "promise": "Data della riga"
+    },
+    "pieces": "{shipped} di {ordered} spediti",
+    "closedShort_one": "{count} pezzo chiuso in meno",
+    "closedShort_other": "{count} pezzi chiusi in meno",
+    "asOrder": "Come l’ordine",
+    "mtm": "Su misura: {rider} · rev. {revision}",
+    "mtmUnit": "Un capo su misura per {rider} (misure rev. {revision}), taglia base {size}.",
+    "mtmUnitNone": "Un capo su misura.",
+    "menu": "Azioni per la riga {seq}",
+    "showSizes": "Mostra le taglie",
+    "askChange": "Chiedi una modifica su questa riga",
+    "sizesTitle": "Taglie di ogni riga",
+    "sizesOf": "Riga {seq} · {style} {colour}"
+  },
+  "sizes": {
+    "size": "Taglia",
+    "ordered": "Ordinati",
+    "shipped": "Spediti",
+    "open": "Aperti",
+    "closedShort": "Chiusi in meno",
+    "price": "Prezzo unitario"
+  },
+  "totals": {
+    "title": "Totali",
+    "what": "Voce",
+    "amount": "Importo",
+    "net": "Imponibile",
+    "vat": "IVA",
+    "gross": "Totale IVA inclusa",
+    "depositPaid": "Acconto pagato",
+    "toPay": "Da pagare in fattura"
+  },
+  "shipments": {
+    "failed": "Non è stato possibile leggere le spedizioni",
+    "none": "Ancora nulla di spedito.",
+    "firstExpected": "Prima spedizione prevista: {date}.",
+    "noneYet": "Te lo diciamo qui appena parte un collo.",
+    "title": "Spedizione {number}",
+    "ddt": "Documento di trasporto (DDT)",
+    "ddtOf": "{number} del {date}",
+    "carrier": "Corriere",
+    "by": {
+      "SENDER": "Nostro mezzo",
+      "RECIPIENT": "Ritiro a vostro carico",
+      "CARRIER": "Un corriere"
+    },
+    "parcels": "Colli",
+    "delivered": "Consegnata",
+    "eta": "Consegna prevista",
+    "shipped": "Spedita",
+    "steps": "Avanzamento della spedizione {number}",
+    "parcelsOf": "Colli della spedizione {number}",
+    "parcel": "Collo {seq}",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "copyOf": "Copia il numero di tracciamento {number}",
+    "noTracking": "Nessun numero di tracciamento",
+    "lastEvent": "Ultimo: {what} · {when}",
+    "track": "Segui sul sito del corriere",
+    "contents_one": "Cosa contiene (1 pezzo)",
+    "contents_other": "Cosa contiene ({count} pezzi)",
+    "contentsOf": "Cosa contiene la spedizione {number}",
+    "events_one": "Eventi di tracciamento (1)",
+    "events_other": "Eventi di tracciamento ({count})",
+    "papers": "Documenti",
+    "noPapers": "Nessun documento ancora condiviso per questa spedizione.",
+    "col": {
+      "line": "Riga",
+      "style": "Modello",
+      "colour": "Variante colore",
+      "pieces": "Pezzi"
+    }
+  },
+  "toShip": {
+    "title": "Ancora da spedire",
+    "none": "Tutto è stato spedito.",
+    "open": "Pezzi aperti",
+    "expected": "Previsto"
+  },
+  "docs": {
+    "label": "Documenti di questo ordine",
+    "failed": "Non è stato possibile leggere i documenti",
+    "none": "Nessun documento per ora.",
+    "noneBody": "Conferme, documenti di trasporto e certificati compaiono qui appena li condividiamo.",
+    "noAccess": "I documenti non fanno parte del tuo accesso",
+    "noAccessBody": "Chiedi al tuo amministratore se ti servono.",
+    "version": "Versione {version}",
+    "versionPrint": "v{version} · {fingerprint}…",
+    "replacedBy": "Sostituito dalla v{version}",
+    "new": "Nuovo",
+    "preview": "Anteprima",
+    "download": "Scarica",
+    "downloadOf": "Scarica {format}: {title}",
+    "format": {
+      "PDF": "PDF",
+      "XML": "XML",
+      "FILE": "File"
+    },
+    "previewFailed": "Non è stato possibile aprire il documento",
+    "downloadFailed": "Non è stato possibile scaricare il documento. Riprova tra poco.",
+    "withdrawn": "Questa versione è stata sostituita: apri la più recente in Documenti.",
+    "noConfirmation": "Per questo ordine non è ancora condivisa una conferma d’ordine.",
+    "confirmation": "Conferma d’ordine"
+  },
+  "dialog": {
+    "close": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "discard": {
+    "title": "Scartare la modifica?",
+    "body": "Quello che hai scritto non è ancora inviato e andrà perso.",
+    "stay": "Resta",
+    "go": "Scarta"
+  },
+  "change": {
+    "title": "Chiedi una modifica su {number}",
+    "editStep": "Passo 1 di 2: cosa cambiare",
+    "reviewStep": "Passo 2 di 2: controlla e invia",
+    "failed": "Non è stato possibile leggere cosa si può cambiare",
+    "hint": "Cambia i pezzi per taglia, la data o l’indirizzo di consegna. Rispondiamo qui e via e-mail.",
+    "line": "Riga {seq} · {style} · {colour}",
+    "was": "Era {count}",
+    "date": "Lo vorremmo entro il",
+    "dateNow": "Richiesto ora: {date}",
+    "dateNone": "Lascia vuoto per tenere la data.",
+    "shipTo": "Consegna a",
+    "shipToSame": "Come concordato",
+    "shipToNow": "Come concordato: {address}",
+    "newAddress": "Un nuovo indirizzo? Aggiungilo prima in Account.",
+    "note": "Nota",
+    "noteHint": "Qualcosa che dobbiamo sapere (facoltativo).",
+    "review": "Controlla la modifica",
+    "back": "Indietro",
+    "send": "Invia la richiesta",
+    "reviewHint": "Ecco cosa chiedi. Nulla cambia finché non rispondiamo.",
+    "reviewLabel": "La tua modifica, prima → dopo",
+    "size": "Taglia {size}",
+    "pieces": "{delta} pezzi",
+    "sendKeys": "⌘ Invio invia.",
+    "problem": {
+      "nothing": "Prima cambia una taglia, la data o l’indirizzo.",
+      "emptied": "Una riga resterebbe senza pezzi: chiedi invece di annullare quella riga.",
+      "long": "La nota è troppo lunga: resta sotto i 2000 caratteri."
+    }
+  },
+  "cancel": {
+    "title": "Chiedi di annullare {number}",
+    "failed": "Non è stato possibile leggere cosa si può annullare",
+    "hint": "Controlliamo la richiesta e rispondiamo qui e via e-mail. Nulla è annullato finché non la accettiamo.",
+    "what": "Cosa annullare",
+    "whole": "Tutto l’ordine",
+    "some": "Alcune righe",
+    "someHint": "Scegli le righe qui sotto.",
+    "lines": "Righe",
+    "lineFee": "penale {fee}",
+    "fee": "Penale {fee}",
+    "reason": "Motivo",
+    "reasonPick": "Scegli un motivo",
+    "note": "Nota",
+    "noteHint": "Qualcosa che dobbiamo sapere (facoltativo).",
+    "noteNeeded": "Scrivici qualche parola: questo motivo lo richiede.",
+    "send": "Invia la richiesta di annullamento",
+    "problem": {
+      "lines": "Scegli almeno una riga che si può annullare.",
+      "reason": "Scegli un motivo.",
+      "note": "Scrivici qualche parola su questo motivo.",
+      "long": "La nota è troppo lunga: resta sotto i 2000 caratteri."
+    }
+  },
+  "problem": {
+    "changed": "L’ordine è appena cambiato: guarda cosa è possibile ora.",
+    "forbidden": "Il tuo accesso non lo consente: chiedi al tuo amministratore.",
+    "missing": "Questo ordine non c’è più.",
+    "invalid": "Qualcosa nella richiesta non va: controlla e riprova.",
+    "rateLimited": "Troppi tentativi: aspetta un minuto e riprova.",
+    "unavailable": "Non siamo raggiungibili ora: riprova tra poco.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. Non è stato inviato nulla.",
+    "verdict": {
+      "FREE": "L’ordine è appena cambiato: guarda cosa è possibile ora.",
+      "NOT_ASKABLE": "Questo ordine è andato avanti: non si può più cambiare dal portale.",
+      "OPEN_REQUEST": "Una tua richiesta su questo ordine aspetta già la nostra risposta.",
+      "STATUS": "Non è possibile a questo punto dell’ordine.",
+      "DAYS": "Non è possibile così vicino alla data di consegna.",
+      "MADE_TO_MEASURE": "Un ordine su misura non si cambia dal portale: scrivici nei Messaggi.",
+      "CLOSED_SHORT": "Quella riga è già chiusa.",
+      "CUT": "Non è possibile: il taglio è iniziato.",
+      "LEATHER_CUT": "Non è possibile: la pelle è stata tagliata.",
+      "WHOLE_ORDER_ONLY": "Si può chiedere di annullare solo tutto l’ordine."
+    }
+  },
+  "pay": {
+    "title": "Paga l’acconto",
+    "purpose": "Acconto per l’ordine {number}",
+    "fakeProvider": "il fornitore di pagamento di prova",
+    "fakeNote": "Solo pagamenti di prova: nessuna carta viene addebitata. Scegli cosa fa la banca.",
+    "method": {
+      "CARD": "Carta",
+      "SEPA_DEBIT": "Addebito diretto SEPA"
+    },
+    "methodHint": {
+      "CARD": "Visa, Mastercard e simili; la tua banca può chiederti di confermare.",
+      "SEPA_DEBIT": "Dal tuo conto in banca; arriva in qualche giorno."
+    },
+    "scenario": {
+      "succeed": "La banca accetta",
+      "decline": "La banca rifiuta",
+      "authenticate": "La banca chiede di confermare",
+      "fail_authentication": "La conferma non riesce",
+      "settle": "Arriva il denaro"
+    },
+    "paid": "Pagato. Te lo confermiamo via e-mail.",
+    "cancelled": "Questo pagamento è stato fermato. Ricomincialo.",
+    "problem": {
+      "NOT_OPEN": "Per questo acconto non resta nulla da pagare.",
+      "NO_PROVIDER": "Il pagamento online non è disponibile ora: paga con bonifico.",
+      "CURRENCY": "Questo acconto non si paga online nella sua valuta: paga con bonifico.",
+      "NOT_PAYABLE": "Questo acconto non si paga online: paga con bonifico.",
+      "PROVIDER": "Il fornitore di pagamento non ha risposto: riprova tra poco.",
+      "IN_PROGRESS": "Un collega sta pagando questo acconto proprio ora."
+    }
+  },
+  "size": {
+    "caption": "Pezzi per taglia",
+    "colour": "Variante colore",
+    "total": "Totale",
+    "cellName": "{colour}, taglia {size}",
+    "notOffered": "non disponibile",
+    "empty": "Nessuna taglia.",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
+    "notWhole": "{cell}: solo pezzi interi, da 0 a {max}.",
+    "cutToMax": "{cell}: ridotto a {max}.",
+    "pasted": "{applied} incollati, {skipped} esclusi.",
+    "issues": "Controlla queste taglie"
+  }
+}

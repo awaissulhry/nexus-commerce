@@ -41,7 +41,12 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['work', 'nav.purchaseOrders', '/orders'],
     ])
     // B-W2b-196: the customer's Account.
-    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'account'])
+    // B-W2b-191: the customer's Orders & tracking (the area left with one page takes its name and address).
+    expect(ids('CUSTOMER', false)).toEqual([
+      ['home', 'nav.home', '/'],
+      ['orders', 'nav.ordersTracking', '/orders'],
+      ['account', 'nav.account', '/account'],
+    ])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
@@ -101,10 +106,12 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'PartyAddress'])
+    // B-W2b-191: a customer's sales order opens its own page.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'PartyAddress'])
     expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')
     expect(recordPageOf(['SUPPLIER'], 'PartyAddress', 'a1')).toBeNull()
-    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBeNull()
+    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBe('/orders/x')
+    expect(recordPageOf(['SUPPLIER'], 'SalesOrder', 'x')).toBeNull()
     // B-W2b-179: a supplier's purchase order opens its own page.
     expect(recordPageOf(['SUPPLIER'], 'PurchaseOrder', 'po')).toBe('/orders/po')
     const built = RECORD_PAGES.map((page) => ({ ...page, built: true }))
