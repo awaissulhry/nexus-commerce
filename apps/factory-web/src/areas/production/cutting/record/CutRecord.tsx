@@ -11,6 +11,8 @@ import { useCoalesced, useLive } from '../../_shared/hooks'
 import { getAvailability, reserveHides } from '../../work-orders/daily/api'
 import { getAllocated, getRecuts, getWorkOrderYield, recutDone, voidBundle, type Allocation, type Replacement, type WorkOrderYield } from '../api'
 import { CUTTING_NAMESPACE, cutOf, cuttingCanOf, loading, phrase, readProblem, tabOf, writeProblem, type Part } from '../model'
+import { listCutOrders, type CutOrderSummary } from '../orders/api'
+import { ORDERS_NAMESPACE } from '../orders/model'
 import type { AllocModel } from '../view/CutDialogs'
 import { CutRecordView, type CutDialog, type CutRecordModel } from './view/CutRecordView'
 
@@ -24,7 +26,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function CutRecord({ workOrderId }: { workOrderId: string }) {
   return (
-    <WithMessages namespaces={[CUTTING_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={[CUTTING_NAMESPACE, ORDERS_NAMESPACE, 'lists']}>
       <Container workOrderId={workOrderId} />
     </WithMessages>
   )
@@ -47,6 +49,8 @@ function Container({ workOrderId }: { workOrderId: string }) {
   const [allocated, setAllocated] = useState<Part<readonly Allocation[]>>(loading())
   const [bundles, setBundles] = useState<Part<WorkOrderBundles>>(loading())
   const [printers, setPrinters] = useState<Part<TicketPrinters>>(loading())
+  const [orders, setOrders] = useState<Part<readonly CutOrderSummary[]>>(loading())
+  const numberRef = useRef<string | null>(null)
   const [dialog, setDialog] = useState<CutDialog | null>(null)
   const [alloc, setAlloc] = useState<AllocModel | null>(null)
   const [busy, setBusy] = useState(false)
@@ -60,6 +64,12 @@ function Container({ workOrderId }: { workOrderId: string }) {
       .then((value) => set({ value, problem: null }))
       .catch((error: unknown) => set({ value: null, problem: readProblem(error) }))
   }, [])
+
+  // B-W2b-129: the cut orders that name this work order (found by its number, kept when they name it).
+  const loadOrders = useCallback(
+    (number: string) => part(async () => (await listCutOrders(api, { view: 'all', q: number, limit: 50 })).rows.filter((row) => row.workOrders.some((entry) => entry.id === workOrderId)), setOrders),
+    [api, workOrderId, part],
+  )
 
   const loadParts = useCallback(() => {
     part(() => getCutLog(api, workOrderId), setLog)
@@ -77,12 +87,14 @@ function Container({ workOrderId }: { workOrderId: string }) {
       const value: WorkOrder = await getWorkOrder(api, workOrderId)
       setWorkOrder({ status: 'ready', value, problem: null })
       loadParts()
+      numberRef.current = value.number
+      loadOrders(value.number)
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setWorkOrder({ status: 'missing', value: null, problem: null })
       else if (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up')) setWorkOrder({ status: 'forbidden', value: null, problem: null })
       else setWorkOrder({ status: 'error', value: null, problem: readProblem(error) })
     }
-  }, [api, workOrderId, readable, loadParts])
+  }, [api, workOrderId, readable, loadParts, loadOrders])
 
   useEffect(() => {
     void load()
@@ -91,6 +103,8 @@ function Container({ workOrderId }: { workOrderId: string }) {
   const reread = useCoalesced(() => void load(), 800)
   const live = useLive(
     (change) => {
+      // B-W2b-129: a cut order's change names no work order: its list is read again.
+      if (/^cut_order\./.test(change.type)) return numberRef.current ? loadOrders(numberRef.current) : undefined
       if (change.fields.workOrderId !== workOrderId) return
       if (/^production\.(cut_|hide_|bundle|replacement_|scrap_)|^workorder\./.test(change.type)) reread()
     },
@@ -181,6 +195,7 @@ function Container({ workOrderId }: { workOrderId: string }) {
     allocated: can.stock ? allocated : { value: [], problem: null },
     bundles,
     printers,
+    orders,
     live,
     dialog,
     alloc,
@@ -194,7 +209,7 @@ function Container({ workOrderId }: { workOrderId: string }) {
       model={model}
       actions={{
         onRetry: () => void load(),
-        onRetryPart: () => loadParts(),
+        onRetryPart: (which) => (which === 'orders' ? numberRef.current && loadOrders(numberRef.current) : loadParts()),
         onAllocate: (id) => (id ? openAlloc() : setAlloc(null)),
         onMaterial: (material) => readAvailability(material),
         onReserve: (hideIds) => void reserve(hideIds),
