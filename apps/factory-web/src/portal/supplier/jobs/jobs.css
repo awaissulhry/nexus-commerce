@@ -1,0 +1,301 @@
+/*
+ * SCR-192 / SCR-193 — a workshop's Jobs (B-W2b-181): layout only, semantic tokens only. Phone first: big text and one
+ * button per card; the pages fill the portal's main area (no page max-width: Owner rule 2026-10-29) and stack on a phone.
+ */
+
+.fw-pjob,
+.fw-pjob-record,
+.fw-pjob-section,
+.fw-pjob-stack,
+.fw-pjob-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pjob-dialog {
+  gap: var(--nds-space-12);
+}
+
+.fw-pjob-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pjob-chips {
+  display: flex;
+  gap: var(--nds-space-8);
+  overflow-x: auto;
+  padding-bottom: var(--nds-space-2);
+  scrollbar-width: thin;
+}
+
+.fw-pjob-chips > * {
+  flex: none;
+}
+
+.fw-pjob-chip-count {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pjob-rowlink,
+.fw-pjob-two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-pjob-rowlink:hover .fw-pjob-number,
+.fw-pjob-rowlink:focus-visible .fw-pjob-number {
+  text-decoration: underline;
+}
+
+.fw-pjob-number {
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pjob-sub,
+.fw-pjob-rowlink > .fw-pjob-sub,
+.fw-pjob-two > .fw-pjob-sub {
+  overflow: hidden;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pjob-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-pjob-lead {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  line-height: 1.5;
+}
+
+.fw-pjob-late {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pjob-ok {
+  margin: 0;
+  color: var(--nds-success-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pjob-progress {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-pjob-progress-big {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pjob-step {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+}
+
+/* The phone card: the job in big text and its one button the full width. */
+.fw-pjob-card-title {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pjob-card-step {
+  display: flex;
+  width: 100%;
+}
+
+.fw-pjob-h1,
+.fw-pjob-h2,
+.fw-pjob-h3 {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pjob-h1 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-pjob-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-pjob-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pjob-summary-head,
+.fw-pjob-card-head,
+.fw-pjob-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pjob-line-head {
+  justify-content: flex-start;
+}
+
+.fw-pjob-line-what {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.fw-pjob-line-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pjob-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pjob-row,
+.fw-pjob-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-pjob-lines,
+.fw-pjob-docs,
+.fw-pjob-photos,
+.fw-pjob-plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pjob-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pjob-line > p {
+  margin: 0;
+}
+
+.fw-pjob-photos {
+  flex-direction: row;
+  flex-wrap: wrap;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pjob-photos > li,
+.fw-pjob-docs > li {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pjob-count,
+.fw-pjob-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pjob-operation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pjob-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-pjob-legend {
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pjob-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+/* On a phone the stacked size grid takes the card's side padding too, so its − and + stay on screen (it needs ~350 px). */
+.fw-pjob-bleed {
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pjob-bleed {
+    margin-inline: calc(-1 * var(--nds-space-16));
+  }
+}
+
+/* The job sheet prints alone (the browser prints it, or saves it as a PDF). */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .fw-pjob-sheet,
+  .fw-pjob-sheet * {
+    visibility: visible;
+  }
+
+  .fw-pjob-sheet {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  .fw-pjob-noprint {
+    display: none;
+  }
+}

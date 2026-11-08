@@ -1,0 +1,547 @@
+{
+  "noPrices": "No prices on this page: we talk about fees in the messages.",
+  "state": {
+    "TO_ANSWER": "Waiting for your answer",
+    "DECLINED": "Declined",
+    "WAITING_KIT": "Kit on its way",
+    "IN_WORK": "In your workshop",
+    "PARTLY_BACK": "Partly back",
+    "BACK": "All back",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "loading": "Loading…",
+    "slow": "Still loading…",
+    "retry": "Try again"
+  },
+  "next": {
+    "ACCEPT": "Accept or decline",
+    "CONFIRM_KIT": "Confirm the kit",
+    "REPORT": "Report finished pieces",
+    "SEND_BACK": "Announce the send-back",
+    "WAIT_KIT": "Waiting for our kit",
+    "NONE": "Nothing to do"
+  },
+  "chip": {
+    "NEW": "New (to accept)",
+    "KIT": "Kit to confirm",
+    "WORK": "In progress",
+    "BACK": "Ready to send back",
+    "DONE": "Done"
+  },
+  "chips": {
+    "label": "Which jobs",
+    "chip": "{name}: {count}"
+  },
+  "held": {
+    "ended": "This job has ended.",
+    "declined": "You declined this job.",
+    "answered": "You answered this job already.",
+    "declinePartly": "Some of the work came back already: write to us in the messages.",
+    "notSent": "This job was not sent to you yet.",
+    "acceptFirst": "Accept the job first.",
+    "kitNone": "No kit line waits for your count.",
+    "noKitYet": "Our kit has not left yet: nothing to send back.",
+    "nothingToAnnounce": "Everything you hold is announced or back already.",
+    "generic": "This job does not take that now.",
+    "preview": "An office preview reads the portal; it never acts.",
+    "may": {
+      "approve": "Your access lets you read our jobs, not answer them: ask your admin.",
+      "comment": "Your access lets you read our jobs, not report on them: ask your admin.",
+      "upload": "Your access lets you read our jobs, not send photos: ask your admin."
+    },
+    "offline": "No connection: try again when you are back online.",
+    "busy": "Sending…",
+    "noneToAccept": "None of the selected jobs waits for your answer.",
+    "reading": "Reading the job…",
+    "noRows": "Nothing to export in this view."
+  },
+  "accept": {
+    "title": "Accept job {number}",
+    "toDecline": "Decline instead…",
+    "goMove": "Accept with this date",
+    "go": "Accept job",
+    "how": "How you accept",
+    "asked": "Accept as asked",
+    "askedHint": "Back to us by {date}.",
+    "move": "Propose another due date",
+    "moveHint": "You accept the job and tell us the day you can bring it back.",
+    "date": "The day you can bring it back",
+    "reason": "Why you need another day",
+    "who": "You answer as {name}.",
+    "held": {
+      "date": "Pick the day you propose.",
+      "past": "Propose a day from today on.",
+      "same": "That is the day we asked for: accept as asked.",
+      "reason": "Say why you need another day."
+    }
+  },
+  "decline": {
+    "title": "Decline job {number}",
+    "go": "Decline job",
+    "body": "We look for another workshop. Tell us why, so we can plan better next time.",
+    "reason": "Why you decline",
+    "reasons": {
+      "NO_CAPACITY": "No capacity",
+      "DATES": "The dates do not work",
+      "OTHER": "Another reason"
+    },
+    "noteRequired": "Say why in a few words",
+    "note": "A note for us (optional)",
+    "held": {
+      "reason": "Pick a reason.",
+      "note": "Say why in a few words."
+    }
+  },
+  "dialog": {
+    "cancel": "Cancel",
+    "back": "Back",
+    "close": "Close"
+  },
+  "facts": {
+    "operations": "Work",
+    "style": "Style",
+    "pieces": "Pieces",
+    "kit": "Kit sent on",
+    "kitNotYet": "Not sent yet",
+    "dueBack": "Due back on",
+    "noDay": "No day yet",
+    "instructions": "Our notes",
+    "from": "From",
+    "workOrder": "Our work order",
+    "finishBy": "You finish by",
+    "notesOf": "Our notes: {note}",
+    "more": "More about the job"
+  },
+  "grid": {
+    "caption": "Pieces by colour and size",
+    "captionOf": "{operation}: pieces by colour and size",
+    "colour": "Colour",
+    "total": "Total",
+    "cellName": "{colour}, size {size}",
+    "notOffered": "– not made",
+    "empty": "No sizes",
+    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. In all: {grand}.",
+    "notWhole": "{cell}: whole pieces from 0 to {max}.",
+    "cutToMax": "{cell}: cut to {max}.",
+    "pasted": "{applied} pasted, {skipped} left out.",
+    "issues": "To check"
+  },
+  "bulkAccept": {
+    "title_one": "Accept {count} job as asked?",
+    "title_other": "Accept {count} jobs as asked?",
+    "go_one": "Accept {count} job",
+    "go_other": "Accept {count} jobs",
+    "result": "{accepted} accepted, {refused} refused: open a refused job to see why.",
+    "body": "Each job is accepted with the dates we asked for. To propose another day, open the job.",
+    "jobs": "The jobs"
+  },
+  "card": {
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "dueBackOn": "due back {date}",
+    "styleOf": "{code} · {workOrder}",
+    "finishedOf": "{done} of {total} finished",
+    "kitNotYet": "Kit not sent yet",
+    "proposed": "You proposed {date}",
+    "parcels_one": "{count} parcel",
+    "parcels_other": "{count} parcels"
+  },
+  "kit": {
+    "photoTitle": "Photo of line {line}: {name}",
+    "photoHint": "Show what is missing or damaged. Keep faces out of the picture.",
+    "photoLabel": "Photo of the damage",
+    "title": "What we sent you",
+    "toCount_one": "{count} line to count",
+    "toCount_other": "{count} lines to count",
+    "lead": "The kit as on our DDT. Check it when it arrives: all as listed with one button, or line by line.",
+    "none": "No kit for this job.",
+    "lines": "Kit lines",
+    "line": "Line {seq}",
+    "lot": "lot {lot}",
+    "hide": "hide {hide}",
+    "sentOn": "sent on {date}",
+    "ddtOf": "our DDT {number} of {date}",
+    "ddt": "our DDT {number}",
+    "notSent": "Not sent yet",
+    "checkedShort": "You counted {quantity} on {time}",
+    "checked": "You confirmed {quantity} on {time}",
+    "counted": "What came (we sent {sent})",
+    "shortNote": "What is missing or damaged",
+    "photos": "Your photos",
+    "addPhoto": "Add a photo of damage",
+    "backToAll": "Back",
+    "sendCount": "Send the count",
+    "lineByLine": "Count line by line",
+    "all": "All received as listed",
+    "bundles": "Bundles we sent",
+    "held": {
+      "count": "Line {line}: count what came (0 or more).",
+      "more": "Line {line}: we sent {sent}. Count again, or write to us in the messages.",
+      "note": "Line {line}: say what is missing or damaged."
+    }
+  },
+  "returns": {
+    "reviewTitle": "Check before you send",
+    "change": "Change",
+    "send": "Send",
+    "reviewLead_one": "We expect {count} piece on {date}.",
+    "reviewLead_other": "We expect {count} pieces on {date}.",
+    "reviewPieces": "What comes back",
+    "reviewFinished": "{count} finished",
+    "reviewScrapped": "{count} scrapped ({reason})",
+    "reviewMaterial": "{item}: {quantity} back",
+    "parcels": "Parcels",
+    "who": "Who carries it",
+    "weCollect": "We collect it",
+    "youDeliver": "You deliver it",
+    "ddt": "Your DDT",
+    "ddtOf": "{number} of {date}",
+    "ddtNone": "Not given",
+    "note": "A note for us",
+    "title": "Announce what comes back",
+    "lead": "Finished pieces, scrap and unused material, with your DDT. You may send back part of the job.",
+    "withYou": "{count} with you · {ready} finished",
+    "finished": "Finished pieces",
+    "scrapped": "Scrapped pieces",
+    "scrapReason": "Why scrapped",
+    "pickReason": "Pick a reason",
+    "material": "Unused material back",
+    "materialHint": "Only what comes back with this send-back.",
+    "materialOf": "{item} (we sent {sent})",
+    "ddtNumber": "Your DDT number",
+    "ddtHint": "The DDT travels with the goods (DPR 472/1996).",
+    "ddtDate": "Your DDT date",
+    "day": "The day it reaches us",
+    "ddtPhotoLater": "A photo of your DDT: bring the paper with the goods for now.",
+    "review": "Review and send",
+    "sofar": "Send-backs so far",
+    "none": "Nothing announced yet.",
+    "notice": "Send-back {seq}",
+    "noticeLine_one": "{count} piece on {date}",
+    "noticeLine_other": "{count} pieces on {date}",
+    "status": {
+      "ANNOUNCED": "On its way",
+      "RECEIVED": "Received",
+      "CANCELLED": "Cancelled"
+    },
+    "yourDdt": "your DDT {number}",
+    "cancelled": "Cancelled by us: {reason}",
+    "held": {
+      "whole": "Operation {line}: whole pieces, 0 or more.",
+      "reason": "Operation {line}: say why the pieces were scrapped.",
+      "more": "Operation {line}: at most {left} with you and not announced yet.",
+      "nothing": "Say what comes back: at least one piece.",
+      "material": "Material of line {line}: a quantity above 0.",
+      "materialMore": "Material of line {line}: we sent {sent}.",
+      "parcels": "From 1 to 9999 parcels.",
+      "day": "The goods reach us today or later.",
+      "ddtNumber": "Give your DDT number with its date.",
+      "ddtDate": "Your DDT is dated on or before the day the goods reach us."
+    }
+  },
+  "scrap": {
+    "LEATHER_FLAW": "Leather flaw",
+    "CUT_WRONG": "Cut wrong",
+    "STITCHING": "Stitching beyond repair",
+    "STAIN": "Stain",
+    "TEAR": "Tear or hole",
+    "MACHINE": "Machine damage",
+    "OTHER": "Other",
+    "unknown": "Other reason"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes",
+    "unknown": "units"
+  },
+  "col": {
+    "job": "Job",
+    "style": "Style",
+    "progress": "Progress",
+    "kit": "Kit",
+    "due": "Due back",
+    "status": "Status",
+    "step": "Next step",
+    "actions": "Actions",
+    "kitNone": "Not sent"
+  },
+  "due": {
+    "none": "No day yet",
+    "inLeft": "back {left}",
+    "today": "Due back today",
+    "late_one": "Late by {count} day",
+    "late_other": "Late by {count} days",
+    "in_one": "In {count} day",
+    "in_other": "In {count} days",
+    "ended": "Ended"
+  },
+  "row": {
+    "open": "Open",
+    "accept": "Accept…",
+    "decline": "Decline…",
+    "sheet": "Job sheet (new tab)",
+    "menu": "More for {number}"
+  },
+  "bulk": {
+    "accept": "Accept {count} of {of} as asked",
+    "export": "Export {count}"
+  },
+  "list": {
+    "failed": "The jobs could not be read.",
+    "failedBody": "Nothing was lost. Try again in a moment.",
+    "none": "No jobs here.",
+    "noMatch": "No job matches “{q}”.",
+    "clear": "Clear the search",
+    "empty": "No jobs right now.",
+    "emptyBody": "When we send you a job, it appears here and we tell you by e-mail.",
+    "noneIn": {
+      "NEW": "No new job waits for your answer.",
+      "KIT": "No kit waits for your count.",
+      "WORK": "No job in progress.",
+      "BACK": "Nothing is ready to send back.",
+      "DONE": "No job has ended yet."
+    },
+    "label": "Your jobs",
+    "title": "Jobs",
+    "count_one": "{count} job",
+    "count_other": "{count} jobs",
+    "search": "Search the jobs",
+    "searchHint": "Job no., work order or style",
+    "capped": "Only the latest 500 jobs are shown: search to find an older one.",
+    "fileName": "jobs"
+  },
+  "keys": {
+    "open": "Open the job",
+    "search": "Search",
+    "rows": "Next or previous job",
+    "closeSheet": "Close the pop-up"
+  },
+  "offline": {
+    "since": "No connection — showing what was loaded at {time}.",
+    "held": "Buttons that send wait until you are back online; what you typed stays.",
+    "sinceRecord": "No connection — showing the job as last loaded."
+  },
+  "notice": {
+    "hide": "Hide"
+  },
+  "band": {
+    "updated": "Updated {time}",
+    "acceptNew_one": "Accept {count} new job",
+    "acceptNew_other": "Accept {count} new jobs",
+    "export": "Export this view (CSV)",
+    "sheet": "Job sheet (new tab)"
+  },
+  "record": {
+    "title": "Job {number}",
+    "titleLoading": "Job",
+    "missing": "This job is not one of yours.",
+    "missingBody": "It may have been withdrawn, or the address is wrong.",
+    "failed": "The job could not be read."
+  },
+  "answer": {
+    "label": "Your answer",
+    "waiting": "We are waiting for your answer: accept the job, propose another day, or decline it.",
+    "decline": "Decline…",
+    "accept": "Accept job",
+    "declineMore": "Decline this job…",
+    "acceptedBy": "Accepted by {name} on {time}.",
+    "declinedBy": "Declined by {name} on {time}.",
+    "dateAccepted": "We agreed: {date} is the new due-back day.",
+    "dateRefused": "We need the job back by the day we asked: {date} does not work for us.",
+    "proposed": "You proposed {date}: we tell you if it works.",
+    "because": "Why: {reason}"
+  },
+  "progress": {
+    "title": "Report finished pieces",
+    "lead": "Per size: what you finished today. The work order sees it at once.",
+    "offline": "Not sent — no connection. Your report stays on this page; press Send again.",
+    "soFar": "{done} of {total} finished",
+    "allFinished": "All pieces of this operation are finished.",
+    "today": "Finished today",
+    "left": "{count} left",
+    "gridOf": "{operation}: finished today by colour and size",
+    "finishBy": "You will finish by",
+    "finishByHint": "Change it when it moves.",
+    "note": "A note for us (optional)",
+    "sendCount_one": "Send {count} finished piece",
+    "sendCount_other": "Send {count} finished pieces",
+    "send": "Send report",
+    "history": "Reports so far",
+    "noReports": "No reports yet.",
+    "reportLine": "{count} finished · {operation} · {size}",
+    "wholeOperation": "all sizes",
+    "byOffice": "entered by us for {name}",
+    "by": "by {name}",
+    "finishByOn": "finish by {date}",
+    "held": {
+      "whole": "Operation {line}: whole pieces.",
+      "cell": "Operation {line}, {size}: at most {left} more.",
+      "operation": "Operation {line}: at most {left} more.",
+      "nothing": "Add today's finished pieces first.",
+      "finishBy": "The finish day is after the job was ordered."
+    }
+  },
+  "problem": {
+    "title": "Report a problem",
+    "lead": "Tell us early when something is wrong: it goes to our office in the job's messages.",
+    "what": "What is wrong",
+    "kind": {
+      "MATERIAL": "Material missing",
+      "DEFECT": "Defect in the cut parts",
+      "MACHINE": "Machine down",
+      "OTHER": "Something else"
+    },
+    "note": "What happened",
+    "send": "Send to our office",
+    "held": {
+      "kind": "Pick what is wrong.",
+      "note": "Say what happened."
+    },
+    "write": "Not sent: try again in a moment.",
+    "invalid": "Not sent: check what you typed.",
+    "changed": "The job changed meanwhile: we read it again. Check and send again.",
+    "state": "The job no longer takes this: we read it again.",
+    "forbidden": "Your access does not allow this: ask your admin.",
+    "offline": "Not sent — no connection. What you typed stays; press Send again.",
+    "slowDown": "Too many tries: wait a minute and send again.",
+    "gone": "This job is no longer yours to answer.",
+    "read": "The job could not be read."
+  },
+  "refused": {
+    "proposedDate": "Not sent: propose a day from today on.",
+    "scrapReason": "Not sent: pick why the pieces were scrapped.",
+    "note": "Not sent: check the note.",
+    "reason": "Not sent: check the reason.",
+    "kit": "Not sent: check the counts of the kit.",
+    "progress": "Not sent: a count is more than is left to finish.",
+    "material": "Not sent: check the unused material.",
+    "returns": "Not sent: more pieces than are with you and not announced yet.",
+    "parcels": "Not sent: from 1 to 9999 parcels.",
+    "day": "Not sent: the goods reach us today or later.",
+    "ddt": "Not sent: check your DDT number and date.",
+    "photo": "Not sent: a photo (JPEG, PNG, WebP or HEIC) up to 15 MB."
+  },
+  "end": {
+    "acceptedMoved": "Accepted — you proposed {date}: we will tell you if it works.",
+    "acceptedKit": "Accepted — we send the kit on {date} with our DDT.",
+    "accepted": "Accepted — we tell you when the kit leaves.",
+    "acceptedKitOf": "{number} accepted — we send the kit on {date} with our DDT.",
+    "acceptedOf": "{number} accepted — we tell you when the kit leaves.",
+    "declined": "Declined — thank you for telling us.",
+    "declinedOf": "{number} declined — thank you for telling us.",
+    "kit_one": "Kit confirmed: {count} line received as listed.",
+    "kit_other": "Kit confirmed: {count} lines received as listed.",
+    "kitShort_one": "Kit confirmed: {count} line with differences; we look into it.",
+    "kitShort_other": "Kit confirmed: {count} lines with differences; we look into them.",
+    "progress_one": "Sent: {count} finished piece. Our work order sees it at once.",
+    "progress_other": "Sent: {count} finished pieces. Our work order sees them at once.",
+    "returns_one": "We expect {count} piece on {date}.",
+    "returns_other": "We expect {count} pieces on {date}.",
+    "photo": "Photo sent: {name}.",
+    "problem": "Sent to our office: you find it in the job's messages."
+  },
+  "tabs": {
+    "label": "The job",
+    "kit": "Kit received",
+    "progress": "Progress",
+    "sendback": "Send back",
+    "documents": "Documents",
+    "messages": "Messages",
+    "toDo": "To do"
+  },
+  "docs": {
+    "title": "Documents",
+    "sheet": "Job sheet {number}",
+    "sheetHint": "For the bench: opens in a new tab, print it or save it as a PDF.",
+    "ourDdtOf": "Our kit DDT {number} of {date}",
+    "ourDdt": "Our kit DDT {number}",
+    "ourDdtHint": "The paper travels with the kit.",
+    "yourDdtOf": "Your DDT {number} of {date}",
+    "yourDdt": "Your DDT {number}",
+    "photoOf": "Your photo of kit line {line}",
+    "more": "Spec photos and instructions come in the job's messages for now."
+  },
+  "sheet": {
+    "print": "Print",
+    "title": "Job sheet {number}",
+    "titleLoading": "Job sheet",
+    "from": "From {company}",
+    "operation_one": "{seq} · {name} · {count} piece",
+    "operation_other": "{seq} · {name} · {count} pieces"
+  },
+  "csv": {
+    "job": "Job",
+    "operations": "Work",
+    "style": "Style",
+    "workOrder": "Work order",
+    "pieces": "Pieces",
+    "finished": "Finished",
+    "kitDate": "Kit sent on",
+    "dueBack": "Due back on",
+    "state": "Status"
+  },
+  "unsaved": {
+    "job": "What you typed for this job is not sent yet."
+  },
+  "link": {
+    "title": "Job {number}",
+    "readBody": "Nothing was lost: try again in a moment.",
+    "kitArrives": "Kit arrives on",
+    "kitWeTell": "We tell you when it leaves",
+    "kit": "The kit we send you",
+    "print": "Print the job",
+    "answer": "Your answer",
+    "how": "What you answer",
+    "mode": {
+      "accept": "Accept as asked",
+      "move": "Propose another due date",
+      "decline": "Decline"
+    },
+    "modeHint": {
+      "accept": "The dates as we asked.",
+      "move": "You accept and tell us the day you can bring it back.",
+      "decline": "We look for another workshop."
+    },
+    "goMove": "Accept with this date",
+    "name": "Your name (optional)",
+    "nameHint": "So we know who answered.",
+    "end": {
+      "by": "Answered by",
+      "at": "When",
+      "portal": "Follow it under Jobs in our portal.",
+      "closed": "This link is used now: it opens nothing more.",
+      "reference": "Job",
+      "contact": "Questions? Answer our e-mail or call us.",
+      "openPortal": "Open the portal",
+      "acceptedTitle": "Accepted",
+      "declinedTitle": "Declined",
+      "declined": "Thank you for telling us: we look for another workshop."
+    },
+    "closed": {
+      "declined": "You declined this job already.",
+      "accepted": "You accepted this job already.",
+      "ended": "This job has ended.",
+      "notSent": "This job takes no answer now.",
+      "accept": "This job cannot be accepted now: write to us.",
+      "decline": "Some of the work came back already: write to us."
+    },
+    "held": {
+      "name": "Your name: at most 200 characters."
+    }
+  }
+}
