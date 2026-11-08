@@ -349,7 +349,10 @@
     "shipDate": "Ships {date}",
     "lines_one": "{count} line",
     "lines_other": "{count} lines",
-    "ddt": "DDT {number}"
+    "ddt": "DDT {number}",
+    "announce": "Announce delivery",
+    "mayWrite": "Your access lets you read deliveries, not announce them: ask your admin for the right to upload.",
+    "notConfirmed": "Confirm the order first: then announce what you ship."
   },
   "docs": {
     "title": "Documents",

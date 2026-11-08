@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { cutOf } from '../model'
 import { ALLOCATED, AVAILABILITY, BUNDLES, canAs, CUT_LOG, EMPTY_LOG, EMPTY_YIELD, HELD_WORK_ORDER, inShell, PREFIX, PRINTERS, RECUTS, WORK_ORDER, WORK_ORDER_YIELD, type Role } from '../demo/fixtures'
+import { ORDER_CUTTING } from '../orders/demo/fixtures'
 import { CutRecordView, type CutRecordModel } from './view/CutRecordView'
 
 /**
@@ -38,6 +39,7 @@ const record = (role: Role, over: Partial<CutRecordModel> = {}): RecordCase => {
       allocated: ready(ALLOCATED),
       bundles: ready(BUNDLES),
       printers: ready(PRINTERS),
+      orders: ready([ORDER_CUTTING]),
       live: 'live',
       dialog: null,
       alloc: null,
@@ -54,6 +56,8 @@ function RecordDesign({ model }: { model: RecordCase }) {
 }
 
 const cut = cutOf(WORK_ORDER, CUT_LOG, WORK_ORDER_YIELD, ALLOCATED.length)
+// B-W2b-129: every hide of one shade (the same shade lot check passes).
+const ONE_SHADE = { ...WORK_ORDER_YIELD, hides: WORK_ORDER_YIELD.hides.map((hide) => ({ ...hide, hide: { ...hide.hide, shade: 'NER-2' } })) }
 const heldCut = cutOf(HELD_WORK_ORDER, CUT_LOG, WORK_ORDER_YIELD, 0)
 
 export const designScreen = defineDesignScreen<RecordCase>({
@@ -61,10 +65,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
   title: 'Cutting: a cut — lay or hides, pieces, yield, tickets (Production)',
   view: RecordDesign,
   cases: [
-    { id: 'lay', label: 'Lay or hides: the hides, their area bars, allocated hides', model: record('manager'), note: 'Fabric lays are W2b: said in their card.' },
+    { id: 'lay', label: 'Lay or hides: the hides, the same shade lot check (two shades), their area bars, allocated hides, the cut orders', model: record('manager'), note: 'W2b: the shade lot check counts the hides cut and allocated; fabric lays are on the cut orders listed.' },
+    { id: 'shade-one', label: 'W2b: the same shade lot check passes (one lot, one shade)', model: record('manager', { figures: ready(ONE_SHADE) }) },
+    { id: 'orders-none', label: 'W2b: no cut order names this work order (its lays are on cut orders)', model: record('manager', { orders: ready([]) }) },
+    { id: 'orders-failed', label: 'W2b: the cut orders could not be read', model: record('manager', { orders: { value: null, problem: 'problem.offline' } }) },
     { id: 'pieces', label: 'Pieces: part × size with short and recut; the recuts', model: record('manager', { tab: 'pieces' }) },
     { id: 'recut', label: 'Mark a recut cut: the entry that cut it', model: record('manager', { tab: 'pieces', dialog: { kind: 'recut', id: RECUTS[0]!.id } }) },
-    { id: 'yield', label: 'Yield: a bar per hide, the plan line, per lot and supplier', model: record('manager', { tab: 'yield' }), note: 'Never by cutter. Single parts are left out of the yield, said under the figures.' },
+    { id: 'yield', label: 'Yield: a bar per hide, the plan line; W2b issued vs used vs returned; per lot and supplier (raise held: no claims right)', model: record('manager', { tab: 'yield' }), note: 'Never by cutter. Single parts are left out of the yield, said under the figures.' },
+    { id: 'yield-feedback', label: 'W2b: Yield as the owner — a lot below the plan is raised with its supplier (a claim on the lot)', model: record('owner', { tab: 'yield', figures: ready({ ...WORK_ORDER_YIELD, overall: { ...WORK_ORDER_YIELD.overall, plannedPct: '78.00' } }) }) },
     { id: 'tickets', label: 'Tickets: printed, reprinted with the reason, a failed print, a void', model: record('manager', { tab: 'tickets' }) },
     { id: 'reprint', label: 'Print a ticket again: the printer and the reason', model: record('manager', { tab: 'tickets', dialog: { kind: 'reprint', id: BUNDLES.bundles[2]!.id } }) },
     { id: 'void', label: 'Void a bundle before its first scan', model: record('manager', { tab: 'tickets', dialog: { kind: 'void', id: BUNDLES.bundles[2]!.id } }) },

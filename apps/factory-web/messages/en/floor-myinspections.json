@@ -54,7 +54,6 @@
   "inspect": "Inspect",
   "start": "Start the inspection",
   "held": {
-    "noFloorScreen": "Incoming inspections are recorded in the office until their floor screen comes.",
     "noTile": "This station has no screen for it: open it at the inspection bench.",
     "notYours": "It is another inspector's: they record it."
   },

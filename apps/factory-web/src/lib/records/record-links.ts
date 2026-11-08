@@ -31,6 +31,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
+  // B-W2b-129: a cut order of several work orders (SCR-238-order: lays, pieces, yield, tickets).
+  CutOrder: '/production/cutting/orders/[id]',
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',

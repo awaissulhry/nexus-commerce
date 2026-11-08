@@ -25,10 +25,10 @@ export const at = (day: number, hour: number, minute = 0) => new Date(Date.UTC(2
 
 const BASE = ['home.view', 'threads.read', 'threads.post', 'files.read']
 export const ROLES = {
-  owner: [...OWNER_PERMISSIONS, 'workorders.view', 'production.cutting.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'inventory.reserve', 'inventory.stock.view', 'production.bundles', 'print.view', 'money.cost'],
-  manager: [...BASE, 'workorders.view', 'workorders.manage', 'production.cutting.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cut', 'production.cut.correct', 'production.bundles', 'inventory.reserve', 'inventory.stock.view', 'print.view'],
+  owner: [...OWNER_PERMISSIONS, 'workorders.view', 'production.cutting.view', 'production.cutorders.manage', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'inventory.reserve', 'inventory.stock.view', 'production.bundles', 'print.view', 'purchasing.claims.manage', 'money.cost'],
+  manager: [...BASE, 'workorders.view', 'workorders.manage', 'production.cutting.view', 'production.cutorders.manage', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cut', 'production.cut.correct', 'production.bundles', 'inventory.reserve', 'inventory.stock.view', 'print.view'],
   supervisor: [...BASE, 'workorders.view', 'production.cutting.view', 'production.scrap.view', 'production.rework', 'inventory.stock.view'],
-  buyer: [...BASE, 'purchasing.view', 'production.cutting.view'],
+  buyer: [...BASE, 'purchasing.view', 'purchasing.claims.manage', 'production.cutting.view'],
   sales: [...BASE, 'orders.view', 'workorders.view'],
 } as const
 export type Role = keyof typeof ROLES

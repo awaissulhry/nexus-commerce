@@ -10,19 +10,15 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, listAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { CUT_STATES, CUT_VIEWS, getRecuts, listCuts, recutDone, voidBundle } from './api'
-import { AVAILABILITY, BUNDLES, canAs, CUT_LOG, CUTTING, EMPTY_LOG, EMPTY_YIELD, HELD, HELD_WORK_ORDER, RECUTS, TILES, WAITING, WAITING_PNT, WAITING_TMO, WORK_ORDER, WORK_ORDER_YIELD, YIELD_TODAY } from './demo/fixtures'
+import { AVAILABILITY, BUNDLES, canAs, CUT_LOG, CUTTING, EMPTY_LOG, EMPTY_YIELD, HELD, HELD_WORK_ORDER, RECUTS, TILES, WAITING, WORK_ORDER, WORK_ORDER_YIELD, YIELD_TODAY } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
   addressText,
   allocateHeld,
-  csvOf,
   cutOf,
   cutStateOf,
   lotYields,
-  newCutChoices,
-  newCutHeld,
-  newCutRowHeld,
   piecesMatrix,
   recutEntries,
   recutHeld,
@@ -62,6 +58,9 @@ describe('the cutting office: address, tiles, states', () => {
     expect(tileValue('yieldToday', TILES, YIELD_TODAY, 'en')).toBe('74.2 % / 75.0 %')
     expect(tileValue('yieldToday', TILES, null, 'en')).toBe('—')
     expect(tileValue('waiting', null, null, 'en')).toBe('—')
+    // B-W2b-129: the fabric cut orders added to Waiting to cut and Cutting now.
+    expect(tileValue('waiting', TILES, null, 'en', { waiting: 2, cutting: 1 })).toBe('5')
+    expect(tileValue('cutting', TILES, null, 'en', { waiting: 2, cutting: 1 })).toBe('2')
   })
 
   it('never adds areas of different units', () => {
@@ -86,19 +85,7 @@ describe('the cutting office: address, tiles, states', () => {
   })
 })
 
-describe('New cut order and Allocate hides', () => {
-  it('offers the work orders waiting with no hide allocated; one leather and colour; one work order a cut (W2a)', () => {
-    expect(newCutChoices([CUTTING, WAITING, WAITING_TMO, HELD]).map((row) => row.workOrder.number)).toEqual([WAITING.workOrder.number, WAITING_TMO.workOrder.number])
-    expect(newCutRowHeld(WAITING_TMO, [WAITING])).toEqual({ key: 'newCut.why.material', params: { material: 'DEMO-LEA-100 · NER' } })
-    expect(newCutRowHeld(WAITING_PNT, [WAITING])).toBeNull()
-    expect(newCutRowHeld(WAITING, [])).toBeNull()
-    const can = canAs('manager')
-    expect(newCutHeld([], can, false)).toEqual({ key: 'newCut.held.none' })
-    expect(newCutHeld([WAITING, WAITING_PNT], can, false)).toEqual({ key: 'newCut.held.many' })
-    expect(newCutHeld([WAITING], can, false)).toBeNull()
-    expect(newCutHeld([WAITING], canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { permission: 'inventory.reserve' } })
-  })
-
+describe('Allocate hides and Print tickets', () => {
   it('Allocate hides is held without the rights, for a cut done, and named otherwise; a held work order may still be allocated', () => {
     expect(allocateHeld(WAITING, canAs('manager'))).toBeNull()
     expect(allocateHeld(HELD, canAs('manager'))).toBeNull()
@@ -178,12 +165,6 @@ describe('the cut record', () => {
     expect(writeProblem(new Error('x'))).toEqual({ key: 'problem.write' })
   })
 
-  it('Export N never names who cut', () => {
-    const text = csvOf([CUTTING], ['a'], 'en')
-    expect(text).toContain('WO-26-0031')
-    expect(text).toContain('TAV-01')
-    expect(text).not.toMatch(/Esempio|Prova/)
-  })
 })
 
 describe('the calls', () => {
@@ -231,14 +212,14 @@ describe('the pages in the map', () => {
   })
 })
 
-const LEFT_KEY = /\b(?:state|kind|view|tile|tiles|col|list|page|common|live|held|newCut|alloc|notice|problem|record|tab|part|lay|pieces|recuts|yield|tickets|hideState|bulk|csv)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+const LEFT_KEY = /\b(?:state|kind|view|tile|tiles|col|list|page|common|live|held|alloc|notice|problem|record|tab|part|lay|pieces|recuts|yield|tickets|hideState|bulk|csv|newOrder|shadeLot|ofWorkOrder|balance|feedback|status|plan|refusal|warning)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 /** Permission names are said on purpose ("needs inventory.reserve"). */
-const SAID = /\b(?:production\.[a-z.]+|inventory\.[a-z.]+|workorders\.[a-z.]+|money\.cost)\b/g
+const SAID = /\b(?:production\.[a-z.]+|inventory\.[a-z.]+|workorders\.[a-z.]+|purchasing\.[a-z.]+|money\.cost)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
-  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'lists', 'records', 'cutting']) }, createElement(View, { model })))
+  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'lists', 'records', 'cutting', 'cutting-orders']) }, createElement(View, { model })))
 }
 
 describe('every design case draws in both languages with no key left on screen', () => {

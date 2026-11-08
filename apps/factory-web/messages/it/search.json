@@ -88,6 +88,7 @@
     "Incident": "Infortunio o quasi incidente",
     "InspectionPlan": "Piano di controllo",
     "Capa": "Azione correttiva",
+    "CutOrder": "Ordine di taglio",
     "other": "Record"
   },
   "chip": {
@@ -126,6 +127,7 @@
     "Incident": "Infortuni e quasi incidenti",
     "InspectionPlan": "Piani di controllo",
     "Capa": "Azioni correttive",
+    "CutOrder": "Ordini di taglio",
     "other": "Altri record"
   },
   "status": {
@@ -210,6 +212,8 @@
     "D5": "D5 azioni correttive",
     "D6": "D6 azioni attuate",
     "D7": "D7 prevenzione",
-    "D8": "D8 chiusura"
+    "D8": "D8 chiusura",
+    "CUT": "Tagliato",
+    "RECONCILED": "Riconciliato"
   }
 }

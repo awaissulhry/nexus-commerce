@@ -15,6 +15,10 @@
  * Never a person, never money: every figure is per line and operation (Statuto dei Lavoratori art. 4; Owner answers W1, F2).
  */
 
+// B-W2b-115: lifted to the floor tasks' shared plan-check rules (Incoming inspection answers the same checks); re-exported here.
+import { wayOf } from '../shared/plan-checks'
+export { checkWords, measuredOutcome, valueText, verdictOf, wayOf, type CheckWay } from '../shared/plan-checks'
+
 export const IN_PROCESS_KINDS = ['FIRST_PIECE', 'CUTTING', 'ROVING', 'END_OF_LINE'] as const
 export type InlineKind = (typeof IN_PROCESS_KINDS)[number]
 export const IN_PROCESS_OUTCOMES = ['APPROVED', 'REJECTED', 'PASS', 'FAIL', 'GREEN', 'AMBER', 'RED'] as const
@@ -198,31 +202,6 @@ export interface ResultFacts {
 /** A first piece is one piece: every result is its first unit. */
 export const FIRST_UNIT = 1
 
-/** The check's words in the worker's language (another floor language, else English; Italian for Italian). */
-export function checkWords(check: Pick<PlanCheckFacts, 'labelIt' | 'labelEn' | 'labelI18n'>, language: string): string {
-  if (language === 'it') return check.labelIt || check.labelEn
-  if (language === 'en') return check.labelEn || check.labelIt
-  return check.labelI18n[language] || check.labelEn || check.labelIt
-}
-
-/** How the floor answers a check: a tap (pass / fail), a value (measure, count, choice), read only (instruction), or in the office (words). */
-export type CheckWay = 'tap' | 'value' | 'read' | 'office'
-
-export function wayOf(check: Pick<PlanCheckFacts, 'type'>): CheckWay {
-  switch (check.type) {
-    case 'MEASUREMENT':
-    case 'COUNT':
-    case 'CHOICE':
-      return 'value'
-    case 'INSTRUCTION':
-      return 'read'
-    case 'FREE_TEXT':
-      return 'office'
-    default:
-      return 'tap'
-  }
-}
-
 /** The first unit's result of a check, or null. */
 export const resultOf = (results: readonly ResultFacts[], code: string): ResultFacts | null => results.find((result) => result.code === code && result.sampleIndex === FIRST_UNIT) ?? null
 
@@ -235,23 +214,6 @@ export function withResult(results: readonly ResultFacts[], answer: { readonly c
     outcome: result.outcome,
     ...(result.value !== null && result.value !== undefined ? { value: result.value } : {}),
   }))
-}
-
-/** A measurement against its nominal ± tolerance, by the numbers (= factory-domain measuredOutcome; the database computes the same). */
-export function measuredOutcome(value: string, nominal: string, tolerance: string): 'PASS' | 'FAIL' {
-  const thousandths = (text: string) => Math.round(Number(text) * 1000)
-  return Math.abs(thousandths(value) - thousandths(nominal)) <= thousandths(tolerance) ? 'PASS' : 'FAIL'
-}
-
-/** The verdict a value gets by itself: by the numbers for a measurement with a nominal and a tolerance; else the inspector says it. */
-export function verdictOf(check: Pick<PlanCheckFacts, 'type' | 'nominal' | 'tolerance'>, value: string): 'PASS' | 'FAIL' | null {
-  if (check.type !== 'MEASUREMENT' || check.nominal === null || check.tolerance === null || value.trim() === '') return null
-  return measuredOutcome(value, check.nominal, check.tolerance)
-}
-
-/** A typed number as the API takes it (a dot, up to three decimals). */
-export function valueText(value: number, type: string): string {
-  return type === 'COUNT' ? String(Math.round(value)) : String(Math.round(value * 1000) / 1000)
 }
 
 /** What holds Approve: a mandatory check unanswered (the API's blockers), a critical check failed, or null. Reject is never held. */

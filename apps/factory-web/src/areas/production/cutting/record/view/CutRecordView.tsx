@@ -16,6 +16,8 @@ import type { CutLog, TicketPrinters, WorkOrder, WorkOrderBundles } from '../../
 import { hideBar } from '../../../_shared/model'
 import type { LiveState } from '../../../_shared/hooks'
 import type { Allocation, CutRow, Replacement, WorkOrderYield } from '../../api'
+import type { CutOrderSummary } from '../../orders/api'
+import { againstPlan, areaBalance, feedbackHeld, ORDER_TONE, orderHref, ORDERS_NAMESPACE, planPhrase, shadeLots, underPlan } from '../../orders/model'
 import {
   allocateHeld,
   areaNumber,
@@ -64,6 +66,8 @@ export interface CutRecordModel {
   readonly allocated: Part<readonly Allocation[]>
   readonly bundles: Part<WorkOrderBundles>
   readonly printers: Part<TicketPrinters>
+  /** B-W2b-129: the cut orders that name this work order (its fabric lays; a leather group). */
+  readonly orders: Part<readonly CutOrderSummary[]>
   readonly live: LiveState
   readonly dialog: CutDialog | null
   readonly alloc: AllocModel | null
@@ -74,7 +78,7 @@ export interface CutRecordModel {
 
 export interface CutRecordActions extends CuttingActions {
   onDialog?: (dialog: CutDialog | null) => void
-  onRetryPart?: (part: 'log' | 'figures' | 'recuts' | 'allocated' | 'bundles') => void
+  onRetryPart?: (part: 'log' | 'figures' | 'recuts' | 'allocated' | 'bundles' | 'orders') => void
   onRecutDone?: (replacementId: string, cutLogId: string) => void
   onReprint?: (bundleId: string, reason: string, printerId: string) => void
   onVoid?: (bundleId: string, reason: string) => void
@@ -82,17 +86,18 @@ export interface CutRecordActions extends CuttingActions {
 
 /**
  * SCR-238 — a cut (design production.cutting "Record: Cut", opens as a record page; Owner L1: the tabs in the band):
- * one work order's leather, cut by hide at the cutting table (W2a; fabric lays are W2b). The band: ‹ Cutting, "Cut ·
+ * one work order's leather, cut by hide at the cutting table (its fabric lays are on cut orders, listed). The band: ‹ Cutting, "Cut ·
  * <number>", its state, style, due date, Allocate hides (the Find hides dialog) and the work order. The tabs: Lay or
- * hides (each hide's grade, shade, area before, used, remnant, waste and state, its AreaBalanceBar, the hides allocated
- * and not cut yet), Pieces (part × size: planned, cut, short, recut; the recuts asked for scrapped pieces, marked cut by
- * their cut log entry), Yield (a bar per hide with the planned line; per lot and supplier) and Tickets (the bundle
+ * hides (each hide's grade, shade, area before, used, remnant, waste and state, the same shade lot check (W2b), its
+ * AreaBalanceBar, the hides allocated and not cut yet, the cut orders naming the work order), Pieces (part × size: planned,
+ * cut, short, recut; the recuts asked for scrapped pieces, marked cut by their cut log entry), Yield (a bar per hide with the
+ * planned line; issued vs used vs returned (W2b); per lot and supplier, a lot raised with its supplier (W2b)) and Tickets (the bundle
  * tickets of this cut, their print state, reprints with the reason, voids before any scan). A work order on hold says
  * why: the cutting table refuses every cut of it, in those words, until quality releases the hold. Never who cut.
  */
 export function CutRecordView({ model, actions }: { model: CutRecordModel; actions?: CutRecordActions }) {
   return (
-    <WithMessages namespaces={[CUTTING_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={[CUTTING_NAMESPACE, ORDERS_NAMESPACE, 'lists']}>
       <Record model={model} actions={actions} />
     </WithMessages>
   )
@@ -331,6 +336,7 @@ function LayTab({ model, actions }: { model: CutRecordModel; actions?: CutRecord
           listKey={null}
           state={lines.length === 0 ? <EmptyState title={t('lay.empty.title')} description={t('lay.empty.body')} /> : undefined}
         />
+        <ShadeLotCheck lines={lines} allocated={model.allocated.value ?? []} />
       </section>
       <div className="fw-ct-cards">
         <Card padded className="fw-ct-card">
@@ -369,11 +375,72 @@ function LayTab({ model, actions }: { model: CutRecordModel; actions?: CutRecord
           <p className="fw-ct-hint">{t('lay.allocatedHint')}</p>
         </Card>
       </div>
-      <Card padded className="fw-ct-card">
-        <h2 className="fw-ct-h2">{t('lay.lays')}</h2>
-        <p className="fw-ct-hint">{t('lay.laysLater')}</p>
-      </Card>
+      <OrdersOfWorkOrder model={model} actions={actions} />
     </>
+  )
+}
+
+/**
+ * rec:Cut/lay/ct-hides#1 — the W2b same shade lot check (SCM-206 "one shade lot per order"): the hides cut and allocated for
+ * this work order by lot and shade. One: said; more: a warning in words (the table warns and a lead signs Cut anyway; the
+ * reserve refuses another lot without inventory.shade.override).
+ */
+function ShadeLotCheck({ lines, allocated }: { lines: readonly HideLine[]; allocated: readonly Allocation[] }) {
+  const o = useT(ORDERS_NAMESPACE)
+  const lots = shadeLots(lines.map((line) => ({ lotCode: line.lotCode, shade: line.shade })), allocated)
+  if (lots.length === 0) return <p className="fw-ct-hint">{o('shadeLot.none')}</p>
+  const words = lots.map((lot) => o('shadeLot.lot', { lot: lot.lot, shade: lot.shade ?? o('shadeLot.unknown'), count: lot.hides })).join(' · ')
+  if (lots.length === 1) {
+    return (
+      <p className="fw-ct-inline">
+        <Tag tone="success">{o('shadeLot.one')}</Tag>
+        <span className="fw-ct-hint">{words}</span>
+      </p>
+    )
+  }
+  return <Banner tone="warning" title={o('shadeLot.many', { count: lots.length })}>{`${words}. ${o('shadeLot.rule')}`}</Banner>
+}
+
+/**
+ * rec:Cut/lay/ct-lays for a work order: the cut orders that name it (B-W2b-129) — its fabric lays and any leather group —, each
+ * with its status and plan, opened on its own record (the Lays grid is there).
+ */
+function OrdersOfWorkOrder({ model, actions }: { model: CutRecordModel; actions?: CutRecordActions }) {
+  const o = useT(ORDERS_NAMESPACE)
+  const orders = model.orders
+  return (
+    <Card padded className="fw-ct-card">
+      <h2 className="fw-ct-h2">{o('ofWorkOrder.title')}</h2>
+      {orders.problem ? (
+        <EmptyState title={o('part.failed', { part: o('ofWorkOrder.title') })} description={o(orders.problem)} action={<Button size="sm" onClick={() => actions?.onRetryPart?.('orders')}>{o('common.retry')}</Button>} />
+      ) : !orders.value ? (
+        <p className="fw-ct-hint" role="status">
+          <Spinner size={12} /> {o('part.loading', { part: o('ofWorkOrder.title') })}
+        </p>
+      ) : orders.value.length === 0 ? (
+        <p className="fw-ct-hint">{o('ofWorkOrder.none')}</p>
+      ) : (
+        <ul className="fw-ct-list">
+          {orders.value.map((order) => {
+            const plan = planPhrase(order)
+            return (
+              <li key={order.id}>
+                <span className="fw-ct-inline">
+                  <Link className="fw-ct-link" href={orderHref(model.prefix, order.id)}>
+                    {order.number}
+                  </Link>
+                  <Pill tone={ORDER_TONE[order.status]}>{o(`status.${order.status}`)}</Pill>
+                  <span className="fw-ct-hint">
+                    {o(`kind.${order.kind}`)} · {[order.material.item.code, order.material.colour?.code].filter(Boolean).join(' · ')} · {o(plan.key, plan.params)}
+                  </span>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      <p className="fw-ct-hint">{o('ofWorkOrder.hint')}</p>
+    </Card>
   )
 }
 
@@ -501,6 +568,7 @@ function RecutDialog({ model, id, actions }: { model: CutRecordModel; id: string
 
 function YieldTab({ model, actions }: { model: CutRecordModel; actions?: CutRecordActions }) {
   const t = useT(CUTTING_NAMESPACE)
+  const o = useT(ORDERS_NAMESPACE)
   const locale = useLocale()
   const figures = model.figures.value
   if (!figures) return <PartState label={t('tab.yield')} part={model.figures} onRetry={() => actions?.onRetryPart?.('figures')} />
@@ -538,6 +606,7 @@ function YieldTab({ model, actions }: { model: CutRecordModel; actions?: CutReco
           />
         )}
       </Card>
+      <AreaBalanceCard model={model} />
       <Card padded className="fw-ct-card">
         <h2 className="fw-ct-h2">{t('yield.byLot')}</h2>
         {lots.length === 0 ? (
@@ -545,18 +614,74 @@ function YieldTab({ model, actions }: { model: CutRecordModel; actions?: CutReco
         ) : (
           <SummaryTable
             label={t('yield.byLot')}
+            density="roomy"
             stackOnPhone
-            columns={[t('yield.col.lot'), t('yield.col.supplier'), t('yield.col.hides'), t('yield.col.used'), t('yield.col.pattern'), t('yield.col.yield')]}
-            align={[undefined, undefined, 'right', 'right', 'right', 'right']}
-            rows={lots.map((lot) => ({
-              id: lot.lotId,
-              cells: [lot.supplierLotRef ? `${lot.lotCode} (${lot.supplierLotRef})` : lot.lotCode, lot.supplier ?? '—', String(lot.hides), `${areaNumber(String(lot.used), locale)} ${unitWord(lot.uom)}`, `${areaNumber(String(lot.pattern), locale)} ${unitWord(lot.uom)}`, percent(lot.yieldPct, locale)],
-            }))}
+            columns={[t('yield.col.lot'), t('yield.col.supplier'), t('yield.col.hides'), t('yield.col.used'), t('yield.col.pattern'), t('yield.col.yield'), o('feedback.col.plan'), o('feedback.col.action')]}
+            align={[undefined, undefined, 'right', 'right', 'right', 'right', 'right', 'left']}
+            rows={lots.map((lot) => {
+              const points = againstPlan(lot.yieldPct, overall.plannedPct)
+              const held = feedbackHeld(lot, model.can.claims)
+              return {
+                id: lot.lotId,
+                cells: [
+                  lot.supplierLotRef ? `${lot.lotCode} (${lot.supplierLotRef})` : lot.lotCode,
+                  lot.supplier ?? '—',
+                  String(lot.hides),
+                  `${areaNumber(String(lot.used), locale)} ${unitWord(lot.uom)}`,
+                  `${areaNumber(String(lot.pattern), locale)} ${unitWord(lot.uom)}`,
+                  percent(lot.yieldPct, locale),
+                  points === null ? '—' : <Tag key="plan" tone={underPlan(points) ? 'warning' : 'neutral'}>{o('feedback.points', { points: `${points > 0 ? '+' : points < 0 ? '−' : ''}${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(Math.abs(points))}` })}</Tag>,
+                  held ? (
+                    <Button key="feedback" size="sm" variant={underPlan(points) ? 'primary' : undefined} heldReason={o(held.key, held.params)}>
+                      {o('feedback.raise')}
+                    </Button>
+                  ) : (
+                    <Button key="feedback" size="sm" variant={underPlan(points) ? 'primary' : undefined} asChild>
+                      <Link href={`${model.prefix}/purchasing/claims?lot=${encodeURIComponent(lot.lotId)}&new=1`}>{o('feedback.raise')}</Link>
+                    </Button>
+                  ),
+                ],
+              }
+            })}
           />
         )}
+        <p className="fw-ct-hint">{o('feedback.hint')}</p>
         <p className="fw-ct-hint">{t('yield.hint')}</p>
       </Card>
     </>
+  )
+}
+
+/**
+ * rec:Cut/yield/ct-yield#1 — the W2b reconciliation of issued vs used vs returned (MES-045) for the work order's leather: the
+ * hides of the cut log summed per unit — issued, cut (used), waste, back to stock, still on the hide. Never by cutter.
+ */
+function AreaBalanceCard({ model }: { model: CutRecordModel }) {
+  const o = useT(ORDERS_NAMESPACE)
+  const locale = useLocale()
+  const log = model.log.value
+  if (!log) return null
+  const units = [...new Set((model.cut?.materials ?? []).map((material) => material.baseUom))]
+  const sums = areaBalance(log, model.figures.value, units.length === 1 ? (units[0] ?? '') : '')
+  return (
+    <Card padded className="fw-ct-card">
+      <h2 className="fw-ct-h2">{o('balance.title')}</h2>
+      {sums.length === 0 ? (
+        <p className="fw-ct-hint">{o('balance.none')}</p>
+      ) : (
+        <SummaryTable
+          label={o('balance.title')}
+          stackOnPhone
+          columns={[o('balance.col.unit'), o('balance.col.hides'), o('balance.col.issued'), o('balance.col.used'), o('balance.col.waste'), o('balance.col.returned'), o('balance.col.left')]}
+          align={['left', 'right', 'right', 'right', 'right', 'right', 'right']}
+          rows={sums.map((sum) => ({
+            id: sum.uom || 'unit',
+            cells: [unitWord(sum.uom) || '—', String(sum.hides), areaNumber(String(sum.issued), locale), areaNumber(String(sum.cut), locale), areaNumber(String(sum.waste), locale), areaNumber(String(sum.returned), locale), areaNumber(String(sum.left), locale)],
+          }))}
+        />
+      )}
+      <p className="fw-ct-hint">{o('balance.hint')}</p>
+    </Card>
   )
 }
 
