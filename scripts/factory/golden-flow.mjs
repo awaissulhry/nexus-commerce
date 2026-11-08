@@ -25,7 +25,12 @@
  * caparra carried onto its invoice, a numbered hold, an NCR from picked defects, search and export, the month locks) in its
  * own throwaway database, the same rules. The default run leaves that folder out too.
  *
- * Run: node scripts/factory/golden-flow.mjs [daily|followups] — exit 1 when a step fails or the server is not usable. The vitest
+ * Fifth suite (B-W2b-150): `node scripts/factory/golden-flow.mjs quality` runs only src/golden-flow/quality/ — the W2b-2 records
+ * that cross quality, stock, production, plant and safety (a lot from the dock to a cut piece, a cut order with a lay, the line's
+ * checks and a final inspection, a hold by genealogy, an NCR to CAPA, a machine check, a safety year) in its own throwaway
+ * database, the same rules. The default run leaves that folder out too.
+ *
+ * Run: node scripts/factory/golden-flow.mjs [daily|followups|people|quality] — exit 1 when a step fails or the server is not usable. The vitest
  * database guard needs FACTORY_DATABASE_URL (loopback, factory_test… or this worktree's database) on the command line
  * when the worktree has no apps/factory-api/.env.
  */
@@ -47,16 +52,19 @@ const DAILY = 'src/golden-flow/daily/'
 const FOLLOWUPS = 'src/golden-flow/followups/'
 // The fourth suite (B-W2b-72): the W2b-1 shift and month; the default run leaves it out too.
 const PEOPLE = 'src/golden-flow/people/'
+// The fifth suite (B-W2b-150): the W2b-2 quality, stock, production, plant and safety records; the default run leaves it out too.
+const QUALITY = 'src/golden-flow/quality/'
 const SUITES = {
-  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`] },
+  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`, '--exclude', `${QUALITY}**`] },
   daily: { folder: DAILY, extra: [] },
   followups: { folder: FOLLOWUPS, extra: [] },
   people: { folder: PEOPLE, extra: [] },
+  quality: { folder: QUALITY, extra: [] },
 }
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]
 if (!suite) {
-  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people)`)
+  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people, quality)`)
   process.exit(2)
 }
 const VITEST = join(ROOT, 'node_modules/.bin/vitest')

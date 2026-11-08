@@ -625,6 +625,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.kits', title: 'Subcontract kits', titleIt: 'Kit per terzisti', tile: 'kits', modes: ['warehouse'] },
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
+  // W2b: B-W2b-115 Incoming inspection (SCR-175), tile family Quality, before Final inspection (it stays on an inspection tablet's first page).
+  { id: 'floor.incoming', title: 'Incoming inspection', titleIt: 'Controllo in accettazione', tile: 'incoming', modes: ['inspection'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
   // W2b: B-W2b-105 In-line inspection (SCR-176), tile family Quality; supervisor = a team leader's line tablet.
   { id: 'floor.inline', title: 'In-line inspection', titleIt: 'Controllo in linea', tile: 'inline', modes: ['inspection', 'supervisor'] },

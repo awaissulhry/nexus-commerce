@@ -39,6 +39,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     expect(ids('SUPPLIER', false)).toEqual([
       ['home', 'nav.home', '/'],
       ['work', 'nav.purchaseOrders', '/orders'],
+      // B-W2b-186: a supplier's Ship notices.
+      ['deliveries', 'nav.deliveries', '/deliveries'],
     ])
     // B-W2b-196: the customer's Account.
     expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'account'])
@@ -101,7 +103,9 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'PartyAddress'])
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'ShipNotice', 'PartyAddress'])
+    // B-W2b-186: a supplier's ship notice opens its own page.
+    expect(recordPageOf(['SUPPLIER'], 'ShipNotice', 'sn')).toBe('/deliveries/sn')
     expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')
     expect(recordPageOf(['SUPPLIER'], 'PartyAddress', 'a1')).toBeNull()
     expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBeNull()

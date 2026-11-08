@@ -64,7 +64,7 @@ function OrderContainer({ id }: { id: string }) {
   const [done, setDone] = useState<AnswerDone | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [changesOpen, setChangesOpen] = useState(false)
-  const [notices, setNotices] = useState<{ state: 'loading' | 'error' | 'noAccess' | 'ready'; items: NoticeRow[] }>({ state: canNotices ? 'loading' : 'noAccess', items: [] })
+  const [notices, setNotices] = useState<{ state: 'loading' | 'error' | 'noAccess' | 'ready'; items: NoticeRow[]; mayWrite?: boolean }>({ state: canNotices ? 'loading' : 'noAccess', items: [] })
   const answerKey = useRef<{ body: string; key: string } | null>(null)
   const keyFor = (body: unknown) => {
     const text = JSON.stringify(body)
@@ -90,7 +90,7 @@ function OrderContainer({ id }: { id: string }) {
     if (!canNotices) return
     try {
       const read = await fetchNotices(api, id)
-      setNotices({ state: 'ready', items: read.items })
+      setNotices({ state: 'ready', items: read.items, mayWrite: read.mayWrite })
     } catch (error) {
       setNotices({ state: isApiError(error) && error.kind === 'forbidden' ? 'noAccess' : 'error', items: [] })
     }
@@ -253,6 +253,8 @@ function OrderContainer({ id }: { id: string }) {
         done,
         changesOpen,
         notices,
+        // B-W2b-186: "Announce delivery" opens the new ship notice from this order (held with the reason).
+        announce: canNotices && page ? { href: `${frame.prefix}/deliveries/new?po=${encodeURIComponent(page.order.id)}`, heldReason: frame.me.preview ? t('held.preview') : notices.mayWrite === false ? t('asn.mayWrite') : page.order.state !== 'CONFIRMED' && page.order.state !== 'PARTLY_DELIVERED' ? t('asn.notConfirmed') : offline ? t('held.offline') : null } : null,
         requests: orderRequests,
         dialog: dialogModel,
       }}

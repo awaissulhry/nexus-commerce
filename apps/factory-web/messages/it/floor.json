@@ -380,6 +380,7 @@
     "pack": "Imballa",
     "final": "Collaudo finale",
     "inline": "Controllo in linea",
+    "incoming": "Controllo in accettazione",
     "scan": "Scansiona",
     "sds": "Schede di sicurezza",
     "hint": {
@@ -395,6 +396,7 @@
       "kits": "Invia un kit con il DDT, ricevi il rientro",
       "final": "Controlla, firma e rilascia i capi",
       "inline": "Primo capo, taglio, itinerante, fine linea",
+      "incoming": "Pelle per pelle, rotoli, componenti; firma la decisione",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
       "machine": "Segnala un guasto; gli interventi del tecnico",
@@ -735,7 +737,8 @@
       "trolleyLoad": "Fascio {code} sul carrello",
       "trolleyUnload": "Fascio {code} tolto dal carrello",
       "trolleySend": "Carrello inviato al cucito",
-      "trolleyReceive": "Carrello ricevuto in linea"
+      "trolleyReceive": "Carrello ricevuto in linea",
+      "incomingRecord": "Controllo in accettazione: una pelle o i controlli"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
