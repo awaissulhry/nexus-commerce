@@ -9,12 +9,15 @@ import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
 import { PartState } from './WorkOrderRecordView'
 import { DAILY_NAMESPACE, leatherMaterials, readinessView, reserveHeld } from '../../daily/model'
 import { PrintButton, ReadinessPill, say } from '../../daily/view/DailyParts'
+// B-W2b-130: Leather (wo-leather W2b: the shade lots and the one shade lot rule).
+import { LeatherPanel } from '../leather/view/LeatherPanel'
 
 /**
  * Materials (design wo-leather, wo-materials; MES-005, SCM-215): what the work order plans per material and colour
  * (waste included, in the base unit), what the ledger issued to it net of returns, and the balance; with the pick list
  * (inventory.issue) — usable stock at the site, stock there that may not be issued and why (Cr VI pending, quality
  * hold …), and what the work order holds per lot and hide. Issuing is the floor's (by scan). No cost (W2a, money.cost).
+ * B-W2b-130: the Leather panel first (each leather's shade lots and the one shade lot rule, SCM-206).
  */
 export function MaterialsTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
@@ -31,6 +34,7 @@ export function MaterialsTab({ workOrder, model, actions }: { workOrder: WorkOrd
   const reserve = (material: (typeof leathers)[number]) => daily && actions?.daily?.onDialog?.({ kind: 'reserve', itemId: material.itemId, itemColourId: material.itemColourId ?? null })
   return (
     <div className="fw-pr-stack">
+      {model.leather && <LeatherPanel model={{ prefix: model.prefix, read: model.leather }} onRetry={() => actions?.onRetryPart?.('leather')} />}
       <Card padded className="fw-pr-card">
         <div className="fw-pr-card-head">
           <h2 className="fw-pr-h2">{t('materials.planned')}</h2>
