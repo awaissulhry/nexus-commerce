@@ -37,6 +37,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   page cookie (`factory_tenant`). A new session opens `/w/<company>`, or the profile's authenticator card while
   the person's role needs two-factor they have not set up. `src/areas/me/` — my profile & security (SCR-007,
   `/w/<company>/me`, from the person menu; no navigation row).
+- `src/app/(portal)/p/signin/` + `src/portal/signin/` — the portal's Sign in (B-W2b-164, SCR-026), outside the portal frame:
+  `/p/signin?tenant=<slug>&company=<code>&next=<portal path>&ended=idle|revoked` (the invitation mail's address; the frame's
+  `next`; with neither, the portal this device remembers: cookie `factory_portal`), `/p/signin/continue#token=…` (the mailed
+  link: read with `…/link/preview`, used only on Continue), `/p/signin/privacy?company=<id>` (the company's public privacy
+  notice, a new tab). Whose portal comes from `GET /branding/portal-sign-in`; `server.ts` reads an open session (PORTAL cookie
+  only) and sends it on, or to its first visit; `PortalSignIn.tsx` is the container (the proof of work in `pow.ts` only after
+  a 429 `challenge`), `model.ts` the rules, `view/PortalSignInView.tsx` the view (DS CodeInput, EndState). Catalogue
+  `portal-signin` (+ `ds-words`).
 - Office entries — `/w/<company>` and each area's own address (`/home`, `/admin`; the rail and the brand link go
   there) — redirect on the server to the first page the person may open, in navigation order, among the BUILT pages
   (`shell/office/office-entry.ts`, `OFFICE_PAGES` in shell/nav/office-nav.ts); none built: My profile. A step that

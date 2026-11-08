@@ -316,6 +316,9 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   in Redis under `<prefix>:<env>:abuse:` (keys are HMACs), this process's memory while Redis is down; tests
   `useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore() … }))`. Policies `links.renew` and `public.lookup` are
   declared for B-W2b-163/166/170. PG tests: `portal.pg.vitest.test.ts` (helpers in `portal/testing/portal.ts`).
+- B-W2b-164 (the sign-in screen): public `GET /branding/portal-sign-in?tenant=<slug>&company=<code>` or `?companyId=` (platform/
+  branding `portal-head.ts`, rate-limited like the public branding): whose portal — the slug and company code the start route
+  takes, the public branding, the company's default CONVERSATION address (whom to ask) and its legal block {it, en}; one 404.
 
 ## Partner organisations, people and roles (`src/platform/auth/partners/`, B-W2b-162; PLT-006, PLT-021, PLT-022, SAL-060, SCM-092)
 - A partner organisation is a Party; its people are User rows (PARTNER, one party, a kind fitting the party's roles:
