@@ -98,7 +98,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
   },
   { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: false },
   { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: false },
-  { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'more', built: false },
+  // B-W2b-196: the customer's Account (SCR-188).
+  { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'more', built: true },
   {
     id: 'work',
     label: 'nav.ordersJobs',
@@ -140,6 +141,8 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: false },
   { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
   { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: false },
+  // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
+  { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
 ]
 
 /** Who is looking: their permissions and partner kind(s) (a preview: every kind of the party). */

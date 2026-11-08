@@ -19,4 +19,10 @@ export const manifest = defineManifest({
   'POST /portal/first-visit': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'POST /portal/step-up/start': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
   'POST /portal/step-up': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
+  // B-W2b-196: the Account page — the person's own name and language, their sessions (work before the first visit, like the
+  // session's own routes), and what the factory holds for invoicing the organisation (the Account page's permission).
+  'POST /portal/me/profile': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
+  'GET /portal/sessions': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
+  'POST /portal/sessions/end-others': { audiences: ['partner'], permission: SIGNED_IN, scope: 'party' },
+  'GET /portal/company': { audiences: ['partner'], permission: 'portal.colleagues.view', scope: 'party' },
 })
