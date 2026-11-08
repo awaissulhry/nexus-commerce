@@ -1,0 +1,444 @@
+{
+  "state": {
+    "loading": "Still loading…",
+    "retry": "Try again"
+  },
+  "who": {
+    "buyer": "the buyer"
+  },
+  "ref": {
+    "yours": "Your ref.",
+    "ours": "Our PO"
+  },
+  "band": {
+    "updated": "Updated {time}",
+    "confirmOrders": "Confirm orders",
+    "confirmWaiting_one": "Confirm the waiting order",
+    "confirmWaiting_other": "Confirm {count} waiting orders",
+    "confirmAll": "Confirm all as asked",
+    "decline": "Decline the order…",
+    "pdf": "PO PDF (as sent, no prices)",
+    "export": "Export this view (CSV)",
+    "emailSettings": "E-mail settings"
+  },
+  "keys": {
+    "search": "Search",
+    "open": "Open the order",
+    "rows": "Next / previous order",
+    "confirm": "Confirm all as asked (asks first)",
+    "closeSheet": "Close a line's sheet",
+    "todo": "Through To do",
+    "runVerb": "Run the row's verb",
+    "goOrders": "Go to Orders"
+  },
+  "chips": {
+    "label": "Which orders",
+    "chip_one": "{name}: {count} order",
+    "chip_other": "{name}: {count} orders"
+  },
+  "col": {
+    "order": "Order",
+    "sentOn": "Sent on",
+    "version": "Version",
+    "lines": "Lines",
+    "earliest": "Earliest date needed",
+    "status": "Status",
+    "delivery": "Delivery",
+    "actions": "Actions",
+    "ourPo": "Our PO",
+    "yourRef": "Your confirmation no.",
+    "line": "Line",
+    "what": "What we ordered",
+    "quantity": "Quantity",
+    "need": "Needed on",
+    "confirmed": "Confirmed",
+    "received": "Received"
+  },
+  "list": {
+    "title": "Purchase orders",
+    "label": "Your purchase orders",
+    "fileName": "purchase-orders",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "search": "Search orders",
+    "searchHint": "Our PO, your confirmation no. or your article code",
+    "version": "Version {version}",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "answerBy": "Answer by {date}",
+    "failed": "We could not read your orders.",
+    "failedBody": "Nothing is lost: try again in a moment.",
+    "none": "No order here",
+    "noMatch": "No order matches “{q}”.",
+    "clear": "Clear the search",
+    "showAll": "Show all orders",
+    "empty": "No purchase orders yet.",
+    "emptyBody": "When we send you an order, it is here and we e-mail you.",
+    "capped": "Only your latest 500 orders are listed: search to find an older one.",
+    "noneIn": {
+      "TO_CONFIRM": "No order waits for your confirmation.",
+      "CONFIRMED": "No order is confirmed and open.",
+      "CHANGE_PROPOSED": "No order waits for our answer to your changes.",
+      "PARTLY_DELIVERED": "No order is partly delivered.",
+      "DELIVERED": "No order is delivered.",
+      "CLOSED": "No order is closed.",
+      "ALL": "No order yet."
+    }
+  },
+  "delivery": {
+    "late": "Late since {date}",
+    "next": "Next due {date}",
+    "done": "Delivered",
+    "none": "—",
+    "notYet": "Not confirmed yet"
+  },
+  "row": {
+    "open": "Open",
+    "confirm": "Confirm all as asked…",
+    "pdf": "PO PDF (as sent, no prices)",
+    "menu": "Actions for {number}"
+  },
+  "bulk": {
+    "confirm_one": "Confirm {count} of {of} as asked",
+    "confirm_other": "Confirm {count} of {of} as asked",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}"
+  },
+  "held": {
+    "preview": "An office preview reads only.",
+    "offline": "No connection: try again when you are back online.",
+    "mayAnswer": "Only colleagues allowed to approve can answer an order: ask your admin.",
+    "busy": "Sending…",
+    "noneToConfirm": "None of the selected orders waits for your confirmation.",
+    "answered": "This order takes no answer now.",
+    "incomplete": "A line's answer is not complete: open it and save it again.",
+    "ref": "Your number is at most 60 characters.",
+    "note": "The note is at most 1000 characters.",
+    "noRows": "No order in this view.",
+    "reading": "Reading the order…"
+  },
+  "confirmAll": {
+    "title": "Confirm {number} as asked?",
+    "titleMany_one": "Confirm {count} order as asked?",
+    "titleMany_other": "Confirm {count} orders as asked?",
+    "body": "Every line by its date and quantity, as we asked:",
+    "bodyMany": "Every open line of each order, by its date and quantity, as we asked:",
+    "lines": "The lines you confirm",
+    "orders": "The orders you confirm",
+    "who": "You confirm as {name}.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "go_one": "Confirm {count} line",
+    "go_other": "Confirm {count} lines",
+    "goMany_one": "Confirm {count} order",
+    "goMany_other": "Confirm {count} orders",
+    "result": "Confirmed: {confirmed}. Not confirmed: {refused} (open each one to see why)."
+  },
+  "decline": {
+    "title": "Decline {number}",
+    "body": "The buyer sees your answer at once. If you can deliver part of the order, answer line by line instead.",
+    "reason": "Why",
+    "reasons": {
+      "NO_CAPACITY": "No capacity for this order",
+      "MATERIAL_NOT_AVAILABLE": "The material is not available",
+      "PRICE": "The price does not work for us",
+      "OTHER": "Another reason"
+    },
+    "note": "A note (optional)",
+    "noteRequired": "Your reason",
+    "held": {
+      "note": "Say why you decline."
+    },
+    "priceTalk": "We talk about prices in the order's Messages, never on this page.",
+    "contact": "We will contact you.",
+    "back": "Back",
+    "go": "Decline the order"
+  },
+  "changes": {
+    "title": "What changed in version {version}",
+    "why": "Why: {note}",
+    "nothing": "The quantities and dates do not change.",
+    "order": "The order",
+    "kind": {
+      "ADDED": "Added",
+      "REMOVED": "Removed",
+      "CANCELLED": "Cancelled",
+      "CHANGED": "Changed"
+    },
+    "close": "Close",
+    "failed": "We could not read what changed."
+  },
+  "record": {
+    "title": "Order {number}",
+    "missing": "Order not found",
+    "missingBody": "This order is not one of yours, or it no longer exists.",
+    "toList": "Back to your orders",
+    "failed": "We could not read this order.",
+    "beingChanged": "We are changing this order: you still hold {number}. Its new version comes to you to confirm."
+  },
+  "tabs": {
+    "label": "The order",
+    "lines": "Lines",
+    "confirm": "Confirm or propose",
+    "asn": "Ship notices",
+    "documents": "Documents",
+    "messages": "Messages",
+    "toAnswer": "To answer"
+  },
+  "order": {
+    "from": "From",
+    "buyer": "Who asks",
+    "deliverTo": "Deliver to",
+    "sentOn": "Sent on",
+    "wanted": "Wanted by",
+    "terms": "Delivery terms",
+    "note": "Note from the buyer"
+  },
+  "lines": {
+    "title": "What we ordered",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "line": "Line {seq}",
+    "askedBy": "{quantity} by {date}",
+    "colour": "Colour {colour}",
+    "yourCode": "your code {code}",
+    "grade": "grade {grade}",
+    "thickness": "{min}–{max} mm",
+    "thicknessFrom": "from {min} mm",
+    "thicknessUpTo": "up to {max} mm",
+    "oneDyeBatch": "one dye batch",
+    "tolerance": "area ± {pct} %",
+    "hides_one": "about {count} hide",
+    "hides_other": "about {count} hides",
+    "crVi": "Cr VI test report needed with each lot",
+    "note": "Note: {note}",
+    "confirmed": "Confirmed: {quantity} {unit} by {date}",
+    "was": "was {value}",
+    "added": "new in this version",
+    "notConfirmed": "Not confirmed yet",
+    "proposed": "Your change waits for the buyer",
+    "received": "Received {value}",
+    "delivery": {
+      "open": "Still open",
+      "partly": "Partly received",
+      "delivered": "Received",
+      "cancelled": "Cancelled",
+      "closedShort": "Closed short"
+    }
+  },
+  "answer": {
+    "title": "Your answer",
+    "by": "Please answer by {date}",
+    "intro": "Confirm everything at once, or answer line by line: lines as asked are confirmed at once, changes wait for {buyer}.",
+    "ref": "Your order or confirmation number",
+    "refHint": "Optional. We print it on our documents.",
+    "note": "A note for {buyer} (optional)",
+    "review": "Your answer: {summary}.",
+    "outcome": {
+      "CONFIRMED": "Sending confirms the order as asked.",
+      "PROPOSED": "Lines as asked are confirmed now; {buyer} accepts or refuses your changes.",
+      "DECLINED": "You cannot deliver any line: sending this declines the order."
+    },
+    "confirmAll": "Confirm all as asked",
+    "sendChanges": "Send your answer",
+    "sendDecline": "Send: I cannot deliver",
+    "decline": "Decline the order…",
+    "noPrices": "No prices here: this page shows what and when. Price talk belongs in the order's Messages."
+  },
+  "answered": {
+    "TO_CONFIRM": {
+      "title": "This order waits for your answer",
+      "body": "Answer it under Confirm or propose."
+    },
+    "CONFIRMED": {
+      "title": "You confirmed this order",
+      "body": "Confirmed on {date}. The lines are locked: to ask for a change, write in Messages."
+    },
+    "CHANGE_PROPOSED": {
+      "title": "Your changes are with {buyer}",
+      "body": "{buyer} accepts or refuses them: you see the answer here."
+    },
+    "DECLINED": {
+      "title": "You declined this order",
+      "body": "The buyer changes it or cancels it."
+    },
+    "BEING_CHANGED": {
+      "title": "We are changing this order",
+      "body": "Its new version comes to you to confirm."
+    },
+    "PARTLY_DELIVERED": {
+      "title": "Goods of this order arrived",
+      "body": "Part of it is received: it needs no confirmation any more."
+    },
+    "DELIVERED": {
+      "title": "This order is delivered",
+      "body": "Everything is received. Thank you."
+    },
+    "CLOSED": {
+      "title": "This order is closed",
+      "body": "It needs no answer."
+    },
+    "CANCELLED": {
+      "title": "This order is cancelled",
+      "body": "It needs no answer."
+    }
+  },
+  "proposal": {
+    "title": "What you proposed",
+    "waiting": "Sent on {at}: {buyer} has not answered yet.",
+    "decision": {
+      "ACCEPTED": "{buyer} accepted your changes.",
+      "REFUSED": "{buyer} refused your changes: the order stays as asked."
+    }
+  },
+  "done": {
+    "CONFIRMED": {
+      "title": "Confirmed — thank you",
+      "body": "{buyer} sees it now.",
+      "next": "Need to change something later? Write in the order's Messages."
+    },
+    "PROPOSED": {
+      "title": "Sent to {buyer}",
+      "body": "Your answer: {summary}. {buyer} accepts or refuses your changes.",
+      "next": "Lines as asked are confirmed now; you see the answer to your changes here."
+    },
+    "DECLINED": {
+      "title": "You declined the order",
+      "body": "{buyer} sees it now.",
+      "next": "We will contact you."
+    },
+    "toList": "Back to your orders",
+    "toLines": "See the lines"
+  },
+  "problem": {
+    "changed": "This order changed a moment ago: read it again and answer the new version.",
+    "invalid": "The answer was refused as it is: check the lines and try again.",
+    "forbidden": "Only colleagues allowed to approve can answer an order: ask your admin.",
+    "missing": "This order is not one of yours, or it no longer exists.",
+    "rateLimited": "Too many tries: wait a minute and try again.",
+    "unavailable": "We could not reach the server: try again.",
+    "internal": "Something went wrong on our side: try again."
+  },
+  "history": {
+    "title": "Answers so far",
+    "empty": "No answer yet.",
+    "sent": "Version {version} sent ({number})",
+    "confirmed": "Version {version} confirmed",
+    "confirmedBy": "Version {version} confirmed by {name}",
+    "proposed": "Changes proposed to version {version}",
+    "proposedBy": "Changes proposed to version {version} by {name}",
+    "declined": "Version {version} declined",
+    "waiting": "Version {version} waits for your answer",
+    "yourRef": "Your ref. {ref}",
+    "note": "Note: {note}",
+    "reason": "Why: {reason}",
+    "reasonNote": "Why: {reason} — {note}",
+    "decision": {
+      "ACCEPTED": "We accepted your changes to version {version}",
+      "REFUSED": "We refused your changes to version {version}",
+      "waiting": "Your changes to version {version} wait for our answer"
+    }
+  },
+  "asn": {
+    "title": "Deliveries announced for this order",
+    "failed": "We could not read your ship notices.",
+    "noAccess": "Ship notices are not part of your access: ask your admin.",
+    "empty": "No delivery announced yet.",
+    "emptyBody": "When you announce a delivery, it shows here with its receipt.",
+    "draft": "Draft notice",
+    "shipDate": "Ships {date}",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "ddt": "DDT {number}"
+  },
+  "docs": {
+    "title": "Documents",
+    "asSent": "{number} as sent",
+    "sentOn": "Sent on {at} · no prices",
+    "pdf": "PDF",
+    "openPdf": "Open the PDF of {number} (no prices) in a new tab",
+    "ddt": "Your DDT {number}",
+    "ddtOf": "With ship notice {notice}",
+    "noPrices": "Our copy of the order shows what and when, never prices.",
+    "requests": "What we ask for",
+    "noRequests": "We ask for nothing on this order now."
+  },
+  "messages": {
+    "priceTalk": "Questions about prices belong here: this conversation is only between you and us."
+  },
+  "unsaved": {
+    "answer": "Your answer to this order is not sent yet."
+  },
+  "noAccess": {
+    "title": "This page is not part of your access",
+    "ask": "Ask your admin ({names}) if you need it.",
+    "askAdmin": "Ask your admin if you need it.",
+    "home": "Back to Home"
+  },
+  "home": {
+    "glance": "At a glance",
+    "upcoming": "Next deliveries",
+    "upcomingFailed": "We could not read your next deliveries.",
+    "upcomingEmpty": "No open deliveries.",
+    "order": "{number} · line {seq}",
+    "needed": "Needed on {date}",
+    "confirmedFor": "Confirmed for {date}",
+    "notConfirmed": "Date not confirmed",
+    "late": "Late",
+    "announced": "Announced",
+    "notAnnounced": "Not announced",
+    "messages": "Recent messages",
+    "messagesFailed": "We could not read your messages.",
+    "messagesEmpty": "No messages.",
+    "fromUs": "From us",
+    "reply": "Reply",
+    "replyTo": "Reply about {record}",
+    "freeTitle": "Free for suppliers",
+    "freeBody": "No fees, nothing to install, no document limits.",
+    "hide": "Hide",
+    "confirmVerb": "Confirm",
+    "confirmed_one": "{number} confirmed: {count} line as asked.",
+    "confirmed_other": "{number} confirmed: {count} lines as asked."
+  },
+  "tiles": {
+    "toConfirm": "To confirm",
+    "toConfirmHint": "orders waiting for your answer",
+    "dueThisWeek": "Due this week",
+    "dueThisWeekHint": "orders with a line due in 7 days, not announced",
+    "late": "Late",
+    "lateHint": "past the date, not delivered",
+    "expiring": "Documents expiring",
+    "expiringHint": "within 30 days",
+    "onTheWay": "On their way",
+    "onTheWayHint": "deliveries you announced",
+    "toAccept": "Jobs to accept",
+    "toAcceptHint": "waiting for your answer",
+    "kitToConfirm": "Kits to confirm",
+    "kitToConfirmHint": "received, not confirmed",
+    "readyToSendBack": "Ready to send back",
+    "readyToSendBackHint": "finished, not announced",
+    "lateJobs": "Late jobs",
+    "lateJobsHint": "past the date",
+    "unknown": "could not be counted",
+    "failed": "We could not count your work."
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}

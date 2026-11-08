@@ -112,7 +112,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     key: 'o',
     built: false,
     pages: [
-      { id: 'work.orders', label: 'nav.purchaseOrders', href: '/orders', permission: 'portal.purchaseOrders.view', kinds: ['SUPPLIER'], built: false },
+      // B-W2b-179: the supplier's purchase orders.
+      { id: 'work.orders', label: 'nav.purchaseOrders', href: '/orders', permission: 'portal.purchaseOrders.view', kinds: ['SUPPLIER'], built: true },
       { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: false },
     ],
   },
@@ -138,7 +139,8 @@ export interface PortalRecordPage {
 export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: false },
   { kinds: ['CUSTOMER'], type: 'Quote', href: (id) => `/quotes/${id}`, built: false },
-  { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: false },
+  // B-W2b-179: the supplier's purchase order (its Lines tab first).
+  { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },
   { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
   { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: false },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
