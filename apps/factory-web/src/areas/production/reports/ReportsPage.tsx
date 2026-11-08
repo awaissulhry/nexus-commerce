@@ -26,12 +26,17 @@ import {
 } from './model'
 import { ReportsView, type ReportsActions, type ReportsModel } from './view/ReportsView'
 import type { SubscribeModel } from './view/SubscribeDialog'
+// B-W2b-130: Cutting and yield (prr-yield).
+import { cutboardLiveTouches } from '../wip/cutting/model'
+import { getCutYield, type CutYield } from './yield/api'
+import { withYieldDays, yieldCanOf, yieldDaysOf, yieldPeriod } from './yield/model'
 
 /**
  * `/w/<company>/production/reports` (SCR-240): reads the day's report of the site in the address (`?site=&date=`; else the
  * API's first site, today) and my e-mail subscriptions, reads the report again when the floor reports (at most once a
  * minute, the design), and runs the "Email me this report" dialog (the colleagues who may get it are read when it opens,
- * for whoever may subscribe them). Nothing per person is asked for: the API serves none.
+ * for whoever may subscribe them). Nothing per person is asked for: the API serves none. B-W2b-130: Cutting and yield (GET
+ * /production/cutboard/yield over `?yield=` days ending on the report's day, read once the day is known; never by cutter).
  */
 export function ReportsPage() {
   const api = useOfficeApi()
@@ -48,6 +53,21 @@ export function ReportsPage() {
   const [now, setNow] = useState(() => Date.now())
   const asked = useRef(address)
   asked.current = address
+  // B-W2b-130.
+  const yieldCan = useMemo(() => yieldCanOf(session.permissions), [session.permissions])
+  const days = useMemo(() => yieldDaysOf(params), [params])
+  const [cutYield, setCutYield] = useState<{ value: CutYield | null; problem: string | null }>({ value: null, problem: null })
+  const yieldAsked = useRef('')
+  const loadYield = useCallback(
+    (siteId: string, day: string) => {
+      const key = `${siteId}|${day}|${days}`
+      yieldAsked.current = key
+      getCutYield(api, { siteId, ...yieldPeriod(day, days) })
+        .then((value) => yieldAsked.current === key && setCutYield({ value, problem: null }))
+        .catch((error: unknown) => yieldAsked.current === key && setCutYield({ value: null, problem: readProblem(error) }))
+    },
+    [api, days],
+  )
 
   const load = useCallback(async () => {
     // Without production.reports.view the page says so and asks the API nothing (it would refuse).
@@ -55,7 +75,10 @@ export function ReportsPage() {
     const target = asked.current
     try {
       const value = await getDaily(api, { siteId: target.site, date: target.date })
-      if (asked.current === target) setDaily({ value, problem: null })
+      if (asked.current === target) {
+        setDaily({ value, problem: null })
+        loadYield(value.site.id, value.day)
+      }
     } catch (error) {
       if (asked.current === target) setDaily({ value: null, problem: readProblem(error) })
     }
@@ -63,22 +86,23 @@ export function ReportsPage() {
     listSubscriptions(api)
       .then(setSubscriptions)
       .catch(() => setSubscriptions([]))
-  }, [api, can.view])
+  }, [api, can.view, loadYield])
 
   useEffect(() => {
     setDaily((current) => ({ value: current.value && current.value.site.id === address.site && current.value.day === address.date ? current.value : null, problem: null }))
+    setCutYield({ value: null, problem: null })
     void load()
   }, [load, address])
 
   const reread = useCoalesced(() => void load(), LIVE_COALESCE_MS)
   const live = useLive(
     (change) => {
-      if (liveTouches(change)) reread()
+      if (liveTouches(change) || cutboardLiveTouches(change)) reread()
     },
     () => void load(),
   )
 
-  const go = (next: ReportAddress) => router.replace(reportsHref(prefix, next), { scroll: false })
+  const go = (next: ReportAddress) => router.replace(withYieldDays(reportsHref(prefix, next), days), { scroll: false })
   const site = daily.value?.site ?? null
   const mine = mySubscription(subscriptions, site?.id ?? null)
   const me = { id: session.user.id, name: session.user.displayName }
@@ -97,6 +121,8 @@ export function ReportsPage() {
     onDay: (date) => go({ site: site?.id ?? address.site, date: date === daily.value?.today ? null : date }),
     onRetry: () => void load(),
     onOpenSubscribe: openSubscribe,
+    onYieldDays: (next) => router.replace(withYieldDays(reportsHref(prefix, { site: daily.value?.site.id ?? address.site, date: address.date }), next), { scroll: false }),
+    onRetryYield: () => (daily.value ? loadYield(daily.value.site.id, daily.value.day) : void load()),
     onCloseSubscribe: () => setDialog(null),
     onDraft: (change) => setDialog((current) => (current ? { ...current, draft: { ...current.draft, ...change }, problem: null } : current)),
     onToggleDay: (day) => setDialog((current) => (current ? { ...current, draft: { ...current.draft, weekdays: toggleDay(current.draft.weekdays, day) }, problem: null } : current)),
@@ -125,6 +151,6 @@ export function ReportsPage() {
     dialog && site
       ? { site: { id: site.id, code: site.code, name: site.name }, me, can, draft: dialog.draft, mine, others: othersSubscribed(subscriptions, site.id), people: dialog.people, busy: dialog.busy, problem: dialog.problem }
       : null
-  const model: ReportsModel = { prefix, can, address, daily, mine, live, now, dialog: dialogModel }
+  const model: ReportsModel = { prefix, can, address, daily, mine, live, now, dialog: dialogModel, cutYield: { prefix, can: yieldCan, days, read: cutYield } }
   return <ReportsView model={model} actions={actions} />
 }

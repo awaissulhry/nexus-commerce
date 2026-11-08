@@ -397,6 +397,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       mywork: 'floor.work', // GET /production/dispatch/station (B-W2a-74)
       operation: 'production.scan',
       cut: 'production.cut',
+      fabriccut: 'production.cut', // GET /production/cut-tickets/waiting, /production/lays/:id (B-W2b-121 on B-W2b-112, -116)
       bundles: 'production.bundles',
       receive: 'inventory.receive',
       pick: 'inventory.issue',
@@ -404,6 +405,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       kits: 'purchasing.subcontract.kit', // GET /purchasing/subcontracting/kits (B-W2a-76)
       labels: 'production.serials',
       pack: 'shipping.pack',
+      incoming: 'quality.incoming.record', // PUT /quality/incoming/:id/hides/:hideId (B-W2b-115 on B-W2b-98, -111)
       final: 'quality.inspections.view',
       inline: 'quality.inprocess.record', // POST /quality/inprocess/checks (B-W2b-105 on B-W2b-99)
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
@@ -425,10 +427,12 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-137: Report an incident stays on the first page too, before the Line view (it must never fall off a full Home).
       // B-W2b-145: Training & PPE sign-off at every station mode (tile family Me, after My day).
       // B-W2b-105: In-line inspection at the inspection bench (tile family Quality, after Final inspection).
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-121: Fabric cutting at the cutting table, after Cut a hide (tile family Cutting).
+      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'inline', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
+      inspection: ['mywork', 'operation', 'incoming', 'final', 'inline', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
@@ -469,7 +473,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       cutting: { hide: 'cut', bundle: 'bundles' },
       warehouse: { workOrder: 'pick', free: 'pick' },
       packing: { bundle: 'operation', serial: 'pack', free: 'pack' },
-      inspection: { bundle: 'operation', workOrder: 'final', free: 'final' },
+      inspection: { bundle: 'operation', workOrder: 'final', free: 'final', /* B-W2b-115 */ lot: 'incoming', hide: 'incoming' },
     }
     for (const mode of FLOOR_MODES) {
       const tiles = homeTiles(mode, everything, false)

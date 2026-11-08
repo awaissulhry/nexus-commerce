@@ -1,11 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Gauge, House, Layers, Lock, RotateCcw, Ruler, ScanLine, Scissors, Send, ShieldCheck, ShieldX, TrafficCone, Undo2, Workflow, X } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, ClipboardCheck, CloudOff, Gauge, House, Layers, Lock, RotateCcw, Ruler, ScanLine, Scissors, Send, ShieldCheck, ShieldX, TrafficCone, Undo2, Workflow } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
 import { FloorChecklist, type FloorChecklistAnswer, type FloorChecklistGroup } from '@nexus/ui/floor/FloorChecklist/index'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
-import { LimitMeter } from '@nexus/ui/components/LimitMeter/index'
 import { PinSignBlock } from '@nexus/ui/components/PinSignBlock/index'
 import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
@@ -17,6 +16,7 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { ListFooter, ProblemState, TaskCard, TaskLine, Ticks, type PinProblem, type TickState } from '../../shared/view/TaskParts'
+import { MeasureStep as SharedMeasureStep } from '../../shared/view/MeasureStep'
 import { tilesOf, type PickerReason } from '../../reasons/model'
 import { glyphOf } from '../../reasons/view/ReasonPicker'
 import type { BundleCard } from '../../scans/model'
@@ -34,7 +34,6 @@ import {
   rovingColourOf,
   sendBackHeld,
   sendBackOperations,
-  verdictOf,
   wayOf,
   type CuttingDraft,
   type EolDraft,
@@ -842,47 +841,22 @@ function FirstPieceChecks({ record, busy, online, t, locale, send }: { record: C
   )
 }
 
-/** One key measurement: the value on the pad (or a choice), its verdict by the numbers when the plan gives a tolerance (DS LimitMeter). */
+/** One key measurement: the shared measure step (B-W2b-115 lifted it to the floor tasks' shared parts) with this screen's words. */
 function MeasureStep({ check, value, choice, busy, t, locale, send }: { check: CheckRecord['checks'][number]; value: number | null; choice: string | null; busy: boolean; t: Translate; locale: Locale; send: (action: InlineAction) => void }) {
-  const ds = useDsWords()
-  const text = check.type === 'CHOICE' ? (choice ?? '') : value === null ? '' : String(value)
-  const verdict = check.type === 'CHOICE' ? null : verdictOf(check, text)
-  const missing = text.trim() === ''
-  const nominal = check.nominal !== null ? Number(check.nominal) : null
   return (
-    <section className="fw-floor-stack" aria-labelledby="fw-in-measure">
-      <h2 id="fw-in-measure" className="fw-floor-section-title">
-        {checkWords(check, locale)}
-      </h2>
-      {check.type === 'CHOICE' ? (
-        <div className="fw-in-choices" role="group" aria-label={checkWords(check, locale)}>
-          {check.choices.map((option) => (
-            <FloorButton key={option} size="lg" block variant={option === choice ? 'primary' : 'secondary'} aria-pressed={option === choice} onClick={() => send({ type: 'measureChoice', value: option })}>
-              {option}
-            </FloorButton>
-          ))}
-        </div>
-      ) : (
-        <QuantityPad label={checkWords(check, locale)} hideLabel unit={check.uom ?? undefined} value={value} onChange={(next) => send({ type: 'measureValue', value: next })} min={0} max={99_999} decimals={check.type === 'MEASUREMENT' ? 3 : 0} decimalSeparator={locale === 'it' ? ',' : '.'} {...padWords(t)} />
-      )}
-      {nominal !== null && check.type === 'MEASUREMENT' ? (
-        <LimitMeter label={checkWords(check, locale)} value={value} unit={check.uom ?? undefined} nominal={nominal} tolerance={check.tolerance !== null ? Number(check.tolerance) : 0} locale={INTL_LOCALE[locale]} labels={ds.limitMeter} />
-      ) : null}
-      {verdict ? (
-        <FloorButton size="lg" block variant={verdict === 'PASS' ? 'success' : 'danger'} icon={<Check />} heldReason={busy ? t('busy') : null} onClick={() => send({ type: 'measureSave', outcome: verdict })}>
-          {t(verdict === 'PASS' ? 'measure.savePass' : 'measure.saveFail')}
-        </FloorButton>
-      ) : (
-        <div className="fw-in-verdict">
-          <FloorButton size="lg" block variant="danger" icon={<X />} heldReason={busy ? t('busy') : missing ? t('measure.held') : null} onClick={() => send({ type: 'measureSave', outcome: 'FAIL' })}>
-            {t('measure.fail')}
-          </FloorButton>
-          <FloorButton size="lg" block variant="success" icon={<Check />} heldReason={busy ? t('busy') : missing ? t('measure.held') : null} onClick={() => send({ type: 'measureSave', outcome: 'PASS' })}>
-            {t('measure.pass')}
-          </FloorButton>
-        </div>
-      )}
-    </section>
+    <SharedMeasureStep
+      id="fw-in-measure"
+      check={check}
+      title={checkWords(check, locale)}
+      value={value}
+      choice={choice}
+      busy={busy}
+      locale={locale}
+      words={{ savePass: t('measure.savePass'), saveFail: t('measure.saveFail'), pass: t('measure.pass'), fail: t('measure.fail'), held: t('measure.held'), busy: t('busy'), pad: padWords(t) }}
+      onValue={(next) => send({ type: 'measureValue', value: next })}
+      onChoice={(next) => send({ type: 'measureChoice', value: next })}
+      onSave={(outcome) => send({ type: 'measureSave', outcome })}
+    />
   )
 }
 

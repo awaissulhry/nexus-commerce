@@ -205,3 +205,12 @@
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   }
 }
+
+/* ── a plan check's choice and verdict (MeasureStep, B-W2b-115 from B-W2b-105): side by side, full rows on a phone ──── */
+.fw-task-choices,
+.fw-task-verdict {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  min-width: 0;
+}

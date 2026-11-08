@@ -615,6 +615,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'warehouse', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
+  // B-W2b-121: Fabric cutting (SCR-182), after Cut a hide (tile family Cutting).
+  { id: 'floor.fabriccut', title: 'Fabric cutting', titleIt: 'Taglio tessuto', tile: 'fabriccut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
   { id: 'floor.receive', title: 'Receive goods', titleIt: 'Ricevi merce', tile: 'receive', modes: ['warehouse'] },
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },
@@ -623,6 +625,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.kits', title: 'Subcontract kits', titleIt: 'Kit per terzisti', tile: 'kits', modes: ['warehouse'] },
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
+  // W2b: B-W2b-115 Incoming inspection (SCR-175), tile family Quality, before Final inspection (it stays on an inspection tablet's first page).
+  { id: 'floor.incoming', title: 'Incoming inspection', titleIt: 'Controllo in accettazione', tile: 'incoming', modes: ['inspection'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
   // W2b: B-W2b-105 In-line inspection (SCR-176), tile family Quality; supervisor = a team leader's line tablet.
   { id: 'floor.inline', title: 'In-line inspection', titleIt: 'Controllo in linea', tile: 'inline', modes: ['inspection', 'supervisor'] },

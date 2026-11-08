@@ -1,0 +1,686 @@
+{
+  "title": "Taglio tessuto",
+  "loading": "Lettura di {code}…",
+  "busy": "Invio in corso…",
+  "noPermission": {
+    "title": "Il taglio tessuto non è tuo qui",
+    "body": "Il tuo ruolo non taglia a questo tavolo. Chiedi al tuo capo linea."
+  },
+  "held": {
+    "online": "Serve la rete. Aspetta che torni, poi fallo.",
+    "trolleys": "Il tuo ruolo non invia carrelli al cucito.",
+    "secondary": "Il tuo ruolo non avanza le lavorazioni secondarie."
+  },
+  "scan": {
+    "read": "Letto: {code}",
+    "type": "Scrivi il codice",
+    "camera": {
+      "start": "Scansiona con la fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera non parte. Scrivi il codice."
+    }
+  },
+  "wrong": {
+    "notTicket": "{code} non è un buono di taglio. Scansiona il buono sul foglio del materasso.",
+    "notRoll": "{code} non è l'etichetta di un rotolo. Scansiona l'etichetta sul rotolo.",
+    "notBundle": "{code} non è il cartellino di un fascio. Scansiona un fascio.",
+    "notTrolley": "{code} non è l'etichetta di un carrello: lettere e cifre, senza spazi, al massimo 20.",
+    "notFound": "Niente con {code} in questo stabilimento. Controlla l'etichetta o chiedi all'ufficio taglio.",
+    "notOnTablet": "{code} non è su questo tablet e la rete non c'è. Scansionalo di nuovo quando la rete torna.",
+    "otherFactory": "{code} è un'etichetta di un'altra fabbrica.",
+    "typo": "{code} è stato letto male. Scansionalo di nuovo.",
+    "otherTicket": "{code} non è il buono di questo materasso. Scansiona il buono del materasso che tagli."
+  },
+  "start": {
+    "scan": "Scansiona il buono di taglio",
+    "scanHint": "Il buono è sul foglio del materasso: da lì si inizia, si stende, si conta e si taglia.",
+    "more": "Altro al tavolo di taglio",
+    "recuts": "Buoni di ritaglio",
+    "recutsHint": "Pezzi chiesti dal cucito o dalla qualità",
+    "recutsCount_one": "{count} ritaglio in attesa",
+    "recutsCount_other": "{count} ritagli in attesa",
+    "sewing": "Invia al cucito",
+    "sewingHint": "Fasci sul carrello, poi a una linea",
+    "reading": "Lettura dei buoni da tagliare…",
+    "waiting": "Buoni da tagliare",
+    "none": "Nessun buono da tagliare in questo stabilimento.",
+    "lay": "Materasso {seq}",
+    "due": "consegna {day}",
+    "count_one": "{count} buono",
+    "count_other": "{count} buoni"
+  },
+  "ticket": {
+    "type": "Buono di taglio",
+    "layOf": "Materasso {seq} di {of}",
+    "ratio": "Taglie e rapporto",
+    "start": "Inizia il taglio",
+    "notNow": "Non ora: il motivo è sulla scheda.",
+    "leather": "Questo ordine di taglio taglia pelle pelle per pelle: taglialo in Taglio pelle.",
+    "go": {
+      "spread": "Stendi il materasso",
+      "cut": "Taglia",
+      "stickers": "Etichette strato"
+    }
+  },
+  "ticketStatus": {
+    "OPEN": "Da iniziare",
+    "STARTED": "In taglio",
+    "DONE": "Tagliato",
+    "VOID": "Annullato"
+  },
+  "fact": {
+    "plies": "Strati",
+    "pliesCount_one": "strato",
+    "pliesCount_other": "strati",
+    "garments": "Capi",
+    "lay": "Materasso",
+    "marker": "Piazzamento",
+    "material": "Materiale",
+    "parts": "Parti",
+    "workOrders": "Ordini di lavoro",
+    "due": "Consegna"
+  },
+  "steps": {
+    "label": "Passi di questo materasso",
+    "start": "Buono",
+    "spread": "Stesura",
+    "check": "Conteggio",
+    "cut": "Taglio",
+    "stickers": "Etichette",
+    "fabric": "Tessuto",
+    "state": {
+      "done": "fatto",
+      "now": "adesso",
+      "todo": "da fare"
+    }
+  },
+  "unit": {
+    "m": "m",
+    "cm": "cm",
+    "mm": "mm",
+    "plies": "strati"
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
+  },
+  "spread": {
+    "reading": "Lettura del materasso…",
+    "sums": "Il materasso finora",
+    "plies": "Strati stesi",
+    "of": "di {planned}",
+    "needed": "Ne mancano",
+    "length": "Uno strato",
+    "rolls": "Rotoli usati",
+    "scan": "Scansiona l'etichetta di un rotolo",
+    "scanHint_one": "Manca {count} strato: scansiona il rotolo da cui lo stendi.",
+    "scanHint_other": "Mancano {count} strati: scansiona ogni rotolo mentre lo stendi.",
+    "full": "Tutti gli strati sono stesi. Ora conta i due capi.",
+    "empty": "Ancora nessun rotolo su questo materasso. Scansiona il primo rotolo.",
+    "report": "Il rapporto di stesura, rotolo per rotolo",
+    "undo": "Togli rotolo",
+    "count": "Conta i due capi",
+    "held": {
+      "nothing": "Non c'è ancora niente di steso: scansiona prima un rotolo.",
+      "planned": "Il materasso parte con il primo rotolo: scansiona prima un rotolo.",
+      "noRoll": "Nessun rotolo da togliere."
+    }
+  },
+  "roll": {
+    "cancel": "Indietro",
+    "add": "Aggiungi il rotolo",
+    "fields": "Questo rotolo",
+    "subject": "Buono {ticket} · materasso {seq} di {of}",
+    "scan": "Scansiona di nuovo il rotolo per aggiungerlo",
+    "scanHint": "Oppure scansiona il rotolo successivo.",
+    "field": {
+      "plies": "Strati da questo rotolo",
+      "splices": "Giunte",
+      "endLoss": "Scarto di testa",
+      "endReturned": "Fine rotolo reso"
+    },
+    "asNeeded": "quanti servono",
+    "notMeasured": "non misurato",
+    "needed_one": "ne serve {count}",
+    "needed_other": "ne servono {count}",
+    "held": {
+      "plies": "Scrivi gli strati da questo rotolo.",
+      "full": "Il materasso ha tutti i suoi strati: conta i due capi."
+    },
+    "lot": "lotto {lot}",
+    "splices_one": "{count} giunta",
+    "splices_other": "{count} giunte",
+    "endLoss": "scarto {length} {unit}",
+    "shade": "tonalità {shade}",
+    "kept": "Salvato su questo tablet",
+    "plies_one": "strato",
+    "plies_other": "strati"
+  },
+  "warning": {
+    "END_DIFFERS": "La fine del rotolo misurata non torna con quello che il rapporto di stesura lascia sul rotolo. Il magazzino misura di nuovo il rotolo.",
+    "WIDTH_UNKNOWN": "L'altezza di questo rotolo non è nota: controlla che sia alta quanto il piazzamento.",
+    "SHRINKAGE_UNKNOWN": "Il gruppo di restringimento di questo rotolo non è noto.",
+    "SHADE_UNKNOWN": "La tonalità di questo rotolo non è nota: controlla che vada con il materasso.",
+    "LOT_NOT_RELEASED": "Il lotto di questo rotolo non è ancora rilasciato dalla qualità.",
+    "SHADES_ACROSS_LAYS": "I materassi di questo ordine di taglio sono di tonalità diverse.",
+    "SHRINKAGE_ACROSS_LAYS": "I materassi di questo ordine di taglio sono di gruppi di restringimento diversi.",
+    "PLANNED_ON_OTHER_LINE": "L'ordine di lavoro di questo fascio è pianificato su un'altra linea.",
+    "other": "L'ufficio ha segnato qualcosa su questo rotolo: i dettagli sono all'ufficio taglio."
+  },
+  "count": {
+    "lead_one": "{count} strato steso. Conta gli strati ai due capi del materasso.",
+    "lead_other": "{count} strati stesi. Conta gli strati ai due capi del materasso.",
+    "left": "Capo sinistro",
+    "right": "Capo destro",
+    "expected_one": "{count} steso",
+    "expected_other": "{count} stesi",
+    "match": "I due capi tornano",
+    "hardStop": "Qualsiasi differenza ferma il taglio: riconta prima di tagliare.",
+    "differ": "Sinistra {left}, destra {right}. Riconta prima di tagliare.",
+    "differFix": "I due capi devono dire lo stesso numero di strati. Conta di nuovo i due capi, o correggi i rotoli del materasso.",
+    "recount": "Riconta",
+    "held": {
+      "empty": "Scrivi gli strati ai due capi."
+    }
+  },
+  "cut": {
+    "elapsed": "In taglio dall'inizio",
+    "scan": "Scansiona il buono a taglio finito",
+    "scanHint": "Scansiona di nuovo {code} alla fine del taglio.",
+    "done": "Taglio finito"
+  },
+  "stickers": {
+    "lead": "Ogni strato e ogni parte prende il suo numero, così le parti di un capo vengono da un solo strato.",
+    "parts": "Le etichette numerano queste parti: {parts}.",
+    "print": "Stampa le etichette strato",
+    "skip": "Tessuto usato",
+    "again": "Ristampa",
+    "next": "Tessuto usato",
+    "run": "Strati da {first} a {last} · {count} etichette · {parts}",
+    "labelName": "Etichetta strato",
+    "more": "Le etichette successive",
+    "noPrinter": "Nessuna stampante di etichette qui: le etichette si vedono, non si stampano. Chiedi all'ufficio taglio di impostarne una.",
+    "held": {
+      "noParts": "Il modello non elenca parti di questo materiale da numerare: le indica l'ufficio taglio."
+    }
+  },
+  "fabric": {
+    "figures": "Tessuto di questo materasso",
+    "estimate": "Stima",
+    "recorded": "Rapporto di stesura",
+    "confirmed": "Confermato",
+    "used": "Metri usati",
+    "confirm": "Conferma",
+    "correct": "Correggi",
+    "diff": {
+      "more": "{metres} m in più della stima (+{percent}%).",
+      "less": "{metres} m in meno della stima (−{percent}%).",
+      "same": "Come la stima."
+    },
+    "held": {
+      "same": "Già confermato con questa cifra.",
+      "closed": "L'ordine di taglio è riconciliato: il tessuto usato non cambia più."
+    },
+    "notCut": "Il materasso non è ancora tagliato: il tessuto usato si conferma dopo il taglio.",
+    "saved": "Tessuto usato: {metres} m",
+    "savedText": "Il tessuto è scaricato sugli ordini di lavoro di questo materasso. Scansiona il buono successivo.",
+    "nextTicket": "Buono successivo"
+  },
+  "recuts": {
+    "title": "Buoni di ritaglio",
+    "scan": "Scansiona un buono di ritaglio",
+    "scanHint": "Oppure aprine uno dall'elenco.",
+    "reading": "Lettura dei ritagli…",
+    "none": "Nessun ritaglio in attesa.",
+    "count_one": "{count} ritaglio",
+    "count_other": "{count} ritagli"
+  },
+  "recut": {
+    "type": "Buono di ritaglio",
+    "joins": "I pezzi nuovi vanno nel fascio {bundle}",
+    "part": "Parte",
+    "whole": "capi interi",
+    "setsLabel": "Serie",
+    "sets_one": "serie",
+    "sets_other": "serie",
+    "sizeLabel": "Colore e taglia",
+    "size": "{colour} {size}",
+    "from": "Tagliare da",
+    "style": "Modello",
+    "rush": "Urgente",
+    "cutFrom": "Taglialo dal lotto {lot}: la stessa tonalità del fascio.",
+    "cutFromBoth": "Taglialo dal lotto {lot} o da ritagli della stessa tonalità.",
+    "cutFromEnds": "Taglialo da ritagli della tonalità del fascio.",
+    "start": "Inizia il ritaglio",
+    "finish": "Ritaglio finito",
+    "print": "Stampa il buono",
+    "noPrinter": "Nessuna stampante di etichette qui: il buono si vede, non si stampa."
+  },
+  "trolleys": {
+    "title": "Invia al cucito",
+    "scan": "Scansiona l'etichetta del carrello",
+    "scanHint": "Un'etichetta nuova inizia un carico; un carrello in arrivo a questa linea si riceve.",
+    "here": "Questo tablet è alla linea {line}: i carrelli in arrivo sono in cima.",
+    "reading": "Lettura dei carrelli…",
+    "none": "Nessun carrello in carico o in viaggio.",
+    "mine": "in arrivo a questa linea",
+    "count_one": "{count} carrello",
+    "count_other": "{count} carrelli"
+  },
+  "trolleyStatus": {
+    "LOADING": "In carico",
+    "SENT": "In viaggio",
+    "RECEIVED": "Ricevuto",
+    "CANCELLED": "Annullato"
+  },
+  "trolley": {
+    "type": "Carrello",
+    "toLine": "alla linea {line}",
+    "scan": "Scansiona un fascio sul carrello",
+    "scanHint": "Scansiona ogni fascio mentre lo carichi. Tocca un fascio per toglierlo.",
+    "new": "Un carrello nuovo: scansiona il primo fascio.",
+    "empty": "Ancora nessun fascio su questo carrello.",
+    "list": "Fasci sul carrello",
+    "bundles_one": "fascio",
+    "bundles_other": "fasci",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "missing": "Non c'è",
+    "here": "C'è",
+    "received": "Ricevuto",
+    "unload": "Togli",
+    "send_one": "Invia {count} fascio alla linea {line}",
+    "send_other": "Invia {count} fasci alla linea {line}",
+    "sendNoLine_one": "Invia {count} fascio",
+    "sendNoLine_other": "Invia {count} fasci",
+    "held": {
+      "empty": "Prima scansiona un fascio sul carrello."
+    },
+    "kept_one": "{count} fascio salvato su questo tablet: {codes}",
+    "kept_other": "{count} fasci salvati su questo tablet: {codes}",
+    "receiveLead_one": "{count} fascio su questo carrello. Tocca un fascio che non c'è, poi conferma.",
+    "receiveLead_other": "{count} fasci su questo carrello. Tocca un fascio che non c'è, poi conferma.",
+    "receive": "Ricevuto",
+    "receiveMissing_one": "Ricevuto · ne manca {count}",
+    "receiveMissing_other": "Ricevuto · ne mancano {count}",
+    "missingCount_one": "{count} fascio non c'era.",
+    "missingCount_other": "{count} fasci non c'erano.",
+    "none": {
+      "LOADING": "Questo carrello è in carico.",
+      "SENT": "Questo carrello è in viaggio verso la linea {line}.",
+      "RECEIVED": "Ricevuto alla linea {line} alle {time}.",
+      "CANCELLED": "Questo carrello è stato annullato."
+    }
+  },
+  "process": {
+    "title": "{bundle} attende una lavorazione prima del cucito",
+    "waits": "Va al cucito quando la sua lavorazione è fatta.",
+    "elsewhere": "La sua lavorazione si fa prima in un'altra postazione."
+  },
+  "print": {
+    "queued": "In attesa di stampa",
+    "sent": "Inviata alla stampante",
+    "printed": "Stampata",
+    "failed": "Non stampata",
+    "failedHint": "La stampante non l'ha stampata: controlla la stampante, poi stampa di nuovo.",
+    "invalid": "Questo codice non si può stampare: {code}",
+    "code": "Codice a barre {code}"
+  },
+  "keys": {
+    "tab": "Passa da una riga all'altra",
+    "enter": "Apri la riga selezionata",
+    "escape": "Indietro"
+  },
+  "notice": {
+    "refused": "L'ufficio l'ha rifiutato. Chiedi all'ufficio taglio."
+  },
+  "done": {
+    "started": "Buono {code} iniziato",
+    "roll_one": "Rotolo {code}: {count} strato",
+    "roll_other": "Rotolo {code}: {count} strati",
+    "undo": "Rotolo {code} tolto",
+    "count_one": "Due capi contati: {count} strato",
+    "count_other": "Due capi contati: {count} strati",
+    "cut": "Buono {code}: il materasso è tagliato",
+    "fabric": "Buono {code}: tessuto usato confermato",
+    "recutStarted": "Ritaglio {code} iniziato",
+    "recutDone": "Ritaglio {code} finito: i pezzi vanno in {line}",
+    "load": "Fascio {code} sul carrello {line}",
+    "unload": "Fascio {code} tolto dal carrello {line}",
+    "send_one": "Carrello {code}: {count} fascio alla linea {line}",
+    "send_other": "Carrello {code}: {count} fasci alla linea {line}",
+    "receive_one": "Carrello {code} ricevuto: {count} fascio",
+    "receive_other": "Carrello {code} ricevuto: {count} fasci",
+    "process": "Fascio {code}: lavorazione avanzata"
+  },
+  "refusal": {
+    "NOT_FABRIC": {
+      "message": "Questo ordine di taglio taglia pelle pelle per pelle.",
+      "fix": "Taglialo in Taglio pelle."
+    },
+    "CUT_ORDER_NOT_AT_TABLE": {
+      "message": "Questo ordine di taglio non è rilasciato per il taglio.",
+      "fix": "Chiedi all'ufficio taglio di rilasciarlo."
+    },
+    "TICKET_NOT_STARTED": {
+      "message": "Il buono non è ancora iniziato.",
+      "fix": "Prima inizia il taglio dal buono."
+    },
+    "LAY_NOT_OPEN": {
+      "message": "Questo materasso è tagliato o annullato: il suo rapporto non cambia più.",
+      "fix": "Scansiona il buono del materasso successivo."
+    },
+    "LAY_NOT_SPREAD": {
+      "message": "Questo materasso non è ancora steso.",
+      "fix": "Scansiona il suo primo rotolo."
+    },
+    "LAY_FULL": {
+      "message": "Con questi strati il materasso ne avrebbe più del previsto.",
+      "fix": "Abbassa gli strati da questo rotolo."
+    },
+    "ROLL_SHORT": {
+      "message": "Questo rotolo è troppo corto per questi strati.",
+      "fix": "Abbassa gli strati, o chiedi al magazzino di misurare di nuovo il rotolo."
+    },
+    "ROLL_NOT_IN_LAY": {
+      "message": "Questo rotolo non è su questo materasso.",
+      "fix": "Scansiona un rotolo di questo materasso."
+    },
+    "NOT_LAST_ROLL": {
+      "message": "Si toglie solo l'ultimo rotolo.",
+      "fix": "Prima togli l'ultimo rotolo."
+    },
+    "PLY_TOO_SHORT": {
+      "message": "Uno strato è più corto del piazzamento.",
+      "fix": "Chiedi all'ufficio taglio la lunghezza del materasso."
+    },
+    "NOTHING_SPREAD": {
+      "message": "Su questo materasso non c'è ancora niente di steso.",
+      "fix": "Prima scansiona i suoi rotoli."
+    },
+    "PLIES_DIFFER": {
+      "message": "I due capi non tornano. Riconta prima di tagliare.",
+      "fix": "Conta di nuovo i due capi."
+    },
+    "COUNT_NOT_SPREAD": {
+      "message": "I due capi dicono un numero che i rotoli non hanno dato.",
+      "fix": "Riconta, o correggi i rotoli del materasso."
+    },
+    "LAY_NOT_CUT": {
+      "message": "Il materasso non è ancora tagliato.",
+      "fix": "Scansiona di nuovo il buono a taglio finito."
+    },
+    "CONSUMPTION_CLOSED": {
+      "message": "L'ordine di taglio è riconciliato: il tessuto usato non cambia più.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "ROLL_NOT_IN_STOCK": {
+      "message": "Questo rotolo non è a magazzino.",
+      "fix": "Scansiona un altro rotolo, o chiedi al magazzino."
+    },
+    "ROLL_OTHER_MATERIAL": {
+      "message": "Questo rotolo è di un altro materiale o colore.",
+      "fix": "Scansiona un rotolo del materiale del buono."
+    },
+    "ROLL_TOO_NARROW": {
+      "message": "Questo rotolo è più stretto del piazzamento.",
+      "fix": "Scansiona un rotolo più alto."
+    },
+    "ROLL_REJECTED": {
+      "message": "Questo rotolo non ha passato il controllo in entrata.",
+      "fix": "Mettilo da parte e scansiona un altro rotolo."
+    },
+    "LOT_HELD": {
+      "message": "Il lotto di questo rotolo è bloccato.",
+      "fix": "Mettilo da parte e scansiona un altro rotolo."
+    },
+    "LOT_NOT_USABLE": {
+      "message": "Il lotto di questo rotolo è respinto o bloccato.",
+      "fix": "Mettilo da parte e scansiona un altro rotolo."
+    },
+    "MIXED_SHADE": {
+      "message": "Questo rotolo è di un'altra tonalità del materasso.",
+      "fix": "Scansiona un rotolo della tonalità del materasso."
+    },
+    "MIXED_SHRINKAGE": {
+      "message": "Questo rotolo è di un altro gruppo di restringimento del materasso.",
+      "fix": "Scansiona un rotolo del gruppo di restringimento del materasso."
+    },
+    "LAY_NOT_PLANNED": {
+      "message": "Questo materasso non è più pianificato.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "ROLL_TWICE": {
+      "message": "Questo rotolo è già sul materasso.",
+      "fix": "Scansiona un altro rotolo."
+    },
+    "TICKET_VOID": {
+      "message": "Questo buono è annullato.",
+      "fix": "Chiedi all'ufficio taglio il buono nuovo."
+    },
+    "TICKET_DONE": {
+      "message": "Questo buono è già tagliato.",
+      "fix": "Scansiona il buono successivo."
+    },
+    "TICKET_STARTED": {
+      "message": "Questo buono è già iniziato.",
+      "fix": "Vai avanti con il suo materasso."
+    },
+    "TICKET_IS_RECUT": {
+      "message": "Questo è un buono di ritaglio.",
+      "fix": "Aprilo da Buoni di ritaglio."
+    },
+    "CUT_ORDER_NOT_RELEASED": {
+      "message": "L'ordine di taglio non è rilasciato.",
+      "fix": "Chiedi all'ufficio taglio di rilasciarlo."
+    },
+    "PLIES_NOT_COUNTED": {
+      "message": "Gli strati non sono ancora contati ai due capi.",
+      "fix": "Conta i due capi prima del taglio."
+    },
+    "PLIES_BEYOND_COUNT": {
+      "message": "Questi strati vanno oltre il conteggio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "PLIES_NUMBERED": {
+      "message": "Tutti gli strati di questo materasso sono già numerati.",
+      "fix": "Stampa di nuovo la serie se manca un'etichetta."
+    },
+    "NO_PARTS": {
+      "message": "Il modello non elenca parti da numerare.",
+      "fix": "Chiedi all'ufficio taglio di indicare le parti."
+    },
+    "RUN_TOO_BIG": {
+      "message": "Troppe etichette in una serie.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "RUN_VOID": {
+      "message": "Questa serie di etichette è stata annullata.",
+      "fix": "Stampa una serie nuova."
+    },
+    "WORK_ORDER_ON_HOLD": {
+      "message": "Un ordine di lavoro di questo buono è in attesa.",
+      "fix": "Chiedi all'ufficio taglio: ora non si taglia niente per lui."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "Un ordine di lavoro di questo buono non è aperto.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Il reparto di questo stabilimento non è ancora pronto per il lavoro vero.",
+      "fix": "Chiedi all'ufficio: prima viene l'informativa ai lavoratori."
+    },
+    "OVER_ISSUE": {
+      "message": "Più tessuto di quanto serve agli ordini di lavoro.",
+      "fix": "Lo conferma l'ufficio taglio, in ufficio."
+    },
+    "QUALITY_HOLD": {
+      "message": "Il tessuto di un rotolo è in blocco qualità.",
+      "fix": "Chiedi alla qualità prima di confermare."
+    },
+    "RESERVED_FOR_OTHER": {
+      "message": "Un rotolo è riservato a un altro ordine di lavoro.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "LENGTH_BEYOND_LEFT": {
+      "message": "Su un rotolo non resta così tanto tessuto.",
+      "fix": "Chiedi al magazzino di misurare di nuovo il rotolo."
+    },
+    "BUNDLE_NOT_ACTIVE": {
+      "message": "Questo fascio non è attivo.",
+      "fix": "Scansiona un altro fascio, o chiedi al tuo capo linea."
+    },
+    "BUNDLE_NEEDED": {
+      "message": "Un ritaglio ha bisogno del suo fascio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "NOT_OF_CELL": {
+      "message": "Non è il colore e la taglia del fascio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "Più di quanto contiene il fascio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "NOT_A_PART": {
+      "message": "Questa parte non è nel modello.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "NO_SOURCE": {
+      "message": "Il ritaglio non indica né un lotto né ritagli.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "LOT_OTHER_MATERIAL": {
+      "message": "Il lotto è di un altro materiale.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "LOT_NOT_SAME_SHADE": {
+      "message": "Il lotto è di un'altra tonalità del fascio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "REPLACEMENT_NOT_RECUT": {
+      "message": "La richiesta non è un ritaglio.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "REPLACEMENT_NOT_OPEN": {
+      "message": "La richiesta non è più aperta.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "REPLACEMENT_HAS_TICKET": {
+      "message": "La richiesta ha già il suo buono.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "REPLACEMENT_OTHER_CELL": {
+      "message": "La richiesta è per un altro colore o un'altra taglia.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "REPLACEMENT_OTHER_PART": {
+      "message": "La richiesta è per un'altra parte.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "MORE_THAN_REPLACEMENT": {
+      "message": "Più di quanto chiede la richiesta.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "TICKET_IS_CUT": {
+      "message": "Questo è un buono di taglio, non un ritaglio.",
+      "fix": "Scansionalo nella schermata iniziale."
+    },
+    "BUNDLE_VOID": {
+      "message": "Il fascio di questo ritaglio è annullato.",
+      "fix": "Chiedi all'ufficio taglio."
+    },
+    "KIND_OPEN_ALREADY": {
+      "message": "Questo fascio ha già questa lavorazione aperta.",
+      "fix": "Vai avanti con quella."
+    },
+    "ON_A_TROLLEY": {
+      "message": "Questo fascio è già su un carrello.",
+      "fix": "Prima toglilo dal carrello."
+    },
+    "NOT_A_WORK_CENTRE": {
+      "message": "Questa postazione non è un centro di lavoro per questa lavorazione.",
+      "fix": "Falla nella sua postazione."
+    },
+    "WORK_CENTRE_OUTSIDE": {
+      "message": "Questa lavorazione si fa fuori.",
+      "fix": "L'ufficio la manda al laboratorio."
+    },
+    "WRONG_STATE": {
+      "message": "Questa lavorazione ora non può avanzare.",
+      "fix": "Scansiona di nuovo il fascio."
+    },
+    "SUBCONTRACT_NEEDED": {
+      "message": "Una lavorazione esterna ha bisogno del suo ordine di conto lavoro.",
+      "fix": "La manda l'ufficio."
+    },
+    "SUBCONTRACT_NOT_SENDABLE": {
+      "message": "L'ordine di conto lavoro ora non può prenderla.",
+      "fix": "Chiedi all'ufficio."
+    },
+    "OUTSIDE_FROM_OFFICE": {
+      "message": "Una lavorazione esterna parte dall'ufficio.",
+      "fix": "Chiedi all'ufficio."
+    },
+    "NOT_A_TROLLEY": {
+      "message": "Questa non è l'etichetta di un carrello.",
+      "fix": "Scansiona l'etichetta sul carrello."
+    },
+    "TROLLEY_SENT": {
+      "message": "Questo carrello è già in viaggio.",
+      "fix": "Usa un altro carrello."
+    },
+    "NO_OPEN_TROLLEY": {
+      "message": "Nessun carrello con questa etichetta è in carico o in viaggio.",
+      "fix": "Prima scansiona i suoi fasci."
+    },
+    "TROLLEY_NOT_LOADING": {
+      "message": "Questo carrello è partito: i suoi fasci restano sopra.",
+      "fix": "Ricevilo in linea."
+    },
+    "TROLLEY_NOT_SENT": {
+      "message": "Questo carrello è ancora in carico.",
+      "fix": "Si riceve quando è partito."
+    },
+    "TROLLEY_EMPTY": {
+      "message": "Questo carrello non porta nessun fascio.",
+      "fix": "Prima scansiona i suoi fasci."
+    },
+    "TROLLEY_FULL": {
+      "message": "Questo carrello è pieno.",
+      "fix": "Invialo e carica un altro carrello."
+    },
+    "LINE_NEEDED": {
+      "message": "Per questo fascio non è pianificata nessuna linea.",
+      "fix": "Chiedi al tuo capo linea dove va."
+    },
+    "LINE_NOT_ACTIVE": {
+      "message": "La linea non è attiva.",
+      "fix": "Chiedi al tuo capo linea."
+    },
+    "PROCESS_PENDING": {
+      "message": "Questo fascio attende una lavorazione prima del cucito.",
+      "fix": "Prima fai la sua lavorazione, poi caricalo."
+    },
+    "ON_THIS_TROLLEY": {
+      "message": "Questo fascio è già su questo carrello.",
+      "fix": "Scansiona il fascio successivo."
+    },
+    "ON_ANOTHER_TROLLEY": {
+      "message": "Questo fascio è su un altro carrello.",
+      "fix": "Prima toglilo da quel carrello."
+    },
+    "NOT_ON_TROLLEY": {
+      "message": "Questo fascio non è su questo carrello.",
+      "fix": "Scansiona un fascio di questo carrello."
+    },
+    "OTHER_LINE": {
+      "message": "Questo carrello va a un'altra linea.",
+      "fix": "Mandalo avanti alla sua linea."
+    }
+  }
+}

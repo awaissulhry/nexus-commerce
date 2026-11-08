@@ -120,7 +120,13 @@ export interface ReceiveBody {
   supplierDdt?: { number: string } | null
 }
 
-const receiveAnswer = z.object({ order, receipt: z.object({ id: z.string(), receivedAt: z.string(), good: z.number(), defective: z.number(), scrapped: z.number(), bundles: z.number(), returned: z.number() }) })
+// B-W2b-115 (design floor.kits "goods go to inspection before stock and before the workshop is paid"; B-W2b-111's answer): the incoming
+// inspection a rule opened with the receipt (its API words are not read: the screen says its own), null: none.
+const receiveAnswer = z.object({
+  order,
+  receipt: z.object({ id: z.string(), receivedAt: z.string(), good: z.number(), defective: z.number(), scrapped: z.number(), bundles: z.number(), returned: z.number() }),
+  inspection: z.object({ id: z.string(), number: z.string() }).nullish(),
+})
 export type ReceiveAnswer = z.infer<typeof receiveAnswer>
 
 /** POST …/kits/:id/receive — ONE receipt; the key is kept for a retry of the same receipt. */
