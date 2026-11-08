@@ -485,7 +485,8 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     const frame = linkKinds().filter((kind) => linkTaskOf({ purpose: kind.purpose, record: { type: kind.recordType } }) === null)
     expect(frame.slice(0, 2)).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }, { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport' }])
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
-    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'JOB_ACCEPT', 'APPROVAL', 'RECORD_INVITE', 'SECURE_FILE']
+    // B-W2b-188: APPROVAL has its page (links/approve).
+    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'JOB_ACCEPT', 'RECORD_INVITE', 'SECURE_FILE']
     expect(frame.slice(2)).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     expect(LINK_TASK_RULES.map((rule) => rule.task).sort()).toEqual([...LINK_TASKS].sort())
