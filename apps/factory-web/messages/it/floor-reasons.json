@@ -52,5 +52,12 @@
   },
   "noteHeld": {
     "hold": "Questo motivo chiede una nota scritta: questo blocco lo mette la qualità in ufficio."
+  },
+  "cause": {
+    "title": "Quale operazione l'ha causato?",
+    "hint": "Attribuito all'operazione, mai a una persona.",
+    "notKnown": "Non so",
+    "here": "Op {seq} · {code} (questa)",
+    "op": "Op {seq} · {code}"
   }
 }

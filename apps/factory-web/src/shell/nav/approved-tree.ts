@@ -620,6 +620,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
+  // W2b: B-W2b-105 In-line inspection (SCR-176), tile family Quality; supervisor = a team leader's line tablet.
+  { id: 'floor.inline', title: 'In-line inspection', titleIt: 'Controllo in linea', tile: 'inline', modes: ['inspection', 'supervisor'] },
   // W2a: B-W2a-73 the floor area Maintenance & safety, its machine problem (SCR-179); Report an incident is W2b.
   { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
   // W2b: B-W2b-70 Call for help (SCR-172) and the team leader's Line view (SCR-168).

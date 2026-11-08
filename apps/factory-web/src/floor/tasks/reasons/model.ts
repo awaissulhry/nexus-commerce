@@ -305,3 +305,31 @@ export interface PickerList {
 export function listOffers(list: PickerList | null | undefined): boolean {
   return list?.state === 'ready' && list.reasons.length > 0
 }
+
+// ---- which operation caused it (B-W2b-105; design floor.reasons "attribute", MES-127, QHS-042) -----------------------
+
+/** The tile that charges nothing: the cause is not known (the default; a charge is never guessed). */
+export const NOT_KNOWN = 'NOT_KNOWN'
+
+/** An operation of the bundle a defect may be charged to (code and name; `here`: the operation on screen). */
+export interface CauseOperation {
+  readonly id: string
+  readonly seq: number
+  readonly code: string
+  readonly name: string
+  readonly here?: boolean
+}
+
+/** The host's "Which operation caused it?": the bundle's operations and the one picked (null: not known). */
+export interface CauseModel {
+  readonly operations: readonly CauseOperation[]
+  readonly value: string | null
+}
+
+/** The picked tile: the operation charged, else Not known (an operation no longer offered falls back to Not known). */
+export function causeValue(cause: CauseModel): string {
+  return cause.value && cause.operations.some((operation) => operation.id === cause.value) ? cause.value : NOT_KNOWN
+}
+
+/** What a tap means for the host: the operation's id, or null for Not known. */
+export const causeOf = (id: string): string | null => (id === NOT_KNOWN ? null : id)

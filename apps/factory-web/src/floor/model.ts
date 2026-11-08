@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -80,6 +80,9 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'labels', permission: 'production.serials', modes: ['packing'], built: true, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
+  // SCR-176 (B-W2b-105): In-line inspection at the inspection bench and on a team leader's line tablet (design floor.inline Modes:
+  // inspection, supervisor); its writes ask quality.inprocess.record (floor_inspector, team_leader). Its scans read a bundle's ticket.
+  { key: 'inline', permission: 'quality.inprocess.record', modes: ['inspection'], devices: ['LINE'], built: true, takesScans: true },
   // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
   // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
   { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
