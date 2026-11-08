@@ -13,7 +13,8 @@ import { dayValue } from '../store'
  *      still SENT; NOT its confirmation: a late date or a short quantity reaches the plan and the receipts only when the
  *      buyer accepts it (the plan keeps the need date, the receipt the ordered quantity until then);
  *   2. the order SENT → CHANGES_PROPOSED with the proposal's time, the link, the typed name, the supplier's reference and
- *      note (the trigger clears the buyer's last decision);
+ *      note (the trigger clears the buyer's last decision); no portal person (a proposal names exactly one of its link
+ *      and its person: an earlier portal proposal's person is cleared, B-W2b-F13a);
  *   3. the audit row of the whole answer, and purchase_order.changes_proposed (the worker tells the buyer).
  */
 export interface ProposalInput {
@@ -44,7 +45,7 @@ export async function recordProposal(tools: CommandTools, input: ProposalInput):
   }
   await tx.purchaseOrder.update({
     where: { id: order.id },
-    data: { status: 'CHANGES_PROPOSED', proposedAt: now, proposalLinkId: linkId, proposedByName: use.typedName, proposalSupplierRef: plan.supplierRef, proposalNote: plan.note },
+    data: { status: 'CHANGES_PROPOSED', proposedAt: now, proposalLinkId: linkId, proposedByUserId: null, proposedByName: use.typedName, proposalSupplierRef: plan.supplierRef, proposalNote: plan.note },
     select: { id: true },
   })
   const changed = plan.lines.filter((line) => line.kind !== 'AS_ASKED').length

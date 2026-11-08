@@ -1,0 +1,291 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Try again"
+  },
+  "section": {
+    "label": "Show",
+    "machines": "Machines",
+    "dies": "Clicking dies",
+    "wall": "Status wall"
+  },
+  "tab": {
+    "docs": "Documents & CE",
+    "status": "Status & downtime",
+    "tag": "Tag"
+  },
+  "tile": {
+    "checks": "Checks overdue",
+    "ce": "No CE declaration on file"
+  },
+  "tileHint": {
+    "checks": "Statutory checks past their due date",
+    "ce": "Art. 71: keep the CE declaration at hand"
+  },
+  "need": {
+    "ce": "Showing the machines without a CE declaration on file",
+    "checks": "Showing the machines with a statutory check overdue",
+    "clear": "Show all"
+  },
+  "col": {
+    "nextCheck": "Next check",
+    "ce": "CE on file",
+    "tag": "Tag printed"
+  },
+  "due": {
+    "OVERDUE": "Overdue",
+    "DUE_SOON": "Due soon",
+    "PLANNED": "Planned",
+    "ENDED": "Ended"
+  },
+  "depth": {
+    "noCheck": "No check planned",
+    "checkOverdue": "{check} · due {date}, {days} days ago",
+    "checkSoon": "{check} · {date}, in {days} days",
+    "checkPlanned": "{check} · {date}",
+    "ce": "CE declaration",
+    "ceOnFile": "On file",
+    "ceMissing": "Missing",
+    "manuals_one": "{count} manual",
+    "manuals_other": "{count} manuals",
+    "tagNever": "Never on a label printer",
+    "tagPrintedOn": "Printed {date}"
+  },
+  "printState": {
+    "QUEUED": "Queued",
+    "SENT": "Sent",
+    "PRINTED": "Printed",
+    "FAILED": "Not printed"
+  },
+  "held": {
+    "noMachines": "No machine on screen to tag",
+    "noneToTag": "The machines selected are retired: their tag reports nothing",
+    "noManage": "Changed by a role that keeps the machines (plant.machines.manage)",
+    "retired": "A retired machine keeps its last status",
+    "locked": "Locked as unsafe: its request's sign-safe frees it",
+    "pickStatus": "Pick the new status",
+    "sameStatus": "It is in this status already",
+    "technician": "Only a technician releases a do-not-use machine (plant.signSafe)",
+    "reason": "Say why, in a few words",
+    "busy": "Working on it…"
+  },
+  "keys": {
+    "printTags": "Print QR tags (the selection, else the rows on screen)"
+  },
+  "wall": {
+    "newTab": "Status wall (new tab)",
+    "title": "Status wall",
+    "tabTitle": "Status wall · every site",
+    "tabTitleSite": "Status wall · {site}",
+    "readAt": "Read at {time}",
+    "filter": "Filter by status",
+    "show": {
+      "ALL": "All",
+      "NOT_RUNNING": "Not running",
+      "DOWN": "Down",
+      "UNDER_MAINTENANCE": "Under maintenance",
+      "DO_NOT_USE": "Do not use"
+    },
+    "loading": "Reading the machines…",
+    "failed": "The status wall couldn't be read",
+    "emptyTitle": "No machine in use",
+    "empty": "Register the machines in Machines & tools: each shows here with its live status.",
+    "noneTitle": "None in this status",
+    "none": "Pick another status, or All.",
+    "truncated": "This wall shows the first 1000 machines: pick one site.",
+    "line": "Line {line}",
+    "noLine": "On no line · {site}",
+    "tileLabel": "{machine}: {status} since {since}",
+    "foot": "Live: a tile changes as soon as its machine does. A tile opens the machine."
+  },
+  "status": {
+    "open": "Change status",
+    "title": "Change the status of {machine}",
+    "submit": "Change status",
+    "now": "Now:",
+    "to": "New status",
+    "current": "Its status now",
+    "choice": {
+      "RUNNING": "Running",
+      "DOWN": "Down",
+      "UNDER_MAINTENANCE": "Under maintenance",
+      "DO_NOT_USE": "Do not use"
+    },
+    "choiceHint": {
+      "RUNNING": "It works and may be used",
+      "DOWN": "Stopped: it does not work now",
+      "UNDER_MAINTENANCE": "Someone is working on it",
+      "DO_NOT_USE": "Nobody may use it until a technician releases it"
+    },
+    "reason": "Why",
+    "reasonHint": "Kept in the machine's history (no person is named there).",
+    "lockedTitle": "Locked as unsafe",
+    "lockedBody": "Only a technician's sign-safe on the request that locked it frees this machine (Owner answer H1). Open the request in Machine requests.",
+    "doNotUseTitle": "Do not use needs a reason",
+    "doNotUseBody": "Only a technician releases it, with a fresh authenticator code.",
+    "releaseTitle": "You release a do-not-use machine",
+    "releaseBody": "A technician's act: a fresh authenticator code is asked when you confirm.",
+    "releaseHeldTitle": "A technician releases it",
+    "releaseHeldBody": "Your role cannot release a do-not-use machine: ask a technician (plant.signSafe).",
+    "cancelled": "No code given: the status did not change."
+  },
+  "stepUp": {
+    "title": "Confirm with your authenticator",
+    "confirm": "Release",
+    "release": "Releasing a machine marked do-not-use is a technician's act: type the six-digit code your authenticator shows now.",
+    "wrong": "That code is wrong or used: type the one showing now.",
+    "locked": "Too many tries: wait a moment.",
+    "unavailable": "The code couldn't be checked: try again."
+  },
+  "refusal": {
+    "MACHINE_RETIRED": "This machine is retired: its status no longer changes.",
+    "SAME_STATUS": "The machine is in this status already.",
+    "LOCKED_UNSAFE": "Locked as unsafe: it stays do-not-use until a technician signs its request safe.",
+    "DOCUMENT_KIND": "A CE declaration or a manual is a document; a photo goes under Photos.",
+    "TAG_RETIRED": "retired: its tag no longer offers Report a problem",
+    "TAG_OTHER_SITE": "stands at another site than the printer"
+  },
+  "docs": {
+    "loading": "Reading the documents…",
+    "failed": "The documents couldn't be read",
+    "forbidden": "Your role does not see this machine's documents.",
+    "notFound": "It does not exist, or you may not see it.",
+    "noCeTitle": "No CE declaration on file",
+    "noCeBody": "Upload the CE declaration first: D.Lgs. 81/2008 art. 71 asks for it, with the manuals, at hand.",
+    "noCeBodyRead": "Ask whoever keeps the machines to upload it: D.Lgs. 81/2008 art. 71 asks for it at hand.",
+    "emptyTitle": "No documents",
+    "empty": "Upload the CE declaration first, then the manuals.",
+    "group": {
+      "MACHINE_CE": "CE declaration",
+      "MANUAL": "Manuals",
+      "PHOTO": "Photos",
+      "OTHER": "Diagrams, wiring and settings sheets"
+    },
+    "groupEmpty": "None yet.",
+    "groupEmptyCe": "Missing: upload the declaration of conformity.",
+    "added": "Added {date} · {size}",
+    "onTablets": "On the tablets",
+    "quarantined": "Held by the virus scan",
+    "scanning": "Being scanned",
+    "view": "View",
+    "viewOne": "View {name}",
+    "downloadOne": "Download {name}",
+    "removeOne": "Remove {name}",
+    "download": "Download",
+    "held": {
+      "notAvailable": "Not available yet (the upload or the scan is not done)",
+      "noManage": "Removed by a role that keeps the machines (plant.machines.manage)",
+      "reason": "Say why, in a few words",
+      "manualPdf": "A manual is a PDF: file a photo under Photos.",
+      "photoImage": "A photo is an image (JPEG, PNG, WebP or HEIC)."
+    },
+    "uploadTitle": "Upload",
+    "uploadHeld": "Documents are added by a role that keeps the machines (plant.machines.manage).",
+    "groupLabel": "What it is",
+    "tabletsLabel": "Show on the site's tablets",
+    "tabletsHint": "Art. 71: the manuals at hand where the machine works.",
+    "uploading": "Uploading…",
+    "uploaded": "{name} is filed",
+    "law": "Paper today: this tab says what is missing; nothing stops a machine without it.",
+    "removeTitle": "Remove {name}",
+    "removeBody": "A wrong or superseded file leaves the machine's documents; the reason is kept.",
+    "removeCeBody": "Without it the machine shows No CE declaration on file again; the reason is kept.",
+    "removeReason": "Why",
+    "remove": "Remove",
+    "viewFailed": "The file couldn't be opened",
+    "reading": "Opening…",
+    "noPreview": "No preview for this file",
+    "noPreviewBody": "Download it to open it."
+  },
+  "history": {
+    "weekNav": "Week",
+    "previous": "Previous week",
+    "next": "Next week",
+    "held": {
+      "future": "This week is the latest"
+    },
+    "thisWeek": "This week",
+    "week": "{from} – {to}",
+    "loading": "Reading the history…",
+    "failed": "The history couldn't be read",
+    "overTime": "Status over time",
+    "now": "Now:",
+    "totals": "Time in each status this week",
+    "noneThisWeek": "Nothing to draw this week (registered later, or a week to come).",
+    "statusRow": "Status",
+    "foot": "The history starts at the machine's first change; it names no person. Idle comes with machine signals (later).",
+    "changes": "Changes and reasons",
+    "noChanges": "No change yet: it has been in its status since it was registered.",
+    "when": "When",
+    "from": "From",
+    "to": "To",
+    "reason": "Why",
+    "registered": "Registered"
+  },
+  "tag": {
+    "title": "QR tag",
+    "print": "Print tag",
+    "reprint": "Reprint",
+    "facts": "Printing",
+    "printedOn": "Printed on",
+    "notPrinted": "Not on a label printer yet",
+    "state": "Print state",
+    "noJob": "No print job",
+    "printer": "Printer",
+    "opensTitle": "What the QR opens",
+    "opensStation": "A station's scan: this machine with Report a problem.",
+    "opensPhone": "A phone camera reads the asset number (the form without sign-in comes later).",
+    "opensReprint": "A reprint is the same tag: the old one keeps opening the machine.",
+    "retired": "Retired: its tag no longer offers Report a problem."
+  },
+  "tags": {
+    "title_one": "Print the QR tag of {count} machine",
+    "title_other": "Print the QR tags of {count} machines",
+    "paper": "Print on paper",
+    "print_one": "Print {count} tag",
+    "print_other": "Print {count} tags",
+    "sent_one": "{count} tag sent to the printer",
+    "sent_other": "{count} tags sent to the printer",
+    "sentBody": "Each tag's state shows under it: queued, sent, printed or not printed.",
+    "refusedLine": "{machine}: {why}",
+    "printer": "Label printer",
+    "printerHint": "A label printer of the machines' site.",
+    "stock": "Labels {width} × {height} mm · {dpi} dpi",
+    "noPrinter": "No label printer",
+    "pickPrinter": "Pick a printer",
+    "copies": "Copies of each",
+    "copiesHint": "One for the machine, one spare.",
+    "fewer": "One copy less",
+    "moreCopies": "One copy more",
+    "noRightBody": "Your role does not send labels to a label printer: print the tag sheet on paper.",
+    "printersFailed": "The printers couldn't be read",
+    "noPrinterTitle": "No label printer at this site",
+    "noPrinterBody": "Print the tag sheet on paper, or add a label printer in Admin › Devices & printers.",
+    "leftOut_one": "Left out: {machines} (retired, or at another site).",
+    "leftOut_other": "Left out: {machines} (retired, or at another site).",
+    "noneTitle": "No machine to tag",
+    "noneBody": "Pick machines in the register first.",
+    "more_one": "and {count} more tag, printed the same way",
+    "more_other": "and {count} more tags, printed the same way",
+    "how": "The QR holds the asset number: a station's scan opens the machine with Report a problem.",
+    "qrLabel": "QR tag of {machine}",
+    "labelName": "Tag {machine}",
+    "labelAsset": "Asset no.",
+    "labelType": "Type",
+    "labelPlace": "Where",
+    "scan": "Scan to report a problem",
+    "retry": "Retry",
+    "onPrinter": "{printer} · {at}",
+    "failedDetail": "{printer} did not print it",
+    "held": {
+      "noRight": "Your role does not send labels to a label printer",
+      "reading": "Reading the printers…",
+      "noPrinter": "No label printer at this site: print on paper",
+      "pickPrinter": "Pick a label printer",
+      "none": "No machine here prints on this printer",
+      "busy": "Sending…",
+      "retired": "A retired machine's tag reports nothing"
+    }
+  }
+}

@@ -2,7 +2,9 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { MachineRecord } from '../../_shared/api'
 import { canAs, card, CARDS, CLASS_LIST, inShell, JOBS, MACHINES, PREFIX, REQUESTS, SITES, type PlantRole } from '../../_shared/fixtures'
-import type { MachineRecordModel, MachineTab } from '../view-model'
+import { STEP_UP_CLOSED } from '../../_shared/parts'
+import { DOCUMENTS, FACTS, HISTORY, recordDepth, tagJob, tagsState } from '../depth/fixtures'
+import type { MachineRecordModel, MachineTab, RecordDepth } from '../view-model'
 import { MachineRecordView } from './view/MachineRecordView'
 
 /**
@@ -41,10 +43,16 @@ function record(role: PlantRole, tab: MachineTab, value: MachineRecord | null, o
       field: null,
       retire: null,
       notice: null,
+      depth: recordDepth({ facts: value ? (FACTS[value.card.machine.id] ?? null) : null }),
       ...over,
     },
   }
 }
+
+/** B-W2b-136: a record with its depth changed. */
+const deep = (role: PlantRole, tab: MachineTab, value: MachineRecord | null, depth: Partial<RecordDepth>, over: Partial<MachineRecordModel> = {}): MachineCase =>
+  record(role, tab, value, { ...over, depth: recordDepth({ facts: value ? (FACTS[value.card.machine.id] ?? null) : null, ...depth }) })
+const docs = (over: Partial<RecordDepth['documents']>): RecordDepth['documents'] => ({ ...recordDepth().documents, ...over })
 
 function MachineDesign({ model }: { model: MachineCase }) {
   const id = model.record.loaded.status === 'ready' ? model.record.loaded.value.card.machine.id : 'x'
@@ -55,7 +63,7 @@ const edit = { siteId: MACHINES.sew1.siteId, assetNumber: MACHINES.sew1.assetNum
 
 export const designScreen = defineDesignScreen<MachineCase>({
   screen: 'SCR-150-record',
-  title: 'Machine (Overview, Maintenance history)',
+  title: 'Machine (Overview, Documents & CE, Maintenance history, Status & downtime, Tag)',
   view: MachineDesign,
   cases: [
     { id: 'overview', label: 'Overview: a running machine (maintenance lead, no money)', model: record('maintenance', 'overview', SEW1) },
@@ -73,5 +81,48 @@ export const designScreen = defineDesignScreen<MachineCase>({
     { id: 'not-found', label: 'Not found', model: record('maintenance', 'overview', null, { loaded: { status: 'notFound' } }) },
     { id: 'error', label: "Couldn't be read", model: record('maintenance', 'overview', null, { loaded: { status: 'error', problem: 'problem.unavailable' } }) },
     { id: 'sales', label: 'Sales: no plant.view', model: record('sales', 'overview', null, { loaded: { status: 'forbidden' } }) },
+    // B-W2b-136: Documents & CE, Status & downtime, Tag, Change status.
+    { id: 'w2a-only', label: 'The W2a record without the depth (as before B-W2b-136)', model: record('maintenance', 'overview', SEW1, { depth: undefined }) },
+    { id: 'now-check', label: 'Now panel: the next statutory check overdue, CE on file', model: record('maintenance', 'overview', { ...SEW1, card: card(MACHINES.press) }) },
+    { id: 'docs', label: 'Documents & CE: CE declaration, manuals, photos, the rest; on the tablets; the scan', model: record('maintenance', 'docs', SEW1), note: 'art. 71 c.4: the manuals at hand where the machine works.' },
+    { id: 'docs-no-ce', label: 'Documents & CE: no CE declaration on file (flagged first)', model: deep('maintenance', 'docs', SEW1, { documents: docs({ loaded: { status: 'ready', value: { documents: DOCUMENTS.filter((row) => row.group !== 'MACHINE_CE'), ceOnFile: false, canManage: true } } }) }) },
+    { id: 'docs-empty', label: 'Documents & CE: nothing yet ("Upload the CE declaration first")', model: deep('maintenance', 'docs', SEW1, { documents: docs({ loaded: { status: 'ready', value: { documents: [], ceOnFile: false, canManage: true } } }) }) },
+    { id: 'docs-uploading', label: 'Documents & CE: a manual uploading', model: deep('maintenance', 'docs', SEW1, { documents: docs({ upload: { group: 'MANUAL', onTablets: true, busy: true, problem: null, done: null } }) }) },
+    { id: 'docs-uploaded', label: 'Documents & CE: uploaded', model: deep('maintenance', 'docs', SEW1, { documents: docs({ upload: { group: 'MACHINE_CE', onTablets: true, busy: false, problem: null, done: 'dichiarazione-ce.pdf' } }) }) },
+    { id: 'docs-refused', label: 'Documents & CE: a photo refused as a manual (in words)', model: deep('maintenance', 'docs', SEW1, { documents: docs({ upload: { group: 'MANUAL', onTablets: true, busy: false, problem: { key: 'depth:docs.held.manualPdf' }, done: null } }) }) },
+    { id: 'docs-viewer', label: 'Documents & CE: a file open for a look (reading)', model: deep('maintenance', 'docs', SEW1, { documents: docs({ viewer: { document: DOCUMENTS[0]!, bytes: null, url: null, problem: null } }) }) },
+    { id: 'docs-remove', label: 'Documents & CE: Remove asks the reason', model: deep('maintenance', 'docs', SEW1, { documents: docs({ remove: { document: DOCUMENTS[2]!, reason: '', busy: false, problem: null } }) }) },
+    { id: 'docs-read-only', label: 'Documents & CE read-only (floor supervisor): upload and remove held', model: deep('supervisor', 'docs', { ...SEW1, canManage: false }, { documents: docs({ loaded: { status: 'ready', value: { documents: DOCUMENTS, ceOnFile: true, canManage: false } } }) }) },
+    { id: 'docs-loading', label: 'Documents & CE loading', model: deep('maintenance', 'docs', SEW1, { documents: docs({ loaded: { status: 'loading' } }) }) },
+    { id: 'docs-error', label: "Documents & CE couldn't be read", model: deep('maintenance', 'docs', SEW1, { documents: docs({ loaded: { status: 'error', problem: 'problem.unavailable' } }) }) },
+    { id: 'status', label: 'Status & downtime: the week day by day, the time per status, the changes with reasons', model: record('maintenance', 'status', SEW1) },
+    { id: 'status-loading', label: 'Status & downtime loading', model: deep('maintenance', 'status', SEW1, { history: { loaded: { status: 'loading' }, week: '2026-10-26' } }) },
+    { id: 'status-error', label: "Status & downtime couldn't be read", model: deep('maintenance', 'status', SEW1, { history: { loaded: { status: 'error', problem: 'problem.unavailable' }, week: '2026-10-26' } }) },
+    { id: 'status-quiet', label: 'Status & downtime: no change this week', model: deep('maintenance', 'status', SEW1, { history: { loaded: { status: 'ready', value: { ...HISTORY, events: [], latest: [] } }, week: '2026-10-26' } }) },
+    { id: 'status-locked', label: 'Status & downtime: locked as unsafe, Change status held (H1)', model: record('maintenance', 'status', SEW2) },
+    { id: 'change', label: 'Change status: down, with the reason', model: deep('maintenance', 'overview', SEW1, { status: { draft: { to: 'DOWN', reason: 'Motore surriscaldato' }, busy: false, problem: null } }) },
+    { id: 'change-dnu', label: 'Change status to do-not-use: a reason, and only a technician releases it', model: deep('production', 'overview', SEW1, { status: { draft: { to: 'DO_NOT_USE', reason: '' }, busy: false, problem: null } }) },
+    {
+      id: 'change-release',
+      label: 'Release from do-not-use: a technician, with a fresh code',
+      model: deep('maintenance', 'overview', { ...SEW1, card: card({ ...MACHINES.sew1, status: 'DO_NOT_USE', statusReason: 'Protezione incrinata' }) }, { status: { draft: { to: 'RUNNING', reason: 'Ricambio montato' }, busy: false, problem: null } }),
+    },
+    {
+      id: 'change-release-held',
+      label: 'Release held without plant.signSafe (production manager)',
+      model: deep('production', 'overview', { ...SEW1, card: card({ ...MACHINES.sew1, status: 'DO_NOT_USE', statusReason: 'Protezione incrinata' }) }, { status: { draft: { to: 'RUNNING', reason: 'Ricambio montato' }, busy: false, problem: null } }),
+    },
+    {
+      id: 'change-stepup',
+      label: 'The fresh code of the release',
+      model: deep('maintenance', 'overview', { ...SEW1, card: card({ ...MACHINES.sew1, status: 'DO_NOT_USE', statusReason: 'Protezione incrinata' }) }, { status: { draft: { to: 'RUNNING', reason: 'Ricambio montato' }, busy: true, problem: null }, stepUp: { ...STEP_UP_CLOSED, open: true, sentence: 'stepUp.release' } }),
+    },
+    { id: 'change-refused', label: 'Change status refused: locked as unsafe (in words)', model: deep('maintenance', 'overview', SEW2, { status: { draft: { to: 'UNDER_MAINTENANCE', reason: 'Prova' }, busy: false, problem: { key: 'depth:refusal.LOCKED_UNSAFE' } } }) },
+    { id: 'tag', label: 'Tag: the tag to scale with its QR, printed on a day', model: record('maintenance', 'tag', SEW1) },
+    { id: 'tag-failed', label: 'Tag: the last print failed (Retry)', model: deep('maintenance', 'tag', SEW1, { tagJob: { status: 'ready', value: tagJob(MACHINES.sew1.id, 'FAILED') } }) },
+    { id: 'tag-never', label: 'Tag: never sent to a label printer', model: deep('maintenance', 'tag', SEW1, { tagJob: { status: 'ready', value: null } }) },
+    { id: 'tag-print', label: 'Tag: Print QR tags for this machine', model: deep('maintenance', 'tag', SEW1, { tags: tagsState({ machines: [tagsState().machines[0]!] }) }) },
+    { id: 'tag-retired', label: 'Tag of a retired machine: nothing to print', model: deep('maintenance', 'tag', RETIRED, { tagJob: { status: 'ready', value: null } }) },
+    { id: 'tag-no-right', label: 'Tag: print held without print.labels (production manager)', model: deep('production', 'tag', SEW1, { canPrint: false }) },
   ],
 })

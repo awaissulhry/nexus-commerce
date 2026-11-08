@@ -1,5 +1,5 @@
 import type { BusinessDate } from '../../core/time'
-import type { TrackingStatus } from '../../shipping/labels/tracking'
+import { trackingPageOf, type TrackingStatus } from '../../shipping/labels/tracking'
 import type { ShipmentStatus } from '../../shipping/shipments'
 import type { ProgressRow } from '../orders/orders'
 import type { Words } from './status'
@@ -18,6 +18,11 @@ import type { Words } from './status'
  *   still to ship  per line and size, the pieces ordered and not shipped yet (a line closed short: nothing), expected on
  *               the line's own promise date, else the order's
  * The carrier's own words of an event (its description and place) are passed on as the carrier wrote them.
+ *
+ *   ETA         B-W2b-F14: the carrier's expected delivery while the goods are packed or on the way (none once delivered
+ *               or returned: the day it happened is shown instead)
+ *   track       B-W2b-F14: "Track on the carrier's site", a parcel's tracking page when it is an https address (anything
+ *               else is never shown)
  */
 
 export const SHOWN_SHIPMENT_STATUSES: readonly ShipmentStatus[] = Object.freeze(['PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED'])
@@ -129,4 +134,18 @@ export function stillToShipOf(rows: readonly ProgressRow[], lines: readonly Open
       const line = lines.find((entry) => entry.id === row.lineId)
       return { lineId: row.lineId, seq: row.seq, size: row.size, ordered: row.ordered, shipped: row.shipped, open: row.toShip, expected: line?.promiseDate ?? orderPromise }
     })
+}
+
+// ---- the carrier's ETA and tracking page (B-W2b-F14) -------------------------------------------------------------------
+
+/** The link's words. */
+export const TRACK_ON_CARRIER_WORDS: Words = Object.freeze({ it: 'Segui sul sito del corriere', en: "Track on the carrier's site" })
+
+/** The ETA the customer sees: while the shipment is packed or on the way; null once it arrived or came back. */
+export const customerEtaOf = (status: ShipmentStatus, expectedDeliveryAt: Date | null): Date | null => (status === 'PACKED' || status === 'SHIPPED' ? expectedDeliveryAt : null)
+
+/** A parcel's "Track on the carrier's site" link, or null (no page kept, or not an https one). */
+export function trackingLinkOf(url: string | null): { readonly url: string; readonly words: Words } | null {
+  const page = trackingPageOf(url)
+  return page ? { url: page, words: TRACK_ON_CARRIER_WORDS } : null
 }

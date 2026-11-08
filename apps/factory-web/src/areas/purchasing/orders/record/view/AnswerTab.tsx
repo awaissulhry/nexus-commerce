@@ -32,6 +32,8 @@ function Answer({ answer, order, model, actions }: { answer: SupplierAnswer; ord
   const proposal = answer.proposal
   const waiting = answer.answer === 'WAITING'
   const live = answer.links.find((link) => link.state === 'LIVE') ?? null
+  // B-W2b-F13a: how the supplier answered — the confirmation's channel, else the proposal's (a link, or a person in the portal).
+  const how = answer.confirmation?.via ?? (proposal ? (proposal.via ?? (proposal.linkId === null ? 'PORTAL' : 'LINK')) : 'LINK')
 
   const head = (() => {
     switch (answer.answer) {
@@ -48,7 +50,9 @@ function Answer({ answer, order, model, actions }: { answer: SupplierAnswer; ord
               ? answer.confirmation.byName
                 ? t('po.answer.confirmedByName', { name: answer.confirmation.byName, date: formatDateTime(answer.confirmation.at, place) })
                 : t('po.answer.confirmedLink', { date: formatDateTime(answer.confirmation.at, place) })
-              : t('po.answer.confirmedOffice', { date: answer.confirmation ? formatDateTime(answer.confirmation.at, place) : '—' }),
+              : answer.confirmation?.via === 'PORTAL'
+                ? t('po.answer.confirmedPortal', { name: answer.confirmation.byName ?? order.supplier.name, date: formatDateTime(answer.confirmation.at, place) })
+                : t('po.answer.confirmedOffice', { date: answer.confirmation ? formatDateTime(answer.confirmation.at, place) : '—' }),
         }
       case 'DECLINED':
         return { tone: 'danger' as const, icon: <XCircle size={18} className="fw-by-ico is-blocked" aria-hidden />, words: t('po.answer.declined', { date: answer.decline ? formatDateTime(answer.decline.at, place) : '—' }) }
@@ -97,8 +101,8 @@ function Answer({ answer, order, model, actions }: { answer: SupplierAnswer; ord
               labelCase="sentence"
               items={[
                 ...(answer.confirmation?.supplierRef || proposal?.supplierRef ? [{ label: t('po.answer.theirRef'), value: answer.confirmation?.supplierRef ?? proposal?.supplierRef ?? '' }] : []),
-                ...(answer.confirmation?.byName || proposal?.byName ? [{ label: t('po.answer.typedName'), value: answer.confirmation?.byName ?? proposal?.byName ?? '' }] : []),
-                { label: t('po.answer.how'), value: t(answer.confirmation?.via === 'OFFICE' ? 'po.answer.viaOffice' : 'po.answer.viaLink') },
+                ...(answer.confirmation?.byName || proposal?.byName ? [{ label: t(how === 'PORTAL' ? 'po.answer.person' : 'po.answer.typedName'), value: answer.confirmation?.byName ?? proposal?.byName ?? '' }] : []),
+                { label: t('po.answer.how'), value: t(how === 'OFFICE' ? 'po.answer.viaOffice' : how === 'PORTAL' ? 'po.answer.viaPortal' : 'po.answer.viaLink') },
               ]}
             />
           )}

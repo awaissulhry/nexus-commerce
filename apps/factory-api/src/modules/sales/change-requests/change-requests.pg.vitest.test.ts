@@ -169,7 +169,7 @@ describe('the rules before the click (SAL-078)', { timeout: SLOW_TEST_TIMEOUT_MS
     expect(settings).toMatchObject({ source: 'TENANT', inForce: { cancelCutoffStatus: null, cancelCutoffDays: null, changeCutoffStatus: null } })
     expect((await thrown(saveCutoffs(viewOnly(), { version: settings.row!.version, cancelCutoffStatus: 'IN_PRODUCTION', cancelCutoffDays: 365, changeCutoffStatus: 'CONFIRMED' }, undefined, h.clock))).code).toBe('forbidden')
     const saved = await saveCutoffs(office(), { version: settings.row!.version, cancelCutoffStatus: 'IN_PRODUCTION', cancelCutoffDays: 365, changeCutoffStatus: 'CONFIRMED' }, undefined, h.clock)
-    expect(saved.inForce).toEqual({ cancelCutoffStatus: 'IN_PRODUCTION', cancelCutoffDays: 365, changeCutoffStatus: 'CONFIRMED' })
+    expect(saved.inForce).toEqual({ cancelCutoffStatus: 'IN_PRODUCTION', cancelCutoffDays: 365, changeCutoffStatus: 'CONFIRMED', cancelFeePct: null })
     const so1 = await orderOf('SEED-SO-0001')
     const rules = await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)
     expect(rules.change).toMatchObject({ code: 'STATUS', words: { en: 'Not possible from the portal: write to us on the order' } })
@@ -203,7 +203,14 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
   it('takes the change, shows it to both customer roles and in the office’s Approvals, then the amendment applies it', async () => {
     const so1 = await orderOf('SEED-SO-0001')
     const [blk, red] = await linesOf(so1.id)
-    const address = (await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)).addresses[0]
+    // B-W2b-F13b (wave 23): the customer asks to deliver to an address its admin added, which waits for our check.
+    const address = { id: newId() }
+    await admin(
+      `INSERT INTO "PartyAddress" (id, "tenantId", "partyId", kinds, name, line1, "postalCode", city, province, country, "approvalStatus", "requestedAt", "requestedByUserId", "createdAt", "updatedAt", "createdById")
+       VALUES ($1, $2, $3, '{SHIP_TO}', 'Seed waiting dock', 'Via Esempio 7', '40100', 'Bologna', 'BO', 'IT', 'WAITING', now() - interval '1 day', $4, now() - interval '1 day', now() - interval '1 day', $4)`,
+      [address.id, T, P1, partnerIds.buyer],
+    )
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)).addresses.map((row: Json) => row.id)).toContain(address.id)
     const wanted = addDays(TODAY(), 50)
     const asked = await browsers.buyer.post(`/portal/sales-orders/${so1.id}/change-requests`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '52', quantity: 6 }, { lineId: red!.id, size: '54', quantity: 0 }], requestedDate: wanted, shipToAddressId: address.id, note: 'Our season starts earlier.' }, { headers: { 'idempotency-key': 'change-request-so1-1' } })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
@@ -248,7 +255,9 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
     const accepted = await acceptRequest(office(), request.id, { version: 1, answer: 'Done: the new date holds.' }, undefined, h.clock)
     expect(accepted.request).toMatchObject({ status: 'ACCEPTED', answer: 'Done: the new date holds.', answeredBy: 'Otto Office', amendment: { revision: 1 }, mayAnswer: false })
     const order = await one('SELECT "requestedDate"::text AS requested, "reapprovalNeededAt" IS NOT NULL AS reaccept, "shipTo"->>\'name\' AS ship FROM "SalesOrder" WHERE id = $1', [so1.id])
-    expect(order).toEqual({ requested: wanted, reaccept: true, ship: 'Seed Racing workshop' })
+    expect(order).toEqual({ requested: wanted, reaccept: true, ship: 'Seed waiting dock' })
+    // B-W2b-F13b: accepting the request approved the waiting address in the same command (by the office person).
+    expect(await one('SELECT "approvalStatus"::text AS approval, "decidedById" IS NOT NULL AS decided FROM "PartyAddress" WHERE id = $1', [address.id])).toEqual({ approval: 'APPROVED', decided: true })
     expect(await admin('SELECT l.seq, s.size, s.quantity FROM "SalesOrderLineSize" s JOIN "SalesOrderLine" l ON l.id = s."lineId" WHERE l."orderId" = $1 ORDER BY l.seq, s.size', [so1.id])).toEqual([
       { seq: 10, size: '50', quantity: 2 },
       { seq: 10, size: '52', quantity: 6 },
@@ -326,5 +335,57 @@ describe('a cancel asked, withdrawn, refused (SAL-078)', { timeout: SLOW_TEST_TI
     // A closed line is not asked to be cancelled again.
     const rules = await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)
     expect(rules.lines[1].cancel.code).toBe('CLOSED_SHORT')
+  })
+})
+
+describe('the cancel fee (B-W2b-F14, SalesSettings.cancelFeePct): shown, never charged', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const feeOf = (net: number, pct: number) => Math.round((net * pct) / 100)
+  const netOf = async (orderId: string) => new Map((await admin<{ id: string; net: number }>('SELECT id, "netAmount" AS net FROM "SalesOrderLine" WHERE "orderId" = $1', [orderId])).map((row) => [row.id, row.net]))
+
+  it('refuses a fee out of range in words; saves 15 %; the cancel pop-up shows the fee per line and for the whole order before the click', async () => {
+    const settings = await getCutoffs(office(), {})
+    expect(settings).toMatchObject({ inForce: { cancelFeePct: null }, cancelFeeWords: { en: 'Free to cancel' } })
+    const base = { version: settings.row!.version, cancelCutoffStatus: null, cancelCutoffDays: null, changeCutoffStatus: null }
+    for (const wrong of ['120', '-1', '12.34567', 'fifteen']) {
+      const refusal = await thrown(saveCutoffs(office(), { ...base, cancelFeePct: wrong }, undefined, h.clock))
+      expect(refusal).toMatchObject({ code: 'validation_failed', message: 'A percentage from 0 to 100, at most 4 decimals, or none (free).', issues: [{ path: 'body/cancelFeePct' }] })
+    }
+    // Leaving it out changes nothing; naming it saves it.
+    const unchanged = await saveCutoffs(office(), base, undefined, h.clock)
+    expect(unchanged.inForce.cancelFeePct).toBeNull()
+    const saved = await saveCutoffs(office(), { ...base, version: unchanged.row!.version, cancelFeePct: '15' }, undefined, h.clock)
+    expect(saved).toMatchObject({ inForce: { cancelFeePct: '15' }, row: { cutoffs: { cancelFeePct: '15' } }, cancelFeeWords: { en: "Fee 15% of the cancelled lines' value", it: 'Penale del 15% sul valore delle righe annullate' } })
+    expect((await outbox('sales_settings.changed')).at(-1)!.payload).toMatchObject({ fields: ['cancelFeePct'] })
+
+    const so2 = await orderOf('SEED-SO-0002')
+    const net = await netOf(so2.id)
+    const rules = await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests/rules`)
+    expect(rules.cancelFee).toMatchObject({ pct: '15', words: { en: "Fee 15% of the cancelled lines' value" }, currency: 'EUR' })
+    expect(rules.lines.map((line: Json) => [line.seq, line.cancelFee])).toEqual(rules.lines.map((line: Json) => [line.seq, feeOf(net.get(line.lineId)!, 15)]))
+    expect(rules.cancelFee.wholeOrderFee).toBe([...net.values()].reduce((total, value) => total + feeOf(value, 15), 0))
+    expect(rules.lines.some((line: Json) => line.cancelFee > 0)).toBe(true)
+  })
+
+  it('a waiting cancel shows the fee per line (the amounts only with the price grain); the office’s answer shows it and keeps it on the audit rows', async () => {
+    const so2 = await orderOf('SEED-SO-0002')
+    const [, free] = await linesOf(so2.id)
+    const net = (await netOf(so2.id)).get(free!.id)!
+    const made = await browsers.buyer.post(`/portal/sales-orders/${so2.id}/change-requests`, { kind: 'CANCEL', reasonCode: 'PRICE', lineIds: [free!.id] })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const fee = { pct: '15', currency: 'EUR', lines: [{ lineId: free!.id, seq: 20, fee: feeOf(net, 15) }], totalFee: feeOf(net, 15) }
+    expect(made.body.request.cancelFee).toMatchObject(fee)
+    // The viewer reads the request and the percent, never the amounts (no price grain).
+    const seen = (await ok(browsers.viewer, `/portal/sales-orders/${so2.id}/change-requests`)).items[0]
+    expect(seen.cancelFee).toEqual({ pct: '15', words: { en: "Fee 15% of the cancelled lines' value", it: 'Penale del 15% sul valore delle righe annullate' }, currency: 'EUR', lines: [{ lineId: free!.id, seq: 20 }] })
+    const record = await officeRecord(office(), made.body.request.id, h.clock.now())
+    expect(record.request.cancelFee).toMatchObject(fee)
+    const accepted = await acceptRequest(office(), made.body.request.id, { version: 1 }, undefined, h.clock)
+    expect(accepted).toMatchObject({ orderCancelled: false, request: { status: 'ACCEPTED', cancelFee: null }, cancelFee: fee })
+    const audit = await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.acceptChangeRequest' AND "recordId" = $1`, [made.body.request.id])
+    expect(audit.after.cancelFee).toEqual({ pct: '15', currency: 'EUR', lines: [{ lineId: free!.id, seq: 20, fee: { $money: 'price', value: feeOf(net, 15) } }], totalFee: { $money: 'price', value: feeOf(net, 15) } })
+    // No money moved: no invoice, no credit note for the order.
+    expect(await admin('SELECT count(*)::int AS n FROM "Invoice" WHERE "salesOrderId" = $1', [so2.id])).toEqual([{ n: 0 }])
+    // A change carries no fee.
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests`)).items.every((row: Json) => row.cancelFee === null)).toBe(true)
   })
 })

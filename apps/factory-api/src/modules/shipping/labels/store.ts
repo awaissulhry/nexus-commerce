@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { cutOffOf, isLabelled, type LabelEnvironment, type LabelFacts, type LabelParcel } from '@nexus/factory-domain/shipping/labels/labels'
-import { latestByParcel, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
+import { latestByParcel, trackingPageOf, type TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import type { CommandTx } from '../../../core/command'
 import { liveDdtOf } from '../ddt/store'
 import type { ShipmentHeader } from '../store'
@@ -23,6 +23,8 @@ export const LABEL_PARCEL_SELECT = {
   trackingNumber: true,
   carrierParcelId: true,
   labelledAt: true,
+  // B-W2b-F14: the carrier's tracking page, kept at the purchase.
+  trackingUrl: true,
 } as const satisfies Prisma.ParcelSelect
 
 export type LabelParcelRow = Prisma.ParcelGetPayload<{ select: typeof LABEL_PARCEL_SELECT }>
@@ -201,8 +203,19 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { cutOffTime: true, labelPrinterId: true } })
   const cutOff = cutOffOf(settings?.cutOffTime ?? null, now)
   const parcels = rows.map(labelParcelOf)
+  const pageOf = new Map(rows.map((row) => [row.id, trackingPageOf(row.trackingUrl)]))
   return {
-    shipment: { id: shipment.id, number: shipment.number, status: shipment.status, version: shipment.version, transportBy: shipment.transportBy, carrierCode: shipment.carrierCode, carrierName: shipment.carrierName, serviceCode: shipment.serviceCode },
+    shipment: {
+      id: shipment.id,
+      number: shipment.number,
+      status: shipment.status,
+      version: shipment.version,
+      transportBy: shipment.transportBy,
+      carrierCode: shipment.carrierCode,
+      carrierName: shipment.carrierName,
+      serviceCode: shipment.serviceCode,
+      expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
+    },
     labelPrinterId: settings?.labelPrinterId ?? null,
     cutOff: cutOff ? { time: cutOff.time, at: toUtcIso(cutOff.at), passed: cutOff.passed } : null,
     toLabel: parcels.filter((parcel) => !isLabelled(parcel)).length,
@@ -212,6 +225,7 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
       version: parcel.version,
       grossWeightKg: parcel.grossWeightKg,
       trackingNumber: parcel.trackingNumber,
+      trackingUrl: pageOf.get(parcel.id) ?? null,
       labelledAt: parcel.labelledAt ? toUtcIso(parcel.labelledAt) : null,
       files: files.get(parcel.id) ?? [],
       print: prints.get(parcel.id) ?? null,

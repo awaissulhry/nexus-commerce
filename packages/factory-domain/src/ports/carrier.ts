@@ -82,6 +82,11 @@ export interface CarrierLabel {
   readonly providerId: string
   readonly trackingNumber: string
   readonly trackingUrl: string | null
+  /**
+   * B-W2b-F14: when the carrier expects to deliver it (an ISO instant, or a day "2026-11-10"); absent or null: it said
+   * nothing (the Sendcloud v3 adapter does not map one yet; the fake does).
+   */
+  readonly expectedDeliveryAt?: string | null
   /** The carrier that carries it, as the provider names it. */
   readonly carrierCode: string | null
   readonly carrierName: string | null
@@ -115,6 +120,8 @@ export interface CarrierTrackingEvent {
   readonly code: string
   readonly description: string | null
   readonly location: string | null
+  /** B-W2b-F14: the carrier's expected delivery as of this event (ISO instant or day); absent or null: not said. */
+  readonly expectedDeliveryAt?: string | null
 }
 
 /** A label of a parcel, as tracking asks for it. */

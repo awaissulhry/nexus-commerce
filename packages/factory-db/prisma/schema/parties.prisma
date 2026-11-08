@@ -10,7 +10,8 @@
 // append-only (the hand-written …_parties_guards migration's triggers hold it for every login). A measurement profile
 // is never edited in place: a change is a new revision (W2b, wave 21/22: the office's update grant moves only when its
 // photos are deleted, and a MEASUREMENTS link session inserts the revision the rider sent; the …_portal_sales_w2b_guards
-// triggers hold both).
+// triggers hold both). W2b schema wave 23: a portal session also inserts a delivery address of its own party that waits for
+// the office's check (PartyAddress.approvalStatus WAITING; the …_portal_followups_w2b_guards triggers).
 //
 // The partyId columns of the W0 modules (OneOffLink, LinkEvidence, Thread, Message, StoredFile, OutboxEvent,
 // AuditLog, IdempotencyReceipt) stay plain ids: the ledgers keep the scope a row was written in, and the others' seeds
@@ -61,6 +62,9 @@ model Party {
   /// The smallest order it is offered, net, in its currency (minor units), 0 or more; null: none.
   /// @grain price
   minimumOrderAmount   Int?
+  /// W2b (schema wave 23, B-W2b-189's gap): its website, as printed on its profile (an http or https address, up to 200
+  /// characters); null: none known.
+  website              String?
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -173,6 +177,9 @@ model Party {
   subcontractOrders       SubcontractOrder[]
   // W2b portal-supply.prisma (wave 22/22): its answers to the supplier questionnaire.
   questionnaireResponses  SupplierQuestionnaireResponse[]
+  // W2b portal-followups.prisma (schema wave 23): the documents it uploaded and the profile changes it asked for.
+  supplierDocumentUploads SupplierDocumentUpload[]
+  changeRequests          PartyChangeRequest[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]
 
@@ -247,12 +254,30 @@ model PartyAddress {
   /// The party's default delivery address (an address with SHIP_TO); at most one per party, as above.
   isDefaultShipTo Boolean            @default(false)
   status          MasterStatus       @default(ACTIVE)
+  /// W2b (schema wave 23, B-W2b-157/-190's need; design neworder "Add a new address (waits for our approval)",
+  /// portal.customer.account › Delivery addresses): a delivery address a partner user added waits for the office's check.
+  /// Null: an address of the office's own, never checked. WAITING → APPROVED | REFUSED, once, by an office user, with when
+  /// (and why, refused). A WAITING address is a SHIP_TO address of its party, ACTIVE or archived (taken back), never a
+  /// default; a REFUSED one is archived for good. Neither is used for an order: a quote version or a shipment never names
+  /// one (a portal order or change request may: the office decides both). A partner session inserts only a WAITING
+  /// SHIP_TO address of its own party, asked by one of its active people (the …_portal_followups_w2b_guards triggers).
+  approvalStatus    PartyAddressApproval?
+  /// Who asked (a partner user of the party: the "added by" the portal shows) and when. Set with WAITING, never changed.
+  requestedAt       DateTime?          @db.Timestamptz(3)
+  requestedByUserId String?            @db.Uuid
+  /// The office's decision: when and by whom (the partner never reads the id), and why it was refused (the customer reads it).
+  decidedAt         DateTime?          @db.Timestamptz(3)
+  decidedById       String?            @db.Uuid
+  refuseReason      String?
   version         Int                @default(1)
   createdAt       DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
   createdById     String?            @db.Uuid
 
   party Party @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (schema wave 23): the partner user who asked for it (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId).
+  requestedBy User? @relation("PartyAddressRequestedBy", fields: [tenantId, requestedByUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // sales.prisma: the quote versions it is the bill-to or ship-to address of.
   quoteVersionsBillTo QuoteVersion[] @relation("QuoteVersionBillTo")
   quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
@@ -263,6 +288,15 @@ model PartyAddress {
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
 
   @@unique([tenantId, partyId, id])
+}
+
+/// The office's check of a delivery address a partner user added (W2b schema wave 23): WAITING → APPROVED | REFUSED, once.
+enum PartyAddressApproval {
+  /// Added in the portal: not used for an order until the office approves it.
+  WAITING
+  APPROVED
+  /// Not accepted (with the reason the customer reads): archived for good.
+  REFUSED
 }
 
 enum PartyAddressKind {

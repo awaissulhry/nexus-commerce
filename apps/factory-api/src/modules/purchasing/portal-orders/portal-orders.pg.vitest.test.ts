@@ -8,6 +8,7 @@ import { seed as seedNumbering } from '../../../../../../packages/factory-db/see
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { callerFor } from '../../../core/command'
+import { textOf } from '../../../adapters/ses/fake'
 import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser, portalWorld } from '../../../platform/auth/portal/testing/portal'
@@ -29,6 +30,7 @@ let buyer: Browser
 let anna: Browser
 let vito: Browser
 let otto: Browser
+let annaId: string
 const NS = 'po-portal'
 const seedId = (key: string): string => seedUuid(NS, key)
 const tenant = seedId('tenant')
@@ -98,6 +100,16 @@ async function sentOrder(): Promise<Json> {
 const tasksOf = (orderId: string) => admin<{ status: string; sourceKey: string; doneById: string | null; dueAt: Date | null; askedByName: string | null }>('SELECT status, "sourceKey", "doneById", "dueAt", "askedByName" FROM "PartnerTask" WHERE "recordId" = $1 ORDER BY "createdAt", id', [orderId])
 const outboxOf = (orderId: string, type: string) => admin<{ id: string; type: string; payload: Json; source: string }>('SELECT id, type, payload, source FROM "OutboxEvent" WHERE subject = $1 AND type = $2 ORDER BY "occurredAt", id', [orderId, type])
 const lineOf = (orderId: string, seq: number) => one(`SELECT * FROM "PurchaseOrderLine" WHERE "purchaseOrderId" = $1 AND seq = $2`, [orderId, seq])
+/** B-W2b-F13a: how the order keeps the supplier's answer (the wave-23 columns). */
+const channelOf = (orderId: string) =>
+  one('SELECT status, "confirmedVia", "confirmLinkId", "confirmedByUserId", "confirmedByName", "proposalLinkId", "proposedByUserId", "proposalDecision" FROM "PurchaseOrder" WHERE id = $1', [orderId])
+/** A request of the supplier's browser through the emailed link: only its token, no cookie. */
+const viaLink = (token: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
+  h.app.inject({ method, url, headers: { 'x-factory-link': token, 'user-agent': 'SeedBrowser/1.0', ...(method === 'POST' ? { 'idempotency-key': key('link') } : {}) }, ...(method === 'POST' ? { payload: (payload ?? {}) as object } : {}) })
+const tokenOf = (outboundId: string): string => {
+  const mail = h.ses.mails.find((entry) => entry.outboundId === outboundId)
+  return mail ? decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '') : ''
+}
 
 beforeAll(async () => {
   h = await startHarness('po_portal')
@@ -129,7 +141,7 @@ beforeAll(async () => {
     await client.party.create({ data: { id: P9, code: `P${P9.slice(-6)}`, kind: 'ORGANISATION', legalName: 'Other Supplier S.r.l.', roles: ['SUPPLIER'] }, select: { id: true } })
     await client.portalSettings.create({ data: { id: P9, partyId: P9, portalOn: true }, select: { id: true } })
   })
-  await partnerPerson(people.anna, P2, ['supplier-orders', 'partner-approve'])
+  annaId = await partnerPerson(people.anna, P2, ['supplier-orders', 'partner-approve'])
   await partnerPerson(people.vito, P2, ['supplier-orders'])
   await partnerPerson(people.otto, P9, ['supplier-orders', 'partner-approve'])
   const buyerUser = await addUser(h, seedTenant, { email: 'bianca.buyer@seed-a.example.com', role: 'buyer' })
@@ -164,6 +176,30 @@ describe('the supplier sees its purchase orders without any price (SCM-094, C2)'
     expect(list.items.map((task: Json) => [task.kind, task.record.id, task.canMarkDone])).toContainEqual(['CONFIRM_PO', order.id, false])
     // The viewer cannot approve: the request is not theirs.
     expect((await as(vito, 'GET', '/portal/tasks')).items.filter((task: Json) => task.record.id === order.id)).toEqual([])
+    // B-W2b-F15: the office's answer panel says where the supplier answers: its portal is on and the request is open there,
+    // and the mailed link is still open too.
+    expect(await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).toMatchObject({
+      answer: 'WAITING',
+      waitingOn: 'PORTAL_OR_LINK',
+      words: { en: 'Waiting for the supplier to answer in the portal or by its link.', it: 'In attesa che il fornitore risponda nel portale o dal suo link.' },
+    })
+    // The link no longer open (expired; set straight in the table with its guard set aside, then put back): in the portal only.
+    const linkTime = async (expiresAt: string | null) => {
+      await admin('BEGIN')
+      try {
+        await admin("SET LOCAL session_replication_role = 'replica'")
+        const rows = await admin<{ expiresAt: Date }>('SELECT "expiresAt" FROM "OneOffLink" WHERE "recordType" = $1 AND "recordId" = $2', ['PurchaseOrder', order.id])
+        await admin('UPDATE "OneOffLink" SET "expiresAt" = COALESCE($3::timestamptz, now() - interval \'1 minute\') WHERE "recordType" = $1 AND "recordId" = $2', ['PurchaseOrder', order.id, expiresAt])
+        await admin('COMMIT')
+        return rows[0]!.expiresAt.toISOString()
+      } catch (error) {
+        await admin('ROLLBACK')
+        throw error
+      }
+    }
+    const kept = await linkTime(null)
+    expect(await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).toMatchObject({ waitingOn: 'PORTAL', words: { en: 'Waiting for the supplier to answer in the portal.', it: 'In attesa che il fornitore risponda nel portale.' } })
+    await linkTime(kept)
   })
 
   it('lists the order under "To confirm" with the counts, and Home counts it', async () => {
@@ -238,12 +274,15 @@ describe('answer line by line: a substitute waits for the buyer, a line as asked
     expect(end.lines[1]).toMatchObject({ confirmedQuantity: null, proposal: { kind: 'SUBSTITUTE', needsBuyer: true, date: addDays(today(), 40), substitute: { itemId: otherProtector, code: 'TEST-PRO-200', note: 'Level 1, same size' } } })
     expect(priceTraces(end)).toEqual([])
     expect(await lineOf(order.id, 20)).toMatchObject({ proposedSubstituteItemId: otherProtector, proposalNeedsBuyer: true, confirmedQuantity: null })
-    const stored = await one('SELECT status, "proposalLinkId", "proposedByName", "proposalSupplierRef" FROM "PurchaseOrder" WHERE id = $1', [order.id])
-    expect(stored).toMatchObject({ status: 'CHANGES_PROPOSED', proposedByName: 'anna orders', proposalSupplierRef: 'OC-77' })
-    expect(stored.proposalLinkId).not.toBeNull()
+    const stored = await one('SELECT status, "proposalLinkId", "proposedByUserId", "proposedByName", "proposalSupplierRef" FROM "PurchaseOrder" WHERE id = $1', [order.id])
+    // B-W2b-F13a: a portal proposal names its person, never the emailed link.
+    expect(stored).toEqual({ status: 'CHANGES_PROPOSED', proposalLinkId: null, proposedByUserId: annaId, proposedByName: 'anna orders', proposalSupplierRef: 'OC-77' })
     expect(await tasksOf(order.id)).toEqual([expect.objectContaining({ status: 'DONE', doneById: expect.any(String) })])
     const audit = await one(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.portalPropose'`, [order.id])
-    expect(audit.after).toMatchObject({ via: 'PORTAL', byPartner: true, byName: 'anna orders' })
+    expect(audit.after).toMatchObject({ via: 'PORTAL', byPartner: true, personId: annaId, byName: 'anna orders' })
+    expect(audit.after).not.toHaveProperty('linkId')
+    const [event] = await outboxOf(order.id, 'purchase_order.changes_proposed')
+    expect(event!.payload).toMatchObject({ linkId: null, changed: 1 })
   })
 
   it('tells the buyer on the thread: in the portal, with the substitute in words', async () => {
@@ -257,7 +296,7 @@ describe('answer line by line: a substitute waits for the buyer, a line as asked
 
   it('shows the office the substitute, and REFUSES accepting it as the article asked for', async () => {
     const panel = await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)
-    expect(panel.proposal.summary).toBe('1 line as asked · 1 later date · 1 substitute')
+    expect(panel.proposal).toMatchObject({ via: 'PORTAL', linkId: null, byName: 'anna orders', summary: '1 line as asked · 1 later date · 1 substitute' })
     expect(panel.lines[1].proposed).toMatchObject({ portalKind: 'SUBSTITUTE', needsBuyer: true, substitute: { itemId: otherProtector, code: 'TEST-PRO-200' } })
     const current = (await as(buyer, 'GET', `/purchasing/orders/${order.id}`)).order
     const refused = await buyer.send('POST', `/purchasing/orders/${order.id}/proposal/accept`, { version: current.version }, { headers: { 'idempotency-key': key() } })
@@ -281,6 +320,72 @@ describe('answer line by line: a substitute waits for the buyer, a line as asked
     expect(end.lines.map((line: Json) => line.confirmedQuantity)).toEqual(['105.0000', '24.0000'])
     expect((await tasksOf(order.id)).map((task) => task.status)).toEqual(['DONE'])
     expect(end.history).toEqual([expect.objectContaining({ revision: 1, answer: 'CONFIRMED', confirmation: expect.objectContaining({ byName: 'anna orders' }) })])
+    // B-W2b-F13a: stored as what it is, PORTAL by the person, no link (the refused proposal stays on the row, the person's).
+    expect(await channelOf(order.id)).toEqual({ status: 'CONFIRMED', confirmedVia: 'PORTAL', confirmLinkId: null, confirmedByUserId: annaId, confirmedByName: 'anna orders', proposalLinkId: null, proposedByUserId: annaId, proposalDecision: 'REFUSED' })
+    const audit = await one(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.portalConfirm'`, [order.id])
+    expect(audit.after).toMatchObject({ status: 'CONFIRMED', via: 'PORTAL', personId: annaId })
+    const [event] = await outboxOf(order.id, 'purchase_order.confirmed')
+    expect(event!.payload).toMatchObject({ channel: 'PORTAL', linkId: null, proposalAccepted: false })
+    await tellBuyer(system(), { eventId: event!.id, type: event!.type, payload: event!.payload, source: event!.source })
+    const note = await one<{ bodyText: string }>(`SELECT m."bodyText" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordId" = $1 AND m.direction = 'INTERNAL_NOTE' ORDER BY m."createdAt" DESC LIMIT 1`, [order.id])
+    expect(note.bodyText).toMatch(new RegExp(`^The supplier confirmed ${order.number} in the portal by anna orders`))
+    const panel = await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)
+    expect(panel.confirmation).toMatchObject({ via: 'PORTAL', linkId: null, byName: 'anna orders' })
+    const row = (await as(buyer, 'GET', '/purchasing/orders?limit=200')).orders.find((item: Json) => item.id === order.id)
+    expect(row).toMatchObject({ confirmedVia: 'PORTAL', confirmedByName: 'anna orders' })
+  })
+
+  it('a change takes the PORTAL-confirmed order back to DRAFT: the confirmation and its person cleared, kept with the change', async () => {
+    const current = (await as(buyer, 'GET', `/purchasing/orders/${order.id}`)).order
+    const changed = await as(buyer, 'POST', `/purchasing/orders/${order.id}/change`, { version: current.version, note: 'More leather' })
+    expect(changed).toMatchObject({ revision: 2, order: { status: 'DRAFT', confirmedAt: null, confirmedVia: null, confirmedByName: null } })
+    expect(await channelOf(order.id)).toMatchObject({ status: 'DRAFT', confirmedVia: null, confirmLinkId: null, confirmedByUserId: null, confirmedByName: null })
+    const audit = await one(`SELECT before, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.change'`, [order.id])
+    expect(audit).toMatchObject({ before: { status: 'CONFIRMED', revision: 1 }, after: { status: 'DRAFT', revision: 2, kept: { status: 'CONFIRMED', confirmation: { via: 'PORTAL', byName: 'anna orders' } } } })
+  })
+})
+
+describe('each proposal names the channel it came through; the buyer accepts it on that channel (B-W2b-F13a)', () => {
+  it('portal → refused → link → refused → portal → accepted: PORTAL by the person who proposed it', async () => {
+    const order = await sentOrder()
+    const [ten, twenty] = [(await lineOf(order.id, 10)).id as string, (await lineOf(order.id, 20)).id as string]
+    const byPortal = (version: number, days: number) =>
+      as(anna, 'POST', `/portal/purchase-orders/${order.id}/confirm`, { version, mode: 'BY_LINE', lines: [{ lineId: ten, answer: 'OTHER', date: addDays(today(), days), reason: 'Dye batch late' }, { lineId: twenty, answer: 'OTHER', quantity: '20', reason: 'Only 20 in stock' }] })
+    const refuse = async () => {
+      const current = (await as(buyer, 'GET', `/purchasing/orders/${order.id}`)).order
+      return (await as(buyer, 'POST', `/purchasing/orders/${order.id}/proposal/refuse`, { version: current.version })).order
+    }
+    expect((await byPortal(order.version, 40)).outcome).toBe('PROPOSED')
+    expect(await channelOf(order.id)).toMatchObject({ status: 'CHANGES_PROPOSED', proposalLinkId: null, proposedByUserId: annaId })
+    // Refused; a new link; the supplier answers on the link: the link, no person (the portal one is cleared).
+    let current = await refuse()
+    const sent = await as(buyer, 'POST', `/purchasing/orders/${order.id}/send-link`, { version: current.version })
+    const token = tokenOf(sent.link.emailId)
+    const linkPage = (await viaLink(token, 'GET', '/link/purchase-order')).json()
+    const answered = await viaLink(token, 'POST', '/link/purchase-order/confirm', { version: linkPage.order.version, mode: 'BY_LINE', typedName: 'Anna Link', lines: [{ lineId: ten, answer: 'OTHER', date: addDays(today(), 41), reason: 'Dye batch late' }, { lineId: twenty, answer: 'AS_ASKED' }] })
+    expect(answered.statusCode, answered.body).toBe(200)
+    expect(await channelOf(order.id)).toMatchObject({ status: 'CHANGES_PROPOSED', proposalLinkId: sent.link.id, proposedByUserId: null })
+    expect((await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).proposal).toMatchObject({ via: 'LINK', linkId: sent.link.id, byName: 'Anna Link' })
+    // Refused again; the supplier answers in the portal: the person, no link.
+    current = await refuse()
+    const page = await as(anna, 'GET', `/portal/purchase-orders/${order.id}`)
+    expect((await byPortal(page.order.version, 42)).outcome).toBe('PROPOSED')
+    expect(await channelOf(order.id)).toMatchObject({ status: 'CHANGES_PROPOSED', proposalLinkId: null, proposedByUserId: annaId, proposalDecision: null })
+    // Accepted: a PORTAL confirmation by the person who proposed it.
+    current = (await as(buyer, 'GET', `/purchasing/orders/${order.id}`)).order
+    const accepted = await as(buyer, 'POST', `/purchasing/orders/${order.id}/proposal/accept`, { version: current.version })
+    expect(accepted.order).toMatchObject({ status: 'CONFIRMED', confirmedVia: 'PORTAL', confirmedByName: 'anna orders' })
+    expect(await channelOf(order.id)).toEqual({ status: 'CONFIRMED', confirmedVia: 'PORTAL', confirmLinkId: null, confirmedByUserId: annaId, confirmedByName: 'anna orders', proposalLinkId: null, proposedByUserId: annaId, proposalDecision: 'ACCEPTED' })
+    expect(await admin('SELECT seq, "confirmedQuantity"::text AS q, "confirmedDate"::text AS d FROM "PurchaseOrderLine" WHERE "purchaseOrderId" = $1 ORDER BY seq', [order.id])).toEqual([
+      { seq: 10, q: '105.0000', d: addDays(today(), 42) },
+      { seq: 20, q: '20.0000', d: addDays(today(), 35) },
+    ])
+    const audit = await one(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.acceptProposal'`, [order.id])
+    expect(audit.after).toMatchObject({ decision: 'ACCEPTED', via: 'PORTAL', linkId: null, personId: annaId })
+    const events = await outboxOf(order.id, 'purchase_order.confirmed')
+    expect(events.map((event) => event.payload)).toEqual([expect.objectContaining({ channel: 'PORTAL', linkId: null, proposalAccepted: true })])
+    expect((await as(buyer, 'GET', `/purchasing/orders/${order.id}/answer`)).confirmation).toMatchObject({ via: 'PORTAL', linkId: null, byName: 'anna orders' })
+    expect((await as(anna, 'GET', `/portal/purchase-orders/${order.id}`)).order).toMatchObject({ status: 'CONFIRMED' })
   })
 })
 

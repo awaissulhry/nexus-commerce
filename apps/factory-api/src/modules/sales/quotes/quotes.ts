@@ -5,6 +5,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { fitsDecimal } from '@nexus/factory-domain/core/money'
 import { asMoney } from '@nexus/factory-domain/money/marked'
+import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
 import { QUOTES_MANAGE, QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { addDays, OPEN_BEFORE_SEND, STATUS_WORDS, validityProblem, versionTaxModeOf, type DepositKind, type QuoteStatus } from '@nexus/factory-domain/sales/quotes/quotes'
 import { parseDecimal } from '@nexus/factory-domain/tax/decimal'
@@ -106,8 +107,10 @@ async function checkPartyRefs(tools: CommandTools, partyId: string, body: Header
   for (const [field, kind] of [['billToAddressId', 'BILL_TO'], ['shipToAddressId', 'SHIP_TO']] as const) {
     const addressId = body[field]
     if (!addressId) continue
-    const address = await tools.tx.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, kinds: true } })
+    const address = await tools.tx.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, kinds: true, approvalStatus: true } })
     if (!address || address.partyId !== partyId || address.status !== 'ACTIVE') issues.push({ path: `body/${field}`, message: 'Not an active address of this customer.' })
+    // B-W2b-F13b: an address a customer added in the portal waits for our check (the database refuses it on a quote too).
+    else if (addressUseProblem(address.approvalStatus)) issues.push({ path: `body/${field}`, message: addressUseProblem(address.approvalStatus)! })
     else if (!address.kinds.includes(kind) && !(kind === 'BILL_TO' && address.kinds.includes('REGISTERED'))) issues.push({ path: `body/${field}`, message: `The address is not a ${kind === 'BILL_TO' ? 'billing' : 'delivery'} address.` })
   }
   if (body.validUntil) {

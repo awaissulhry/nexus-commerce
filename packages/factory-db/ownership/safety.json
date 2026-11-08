@@ -54,7 +54,7 @@
       }
     },
     "RiskAssessmentSignature": {
-      "about": "One signature of a DVR version (employer, RSPP, RLS or RLST, doctor), append-only. Office only (a worker's PIN signature is recorded by the office's tablet).",
+      "about": "One signature of a DVR version (employer, RSPP, RLS or RLST, doctor), append-only. Office only (a worker's PIN signature is recorded by the office's tablet; W2b schema wave 23: an outside signer's LINK signature is written by the office or the API in the system context from the approval request it approved).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

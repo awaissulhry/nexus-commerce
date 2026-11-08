@@ -12,12 +12,18 @@
  *   5. Drops the database, whatever happened.
  *
  * Needs the local PostgreSQL, so run-guards.mjs does not run it; it is a schema check (`npm run check:drift -w
- * @nexus/factory-db` runs it too). The migrations create the cluster-wide roles under the same advisory lock the test
- * databases use (packages/factory-db/src/testing/database.ts).
+ * @nexus/factory-db` runs it too). The migrations create the cluster-wide roles, so step 2 runs under the lock the test
+ * databases use (B-W2b-F15): `withMigrationLock` of packages/factory-db/src/testing/migration-lock.ts on the same key
+ * (MIGRATION_LOCK), so this check and the test kit take turns. A transaction-level lock on a connection of its own that
+ * says "still here" every few seconds: it cannot outlive the check (a killed or frozen process loses it to the server), a
+ * deploy that holds it past the kit's 5 minutes is stopped (a replay takes about half a minute), and a wait ends with an
+ * error that names the holder (pid, application_name, state, idle time). Prisma runs as an asynchronous child process, so
+ * the heartbeat goes on while it works; a lost lock kills the child. The check's connections are named
+ * `factory-test <lock|root|admin> <pid> replay_<hex>`.
  *
  * Run: node scripts/factory/check-migrations-replay.mjs — exit 1 on any problem.
  */
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +35,7 @@ const PACKAGE = join(ROOT, 'packages/factory-db')
 const PRISMA = join(ROOT, 'node_modules/.bin/prisma')
 
 const testing = await tsImport('../../packages/factory-db/src/testing/database.ts', import.meta.url)
+const { testKitApplicationName, withMigrationLock } = await tsImport('../../packages/factory-db/src/testing/migration-lock.ts', import.meta.url)
 const { readMigrations } = await tsImport('../../packages/factory-db/src/policies.ts', import.meta.url)
 const { MIGRATIONS_DIR } = await tsImport('../../packages/factory-db/src/tools.ts', import.meta.url)
 
@@ -39,17 +46,27 @@ const fail = (message) => {
 
 const server = testing.testServerUrl()
 const name = `factory_test_replay_${randomBytes(4).toString('hex')}`
+const tag = name.slice('factory_test_'.length)
 const url = new URL(server.href)
 url.pathname = `/${name}`
-const prisma = (args) =>
-  spawnSync(PRISMA, args, {
-    cwd: PACKAGE,
-    encoding: 'utf8',
-    env: { ...process.env, FACTORY_MIGRATION_DATABASE_URL: url.href, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+/** Prisma as a child process that does not block this one (the lock's heartbeat runs meanwhile); `signal` kills it. */
+const prisma = (args, signal) =>
+  new Promise((resolve) => {
+    const run = { status: null, stdout: '', stderr: '', error: null }
+    const child = spawn(PRISMA, args, {
+      cwd: PACKAGE,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, FACTORY_MIGRATION_DATABASE_URL: url.href, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+      ...(signal ? { signal } : {}),
+    })
+    child.stdout.setEncoding('utf8').on('data', (chunk) => (run.stdout += chunk))
+    child.stderr.setEncoding('utf8').on('data', (chunk) => (run.stderr += chunk))
+    child.on('error', (error) => (run.error = error))
+    child.on('close', (status) => resolve({ ...run, status }))
   })
 const output = (run) => `${run.stdout ?? ''}${run.stderr ?? ''}${run.error ? String(run.error) : ''}`.trim().replace(/^/gm, '    ')
 
-const root = new pg.Client({ connectionString: server.href })
+const root = new pg.Client({ connectionString: server.href, application_name: testKitApplicationName('root', tag) })
 await root.connect()
 try {
   const version = (await root.query('SHOW server_version')).rows[0].server_version
@@ -57,20 +74,19 @@ try {
   await root.query(`CREATE DATABASE "${name}"`)
   try {
     const migrations = readMigrations(MIGRATIONS_DIR)
-    await root.query('SELECT pg_advisory_lock($1::bigint)', [testing.MIGRATION_LOCK])
-    let deploy
-    try {
-      deploy = prisma(['migrate', 'deploy'])
-    } finally {
-      await root.query('SELECT pg_advisory_unlock($1::bigint)', [testing.MIGRATION_LOCK])
-    }
+    // The test kit's bounded lock (same key): given back when the deploy ends, whatever happened.
+    const deploy = await withMigrationLock({ url: server.href, key: testing.MIGRATION_LOCK, tag }, async (signal) => {
+      const run = await prisma(['migrate', 'deploy'], signal)
+      signal.throwIfAborted()
+      return run
+    })
     if (deploy.status !== 0) throw new Error(`prisma migrate deploy failed:\n${output(deploy)}`)
 
-    const diff = prisma(['migrate', 'diff', '--from-config-datasource', '--to-schema', 'prisma/schema', '--script', '--exit-code'])
+    const diff = await prisma(['migrate', 'diff', '--from-config-datasource', '--to-schema', 'prisma/schema', '--script', '--exit-code'])
     if (diff.status === 2) throw new Error(`the replayed database differs from prisma/schema; the missing migration is:\n${output(diff)}`)
     if (diff.status !== 0) throw new Error(`prisma migrate diff failed:\n${output(diff)}`)
 
-    const db = new pg.Client({ connectionString: url.href })
+    const db = new pg.Client({ connectionString: url.href, application_name: testKitApplicationName('admin', tag) })
     await db.connect()
     let tables
     try {

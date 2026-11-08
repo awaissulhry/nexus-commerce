@@ -14,6 +14,8 @@ import { PARTNER_TASK_KINDS } from './tasks/kinds'
  *   partner_task.reopened        … opened again (the office, or the partner's Undo)
  *   partner_task.due_moved       … its due date moved
  *   partner_task.reminded        the reminder job reminded the partner of it (the notification fan-out tells its people)
+ *   partner_task.assigned        B-W2b-F14: a partner person took it, gave it to a colleague or back to everyone, or the
+ *                                person it was handed to was deactivated (it went back to everyone)
  *   partner_notification.created the fan-out told partner people of an event (the portal's bell reads again; nobody named)
  *   partner_notification.digest_sent  a partner person's daily or weekly summary went out
  *   partner_email.settings_changed    a partner person's e-mail settings changed (in the portal, or by the unsubscribe link)
@@ -60,6 +62,14 @@ export const events = [
     context: 'portal',
     description: 'The partner was reminded of a request that is due soon or overdue.',
     payload: z.strictObject({ taskId: z.uuid(), partyId: z.uuid(), kind, dueAt: z.string() }),
+  }),
+  // B-W2b-F14 (PartnerTask.assigneeId): who of the party has it; no person named (the list reads it again).
+  defineEvent({
+    type: 'partner_task.assigned',
+    context: 'portal',
+    description: 'A request to a partner was taken by one of its people, handed to a colleague, or given back to everyone.',
+    payload: z.strictObject({ taskId: z.uuid(), partyId: z.uuid(), kind, assigned: z.boolean(), why: z.enum(['TAKEN', 'GIVEN', 'RELEASED', 'LEFT']) }),
+    live: live(['taskId', 'partyId', 'kind', 'assigned']),
   }),
   defineEvent({
     type: 'partner_notification.created',

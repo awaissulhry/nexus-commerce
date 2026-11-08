@@ -17,7 +17,8 @@ export type SignerRole = (typeof SIGNER_ROLES)[number]
 export const AUTHOR_KINDS = ['CONSULTANT', 'IN_HOUSE'] as const
 export type AuthorKind = (typeof AUTHOR_KINDS)[number]
 export const VERSION_STATUSES = ['AWAITING_SIGNATURES', 'SIGNED', 'WITHDRAWN'] as const
-export const SIGN_METHODS = ['OFFICE', 'FLOOR_PIN', 'PAPER'] as const
+// B-W2b-F13b: LINK — an outside signer approved our approval request on the version.
+export const SIGN_METHODS = ['OFFICE', 'FLOOR_PIN', 'PAPER', 'LINK'] as const
 export const MEASURE_STATUSES = ['PLANNED', 'IN_PROGRESS', 'DONE', 'VERIFIED', 'CANCELLED'] as const
 export type MeasureStatus = (typeof MEASURE_STATUSES)[number]
 export const MEASURE_SOURCES = ['DVR', 'INCIDENT', 'INSPECTION', 'MEETING', 'OTHER'] as const

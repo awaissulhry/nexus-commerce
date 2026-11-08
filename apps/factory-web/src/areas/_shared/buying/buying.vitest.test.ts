@@ -127,6 +127,9 @@ describe('Purchase orders (SCR-058/059)', () => {
     const now = new Date('2026-10-29T11:00:00Z')
     expect(confirmationPhrase({ status: 'SENT', sentAt: '2026-10-26T10:00:00Z', confirmedAt: null, confirmedVia: null, confirmedByName: null, declinedAt: null }, now)).toEqual({ key: 'po.confirm.sentDays', params: { count: 3 } })
     expect(confirmationPhrase({ status: 'CONFIRMED', sentAt: null, confirmedAt: '2026-10-28T08:40:00Z', confirmedVia: 'LINK', confirmedByName: 'Marta Demo', declinedAt: null })).toEqual({ key: 'po.confirm.byLinkName', params: { name: 'Marta Demo' } })
+    // B-W2b-F13a: a confirmation given in the supplier portal says so, with the person.
+    expect(confirmationPhrase({ status: 'CONFIRMED', sentAt: null, confirmedAt: '2026-10-28T08:40:00Z', confirmedVia: 'PORTAL', confirmedByName: 'Marta Demo', declinedAt: null })).toEqual({ key: 'po.confirm.byPortalName', params: { name: 'Marta Demo' } })
+    expect(confirmationPhrase({ status: 'RECEIVED', sentAt: null, confirmedAt: '2026-10-28T08:40:00Z', confirmedVia: 'PORTAL', confirmedByName: null, declinedAt: null })).toEqual({ key: 'po.confirm.byPortal' })
     expect(journeyIndex('DRAFT')).toBe(0)
     expect(journeyIndex('PARTLY_RECEIVED')).toBe(3)
     expect(nextStep(BLOCKED_DRAFT(), canOf('buyer'))).toEqual({ kind: 'send', held: { key: 'po.check.LINE_NOT_PRICED' } })

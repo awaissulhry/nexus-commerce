@@ -3,6 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { NUMBER_FORMATS } from '@nexus/factory-domain/imports/cells'
 import { CSV_ENCODINGS } from '@nexus/factory-domain/imports/job'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
+import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/parties/address-approval'
 import { ACCEPT_AS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
@@ -162,6 +163,8 @@ const address = output({
   deliveryNotes: z.string().nullable(),
   isDefault: z.boolean(),
   status: z.enum(['ACTIVE', 'ARCHIVED']),
+  /** B-W2b-F13b: our check of an address the customer added (null: one of the factory's own); refused with its reason. */
+  approval: output({ status: z.enum(ADDRESS_APPROVALS), words, refuseReason: z.string().nullable() }).nullable(),
   version,
 })
 
@@ -337,6 +340,9 @@ export const uploadContract = defineContract({
 const portalAddress = address.extend({
   createdAt: at,
   addedBy: output({ kind: z.enum(['COLLEAGUE', 'FACTORY']), name: z.string().nullable(), you: z.boolean() }),
+  /** B-W2b-F13b: when it was asked for and when we decided (null: never checked, or not yet). */
+  requestedAt: at.nullable(),
+  decidedAt: at.nullable(),
 })
 const addressList = output({ addresses: z.array(portalAddress), canManage: z.boolean() })
 
@@ -388,7 +394,8 @@ const officeRecord = output({
     requestedDate: day.nullable(),
     note: z.string().nullable(),
     currency: z.string(),
-    shipTo: output({ id: id(), name: z.string().nullable(), line1: z.string(), line2: z.string().nullable(), postalCode: z.string(), city: z.string(), province: z.string().nullable(), country: z.string(), status: z.string() }).nullable(),
+    /** B-W2b-F13b: `approvalStatus` WAITING — the customer added it in the portal; accepting the request approves it. */
+    shipTo: output({ id: id(), name: z.string().nullable(), line1: z.string(), line2: z.string().nullable(), postalCode: z.string(), city: z.string(), province: z.string().nullable(), country: z.string(), status: z.string(), approvalStatus: z.enum(ADDRESS_APPROVALS).nullable() }).nullable(),
     sentAt: at.nullable(),
     sentBy: z.string().nullable(),
     decidedAt: at.nullable(),
@@ -450,3 +457,45 @@ export const acceptContract = defineContract({
   },
 })
 export const refuseContract = defineContract({ params: requestParams, body: input({ version, reason: z.string().trim().min(1).max(ORDERING_LIMITS.reason) }), response: { 200: officeRecord } })
+
+// ---- the office's check of the delivery addresses customers add (B-W2b-F13b, wave 23) ----------------------------------
+
+const addressCheck = output({
+  id: id(),
+  party: named,
+  kinds: z.array(z.string()),
+  name: z.string().nullable(),
+  line1: z.string(),
+  line2: z.string().nullable(),
+  postalCode: z.string(),
+  city: z.string(),
+  province: z.string().nullable(),
+  country: z.string(),
+  contactName: z.string().nullable(),
+  phone: z.string().nullable(),
+  deliveryNotes: z.string().nullable(),
+  status: z.enum(['ACTIVE', 'ARCHIVED']),
+  approval: output({
+    status: z.enum(ADDRESS_APPROVALS),
+    requestedAt: at.nullable(),
+    /** The customer's person who added it. */
+    requestedBy: z.string().nullable(),
+    decidedAt: at.nullable(),
+    decidedBy: z.string().nullable(),
+    refuseReason: z.string().nullable(),
+  }),
+  version,
+  may: output({ decide: z.boolean() }),
+})
+const addressCheckParams = input({ addressId: id() })
+
+export const addressChecksContract = defineContract({
+  querystring: input({ state: z.enum(['WAITING', 'APPROVED', 'REFUSED', 'ALL']).default('WAITING'), partyId: id().optional() }),
+  response: { 200: output({ addresses: z.array(addressCheck) }) },
+})
+export const approveAddressContract = defineContract({ params: addressCheckParams, body: input({ version }), response: { 200: output({ address: addressCheck }) } })
+export const refuseAddressContract = defineContract({
+  params: addressCheckParams,
+  body: input({ version, reason: z.string().trim().min(1).max(REFUSE_REASON_LIMITS.max) }),
+  response: { 200: output({ address: addressCheck }) },
+})

@@ -6,6 +6,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { StaleVersionError, type CommandTools, type CommandTx } from '../../../core/command'
+import { handBackInCommand } from '../../portal/tasks/people'
 import { requirePortalTerms } from '../portal/terms'
 import { endAllAssignments } from '../roles/assignments'
 import { endSessions } from '../sessions/session-store'
@@ -197,22 +198,26 @@ export const STATUS_TARGET = { suspend: 'SUSPENDED', reactivate: 'ACTIVE', deact
 const STATUS_EVENT = { suspend: 'SUSPENDED', reactivate: 'REACTIVATED', deactivate: 'DEACTIVATED' } as const
 
 /** The work of a status command (the record guard moved the status first: the user status machine). */
-export async function statusInCommand({ tx, now, audit, emit, record }: CommandTools, work: { readonly partyId: string; readonly userId: string; readonly change: StatusChange; readonly reason?: string | undefined }, by: Changer, companyId: string | null) {
+export async function statusInCommand(tools: CommandTools, work: { readonly partyId: string; readonly userId: string; readonly change: StatusChange; readonly reason?: string | undefined }, by: Changer, companyId: string | null) {
+  const { tx, now, audit, emit, record } = tools
   const to = STATUS_TARGET[work.change]
   let sessionsEnded = 0
   let assignmentsEnded = 0
   let invitationsRevoked = 0
+  let tasksHandedBack = 0
   if (to === 'SUSPENDED' || to === 'DEACTIVATED') sessionsEnded = await endSessions(tx, { userId: work.userId, now, reason: to })
   if (to === 'DEACTIVATED') {
     invitationsRevoked = (await tx.invitation.updateMany({ where: { userId: work.userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now } })).count
     assignmentsEnded = await endAllAssignments(tx, work.userId, { now, endedById: by.actorId })
+    // B-W2b-F14: the open requests handed to them go back to everyone of the party.
+    tasksHandedBack = await handBackInCommand(tools, work.userId)
   }
   audit({
     recordType: 'User',
     recordId: work.userId,
     companyId,
     before: { status: record!.from },
-    after: { status: record!.to, sessionsEnded, invitationsRevoked, assignmentsEnded, byPartner: by.byPartner },
+    after: { status: record!.to, sessionsEnded, invitationsRevoked, assignmentsEnded, tasksHandedBack, byPartner: by.byPartner },
     ...(work.reason ? { reason: work.reason } : {}),
   })
   emit({ type: 'partner_user.changed', subject: work.userId, companyId, payload: { userId: work.userId, partyId: work.partyId, changes: [STATUS_EVENT[work.change]], status: to, byPartner: by.byPartner } })

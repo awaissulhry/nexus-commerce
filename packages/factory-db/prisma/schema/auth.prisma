@@ -113,6 +113,15 @@ model User {
   // W2b portal-frame.prisma (wave 20/22): as a partner user, the tasks they did in the portal and their e-mail settings.
   partnerTasksDone    PartnerTask[]     @relation("PartnerTaskDoneBy")
   partnerEmailPreferences PartnerEmailPreference[]
+  // W2b portal follow-ups (schema wave 23): as a partner user, the open requests handed to them, the purchase orders they
+  // confirmed or answered with changes in the portal, the delivery addresses they asked for, the documents they uploaded
+  // and the profile changes they asked.
+  partnerTasksAssigned    PartnerTask[]          @relation("PartnerTaskAssignee")
+  portalConfirmedOrders   PurchaseOrder[]        @relation("PurchaseOrderConfirmedByUser")
+  portalProposedOrders    PurchaseOrder[]        @relation("PurchaseOrderProposedByUser")
+  requestedAddresses      PartyAddress[]         @relation("PartyAddressRequestedBy")
+  supplierDocumentUploads SupplierDocumentUpload[]
+  partyChangeRequests     PartyChangeRequest[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

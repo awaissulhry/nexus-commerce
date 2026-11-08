@@ -26,7 +26,7 @@ import { addDays, MAX_SIZE_QUANTITY, type SalesLineKind } from '../quotes/quotes
  *               request keeps naming them (OrderChangeRequestLine's reference)
  *   SAL-304     the consumer's no-withdrawal rule stays: a made-to-measure order for a consumer may still be ASKED to be
  *               cancelled (the factory decides), and the pop-up says no right of withdrawal applies
- * The cancel fee per line (the design's "Fee 15%") has no setting: every possible line is "Free" (a gap).
+ * The cancel fee per line (the design's "Fee 15%"): ./fee.ts (B-W2b-F14, SalesSettings.cancelFeePct; shown, never charged).
  */
 
 export interface Words {

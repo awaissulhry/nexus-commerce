@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
+import { OUTCOMES_WANTED } from '@nexus/factory-domain/sales/portal-returns/rules'
 import {
   FREIGHT_PAYERS,
   GOODS_OUTCOMES,
@@ -130,6 +131,10 @@ export const returnView = output({
   inspectedAt: instant().nullable(),
   closedAt: instant().nullable(),
   statusReason: z.string().nullable(),
+  /** B-W2b-F13b (wave 23): how the request reached us, what the customer would like and their words (set when made). */
+  channel: z.enum(['OFFICE', 'PORTAL', 'LINK']),
+  outcomeWanted: z.enum(OUTCOMES_WANTED).nullable(),
+  customerNote: z.string().nullable(),
   ownerId: id().nullable(),
   internalNote: z.string().nullable(),
   replacementOrder: output({ id: id(), number: z.string(), status: z.string() }).nullable(),

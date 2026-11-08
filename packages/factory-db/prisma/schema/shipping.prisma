@@ -195,6 +195,9 @@ model Shipment {
   shippedAt            DateTime?      @db.Timestamptz(3)
   deliveredAt          DateTime?      @db.Timestamptz(3)
   returnedAt           DateTime?      @db.Timestamptz(3)
+  /// W2b (schema wave 23, B-W2b-175's need): when the carrier expects to deliver it (its ETA, as the carrier last said;
+  /// the customer reads it); null: not known. Moves while the goods travel too (SHIPPED), never on a cancelled shipment.
+  expectedDeliveryAt   DateTime?      @db.Timestamptz(3)
   /// Set exactly when CANCELLED.
   cancelledAt          DateTime?      @db.Timestamptz(3)
   cancelReason         String?
@@ -328,6 +331,9 @@ model Parcel {
   /// The carrier's tracking number and its id of the parcel, set when the label is bought.
   trackingNumber  String?
   carrierParcelId String?
+  /// W2b (schema wave 23, B-W2b-175's need): the carrier's own tracking page of the parcel (an https address, up to 2000
+  /// characters; "Track on the carrier's site"), set with the label; the customer reads it.
+  trackingUrl     String?
   labelledAt      DateTime? @db.Timestamptz(3)
   version         Int       @default(1)
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)

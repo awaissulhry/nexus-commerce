@@ -14,7 +14,7 @@ import {
   type PortalDeclineReason,
 } from '@nexus/factory-domain/purchasing/portal-orders/answer'
 import { portalAnswerProblem } from '@nexus/factory-domain/purchasing/portal-orders/views'
-import type { CommandTools, CommandTx } from '../../../core/command'
+import type { CommandTools } from '../../../core/command'
 import { portalSessionOf, type PortalSession } from '../../../platform/auth/portal/authenticator'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { dayOf, dayValue, quantityText } from '../store'
@@ -42,10 +42,11 @@ import { closeConfirmTasks } from './tasks'
  *                   at once (design: "Lines answered 'as asked' are confirmed at once; changes wait for the buyer"), then
  *                   the order SENT → CHANGES_PROPOSED with the person's name, reference and note;
  *                   purchase_order.changes_proposed
- *      The database knows two confirmation channels (LINK, OFFICE) and keeps a proposal with the link it came through: a
- *      portal answer names the order's PO_CONFIRM link of this revision (the request it answers; it stays as it is), so the
- *      buyer's accept (W1, ../confirm/decide.ts) works unchanged. The audit row says `via: PORTAL` and who (schema need:
- *      a PORTAL channel, see the step's notes).
+ *      Since the wave-23 schema (B-W2b-F12/F13a) a portal answer is stored as what it is: a confirmation is channel
+ *      PORTAL with the person (confirmedByUserId, no link), a proposal names the person (proposedByUserId) and no link
+ *      (proposalLinkId cleared: an earlier link proposal may still be on the row); the buyer's accept (../confirm/
+ *      decide.ts) confirms a portal proposal PORTAL by that person. The emailed link stays as it is (it shows the order
+ *      answered). The audit row says `via` from the stored channel and who.
  *   4. the CONFIRM_PO request done by the person (./tasks.ts), and the audit row of the whole answer.
  *
  * The worker's handler tells the buyer on the order's thread (../confirm/handler.ts: "in the portal"). The answer is the
@@ -71,13 +72,6 @@ function assertMayAnswer(request: FastifyRequest, session: PortalSession, order:
 function assertAnswerable(status: string): void {
   const problem = portalAnswerProblem(status)
   if (problem) throw new InvalidStateError(problem)
-}
-
-/** The order's PO_CONFIRM link of the revision the supplier answers (the newest one: each send makes one). */
-async function requestLinkOf(tx: CommandTx, orderId: string): Promise<string> {
-  const link = await tx.oneOffLink.findFirst({ where: { recordType: 'PurchaseOrder', recordId: orderId, purpose: 'PO_CONFIRM' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } })
-  if (!link) throw new InvalidStateError('This order has no request to confirm: ask the buyer to send it again.')
-  return link.id
 }
 
 const linesOfPlan = (plan: PortalAnswerPlan) =>
@@ -107,12 +101,12 @@ async function confirmLines(tools: CommandTools, orderId: string, plan: PortalAn
   }
 }
 
-async function writeConfirmation(tools: CommandTools, order: Held, plan: PortalAnswerPlan, linkId: string, person: { id: string; name: string }) {
+async function writeConfirmation(tools: CommandTools, order: Held, plan: PortalAnswerPlan, person: { id: string; name: string }) {
   await confirmLines(tools, order.id, plan, plan.confirmNow)
-  await tools.tx.purchaseOrder.update({
+  const stored = await tools.tx.purchaseOrder.update({
     where: { id: order.id },
-    data: { status: 'CONFIRMED', confirmedAt: tools.now, confirmedVia: 'LINK', confirmLinkId: linkId, confirmedByName: person.name, supplierRef: plan.supplierRef, confirmNote: plan.note },
-    select: { id: true },
+    data: { status: 'CONFIRMED', confirmedAt: tools.now, confirmedVia: 'PORTAL', confirmedByUserId: person.id, confirmedByName: person.name, supplierRef: plan.supplierRef, confirmNote: plan.note },
+    select: { confirmedVia: true },
   })
   tools.audit({
     action: 'purchasing.portalConfirm',
@@ -121,18 +115,18 @@ async function writeConfirmation(tools: CommandTools, order: Held, plan: PortalA
     companyId: order.companyId,
     siteId: order.siteId,
     before: { status: 'SENT' },
-    after: { status: 'CONFIRMED', via: 'PORTAL', byPartner: true, personId: person.id, byName: person.name, linkId, supplierRef: plan.supplierRef, note: plan.note, summary: plan.summary, lines: linesOfPlan(plan) },
+    after: { status: 'CONFIRMED', via: stored.confirmedVia, byPartner: true, personId: person.id, byName: person.name, supplierRef: plan.supplierRef, note: plan.note, summary: plan.summary, lines: linesOfPlan(plan) },
   })
   tools.emit({
     type: 'purchase_order.confirmed',
     subject: order.id,
     companyId: order.companyId,
     siteId: order.siteId,
-    payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, channel: 'LINK', linkId, lines: plan.lines.length, proposalAccepted: false },
+    payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, channel: 'PORTAL', linkId: null, lines: plan.lines.length, proposalAccepted: false },
   })
 }
 
-async function writeProposal(tools: CommandTools, order: Held, plan: PortalAnswerPlan, linkId: string, person: { id: string; name: string }) {
+async function writeProposal(tools: CommandTools, order: Held, plan: PortalAnswerPlan, person: { id: string; name: string }) {
   // The lines first (a partner session writes them only while the order is SENT): the proposals, then the lines as asked.
   for (const line of plan.lines) {
     const columns = portalProposalColumnsOf(line)
@@ -154,7 +148,8 @@ async function writeProposal(tools: CommandTools, order: Held, plan: PortalAnswe
   await confirmLines(tools, order.id, plan, plan.confirmNow)
   await tools.tx.purchaseOrder.update({
     where: { id: order.id },
-    data: { status: 'CHANGES_PROPOSED', proposedAt: tools.now, proposalLinkId: linkId, proposedByName: person.name, proposalSupplierRef: plan.supplierRef, proposalNote: plan.note },
+    // The person, never a link (a proposal names exactly one: an earlier link proposal's link is cleared).
+    data: { status: 'CHANGES_PROPOSED', proposedAt: tools.now, proposalLinkId: null, proposedByUserId: person.id, proposedByName: person.name, proposalSupplierRef: plan.supplierRef, proposalNote: plan.note },
     select: { id: true },
   })
   const changed = plan.lines.filter((line) => line.needsBuyer).length
@@ -165,18 +160,18 @@ async function writeProposal(tools: CommandTools, order: Held, plan: PortalAnswe
     companyId: order.companyId,
     siteId: order.siteId,
     before: { status: 'SENT' },
-    after: { status: 'CHANGES_PROPOSED', via: 'PORTAL', byPartner: true, personId: person.id, byName: person.name, linkId, supplierRef: plan.supplierRef, note: plan.note, summary: plan.summary, lines: linesOfPlan(plan) },
+    after: { status: 'CHANGES_PROPOSED', via: 'PORTAL', byPartner: true, personId: person.id, byName: person.name, supplierRef: plan.supplierRef, note: plan.note, summary: plan.summary, lines: linesOfPlan(plan) },
   })
   tools.emit({
     type: 'purchase_order.changes_proposed',
     subject: order.id,
     companyId: order.companyId,
     siteId: order.siteId,
-    payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, linkId, lines: plan.lines.length, changed },
+    payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, linkId: null, lines: plan.lines.length, changed },
   })
 }
 
-async function writeDecline(tools: CommandTools, order: Held, reasonText: string, linkId: string, person: { id: string; name: string }, details: Record<string, unknown>) {
+async function writeDecline(tools: CommandTools, order: Held, reasonText: string, person: { id: string; name: string }, details: Record<string, unknown>) {
   await tools.tx.purchaseOrder.update({ where: { id: order.id }, data: { status: 'DECLINED', declinedAt: tools.now, declineReason: reasonText }, select: { id: true } })
   tools.audit({
     action: 'purchasing.portalDecline',
@@ -186,9 +181,9 @@ async function writeDecline(tools: CommandTools, order: Held, reasonText: string
     siteId: order.siteId,
     reason: reasonText,
     before: { status: 'SENT' },
-    after: { status: 'DECLINED', via: 'PORTAL', byPartner: true, personId: person.id, byName: person.name, linkId, ...details },
+    after: { status: 'DECLINED', via: 'PORTAL', byPartner: true, personId: person.id, byName: person.name, ...details },
   })
-  tools.emit({ type: 'purchase_order.declined', subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, linkId } })
+  tools.emit({ type: 'purchase_order.declined', subject: order.id, companyId: order.companyId, siteId: order.siteId, payload: { purchaseOrderId: order.id, number: order.number, partyId: order.partyId, linkId: null } })
 }
 
 const askedOf = (lines: Awaited<ReturnType<typeof heldLines>>): PortalAskedLine[] =>
@@ -220,10 +215,9 @@ export async function confirmInPortal(app: FastifyInstance, request: FastifyRequ
       const order = await heldOrder(tools.tx, session, before.order.id)
       assertAnswerable(order.status)
       const plan = planPortalAnswer(askedOf(await heldLines(tools.tx, order.id)), body, choices, businessDate(tools.now))
-      const linkId = await requestLinkOf(tools.tx, order.id)
-      if (plan.outcome === 'CONFIRMED') await writeConfirmation(tools, order, plan, linkId, person)
-      else if (plan.outcome === 'DECLINED') await writeDecline(tools, order, plan.declineReason!, linkId, person, { answer: 'BY_LINE', summary: plan.summary, lines: linesOfPlan(plan), note: plan.note })
-      else await writeProposal(tools, order, plan, linkId, person)
+      if (plan.outcome === 'CONFIRMED') await writeConfirmation(tools, order, plan, person)
+      else if (plan.outcome === 'DECLINED') await writeDecline(tools, order, plan.declineReason!, person, { answer: 'BY_LINE', summary: plan.summary, lines: linesOfPlan(plan), note: plan.note })
+      else await writeProposal(tools, order, plan, person)
       await closeConfirmTasks(tools, order.id, 'DONE', session.userId)
       return { outcome: plan.outcome, summary: plan.summary, confirmedNow: plan.confirmNow.length, at: toUtcIso(tools.now), lines: plan.lines.map((line) => portalLineText(line)) }
     },
@@ -245,8 +239,7 @@ export async function declineInPortal(app: FastifyInstance, request: FastifyRequ
     async (tools) => {
       const current = await heldOrder(tools.tx, session, order.id)
       assertAnswerable(current.status)
-      const linkId = await requestLinkOf(tools.tx, current.id)
-      await writeDecline(tools, current, reasonText, linkId, person, { answer: 'DECLINE', reasonCode: body.reason })
+      await writeDecline(tools, current, reasonText, person, { answer: 'DECLINE', reasonCode: body.reason })
       await closeConfirmTasks(tools, current.id, 'DONE', session.userId)
       return { outcome: 'DECLINED' as const }
     },

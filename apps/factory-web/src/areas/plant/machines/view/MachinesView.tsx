@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertCircle, Archive, Check, Download, MoreHorizontal, Plus, QrCode as QrIcon, Search } from 'lucide-react'
+import { AlertCircle, Archive, Check, Download, FileWarning, MoreHorizontal, Plus, QrCode as QrIcon, Search } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, Pill, SegmentedControl, Select, Spinner } from '@nexus/ui/primitives'
+import { formatDate } from '../../../../lib/i18n/format'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { formatDateTime } from '../../../../lib/i18n/format'
@@ -13,6 +14,10 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import type { Machine } from '../../_shared/api'
 import { labelOf, MACHINE_VIEWS, type MachinesAddress } from '../../_shared/model'
 import { Cost, KeysModal, LiveLine, MachinePill, NoPlantAccess, NoticeBanner, PlantMessages, say, useWords } from '../../_shared/parts'
+import { DUE_TONE, nextCheckWords, SECTIONS, tagWords, type Section } from '../depth/model'
+import { DepthMessages, useDepthWords } from '../depth/parts'
+import { StatusWall } from '../depth/view/StatusWall'
+import { TagsDialog } from '../depth/view/TagsDialog'
 import type { CellState, MachinesListActions, MachinesListModel } from '../view-model'
 import { MachineDialogs } from './MachineDialogs'
 
@@ -35,7 +40,9 @@ const TILES = [
 export function MachinesView({ model, actions }: { model: MachinesListModel; actions?: MachinesListActions }) {
   return (
     <PlantMessages>
-      <Machines model={model} actions={actions} />
+      <DepthMessages>
+        <Machines model={model} actions={actions} />
+      </DepthMessages>
     </PlantMessages>
   )
 }
@@ -50,7 +57,10 @@ function CellMark({ cell }: { cell: CellState | undefined }) {
 
 function Machines({ model, actions }: { model: MachinesListModel; actions?: MachinesListActions }) {
   const t = useWords()
+  const d = useDepthWords()
   const locale = useLocale()
+  const depth = model.depth
+  const section: Section = depth?.address.section ?? 'machines'
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.address.q)
   useEffect(() => setQuery(model.address.q), [model.address.q])
@@ -63,6 +73,8 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
     return () => clearTimeout(timer)
   }, [query])
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
   const [help, setHelp] = useState(!!model.helpOpen)
   const rowsKey = model.rows.items?.map((row) => row.id).join(',') ?? ''
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
@@ -74,14 +86,22 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || help) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
+      if (section !== 'machines') return
       if (event.key === 'c' && model.can.manageMachines) {
         event.preventDefault()
         latest.current?.onNew?.()
       }
+      // B-W2b-136 (design kb "t — print tags for the selection"; none selected: the rows on screen).
+      if (event.key === 't' && depth && !depth.tags) {
+        event.preventDefault()
+        const rows = model.rows.items ?? []
+        const chosen = rows.filter((row) => selectedRef.current.includes(row.id))
+        latest.current?.onOpenTags?.(chosen.length > 0 ? chosen : rows)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [model.dialog, model.can.manageMachines, help])
+  }, [model.dialog, model.can.manageMachines, help, section, depth, model.rows.items])
 
   // The cells call the page's latest actions (the grid keeps its columns between renders).
   const act = useRef(actions)
@@ -160,6 +180,49 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
         </span>
       )
     const CostCell = ({ data }: ICellRendererParams<Machine>) => (data ? <Cost minor={data.purchaseCost} /> : null)
+    // B-W2b-136: the depth columns (the facts of the rows on screen; "—" while they are read).
+    const factsOf = (row: Machine) => depth?.facts[row.id] ?? null
+    const day = (value: string) => formatDate(value, { locale, timeZone: 'UTC' })
+    const NextCheckCell = ({ data }: ICellRendererParams<Machine>) => {
+      if (!data) return null
+      const facts = factsOf(data)
+      if (!facts) return <span className="fw-pl-sub">—</span>
+      const words = nextCheckWords(d, facts, day, (worded) => labelOf(worded, locale))
+      return words.state ? (
+        <span className="fw-md-cell">
+          <span>
+            <Pill tone={DUE_TONE[words.state]} dot>
+              {d(`due.${words.state}`)}
+            </Pill>
+          </span>
+          <span className="fw-md-sub">{words.text}</span>
+        </span>
+      ) : (
+        <span className="fw-pl-sub">{words.text}</span>
+      )
+    }
+    const CeCell = ({ data }: ICellRendererParams<Machine>) => {
+      if (!data) return null
+      const facts = factsOf(data)
+      if (!facts) return <span className="fw-pl-sub">—</span>
+      return facts.ceOnFile ? (
+        <span className="fw-md-cell">
+          <span>{d('depth.ceOnFile')}</span>
+          <span className="fw-md-sub">{d('depth.manuals', { count: facts.manuals })}</span>
+        </span>
+      ) : (
+        <span className="fw-pl-row fw-pl-danger">
+          <FileWarning size={13} aria-hidden /> {d('depth.ceMissing')}
+        </span>
+      )
+    }
+    const TagCell = ({ data }: ICellRendererParams<Machine>) => {
+      if (!data) return null
+      const facts = factsOf(data)
+      if (!facts) return <span className="fw-pl-sub">—</span>
+      const words = tagWords(d, facts, day)
+      return facts.tag ? <Pill tone={words.tone}>{words.text}</Pill> : <span className="fw-pl-sub">{words.text}</span>
+    }
     const SiteCell = ({ data }: ICellRendererParams<Machine>) => <span className="fw-pl-code">{data?.siteCode ?? ''}</span>
     const MoreCell = ({ data }: ICellRendererParams<Machine>) =>
       data ? (
@@ -171,7 +234,10 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
             { id: 'open', label: t('machines.open'), href: href(data) },
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
             { id: 'history', label: t('machineTab.history'), href: `${href(data)}?tab=history` },
-            { id: 'tag', label: t('machines.printTag'), href: `${model.prefix}/plant/machines/tags?ids=${encodeURIComponent(data.id)}`, target: '_blank' },
+            depth
+              ? { id: 'tag', label: t('machines.printTag'), onSelect: () => act.current?.onOpenTags?.([data]) }
+              : { id: 'tag', label: t('machines.printTag'), href: `${model.prefix}/plant/machines/tags?ids=${encodeURIComponent(data.id)}`, target: '_blank' as const },
+            ...(depth ? [{ id: 'docs', label: d('tab.docs'), href: `${href(data)}?tab=docs` }, { id: 'status', label: d('tab.status'), href: `${href(data)}?tab=status` }] : []),
             ...(data.status !== 'RETIRED' ? [{ id: 'report', label: t('requests.report'), href: `${model.prefix}/plant/requests?report=1&machine=${encodeURIComponent(data.id)}` }] : []),
           ]}
         />
@@ -183,12 +249,19 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
       { colId: 'workCentre', headerName: t('col.workCentre'), minWidth: canEdit ? 180 : 130, flex: 0.9, cellRenderer: CentreCell },
       { colId: 'status', headerName: t('col.status'), minWidth: 172, flex: 0.9, cellRenderer: StatusCell },
       { colId: 'work', headerName: t('col.openWork'), minWidth: 132, flex: 0.6, cellRenderer: WorkCell },
+      ...(depth
+        ? ([
+            { colId: 'nextCheck', headerName: d('col.nextCheck'), minWidth: 170, flex: 0.8, cellRenderer: NextCheckCell },
+            { colId: 'ce', headerName: d('col.ce'), minWidth: 120, flex: 0.5, cellRenderer: CeCell },
+            { colId: 'tag', headerName: d('col.tag'), minWidth: 130, flex: 0.5, cellRenderer: TagCell },
+          ] satisfies ColDef<Machine>[])
+        : []),
       ...(model.can.cost ? [{ colId: 'cost', headerName: t('col.cost'), minWidth: 110, flex: 0.5, type: 'rightAligned', cellRenderer: CostCell } satisfies ColDef<Machine>] : []),
       { colId: 'more', headerName: t('col.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     if (allSites) list.splice(1, 0, { colId: 'site', headerName: t('col.site'), minWidth: 84, flex: 0.3, cellRenderer: SiteCell })
     return list
-  }, [t, locale, model.prefix, model.timeZone, model.sites, model.cells, model.can.cost, allSites, canEdit])
+  }, [t, d, locale, model.prefix, model.timeZone, model.sites, model.cells, model.can.cost, allSites, canEdit, depth])
 
   if (!model.can.view) {
     return (
@@ -202,7 +275,10 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
   const picked = items.filter((row) => selected.includes(row.id))
   const retirable = picked.filter((row) => row.status !== 'RETIRED')
   const filtered = model.address.view !== 'inUse' || model.address.q.trim() !== '' || model.address.siteId !== null || model.address.classId !== null
-  const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.newMachine') }]
+  const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.newMachine') }, ...(depth ? [{ keys: ['t'], does: d('keys.printTags') }] : [])]
+  const openTags = (rows: Machine[]) => actions?.onOpenTags?.(rows)
+  const wallHref = `${model.prefix}/plant/machines/wall${model.address.siteId ? `?site=${encodeURIComponent(model.address.siteId)}` : ''}`
+  const need = depth?.address.need ?? null
   const tagIds = (picked.length > 0 ? picked : items).filter((row) => row.status !== 'RETIRED').map((row) => row.id)
   const tagsHref = `${model.prefix}/plant/machines/tags${tagIds.length > 0 && tagIds.length <= 200 ? `?ids=${tagIds.map(encodeURIComponent).join(',')}` : ''}`
   const newButton = (
@@ -285,20 +361,40 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
   return (
     <div className="fw-pl">
       <div className="fw-pl-head">
-        <LiveLine asOf={model.asOf} live={model.live} />
+        <span className="fw-pl-row">
+          {depth && (
+            <SegmentedControl
+              size="sm"
+              ariaLabel={d('section.label')}
+              value={section}
+              onChange={(value) => actions?.onSection?.(value as Section)}
+              options={SECTIONS.map((entry) => ({ value: entry, label: d(`section.${entry}`) }))}
+            />
+          )}
+          {section === 'machines' && <LiveLine asOf={model.asOf} live={model.live} />}
+        </span>
         <span className="fw-pl-actions">
-          <Button size="sm" asChild>
-            <Link href={tagsHref} target="_blank">
-              <QrIcon size={14} aria-hidden /> {picked.length > 0 ? t('machines.printTagsCount', { count: tagIds.length }) : t('machines.printTags')}
-            </Link>
-          </Button>
-          {newButton}
+          {depth ? (
+            section === 'machines' && (
+              <Button size="sm" aria-keyshortcuts="t" heldReason={items.length === 0 ? d('held.noMachines') : null} onClick={() => openTags(picked.length > 0 ? picked : items)}>
+                <QrIcon size={14} aria-hidden /> {picked.length > 0 ? t('machines.printTagsCount', { count: tagIds.length }) : t('machines.printTags')}
+              </Button>
+            )
+          ) : (
+            <Button size="sm" asChild>
+              <Link href={tagsHref} target="_blank">
+                <QrIcon size={14} aria-hidden /> {picked.length > 0 ? t('machines.printTagsCount', { count: tagIds.length }) : t('machines.printTags')}
+              </Link>
+            </Button>
+          )}
+          {section === 'machines' && newButton}
           <Menu
             label={<MoreHorizontal size={16} aria-hidden />}
             align="right"
             triggerProps={{ 'aria-label': t('machines.more') }}
             items={[
               { id: 'import', label: t('machines.import'), disabled: true, description: t('machines.importHeld') },
+              ...(depth ? [{ id: 'wall', label: d('wall.newTab'), href: wallHref, target: '_blank' as const }] : []),
               { id: 'keys', label: t('keys.title'), onSelect: () => setHelp(true) },
             ]}
           />
@@ -320,15 +416,32 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
         />
       )}
 
+      {section === 'dies' && depth ? (
+        depth.dies ?? null
+      ) : section === 'wall' && depth ? (
+        <StatusWall loaded={depth.wall.loaded} filter={depth.wall.filter} prefix={model.prefix} live={model.live} asOf={depth.wall.asOf} onFilter={actions?.onWallFilter} onRetry={actions?.onRetryWall} />
+      ) : (
+        <>
       <MetricStrip
-        metrics={TILES.map((entry) => ({
-          label: t(`machineTile.${entry.tile}`),
-          value: model.tiles ? String(model.tiles.tiles[entry.tile]) : '—',
-          hint: entry.tile === 'DO_NOT_USE' && model.tiles && model.tiles.locked > 0 ? t('machineTileHint.LOCKED', { count: model.tiles.locked }) : t(`machineTileHint.${entry.tile}`),
-          onClick: () => actions?.onView?.(model.address.view === entry.view ? 'inUse' : entry.view),
-          active: model.address.view === entry.view,
-        }))}
+        metrics={[
+          ...TILES.map((entry) => ({
+            label: t(`machineTile.${entry.tile}`),
+            value: model.tiles ? String(model.tiles.tiles[entry.tile]) : '—',
+            hint: entry.tile === 'DO_NOT_USE' && model.tiles && model.tiles.locked > 0 ? t('machineTileHint.LOCKED', { count: model.tiles.locked }) : t(`machineTileHint.${entry.tile}`),
+            onClick: () => actions?.onView?.(model.address.view === entry.view && !need ? 'inUse' : entry.view),
+            active: model.address.view === entry.view && !need,
+          })),
+          ...(depth
+            ? [
+                { label: d('tile.checks'), value: depth.tiles ? String(depth.tiles.checksOverdue) : '—', hint: d('tileHint.checks'), onClick: () => actions?.onNeed?.(need === 'checks' ? null : 'checks'), active: need === 'checks' },
+                { label: d('tile.ce'), value: depth.tiles ? String(depth.tiles.noCe) : '—', hint: d('tileHint.ce'), onClick: () => actions?.onNeed?.(need === 'ce' ? null : 'ce'), active: need === 'ce' },
+              ]
+            : []),
+        ]}
       />
+      {need && (
+        <Banner tone="info" title={d(`need.${need}`)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onNeed?.(null)}>{d('need.clear')}</Button>} />
+      )}
 
       <ListFrame<Machine>
         label={t('machines.tableLabel')}
@@ -343,11 +456,17 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
           onChange: setSelected,
           actions: (
             <>
-              <Button size="sm" asChild>
-                <Link href={tagsHref} target="_blank" aria-label={t('machines.printTagsCount', { count: tagIds.length })}>
+              {depth ? (
+                <Button size="sm" aria-label={t('machines.printTagsCount', { count: tagIds.length })} heldReason={tagIds.length === 0 ? d('held.noneToTag') : null} onClick={() => openTags(picked)}>
                   <QrIcon size={13} aria-hidden /> <SelectionLabel>{t('machines.printTagsCount', { count: tagIds.length })}</SelectionLabel>
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button size="sm" asChild>
+                  <Link href={tagsHref} target="_blank" aria-label={t('machines.printTagsCount', { count: tagIds.length })}>
+                    <QrIcon size={13} aria-hidden /> <SelectionLabel>{t('machines.printTagsCount', { count: tagIds.length })}</SelectionLabel>
+                  </Link>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="danger-outline"
@@ -371,8 +490,22 @@ function Machines({ model, actions }: { model: MachinesListModel; actions?: Mach
         state={state}
       />
       <p className="fw-pl-hint">{t(model.can.cost ? 'machines.footCost' : 'machines.foot')}</p>
+        </>
+      )}
 
       <MachineDialogs model={model} actions={actions} />
+      {depth?.tags && (
+        <TagsDialog
+          state={depth.tags}
+          canPrint={depth.canPrint}
+          sheetHref={`${model.prefix}/plant/machines/tags${depth.tags.machines.length > 0 ? `?ids=${depth.tags.machines.filter((machine) => !machine.retired).map((machine) => encodeURIComponent(machine.id)).join(',')}` : ''}`}
+          onPrinter={actions?.onTagPrinter}
+          onCopies={actions?.onTagCopies}
+          onPrint={actions?.onTagPrint}
+          onRetry={actions?.onTagRetry}
+          onClose={actions?.onTagsClose}
+        />
+      )}
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
     </div>
   )

@@ -21,8 +21,9 @@ import { dayOf, dayValue, officeContextOf, officeOrder, quantityText, senderOf }
  *
  *   accept   CHANGES_PROPOSED → CONFIRMED: every line's confirmation = its proposal (the whole quantity by its last
  *            delivery's date; 0 for a line the supplier cannot deliver), written while the order is CHANGES_PROPOSED; then
- *            the order's confirmation from the proposal (channel LINK, the proposal's link, the typed name, the
- *            supplier's reference and note) and the decision ACCEPTED (who, when). The supplier is told by mail (the
+ *            the order's confirmation from the proposal (a link's: channel LINK through that link with the typed name;
+ *            a portal's: channel PORTAL by the person who proposed it (B-W2b-F13a); the supplier's reference and note)
+ *            and the decision ACCEPTED (who, when). The supplier is told by mail (the
  *            worker sends it; no link in it). purchase_order.confirmed (proposalAccepted).
  *   refuse   CHANGES_PROPOSED → SENT with the decision REFUSED (who, when, the buyer's note for the office). Nothing is
  *            confirmed; the buyer then sends a new link (the supplier answers again, in the office's own words) or cancels
@@ -60,6 +61,7 @@ export const PROPOSAL_LINE_COLUMNS = {
 export const PROPOSAL_ORDER_COLUMNS = {
   proposedAt: true,
   proposalLinkId: true,
+  proposedByUserId: true,
   proposedByName: true,
   proposalSupplierRef: true,
   proposalNote: true,
@@ -120,13 +122,14 @@ export async function acceptProposal(caller: CommandCaller, orderId: string, bod
         data: { confirmedQuantity: confirmation.confirmedQuantity, confirmedDate: confirmation.confirmedDate === null ? null : dayValue(confirmation.confirmedDate), version: { increment: 1 } },
       })
     }
+    // The channel the proposal came through (exactly one of its link and its portal person: the …_portal_followups guard).
+    const channel = proposal.proposalLinkId ? ({ confirmedVia: 'LINK', confirmLinkId: proposal.proposalLinkId } as const) : ({ confirmedVia: 'PORTAL', confirmedByUserId: proposal.proposedByUserId } as const)
     await tx.purchaseOrder.update({
       where: { id: current.id },
       data: {
         status: 'CONFIRMED',
         confirmedAt: now,
-        confirmedVia: 'LINK',
-        confirmLinkId: proposal.proposalLinkId,
+        ...channel,
         confirmedByName: proposal.proposedByName,
         supplierRef: proposal.proposalSupplierRef,
         confirmNote: proposal.proposalNote,
@@ -155,8 +158,10 @@ export async function acceptProposal(caller: CommandCaller, orderId: string, bod
       after: {
         status: 'CONFIRMED',
         decision: 'ACCEPTED',
+        via: channel.confirmedVia,
         proposedAt: proposal.proposedAt ? toUtcIso(proposal.proposedAt) : null,
         linkId: proposal.proposalLinkId,
+        personId: proposal.proposedByUserId,
         lines: accepted.map(({ line, confirmation }) => ({ lineId: line.id, seq: line.seq, ...confirmation })),
         outboundId,
       },
@@ -166,7 +171,7 @@ export async function acceptProposal(caller: CommandCaller, orderId: string, bod
       subject: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
-      payload: { purchaseOrderId: current.id, number: current.number, partyId: current.partyId, channel: 'LINK', linkId: proposal.proposalLinkId, lines: lines.length, proposalAccepted: true },
+      payload: { purchaseOrderId: current.id, number: current.number, partyId: current.partyId, channel: channel.confirmedVia, linkId: proposal.proposalLinkId, lines: lines.length, proposalAccepted: true },
     })
     return { ...(await detailInCommand(tools, current.id)), supplierTold: outboundId !== null }
   })
@@ -197,7 +202,7 @@ export async function refuseProposal(caller: CommandCaller, orderId: string, bod
       siteId: current.siteId,
       ...(note ? { reason: note } : {}),
       before: { status: 'CHANGES_PROPOSED' },
-      after: { status: 'SENT', decision: 'REFUSED', proposedAt: proposal.proposedAt ? toUtcIso(proposal.proposedAt) : null, linkId: proposal.proposalLinkId },
+      after: { status: 'SENT', decision: 'REFUSED', via: proposal.proposalLinkId ? 'LINK' : 'PORTAL', proposedAt: proposal.proposedAt ? toUtcIso(proposal.proposedAt) : null, linkId: proposal.proposalLinkId, personId: proposal.proposedByUserId },
     })
     tools.emit({ type: 'purchase_order.proposal_refused', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { purchaseOrderId: current.id, number: current.number, partyId: current.partyId } })
     return { ...(await detailInCommand(tools, current.id)), next: 'Nothing is confirmed. Send the supplier a new link with your words, or cancel the order: the supplier is told either way.' }

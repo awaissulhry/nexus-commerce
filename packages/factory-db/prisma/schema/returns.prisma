@@ -24,8 +24,10 @@
 //
 // Who sees what (ownership/returns.json): the office reads and writes. The floor of the RMA's site reads its RMAs and
 // lines (never a price or credit value), records the dock receipt, moves an AUTHORISED RMA to RECEIVED and an RECEIVED
-// one to INSPECTED, and writes the received pieces, the grade and the outcome of a line. The portal reads nothing here yet
-// (the customer's returns pages are W2b). Nothing is deleted but an RMA line before the goods arrive.
+// one to INSPECTED, and writes the received pieces, the grade and the outcome of a line. W2b schema wave 23 (B-W2b-192's
+// need): a portal or link session (factory_partner_runtime) reads its OWN party's RMAs and lines (never the internal note,
+// the owner, who authorised, inspected or decided, nor who wrote a row); it writes nothing here (the API makes a customer's
+// request as the person or the tenant's system). Nothing is deleted but an RMA line before the goods arrive.
 
 /// A return authorisation (RMA; SAL-333, SAL-362): a customer's goods coming back to one site of the selling company,
 /// with its number, deadline and state. REQUESTED → AUTHORISED → RECEIVED → INSPECTED → CLOSED; REJECTED from REQUESTED;
@@ -51,6 +53,12 @@ model ReturnAuthorisation {
   status             ReturnStatus @default(REQUESTED)
   /// When the customer asked.
   requestedAt        DateTime     @db.Timestamptz(3)
+  /// W2b (schema wave 23, B-W2b-192's need): how the request reached us (the office, the customer's portal or a claim
+  /// link: a portal or link request starts REQUESTED), what the customer would like (a replacement, a repair or a credit;
+  /// null: not said) and their words (up to 2000 characters). Written when it is made, never changed.
+  channel            ReturnRequestChannel @default(OFFICE)
+  outcomeWanted      ReturnOutcomeWanted?
+  customerNote       String?
   /// When and by whom it was authorised: set from AUTHORISED on (a CANCELLED one may have them), set once.
   authorisedAt       DateTime?    @db.Timestamptz(3)
   authorisedById     String?      @db.Uuid
@@ -95,6 +103,27 @@ model ReturnAuthorisation {
   // The returns list and its tiles (waiting for goods, to inspect).
   @@index([tenantId, status])
   @@index([tenantId, partyId])
+}
+
+/// How a return request reached us (W2b schema wave 23).
+enum ReturnRequestChannel {
+  /// The office made it (from a mail, a call, a visit).
+  OFFICE
+  /// A person of the customer asked in the portal.
+  PORTAL
+  /// The customer asked through a claim link (no person of ours in between).
+  LINK
+}
+
+/// What the customer would like back for a return (W2b schema wave 23; design links.claim and portal "What would you
+/// like?"); the office decides each line's disposition.
+enum ReturnOutcomeWanted {
+  /// Another garment.
+  REPLACE
+  /// The same garment, repaired.
+  REPAIR
+  /// A credit note (the money back).
+  CREDIT
 }
 
 enum ReturnStatus {

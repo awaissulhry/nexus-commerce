@@ -312,6 +312,13 @@ describe('buying labels (LOG-025, LOG-032; the company pays)', () => {
     expect(fake.requests.map((request) => request.externalReference)).toEqual([`${S.p1}.v${row!.version - 1}`, `${S.p2}.v${(await parcelsOf(sh2()))[1]!.version}`])
     expect(fake.requests[0]).toMatchObject({ shipmentNumber: expect.any(String), parcels: 2, serviceCode: 'seed-standard', weightKg: '1.8500', lengthCm: '40.00', from: expect.objectContaining({ country: 'IT' }) })
     expect(await admin(`SELECT "carrierName", "integrationAccountId" FROM "Shipment" WHERE id = $1`, [sh2()])).toEqual([{ carrierName: 'Seed Express', integrationAccountId: accountId }])
+    // B-W2b-F14: the carrier's tracking page and expected delivery, kept at the purchase (the fake's: https, in 2 days).
+    expect(first.trackingUrl).toBe(`https://tracking.invalid/${first.trackingNumber}`)
+    expect(second.trackingUrl).toBeNull()
+    const eta = fake.labelOf(first.trackingNumber).label.expectedDeliveryAt!
+    expect(answer.shipment.expectedDeliveryAt).toBe(eta)
+    expect(Date.parse(eta) - Date.now()).toBeGreaterThan(47 * 3_600_000)
+    expect(await admin(`SELECT "trackingUrl" FROM "Parcel" WHERE id = $1`, [S.p1])).toEqual([{ trackingUrl: first.trackingUrl }])
     // One gateway call per carrier operation, in the ledger.
     expect(await calls('carrier.create_label')).toEqual([
       { status: 'FAILED', n: 1 },
@@ -537,6 +544,36 @@ describe('the account (Owner Q20: the company own Sendcloud account; LIVE only w
   })
 })
 
+describe("B-W2b-F14: the carrier's tracking page and expected delivery (schema wave 23)", () => {
+  it("a void clears the parcel's tracking page; a carrier's http page is never kept nor shown; the reads show the page and the ETA", async () => {
+    const eta = (await admin<{ eta: Date }>(`SELECT "expectedDeliveryAt" AS eta FROM "Shipment" WHERE id = $1`, [sh2()]))[0]!.eta
+    expect(eta).toBeInstanceOf(Date)
+    const voided = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/parcels/${S.p2}/label/void`, { reason: 'Second box after all' })
+    expect(voided.parcels[1]).toMatchObject({ trackingNumber: null, trackingUrl: null })
+    expect(await admin(`SELECT "trackingUrl" FROM "Parcel" WHERE id = $1`, [S.p2])).toEqual([{ trackingUrl: null }])
+    // Parcel 1 keeps its label: the ETA stays.
+    expect(voided.shipment.expectedDeliveryAt).toBe(eta.toISOString())
+    // The carrier answers the next label with an http page: the label is kept, its page is not.
+    fake.trackingPageNext(`http://tracking.invalid/plain`)
+    const rebought = await ok('warehouse', 'POST', labelsUrl(sh2()), {}, 201)
+    S.track2 = rebought.parcels[1].trackingNumber
+    expect(fake.labelOf(S.track2!).label.trackingUrl).toBe('http://tracking.invalid/plain')
+    expect(rebought.parcels[1]).toMatchObject({ trackingNumber: S.track2, trackingUrl: null })
+    expect(await admin(`SELECT "trackingUrl" FROM "Parcel" WHERE id = $1`, [S.p2])).toEqual([{ trackingUrl: null }])
+    // The shipment's ETA is the later of its labels' (parcel 2's, bought now).
+    expect(rebought.shipment.expectedDeliveryAt).toBe(fake.labelOf(S.track2!).label.expectedDeliveryAt)
+    // The office's record and tracking read show both.
+    const record = (await ok('viewer', 'GET', `/shipping/shipments/${sh2()}`)).shipment
+    expect(record.expectedDeliveryAt).toBe(rebought.shipment.expectedDeliveryAt)
+    expect(record.parcels.map((parcel: Json) => parcel.trackingUrl)).toEqual([`https://tracking.invalid/${S.track1}`, null])
+    const read = await ok('viewer', 'GET', `/shipping/shipments/${sh2()}/tracking`)
+    expect(read.shipment.expectedDeliveryAt).toBe(rebought.shipment.expectedDeliveryAt)
+    expect(read.parcels.map((parcel: Json) => parcel.trackingUrl)).toEqual([`https://tracking.invalid/${S.track1}`, null])
+    // The database refuses an http page for every login (Parcel_tracking_url_check).
+    await expect(admin(`UPDATE "Parcel" SET "trackingUrl" = 'http://tracking.invalid/x' WHERE id = $1`, [S.p2])).rejects.toThrow(/https address/)
+  })
+})
+
 describe('tracking (LOG-059): webhooks through the inbound ledger, and the poll', () => {
   it('ships SH-0002; then a void is refused (the goods left)', async () => {
     expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ship`, {})).shipment.status).toBe('SHIPPED')
@@ -577,6 +614,9 @@ describe('tracking (LOG-059): webhooks through the inbound ledger, and the poll'
   })
 
   it('the poll finds a lost update: parcel 2 delivered with no webhook, so the shipment is DELIVERED', async () => {
+    // B-W2b-F14: the carrier moved its ETA too, but the goods arrive in this poll: the kept ETA stays.
+    const etaBefore = (await admin<{ eta: Date }>(`SELECT "expectedDeliveryAt" AS eta FROM "Shipment" WHERE id = $1`, [sh2()]))[0]!.eta
+    fake.delay(S.track2!, 1)
     // The carrier's events after the label (the fake's label event): never posted.
     fake.advance(S.track2!, 'IN_TRANSIT', WEBHOOK_SECRET, new Date(Date.now() + 60_000))
     fake.advance(S.track2!, 'DELIVERED', WEBHOOK_SECRET, new Date(Date.now() + 120_000))
@@ -589,7 +629,7 @@ describe('tracking (LOG-059): webhooks through the inbound ledger, and the poll'
     expect(due).toEqual([{ payload: { shipmentId: sh2(), parcels: 1 } }])
     const polled = await pollShipment(carrier, callerFor(database, systemContext(A.tenant, newId())), sh2())
     expect(polled).toEqual({ recorded: 3, moved: 'DELIVERED', failures: [] })
-    expect(await admin(`SELECT status::text AS status, "deliveredAt" IS NOT NULL AS delivered FROM "Shipment" WHERE id = $1`, [sh2()])).toEqual([{ status: 'DELIVERED', delivered: true }])
+    expect(await admin(`SELECT status::text AS status, "deliveredAt" IS NOT NULL AS delivered, "expectedDeliveryAt" AS eta FROM "Shipment" WHERE id = $1`, [sh2()])).toEqual([{ status: 'DELIVERED', delivered: true, eta: etaBefore }])
     expect((await tracking(sh2())).filter((event) => event.parcelId === S.p2)).toEqual([
       { parcelId: S.p2, status: 'LABEL_CREATED', source: 'POLL' },
       { parcelId: S.p2, status: 'IN_TRANSIT', source: 'POLL' },
@@ -603,11 +643,28 @@ describe('tracking (LOG-059): webhooks through the inbound ledger, and the poll'
     expect((await tracking(sh2())).filter((event) => event.parcelId === S.p2 && event.status === 'DELIVERED')).toHaveLength(1)
   })
 
-  it('moves SB to RETURNED when its parcel comes back', async () => {
-    await ok('warehouse', 'POST', labelsUrl(S.sb!), {}, 201)
+  it("B-W2b-F14: the poll moves SB's ETA when the carrier moves it while the goods travel; the same ETA again moves nothing", async () => {
+    const bought = await ok('warehouse', 'POST', labelsUrl(S.sb!), {}, 201)
     await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/ship`, {})
     const sbTrack = (await parcelsOf(S.sb!))[0]!.trackingNumber!
-    for (const hook of fake.play(sbTrack, 'returned', WEBHOOK_SECRET, new Date(Date.now() - 3 * 3_600_000))) await webhook(hook)
+    expect(bought.shipment.expectedDeliveryAt).toBe(fake.labelOf(sbTrack).label.expectedDeliveryAt)
+    const moved = fake.delay(sbTrack, 2)
+    const version = (await admin<{ version: number }>(`SELECT version FROM "Shipment" WHERE id = $1`, [S.sb]))[0]!.version
+    const polled = await pollShipment(carrier, callerFor(database, systemContext(A.tenant, newId())), S.sb!)
+    expect(polled).toEqual({ recorded: 1, moved: null, failures: [] })
+    expect(await admin(`SELECT status::text AS status, "expectedDeliveryAt" AS eta, version FROM "Shipment" WHERE id = $1`, [S.sb])).toEqual([{ status: 'SHIPPED', eta: new Date(moved), version: version + 1 }])
+    const audit = await admin(`SELECT before, after FROM "AuditLog" WHERE action = 'shipping.etaMoved' AND "recordId" = $1`, [S.sb])
+    expect(audit).toEqual([{ before: { expectedDeliveryAt: bought.shipment.expectedDeliveryAt }, after: { expectedDeliveryAt: moved, source: 'POLL' } }])
+    expect((await ok('viewer', 'GET', `/shipping/shipments/${S.sb}/tracking`)).shipment.expectedDeliveryAt).toBe(moved)
+    // Asked again with nothing new: no move, no second audit row.
+    expect(await pollShipment(carrier, callerFor(database, systemContext(A.tenant, newId())), S.sb!)).toEqual({ recorded: 0, moved: null, failures: [] })
+    expect(await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'shipping.etaMoved' AND "recordId" = $1`, [S.sb])).toEqual([{ n: 1 }])
+  })
+
+  it('moves SB to RETURNED when its parcel comes back', async () => {
+    const sbTrack = (await parcelsOf(S.sb!))[0]!.trackingNumber!
+    // After the label event the poll above recorded (B-W2b-F14): the carrier's events come later than it.
+    for (const hook of fake.play(sbTrack, 'returned', WEBHOOK_SECRET, new Date(Date.now() + 60_000))) await webhook(hook)
     expect(await admin(`SELECT status::text AS status, "returnedAt" IS NOT NULL AS returned FROM "Shipment" WHERE id = $1`, [S.sb])).toEqual([{ status: 'RETURNED', returned: true }])
     expect((await ok('viewer', 'GET', `/shipping/shipments/${S.sb}/tracking`)).parcels).toEqual([expect.objectContaining({ status: 'RETURNED' })])
     expect(await admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'shipment.status_changed' AND payload->>'to' = 'RETURNED'`)).toEqual([{ n: 1 }])

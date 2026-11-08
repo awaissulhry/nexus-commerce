@@ -38,4 +38,8 @@ export const manifest = defineManifest({
   'GET /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'POST /sales/order-requests/:requestId/accept': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // B-W2b-F13b: the delivery addresses customers add wait for the office's check (whoever takes the customer's orders).
+  'GET /sales/delivery-addresses': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/delivery-addresses/:addressId/approve': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/delivery-addresses/:addressId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
 })

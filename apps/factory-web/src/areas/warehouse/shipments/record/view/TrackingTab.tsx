@@ -14,8 +14,13 @@ import { PartState } from './ShipmentRecordView'
  * Tracking & delivery (design sh-track, sh-pod): the carrier's events mapped to one list (label created, in transit, out
  * for delivery, delivered, exception, returned) per parcel with time and place, newest first, and the latest of each
  * parcel; they come by Sendcloud's webhook and the hourly poll, so nothing here needs a refresh ("Last event 10:42").
- * Proof of delivery: when it was delivered (the carrier's signer and image are W2b).
+ * Proof of delivery: when it was delivered (the carrier's signer and image are W2b). B-W2b-F14: the carrier's expected
+ * delivery while the goods are on their way, and each parcel's "Track on the carrier's site" (an https page only).
  */
+
+/** The carrier's page is opened only when it is an https address (the API keeps no other). */
+const safePage = (url: string | null | undefined): string | null => (url && /^https:\/\/\S+$/i.test(url) ? url : null)
+
 export function TrackingTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
   const t = useT('shipments')
   const locale = useLocale()
@@ -44,6 +49,11 @@ export function TrackingTab({ shipment, model, actions }: { shipment: Shipment; 
               <span className="fw-sh-file-name">
                 <strong>{t('cartons.name', { seq: parcel.seq, count: tracking.parcels.length })}</strong>
                 <span className="fw-sh-cell-sub fw-sh-mono">{parcel.trackingNumber ?? '—'}</span>
+                {safePage(parcel.trackingUrl) && (
+                  <a className="fw-sh-link" href={safePage(parcel.trackingUrl)!} target="_blank" rel="noopener noreferrer" aria-label={t('tracking.trackOnCarrierOf', { seq: parcel.seq })}>
+                    {t('tracking.trackOnCarrier')}
+                  </a>
+                )}
               </span>
               {parcel.status ? <Pill tone={TRACKING_TONE[parcel.status] ?? 'neutral'}>{t(`trackingStatus.${parcel.status}`)}</Pill> : <span className="fw-sh-muted">{t('tracking.waiting')}</span>}
             </li>
@@ -81,6 +91,9 @@ export function TrackingTab({ shipment, model, actions }: { shipment: Shipment; 
           labelCase="sentence"
           items={[
             { label: t('tracking.shippedAt'), value: shipment.shippedAt ? formatDateTime(shipment.shippedAt, { locale }) : t('tracking.notYet') },
+            ...(tracking.shipment.expectedDeliveryAt && !shipment.deliveredAt && !shipment.returnedAt
+              ? [{ label: t('tracking.expectedAt'), value: formatDateTime(tracking.shipment.expectedDeliveryAt, { locale }) }]
+              : []),
             { label: t('tracking.deliveredAt'), value: shipment.deliveredAt ? formatDateTime(shipment.deliveredAt, { locale }) : t('tracking.notDelivered') },
             ...(shipment.returnedAt ? [{ label: t('tracking.returnedAt'), value: formatDateTime(shipment.returnedAt, { locale }) }] : []),
           ]}

@@ -1,12 +1,14 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { partnerGrants, portalAccessProblem } from '@nexus/factory-domain/auth/portal/access'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
-import type { CommandTx } from '../../../core/command'
+import type { CommandTools, CommandTx } from '../../../core/command'
 import { partnerRoles, partyOf, portalOn, termsState } from '../../auth/portal/store'
+import { assignInCommand, TASK_COLUMNS } from './store'
 
 /**
  * The people of a party a request or a notification is for (B-W2b-167; plan B-W2b-156 "which person a task is for is the
- * API's"): there is no assignee — a partner person is a reader of the party's task list or news when they could use the portal
+ * API's"): a task is for every person whose roles act on it (B-W2b-F14: one of them may take it, or give it to a colleague
+ * — PartnerTask.assigneeId, the "Mine" filter — but the others still see it) — a partner person is a reader of the party's task list or news when they could use the portal
  * now (ACTIVE, before their end of access, the organisation not paused, its portal ON, the company's portal terms in force:
  * B-W2b-159's access rules) and their PARTNER roles reach the record's company and party. Their actor carries those grants
  * (price at most), so `isTaskFor` and a rule's own check read the same thing a portal session of theirs would hold.
@@ -55,4 +57,15 @@ export async function partyReaders(client: Client, tenantId: string, partyId: st
     })
   }
   return readers
+}
+
+/**
+ * The hand-over when a partner person is deactivated (B-W2b-F14): the OPEN tasks handed to them go back to everyone of
+ * their party (assignee null), in the deactivation's own command (office scope: the partner portal's colleague admin and the
+ * office's Portal access both run it as the office). Closed tasks keep the name (their history). How many went back.
+ */
+export async function handBackInCommand(tools: CommandTools, userId: string): Promise<number> {
+  const open = await tools.tx.partnerTask.findMany({ where: { assigneeId: userId, status: 'OPEN' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: TASK_COLUMNS })
+  for (const task of open) await assignInCommand(tools, task, null, 'LEFT')
+  return open.length
 }

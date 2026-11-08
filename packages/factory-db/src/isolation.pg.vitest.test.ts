@@ -41,6 +41,7 @@ import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
+import { seed as seedPortalFollowups } from '../seed/portal-followups'
 import { seed as seedPortalFrame } from '../seed/portal-frame'
 import { seed as seedPortalSales } from '../seed/portal-sales'
 import { seed as seedPortalSupply } from '../seed/portal-supply'
@@ -309,6 +310,10 @@ beforeAll(async () => {
   // (a sent purchase order with a draft ship notice, a job at its workshop, an answer) for the partner scope.
   await seedPortalSupply({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
   await seedPortalSupply({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
+  // The portal follow-ups of W2b (schema wave 23): P2's uploads and change requests; with partnerScope, P1's delivery address
+  // that waits for the office's check (the first address: a partner session inserts only such a one), upload and request.
+  await seedPortalFollowups({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
+  await seedPortalFollowups({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -518,6 +523,7 @@ it('covers every classified table and every runtime role', () => {
     'PartnerTask',
     'Party',
     'PartyAddress',
+    'PartyChangeRequest',
     'PartyContact',
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
@@ -674,6 +680,7 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReturnNotice',
     'SupplierClaim',
     'SupplierClaimLine',
+    'SupplierDocumentUpload',
     'SupplierInvoice',
     'SupplierInvoiceFile',
     'SupplierInvoiceLine',

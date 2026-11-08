@@ -3,6 +3,7 @@ import { ConflictError, DomainError, InvalidStateError, NotFoundError, Validatio
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
+import { approvalView } from '@nexus/factory-domain/parties/address-approval'
 import { withdrawProblem } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { reorderPlan, type PastLine } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import {
@@ -121,7 +122,7 @@ export async function shipToAddresses(request: FastifyRequest) {
   const rows = await request.withClient((client) =>
     client.partyAddress.findMany({
       where: { kinds: { has: 'SHIP_TO' } },
-      select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true, deliveryNotes: true, isDefaultShipTo: true, status: true, version: true },
+      select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true, deliveryNotes: true, isDefaultShipTo: true, status: true, approvalStatus: true, refuseReason: true, version: true },
       orderBy: [{ status: 'asc' }, { isDefaultShipTo: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
     }),
   )
@@ -209,7 +210,7 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
       pricesChanged: views.filter((line) => line.problems.some((problem) => problem.code === 'PRICE_CHANGED')).length,
       notice: REQUEST_NOTICE,
     },
-    addresses: addresses.map((address) => ({ ...address, isDefault: address.isDefaultShipTo })),
+    addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: reader.seesPrices,
   }
 }

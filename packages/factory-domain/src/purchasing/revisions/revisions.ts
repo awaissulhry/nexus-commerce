@@ -63,7 +63,7 @@ export interface RevisionLine {
 
 export interface RevisionConfirmation {
   readonly at: string
-  readonly via: 'LINK' | 'OFFICE'
+  readonly via: 'LINK' | 'OFFICE' | 'PORTAL'
   readonly byName: string | null
   readonly supplierRef: string | null
 }

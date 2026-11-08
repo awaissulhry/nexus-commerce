@@ -305,8 +305,17 @@ export function labels(value: Shipment, print: 'QUEUED' | 'SENT' | 'PRINTED' | '
 export function tracking(value: Shipment, delivered = false): Tracking {
   const [first, second] = value.parcels
   return {
-    shipment: { status: value.status, carrierName: value.carrierName, shippedAt: value.shippedAt, deliveredAt: value.deliveredAt, returnedAt: value.returnedAt },
-    parcels: value.parcels.map((entry) => ({ parcelId: entry.id, seq: entry.seq, trackingNumber: entry.trackingNumber, labelledAt: entry.labelledAt, status: delivered ? 'DELIVERED' : 'IN_TRANSIT', lastEventAt: at(30, delivered ? 11 : 8, 42) })),
+    // B-W2b-F14: the carrier's expected delivery and each parcel's tracking page (made up).
+    shipment: { status: value.status, carrierName: value.carrierName, shippedAt: value.shippedAt, deliveredAt: value.deliveredAt, returnedAt: value.returnedAt, expectedDeliveryAt: at(31, 18, 0) },
+    parcels: value.parcels.map((entry) => ({
+      parcelId: entry.id,
+      seq: entry.seq,
+      trackingNumber: entry.trackingNumber,
+      trackingUrl: entry.trackingNumber ? `https://tracking.example.com/${entry.trackingNumber}` : null,
+      labelledAt: entry.labelledAt,
+      status: delivered ? 'DELIVERED' : 'IN_TRANSIT',
+      lastEventAt: at(30, delivered ? 11 : 8, 42),
+    })),
     events: [
       ...(delivered
         ? [

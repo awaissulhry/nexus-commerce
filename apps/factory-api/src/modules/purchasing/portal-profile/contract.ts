@@ -207,7 +207,8 @@ const addressFields = {
 }
 const contactFields = { name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), roles: z.array(z.string()), language: z.string().nullable() }
 const plannedChange = output({
-  target: z.enum(['ADDRESS', 'CONTACT']),
+  /** COMPANY (W2b wave 23): the party's own website. */
+  target: z.enum(['ADDRESS', 'CONTACT', 'COMPANY']),
   op: z.enum(['ADD', 'CHANGE', 'REMOVE']),
   id: id().nullable(),
   version: z.number().int().nullable(),
@@ -232,7 +233,17 @@ const requestView = output({
 export const supplierProfileContract = defineContract({
   response: {
     200: output({
-      company: output({ code: z.string(), legalName: z.string(), tradeName: z.string().nullable(), country: z.string(), vatNumber: z.string().nullable(), fiscalCode: z.string().nullable() }),
+      company: output({
+        code: z.string(),
+        legalName: z.string(),
+        tradeName: z.string().nullable(),
+        country: z.string(),
+        vatNumber: z.string().nullable(),
+        fiscalCode: z.string().nullable(),
+        /** W2b wave 23: the supplier's website, and whether a change of it waits for our check. */
+        website: z.string().nullable(),
+        waiting: z.boolean(),
+      }),
       addresses: z.array(output({ id: id(), version: z.number().int(), ...addressFields, isDefaultBillTo: z.boolean(), isDefaultShipTo: z.boolean(), waiting: z.boolean() })),
       contacts: z.array(output({ id: id(), version: z.number().int(), ...contactFields, waiting: z.boolean() })),
       pending: z.array(requestView),
@@ -248,6 +259,8 @@ export const requestProfileChangeContract = defineContract({
   body: input({
     addresses: z.array(addressChange).max(MAX_PROFILE_CHANGES).optional(),
     contacts: z.array(contactChange).max(MAX_PROFILE_CHANGES).optional(),
+    /** W2b wave 23: the company's website (null or blank: none); checked against the one the supplier saw at approval. */
+    company: input({ website: z.string().max(300).nullable() }).optional(),
     note: optional(PROFILE_NOTE_MAX),
   }),
   response: { 201: output({ request: requestView }) },

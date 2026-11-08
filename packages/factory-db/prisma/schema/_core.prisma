@@ -115,6 +115,9 @@ model Company {
   approvalRequests    ApprovalRequest[]
   // W2b portal-frame.prisma (wave 20/22): the requests it made of partners (their tasks).
   partnerTasks        PartnerTask[]
+  // W2b portal-followups.prisma (schema wave 23): the documents and profile changes suppliers sent through its portal.
+  supplierDocumentUploads SupplierDocumentUpload[]
+  partyChangeRequests     PartyChangeRequest[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
   // W2b imports.prisma: the steps of its first load marked done.

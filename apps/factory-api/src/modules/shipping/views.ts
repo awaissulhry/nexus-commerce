@@ -43,6 +43,8 @@ export const parcelSchema = output({
   widthCm: z.string().nullable(),
   heightCm: z.string().nullable(),
   trackingNumber: z.string().nullable(),
+  /** B-W2b-F14: the carrier's tracking page ("Track on the carrier's site"): https only; null: none kept. */
+  trackingUrl: z.string().nullable(),
   labelledAt: instant().nullable(),
   garments: z.number().int(),
 })
@@ -93,6 +95,8 @@ export const shipmentSchema = output({
   shippedAt: instant().nullable(),
   deliveredAt: instant().nullable(),
   returnedAt: instant().nullable(),
+  /** B-W2b-F14: when the carrier expects to deliver (at the label's purchase, moved by its tracking); null: not said. */
+  expectedDeliveryAt: instant().nullable(),
   cancelledAt: instant().nullable(),
   cancelReason: z.string().nullable(),
   internalNote: z.string().nullable(),

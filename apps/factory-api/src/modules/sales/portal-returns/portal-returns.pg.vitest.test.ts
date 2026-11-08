@@ -194,8 +194,15 @@ describe('the cases and a return request from the portal (SAL-334)', { timeout: 
     expect(requested.request).toMatchObject({ via: 'PORTAL', outcomeWanted: { code: 'REPAIR' }, note: 'Please collect it with the next delivery.' })
     expect(requested.request.lines).toHaveLength(1)
     expect(sent.body.sent.words.en).toMatch(new RegExp(`^Return request ${requested.number} opened\\.`))
-    const row = await one('SELECT status::text, "createdById", "authorisedAt", "goodsDueBy" FROM "ReturnAuthorisation" WHERE id = $1', [requested.id])
-    expect(row).toEqual({ status: 'REQUESTED', createdById: userIds.buyer, authorisedAt: null, goodsDueBy: null })
+    // B-W2b-F13b (wave 23): how it came, the wish and the words are the RMA's own columns, written with it.
+    const row = await one('SELECT status::text, "createdById", "authorisedAt", "goodsDueBy", channel::text, "outcomeWanted"::text AS "outcomeWanted", "customerNote" FROM "ReturnAuthorisation" WHERE id = $1', [requested.id])
+    expect(row).toEqual({ status: 'REQUESTED', createdById: userIds.buyer, authorisedAt: null, goodsDueBy: null, channel: 'PORTAL', outcomeWanted: 'REPAIR', customerNote: 'Please collect it with the next delivery.' })
+    // The partner role reads them on its own RMA (wave 23's grant), never a hidden column; another party reads nothing.
+    const asPartner = <R>(partyId: string, read: (client: any) => Promise<R>) => h.database.withScope({ audience: 'partner', tenantId: T, actorId: userIds.buyer, partyId }, read)
+    expect(await asPartner(P1, (client) => client.returnAuthorisation.findUnique({ where: { id: requested.id }, select: { status: true, channel: true, outcomeWanted: true, customerNote: true } }))).toEqual({ status: 'REQUESTED', channel: 'PORTAL', outcomeWanted: 'REPAIR', customerNote: 'Please collect it with the next delivery.' })
+    await expect(asPartner(P1, (client) => client.returnAuthorisation.findUnique({ where: { id: requested.id }, select: { internalNote: true } }))).rejects.toThrow(/permission denied/)
+    await expect(asPartner(P1, (client) => client.returnAuthorisation.findUnique({ where: { id: requested.id }, select: { createdById: true } }))).rejects.toThrow(/permission denied/)
+    expect(await asPartner(seedUuid(NS, 'party:P2'), (client) => client.returnAuthorisation.findUnique({ where: { id: requested.id }, select: { id: true } }))).toBeNull()
     expect((await events('return_request.sent')).find((payload) => payload.returnId === requested.id)).toMatchObject({ via: 'PORTAL', pieces: 1, partyId: P1 })
     const audit = await one('SELECT "actorId", after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['ReturnAuthorisation', requested.id, 'portalReturns.request'])
     expect(audit).toMatchObject({ actorId: userIds.buyer, after: { via: 'PORTAL', byPartner: true, outcomeWanted: 'REPAIR' } })
@@ -222,7 +229,8 @@ describe('the cases and a return request from the portal (SAL-334)', { timeout: 
   it('the office authorises it in Returns: the customer reads "send it back by" and prints the instructions', async () => {
     const before = await one<{ version: number }>('SELECT version FROM "ReturnAuthorisation" WHERE id = $1', [requested.id])
     const answer = await authoriseReturn(officeCaller(), requested.id, { version: before.version })
-    expect(answer.return).toMatchObject({ status: 'AUTHORISED' })
+    // B-W2b-F13b: the office's record shows how it came, the wish and the customer's words.
+    expect(answer.return).toMatchObject({ status: 'AUTHORISED', channel: 'PORTAL', outcomeWanted: 'REPAIR', customerNote: 'Please collect it with the next delivery.' })
     expect((await events('return.authorised')).some((payload) => payload.returnId === requested.id)).toBe(true)
     const record = (await ok(browsers.buyer, `/portal/returns/${requested.id}`)).return
     expect(record).toMatchObject({ state: 'SEND_IT_BACK', next: { forYou: true, code: 'SEND_IT_BACK' }, progress: { instructions: true } })
@@ -360,7 +368,8 @@ describe('"Report a problem" by a claim link', { timeout: SLOW_TEST_TIMEOUT_MS }
     expect(answer.sent).toMatchObject({ type: 'RETURN' })
     expect(answer.cases.map((entry: Json) => entry.number)).toEqual([answer.sent.number])
     expect(await one('SELECT count(*)::int AS n FROM "LinkDraft" WHERE "tenantId" = $1', [T])).toEqual({ n: 0 })
-    expect(await one('SELECT status::text, "createdById" FROM "ReturnAuthorisation" WHERE id = $1', [answer.sent.id])).toEqual({ status: 'REQUESTED', createdById: null })
+    expect(await one('SELECT status::text, "createdById", channel::text, "outcomeWanted"::text AS "outcomeWanted", "customerNote" FROM "ReturnAuthorisation" WHERE id = $1', [answer.sent.id])).toEqual({ status: 'REQUESTED', createdById: null, channel: 'LINK', outcomeWanted: 'CREDIT', customerNote: null })
+    expect((await linkCall(token, 'GET', `/link/claim/cases/RETURN/${answer.sent.id}`)).json()).toMatchObject({ return: { request: { via: 'LINK', outcomeWanted: { code: 'CREDIT' }, note: null } } })
     const complaintSent = await linkCall(token, 'POST', '/link/claim', { type: 'COMPLAINT', description: 'The zip broke on the second day.', salesOrderLineId: item.salesOrderLineId, size: item.size })
     expect(complaintSent.statusCode, complaintSent.body).toBe(201)
     const afterComplaint = complaintSent.json() as Json

@@ -84,6 +84,9 @@ export const ATTENTION_KINDS = [
   // waiting for the buyer's yes, and a document a supplier sent waiting for our check.
   'SUPPLIER_CHANGE',
   'SUPPLIER_DOCUMENT',
+  // B-W2b-F13b (design portal.customer.neworder "Add a new address (waits for our approval)", home.approvals): a delivery
+  // address a customer added in the portal, waiting for the check of whoever takes the customer's orders.
+  'DELIVERY_ADDRESS',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -351,6 +354,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [SUPPLIER_DOCUMENTS_REVIEW],
     decide: 'OPEN',
     live: ['supplier_document.uploaded', 'supplier_document.accepted', 'supplier_document.refused', 'file.available'],
+  }),
+  // B-W2b-F13b: a delivery address a customer added (modules/insights/sources/delivery-addresses.ts); approved or refused by
+  // whoever takes the customer's orders (modules/sales/portal-ordering/address-check.ts), or approved with a request that names it.
+  DELIVERY_ADDRESS: rule({
+    kind: 'DELIVERY_ADDRESS',
+    category: 'APPROVAL',
+    label: 'Delivery addresses customers added, to check',
+    view: ORDERS_VIEW,
+    act: [ORDERS_MANAGE],
+    decide: 'OPEN',
+    live: ['party.addresses_changed'],
   }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',

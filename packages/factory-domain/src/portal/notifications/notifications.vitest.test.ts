@@ -112,3 +112,23 @@ describe('partner notifications (B-W2b-167, PLT-148)', () => {
     expect(homeCountProblems([{ key: 'Tasks', area: 'home', kinds: [], words: { it: '', en: 'b' } }])).toHaveLength(3)
   })
 })
+
+describe('our check of a delivery address the person added (B-W2b-F15)', () => {
+  const label = 'Seed warehouse two, Via Esempio 12, 40100 Bologna'
+
+  it('says the decision in Italian and English with the address in short, a refusal with the reason; orders mail it at once', () => {
+    expect(partnerSentence({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was checked: your orders can use it`)
+    expect(partnerSentence({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, 'it', 'Factory Spa')).toBe(`Il tuo indirizzo di consegna ${label} è stato verificato: i tuoi ordini possono usarlo`)
+    const refused = { messageKey: 'portal.address.refused', recordLabel: label, params: { reason: ' We do not deliver to private garages. ' } }
+    expect(partnerSentence(refused, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was not accepted: We do not deliver to private garages.`)
+    expect(partnerSentence(refused, 'it', 'Factory Spa')).toBe(`Il tuo indirizzo di consegna ${label} non è stato accettato: We do not deliver to private garages.`)
+    expect(partnerSentence({ ...refused, params: {} }, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was not accepted`)
+    const kindTopic = () => null
+    expect(topicOfNotice({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, kindTopic)).toBe('ORDERS')
+    expect(topicOfNotice(refused, kindTopic)).toBe('ORDERS')
+  })
+
+  it('puts free text in as written: a "$&" in the address or the reason is never a replacement pattern', () => {
+    expect(partnerSentence({ messageKey: 'portal.address.refused', recordLabel: 'Via $& 1', params: { reason: "Not $' here" } }, 'en', 'Factory Spa')).toBe("Your delivery address Via $& 1 was not accepted: Not $' here")
+  })
+})

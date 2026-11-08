@@ -1,0 +1,291 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "retry": "Riprova"
+  },
+  "section": {
+    "label": "Mostra",
+    "machines": "Macchine",
+    "dies": "Fustelle",
+    "wall": "Parete di stato"
+  },
+  "tab": {
+    "docs": "Documenti e CE",
+    "status": "Stato e fermi",
+    "tag": "Targhetta"
+  },
+  "tile": {
+    "checks": "Verifiche scadute",
+    "ce": "Senza dichiarazione CE"
+  },
+  "tileHint": {
+    "checks": "Verifiche periodiche oltre la scadenza",
+    "ce": "Art. 71: la dichiarazione CE va tenuta a disposizione"
+  },
+  "need": {
+    "ce": "Sono mostrate le macchine senza dichiarazione CE in archivio",
+    "checks": "Sono mostrate le macchine con una verifica periodica scaduta",
+    "clear": "Mostra tutte"
+  },
+  "col": {
+    "nextCheck": "Prossima verifica",
+    "ce": "CE in archivio",
+    "tag": "Targhetta stampata"
+  },
+  "due": {
+    "OVERDUE": "Scaduta",
+    "DUE_SOON": "In scadenza",
+    "PLANNED": "Pianificata",
+    "ENDED": "Conclusa"
+  },
+  "depth": {
+    "noCheck": "Nessuna verifica pianificata",
+    "checkOverdue": "{check} · scaduta il {date}, {days} giorni fa",
+    "checkSoon": "{check} · {date}, tra {days} giorni",
+    "checkPlanned": "{check} · {date}",
+    "ce": "Dichiarazione CE",
+    "ceOnFile": "In archivio",
+    "ceMissing": "Mancante",
+    "manuals_one": "{count} manuale",
+    "manuals_other": "{count} manuali",
+    "tagNever": "Mai su un'etichettatrice",
+    "tagPrintedOn": "Stampata il {date}"
+  },
+  "printState": {
+    "QUEUED": "In coda",
+    "SENT": "Inviata",
+    "PRINTED": "Stampata",
+    "FAILED": "Non stampata"
+  },
+  "held": {
+    "noMachines": "Nessuna macchina a schermo da etichettare",
+    "noneToTag": "Le macchine scelte sono dismesse: la loro targhetta non segnala nulla",
+    "noManage": "Lo cambia un ruolo che gestisce le macchine (plant.machines.manage)",
+    "retired": "Una macchina dismessa mantiene l'ultimo stato",
+    "locked": "Bloccata non sicura: la libera la firma di sicurezza della sua richiesta",
+    "pickStatus": "Scegli il nuovo stato",
+    "sameStatus": "È già in questo stato",
+    "technician": "Solo un tecnico sblocca una macchina da non usare (plant.signSafe)",
+    "reason": "Scrivi il motivo, in poche parole",
+    "busy": "In corso…"
+  },
+  "keys": {
+    "printTags": "Stampa targhette QR (la selezione, altrimenti le righe a schermo)"
+  },
+  "wall": {
+    "newTab": "Parete di stato (nuova scheda)",
+    "title": "Parete di stato",
+    "tabTitle": "Parete di stato · tutti gli stabilimenti",
+    "tabTitleSite": "Parete di stato · {site}",
+    "readAt": "Letta alle {time}",
+    "filter": "Filtra per stato",
+    "show": {
+      "ALL": "Tutte",
+      "NOT_RUNNING": "Non in funzione",
+      "DOWN": "Ferme",
+      "UNDER_MAINTENANCE": "In manutenzione",
+      "DO_NOT_USE": "Da non usare"
+    },
+    "loading": "Lettura delle macchine…",
+    "failed": "Non è stato possibile leggere la parete di stato",
+    "emptyTitle": "Nessuna macchina in uso",
+    "empty": "Registra le macchine in Macchine e attrezzature: ognuna compare qui con il suo stato.",
+    "noneTitle": "Nessuna in questo stato",
+    "none": "Scegli un altro stato, oppure Tutte.",
+    "truncated": "La parete mostra le prime 1000 macchine: scegli uno stabilimento.",
+    "line": "Linea {line}",
+    "noLine": "Fuori linea · {site}",
+    "tileLabel": "{machine}: {status} dal {since}",
+    "foot": "In tempo reale: una tessera cambia appena cambia la sua macchina. La tessera apre la macchina."
+  },
+  "status": {
+    "open": "Cambia stato",
+    "title": "Cambia lo stato di {machine}",
+    "submit": "Cambia stato",
+    "now": "Ora:",
+    "to": "Nuovo stato",
+    "current": "Il suo stato attuale",
+    "choice": {
+      "RUNNING": "In funzione",
+      "DOWN": "Ferma",
+      "UNDER_MAINTENANCE": "In manutenzione",
+      "DO_NOT_USE": "Da non usare"
+    },
+    "choiceHint": {
+      "RUNNING": "Funziona e si può usare",
+      "DOWN": "Ferma: ora non funziona",
+      "UNDER_MAINTENANCE": "Qualcuno ci sta lavorando",
+      "DO_NOT_USE": "Nessuno la usa finché un tecnico non la sblocca"
+    },
+    "reason": "Motivo",
+    "reasonHint": "Resta nella storia della macchina (lì non compare nessuna persona).",
+    "lockedTitle": "Bloccata non sicura",
+    "lockedBody": "Solo la firma di sicurezza di un tecnico sulla richiesta che l'ha bloccata libera questa macchina (risposta H1). Apri la richiesta in Richieste macchine.",
+    "doNotUseTitle": "Da non usare richiede un motivo",
+    "doNotUseBody": "Solo un tecnico la sblocca, con un nuovo codice dell'autenticatore.",
+    "releaseTitle": "Stai sbloccando una macchina da non usare",
+    "releaseBody": "Un atto da tecnico: alla conferma ti viene chiesto un nuovo codice dell'autenticatore.",
+    "releaseHeldTitle": "La sblocca un tecnico",
+    "releaseHeldBody": "Il tuo ruolo non può sbloccare una macchina da non usare: chiedi a un tecnico (plant.signSafe).",
+    "cancelled": "Nessun codice inserito: lo stato non è cambiato."
+  },
+  "stepUp": {
+    "title": "Conferma con l'autenticatore",
+    "confirm": "Sblocca",
+    "release": "Sbloccare una macchina da non usare è un atto da tecnico: scrivi il codice di sei cifre che l'autenticatore mostra ora.",
+    "wrong": "Il codice è errato o già usato: scrivi quello mostrato ora.",
+    "locked": "Troppi tentativi: attendi un momento.",
+    "unavailable": "Non è stato possibile controllare il codice: riprova."
+  },
+  "refusal": {
+    "MACHINE_RETIRED": "Questa macchina è dismessa: il suo stato non cambia più.",
+    "SAME_STATUS": "La macchina è già in questo stato.",
+    "LOCKED_UNSAFE": "Bloccata non sicura: resta da non usare finché un tecnico non firma la sicurezza della sua richiesta.",
+    "DOCUMENT_KIND": "Una dichiarazione CE o un manuale è un documento; una foto va in Foto.",
+    "TAG_RETIRED": "dismessa: la sua targhetta non offre più Segnala un problema",
+    "TAG_OTHER_SITE": "si trova in un altro stabilimento rispetto alla stampante"
+  },
+  "docs": {
+    "loading": "Lettura dei documenti…",
+    "failed": "Non è stato possibile leggere i documenti",
+    "forbidden": "Il tuo ruolo non vede i documenti di questa macchina.",
+    "notFound": "Non esiste, oppure non puoi vederlo.",
+    "noCeTitle": "Nessuna dichiarazione CE in archivio",
+    "noCeBody": "Carica prima la dichiarazione CE: il D.Lgs. 81/2008 art. 71 la chiede a disposizione, con i manuali.",
+    "noCeBodyRead": "Chiedi a chi gestisce le macchine di caricarla: il D.Lgs. 81/2008 art. 71 la chiede a disposizione.",
+    "emptyTitle": "Nessun documento",
+    "empty": "Carica prima la dichiarazione CE, poi i manuali.",
+    "group": {
+      "MACHINE_CE": "Dichiarazione CE",
+      "MANUAL": "Manuali",
+      "PHOTO": "Foto",
+      "OTHER": "Schemi, cablaggi e schede di regolazione"
+    },
+    "groupEmpty": "Ancora nessuno.",
+    "groupEmptyCe": "Mancante: carica la dichiarazione di conformità.",
+    "added": "Aggiunto il {date} · {size}",
+    "onTablets": "Sui tablet",
+    "quarantined": "Trattenuto dall'antivirus",
+    "scanning": "Controllo antivirus in corso",
+    "view": "Apri",
+    "viewOne": "Apri {name}",
+    "downloadOne": "Scarica {name}",
+    "removeOne": "Rimuovi {name}",
+    "download": "Scarica",
+    "held": {
+      "notAvailable": "Non ancora disponibile (caricamento o controllo non concluso)",
+      "noManage": "Lo rimuove un ruolo che gestisce le macchine (plant.machines.manage)",
+      "reason": "Scrivi il motivo, in poche parole",
+      "manualPdf": "Un manuale è un PDF: metti la foto in Foto.",
+      "photoImage": "Una foto è un'immagine (JPEG, PNG, WebP o HEIC)."
+    },
+    "uploadTitle": "Carica",
+    "uploadHeld": "I documenti li aggiunge un ruolo che gestisce le macchine (plant.machines.manage).",
+    "groupLabel": "Che cos'è",
+    "tabletsLabel": "Mostra sui tablet dello stabilimento",
+    "tabletsHint": "Art. 71: i manuali a disposizione dove la macchina lavora.",
+    "uploading": "Caricamento…",
+    "uploaded": "{name} è archiviato",
+    "law": "Oggi su carta: questa scheda dice cosa manca; nulla ferma una macchina senza.",
+    "removeTitle": "Rimuovi {name}",
+    "removeBody": "Un file errato o superato esce dai documenti della macchina; il motivo resta registrato.",
+    "removeCeBody": "Senza, la macchina torna a risultare senza dichiarazione CE; il motivo resta registrato.",
+    "removeReason": "Motivo",
+    "remove": "Rimuovi",
+    "viewFailed": "Non è stato possibile aprire il file",
+    "reading": "Apertura…",
+    "noPreview": "Nessuna anteprima per questo file",
+    "noPreviewBody": "Scaricalo per aprirlo."
+  },
+  "history": {
+    "weekNav": "Settimana",
+    "previous": "Settimana precedente",
+    "next": "Settimana successiva",
+    "held": {
+      "future": "Questa settimana è l'ultima"
+    },
+    "thisWeek": "Questa settimana",
+    "week": "{from} – {to}",
+    "loading": "Lettura della storia…",
+    "failed": "Non è stato possibile leggere la storia",
+    "overTime": "Stato nel tempo",
+    "now": "Ora:",
+    "totals": "Tempo in ogni stato in settimana",
+    "noneThisWeek": "Niente da mostrare in questa settimana (registrata dopo, o settimana futura).",
+    "statusRow": "Stato",
+    "foot": "La storia parte dal primo cambio della macchina; non nomina persone. L'inattività arriverà con i segnali macchina (più avanti).",
+    "changes": "Cambi e motivi",
+    "noChanges": "Nessun cambio: è nello stato attuale da quando è stata registrata.",
+    "when": "Quando",
+    "from": "Da",
+    "to": "A",
+    "reason": "Motivo",
+    "registered": "Registrata"
+  },
+  "tag": {
+    "title": "Targhetta QR",
+    "print": "Stampa targhetta",
+    "reprint": "Ristampa",
+    "facts": "Stampa",
+    "printedOn": "Stampata il",
+    "notPrinted": "Non ancora su un'etichettatrice",
+    "state": "Stato di stampa",
+    "noJob": "Nessuna stampa",
+    "printer": "Stampante",
+    "opensTitle": "Cosa apre il QR",
+    "opensStation": "La scansione di una postazione: questa macchina con Segnala un problema.",
+    "opensPhone": "La fotocamera di un telefono legge la matricola (il modulo senza accesso arriverà più avanti).",
+    "opensReprint": "Una ristampa è la stessa targhetta: quella vecchia continua ad aprire la macchina.",
+    "retired": "Dismessa: la sua targhetta non offre più Segnala un problema."
+  },
+  "tags": {
+    "title_one": "Stampa la targhetta QR di {count} macchina",
+    "title_other": "Stampa le targhette QR di {count} macchine",
+    "paper": "Stampa su carta",
+    "print_one": "Stampa {count} targhetta",
+    "print_other": "Stampa {count} targhette",
+    "sent_one": "{count} targhetta inviata alla stampante",
+    "sent_other": "{count} targhette inviate alla stampante",
+    "sentBody": "Lo stato di ogni targhetta è sotto di essa: in coda, inviata, stampata o non stampata.",
+    "refusedLine": "{machine}: {why}",
+    "printer": "Etichettatrice",
+    "printerHint": "Un'etichettatrice dello stabilimento delle macchine.",
+    "stock": "Etichette {width} × {height} mm · {dpi} dpi",
+    "noPrinter": "Nessuna etichettatrice",
+    "pickPrinter": "Scegli una stampante",
+    "copies": "Copie di ognuna",
+    "copiesHint": "Una per la macchina, una di scorta.",
+    "fewer": "Una copia in meno",
+    "moreCopies": "Una copia in più",
+    "noRightBody": "Il tuo ruolo non invia etichette a un'etichettatrice: stampa il foglio delle targhette su carta.",
+    "printersFailed": "Non è stato possibile leggere le stampanti",
+    "noPrinterTitle": "Nessuna etichettatrice in questo stabilimento",
+    "noPrinterBody": "Stampa il foglio delle targhette su carta, o aggiungi un'etichettatrice in Sistema › Dispositivi e stampanti.",
+    "leftOut_one": "Esclusa: {machines} (dismessa, o in un altro stabilimento).",
+    "leftOut_other": "Escluse: {machines} (dismesse, o in un altro stabilimento).",
+    "noneTitle": "Nessuna macchina da etichettare",
+    "noneBody": "Scegli prima le macchine nel registro.",
+    "more_one": "e {count} altra targhetta, stampata allo stesso modo",
+    "more_other": "e altre {count} targhette, stampate allo stesso modo",
+    "how": "Il QR contiene la matricola: la scansione di una postazione apre la macchina con Segnala un problema.",
+    "qrLabel": "Targhetta QR di {machine}",
+    "labelName": "Targhetta {machine}",
+    "labelAsset": "Matricola",
+    "labelType": "Tipo",
+    "labelPlace": "Dove",
+    "scan": "Inquadra per segnalare un problema",
+    "retry": "Riprova",
+    "onPrinter": "{printer} · {at}",
+    "failedDetail": "{printer} non l'ha stampata",
+    "held": {
+      "noRight": "Il tuo ruolo non invia etichette a un'etichettatrice",
+      "reading": "Lettura delle stampanti…",
+      "noPrinter": "Nessuna etichettatrice in questo stabilimento: stampa su carta",
+      "pickPrinter": "Scegli un'etichettatrice",
+      "none": "Nessuna macchina qui si stampa su questa stampante",
+      "busy": "Invio…",
+      "retired": "La targhetta di una macchina dismessa non segnala nulla"
+    }
+  }
+}
