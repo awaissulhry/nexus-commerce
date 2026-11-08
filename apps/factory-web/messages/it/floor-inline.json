@@ -1,0 +1,302 @@
+{
+  "title": "Controllo in linea",
+  "busy": "Salvataggio…",
+  "loading": "Lettura di {code}…",
+  "noPermission": {
+    "title": "I controlli in linea non sono tuoi da registrare",
+    "body": "Li registrano il controllore e il capo squadra. Chiedi al tuo capo squadra."
+  },
+  "scan": {
+    "read": "Letto {code}",
+    "type": "Digita",
+    "camera": {
+      "start": "Fotocamera",
+      "stop": "Ferma fotocamera",
+      "error": "La fotocamera non parte. Scansiona o digita il codice."
+    },
+    "firstPiece": {
+      "label": "Scansiona il primo fascio",
+      "hint": "Il fascio da cui è tagliato, cucito o fatto il primo capo."
+    },
+    "cutting": {
+      "label": "Scansiona un fascio del materasso",
+      "hint": "I suoi pezzi si controllano sul modello."
+    },
+    "eol": {
+      "label": "Scansiona il fascio a fine linea",
+      "hint": "Poi Conforme, o Difetto per rimandarlo indietro.",
+      "next": "Scansiona il fascio successivo",
+      "nextHint": "Invio: questo è conforme."
+    },
+    "wrong": {
+      "notBundle": "{code} non è un cartellino di fascio. Scansiona il cartellino del fascio.",
+      "notFound": "{code} non è un fascio di questo stabilimento.",
+      "notOnTablet": "{code} non è su questo tablet. Controllalo quando torna la rete.",
+      "otherFactory": "{code} è un'etichetta di un'altra fabbrica.",
+      "typo": "{code} è stato letto male. Scansionalo di nuovo."
+    }
+  },
+  "defects": {
+    "loading": "Lettura dei difetti…",
+    "offline": "I difetti non sono su questo tablet: arrivano con la rete.",
+    "error": "I difetti non si sono caricati. Riprova.",
+    "empty": "Nessun difetto impostato per questa fase. Chiedi all'ufficio (Qualità › Difetti e destinazioni).",
+    "critical": "Critico"
+  },
+  "kinds": {
+    "title": "Quale controllo?",
+    "waiting_one": "{count} primo capo attende l'approvazione",
+    "waiting_other": "{count} primi capi attendono l'approvazione"
+  },
+  "kind": {
+    "FIRST_PIECE": "Primo capo",
+    "CUTTING": "Taglio",
+    "ROVING": "Itinerante",
+    "END_OF_LINE": "Fine linea"
+  },
+  "kindHint": {
+    "FIRST_PIECE": "La serie attende la sua approvazione",
+    "CUTTING": "Pezzi confrontati col modello",
+    "ROVING": "Verde, giallo o rosso per operazione",
+    "END_OF_LINE": "Conforme, o rimanda indietro un difetto"
+  },
+  "kindHeld": {
+    "online": "Serve la rete: si firma o si registra subito.",
+    "noLine": "Questo tablet non mostra una linea: l'ufficio imposta la linea di questa postazione."
+  },
+  "opCode": "Op {seq} · {code}",
+  "fp": {
+    "operation": {
+      "title": "Quale operazione attende questo primo capo?",
+      "hint": "Finché non è approvato, nessun altro fascio della serie si lavora lì.",
+      "all": "Tutte le operazioni",
+      "allHint": "Tutta la serie attende"
+    },
+    "held": {
+      "critical": "Un controllo critico non è conforme: {check}. Respingi il primo capo.",
+      "left_one": "Manca {count} controllo obbligatorio",
+      "left_other": "Mancano {count} controlli obbligatori"
+    },
+    "reject": "Respingi",
+    "approve": "Approva con PIN",
+    "next": "Prossimo primo capo",
+    "done": {
+      "approved": "Primo capo approvato",
+      "rejected": "Primo capo respinto",
+      "approvedText": "La serie è libera in {operation}: le schermate operazione tolgono subito il blocco.",
+      "rejectedText": "La serie resta in attesa. Si chiede un nuovo primo capo.",
+      "signed": "Firmato · {fingerprint}"
+    },
+    "holds": "La serie attende in questa operazione finché il primo capo non è approvato.",
+    "noPlan": "Nessun piano di controllo si applica: guarda il capo, poi approvalo o respingilo.",
+    "optional": "Facoltativo",
+    "checks": "Controlli",
+    "measures": "Misure chiave",
+    "nominal": "{nominal} ± {tolerance} {uom}",
+    "result": {
+      "PASS": "Conforme · {value}",
+      "FAIL": "Non conforme · {value}",
+      "NOT_APPLICABLE": "Non si applica"
+    },
+    "toMeasure": "Da misurare",
+    "office": "{check}: si risponde in ufficio (niente testo sul reparto)."
+  },
+  "sign": {
+    "approveTitle": "Approva il primo capo",
+    "rejectTitle": "Respingi il primo capo",
+    "results": "Controlli: {passed} conformi, {failed} non conformi.",
+    "noPlan": "Nessun piano: hai guardato il capo.",
+    "approveMeaning": "Approvi il primo capo dell'ordine di lavoro {number} in {operation}: la serie parte da lì.",
+    "rejectMeaning": "Respingi il primo capo dell'ordine di lavoro {number}: la serie resta in attesa di uno nuovo.",
+    "detail": "Controllo"
+  },
+  "cutting": {
+    "fail_one": "Non conforme · {count} da ritagliare",
+    "fail_other": "Non conforme · {count} da ritagliare",
+    "pass": "Conforme",
+    "pieces": "Pezzi guardati",
+    "rejected": "Pezzi scartati",
+    "defect": "Cosa non va?",
+    "recut_one": "{count} pezzo si ritaglia: l'ufficio taglio fa il cartellino di ritaglio.",
+    "recut_other": "{count} pezzi si ritagliano: l'ufficio taglio fa il cartellino di ritaglio."
+  },
+  "roving": {
+    "loading": "Lettura della linea…",
+    "empty": {
+      "title": "Oggi non lavora niente su questa linea",
+      "body": "Le operazioni compaiono qui quando un ordine di lavoro è assegnato alla linea o lavorato alle sue postazioni."
+    },
+    "title": "Le operazioni della linea",
+    "latest": "{colour} alle {time}",
+    "none": "Non controllata oggi",
+    "checks_one": "{count} controllo oggi",
+    "checks_other": "{count} controlli oggi",
+    "record": "Registra {colour}",
+    "held": {
+      "greenWithDefects": "Verde vuol dire che ogni pezzo è giusto: uno sbagliato è giallo, due o più rosso.",
+      "critical": "Un difetto critico è sempre rosso."
+    },
+    "perOperation": "Registrato per l'operazione, mai per una persona.",
+    "pieces": "Pezzi guardati",
+    "defective": "Pezzi sbagliati",
+    "defect": "Cosa non va?",
+    "colour": "Esito",
+    "suggested": "Suggerito: {colour}"
+  },
+  "colour": {
+    "GREEN": "Verde",
+    "AMBER": "Giallo",
+    "RED": "Rosso"
+  },
+  "fact": {
+    "workOrder": "Ordine di lavoro",
+    "bundle": "Fascio",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "style": "Modello",
+    "size": "Colore e taglia",
+    "operation": "Operazione",
+    "plan": "Piano"
+  },
+  "eol": {
+    "defect": "Difetto",
+    "sendBackOnline": "Rimandare indietro richiede la rete: apre subito un ordine di rilavorazione.",
+    "pass_one": "Conforme · {count}",
+    "pass_other": "Conforme · {count}",
+    "offline": "Senza rete: un conforme si salva su questo tablet e si invia dopo.",
+    "next": "Avanti",
+    "held": {
+      "defect": "Scegli il difetto",
+      "operation": "Scegli l'operazione che l'ha causato",
+      "reason": "Scegli perché si rilavora"
+    },
+    "sendBack_one": "Rimanda indietro {count}",
+    "sendBack_other": "Rimanda indietro {count}",
+    "subject": "{defective} su {pieces}",
+    "to": "a {operation}",
+    "defective": "Pezzi con il difetto",
+    "whichDefect": "Quale difetto?",
+    "whichOperation": "Quale operazione l'ha causato?",
+    "perOperation": "Attribuito all'operazione, mai a una persona.",
+    "whyRework": "Perché si rilavora?"
+  },
+  "line": {
+    "none": "Questo tablet non mostra una linea: il DHU di una linea si vede sul tablet della linea.",
+    "type": "Linea · DHU di oggi",
+    "dhu": "difetti ogni 100 pezzi",
+    "checks": "Controlli di fine linea",
+    "pieces": "Pezzi",
+    "defects": "Difetti",
+    "noChecks": "Ancora nessun controllo di fine linea oggi.",
+    "asOf": "Da questo tablet, alle {time}"
+  },
+  "asOfCard": "Da questo tablet, alle {time}",
+  "open": {
+    "none": "Nessun primo capo attende l'approvazione.",
+    "title": "Primi capi in attesa",
+    "since": "dalle {time}",
+    "plan": "con piano",
+    "noPlan": "senza piano",
+    "count_one": "{count} primo capo",
+    "count_other": "{count} primi capi"
+  },
+  "keys": {
+    "move": "Passa da una riga all'altra",
+    "open": "Apri la riga"
+  },
+  "class": {
+    "CRITICAL": "Critici",
+    "MAJOR": "Maggiori",
+    "MINOR": "Minori",
+    "OTHER": "Controlli"
+  },
+  "measure": {
+    "savePass": "Salva · in tolleranza",
+    "saveFail": "Salva · fuori tolleranza",
+    "held": "Prima misura",
+    "fail": "Non conforme",
+    "pass": "Conforme"
+  },
+  "done": {
+    "pass": "{code} conforme · {pieces} pezzi",
+    "sentBack_one": "{code}: {count} pezzo rimandato a {operation}",
+    "sentBack_other": "{code}: {count} pezzi rimandati a {operation}",
+    "defectKept_one": "{code}: {count} difetto attribuito a {operation}.",
+    "defectKept_other": "{code}: {count} difetti attribuiti a {operation}.",
+    "roving": "{code}: {colour} registrato",
+    "cutting_one": "{code}: taglio registrato · {count} da ritagliare",
+    "cutting_other": "{code}: taglio registrato · {count} da ritagliare",
+    "reworkNotOpened": "L'ordine di rilavorazione non si è aperto: avvisa il tuo capo squadra."
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
+  },
+  "refusal": {
+    "FIRST_PIECE_OPEN": {
+      "message": "Un primo capo di questa serie è già aperto.",
+      "fix": "Aprilo dall'elenco dei primi capi in attesa, decidilo, o chiedi all'ufficio di annullarlo."
+    },
+    "ALREADY_APPROVED": {
+      "message": "Il primo capo di questa serie è già approvato: non attende niente.",
+      "fix": "Registra invece un controllo itinerante o di fine linea."
+    },
+    "WORK_ORDER_NOT_RUNNING": {
+      "message": "Questo ordine di lavoro non è in corso.",
+      "fix": "Controlla un ordine di lavoro che la linea sta lavorando."
+    },
+    "NOT_OPEN": {
+      "message": "Questo controllo è già deciso o annullato: non cambia più.",
+      "fix": "Apri un nuovo controllo."
+    },
+    "NO_PLAN": {
+      "message": "Questo controllo non ha un piano: non c'è una lista da compilare.",
+      "fix": "Approvalo o respingilo."
+    },
+    "PLAN_RESULTS": {
+      "message": "Il piano non è ancora compilato, o un controllo critico non è conforme.",
+      "fix": "Compila prima il piano, o respingi il primo capo."
+    },
+    "NOT_FOUND": {
+      "message": "Questo controllo non si trova.",
+      "fix": "Torna indietro e rileggi la linea."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "I controlli sono fermi in questo stabilimento finché il reparto non è pronto.",
+      "fix": "Chiedi al tuo capo squadra."
+    },
+    "BUNDLE_NOT_ACTIVE": {
+      "message": "Questo fascio è annullato o sostituito.",
+      "fix": "Scansiona il cartellino attuale del fascio."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "Più pezzi di quanti il fascio ne contiene.",
+      "fix": "Rimanda indietro al massimo i pezzi del fascio."
+    },
+    "NOT_A_REWORK_REASON": {
+      "message": "Quel motivo di rilavorazione non è attivo.",
+      "fix": "Chiedi all'ufficio (Produzione › Regole di reparto)."
+    },
+    "NOT_OF_CELL": {
+      "message": "Il fascio non è di questo colore e taglia.",
+      "fix": "Scansiona di nuovo il fascio."
+    },
+    "REWORK_AT_LATER": {
+      "message": "La rilavorazione è in un'operazione dopo quella che l'ha trovata.",
+      "fix": "Scegli un'operazione precedente."
+    },
+    "NEXT_REPORTED": {
+      "message": "L'operazione successiva ha già preso il fascio.",
+      "fix": "Chiedi al tuo capo squadra di aprire la rilavorazione."
+    }
+  },
+  "colourWord": {
+    "GREEN": "verde",
+    "AMBER": "giallo",
+    "RED": "rosso"
+  }
+}

@@ -5,6 +5,7 @@ import { putToStore, sha256Hex } from '../../../record-panels/store'
 import { onlineFirst, type KeepsActions } from '../../queue/online-first'
 import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api'
 import type { OperationCheck, OperationSteps } from './checks'
+import type { FirstPieceFlag } from './first-piece'
 import { EXTRA_REASON_CODES, type ExtraChoices, type ExtraPay } from './extra'
 import type { OffStandardBlock, OffStandardFloor, OffStandardTile } from './indirect'
 import type { BundleCard, CorrectionTarget } from './model'
@@ -32,6 +33,15 @@ const reason = z.object({
   labelI18n: z.record(z.string(), z.string()).optional(),
   needsDetail: z.boolean().optional(),
 })
+
+// B-W2b-105 (QHS-039): the work order's first piece at the bundle's operations (B-W2b-99; optional: an older API).
+export const firstPieceSchema = z.object({
+  heldOperationIds: z.array(z.string()),
+  firstBundle: z.boolean(),
+  check: z.object({ id: z.string(), status: z.enum(['OPEN', 'DECIDED', 'CANCELLED']), outcome: z.string().nullable(), workOrderOperationId: z.string().nullable() }).nullable(),
+  message: z.string().nullable(),
+  fix: z.string().nullable(),
+}) satisfies z.ZodType<FirstPieceFlag>
 
 export const cardSchema = z.object({
   scanned: z.string(),
@@ -76,11 +86,18 @@ export const cardSchema = z.object({
   choose: z.array(z.string()),
   hint: z.object({ code: z.string(), message: z.string(), fix: z.string() }).nullable(),
   reasons: z.array(reason),
+  firstPiece: firstPieceSchema.nullable().optional(),
 }) satisfies z.ZodType<BundleCard>
 
 /** The bundle card of a scanned ticket (404: not a bundle of this site; 400: another kind of label or a typo). */
 export function fetchCard(api: ApiClient, code: string): Promise<TaskOutcome<BundleCard>> {
   return floorRead(api, '/production/scans/card', { query: { code }, schema: cardSchema })
+}
+
+/** B-W2b-105: the bundle's first-piece flag read again (a live hint: a first piece decided or cancelled elsewhere). production.scan. */
+export async function fetchFirstPiece(api: ApiClient, bundleId: string): Promise<TaskOutcome<FirstPieceFlag | null>> {
+  const answer = await floorRead(api, '/quality/inprocess/first-piece', { query: { bundleId }, schema: z.object({ firstPiece: firstPieceSchema.nullable() }) })
+  return answer.ok ? { ok: true, value: answer.value.firstPiece } : answer
 }
 
 const defect = z.object({ kind: z.enum(['SCRAP', 'REWORK']), reason: z.string(), quantity: z.number() })

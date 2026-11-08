@@ -126,10 +126,12 @@
       "inspections": "Inspections",
       "holds": "Holds",
       "settings": "Settings",
+      "plans": "Inspection plans & AQL",
       "defects": "Defects & dispositions",
       "rules": "Quality rules",
       "problems": "Problems",
       "ncr": "Nonconformances",
+      "capa": "Corrective actions",
       "complaints": "Complaints",
       "reportsGroup": "Reports",
       "reports": "Quality reports"

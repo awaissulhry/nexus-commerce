@@ -1,0 +1,505 @@
+/*
+ * Inspection plans & AQL (B-W2b-104; SCR-077, SCR-077-plan, SCR-077-print) LAYOUT: tabs, form cards, the profiles' rows,
+ * the ordered rules, the plan builder's checks, the printable sheet. Controls are the design system's; this file places
+ * them with semantic tokens only (no raw colours, no restyled control). No page sets a max-width (Owner rule 2026-10-29):
+ * wide screens get more columns.
+ */
+.fw-qp-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qp-muted,
+.fw-qp-preview-line {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-qp-preview-line {
+  color: var(--nds-text);
+}
+
+.fw-qp-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-h3,
+.fw-qp-h4 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-qp-h4 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-qp-actions,
+.fw-qp-state,
+.fw-qp-chips,
+.fw-qp-inline,
+.fw-qp-inline-row,
+.fw-qp-band-status,
+.fw-qp-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-qp-actions {
+  gap: var(--nds-space-8);
+}
+
+.fw-qp-inline-row {
+  gap: var(--nds-space-16);
+}
+
+.fw-qp-meta > * + *::before {
+  content: '·';
+  margin-inline-end: var(--nds-space-6);
+  color: var(--nds-text-3);
+}
+
+.fw-qp-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin-bottom: var(--nds-space-12);
+}
+
+.fw-qp-section-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-qp-section-title h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-qp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qp-two,
+.fw-qp-three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qp-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-qp-radios > .fw-qp-legend {
+  grid-column: 1 / -1;
+}
+
+.fw-qp-radios-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), max-content));
+}
+
+/* ---- chips ---- */
+.fw-qp-chip-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-qp-chip-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  align-items: end;
+  gap: var(--nds-space-8);
+}
+
+.fw-qp-chip-link {
+  color: inherit;
+}
+
+.fw-qp-chip-problem {
+  color: var(--nds-text-2);
+}
+
+/* ---- AQL profiles ---- */
+.fw-qp-lock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0 0 var(--nds-space-12);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-profiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 860px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-qp-profile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-qp-profile-head {
+  padding: 0 var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qp-profile-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: var(--nds-space-10);
+}
+
+.fw-qp-profile-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-qp-used {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-assignments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-qp-assignments li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding-block: var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-qp-assignments li > span {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* ---- rules ---- */
+.fw-qp-rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-qp-rule-main {
+  display: flex;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qp-rule-n {
+  flex: none;
+  min-width: 1.5em;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-qp-rule-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-qp-rule-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+}
+
+.fw-qp-rule-did,
+.fw-qp-rule .fw-qp-problem {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-inline-start: calc(1.5em + var(--nds-space-10));
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-held-events {
+  margin: var(--nds-space-12) 0 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-qp-preview p {
+  margin: 0;
+}
+
+/* ---- the calculator ---- */
+.fw-qp-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--nds-space-20);
+  align-items: start;
+  margin-bottom: var(--nds-space-12);
+}
+
+/* ---- the plan builder ---- */
+.fw-qp-builder {
+  min-width: 0;
+}
+
+.fw-qp-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qp-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-qp-check-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qp-check-label {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--nds-text);
+}
+
+.fw-qp-check-tags,
+.fw-qp-check-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-qp-check-tags .fw-qp-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+}
+
+.fw-qp-check-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-qp-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-qp-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-qp-choice > :first-child {
+  flex: 1 1 auto;
+}
+
+.fw-qp-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qp-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-qp-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-qp-facts dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-qp-facts dd {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text);
+}
+
+.fw-qp-problems ul {
+  margin: var(--nds-space-4) 0 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qp-note {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-inline-start: 3px solid var(--nds-border-strong);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  white-space: pre-wrap;
+}
+
+/* ---- the keys dialog ---- */
+.fw-qp-keys {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-qp-keys > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--nds-space-8);
+}
+
+.fw-qp-keys dd {
+  margin: 0;
+}
+
+/* ---- the printable checklist ---- */
+.fw-qp-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  break-inside: auto;
+}
+
+.fw-qp-sheet + .fw-qp-sheet,
+.nds-printview-section + .nds-printview-section {
+  break-before: page;
+}
+
+.fw-qp-sheet-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-qp-sheet-check {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-qp-sheet-choices {
+  flex-basis: 100%;
+  color: var(--nds-text-2);
+}
+
+.fw-qp-sheet-box {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-xs);
+}
+
+.fw-qp-sheet-sign {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-qp-sheet-sign p {
+  margin: 0;
+}

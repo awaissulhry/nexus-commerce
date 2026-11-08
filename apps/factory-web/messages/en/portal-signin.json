@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "title": "Sign in",
+    "privacyTitle": "Privacy notice"
+  },
+  "head": {
+    "language": "Language",
+    "portal": "Partner portal",
+    "stillLoading": "Still loading…"
+  },
+  "email": {
+    "title": "Sign in to {portal}",
+    "titleAnonymous": "Sign in to the portal",
+    "lead": "We send you one e-mail with a sign-in link and a code. No password.",
+    "label": "Work e-mail",
+    "hint": "The address you were invited with.",
+    "submit": "Send me a sign-in link",
+    "sending": "Sending the e-mail…",
+    "required": "Type your work e-mail.",
+    "format": "Type an e-mail like name@company.com",
+    "failed": "We could not send the e-mail right now. Try again in a minute.",
+    "offline": "No connection"
+  },
+  "wait": {
+    "seconds_one": "Wait {count} second before asking again.",
+    "seconds_other": "Wait {count} seconds before asking again.",
+    "minutes_one": "Wait {count} minute before asking again.",
+    "minutes_other": "Wait {count} minutes before asking again."
+  },
+  "check": {
+    "running": "One moment: we are checking that this is a person and not a program. Nothing is sent anywhere else.",
+    "failed": "The check did not finish. Try again."
+  },
+  "code": {
+    "title": "Check your e-mail",
+    "sent": "If {email} is invited, we sent a link and a code. They work for 15 minutes.",
+    "lead": "Open the link in the e-mail, or type the 6-digit code here: on this device, or on the one you read mail on.",
+    "label": "Code from the e-mail",
+    "hint": "6 digits. You can paste the whole code.",
+    "submit": "Sign in",
+    "otherEmail": "Use another e-mail",
+    "wrong": "That code does not match.",
+    "triedOut": "Too many tries. Ask for a new code.",
+    "expired": "This code has expired. We can send a new one.",
+    "format": "Type the 6 digits of the code.",
+    "incomplete": "Type the 6 digits of the code first.",
+    "failed": "Sign-in failed on our side. Try again.",
+    "offline": "No connection",
+    "checking": "Checking the code…"
+  },
+  "link": {
+    "checking": "Opening your sign-in link…",
+    "title": "Continue to the {company} portal",
+    "as": "Continue to the {company} portal as {email}",
+    "why": "Nothing happens until you press Continue, so a mail program that opens links by itself cannot use yours.",
+    "continue": "Continue",
+    "deadTitle": "This sign-in link no longer works.",
+    "deadBody": "A link works once and for 15 minutes. Ask for a new one with your work e-mail.",
+    "newLink": "Send a new link",
+    "failed": "Sign-in failed on our side. Try again."
+  },
+  "first": {
+    "title": "Welcome to {portal}",
+    "lead": "Two short confirmations, only this first time. You can change them later.",
+    "name": "Your name",
+    "nameHint": "As people at {company} see it.",
+    "nameRequired": "Type your name.",
+    "nameTooLong": "At most 120 characters.",
+    "language": "Language",
+    "languageHint": "The portal and its e-mails speak it.",
+    "summaries": "E-mail summaries",
+    "summariesHint": "For updates that are not urgent. E-mails about orders, deliveries and invoices always arrive as they happen.",
+    "instant": "As it happens",
+    "instantHint": "An e-mail for each update.",
+    "daily": "Once a day",
+    "dailyHint": "One summary a day.",
+    "weekly": "Once a week",
+    "weeklyHint": "One summary a week.",
+    "terms": "Portal terms",
+    "termsVersion": "{label}",
+    "termsLoading": "Loading the portal terms…",
+    "termsFailed": "The portal terms could not be loaded. Try again.",
+    "termsRetry": "Load them again",
+    "termsLanguage": "Not ready in your language yet: shown in {language}.",
+    "accept": "I have read and accept the portal terms of {company}.",
+    "acceptRequired": "Accept the portal terms to go on.",
+    "privacy": "Privacy notice of {company}",
+    "newTab": "opens in a new tab",
+    "submit": "Go to my portal",
+    "saving": "Saving…",
+    "failed": "We could not save this right now. Try again.",
+    "termsChanged": "The portal terms changed while you were reading. Read the new version and accept it again."
+  },
+  "opening": "Signed in. Opening your portal…",
+  "ended": {
+    "title": "You were signed out",
+    "idle": "You were signed out after 30 minutes without use. Sign in again to go on.",
+    "revoked": "Your session was ended. Sign in again to go on.",
+    "hide": "Hide"
+  },
+  "paused": {
+    "title": "Access paused",
+    "endedTitle": "Access ended",
+    "PAUSED": "Your access to the {company} portal is paused. Contact {contact}.",
+    "ENDED": "Your access to the {company} portal ended on {date}. Contact {contact} if you still need it.",
+    "ENDED_undated": "Your access to the {company} portal has ended. Contact {contact} if you still need it.",
+    "INVITATION_ENDED": "Your invitation to the {company} portal is no longer valid. Ask {contact} for a new one.",
+    "PORTAL_OFF": "The {company} portal is not switched on for your organisation yet. Contact {contact}.",
+    "TERMS_NOT_PUBLISHED": "The {company} portal is not open yet: its portal terms are not published. Contact {contact}.",
+    "contactPerson": "your contact at {company}",
+    "write": "Write an e-mail"
+  },
+  "unknown": {
+    "title": "Which portal?",
+    "none": "This page does not know whose portal to open. Open the address in your invitation e-mail, or the link in your sign-in e-mail.",
+    "notFound": "We do not know this portal address. Check the address in your invitation e-mail, or ask the company that invited you."
+  },
+  "foot": {
+    "invite": "The portal is by invitation. Ask your contact at {company}:",
+    "inviteNoContact": "The portal is by invitation. Ask your contact at {company}.",
+    "inviteAnonymous": "The portal is by invitation. Ask your contact at the company that invited you.",
+    "privacy": "Privacy notice of {company}",
+    "newTab": "opens in a new tab",
+    "legal": "Company details"
+  },
+  "privacy": {
+    "title": "Privacy notice of {company}",
+    "titleAnonymous": "Privacy notice",
+    "missing": "No privacy notice is published at this address yet. Ask {company}.",
+    "missingAnonymous": "No privacy notice is published at this address yet.",
+    "failed": "The notice could not be loaded right now.",
+    "retry": "Try again",
+    "language": "Not ready in your language yet: shown in {language}.",
+    "close": "You can close this tab: the sign-in stays open in the other one."
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  }
+}

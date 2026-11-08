@@ -25,8 +25,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
  *   - the cells waiting per material; a fabric cut order over both work orders (marker, ratio, plies, two lays) and its refusals;
  *   - re-planned, released with a ticket per lay; rolls by shade, width and shrinkage: the candidates, the proposal, allocation
  *     and its refusals, a roll taken off;
- *   - at the table: the ticket's card, the start scan, the end scan once the lay was counted (the count is B-W2b-116's: written
- *     here as the floor does), the cut order CUT with its last lay; ply stickers numbered, printed, voided and numbered again;
+ *   - at the table: the ticket's card, the start scan, the end scan once the lay was counted (B-W2b-116's spread and count
+ *     routes), the cut order CUT with its last lay; ply stickers numbered, printed, voided and numbered again;
  *   - a leather cut order: its ticket voided and replaced, started, finished; back to planning and cancelled; the scopes.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/production/cutorders`.
  */
@@ -100,8 +100,6 @@ const events = async (type: string) => (await admin<{ payload: Json }>(`SELECT p
 const keysOf = (value: unknown): string[] => (Array.isArray(value) ? value.flatMap(keysOf) : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, item]) => [key, ...keysOf(item)]) : [])
 const MONEY = /cost|price|margin|amount|wage|valuation/i
 const asOffice = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => database.withScope({ audience: 'office', tenantId: A.tenant, actorId: A.actor }, (client) => client.$transaction(work, { timeout: 30_000 }))
-const asFloor = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) =>
-  database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1 }, (client) => client.$transaction(work, { timeout: 30_000 }))
 
 /** A CONFIRMED order of black SEED-JKT-02 and its released work order (the work-order routes). */
 async function releasedWorkOrder(tag: string, sizes: Record<string, number>): Promise<Json> {
@@ -370,12 +368,10 @@ describe('rolls by shade, width and shrinkage (MES-037)', () => {
   })
 })
 
-/** What B-W2b-116's count does at the table (not built yet): the lay spread from its rolls, both ends counted. */
+/** B-W2b-116's routes at the table: the lay spread from its allocated rolls, both ends counted. */
 async function countLay(layId: string, plies: number) {
-  await asFloor(async (tx) => {
-    await tx.lay.update({ where: { id: layId }, data: { status: 'SPREADING' }, select: { id: true } })
-    await tx.lay.update({ where: { id: layId }, data: { status: 'CHECKED', plyCountLeft: plies, plyCountRight: plies, checkedAt: new Date() }, select: { id: true } })
-  })
+  await ok('floor', 'POST', `/production/lays/${layId}/spread`, {})
+  await ok('floor', 'POST', `/production/lays/${layId}/count`, { left: plies, right: plies })
 }
 
 describe('cut tickets at the table (MES-041) and ply numbering (MES-043)', () => {

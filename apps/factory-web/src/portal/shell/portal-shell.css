@@ -1,0 +1,682 @@
+/*
+ * The portal frame's LAYOUT (SCR-027, B-W2b-173): where the top bar, the notice, the rail, the band, the page, the foot and
+ * the phone's bars sit, and the composed rail's look. Semantic design-system tokens only (no raw colour); the DS parts keep
+ * their own look. The frame is the page's own surface (light in light, dark in dark), so a company's logo and colour read as
+ * theirs; the colour reaches only `--nds-primary` / `--nds-brand-accent`, where the DS's checkBranding let it.
+ */
+.fw-portal {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body, var(--nds-font-size-base));
+}
+
+.fw-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── top bar ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-ptop {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-height: 60px;
+  padding: var(--nds-space-8) var(--nds-space-16);
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border);
+  position: relative;
+  z-index: var(--nds-z-sticky);
+}
+
+.fw-ptop-brand {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--nds-text-strong);
+  text-decoration: none;
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-ptop-logo {
+  display: block;
+  max-height: 36px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.fw-ptop-logo.for-dark {
+  display: none;
+}
+
+.dark .fw-ptop-logo.for-light {
+  display: none;
+}
+
+.dark .fw-ptop-logo.for-dark {
+  display: block;
+}
+
+.fw-ptop-name {
+  font-weight: var(--nds-font-weight-bold);
+  font-size: var(--nds-font-size-md);
+  white-space: nowrap;
+}
+
+.fw-ptop-party {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: var(--nds-space-12);
+  border-left: 1px solid var(--nds-border);
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-ptop-search {
+  flex: 1 1 520px;
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.fw-ptop-field {
+  width: 100%;
+}
+
+.fw-ptop-search-compact {
+  display: none;
+}
+
+.fw-ptop-utility {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin-left: auto;
+}
+
+.fw-ptop-search + .fw-ptop-utility {
+  margin-left: 0;
+}
+
+.fw-ptop-bell {
+  display: inline-flex;
+}
+
+.fw-pmenu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+/* ── the one notice ──────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pnotice {
+  flex: 0 0 auto;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+/* ── rail + page ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.fw-prail {
+  flex: 0 0 auto;
+  width: 240px;
+  overflow-y: auto;
+  background: var(--nds-surface);
+  border-right: 1px solid var(--nds-border);
+  padding: var(--nds-space-12) var(--nds-space-8);
+}
+
+.fw-prail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-prail-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-height: 44px;
+  padding: var(--nds-space-6) var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-prail-row:hover {
+  background: var(--nds-surface-hover);
+  color: var(--nds-text-strong);
+}
+
+.fw-prail-row.on {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  box-shadow: inset 3px 0 0 var(--nds-brand-accent, var(--nds-primary));
+}
+
+.fw-prail-ico {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.fw-prail-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--nds-space-4);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-micro);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 18px;
+  text-align: center;
+}
+
+/* A label is never cut: a long one ("Preventivi e campioni") takes a second line. */
+.fw-prail-lbl {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.fw-ppage {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-pband {
+  position: sticky;
+  top: 0;
+  z-index: var(--nds-z-sticky);
+  background: var(--nds-surface);
+}
+
+.fw-pband-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}
+
+.fw-pband-actions,
+.fw-pband-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-plive {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-warning-text);
+  white-space: nowrap;
+}
+
+.fw-ptabs {
+  padding: 0 var(--nds-space-16);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pmain {
+  flex: 1 0 auto;
+  padding: var(--nds-space-24) var(--nds-space-30);
+  outline: none;
+}
+
+/* ── the foot ────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pfoot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12) var(--nds-space-24);
+  margin: 0 var(--nds-space-30);
+  padding: var(--nds-space-16) 0 var(--nds-space-24);
+  border-top: 1px solid var(--nds-border);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pfoot-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pfoot-name {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pfoot-links {
+  display: flex;
+  gap: var(--nds-space-16);
+}
+
+.fw-pfoot-links a {
+  color: var(--nds-text-link);
+  min-height: 24px;
+}
+
+.fw-pfoot-free {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── pop-ups and the frame's pages ───────────────────────────────────────────────────────────────────────────────── */
+.fw-pstate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) 0;
+  color: var(--nds-danger-text);
+}
+
+.fw-pstate > span {
+  color: var(--nds-text);
+}
+
+.fw-pdialog-text {
+  margin: 0 0 var(--nds-space-8);
+  line-height: 1.5;
+}
+
+.fw-pdialog-failed {
+  margin: var(--nds-space-8) 0 0;
+  color: var(--nds-danger-text);
+}
+
+.fw-pnotes,
+.fw-psearch-list,
+.fw-pemail-topics,
+.fw-paccess-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fw-pnotes-loading,
+.fw-pemail-loading,
+.fw-psearch-loading,
+.fw-ptasks-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pnote {
+  display: flex;
+  gap: var(--nds-space-12);
+  min-height: 44px;
+  padding: var(--nds-space-10) var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text);
+  text-decoration: none;
+}
+
+.fw-pnote:hover,
+.fw-pnote:focus-visible {
+  background: var(--nds-surface-hover);
+}
+
+.fw-pnote-mark {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: var(--nds-radius-full);
+}
+
+.fw-pnote.unread .fw-pnote-mark {
+  background: var(--nds-primary);
+}
+
+.fw-pnote.unread .fw-pnote-sentence {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pnote-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pnote-meta,
+.fw-presult-meta,
+.fw-pdisplay-hint,
+.fw-pemail-all-hint,
+.fw-precord-sub,
+.fw-pterms-meta,
+.fw-pterms-note {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pemail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-pemail-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-16);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-pemail-all-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pemail-all-title,
+.fw-pdisplay-label,
+.fw-pkeys-title {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pemail-topic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-8) 0;
+}
+
+.fw-pemail-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pemail-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pemail-fixed {
+  color: var(--nds-text-2);
+}
+
+.fw-pemail-failed {
+  margin: 0;
+  color: var(--nds-danger-text);
+}
+
+.fw-pkeys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-pkeys-title {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pkeys-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pkeys-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: var(--nds-space-12);
+  align-items: center;
+}
+
+.fw-pkeys-row dd {
+  margin: 0;
+}
+
+.fw-pkeys-then {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-paccess {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-paccess-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-paccess-list li::before {
+  content: '·';
+  margin-right: var(--nds-space-6);
+  color: var(--nds-text-2);
+}
+
+.fw-paccess-line {
+  margin: var(--nds-space-8) 0 0;
+  color: var(--nds-text-2);
+}
+
+.fw-pdisplay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+}
+
+.fw-pdisplay-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-psearch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-psearch-state {
+  min-height: 1.4em;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psearch-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  margin: 0 0 var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-psearch-count {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-presult {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-height: 44px;
+  padding: var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text);
+  text-decoration: none;
+}
+
+.fw-presult:hover,
+.fw-presult:focus-visible {
+  background: var(--nds-surface-hover);
+}
+
+.fw-ptasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-ptasks-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  color: var(--nds-text-strong);
+}
+
+.fw-precord {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-precord-sub {
+  margin: 0;
+}
+
+.fw-precord-messages {
+  scroll-margin-top: var(--nds-space-24);
+}
+
+.fw-pterms-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0 0 var(--nds-space-12);
+}
+
+.fw-pterms-note {
+  margin: 0 0 var(--nds-space-12);
+}
+
+.fw-pterms-body {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  max-width: 80ch;
+}
+
+.fw-pgate {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nds-space-24) var(--nds-space-16);
+}
+
+/* ── tablet: the rail keeps its labels under the icons ───────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  .fw-prail {
+    width: 96px;
+    padding: var(--nds-space-8) var(--nds-space-4);
+  }
+
+  .fw-prail-row {
+    flex-direction: column;
+    gap: var(--nds-space-4);
+    padding: var(--nds-space-8) var(--nds-space-4);
+    text-align: center;
+    font-size: var(--nds-font-size-xs);
+  }
+
+  .fw-prail-row.on {
+    box-shadow: inset 0 -3px 0 var(--nds-brand-accent, var(--nds-primary));
+  }
+
+  .fw-ptop-party {
+    max-width: 24ch;
+  }
+}
+
+/* ── phone: no rail, the bottom bar and the action bar instead ───────────────────────────────────────────────────── */
+@media (max-width: 719px) {
+  .fw-prail {
+    display: none;
+  }
+
+  .fw-ptop {
+    gap: var(--nds-space-4);
+    padding: var(--nds-space-4) var(--nds-space-8) var(--nds-space-4) var(--nds-space-12);
+  }
+
+  .fw-ptop-party,
+  .fw-pmenu-name,
+  .fw-ptop-search > .nds-searchtrigger {
+    display: none;
+  }
+
+  .fw-ptop-search {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .fw-ptop-search-compact {
+    display: flex;
+  }
+
+  /* The primary action moves to the action bar above the bottom bar (thumb reach); the band keeps the title, pill and ⋯. */
+  .fw-pband-buttons {
+    display: none;
+  }
+
+  .fw-pmain {
+    padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-16);
+  }
+
+  .fw-pfoot {
+    margin: 0 var(--nds-space-16);
+    padding-bottom: calc(64px + env(safe-area-inset-bottom) + var(--nds-space-16));
+    flex-direction: column;
+  }
+}

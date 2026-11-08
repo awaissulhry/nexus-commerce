@@ -16,6 +16,7 @@ import {
   Hammer,
   Layers,
   ListChecks,
+  ListTodo,
   MapPin,
   MessageSquareWarning,
   OctagonPause,
@@ -75,6 +76,10 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   MaintenanceJob: Hammer,
   // B-W2b-149
   Incident: Siren,
+  // B-W2b-104
+  InspectionPlan: ListTodo,
+  // B-W2b-119
+  Capa: ListChecks,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {

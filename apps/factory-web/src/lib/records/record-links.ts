@@ -36,10 +36,16 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   DefectCode: '/quality/defects?open=[id]',
   // B-W2a-68: Quality › Nonconformances (SCR-145): an NCR's record (problem, containment, disposition, linked, activity).
   Nonconformance: '/quality/ncr/[id]',
+  // B-W2b-119: Quality › Corrective actions (SCR-146): a CAPA's or an 8D's record (problem, actions, report, activity).
+  Capa: '/quality/capa/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
   // B-W2b-118: a quality alert rule (a test of it rings the bell) opens on Quality rules in its dialog.
   QualityAlertRule: '/quality/settings?rule=[id]',
+  // B-W2b-104: an inspection plan's record (SCR-077-plan); an AQL profile and a rule of "When inspections are created" on their tabs.
+  InspectionPlan: '/quality/plans/[id]',
+  AqlProfile: '/quality/plans?tab=aql&profile=[id]',
+  InspectionTrigger: '/quality/plans?tab=triggers&rule=[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
   // Compliance › Tests & substances (SCR-054), which the lot record links.
   Lot: '/warehouse/lots/[id]',
@@ -199,12 +205,16 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).
   '/quality/ncr': '/quality/ncr',
+  // B-W2b-119: the CAPA list and board (`?view=`, `?type=`, `?priority=`, `?q=`, `?mode=board`, New CAPA `?new=1&from=&ids=`).
+  '/quality/capa': '/quality/capa',
   // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
   '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',
   // B-W2a-67: the holds (the page reads the API's own filters: `?status=`, `?overdue=true`, `?system=true`, `?quarantine=`, `?ownerId=me`).
   '/quality/holds': '/quality/holds',
   '/quality/defects': '/quality/defects',
+  // B-W2b-104: the plans (`?stage=`, `?status=`, `?q=` as the API reads them).
+  '/quality/plans': '/quality/plans',
   '/compliance/register': '/compliance/register',
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',

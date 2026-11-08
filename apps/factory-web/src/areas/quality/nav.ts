@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
+import { BarChart3, ClipboardCheck, FileWarning, Hand, ListChecks, ListTodo, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -36,6 +36,8 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.quality.problems',
         items: [
           { id: 'quality-ncr', label: 'shell:nav.quality.ncr', href: '/quality/ncr', icon: FileWarning, permission: 'quality.ncr.view' },
+          // B-W2b-119 SCR-146: Corrective actions (CAPA and 8D), between Nonconformances and Complaints (quality.capa.view).
+          { id: 'quality-capa', label: 'shell:nav.quality.capa', href: '/quality/capa', icon: ListChecks, permission: 'quality.capa.view' },
           { id: 'quality-complaints', label: 'shell:nav.quality.complaints', href: '/quality/complaints', icon: MessageSquareWarning, permission: 'quality.complaints.view' },
         ],
       },
@@ -50,6 +52,8 @@ export const officeArea: OfficeAreaNav = {
         id: 'quality-settings',
         label: 'shell:nav.quality.settings',
         items: [
+          // B-W2b-104 SCR-077: Settings › Inspection plans & AQL (plans, AQL profiles, when inspections are created, the calculator; quality.plans.view).
+          { id: 'quality-plans', label: 'shell:nav.quality.plans', href: '/quality/plans', icon: ListTodo, permission: 'quality.plans.view' },
           { id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' },
           // B-W2b-118 SCR-260: Settings › Quality rules (who may sign what, alerts and escalation, result rules; quality.rules.view).
           { id: 'quality-rules', label: 'shell:nav.quality.rules', href: '/quality/settings', icon: Scale, permission: 'quality.rules.view' },
