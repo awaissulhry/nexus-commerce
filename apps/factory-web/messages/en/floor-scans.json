@@ -174,6 +174,14 @@
     "UNPLANNED_GOOD_ONLY": {
       "message": "An unplanned operation counts good pieces only.",
       "fix": "Count the good ones here; report scrap or rework at the next operation of the routing."
+    },
+    "FIRST_PIECE": {
+      "message": "Waiting for first-piece approval: work order {number} runs at this operation once its first piece is approved.",
+      "fix": "Work on the first bundle of the run, or ask the inspector or your team leader to approve its first piece."
+    },
+    "CHARGED_OPERATION_UNKNOWN": {
+      "message": "The operation the defect is charged to is not one of this bundle's work order.",
+      "fix": "Pick one of the bundle's operations, or Not known."
     }
   },
   "unknownCode": {
@@ -239,7 +247,8 @@
       "steps_one": "{count} step left to tick",
       "steps_other": "{count} steps left to tick",
       "component": "Scan the lot of {code}: {covered} of {garments} covered",
-      "lotCount": "Say how many garments lot {code} covers"
+      "lotCount": "Say how many garments lot {code} covers",
+      "firstPiece": "Waiting for first-piece approval"
     }
   },
   "fact": {
@@ -549,5 +558,13 @@
       "reason": "Say why it is needed.",
       "words": "Say why in a few words."
     }
+  },
+  "firstPiece": {
+    "held": "Waiting for first-piece approval.",
+    "rejected": "First piece rejected: waiting for a new one.",
+    "why": "Work order {number} runs at this operation once a first piece is approved.",
+    "fix": "Work on the first bundle, or ask the inspector or your team leader to approve it.",
+    "firstBundle": "This bundle is the first piece: work it, then the inspector checks it.",
+    "lifted": "First piece approved: the run is free at this operation."
   }
 }
