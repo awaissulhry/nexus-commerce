@@ -14,12 +14,15 @@ import { correctHold, entryPieces, hideBar, quantityText } from '../../../_share
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
 import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
 import { PrintButton, YieldCard } from '../../daily/view/DailyParts'
+// B-W2b-130: the hide photo in an entry's detail (wo-cutlog "pieces, hide photo W2b").
+import { HidePhoto } from './HidePhoto'
 
 /**
  * SCR-071 — Cutting (design wo-cutlog, wo-cutplan; MES-056): cut against plan per cell, each hide's area (cut + waste +
  * returned + left = issued), and the cut log per hide, append-only, newest first. The office corrects an entry with a
  * reason (production.cut.correct): a mirror entry; of a used-up hide only its closing cut, which opens the hide again. A
  * cutter's name only where the site records workers, as plain text in the entry (never a filter, group or total).
+ * B-W2b-130: an entry's detail shows the photo of the hide taken at the table (B-W2b-103) and the thickness measured there.
  */
 export function CuttingTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
@@ -229,6 +232,7 @@ function EntryDetail({ log, entryId, model, actions }: { log: CutLog; entryId: s
             { label: t('cutting.col.by'), value: entry.worker?.name ?? t(entry.workerHidden ? 'cutting.workerHidden' : 'cutting.noWorker') },
           ]}
         />
+        <HidePhoto entry={entry} photo={model.cutPhoto?.entryId === entry.id ? model.cutPhoto : null} />
         {entry.pieces.length > 0 && (
           <SummaryTable
             label={t('cutting.col.pieces')}

@@ -14,6 +14,9 @@ import { useFloorBoards } from './use-floor-boards'
 import type { HeatCellPick, HeatPanelModel } from './view/HeatPanel'
 import { FloorNowView, type FloorNowModel } from './view/FloorNowView'
 import type { TargetsDialogModel } from './view/TargetsDialog'
+// B-W2b-130: the Cutting room.
+import { cuttingPageHref, cuttingRoomCan } from './cutting/model'
+import { useCuttingRoom } from './cutting/use-cutting-room'
 
 /**
  * `/w/<company>/production/floor` (SCR-073): reads the open work orders' WIP at the person's sites (GET
@@ -21,7 +24,8 @@ import type { TargetsDialogModel } from './view/TargetsDialog'
  * /production/reports/lines), and reads them again when the floor reports (a burst of scans is one read). A line card
  * sets the line scope in the address (`?line=<id>`); [ and ] step to the previous and next line. Nothing per person is
  * asked for: the API serves none (per station only "nobody signed in" and machines down, Owner F2). B-W2b-66: hour by hour,
- * the heat map, the stuck bundles and the line TV (`use-floor-boards.ts`); t opens the line TV.
+ * the heat map, the stuck bundles and the line TV (`use-floor-boards.ts`); t opens the line TV. B-W2b-130: the Cutting room
+ * (`cutting/use-cutting-room.ts`, GET /production/cutboard per site; production.cutting.view).
  */
 export function FloorNowPage() {
   const api = useOfficeApi()
@@ -42,6 +46,9 @@ export function FloorNowPage() {
   const boards = useFloorBoards(api, boardsCan)
   const [cell, setCell] = useState<HeatPanelModel['cell']>(null)
   const [targets, setTargets] = useState<(TargetsDialogModel & { lineId: string; day: string }) | null>(null)
+  // B-W2b-130.
+  const cuttingCan = useMemo(() => cuttingRoomCan(session.permissions), [session.permissions])
+  const cutting = useCuttingRoom(api, cuttingCan.view)
 
   const loadLines = useCallback(() => {
     getLines(api)
@@ -74,10 +81,12 @@ export function FloorNowPage() {
     (change) => {
       if (liveTouches(change)) reread()
       boards.onLive(change)
+      cutting.onLive(change)
     },
     () => {
       void load()
       boards.load()
+      cutting.load()
     },
   )
 
@@ -129,7 +138,19 @@ export function FloorNowPage() {
     [boards.readTargets],
   )
 
-  const model: FloorNowModel = { prefix, can, wip, counts, late, asOf, live, lines, lineScope, boards: { ...boards.state, can: boardsCan, cell, targets } }
+  const model: FloorNowModel = {
+    prefix,
+    can,
+    wip,
+    counts,
+    late,
+    asOf,
+    live,
+    lines,
+    lineScope,
+    boards: { ...boards.state, can: boardsCan, cell, targets },
+    ...(cuttingCan.view ? { cutting: { prefix, read: cutting.state, cuttingHref: cuttingPageHref(prefix) } } : {}),
+  }
   return (
     <FloorNowView
       model={model}
@@ -146,6 +167,7 @@ export function FloorNowPage() {
         onCloseCell: () => setCell(null),
         onOpenBundle: (row) => router.push(bundleHref(prefix, row)),
         onExportStuck: (rows, head) => downloadText('stuck-bundles.csv', stuckCsv(rows, head)),
+        onRetryCutting: cutting.load,
       }}
     />
   )
