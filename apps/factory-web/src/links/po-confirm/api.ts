@@ -1,8 +1,9 @@
 import { z } from 'zod'
-import { ANSWER_OUTCOMES, DECLINE_REASONS, LINE_ANSWERS, type DeclineReason, type LineAnswerKind } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { ANSWER_OUTCOMES, DECLINE_REASONS, type DeclineReason } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { newIdempotencyKey, type ApiClient } from '../../lib/api/client'
+import type { PortalLineBody } from '../../lib/po-answer/lines'
 import { presignedSchema, type Presigned } from '../../record-panels/api'
 import { putToStore, sha256Hex } from '../../record-panels/store'
 
@@ -75,7 +76,10 @@ export const linkOrderSchema = z.object({
   canAnswer: z.boolean(),
   message: z.string().nullable(),
   answers: z.array(z.object({ action: z.enum(['confirm', 'decline']), typedName: z.enum(['required', 'optional', 'none']), email: z.boolean() })),
-  lineAnswers: z.array(z.enum(LINE_ANSWERS)),
+  /** The line answers the link takes (W1's four; B-W2b-179: a substitute or a change too, once the link's API offers them). */
+  lineAnswers: z.array(z.string()),
+  /** Per line: the articles of ours the supplier may offer instead (only when the link takes a substitute). */
+  substitutes: z.record(z.string(), z.array(z.object({ itemId: z.string(), code: z.string(), name: z.string() }))).optional(),
   declineReasons: z.array(z.enum(DECLINE_REASONS)),
   document: z.string(),
   expiresAt: instant,
@@ -94,19 +98,13 @@ export function readLinkOrder(api: ApiClient, signal?: AbortSignal): Promise<Lin
   return api.get('/link/purchase-order', { schema: linkOrderSchema, signal })
 }
 
-export interface LineAnswerBody {
-  readonly lineId: string
-  readonly answer: LineAnswerKind
-  readonly quantity?: string | null
-  readonly date?: string | null
-  readonly deliveries?: { quantity: string; date: string }[] | null
-  readonly reason?: string | null
-}
+/** A line's answer (the portal's and the link's are one shape: B-W2b-179). */
+export type LineAnswerBody = PortalLineBody
 
 export interface ConfirmBody {
   readonly version: number
   readonly mode: 'ALL_AS_ASKED' | 'BY_LINE'
-  readonly lines?: LineAnswerBody[] | null
+  readonly lines?: readonly LineAnswerBody[] | null
   readonly supplierRef?: string | null
   readonly note?: string | null
   readonly typedName?: string | null

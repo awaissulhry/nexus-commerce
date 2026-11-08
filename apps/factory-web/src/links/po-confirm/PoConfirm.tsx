@@ -4,11 +4,11 @@ import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ApiClient } from '../../lib/api/client'
 import { newIdempotencyKey } from '../../lib/api/client'
 import { isApiError } from '../../lib/api/errors'
-import { useLocale } from '../../lib/i18n/provider'
 import { WithMessages } from '../../record-panels/i18n'
 import type { LinkState } from '../../shell/links/link-state'
 import { askNewOrderLink, confirmLinkOrder, declineLinkOrder, pickedPdf, readLinkOrder, uploadConfirmation, type AnswerEnd } from './api'
 import { answerPreview, clean, confirmBody, dayIn, declineHeld, initialModel, pdfProblem, reduce, sendHeld, type Done, type Problem } from './model'
+import { useLocale } from '../../lib/i18n/provider'
 import { PoConfirmView } from './view/PoConfirmView'
 
 /** A refused answer: this page's problem, and the link state it means when it is the link's (the one 404 of a dead link). */
@@ -94,38 +94,22 @@ function PoConfirmContainer({ api }: { api: ApiClient }) {
     if (refusal.reread) void load()
   }
 
-  const lineOf = (lineId: string) => model.page?.lines.find((line) => line.id === lineId)
-
   return (
     <PoConfirmView
       model={model}
       actions={{
         onField: (field, value) => dispatch({ type: 'field', field, value }),
-        onOpenLine: (lineId) => {
-          const line = lineOf(lineId)
-          if (line) dispatch({ type: 'openLine', line, locale })
-        },
-        onResetLine: (lineId) => dispatch({ type: 'resetLine', lineId }),
-        onResetAll: () => dispatch({ type: 'resetAll' }),
-        onSheetKind: (kind) => {
-          const line = model.sheet ? lineOf(model.sheet.lineId) : undefined
-          if (line) dispatch({ type: 'sheetKind', line, kind, locale })
-        },
-        onSheetDraft: (draft) => dispatch({ type: 'sheetDraft', draft }),
-        onSheetSave: () => {
-          const line = model.sheet ? lineOf(model.sheet.lineId) : undefined
-          if (line) dispatch({ type: 'sheetSave', line, locale })
-        },
-        onSheetClose: () => dispatch({ type: 'sheetClose' }),
+        onAnswer: (lineId, draft) => dispatch({ type: 'answer', lineId, draft }),
+        onAllAsAsked: () => dispatch({ type: 'allAsAsked' }),
         onSend: () => {
           const page = model.page
           if (!page) return
           const preview = answerPreview(page, model.answers, model.today, locale)
           if (!preview || sendHeld(model, preview)) return
-          const body = confirmBody(model, preview, locale)
+          const body = confirmBody(model, preview)
           dispatch({ type: 'sending' })
           confirmLinkOrder(api, body, keyFor(body))
-            .then((end) => answered(end, { counts: preview.counts, fileName: model.upload.state === 'done' ? model.upload.name : null, supplierRef: clean(model.supplierRef) }))
+            .then((end) => answered(end, { summary: preview.summary, fileName: model.upload.state === 'done' ? model.upload.name : null, supplierRef: clean(model.supplierRef) }))
             .catch(refused)
         },
         onDecline: (open) => dispatch({ type: 'declineOpen', open }),
@@ -140,7 +124,7 @@ function PoConfirmContainer({ api }: { api: ApiClient }) {
           const body = { version: page.order.version, reason: model.decline.reason, note: clean(model.decline.note), typedName: clean(model.typedName) }
           dispatch({ type: 'sending' })
           declineLinkOrder(api, body, keyFor(body))
-            .then((end) => answered(end, { counts: null, fileName: null, supplierRef: null }))
+            .then((end) => answered(end, { summary: null, fileName: null, supplierRef: null }))
             .catch(refused)
         },
         onPickFile: (file) => {

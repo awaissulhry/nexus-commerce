@@ -134,41 +134,29 @@ function linkOrder(overrides: Omit<Partial<LinkOrder>, 'order'> & { order?: Part
 const PAGE = linkOrder()
 const [LEATHER, LINING, PROTECTORS] = PAGE.lines as [LinkOrder['lines'][number], LinkOrder['lines'][number], LinkOrder['lines'][number]]
 
-const draft = (patch: Partial<LineDraft> & Pick<LineDraft, 'kind'>): LineDraft => ({
-  quantity: '',
-  date: '',
-  deliveries: [
-    { quantity: '', date: '' },
-    { quantity: '', date: '' },
-  ],
-  reason: '',
-  ...patch,
-})
-
-const LATER = draft({ kind: 'OTHER', quantity: '1200', date: '2026-11-28', reason: 'La concia del nero finisce il 25 novembre.' })
-const SPLIT = draft({
+const LATER: LineDraft = { kind: 'OTHER', quantity: '1200', date: '2026-11-28', reason: 'La concia del nero finisce il 25 novembre.' }
+const SPLIT: LineDraft = {
   kind: 'SPLIT',
   deliveries: [
     { quantity: '700', date: '2026-11-14' },
     { quantity: '500', date: '2026-11-28' },
   ],
   reason: 'Metà del bagno è pronta, il resto dopo la rifinizione.',
-})
-const CANNOT = draft({ kind: 'CANNOT_DELIVER', reason: 'Articolo fuori produzione.' })
+}
+const CANNOT: LineDraft = { kind: 'CANNOT', reason: 'Articolo fuori produzione.' }
+const SUBSTITUTE: LineDraft = { kind: 'SUBSTITUTE', quantity: '', date: '', substituteId: '0190f0e2-7777-7000-8000-000000000031', substitute: '', reason: '' }
+const CHANGE: LineDraft = { kind: 'CHANGE', reason: 'Due bagni di tintura invece di uno.' }
 
 function model(overrides: Partial<PoConfirmViewModel> = {}): PoConfirmViewModel {
   return { ...initialModel(TODAY), link: 'valid', page: PAGE, timeZone: 'Europe/Rome', ...overrides }
 }
-
-const withSheet = (line: LinkOrder['lines'][number], sheetDraft: LineDraft, tried = false, answers: PoConfirmViewModel['answers'] = {}) =>
-  model({ answers, sheet: { lineId: line.id, draft: sheetDraft, tried } })
 
 const doneOf = (answers: PoConfirmViewModel['answers'], outcome: 'CONFIRMED' | 'PROPOSED' | 'DECLINED', status: LinkOrder['order']['status'], extra: Partial<PoConfirmViewModel['done']> = {}) => {
   const preview = answerPreview(PAGE, answers, TODAY, 'en')
   return model({
     answers,
     page: linkOrder({ canAnswer: false, order: { status, version: 5 } }),
-    done: { outcome, counts: outcome === 'DECLINED' && !extra?.counts ? null : (preview?.counts ?? null), fileName: null, supplierRef: null, ...extra },
+    done: { outcome, summary: outcome === 'DECLINED' && !extra?.summary ? null : (preview?.summary ?? null), fileName: null, supplierRef: null, ...extra },
   })
 }
 
@@ -176,6 +164,11 @@ const CONFIRMED_PAGE = linkOrder({
   canAnswer: false,
   order: { status: 'CONFIRMED', confirmedAt: '2026-10-30T08:40:00.000Z', confirmedVia: 'LINK', confirmedByName: 'Marco Conceria', supplierRef: 'OC-5521', version: 5 },
   lines: PAGE.lines.map((line) => ({ ...line, confirmedQuantity: line.quantity, confirmedDate: line.needDate })),
+})
+
+const PROPOSE_PAGE = linkOrder({
+  lineAnswers: ['AS_ASKED', 'OTHER', 'SPLIT', 'CANNOT_DELIVER', 'SUBSTITUTE', 'CHANGE'],
+  substitutes: { [PAGE.lines[2]!.id]: [{ itemId: '0190f0e2-7777-7000-8000-000000000031', code: 'PROT-CE-L2', name: 'Protezione spalla demo livello 2' }] },
 })
 
 const answered = (status: LinkOrder['order']['status']) => model({ page: linkOrder({ canAnswer: false, order: { status, version: 6 } }) })
@@ -190,13 +183,12 @@ export const designScreen = defineDesignScreen<PoConfirmViewModel>({
     { id: 'later-date', label: 'Line by line · one later date', model: model({ answers: { [LEATHER.id]: LATER } }), note: 'The review line before sending; the buyer decides on the change (P2).' },
     { id: 'mixed', label: 'Line by line · two deliveries and a line they cannot deliver', model: model({ answers: { [LEATHER.id]: SPLIT, [PROTECTORS.id]: CANNOT } }) },
     { id: 'all-cannot', label: 'Every line one they cannot deliver (it declines the order)', model: model({ answers: { [LEATHER.id]: CANNOT, [LINING.id]: CANNOT, [PROTECTORS.id]: CANNOT } }) },
-    { id: 'sheet-other', label: 'Line sheet · another date or quantity', model: withSheet(LEATHER, LATER) },
-    { id: 'sheet-other-problems', label: 'Line sheet · Save pressed with problems', model: withSheet(LEATHER, draft({ kind: 'OTHER', quantity: '0', date: '2026-10-01', reason: '' }), true) },
-    { id: 'sheet-same', label: 'Line sheet · what was asked again (choose As asked)', model: withSheet(LINING, draft({ kind: 'OTHER', quantity: '350', date: '2026-11-10', reason: 'Va bene.' }), true) },
-    { id: 'sheet-split', label: 'Line sheet · two deliveries', model: withSheet(LEATHER, SPLIT) },
-    { id: 'sheet-split-same-day', label: 'Line sheet · two deliveries on one day', model: withSheet(LEATHER, draft({ ...SPLIT, deliveries: [{ quantity: '700', date: '2026-11-14' }, { quantity: '500', date: '2026-11-14' }] }), true) },
-    { id: 'sheet-cannot', label: 'Line sheet · cannot deliver', model: withSheet(PROTECTORS, CANNOT) },
-    { id: 'sheet-as-asked', label: 'Line sheet · back to as asked', model: withSheet(LEATHER, draft({ kind: 'AS_ASKED' }), false, { [LEATHER.id]: LATER }) },
+    {
+      id: 'propose',
+      label: 'Propose a change · a substitute and another change (when the link offers them)',
+      model: model({ page: PROPOSE_PAGE, answers: { [PROTECTORS.id]: SUBSTITUTE, [LINING.id]: CHANGE } }),
+      note: 'B-W2b-179: the same LineResponseList as the portal; the substitute from the articles offered or in the supplier’s words, a change that needs the buyer’s yes. Shown once the link’s API offers SUBSTITUTE / CHANGE (named in the notes).',
+    },
     { id: 'decline', label: 'Decline dialog', model: model({ declineOpen: true }) },
     { id: 'decline-other', label: 'Decline · another reason needs a note', model: model({ declineOpen: true, decline: { reason: 'OTHER', note: '', tried: true } }) },
     { id: 'upload-uploading', label: 'Their PDF · uploading', model: model({ upload: { state: 'uploading', name: 'Conferma OC-5521.pdf', size: 184_320 } }), note: 'Sending waits until it is uploaded.' },

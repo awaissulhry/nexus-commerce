@@ -3,32 +3,18 @@
 import { useRef, type ReactNode } from 'react'
 import { CheckCircle2, Clock3, FileText, Link2Off, Paperclip, Send, ShieldAlert, XCircle } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
-import { DateField, Modal, Textarea } from '../../../lib/i18n/ds-parts'
-import type { DeclineReason, LineAnswerKind } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { LineResponseList } from '@nexus/ui/patterns/LineResponseList/index'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea, useDsWords } from '../../../lib/i18n/ds-parts'
+import type { DeclineReason } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { formatDate, formatDateTime } from '../../../lib/i18n/format'
-import type { Locale } from '../../../lib/i18n/locales'
+import { INTL_LOCALE, type Locale } from '../../../lib/i18n/locales'
+import { answerLines, kindsOf, lineRequestOf, parseQuantityIn } from '../../../lib/po-answer/lines'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { LinkOrder, LinkOrderLine } from '../api'
-import {
-  answeredKey,
-  answerPreview,
-  declineHeld,
-  draftProblems,
-  expectedSpan,
-  firstProblemKey,
-  nameAsked,
-  plainQuantity,
-  quantityShown,
-  sendHeld,
-  summaryParts,
-  type AnswerPreview,
-  type DraftProblems,
-  type LineDraft,
-  type PoConfirmViewModel,
-} from '../model'
+import { answeredKey, answerPreview, declineHeld, expectedSpan, nameAsked, quantityShown, sendHeld, type AnswerPreview, type LineDraft, type PoConfirmViewModel } from '../model'
 import '../po-confirm.css'
 
 export type { PoConfirmViewModel } from '../model'
@@ -36,13 +22,9 @@ export type { PoConfirmViewModel } from '../model'
 /** What the page asks its container to do (the design index draws it without). */
 export interface PoConfirmActions {
   onField?: (field: 'supplierRef' | 'typedName' | 'note', value: string) => void
-  onOpenLine?: (lineId: string) => void
-  onResetLine?: (lineId: string) => void
-  onResetAll?: () => void
-  onSheetKind?: (kind: LineAnswerKind) => void
-  onSheetDraft?: (draft: LineDraft) => void
-  onSheetSave?: () => void
-  onSheetClose?: () => void
+  /** A line's answer saved in the DS part's sheet (null: as asked again). */
+  onAnswer?: (lineId: string, draft: LineDraft | null) => void
+  onAllAsAsked?: () => void
   onSend?: () => void
   onDecline?: (open: boolean) => void
   onDeclineDraft?: (reason: DeclineReason, note: string) => void
@@ -53,7 +35,6 @@ export interface PoConfirmActions {
   onNewLink?: () => void
 }
 
-const KINDS: readonly LineAnswerKind[] = ['AS_ASKED', 'OTHER', 'SPLIT', 'CANNOT_DELIVER']
 const DECLINES: readonly DeclineReason[] = ['NO_CAPACITY', 'MATERIAL_NOT_AVAILABLE', 'OTHER']
 const NS = 'po-confirm-link'
 
@@ -111,11 +92,6 @@ function useWords(model: PoConfirmViewModel) {
   return { t, locale, day, unit, qty, buyer, buyerStart }
 }
 
-/** A typed quantity shown back in the page's form ("1.200,5"), or as typed when it is no number. */
-const typedShown = (typed: string, locale: Locale) => {
-  const plain = plainQuantity(typed, locale)
-  return plain === null ? typed : quantityShown(plain, locale)
-}
 
 // ---- the page ------------------------------------------------------------------------------------------------------------------
 
@@ -137,7 +113,6 @@ function Body({ page, model, actions }: { page: LinkOrder; model: PoConfirmViewM
       <OrderCard page={page} model={model} />
       <LinesCard page={page} model={model} actions={actions} editable={editable} />
       {editable && <AnswerCard page={page} model={model} preview={preview} actions={actions} />}
-      {editable && model.sheet && <LineSheet page={page} model={model} actions={actions} />}
       {editable && model.declineOpen && <DeclineDialog page={page} model={model} actions={actions} />}
     </>
   )
@@ -200,9 +175,45 @@ function leatherFacts(line: LinkOrderLine, t: ReturnType<typeof useT>, locale: L
   return facts
 }
 
+/**
+ * The lines: while the order takes an answer (and in the end state right after it), the DS LineResponseList — the same
+ * part and rules as the supplier portal's "Confirm or propose" (B-W2b-179): per line Change opens its sheet (another date
+ * or quantity, two deliveries, cannot deliver, and — "Propose a change", when the link offers them — a substitute or a
+ * change that needs the buyer's yes). An order answered before shows its lines as they stand.
+ */
 function LinesCard({ page, model, actions, editable }: { page: LinkOrder; model: PoConfirmViewModel; actions?: PoConfirmActions; editable: boolean }) {
   const { t, locale, day, qty } = useWords(model)
-  const answered = editable || model.done !== null
+  const ds = useDsWords()
+  const answering = editable || model.done !== null
+  if (answering) {
+    const lines = answerLines(page.lines)
+    const kinds = kindsOf(page.lineAnswers)
+    const proposes = kinds.includes('SUBSTITUTE') || kinds.includes('CHANGE')
+    return (
+      <Card padded className="fw-poc-card" aria-labelledby="fw-poc-lines">
+        <h2 id="fw-poc-lines" className="fw-poc-h2">
+          {t('lines.title', { count: page.lines.length })}
+        </h2>
+        {editable ? <p className="fw-poc-hint">{t(proposes ? 'propose.hintAll' : 'propose.hint', { buyer: page.from.buyerName ?? t('who.buyer') })}</p> : null}
+        <LineResponseList
+          lines={lines.map((line) => lineRequestOf(line, { t, locale, day }, page.substitutes?.[line.id] ?? []))}
+          answers={model.answers}
+          onAnswer={actions?.onAnswer}
+          onAllAsAsked={actions?.onAllAsAsked}
+          editable={editable}
+          kinds={kinds}
+          today={model.today}
+          parseQuantity={parseQuantityIn(locale)}
+          formatDate={day}
+          locale={INTL_LOCALE[locale]}
+          labels={ds.lineResponseList}
+          modalLabels={ds.modal}
+          textareaLabels={ds.textarea}
+          dateFieldLabels={ds.dateField}
+        />
+      </Card>
+    )
+  }
   return (
     <Card padded className="fw-poc-card" aria-labelledby="fw-poc-lines">
       <h2 id="fw-poc-lines" className="fw-poc-h2">
@@ -210,7 +221,6 @@ function LinesCard({ page, model, actions, editable }: { page: LinkOrder; model:
       </h2>
       <ol className="fw-poc-lines">
         {page.lines.map((line) => {
-          const draft = model.answers[line.id]
           const facts = leatherFacts(line, t, locale)
           const code = line.code ?? line.name ?? ''
           return (
@@ -231,28 +241,10 @@ function LinesCard({ page, model, actions, editable }: { page: LinkOrder; model:
               <div className="fw-poc-line-ask">
                 <span className="fw-poc-qty">{qty(line.quantity, line.uom)}</span>
                 <span className="fw-poc-sub">{t('lines.needed', { date: day(line.needDate) })}</span>
-                {!answered && line.confirmedQuantity !== null && (
+                {line.confirmedQuantity !== null && (
                   <span className="fw-poc-sub fw-poc-strong">{t('lines.confirmed', { quantity: quantityShown(line.confirmedQuantity, locale), unit: t(`uom.${line.uom}`), date: line.confirmedDate ? day(line.confirmedDate) : '—' })}</span>
                 )}
               </div>
-              {answered && (
-                <div className="fw-poc-line-answer">
-                  <span className="fw-poc-label">{t('lines.yourAnswer')}</span>
-                  <LineAnswer line={line} draft={draft} model={model} />
-                  {editable && (
-                    <span className="fw-poc-line-actions">
-                      <Button size="sm" onClick={() => actions?.onOpenLine?.(line.id)} aria-label={t('lines.changeAria', { seq: line.seq })}>
-                        {t('lines.change')}
-                      </Button>
-                      {draft && draft.kind !== 'AS_ASKED' && (
-                        <Button size="sm" variant="quiet" onClick={() => actions?.onResetLine?.(line.id)} aria-label={t('lines.asAskedAgainAria', { seq: line.seq })}>
-                          {t('lines.asAskedAgain')}
-                        </Button>
-                      )}
-                    </span>
-                  )}
-                </div>
-              )}
             </li>
           )
         })}
@@ -261,45 +253,17 @@ function LinesCard({ page, model, actions, editable }: { page: LinkOrder; model:
   )
 }
 
-function LineAnswer({ line, draft, model }: { line: LinkOrderLine; draft: LineDraft | undefined; model: PoConfirmViewModel }) {
-  const { t, locale, day, unit } = useWords(model)
-  if (!draft || draft.kind === 'AS_ASKED') return <span className="fw-poc-answer">{t('lines.answer.AS_ASKED')}</span>
-  const delivery = (quantity: string, date: string) => t('lines.delivery', { quantity: typedShown(quantity, locale), unit: unit(line.uom), date: date ? day(date) : '—' })
-  const words =
-    draft.kind === 'OTHER'
-      ? t('lines.answer.OTHER', { quantity: draft.quantity.trim() === '' ? quantityShown(line.quantity, locale) : typedShown(draft.quantity, locale), unit: unit(line.uom), date: day(draft.date.trim() === '' ? line.needDate : draft.date) })
-      : draft.kind === 'SPLIT'
-        ? t('lines.answer.SPLIT', { first: delivery(draft.deliveries[0].quantity, draft.deliveries[0].date), second: delivery(draft.deliveries[1].quantity, draft.deliveries[1].date) })
-        : t('lines.answer.CANNOT_DELIVER')
-  const preview = model.page ? answerPreview({ ...model.page, lines: [line] }, { [line.id]: draft }, model.today, locale) : null
-  const changes = preview?.lines[0]?.changes ?? []
-  return (
-    <span className="fw-poc-answer">
-      <span className="fw-poc-strong">{words}</span>
-      {changes.length > 0 && (
-        <span className="fw-poc-tags">
-          {changes.map((change) => (
-            <Tag key={change} tone={change === 'CANNOT_DELIVER' ? 'danger' : 'warning'}>
-              {t(`lines.changes.${change}`)}
-            </Tag>
-          ))}
-        </span>
-      )}
-      {draft.reason.trim() !== '' && <span className="fw-poc-sub">{t('lines.reason', { reason: draft.reason.trim() })}</span>}
-    </span>
-  )
-}
-
 // ---- the answer ------------------------------------------------------------------------------------------------------------------
 
 function AnswerCard({ page, model, preview, actions }: { page: LinkOrder; model: PoConfirmViewModel; preview: AnswerPreview | null; actions?: PoConfirmActions }) {
   const { t, buyer } = useWords(model)
+  const ds = useDsWords()
   const held = sendHeld(model, preview)
   const name = nameAsked(page, 'confirm')
   const outcome = preview?.outcome ?? 'PROPOSED'
   const changed = Object.keys(model.answers).length > 0
   const main = outcome === 'CONFIRMED' ? t('answer.confirmAll') : outcome === 'DECLINED' ? t('answer.sendDecline') : t('answer.sendChanges')
-  const summary = preview ? summaryParts(preview.counts).map((part) => t(part.key, { count: part.count })).join(' · ') : null
+  const summary = preview ? preview.summary.map((part) => ds.lineResponseList.summary[part.key](part.count)).join(ds.lineResponseList.summaryJoin) : null
   return (
     <Card padded className="fw-poc-card fw-poc-answer-card" aria-labelledby="fw-poc-answer">
       <form
@@ -338,7 +302,7 @@ function AnswerCard({ page, model, preview, actions }: { page: LinkOrder; model:
             {model.send === 'busy' ? <Spinner size={14} /> : outcome === 'CONFIRMED' ? <CheckCircle2 size={16} aria-hidden /> : <Send size={16} aria-hidden />} {model.send === 'busy' ? t('answer.busy') : main}
           </Button>
           {changed && (
-            <Button variant="quiet" onClick={() => actions?.onResetAll?.()}>
+            <Button variant="quiet" onClick={() => actions?.onAllAsAsked?.()}>
               {t('answer.undoAll')}
             </Button>
           )}
@@ -435,102 +399,6 @@ function PdfChooser({ model, actions }: { model: PoConfirmViewModel; actions?: P
   )
 }
 
-// ---- a line's sheet ----------------------------------------------------------------------------------------------------------------
-
-function LineSheet({ page, model, actions }: { page: LinkOrder; model: PoConfirmViewModel; actions?: PoConfirmActions }) {
-  const { t, locale, day, unit, buyer } = useWords(model)
-  const sheet = model.sheet!
-  const line = page.lines.find((entry) => entry.id === sheet.lineId)
-  if (!line) return null
-  const draft = sheet.draft
-  const problems: DraftProblems = sheet.tried ? draftProblems(line, draft, model.today, locale) : {}
-  const first = sheet.tried ? firstProblemKey(draftProblems(line, draft, model.today, locale)) : null
-  const set = (patch: Partial<LineDraft>) => actions?.onSheetDraft?.({ ...draft, ...patch })
-  const setPart = (index: 0 | 1, patch: Partial<LineDraft['deliveries'][0]>) => {
-    const parts = [...draft.deliveries] as [LineDraft['deliveries'][0], LineDraft['deliveries'][1]]
-    parts[index] = { ...parts[index], ...patch }
-    set({ deliveries: parts })
-  }
-  const word = (key: string | undefined, group: string) => (key ? t(`sheet.problem.${group}.${key}`) : undefined)
-  const dateField = (value: string, onChange: (value: string) => void, error: string | undefined, label: string) => (
-    <Field label={label} error={error}>
-      <DateField value={value} onChange={onChange} locale={locale === 'it' ? 'it-IT' : 'en-GB'} min={model.today} clearable={false} ariaLabel={label} />
-    </Field>
-  )
-  const quantityField = (value: string, onChange: (value: string) => void, error: string | undefined) => (
-    <Field label={t('sheet.quantity', { unit: unit(line.uom) })} error={error}>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} inputMode="decimal" autoComplete="off" suffix={unit(line.uom)} />
-    </Field>
-  )
-  const article = [line.code, line.name].filter(Boolean).join(' · ')
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onSheetClose?.()}
-      title={t('sheet.title', { seq: line.seq })}
-      subtitle={article}
-      size="sm"
-      footer={
-        <>
-          <Button onClick={() => actions?.onSheetClose?.()}>{t('sheet.cancel')}</Button>
-          <Button variant="primary" type="submit" form="fw-poc-sheet" heldReason={first ? t(first) : null}>
-            {t('sheet.save')}
-          </Button>
-        </>
-      }
-    >
-      <form
-        id="fw-poc-sheet"
-        className="fw-poc-sheet"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!first) actions?.onSheetSave?.()
-        }}
-      >
-        <KeyValue dense labelCase="sentence" items={[{ label: t('sheet.asked'), value: t('sheet.askedValue', { quantity: quantityShown(line.quantity, locale), unit: unit(line.uom), date: day(line.needDate) }) }]} />
-        <div className="fw-poc-kinds" role="radiogroup" aria-label={t('sheet.kind')}>
-          <span className="fw-poc-label">{t('sheet.kind')}</span>
-          {KINDS.map((kind) => (
-            <RadioCard
-              key={kind}
-              name={`fw-poc-kind-${line.id}`}
-              value={kind}
-              checked={draft.kind === kind}
-              selected={draft.kind === kind}
-              onChange={() => actions?.onSheetKind?.(kind)}
-              title={t(`sheet.kinds.${kind}.title`)}
-              description={kind === 'AS_ASKED' ? t('sheet.kinds.AS_ASKED.body', { quantity: quantityShown(line.quantity, locale), unit: unit(line.uom), date: day(line.needDate) }) : t(`sheet.kinds.${kind}.body`)}
-            />
-          ))}
-        </div>
-        {draft.kind === 'OTHER' && (
-          <div className="fw-poc-pair">
-            {quantityField(draft.quantity, (quantity) => set({ quantity }), word(problems.quantity, 'quantity'))}
-            {dateField(draft.date, (date) => set({ date }), word(problems.date, 'date'), t('sheet.date'))}
-          </div>
-        )}
-        {draft.kind === 'SPLIT' &&
-          ([0, 1] as const).map((index) => (
-            <fieldset key={index} className="fw-poc-delivery">
-              <legend className="fw-poc-label">{t(index === 0 ? 'sheet.first' : 'sheet.second')}</legend>
-              <div className="fw-poc-pair">
-                {quantityField(draft.deliveries[index].quantity, (quantity) => setPart(index, { quantity }), word(problems.deliveries?.[index]?.quantity, 'quantity'))}
-                {dateField(draft.deliveries[index].date, (date) => setPart(index, { date }), word(problems.deliveries?.[index]?.date, 'date') ?? (index === 1 && problems.whole === 'sameDay' ? t('sheet.problem.whole.sameDay') : undefined), t('sheet.date'))}
-              </div>
-            </fieldset>
-          ))}
-        {draft.kind !== 'AS_ASKED' && (
-          <Field label={t('sheet.reason')} hint={t('sheet.reasonHint', { buyer })} error={word(problems.reason, 'reason')} required>
-            <Textarea value={draft.reason} onChange={(event) => set({ reason: event.target.value })} rows={2} maxLength={600} />
-          </Field>
-        )}
-        {problems.whole && problems.whole !== 'sameDay' && <Banner tone="warning" title={t(`sheet.problem.whole.${problems.whole}`)} />}
-      </form>
-    </Modal>
-  )
-}
-
 // ---- decline ---------------------------------------------------------------------------------------------------------------------
 
 function DeclineDialog({ page, model, actions }: { page: LinkOrder; model: PoConfirmViewModel; actions?: PoConfirmActions }) {
@@ -581,12 +449,12 @@ function DeclineDialog({ page, model, actions }: { page: LinkOrder; model: PoCon
 // ---- end states --------------------------------------------------------------------------------------------------------------------
 
 function DoneCard({ page, model }: { page: LinkOrder; model: PoConfirmViewModel }) {
-  const { t, locale, day, buyer, buyerStart } = useWords(model)
+  const { t, day, buyer, buyerStart } = useWords(model)
+  const ds = useDsWords()
   const done = model.done!
-  const preview = done.outcome === 'CONFIRMED' ? answerPreview({ ...page, canAnswer: true }, model.answers, model.today, locale) : null
-  const span = preview ? expectedSpan(preview.lines) : null
+  const span = done.outcome === 'CONFIRMED' ? expectedSpan(page.lines) : null
   const site = page.deliverTo?.name ?? null
-  const summary = done.counts ? summaryParts(done.counts).map((part) => t(part.key, { count: part.count })).join(' · ') : ''
+  const summary = done.summary ? done.summary.map((part) => ds.lineResponseList.summary[part.key](part.count)).join(ds.lineResponseList.summaryJoin) : ''
   const facts = [...(done.supplierRef ? [{ label: t('done.ref'), value: done.supplierRef }] : []), ...(done.fileName ? [{ label: t('done.file'), value: done.fileName }] : [])]
   const icon = done.outcome === 'CONFIRMED' ? <CheckCircle2 size={22} aria-hidden className="fw-poc-ok" /> : done.outcome === 'PROPOSED' ? <Send size={22} aria-hidden className="fw-poc-info" /> : <XCircle size={22} aria-hidden className="fw-poc-muted" />
   return (
