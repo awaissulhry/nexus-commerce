@@ -42,15 +42,15 @@ export interface UserRecordActions {
  * each after a fresh code) and Activity.
  * The last administrator is held before the click. Fetches nothing (UserRecord.tsx reads the API).
  */
-export function UserRecordView({ model, actions, panels }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode }) {
+export function UserRecordView({ model, actions, panels, partner }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode }) {
   return (
     <AdminMessages>
-      <UserRecord model={model} actions={actions} panels={panels} />
+      <UserRecord model={model} actions={actions} panels={panels} partner={partner} />
     </AdminMessages>
   )
 }
 
-function UserRecord({ model, actions, panels }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode }) {
+function UserRecord({ model, actions, panels, partner }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/users'), label: t('nav.users') }
@@ -88,11 +88,15 @@ function UserRecord({ model, actions, panels }: { model: UserRecordModel; action
   }
   const held = lifecycleHeld(model)
   const live = (model.assignments.items ?? []).filter((assignment) => assignment.live)
+  // B-W2b-180: a person of a partner organisation has Partner organisation in place of Roles & scope (their role is a
+  // fixed partner template, changed on the organisation's Portal access tab).
+  const isPartner = user.audience === 'PARTNER'
   const tabs: Array<{ id: UserTab; label: string; count?: number | null }> = [
     { id: 'profile', label: t('user.tab.profile') },
-    { id: 'roles', label: t('user.tab.roles'), count: model.assignments.items ? live.length : null },
+    ...(isPartner ? (partner ? [{ id: 'partner' as const, label: t('user.tab.partner') }] : []) : [{ id: 'roles' as const, label: t('user.tab.roles'), count: model.assignments.items ? live.length : null }]),
     { id: 'activity', label: t('user.tab.activity') },
   ]
+  const tab: UserTab = tabs.some((entry) => entry.id === model.tab) ? model.tab : 'profile'
 
   return (
     <div className="fw-adm">
@@ -103,25 +107,27 @@ function UserRecord({ model, actions, panels }: { model: UserRecordModel; action
         status={
           <span className="fw-adm-tags">
             <Pill tone={STATUS_TONE[user.status] ?? 'neutral'}>{t(`users.status.${user.status}`)}</Pill>
-            {user.status !== 'INVITED' && <Tag tone={user.mfaEnabled ? 'success' : 'warning'}>{t(user.mfaEnabled ? 'user.mfaOn' : 'user.mfaOff')}</Tag>}
+            {/* B-W2b-180: a partner signs in with an e-mail code: no authenticator to show. */}
+            {user.status !== 'INVITED' && !isPartner && <Tag tone={user.mfaEnabled ? 'success' : 'warning'}>{t(user.mfaEnabled ? 'user.mfaOn' : 'user.mfaOff')}</Tag>}
           </span>
         }
         actions={
-          <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={heldText(t, held.assign)}>
+          <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={isPartner ? t('user.held.partnerRole') : heldText(t, held.assign)}>
             {t('user.giveRole')}
           </Button>
         }
         tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => `${href(`/users/${user.id}`)}?tab=${tab}`}
-        dock={model.tab === 'activity' ? undefined : panels}
+        active={tab}
+        tabHref={(id) => `${href(`/users/${user.id}`)}?tab=${id}`}
+        dock={tab === 'activity' ? undefined : panels}
         dockOpen={model.dockOpen}
         onDock={actions?.onDock}
       >
         <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {model.tab === 'profile' && <ProfileTab model={model} open={open} />}
-        {model.tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
-        {model.tab === 'activity' && panels}
+        {tab === 'profile' && <ProfileTab model={model} open={open} />}
+        {tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
+        {tab === 'partner' && partner}
+        {tab === 'activity' && panels}
       </RecordFrame>
       <GiveRoleModal model={model} open={dialog === 'give-role'} onClose={() => open(null)} actions={actions} />
       <EndRolesConfirm model={model} open={dialog === 'end-roles'} selected={selected} onClose={() => open(null)} onDone={() => setSelected([])} actions={actions} />

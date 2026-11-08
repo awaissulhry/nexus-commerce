@@ -134,6 +134,7 @@
       "tax": "Tax & terms",
       "orders": "Quotes & orders",
       "documents": "Documents",
+      "portal": "Portal access",
       "activity": "Activity"
     },
     "side": {
@@ -209,6 +210,7 @@
       "contacts": "Contacts",
       "items": "Items & prices",
       "orders": "Orders",
+      "portal": "Portal access",
       "activity": "Activity"
     },
     "side": {

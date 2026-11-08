@@ -119,6 +119,12 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     expect(await events('partner_user.invited')).toEqual([expect.objectContaining({ userId: invited.body.invitation.userId, partyId: world.partyId, kind: 'CUSTOMER', roleKey: 'customer-buyer', byPartner: false })])
 
     const bea = await signedIn(email)
+    // B-W2b-180: the sign-in reaches the office's Portal access tab (its live line); the first one says so.
+    expect(await events('partner_user.signed_in')).toEqual([{ userId: invited.body.invitation.userId, partyId: world.partyId, firstSignIn: true }])
+    // B-W2b-180: Admin › Users lists the person as a partner of the party (audience, party, portal), never as an office person.
+    const people = (await owner.get('/auth/users')).body.users as Array<Record<string, unknown>>
+    expect(people.find((user) => user.id === invited.body.invitation.userId)).toMatchObject({ audience: 'PARTNER', partyId: world.partyId, partnerKind: 'CUSTOMER', accessUntil: null, status: 'ACTIVE' })
+    expect(people.find((user) => user.id === ownerUser.id)).toMatchObject({ audience: 'OFFICE', partyId: null, partnerKind: null, accessUntil: null })
     expect((await bea.get('/portal/me')).body.permissions).toEqual([])
     await acknowledge(bea)
     expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.search', 'portal.upload', 'threads.read'])
