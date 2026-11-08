@@ -1,0 +1,420 @@
+/*
+ * SCR-175 — Incoming inspection (B-W2b-115): layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*`
+ * tokens, colours are semantic `--nds-*` roles (a tone always comes with its word or icon). No raw colour. The one-job screen
+ * stays centred on the tablet (the frame's own column).
+ */
+
+.fw-ii {
+  min-width: 0;
+}
+
+/* ── the sections of an inspection: big buttons, each with its state in words, wrapping to full rows on a phone ──────── */
+.fw-ii-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  min-width: 0;
+}
+.fw-ii-strip .nds-floor-btn-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  text-align: start;
+}
+.fw-ii-strip-name {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+.fw-ii-strip-state {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+/* ── a big figure with its words: points per 100 sq yd, an area's difference in % ──────────────────────────────────────── */
+.fw-ii-big {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+  padding: var(--nds-density-gap);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+.fw-ii-big[data-tone='success'] {
+  border-color: var(--nds-success);
+  background: var(--nds-success-soft);
+}
+.fw-ii-big[data-tone='warning'] {
+  border-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+}
+.fw-ii-big[data-tone='danger'] {
+  border-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+}
+.fw-ii-big-value {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text);
+}
+.fw-ii-big[data-tone='success'] .fw-ii-big-value {
+  color: var(--nds-success-text);
+}
+.fw-ii-big[data-tone='warning'] .fw-ii-big-value {
+  color: var(--nds-warning-text);
+}
+.fw-ii-big[data-tone='danger'] .fw-ii-big-value {
+  color: var(--nds-danger-text);
+}
+.fw-ii-big-label {
+  flex: 1 1 12em;
+  min-width: 0;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+/* ── grades, the body's second actions, the pads side by side (full rows on a phone) ──────────────────────────────────── */
+.fw-ii-grades {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  align-items: center;
+  min-width: 0;
+}
+.fw-ii-grades > .fw-floor-subtitle {
+  grid-column: 1 / -1;
+}
+.fw-ii-body-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+}
+.fw-ii-pads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.fw-ii-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-ii-pad[data-open='true'] {
+  grid-column: 1 / -1;
+}
+.fw-ii-sum {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-success-text);
+}
+.fw-ii-sum[data-tone='warning'] {
+  color: var(--nds-warning-text);
+}
+.fw-ii-held {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── a counter row: words, then − the count + (the 4-point classes, the defect classes of a counted lot) ──────────────── */
+.fw-ii-counter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 4ch auto;
+  align-items: center;
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+.fw-ii-counter-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-ii-counter-label {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-ii-counter-value {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.fw-ii-counter[data-tone='warning'] .fw-ii-counter-value {
+  color: var(--nds-warning-text);
+}
+.fw-ii-counter[data-tone='danger'] .fw-ii-counter-value {
+  color: var(--nds-danger-text);
+}
+
+/* ── a shade tile's mark: the group's name big in the bubble ───────────────────────────────────────────────────────────── */
+.fw-ii-swatch {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1;
+}
+
+/* ── the decision signed: what is signed beside the PIN pad on a tablet, one column when narrow ─────────────────────────── */
+.fw-ii-sign,
+.fw-ii-sign-pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+@media (min-width: 900px) {
+  .fw-ii-sign {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: calc(var(--nds-density-gap) * 2);
+  }
+}
+
+/* ── what was just recorded: words, then its ticks at the end of the line ───────────────────────────────────────────────── */
+.fw-ii-done {
+  flex-wrap: wrap;
+}
+.fw-ii-done-text {
+  flex: 1 1 16em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-ii-zones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+}
+
+/* ── the hide map ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-ii-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-ii-map-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+}
+.fw-ii-map-zoom {
+  min-width: 5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.fw-ii-map-frame {
+  width: 100%;
+  aspect-ratio: 10 / 7;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  overflow: hidden;
+  cursor: crosshair;
+}
+.fw-ii-map-frame:focus-visible {
+  outline: 3px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+.fw-ii-map-frame[data-held='true'] {
+  cursor: not-allowed;
+}
+.fw-ii-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: manipulation;
+}
+.fw-ii-hide {
+  fill: var(--nds-surface);
+  stroke: var(--nds-border-strong);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+.fw-ii-zone polygon {
+  fill: var(--nds-success-soft);
+  fill-opacity: 0.75;
+  stroke: var(--nds-success);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.fw-ii-zone[data-tone='warning'] polygon {
+  fill: var(--nds-warning-soft);
+  stroke: var(--nds-warning);
+}
+.fw-ii-zone[data-tone='danger'] polygon {
+  fill: var(--nds-danger-soft);
+  stroke: var(--nds-danger);
+}
+.fw-ii-zone text,
+.fw-ii-defect text {
+  fill: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+  pointer-events: none;
+}
+.fw-ii-defect circle {
+  fill: var(--nds-warning-soft);
+  stroke: var(--nds-warning);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.fw-ii-defect[data-tone='danger'] circle {
+  fill: var(--nds-danger-soft);
+  stroke: var(--nds-danger);
+}
+.fw-ii-defect[data-tone='info'] circle {
+  fill: var(--nds-info-soft);
+  stroke: var(--nds-info);
+}
+.fw-ii-drawing polyline {
+  fill: none;
+  stroke: var(--nds-primary);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.fw-ii-drawing circle {
+  fill: var(--nds-primary);
+}
+.fw-ii-cross line {
+  stroke: var(--nds-text-2);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.fw-ii-map-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+.fw-ii-map-foot > p {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fw-ii-marks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-ii-mark {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.fw-ii-mark-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.25em;
+  height: 2.25em;
+  padding: 0 var(--nds-space-4);
+  border-radius: 999px;
+  font-weight: var(--nds-font-weight-semibold);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.fw-ii-mark-badge[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-ii-mark-badge[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.fw-ii-mark-badge[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-ii-mark-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-ii-mark-label {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── a choice: its label, then a row of pressed buttons (2 to 4 a row by width; a long choice like a certificate wider) ─── */
+.fw-ii-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-ii-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  min-width: 0;
+}
+.fw-ii-choice-grid[data-wide='true'] {
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+.fw-ii-choice .nds-floor-btn-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+}
+.fw-ii-choice-label {
+  overflow-wrap: normal;
+  hyphens: none;
+}
+.fw-ii-choice-hint {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+  opacity: 0.85;
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+}
+
+/* ── the sample's bar across the card ───────────────────────────────────────────────────────────────────────────────────── */
+.fw-ii-progress {
+  width: 100%;
+}
+
+/* ── the hide map's step: the map and its marks beside the tools on a tablet, the tools first on a phone ──────────────────── */
+.fw-ii-map-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+.fw-ii-map-tools-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+@container nds-floor-frame (min-width: 900px) {
+  .fw-ii-map-split {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+  .fw-ii-map-split > .fw-ii-map {
+    order: -1;
+  }
+}

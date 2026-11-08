@@ -337,6 +337,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   its one tap). Online first, kept as `production.lay.roll|undo|count` and `production.trolley.load|unload|send|receive` (the try's key
   `<device>.<client event id>`; `model.ts applyKept…` moves the lay on screen); the start/end scans, stickers, fabric used, recuts and
   process taps online only. Refusals in its own words (`model.ts KNOWN_REFUSALS`, held against the domain lists by its test).
+  B-W2b-115: `floor/tasks/incoming/` (SCR-175, `/floor/incoming`, tile `incoming` at the inspection bench, before Final inspection so it
+  stays on Home's first page; quality.incoming.record; catalogue `floor-incoming`; on B-W2b-98's, -111's and -106's API): scan the lot (a lot,
+  a hide tag or an inspection number → POST /quality/queue/scan, stage INCOMING) or a row of the site's open ones; one FloorCard with the
+  sample and its bar; a strip of sections — Hides (scan → shade → Accept; grade, the area against the tannery's, the composed HideMap in
+  `view/HideMap.tsx`), Fabric rolls (4-point counters, width and length, points per 100 sq yd), Armour, zips, hardware, the defect counter,
+  the plan's checks (DS FloorChecklist + the shared MeasureStep), Decision (three pads, a workshop's bundles; held with every reason in
+  words, `model.ts decisionHeld`; an override is the office's) → the PIN (DS PinSignBlock). A hide and the checks go ONLINE FIRST as
+  `quality.incoming.record` (`api.ts recordOrKeep`; a kept write moves the record, `model.ts applyKept`); rolls, components, the counter,
+  opening and signing online only. The plan checks' rules and the measure step are shared (`tasks/shared/plan-checks.ts`,
+  `tasks/shared/view/MeasureStep.tsx`; In-line re-exports them). floor.kits' receipt says the goods go to that inspection first.
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
