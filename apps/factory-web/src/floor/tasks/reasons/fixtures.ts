@@ -83,6 +83,12 @@ const model = (picker: Partial<ReasonPickerModel> & Pick<ReasonPickerModel, 'pur
 
 const PUT_LAST = 'WO-DEMO-0042 · Op 20 Cucire fianchi'
 
+/** B-W2b-105: a bundle's operations up to Op 20 (made-up). */
+const CAUSE_OPS = [
+  { id: 'op-10', seq: 10, code: 'CUT', name: 'Taglio pelle' },
+  { id: 'op-20', seq: 20, code: 'SEW-SIDE', name: 'Cucire fianchi', here: true },
+]
+
 export const designScreen = defineDesignScreen<ReasonPickerViewModel>({
   screen: 'SCR-091',
   title: 'Floor reason picker',
@@ -106,6 +112,14 @@ export const designScreen = defineDesignScreen<ReasonPickerViewModel>({
       model: model({ purpose: 'scrap', reasons: SCRAP, counts: { LEATHER_FLAW: 18, STAIN: 2 }, of: 20, problem: 'atMost' }),
       note: 'Every piece already has a reason: the tap is refused with an amber flash and the words; nothing is counted.',
     },
+    // B-W2b-105 (design floor.reasons "attribute"; MES-127, QHS-042): which operation caused it, once a piece is counted.
+    {
+      id: 'cause',
+      label: 'Which operation caused it? (not known)',
+      model: model({ purpose: 'scrap', reasons: SCRAP, counts: { STAIN: 1 }, of: 20, cause: { operations: CAUSE_OPS, value: null } }),
+      note: 'One row of pressed buttons above the reasons, there from the start (the tiles never move under the finger): the bundle\'s operations up to this one, this one marked. Not known is pressed by default: a charge is never guessed. Recorded per operation, never per person.',
+    },
+    { id: 'cause-picked', label: 'Which operation caused it? (picked)', model: model({ purpose: 'rework', reasons: REWORK, counts: { RESTITCH: 2 }, of: 20, cause: { operations: CAUSE_OPS, value: 'op-10' } }), note: 'The rework counted here is charged to Op 10; the worker of that operation sees it on My day only where the site\'s legal gate allows it.' },
     { id: 'rework', label: 'Rework from Operation (count)', model: model({ purpose: 'rework', reasons: REWORK, counts: { RESTITCH: 1 }, of: 20 }), note: 'The rework list, the same way. The pieces reach the office\'s Production › Scrap & rework list with their reason.' },
     {
       id: 'put-last',

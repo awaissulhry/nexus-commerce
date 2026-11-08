@@ -32,6 +32,8 @@ import { OverrideDialog, type OverrideAction, type OverrideModel } from './Overr
 import { StackBody, type StackAction, type StackLine } from './StackView'
 import { StepsPanel } from './StepsPanel'
 import { TimingPanel } from './TimingPanel'
+import { FirstPieceLine } from './FirstPieceLine'
+import { firstPieceHolds } from '../first-piece'
 import {
   CORRECTION_REASONS,
   finishHeld,
@@ -42,6 +44,8 @@ import {
   reworkOf,
   scrapOf,
   correctionHeld,
+  causeOperations,
+  causedAtOf,
   totalOf,
   totalOfTarget,
   touched,
@@ -90,7 +94,19 @@ export interface Work {
 
 export const NO_WORK: Work = Object.freeze({ timing: null, skewMs: 0, check: null, steps: null, lots: Object.freeze([]) as readonly LotLine[], lotRefusal: null })
 
-export type CountsStep = { readonly kind: 'counts'; readonly card: BundleCard; readonly operation: CardOperation; readonly counts: Counts; readonly open: CountsOpen; readonly asOf: string | null; readonly problem?: 'atMost' | null; readonly busy?: boolean; readonly work?: Work }
+export type CountsStep = {
+  readonly kind: 'counts'
+  readonly card: BundleCard
+  readonly operation: CardOperation
+  readonly counts: Counts
+  readonly open: CountsOpen
+  readonly asOf: string | null
+  readonly problem?: 'atMost' | null
+  readonly busy?: boolean
+  readonly work?: Work
+  /** B-W2b-105: the first piece was approved while this bundle was on screen (the success line). */
+  readonly firstPieceLifted?: boolean
+}
 
 export type OperationStep =
   | { readonly kind: 'scan' }
@@ -181,6 +197,8 @@ export type OperationAction =
   | { type: 'pick'; operationId: string }
   | { type: 'reason'; kind: DefectKind; code: string }
   | { type: 'unreason'; kind: DefectKind; code: string }
+  /** B-W2b-105 (MES-127): the operation the kind's pieces are charged to (null: not known). */
+  | { type: 'cause'; kind: DefectKind; operationId: string | null }
   | { type: 'open'; what: CountsOpen }
   | { type: 'good'; value: number | null }
   | { type: 'finish' }
@@ -261,8 +279,10 @@ export function pickerKindOf(open: CountsOpen): DefectKind | null {
  * The reason picker (SCR-091) over the bundle card's reasons (W2a: the illustrated picker; design floor.operation
  * "counts"): what it is for ("Scrap · the bundle · Op 20 …") and the running count, each tap one piece with that reason.
  */
-export function pickerOf(input: { bundleCode: string; operation: { seq: number; name: string }; kind: DefectKind; reasons: readonly CardReason[]; counts: Counts; expected: number; problem: 'atMost' | null }): ReasonPickerModel {
+export function pickerOf(input: { bundleCode: string; operation: { seq: number; name: string }; kind: DefectKind; reasons: readonly CardReason[]; counts: Counts; expected: number; problem: 'atMost' | null; card?: BundleCard; at?: CardOperation }): ReasonPickerModel {
   return {
+    // B-W2b-105 (MES-127): "Which operation caused it?" over the bundle's operations up to this one (a correction asks none).
+    cause: input.card && input.at ? { operations: causeOperations(input.card, input.at), value: causedAtOf(input.counts, input.kind) } : null,
     purpose: input.kind === 'SCRAP' ? 'scrap' : 'rework',
     subject: `${input.bundleCode} · Op ${input.operation.seq} ${input.operation.name}`,
     reasons: input.reasons.filter((reason) => reason.kind === input.kind).map(fromScanReason),
@@ -282,6 +302,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
   // A tap on a reason tile adds one piece with that reason; − on the tile takes one off (reason-first counting).
   const pickerSend = (kind: DefectKind) => (action: ReasonPickerAction) => {
     if (action.type === 'count') send({ type: action.delta > 0 ? 'reason' : 'unreason', kind, code: action.id })
+    if (action.type === 'cause') send({ type: 'cause', kind, operationId: action.operationId })
   }
   const { step } = model
   const time = (value: string) => formatTime(value, { locale, timeZone: model.timeZone })
@@ -498,7 +519,9 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       const good = goodOf(step.counts, expected)
       const asked = work.check?.components.asked ?? []
       const held = finishHeld(step.counts, step.operation.expected, ceiling)
-      const hold = held ? null : workHold({ steps: work.steps, asked, lots: work.lots, counts: step.counts, expected })
+      // B-W2b-105 (QHS-039): the run waits for its first piece here: Finish, Start and Resume are held (the API refuses them).
+      const waiting = firstPieceHolds(step.card, step.operation.id)
+      const hold = held ? null : workHold({ steps: work.steps, asked, lots: work.lots, counts: step.counts, expected, firstPiece: waiting })
       const heldWords = held ? t(`finish.held.${held}`, { count: ceiling }) : step.busy ? t('finish.busy') : hold ? t(`finish.work.${hold.key}`, hold) : null
       const finish: FloorAction = { label: t('finish.label', { count: good }), icon: <Check />, onPress: () => send({ type: 'finish' }), heldReason: heldWords, id: 'finish' }
       barWords = heldWords
@@ -510,7 +533,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
           { label: t(kind === 'SCRAP' ? 'counts.rework' : 'counts.scrap'), icon: kind === 'SCRAP' ? <Wrench /> : <TriangleAlert />, variant: 'secondary', onPress: () => send({ type: 'pickerSwitch' }) },
           finish,
         ]
-        const picker = pickerOf({ bundleCode: step.card.bundle.code, operation: step.operation, kind, reasons: step.card.reasons, counts: step.counts, expected, problem: step.problem ?? null })
+        const picker = pickerOf({ bundleCode: step.card.bundle.code, operation: step.operation, kind, reasons: step.card.reasons, counts: step.counts, expected, problem: step.problem ?? null, card: step.card, at: step.operation })
         body = (
           <>
             {model.last ? <LastLine last={model.last} t={t} shared={shared} send={send} /> : null}
@@ -523,8 +546,9 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       // B-W2b-82: an unplanned operation counts good pieces only, so it has no "Not all good".
       const goodOnly = step.operation.unplanned === true
       const notAllGood: FloorAction = { label: t('timing.notAllGood'), icon: <TriangleAlert />, onPress: () => send({ type: 'notAllGood' }) }
-      const first: FloorAction | null = bar === 'running' ? { label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pause' }) } : bar === 'paused' || bar === 'other' ? null : { label: t('timing.start'), icon: <Play />, onPress: () => send({ type: 'start' }) }
-      const resume: FloorAction = { label: t('timing.resume'), icon: <Play />, onPress: () => send({ type: 'resume' }), id: 'resume' }
+      const waitHeld = waiting ? t('firstPiece.held') : null
+      const first: FloorAction | null = bar === 'running' ? { label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pause' }) } : bar === 'paused' || bar === 'other' ? null : { label: t('timing.start'), icon: <Play />, onPress: () => send({ type: 'start' }), heldReason: waitHeld }
+      const resume: FloorAction = { label: t('timing.resume'), icon: <Play />, onPress: () => send({ type: 'resume' }), id: 'resume', heldReason: waitHeld }
       if (goodOnly) actions = bar === 'paused' ? [finish, resume] : first ? [first, finish] : [finish]
       else actions = bar === 'paused' ? [notAllGood, finish, resume] : first ? [first, notAllGood, finish] : [notAllGood, finish]
       const total = totalOf(step.counts, expected)
@@ -537,7 +561,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
           {model.done ? <DoneStrip done={model.done} t={t} /> : null}
           <div className="fw-task-split">
             <div className="fw-floor-stack">
-              <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} />
+              <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} lifted={step.firstPieceLifted ?? false} />
               <TimingPanel timing={work.timing} skewMs={work.skewMs} reasons={model.pauseReasons ?? []} />
               {goodOnly ? (
                 <TaskLine tone="info" icon={<Workflow />}>
@@ -995,7 +1019,7 @@ function LastLine({ last, t, shared, send }: { last: LastStrip; t: Translate; sh
   )
 }
 
-function BundleFacts({ card, operation, asOf, t, shared, locale, time }: { card: BundleCard; operation: CardOperation | null; asOf: string | null; t: Translate; shared: Translate; locale: Locale; time: (value: string) => string }) {
+function BundleFacts({ card, operation, asOf, t, shared, locale, time, lifted = false }: { card: BundleCard; operation: CardOperation | null; asOf: string | null; t: Translate; shared: Translate; locale: Locale; time: (value: string) => string; lifted?: boolean }) {
   const colourSize = [card.bundle.colourwayName || card.bundle.colourwayCode, card.bundle.size].filter(Boolean).join(' · ')
   return (
     <TaskCard
@@ -1016,6 +1040,7 @@ function BundleFacts({ card, operation, asOf, t, shared, locale, time }: { card:
               {t('opCode', { seq: operation.seq, code: operation.code })} · {operation.name}
             </p>
           ) : null}
+          <FirstPieceLine card={card} operationId={operation?.id ?? null} lifted={lifted} t={t} />
           {operation?.unplanned ? (
             <TaskLine tone="info" icon={<Workflow />}>
               {t('unplanned.flag')}

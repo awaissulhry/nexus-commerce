@@ -62,6 +62,7 @@ import {
   undoClosesIn,
   undoOpen,
   UNDO_WINDOW_MS,
+  withCause,
   type BundleCard,
   type CardOperation,
   type CardReason,
@@ -73,6 +74,8 @@ import { moreFiles, NEW_NOTE, notePayload, noteHeld, type NoteDraft } from './no
 import { addToStack, afterFinish, expectedOf, joinedBundles, stackItems, stackTotals, stepRow, takeOffStack, type StackRow } from './stack'
 import { afterPause, afterResume, afterStart, piecesLeft, skewOf, type OpenItem } from './timing'
 import { useWedgeScans } from './wedge'
+import { firstPieceHolds, firstPieceLifted, withFirstPiece, type FirstPieceFlag } from './first-piece'
+import { useFirstPieceLive } from './use-first-piece'
 import { NO_WORK, OperationView, type CountsStep, type DoneLine, type LastStrip, type OperationAction, type OperationStep, type Work } from './view/OperationView'
 import type { OverrideModel } from './view/OverrideDialog'
 
@@ -168,6 +171,29 @@ export function FloorOperation() {
     const timer = window.setTimeout(() => setTick((value) => value + 1), closesIn + 50)
     return () => window.clearTimeout(timer)
   }, [closesIn])
+
+  // B-W2b-105 (QHS-039): a first piece decided elsewhere lifts (or keeps) the hold at once; a refused Start opens again when it lifts.
+  const reopen = useRef<(code: string) => void>(() => undefined)
+  const shownStep = useRef(step)
+  shownStep.current = step
+  const firstPieceCard = step.kind === 'counts' || (step.kind === 'refused' && step.code === 'FIRST_PIECE') ? step.card : null
+  const onFirstPiece = useCallback(
+    (card: BundleCard, flag: FirstPieceFlag | null) => {
+      const next = withFirstPiece(card, flag)
+      CARDS.keep(codeKey(next.bundle.code), next)
+      const now = shownStep.current
+      if (now.kind === 'refused' && now.code === 'FIRST_PIECE' && now.card?.bundle.id === card.bundle.id) {
+        if ((next.firstPiece?.heldOperationIds.length ?? 0) === 0) reopen.current(card.bundle.code)
+        return
+      }
+      if (now.kind !== 'counts' || now.card.bundle.id !== card.bundle.id) return
+      const lifted = firstPieceLifted(now.card, next, now.operation.id)
+      if (lifted) feedback('success')
+      setStep((current) => (current.kind === 'counts' && current.card.bundle.id === card.bundle.id ? { ...current, card: next, firstPieceLifted: lifted || current.firstPieceLifted } : current))
+    },
+    [feedback],
+  )
+  useFirstPieceLive(firstPieceCard, api, online, onFirstPiece)
 
   /** The rest of the bundle at this operation: read while online (a read that fails leaves that part unknown), else what the tablet kept. */
   const readWork = useCallback(
@@ -288,6 +314,7 @@ export function FloorOperation() {
     },
     [me, allowed, held, store, feedback, online, api, openCard, problem],
   )
+  reopen.current = (code: string) => void look(code)
 
   const updateCounts = useCallback((step: CountsStep, change: Partial<Work>) => {
     const work = { ...(step.work ?? NO_WORK), ...change }
@@ -478,7 +505,7 @@ export function FloorOperation() {
     const work = step.work ?? NO_WORK
     const { expected, body } = report(step)
     const asked = work.check?.components.asked ?? []
-    if (finishHeld(counts, operation.expected, card.bundle.quantity) || workHold({ steps: work.steps, asked, lots: work.lots, counts, expected })) {
+    if (finishHeld(counts, operation.expected, card.bundle.quantity) || workHold({ steps: work.steps, asked, lots: work.lots, counts, expected, firstPiece: firstPieceHolds(card, operation.id) })) {
       feedback('warning')
       return
     }
@@ -882,6 +909,9 @@ export function FloorOperation() {
         }
         return setStep({ ...step, counts: move.counts, problem: null })
       }
+      // B-W2b-105 (MES-127): which operation caused the scrap or rework counted (null: not known).
+      case 'cause':
+        return step.kind === 'counts' ? setStep({ ...step, counts: withCause(step.counts, action.kind, action.operationId) }) : undefined
       case 'finish':
         return void finish()
       case 'back':

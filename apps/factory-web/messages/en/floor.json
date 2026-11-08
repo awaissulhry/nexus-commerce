@@ -378,6 +378,7 @@
     "labels": "Garment labels",
     "pack": "Pack",
     "final": "Final inspection",
+    "inline": "In-line inspection",
     "scan": "Scan anything",
     "sds": "Safety data sheets",
     "hint": {
@@ -391,6 +392,7 @@
       "returnsin": "Scan the RMA, receive and grade the garments",
       "kits": "Send a kit with its DDT, receive goods back",
       "final": "Check, sign and release garments",
+      "inline": "First piece, cutting, roving, end of line",
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
