@@ -78,6 +78,8 @@ const CARD: BundleCard = {
 }
 
 const WITH_UNPLANNED: BundleCard = { ...CARD, operations: [...CARD.operations, OP50] }
+/** B-W2b-105 (QHS-039): the work order's first piece is open at Op 20 on another bundle: this one waits. */
+const FIRST_PIECE_HELD: BundleCard = { ...CARD, firstPiece: { heldOperationIds: ['op-20'], firstBundle: false, check: { id: 'fp-1', status: 'OPEN', outcome: null, workOrderOperationId: 'op-20' }, message: null, fix: null } }
 const EXTRA_CHOICES: ExtraChoices = {
   operations: [
     { id: 'lib-1', code: 'REINF', name: 'Rinforzo colletto', workCentreKind: 'SEWING', standardMinutes: '1.500', pays: 'PIECE_RATE' },
@@ -316,6 +318,23 @@ export const designScreen = defineDesignScreen<OperationViewModel>({
     // ---- B-W2b-69: start, pause, finish ----
     { id: 'not-started', label: 'Not started: Start, or just Finish', model: model(counts({ work: work({}) })), note: 'Bar: Start · Not all good · Finish · 20 good. Finish stays one tap with no Start (Owner answer F3); scanning the ticket again is Start.' },
     { id: 'rush', label: 'Rush flag on the bundle', model: model(counts({ card: { ...CARD, workOrder: { ...CARD.workOrder, rush: true } }, work: work({}) })), note: 'Icon and word, never colour alone. First-piece hold (W2b-2) and Spec changed (W2b-4) join here later.' },
+    // ---- B-W2b-105: the first-piece hold (QHS-039) and "Which operation caused it?" (MES-127) ----
+    {
+      id: 'first-piece-held',
+      label: 'Waiting for first-piece approval: held',
+      model: model(counts({ card: FIRST_PIECE_HELD, work: work({}) })),
+      note: 'The flag with icon and words on the card; Start and Finish held with the reason on screen (the API refuses them: 409 FIRST_PIECE). Pause and Hand back stay free.',
+    },
+    { id: 'first-piece-rejected', label: 'First piece rejected: still held', model: model(counts({ card: { ...FIRST_PIECE_HELD, firstPiece: { ...FIRST_PIECE_HELD.firstPiece!, check: { ...FIRST_PIECE_HELD.firstPiece!.check!, status: 'DECIDED', outcome: 'REJECTED' } } }, work: work({}) })), note: 'A rejected first piece keeps the hold; a new one is asked.' },
+    { id: 'first-piece-bundle', label: 'This bundle is the first piece', model: model(counts({ card: { ...CARD, firstPiece: { heldOperationIds: [], firstBundle: true, check: { id: 'fp-1', status: 'OPEN', outcome: null, workOrderOperationId: 'op-20' }, message: null, fix: null } }, work: work({}) })), note: 'The first bundle itself is worked (it goes through), then the inspector checks it.' },
+    { id: 'first-piece-lifted', label: 'First piece approved while on screen', model: model({ ...counts({ card: { ...CARD, firstPiece: { heldOperationIds: [], firstBundle: false, check: { id: 'fp-1', status: 'DECIDED', outcome: 'APPROVED', workOrderOperationId: 'op-20' }, message: null, fix: null } }, work: work({}) }), firstPieceLifted: true }), note: 'Live: the hold lifts with a success flash and this line; Start and Finish open at once.' },
+    { id: 'first-piece-refused', label: 'Start refused: waiting for the first piece', model: model({ kind: 'refused', code: 'FIRST_PIECE', message: '', fix: null, card: FIRST_PIECE_HELD, scanned: BUNDLE }), note: 'The API\'s 409 refusal/FIRST_PIECE in the screen\'s words; it opens again by itself when the first piece is approved.' },
+    {
+      id: 'cause',
+      label: 'Which operation caused it?',
+      model: model(counts({ counts: { ...SCRAP_REWORK, causedAt: { scrap: 'op-10' } }, open: 'scrap', work: work({}) })),
+      note: 'Above the scrap reasons: the bundle\'s operations up to this one, Not known by default; Op 10 pressed here. Charged per operation, never per person (MES-127).',
+    },
     { id: 'running', label: 'Running: the bundle\'s own clock', model: model(started()), note: 'FloorElapsed big; a screen reader hears it once a minute. Bar: Pause · Not all good · Finish · 20 good. No pace, no target (art. 4).' },
     { id: 'running-team', label: 'Running: a team on one tablet', model: model(started({ timing: { ...RUNNING, people: 3 } })), note: 'MES-094: the tablet\'s crew; only how many, never who.' },
     { id: 'not-all-good', label: 'Not all good: the scrap reasons', model: model(counts({ open: 'scrap', work: work({ timing: RUNNING }) })), note: 'Not all good opens the picker of Scrap; a button in the bar turns it to Rework, Finish stays one tap away.' },

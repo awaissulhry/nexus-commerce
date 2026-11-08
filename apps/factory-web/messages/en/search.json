@@ -86,6 +86,7 @@
     "Machine": "Machine",
     "MaintenanceJob": "Maintenance job",
     "Incident": "Incident",
+    "InspectionPlan": "Inspection plan",
     "other": "Record"
   },
   "chip": {
@@ -122,6 +123,7 @@
     "Machine": "Machines",
     "MaintenanceJob": "Maintenance jobs",
     "Incident": "Incidents",
+    "InspectionPlan": "Inspection plans",
     "other": "Other records"
   },
   "status": {

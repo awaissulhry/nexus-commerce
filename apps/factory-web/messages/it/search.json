@@ -86,6 +86,7 @@
     "Machine": "Macchina",
     "MaintenanceJob": "Intervento di manutenzione",
     "Incident": "Infortunio o quasi incidente",
+    "InspectionPlan": "Piano di controllo",
     "other": "Record"
   },
   "chip": {
@@ -122,6 +123,7 @@
     "Machine": "Macchine",
     "MaintenanceJob": "Interventi",
     "Incident": "Infortuni e quasi incidenti",
+    "InspectionPlan": "Piani di controllo",
     "other": "Altri record"
   },
   "status": {
