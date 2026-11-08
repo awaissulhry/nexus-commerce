@@ -1,0 +1,234 @@
+/*
+ * SCR-182 — Fabric cutting (B-W2b-121): layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*` tokens,
+ * colours are semantic `--nds-*` roles. No raw colour. The one-job screen stays centred on the tablet (the frame's own column).
+ */
+
+.fw-fc {
+  min-width: 0;
+}
+
+/* ── what was just done: words, then its ticks at the end of the line ──────────────────────────────────────────────────── */
+.fw-fc-done {
+  flex-wrap: wrap;
+}
+.fw-fc-done-text {
+  flex: 1 1 16em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── the lay's head: the ticket's code, its lay, the step strip ───────────────────────────────────────────────────────── */
+.fw-fc-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-fc-head-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  min-width: 0;
+}
+.fw-fc-head-type {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+.fw-fc-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fc-step {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-4) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+.fw-fc-step[data-state='now'] {
+  border-color: var(--nds-primary);
+  border-width: 2px;
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-fc-step[data-state='done'] {
+  color: var(--nds-success-text);
+}
+.fw-fc-step-word {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── the ticket's card: the ratio as size chips ───────────────────────────────────────────────────────────────────────── */
+.fw-fc-card-title {
+  overflow-wrap: anywhere;
+}
+/* the ratio's chips at the start, the plies big at the end */
+.fw-fc-ticket-row {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-8);
+}
+.fw-fc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-fc-plies {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+.fw-fc-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-6) var(--nds-space-12);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+}
+.fw-fc-chip-size {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-fc-chip-ratio {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+
+/* ── the running sums and the fabric's figures: big numbers in a row (a column beside a pad) ─────────────────────────────── */
+.fw-fc-sums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+.fw-fc-sums-col {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fw-fc-sum {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+}
+.fw-fc-sum[data-tone='success'] {
+  border-color: var(--nds-success);
+}
+.fw-fc-sum dt {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+.fw-fc-sum dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+.fw-fc-sum-big {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.fw-fc-sum-of {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+
+/* ── one roll: what was scanned, the four figures as buttons beside the one pad ─────────────────────────────────────────── */
+.fw-fc-subject-meta {
+  margin: 0;
+}
+.fw-fc-subject {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+.fw-fc-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  align-content: start;
+  min-width: 0;
+}
+.fw-fc-field-btn {
+  height: auto;
+  min-height: calc(var(--nds-density-control-h-primary) * 1.25);
+  padding-block: var(--nds-space-8);
+}
+.fw-fc-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-fc-field-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+  text-align: center;
+}
+.fw-fc-field-value {
+  font-size: var(--nds-density-font-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── both ends: the two counters side by side, one above the other when narrow ──────────────────────────────────────────── */
+.fw-fc-ends {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+}
+@container nds-floor-frame (min-width: 700px) {
+  .fw-fc-ends {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/* ── labels as the printer prints them ────────────────────────────────────────────────────────────────────────────────── */
+.fw-fc-label {
+  min-width: 0;
+  max-width: 34rem;
+}
+.fw-fc-sticker-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--nds-space-8);
+}
+
+/* ── a bundle's secondary process before sewing ───────────────────────────────────────────────────────────────────────── */
+.fw-fc-process {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-warning);
+  border-radius: var(--nds-density-radius);
+}

@@ -38,9 +38,14 @@ export interface TasksViewProps {
   onRetry?: () => void
   /** The heading's level (Home: 2). */
   headingLevel?: 2 | 3
+  /**
+   * B-W2b-179: a Home that answers a request in a pop-up (the supplier's "Confirm" on a PO) gives that row's verb here; its
+   * record then stays a real link to the request (⌘-click opens it in a new tab). Null: the row's own verb.
+   */
+  verbFor?: (row: TaskRowState) => { label: string; onRun: () => void; heldReason?: string | null; busy?: boolean } | null
 }
 
-export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2 }: TasksViewProps) {
+export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2, verbFor }: TasksViewProps) {
   const t = useT('portal')
   const ds = useDsWords()
   const H = `h${headingLevel}` as 'h2'
@@ -71,19 +76,29 @@ export function TasksView({ model, onDone, onUndo, onRetry, headingLevel = 2 }: 
   const groups: ActionGroup[] = model.groups.map((group) => ({
     id: group.kind,
     label: t(`tasks.kind.${group.kind}`),
-    items: group.rows.map((row) => ({
+    items: group.rows.map((row) => {
+      const own = row.done ? null : (verbFor?.(row) ?? null)
+      return {
       id: row.id,
       title: row.title,
-      // The request's words already name the record ("Confirm order PO-…"): it is not said twice.
-      record: row.title.includes(row.record) ? undefined : <span className="fw-ptask-record">{row.record}</span>,
+      // The request's words already name the record ("Confirm order PO-…"): it is not said twice; with a verb of the page's, the record is the link.
+      record: own ? (
+        <a className="fw-ptask-record" href={row.href}>
+          {row.record}
+        </a>
+      ) : row.title.includes(row.record) ? undefined : (
+        <span className="fw-ptask-record">{row.record}</span>
+      ),
       meta: row.askedBy ? t('tasks.askedBy', { name: row.askedBy }) : t('tasks.askedBySystem'),
       due: row.due,
-      verb:
-        row.act === 'inline'
+      verb: own
+        ? { label: own.label, kind: 'dialog' as const, onRun: own.onRun, heldReason: own.heldReason ?? row.held ?? null, busy: own.busy ?? false }
+        : row.act === 'inline'
           ? { label: row.verb, kind: 'inline' as const, onRun: () => onDone?.(row), busy: row.busy && !row.done, heldReason: row.held ?? null }
           : { label: row.verb, kind: 'link' as const, href: row.href, heldReason: row.held ?? null },
       done: row.done ? { words: t('tasks.done'), ...(row.done.canUndo ? { onUndo: () => onUndo?.(row) } : {}), undoHeldReason: row.busy ? t('tasks.undoing') : null } : null,
-    })),
+      }
+    }),
   }))
   return (
     <section className="fw-ptasks" aria-label={t('tasks.title')}>

@@ -8,6 +8,9 @@ import { PORTAL_JOBS_VIEW } from '../../purchasing/portal-jobs/permissions'
 // B-W2b-182: the supplier's ship notices.
 import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissions'
 import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
+// B-W2b-196: the customer's Account page (its colleagues, its delivery addresses).
+import { PORTAL_COLLEAGUES_VIEW } from '../../auth/partners/permissions'
+import { PORTAL_ADDRESSES_VIEW } from '../../sales/portal-ordering/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -59,6 +62,11 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'supplier_profile.change_requested': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
   'supplier_profile.change_withdrawn': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId'] },
   'supplier_profile.change_decided': { permission: PORTAL_SUPPLIER_PROFILE_VIEW, party: 'partyId', fields: ['requestId', 'partyId', 'outcome'] },
+  // B-W2b-196: the Account page — our check of an address they added (its status updates), and their colleagues invited or
+  // changed by their admin or by us (the Colleagues list reads again). Ids and states only.
+  'delivery_address.checked': { permission: PORTAL_ADDRESSES_VIEW, party: 'partyId', fields: ['addressId', 'partyId', 'decision'] },
+  'partner_user.invited': { permission: PORTAL_COLLEAGUES_VIEW, party: 'partyId', fields: ['userId', 'partyId'] },
+  'partner_user.changed': { permission: PORTAL_COLLEAGUES_VIEW, party: 'partyId', fields: ['userId', 'partyId', 'status'] },
 })
 
 /**

@@ -21,6 +21,8 @@ import { HeatPanel, type HeatPanelActions, type HeatPanelModel } from './HeatPan
 import { HourlyPanel, type BoardRefusal } from './HourlyPanel'
 import { StuckPanel, type StuckPanelActions } from './StuckPanel'
 import { TargetsDialog, type TargetsDialogModel } from './TargetsDialog'
+// B-W2b-130: the Cutting room section (fn-cutting).
+import { CuttingRoomPanel, type CuttingRoomModel } from '../cutting/view/CuttingRoomPanel'
 import '../wip.css'
 
 /** SCR-073 — Floor now's view model (FloorNowView draws it and fetches nothing). */
@@ -38,6 +40,8 @@ export interface FloorNowModel {
   lineScope?: string | null
   /** B-W2b-66: the W2b sections; absent: none is drawn. */
   boards?: FloorBoardsModel
+  /** B-W2b-130: the Cutting room (production.cutting.view); absent: not drawn. */
+  cutting?: CuttingRoomModel
 }
 
 /** B-W2b-66: what the W2b sections draw (each only for a person who may read it). */
@@ -64,6 +68,8 @@ export interface FloorNowActions {
   onCloseCell?: () => void
   onOpenBundle?: StuckPanelActions['onOpen']
   onExportStuck?: StuckPanelActions['onExport']
+  /** B-W2b-130. */
+  onRetryCutting?: () => void
 }
 
 /**
@@ -73,11 +79,12 @@ export interface FloorNowActions {
  * marked in words — each operation opening the bundles waiting there, and the late work orders. Totals per work order,
  * operation and line only: no person, no station (Statuto dei Lavoratori art. 4; Owner F2). Live from the floor's scans.
  * B-W2b-66: the tiles for stuck bundles and open help calls, Open line TV, the heat map, hour by hour with the lead's
- * reasons, the stuck bundles.
+ * reasons, the stuck bundles. B-W2b-130: the Cutting room (cut orders waiting and cutting, cut against plan today, hides used
+ * and yield today, the fabric used; no cutter names).
  */
 export function FloorNowView({ model, actions }: { model: FloorNowModel; actions?: FloorNowActions }) {
   return (
-    <WithMessages namespaces={['production', 'production-reports', 'production-floor']}>
+    <WithMessages namespaces={['production', 'production-reports', 'production-floor', 'production-cutboard']}>
       <FloorNow model={model} actions={actions} />
     </WithMessages>
   )
@@ -221,6 +228,12 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
       {boards?.can.bundles && (
         <Card padded className="fw-pr-card">
           <StuckPanel model={{ prefix: model.prefix, stuck: { value: stuckRows, problem: boards.stuck.problem }, capped: boards.stuckCapped }} actions={{ onOpen: actions?.onOpenBundle, onExport: actions?.onExportStuck, onRetry: actions?.onRetryBoards }} />
+        </Card>
+      )}
+
+      {model.cutting && (
+        <Card padded className="fw-pr-card">
+          <CuttingRoomPanel model={model.cutting} actions={{ onRetry: actions?.onRetryCutting }} />
         </Card>
       )}
 
