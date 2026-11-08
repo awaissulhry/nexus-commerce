@@ -71,6 +71,8 @@ export const linkContract = defineContract({
 export const signOutContract = defineContract({ response: { 200: output({ status: z.literal('signed_out') }) } })
 
 const termsState = output({ noticeId: id(), label: z.string(), acknowledged: z.boolean() })
+/** The name as printed ("in liquidazione" when it is) and the lines under it, as the company's documents print them. */
+const legalBlock = output({ name: z.string(), lines: z.array(z.string()) })
 
 export const meContract = defineContract({
   response: {
@@ -85,8 +87,14 @@ export const meContract = defineContract({
         /** The end of access (PLT-022); null: none. */
         accessUntil: instant().nullable(),
       }),
-      party: output({ id: id(), name: z.string() }),
-      company: output({ id: id(), code: z.string(), name: z.string() }),
+      /**
+       * B-W2b-173: the party's `code` is the portal's address (`/p/<code>/…`, the links the API hands out); `kinds` are its
+       * partner kinds (CUSTOMER, SUPPLIER, SUBCONTRACTOR, GUEST): an office preview has no person's kind, so the frame
+       * draws the rail of the party's.
+       */
+      party: output({ id: id(), name: z.string(), code: z.string(), kinds: z.array(z.string()) }),
+      /** B-W2b-173: `legal` = the company's legal block (c.c. art. 2250) in each language, for the portal's foot. */
+      company: output({ id: id(), code: z.string(), name: z.string(), legal: output({ it: legalBlock, en: legalBlock }) }),
       session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
       /** An office person previewing this portal (read-only; B-W2b-162). */
       preview: z.boolean(),
@@ -99,6 +107,12 @@ export const meContract = defineContract({
 })
 
 export const refreshContract = defineContract({ response: { 200: sessionTimes } })
+
+/** B-W2b-173 (SCM-101): the person's own language, from the portal's person menu (the pages and their e-mails speak it). */
+export const localeContract = defineContract({
+  body: input({ locale: z.enum(LOCALES) }),
+  response: { 200: output({ locale: z.enum(LOCALES), changed: z.boolean() }) },
+})
 
 export const termsContract = defineContract({
   querystring: input({ locale: z.string().trim().regex(/^[a-z]{2}$/).optional() }),

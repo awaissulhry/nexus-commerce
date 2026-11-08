@@ -1,12 +1,13 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { AUTH_RATE_LIMITS, type AuthRateLimit } from '../sessions/office-auth'
-import { firstVisit, me, refresh, terms } from './account'
+import { changeLocale, firstVisit, me, refresh, terms } from './account'
 import {
   codeContract,
   firstVisitContract,
   linkContract,
   linkPreviewContract,
+  localeContract,
   meContract,
   refreshContract,
   signOutContract,
@@ -30,6 +31,7 @@ import { startStepUp, stepUp } from './step-up'
  * POST /portal/sign-out              ends the portal cookie's session
  * GET  /portal/me                    the person, organisation, company, session, terms, permissions
  * POST /portal/sessions/refresh      "Stay signed in" (the idle end moves now)
+ * POST /portal/me/locale             the person's own language (B-W2b-173, the portal's person menu)
  * GET  /portal/terms                 the portal terms in force, in the person's language
  * POST /portal/first-visit           name, language and the acknowledgement of the portal terms (once per version)
  * POST /portal/step-up/start         a step-up code by e-mail
@@ -50,6 +52,7 @@ export default defineRoutes('auth-portal', manifest, async (app) => {
 
   app.get('/portal/me', { schema: meContract }, async (request) => me(app, request))
   app.post('/portal/sessions/refresh', { schema: refreshContract }, (request) => refresh(app, request))
+  app.post('/portal/me/locale', { schema: localeContract }, (request) => changeLocale(app, request, request.body, idempotencyKeyFrom(request)))
   app.get('/portal/terms', { schema: termsContract }, (request) => terms(app, request, request.query))
   app.post('/portal/first-visit', { schema: firstVisitContract }, (request) => firstVisit(app, request, request.body, idempotencyKeyFrom(request)))
   app.post('/portal/step-up/start', { schema: stepUpStartContract, config: limit(limits.codes) }, (request, reply) => startStepUp(app, request, reply))
