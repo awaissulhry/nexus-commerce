@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest'
+import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
+import { PORTAL_AREAS as TASK_AREAS } from '@nexus/factory-domain/portal/tasks/kinds'
+import { bottomBarLayout } from '@nexus/ui/components/BottomBar/index'
+import { CATALOGUE } from '../../../lib/i18n/messages'
+import { PORTAL_AREAS, PORTAL_PENDING_PERMISSIONS, portalChords, portalNavFor, portalNavLabelKeys, portalNavPermissions, recordPageOf, RECORD_PAGES, type PortalKind } from './portal-nav'
+
+const everything = () => true
+const ids = (kind: PortalKind, everyPage = true) => portalNavFor({ can: everything, kinds: [kind], everyPage }).areas.map((area) => [area.id, area.label, area.href])
+const roleCan = (key: string) => {
+  const template = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === key)!
+  return (permission: string) => template.permissions.includes(permission as never)
+}
+
+describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom bar)', () => {
+  it('gives each partner kind its areas, in the design’s order, once every page is built', () => {
+    expect(ids('CUSTOMER').map(([id]) => id)).toEqual(['home', 'orders', 'quotes', 'documents', 'returns', 'account'])
+    expect(ids('SUPPLIER')).toEqual([
+      ['home', 'nav.home', '/'],
+      ['work', 'nav.purchaseOrders', '/orders'],
+      ['deliveries', 'nav.deliveries', '/deliveries'],
+      ['supplier-documents', 'nav.documents', '/documents'],
+      ['profile', 'nav.profile', '/profile'],
+    ])
+    // A workshop: "Orders & jobs" is its Jobs page.
+    expect(ids('SUBCONTRACTOR')).toEqual([
+      ['home', 'nav.home', '/'],
+      ['work', 'nav.jobs', '/jobs'],
+      ['supplier-documents', 'nav.documents', '/documents'],
+      ['profile', 'nav.profile', '/profile'],
+    ])
+    expect(ids('GUEST').map(([id]) => id)).toEqual(['home', 'accounting', 'audit-room'])
+  })
+
+  it('never shows a door to a page not built: today only Home, which the frame draws', () => {
+    for (const kind of ['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const) expect(ids(kind, false).map(([id]) => id)).toEqual(['home'])
+  })
+
+  it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
+    const designer = portalNavFor({ can: roleCan('customer-designer'), kinds: ['CUSTOMER'], everyPage: true })
+    // The Designer holds the catalogue (Quotes & samples keeps that one page) and its colleagues (Account).
+    expect(designer.areas.map((area) => [area.id, area.label])).toEqual([
+      ['home', 'nav.home'],
+      ['quotes', 'nav.catalogue'],
+      ['account', 'nav.account'],
+    ])
+    const invoices = portalNavFor({ can: roleCan('supplier-invoices'), kinds: ['SUPPLIER'], everyPage: true })
+    expect(invoices.areas.map((area) => area.id)).toEqual(['home', 'supplier-documents', 'profile'])
+    expect(portalNavFor({ can: () => false, kinds: ['CUSTOMER'], everyPage: true }).areas).toEqual([])
+    expect(portalNavFor({ can: everything, kinds: [], everyPage: true }).areas).toEqual([])
+  })
+
+  it('a preview of a supplier that also works as a workshop reads as both kinds, each address once', () => {
+    const both = portalNavFor({ can: everything, kinds: ['SUPPLIER', 'SUBCONTRACTOR'], everyPage: true })
+    expect(both.areas.map((area) => [area.id, area.href])).toEqual([
+      ['home', '/'],
+      ['work', '/orders'],
+      ['deliveries', '/deliveries'],
+      ['supplier-documents', '/documents'],
+      ['profile', '/profile'],
+    ])
+  })
+
+  it('the phone: a customer gets four tabs and More (Quotes & samples, Account); a workshop four tabs and no More', () => {
+    const customer = bottomBarLayout(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }), '/')
+    expect(customer.tabs.map((tab) => tab.id)).toEqual(['home', 'orders', 'documents', 'returns'])
+    expect(customer.more.map((entry) => entry.id)).toEqual(['quotes', 'account'])
+    expect(customer.current).toBe('home')
+    const workshop = bottomBarLayout(portalNavFor({ can: everything, kinds: ['SUBCONTRACTOR'], everyPage: true }), '/jobs/x')
+    expect(workshop.tabs.map((tab) => tab.id)).toEqual(['home', 'work', 'supplier-documents', 'profile'])
+    expect(workshop.more).toEqual([])
+    expect(workshop.current).toBe('work')
+  })
+
+  it('names only declared partner permissions, or pending ones a later page declares', () => {
+    const declared = new Set<string>(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name))
+    expect(portalNavPermissions().filter((name) => !declared.has(name) && !PORTAL_PENDING_PERMISSIONS.has(name))).toEqual([])
+    expect([...PORTAL_PENDING_PERMISSIONS].filter((name) => declared.has(name))).toEqual([])
+  })
+
+  it('every badge is an area of the one task list, every label is in both languages', () => {
+    for (const area of PORTAL_AREAS) if (area.badge) expect(TASK_AREAS).toContain(area.badge)
+    for (const locale of ['it', 'en'] as const) {
+      const words = CATALOGUE[locale].portal ?? {}
+      expect(portalNavLabelKeys().filter((key) => !(key in words))).toEqual([])
+    }
+  })
+
+  it('keys: g h Home, g o Orders (or Jobs), g d Documents', () => {
+    expect(portalChords(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }))).toEqual({ h: '/', o: '/orders', d: '/documents' })
+    expect(portalChords(portalNavFor({ can: everything, kinds: ['SUBCONTRACTOR'], everyPage: true }))).toEqual({ h: '/', o: '/jobs', d: '/documents' })
+  })
+
+  it('a record opens its own page once built, else the frame’s record page', () => {
+    expect(RECORD_PAGES.every((page) => !page.built)).toBe(true)
+    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBeNull()
+    const built = RECORD_PAGES.map((page) => ({ ...page, built: true }))
+    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x', built)).toBe('/orders/x')
+    expect(recordPageOf(['SUPPLIER'], 'SalesOrder', 'x', built)).toBeNull()
+    expect(recordPageOf(['SUPPLIER', 'SUBCONTRACTOR'], 'SubcontractOrder', 'j', built)).toBe('/jobs/j')
+  })
+})
