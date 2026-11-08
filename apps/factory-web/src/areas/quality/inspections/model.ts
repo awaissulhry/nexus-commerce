@@ -1,6 +1,10 @@
 import { CHECKLIST_GROUPS, CHECKLIST_ITEMS, computedResult, type ChecklistGroup, type InspectionResult } from '@nexus/factory-domain/quality/final/rules'
 import { isFourEyesLoosening, type FourEyesRule, type ReleaseCheckCode, type SecondPersonReason } from '@nexus/factory-domain/quality/release/rules'
 import type { Lot } from '../_shared/lots'
+import type { IncomingRow, InlineKind, InlineRow, WorkOrderPlans } from './depth/api'
+import type { DepthCan, KindFilter } from './depth/model'
+import type { AmendmentsState } from './depth/use-amendments'
+import type { FinalDepthState } from './depth/use-final-depth'
 import type { LiveState, Notice, QualityCan, Read } from '../_shared/model'
 import type { Assigned, DefectBody, FinalCell, FinalState, Inspection, InspectionPhoto, InspectionRead, InspectionRow, Inspectors, InspectorPick, PickedDefect, Release, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, ReverseImpact, Who, WorkOrderCells, WorkOrderPick, PartyPick } from './api'
 
@@ -18,7 +22,8 @@ import type { Assigned, DefectBody, FinalCell, FinalState, Inspection, Inspectio
  * "On hold" view and tile are gone, an old address is sent there (`holdsAddressFor`); "Failed - not decided" and "Waiting
  * for me" (assigned to me) joined.
  */
-export const VIEWS = ['all', 'open', 'mine', 'overdue', 'waiting', 'failed', 'reversed', 'lots'] as const
+// B-W2b-127: + 'amended' (design qi-grid saved view "Amended results").
+export const VIEWS = ['all', 'open', 'mine', 'overdue', 'waiting', 'failed', 'amended', 'reversed', 'lots'] as const
 export type View = (typeof VIEWS)[number]
 export type ViewKind = 'inspections' | 'releases' | 'lots'
 
@@ -34,6 +39,7 @@ export function viewFromAddress(params: { get(name: string): string | null } | n
   if (params?.get('failedUndecided') === 'true') return 'failed'
   if (params?.get('assigned') === 'me') return 'mine'
   if (params?.get('overdue') === 'true') return 'overdue'
+  if (params?.get('amended') === 'true') return 'amended'
   if (params?.get('waitingRelease') === 'true') return 'waiting'
   if (params?.get('reversed') === 'true') return 'reversed'
   if (params?.get('status') === 'OPEN') return 'open'
@@ -152,7 +158,8 @@ export function lastReversal(release: Pick<Release, 'reversals'>): Release['reve
 
 // ---- the record: what this person may do, held reasons said before the click ---------------------------------------------------
 
-export const RECORD_TABS = ['checks', 'defects', 'decision'] as const
+// B-W2b-127: + Sample & AQL and Measurements (design rec:Inspection tabs aql, measurements).
+export const RECORD_TABS = ['checks', 'aql', 'measurements', 'defects', 'decision'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export interface ChecklistRow {
@@ -438,9 +445,35 @@ export interface NewDraft {
   readonly acceptMajor: string
   readonly acceptMinor: string
   readonly note: string
+  /** B-W2b-127 In-line: which check, and the bundle a first piece is made from. */
+  readonly inlineKind: InlineKind
+  readonly bundleCode: string
+  /** B-W2b-127 Final: the plan it runs on (null: the one that applies), why another one, or the sample typed by hand (W1). */
+  readonly planId: string | null
+  readonly planReason: string
+  readonly typed: boolean
 }
 
-export const NEW_DRAFT: NewDraft = Object.freeze({ kind: 'FINAL', dueAt: '', assignee: '', workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' })
+export const NEW_DRAFT: NewDraft = Object.freeze({
+  kind: 'FINAL',
+  dueAt: '',
+  assignee: '',
+  workOrderId: null,
+  lotSize: '',
+  sampleSize: '',
+  inspectionLevel: 'II',
+  aqlMajor: '2.5',
+  aqlMinor: '4.0',
+  acceptMajor: '',
+  acceptMinor: '',
+  note: '',
+  inlineKind: 'FIRST_PIECE',
+  bundleCode: '',
+  planId: null,
+  planReason: '',
+  // Typed by hand until a work order is picked and a plan applies to it (the container then turns to the plan).
+  typed: true,
+})
 
 /** The finished garments of a work order (good at the final operation): null while unknown. */
 export function finishedOf(workOrder: Pick<WorkOrderCells, 'cells'> | null): number | null {
@@ -460,6 +493,8 @@ export function newProblems(draft: NewDraft, finished: number | null, now: Date 
   if (finished === 0) problems.push('new.problem.nothingFinished')
   if (!whole(draft.lotSize, 1)) problems.push('new.problem.lotSize')
   else if (finished !== null && Number(draft.lotSize) > finished) problems.push('new.problem.lotOverFinished')
+  // B-W2b-127: on a plan the sample comes from the plan (its fixed size or the AQL profile): nothing else is typed.
+  if (!draft.typed) return [...new Set(problems)]
   if (!whole(draft.sampleSize, 1)) problems.push('new.problem.sampleSize')
   else if (whole(draft.lotSize, 1) && Number(draft.sampleSize) > Number(draft.lotSize)) problems.push('new.problem.sampleOverLot')
   for (const value of [draft.acceptMajor, draft.acceptMinor]) {
@@ -525,6 +560,15 @@ export interface InspectionsListModel {
   readonly due?: DueState | null
   /** Design cases: the focused row, the keys panel open. */
   readonly focusRow?: number
+  /** B-W2b-127: the kind chips (`?kind=`), the W2b rights, the incoming and in-line reads (null: this view does not read them). */
+  readonly kind?: KindFilter
+  readonly depth?: DepthCan
+  readonly incoming?: Read<readonly IncomingRow[]> | null
+  readonly inline?: Read<readonly InlineRow[]> | null
+  /** The in-line read stops at the newest 500. */
+  readonly inlineCapped?: boolean
+  /** New inspection: the plans that apply to the picked work order (Final), the In-line kind's held reason. */
+  readonly plans?: Read<WorkOrderPlans> | null
 }
 
 export type ListDialog = { kind: 'new' } | { kind: 'rules' } | { kind: 'reverse'; releaseId: string } | { kind: 'shortcuts' }
@@ -568,6 +612,8 @@ export interface InspectionRecordModel {
   readonly defects?: DefectsTabModel
   /** W2a: Assign inspector from the record's band. */
   readonly assign?: AssignState | null
+  /** B-W2b-127: the W2b parts — the rights they read, the plan's sheet, AQL, causes, photos, the amendments, the chart's page. */
+  readonly depth?: { readonly can: DepthCan; readonly final: FinalDepthState; readonly amendments: AmendmentsState; readonly chartFrom: number; readonly chartSize?: string | null }
 }
 
 /** The Defects & photos tab (design ins-defects): the lines, their save state, the library picker, the photos, the picks for an NCR. */
@@ -618,7 +664,7 @@ export const planDraftOf = (inspection: Pick<Inspection, 'plan'>): PlanDraft => 
 })
 
 /** The plan dialog's problems (the same rules as New inspection, without the work order). */
-export const planProblems = (draft: PlanDraft): string[] => newProblems({ ...NEW_DRAFT, ...draft, workOrderId: 'x' }, null)
+export const planProblems = (draft: PlanDraft): string[] => newProblems({ ...NEW_DRAFT, ...draft, workOrderId: 'x', typed: true }, null)
 
 export const planBody = (draft: PlanDraft) => ({
   lotSize: Number(draft.lotSize),
@@ -642,6 +688,8 @@ export const defectLinesOf = (inspection: Pick<Inspection, 'defects'>): DefectBo
     note: defect.note,
     defectCodeId: defect.defectCodeId,
     zone: defect.zone,
+    // B-W2b-127: the line's cause code goes back with it (the list is saved whole).
+    causeCodeId: defect.causeCodeId ?? null,
   }))
 
 /** A defect picked from the library: a new line with its default class and zone, or one more garment on its line. */
@@ -697,7 +745,8 @@ export function inspectionCsvRow(row: InspectionRow, t: (key: string, params?: R
 // ---- live --------------------------------------------------------------------------------------------------------------------------
 
 /** The live events that change these lists (B-W1-34, B-W1-45 events). */
-export const LIST_EVENTS = ['quality.inspection_', 'quality.garments_released', 'quality.release_reversed', 'quality.release_rule_changed', 'lot.'] as const
+// B-W2b-127: + the incoming and in-line inspections, the countersigned corrections, the reports.
+export const LIST_EVENTS = ['quality.inspection_', 'quality.garments_released', 'quality.release_reversed', 'quality.release_rule_changed', 'lot.', 'incoming_inspection.', 'in_process_check.', 'inspection_amendment.answered', 'final_inspection.'] as const
 
 // ---- B-W2b-17: by when an inspection is due (design qi-grid inline "Due"; Inspection.dueAt) ----------------------------
 

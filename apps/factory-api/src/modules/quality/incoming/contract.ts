@@ -327,6 +327,10 @@ export const listContract = defineContract({
           inspectorKind: z.enum(['FLOOR', 'OFFICE']).nullable(),
           dueAt: instant().nullable(),
           createdAt: instant(),
+          /** B-W2b-127 (design qi-grid): the lot's supplier (office only), the plan version, a countersigned correction. */
+          supplier: output({ id: id(), name: z.string() }).nullable(),
+          plan: output({ code: z.string(), number: z.number().int() }),
+          amended: z.boolean(),
         }),
       ),
       nextCursor: id().nullable(),

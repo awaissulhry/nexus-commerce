@@ -164,7 +164,7 @@ const piecesOf = async (db: Reader, workOrderId: string) => (await readCells(db,
 
 // ---- the views -------------------------------------------------------------------------------------------------------------------
 
-const defectView = (row: DefectRow) => ({ id: row.id, defectClass: row.defectClass, code: row.code, defectCodeId: row.defectCodeId, zone: row.zone, description: row.description, quantity: row.quantity, workOrderSizeId: row.workOrderSizeId, note: row.note })
+const defectView = (row: DefectRow) => ({ id: row.id, defectClass: row.defectClass, code: row.code, defectCodeId: row.defectCodeId, zone: row.zone, description: row.description, quantity: row.quantity, workOrderSizeId: row.workOrderSizeId, note: row.note, causeCodeId: row.causeCodeId })
 
 /** The checklist's answers (B-W2b-97: without the counter's and the identity check's entries of an inspection on a plan). */
 export const checklistAnswers = (value: unknown): ChecklistAnswer[] =>
@@ -517,7 +517,27 @@ export async function updateInspection(caller: CommandCaller, inspectionId: stri
 
 export interface DefectsBody {
   readonly version: number
-  readonly defects: readonly DefectLine[]
+  /** B-W2b-127: a line may name its cause code (undefined: the stored cause stays). */
+  readonly defects: readonly (DefectLine & { readonly causeCodeId?: string | null | undefined })[]
+}
+
+/**
+ * B-W2b-127 (design ins-defects "cause code"): a cause a line names is a code of the group's list, active unless the line
+ * named it already (a retired code stays where it is; the database's own trigger refuses it on a new line too).
+ */
+async function causeProblems(tx: CommandTx, lines: DefectsBody['defects'], existing: readonly DefectRow[]): Promise<Issue[]> {
+  const ids = [...new Set(lines.map((line) => line.causeCodeId).filter((id): id is string => typeof id === 'string'))]
+  if (ids.length === 0) return []
+  const causes = new Map((await tx.causeCode.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, active: true } })).map((row) => [row.id, row]))
+  const problems: Issue[] = []
+  lines.forEach((line, index) => {
+    if (!line.causeCodeId) return
+    const found = causes.get(line.causeCodeId)
+    const at = `defects/${index}/causeCodeId`
+    if (!found) problems.push({ path: at, message: 'Not a cause code of the list.' })
+    else if (!found.active && !existing.some((row) => row.defectClass === line.defectClass && row.code === line.code && row.causeCodeId === line.causeCodeId)) problems.push({ path: at, message: `${found.code} is retired: it is no longer picked.` })
+  })
+  return problems
 }
 
 /**
@@ -557,14 +577,16 @@ export async function putDefects(caller: CommandCaller, inspectionId: string, bo
     const current = await lockInspection(tx, inspection.id, body.version)
     const cells = await readCells(tx, header.id)
     const existing = await readDefects(tx, [current.id])
-    const problems = [...defectProblems(body.defects, { sampleSize: current.sampleSize, cellIds: new Set(cells.map((cell) => cell.id)) }), ...(await libraryProblems(tx, body.defects, existing))]
+    const problems = [...defectProblems(body.defects, { sampleSize: current.sampleSize, cellIds: new Set(cells.map((cell) => cell.id)) }), ...(await libraryProblems(tx, body.defects, existing)), ...(await causeProblems(tx, body.defects, existing))]
     if (problems.length > 0) throw invalid('The defects are not valid.', problems)
     const key = (line: Pick<DefectLine, 'defectClass' | 'code'>) => `${line.defectClass}|${line.code}`
     const wanted = new Map(body.defects.map((line) => [key(line), line]))
     for (const row of existing) if (!wanted.has(key(row))) await tx.inspectionDefect.delete({ where: { id: row.id }, select: { id: true } })
     for (const line of body.defects) {
       const row = existing.find((entry) => key(entry) === key(line))
-      const data = { quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, description: line.description?.trim() || null, note: line.note?.trim() || null, defectCodeId: line.defectCodeId ?? null, zone: line.zone?.trim() || null }
+      // B-W2b-127: a line without `causeCodeId` keeps its stored cause (the bench sends none).
+      const causeCodeId = line.causeCodeId === undefined ? (row?.causeCodeId ?? null) : line.causeCodeId
+      const data = { quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, description: line.description?.trim() || null, note: line.note?.trim() || null, defectCodeId: line.defectCodeId ?? null, zone: line.zone?.trim() || null, causeCodeId }
       if (row) await tx.inspectionDefect.update({ where: { id: row.id }, data: { ...data, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
       else
         await tx.inspectionDefect.create({
