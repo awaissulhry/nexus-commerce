@@ -70,6 +70,8 @@ model PartnerTask {
   // W2b (schema wave 23): the colleague it was handed to; the supplier uploads that answered it.
   assignee User?  @relation("PartnerTaskAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   supplierDocumentUploads SupplierDocumentUpload[]
+  // W2b-4 substances.prisma (wave 31/33): the declaration requests it asks in the portal.
+  supplierDeclarationRequests SupplierDeclarationRequest[]
 
   @@unique([tenantId, recordType, recordId, kind, sourceKey])
   // W2b (schema wave 23): the target of a supplier upload's reference: the task it answers is of its own party.

@@ -7,6 +7,8 @@ import { lowestPrice, PPE_WORDS, priceShown, rangeLabel, type RangeFilter } from
 import { appClock } from '../../../platform/portal/tasks/clock'
 import { portalReader } from '../portal-orders/access'
 import { readCatalogue, type CatalogueStyle } from './catalogue'
+// B-W2b-227: a style's names and descriptions per language (StyleText) on the cards and in the search.
+import { catalogueTextsOf, type CatalogueTexts } from '../../product/style-texts/texts'
 
 /**
  * The customer's catalogue in the portal (B-W2b-190, SAL-071; design portal.customer.catalogue "Styles you can buy",
@@ -43,6 +45,12 @@ function cardOf(style: CatalogueStyle) {
   }
 }
 
+/** B-W2b-227: the card's Italian and English names from the style's texts (W1's nameI18n where no text gives one). */
+function withTexts<Card extends { nameI18n: CatalogueStyle['nameI18n'] }>(card: Card, texts: CatalogueTexts | undefined): Card {
+  if (!texts || Object.keys(texts.nameI18n).length === 0) return card
+  return { ...card, nameI18n: { ...(card.nameI18n ?? {}), ...texts.nameI18n } }
+}
+
 export interface CatalogueQuery {
   readonly q?: string | undefined
   readonly category?: string | undefined
@@ -62,9 +70,12 @@ export async function browseCatalogue(app: FastifyInstance, request: FastifyRequ
   const now = appClock(app).now()
   const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: reader.session.company.id, partyId: reader.session.partyId, day: businessDate(now) }))
   const all = [...catalogue.styles.values()]
+  // B-W2b-227: the private-label filter stays readCatalogue's (mayOffer: another brand's own style is never offered); the
+  // cards and the search read the style's names in every language.
+  const texts = await reader.inTenant((db) => catalogueTextsOf(db, all.map((style) => style.id), reader.session.person.locale))
   const q = query.q?.trim().toLowerCase()
   const matches = all.filter((style) => {
-    if (q && !`${style.code} ${style.name} ${style.nameI18n?.it ?? ''} ${style.nameI18n?.en ?? ''}`.toLowerCase().includes(q)) return false
+    if (q && !`${style.code} ${style.name} ${style.nameI18n?.it ?? ''} ${style.nameI18n?.en ?? ''} ${(texts.get(style.id)?.names ?? []).join(' ')}`.toLowerCase().includes(q)) return false
     if (query.category && style.productType !== query.category) return false
     if (query.season && style.season !== query.season) return false
     if (query.ppe && style.ppeCategory !== query.ppe) return false
@@ -73,7 +84,7 @@ export async function browseCatalogue(app: FastifyInstance, request: FastifyRequ
     return true
   })
   return {
-    styles: matches.map(cardOf),
+    styles: matches.map((style) => withTexts(cardOf(style), texts.get(style.id))),
     count: matches.length,
     total: all.length,
     facets: {
@@ -97,10 +108,11 @@ export async function catalogueStyle(app: FastifyInstance, request: FastifyReque
   const style = catalogue.styles.get(styleId)
   // Not in the customer's catalogue: the same answer as a style that does not exist.
   if (!style) throw new NotFoundError('Style not found.')
+  const text = (await reader.inTenant((db) => catalogueTextsOf(db, [styleId], reader.session.person.locale))).get(styleId)
   return {
     style: {
-      ...cardOf(style),
-      description: style.description,
+      ...withTexts(cardOf(style), text),
+      description: text?.own.longDescription ?? text?.own.shortDescription ?? style.description,
       baseSize: style.baseSize,
       revision: style.revisionNow,
       colourways: style.colourways

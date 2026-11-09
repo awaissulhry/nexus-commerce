@@ -1,0 +1,522 @@
+// Materials and restricted substances (W2b-4, schema wave 31/33, B-W2b-217; features PRD-303, PRD-304, PRD-309, PRD-314,
+// PRD-318, PRD-320 to PRD-326, PRD-329): what a material may contain and how we know it. The substance list (REACH Annex
+// XVII entries, the SVHC Candidate List, POPs, industry and customer RSLs) and the rules over it (azo dyes, nickel release,
+// PAHs, DMFu, NPE, CMR in clothing, PFAS, chromium VI and our own) are rows with their legal reference, never code; a new
+// Candidate List version is a row too (a longer list asks the SVHC declarations again). Per material: its compliance
+// profile (composition and tannage confirmed, origin, the SVHC answer above 0.1 % w/w per article, the rules that apply,
+// the tests and declarations it needs, its state). Per supplier: the declarations asked of it (by the portal, a link or the
+// office), its answer (a SupplierDocumentUpload of the portal, B-W2b-F12, or a file of the request) and what it says per
+// material. Test plan rules say which lab test a material needs and how often (W1 tests every leather lot for chromium VI;
+// quality.prisma LabTest gains AZO, NICKEL, PAH, DMFU, NPE and PFAS). apps/factory-api's modules/compliance/substances,
+// material-profiles, declarations-asked and test-plans (B-W2b-250, -256) write these tables through command(); the
+// hand-written …_substances_w2b_guards migration holds their rules for every login.
+//
+// Who sees what (ownership/substances.json): the office reads and writes. A supplier (a portal or link session of its
+// party) reads its own declaration requests and their lines, never who decided in the office, the office's internal note or
+// a cost; it answers by an upload of its portal (or through a link), never by writing these rows. The floor reads none. No
+// money column (a lab and its price are the company's own business: none is kept here), no personal data.
+
+/// The lists a restricted substance is on (PRD-318).
+enum RestrictedSubstanceList {
+  /// REACH Annex XVII (restrictions): the entry numbers are on the substance (annexXviiEntries).
+  REACH_ANNEX_XVII
+  /// The SVHC Candidate List (REACH art. 59): the version that added it is on the substance (svhcListVersionId).
+  SVHC
+  /// Persistent organic pollutants (Reg. (EU) 2019/1021).
+  POPS
+  /// An industry RSL (the AFIRM RSL, updated every year by 1 February; imported).
+  AFIRM_RSL
+  /// A customer's own RSL (the brand is named on its rules: SubstanceRule.customerPartyId).
+  CUSTOMER_RSL
+}
+
+/// A substance (or a family of substances a rule names as one, such as the nonylphenol ethoxylates) on a restricted list
+/// (PRD-318): its CAS and EC numbers (with their check digits), its name, the lists it is on, the Annex XVII entries that
+/// restrict it, the Candidate List version that added it as an SVHC, and the group a rule names it by (the aromatic amines
+/// of entry 43, the eight PAHs of entry 50). Master data: tenant-wide (the starter list) or a company's own; archived,
+/// never deleted. One ACTIVE row per CAS number in the tenant (a partial unique).
+model RestrictedSubstance {
+  id                String                    @id @db.Uuid
+  tenantId          String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1). Never changes.
+  companyId         String?                   @db.Uuid
+  /// The CAS Registry Number ("50-32-8"), its check digit right; null for a family without one.
+  casNumber         String?
+  /// The EC number ("200-028-5"), its check digit right; null: none.
+  ecNumber          String?
+  /// The name as the list writes it (English), 1 to 300 characters, and per language (BCP 47 → words); null: `name` only.
+  name              String
+  nameI18n          Json?
+  /// The group a rule names it by ("AZO_AMINES", "PAH_8"): capitals, digits and _; null: named alone.
+  groupCode         String?
+  /// The lists it is on, each once, at least one.
+  lists             RestrictedSubstanceList[]
+  /// The REACH Annex XVII entries that restrict it ("43", "46a"), each once: exactly when it is on REACH_ANNEX_XVII.
+  annexXviiEntries  String[]                  @default([])
+  /// The Candidate List version that added it as an SVHC: only when it is on SVHC (null: added before the first version
+  /// we hold).
+  svhcListVersionId String?                   @db.Uuid
+  /// Why it is restricted or listed, in words (up to 1000 characters).
+  note              String?
+  status            MasterStatus              @default(ACTIVE)
+  version           Int                       @default(1)
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                   @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company          Company?                  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  svhcListVersion  SvhcListVersion?          @relation(fields: [tenantId, svhcListVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  rules            SubstanceRule[]
+  declarationLines SupplierDeclarationLine[]
+
+  @@unique([tenantId, id])
+  // The list by group (a rule's substances) and by list.
+  @@index([tenantId, groupCode])
+}
+
+/// What a substance rule restricts (PRD-319 to PRD-325, PRD-329): the REACH Annex XVII entry it carries out, or OTHER (a
+/// customer's or our own rule).
+enum SubstanceRuleCode {
+  /// Azo colourants releasing the listed aromatic amines (entry 43).
+  AZO
+  /// Nickel release from metal parts in prolonged skin contact (entry 27).
+  NICKEL
+  /// The eight PAHs in rubber and plastic parts in skin contact (entry 50).
+  PAH
+  /// Dimethylfumarate (entry 61).
+  DMFU
+  /// Nonylphenol ethoxylates in textiles washed in water (entry 46a).
+  NPE
+  /// CMR substances in clothing and textiles (entry 72), with its exemptions.
+  CMR
+  /// PFAS: PFHxA and national bans (entry 79 and the markets' own law).
+  PFAS
+  /// Chromium VI in leather in contact with the skin (entry 47).
+  CR6
+  OTHER
+}
+
+/// Where a rule comes from.
+enum SubstanceRuleSource {
+  /// A law (the legal reference names it).
+  LAW
+  /// An industry list (the AFIRM RSL).
+  INDUSTRY
+  /// A customer's RSL (customerPartyId names the brand).
+  CUSTOMER
+}
+
+/// The unit of a limit or a concentration.
+enum SubstanceUnit {
+  /// mg/kg (ppm).
+  MG_KG
+  /// µg/kg (ppb).
+  UG_KG
+  /// % by weight (w/w).
+  PERCENT_WW
+  /// µg/cm²/week (a release rate: nickel, EN 1811).
+  UG_CM2_WEEK
+  /// µg/m² (a surface content: PFAS on a textile).
+  UG_M2
+}
+
+/// Which side of its limit a value at the limit falls on, as the law writes it.
+enum SubstanceLimitBound {
+  /// It passes only strictly below the limit: "equal to or greater than" is restricted (chromium VI 3 mg/kg, NPE 0.01 %).
+  BELOW
+  /// It passes up to and at the limit: only "more than" is restricted (azo 30 mg/kg, nickel 0.5, PAH 1, DMFu 0.1).
+  AT_MOST
+}
+
+/// What proves a rule is met.
+enum SubstanceEvidence {
+  /// A lab test (a LabResult of the lot, or a supplier's test report).
+  TEST
+  /// A supplier's declaration.
+  DECLARATION
+  /// Either of them.
+  EITHER
+}
+
+/// A rule over the substance list (PRD-319 to PRD-325, PRD-329): what it restricts (one substance, or a group of them),
+/// where (material kinds, product types, markets; empty: every one), the limit and its unit and which side of the limit a
+/// value at it falls on (null limit: a ban the evidence answers yes or no), the test method, the evidence that proves it,
+/// its exemptions (PPE in scope of Reg. (EU) 2016/425, parts made only of natural leather, fur or hide: entry 72), where it
+/// comes from and its legal reference. Seeded as data, never code. A rule the Owner has not decided on yet (a line or a
+/// market not sold in: Owner answer 11-09, question 5 A) is switched OFF with the reason; archived when no longer used,
+/// never deleted.
+model SubstanceRule {
+  id               String               @id @db.Uuid
+  tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1). Never changes.
+  companyId        String?              @db.Uuid
+  /// Unique in the tenant, stable for an import ("REACH-XVII-43"): a letter or digit, then letters, digits, ".", "_" or
+  /// "-", up to 80. Never changes.
+  key              String
+  code             SubstanceRuleCode
+  /// What it says, in words (the list's line), 1 to 300 characters, and per language; null: `name` only.
+  name             String
+  nameI18n         Json?
+  /// What it restricts: one substance, or the substances of a group (RestrictedSubstance.groupCode), exactly one of them.
+  substanceId      String?              @db.Uuid
+  substanceGroup   String?
+  /// Where it applies (empty: every one): the kinds of material, the product types of the style, the markets (a market
+  /// code: "IT", "FR", "UK", "US-CA"), each once. The words of the law ("parts in prolonged contact with the skin") in
+  /// scopeNote, up to 1000 characters.
+  materialKinds    ItemKind[]           @default([])
+  productTypes     ProductType[]        @default([])
+  marketCodes      String[]             @default([])
+  scopeNote        String?
+  /// The limit, above 0, with its unit (both or neither) and which side of it a value at the limit falls on (exactly with
+  /// a limit); null: a ban the evidence answers (no limit value).
+  limitValue       Decimal?             @db.Decimal(18, 6)
+  limitUnit        SubstanceUnit?
+  limitBound       SubstanceLimitBound?
+  /// The test method ("EN ISO 17234-1", "EN 1811"), up to 200 characters.
+  testMethod       String?
+  evidence         SubstanceEvidence
+  /// Entry 72's exemptions: a style in scope of the PPE Regulation, a part made only of natural leather, fur or hide.
+  exemptPpe        Boolean              @default(false)
+  exemptNaturalLeather Boolean          @default(false)
+  source           SubstanceRuleSource  @default(LAW)
+  /// The brand whose RSL it is: exactly for a CUSTOMER rule.
+  customerPartyId  String?              @db.Uuid
+  /// The law or list it carries out ("REACH Annex XVII entry 43"; a brand RSL's name and version), 1 to 300 characters,
+  /// and a link to it (https, up to 2000).
+  legalReference   String
+  legalUrl         String?
+  /// OFF: built but not applied yet, with the reason in words (the Owner question it waits for); ON has no reason. When
+  /// and by whom it was last switched (set with every switch).
+  switchedOn       Boolean              @default(true)
+  offReason        String?
+  switchedAt       DateTime?            @db.Timestamptz(3)
+  switchedById     String?              @db.Uuid
+  note             String?
+  status           MasterStatus         @default(ACTIVE)
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?              @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company       Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  substance     RestrictedSubstance? @relation(fields: [tenantId, substanceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  customerParty Party?               @relation(fields: [tenantId, customerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  testPlanRules TestPlanRule[]
+
+  @@unique([tenantId, key])
+  @@unique([tenantId, id])
+  // The rules of one kind (the evaluator), and those of a brand.
+  @@index([tenantId, code])
+  @@index([tenantId, customerPartyId])
+}
+
+/// A version of the ECHA Candidate List of SVHCs (PRD-326): the day ECHA published it, how many entries it has, and where
+/// it was read. A new version is a row, never a code change; a declaration asked against an older, shorter list is asked
+/// again (B-W2b-250, -256). Tenant-wide; what was published never changes (only the note); removed only while nothing
+/// names it.
+model SvhcListVersion {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The day ECHA published the list; one version per day in the tenant.
+  publishedOn DateTime @db.Date
+  /// How many entries the list has, from 1.
+  entryCount  Int
+  /// Where it was read, in words ("ECHA Candidate List, update of …"), 1 to 300 characters, and its page (https, up to
+  /// 2000).
+  source      String
+  sourceUrl   String?
+  note        String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  substances           RestrictedSubstance[]
+  profiles             MaterialComplianceProfile[]
+  requests             SupplierDeclarationRequest[] @relation("SupplierDeclarationRequestListVersion")
+  answeredRequests     SupplierDeclarationRequest[] @relation("SupplierDeclarationRequestAnsweredVersion")
+
+  @@unique([tenantId, publishedOn])
+  @@unique([tenantId, id])
+}
+
+/// Where a material's compliance stands (PRD-303).
+enum MaterialComplianceState {
+  /// A rule's evidence, a declaration or a confirmation is missing (the default).
+  INCOMPLETE
+  /// Everything its rules need is there and in force.
+  COMPLETE
+  /// A failed test or a refused declaration: it may not be used (with the reason).
+  BLOCKED
+}
+
+/// What a supplier is asked to declare (PRD-304).
+enum SupplierDeclarationKind {
+  /// The SVHCs of the Candidate List above 0.1 % w/w (REACH art. 33), against a list version.
+  REACH_SVHC
+  /// A restricted substance list (the AFIRM RSL, a brand's RSL, Annex XVII).
+  RSL
+  /// PFAS-free (no intentionally added PFAS).
+  PFAS
+  /// Nickel release of metal trims (entry 27), per trim model.
+  NICKEL
+  /// A chromium VI statement for leather (entry 47).
+  CR6
+  OTHER
+}
+
+/// How a declaration request reaches its supplier and comes back.
+enum SupplierDeclarationChannel {
+  /// A task in the supplier portal (UPLOAD_DOCUMENT); the answer is a SupplierDocumentUpload of the party.
+  PORTAL
+  /// A one-off link of the party; the answer is a file of the request uploaded through it.
+  LINK
+  /// Asked by e-mail or by hand; the office records the answer's file.
+  OFFICE
+}
+
+/// SENT → ANSWERED | OVERDUE | CANCELLED; OVERDUE → ANSWERED | CANCELLED; ANSWERED → ACCEPTED | REFUSED. ACCEPTED,
+/// REFUSED and CANCELLED are final: asked again = a new request that supersedes it.
+enum SupplierDeclarationStatus {
+  SENT
+  ANSWERED
+  ACCEPTED
+  REFUSED
+  OVERDUE
+  CANCELLED
+}
+
+/// A material's compliance profile (PRD-303, PRD-314, PRD-326): the material's own composition and tannage (Item.composition,
+/// Item.tannage) confirmed against the evidence, by whom and when; where it is made; the SVHC answer above 0.1 % w/w per
+/// article against a Candidate List version (which SVHCs); what the evaluator found the last time it ran: the rules that
+/// apply, the tests and declarations it needs; and its state (BLOCKED with the reason). The innocuousness evidence of a
+/// material in a certified PPE style (EN ISO 13688: pH, Cr VI, azo, nickel) is its lots' LabResults and the StoredFile rows
+/// of record type "MaterialComplianceProfile". One per material: its id is the item's id (as ProductSettings' is the
+/// company's). Never deleted.
+model MaterialComplianceProfile {
+  /// The item's id (one profile per material).
+  id                       String                    @id @db.Uuid
+  tenantId                 String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The material (not a FINISHED garment). Never changes.
+  itemId                   String                    @db.Uuid
+  /// The item's composition (a textile's fibres; a leather's animal and tannage) checked against the evidence: when and by
+  /// whom (both or neither).
+  compositionConfirmedAt   DateTime?                 @db.Timestamptz(3)
+  compositionConfirmedById String?                   @db.Uuid
+  /// LEATHER only: the item's tannage checked against the tannery's declaration: when and by whom (both or neither).
+  tannageConfirmedAt       DateTime?                 @db.Timestamptz(3)
+  tannageConfirmedById     String?                   @db.Uuid
+  /// Where the material is made (tanned, woven, moulded): ISO 3166-1 alpha-2; null: not known.
+  originCountry            String?
+  /// The SVHC answer per article (REACH art. 33): true, an SVHC of the Candidate List above 0.1 % w/w (svhcSubstanceIds:
+  /// which, each an SVHC of the list, at least one); false, none; null, not known. Judged against svhcListVersionId (set
+  /// exactly with an answer).
+  svhcAboveThreshold       Boolean?
+  svhcListVersionId        String?                   @db.Uuid
+  svhcSubstanceIds         String[]                  @default([]) @db.Uuid
+  /// What the evaluator found when it last ran (evaluatedAt; all four together): the rules that apply (SubstanceRule ids),
+  /// the lab tests it needs and the declarations it needs, each once.
+  applicableRuleIds        String[]                  @default([]) @db.Uuid
+  testsNeeded              LabTest[]                 @default([])
+  declarationsNeeded       SupplierDeclarationKind[] @default([])
+  evaluatedAt              DateTime?                 @db.Timestamptz(3)
+  state                    MaterialComplianceState   @default(INCOMPLETE)
+  /// Why it is BLOCKED (required then, 1 to 1000 characters) or INCOMPLETE (optional): none when COMPLETE.
+  stateReason              String?
+  note                     String?
+  version                  Int                       @default(1)
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById              String?                   @db.Uuid
+
+  item            Item             @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  svhcListVersion SvhcListVersion? @relation(fields: [tenantId, svhcListVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The profiles by state (the tile "incomplete profiles").
+  @@index([tenantId, state])
+  @@index([tenantId, itemId])
+}
+
+/// A declaration asked of a supplier (PRD-304, PRD-326, PRD-329): one per supplier and kind, numbered from the company's
+/// SUPPLIER_DECLARATION series; the Candidate List version it asks about (REACH_SVHC); how it went (PORTAL: an UPLOAD_DOCUMENT
+/// partner task; LINK: a one-off link of the party; OFFICE: by e-mail or by hand), when, by when, the reminders sent; the
+/// answer (PORTAL: the party's SupplierDocumentUpload; LINK, OFFICE: a file of this request), the list version the answer
+/// states, its validity; and the decision (refused with the reason the supplier reads). The materials it covers and what
+/// it says for each are its lines. Asked again (the list grew, a refusal, an expiry) = a new request naming the one it
+/// supersedes. Never deleted.
+model SupplierDeclarationRequest {
+  id                     String                     @id @db.Uuid
+  tenantId               String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that asks (its buyers decide the answer). Never changes.
+  companyId              String                     @db.Uuid
+  /// From the company's SUPPLIER_DECLARATION series (SD-…), unique in the company; given at insert, never changed.
+  number                 String
+  /// The supplier asked (the partner policy key). Never changes.
+  partyId                String                     @db.Uuid
+  /// Never changes.
+  kind                   SupplierDeclarationKind
+  /// The Candidate List version asked about: exactly for REACH_SVHC. Never changes.
+  svhcListVersionId      String?                    @db.Uuid
+  /// Never changes.
+  channel                SupplierDeclarationChannel
+  /// PORTAL: the partner task (UPLOAD_DOCUMENT, of the party) that asks it, set once; LINK: the one-off link of the party,
+  /// set once; neither for the other channels.
+  partnerTaskId          String?                    @db.Uuid
+  linkId                 String?                    @db.Uuid
+  /// What we ask, in words the supplier reads (up to 2000 characters).
+  message                String?
+  /// When it went out and the day it is due (not before the day it went out). Never change.
+  sentAt                 DateTime                   @db.Timestamptz(3)
+  dueOn                  DateTime                   @db.Date
+  /// The reminders: every how many days (1 to 90; null: none), how many were sent and the last one's time (both or
+  /// neither; counted one at a time while it waits).
+  reminderEveryDays      Int?
+  remindersSent          Int                        @default(0)
+  lastRemindedAt         DateTime?                  @db.Timestamptz(3)
+  status                 SupplierDeclarationStatus  @default(SENT)
+  /// The answer (set when it is ANSWERED, never changed after): when it came, the party's portal upload (PORTAL: a
+  /// DECLARATION upload of the party) or the file (LINK, OFFICE: a file of this request), the Candidate List version the
+  /// answer states (REACH_SVHC) and the last day it is valid (null: no end).
+  answeredAt             DateTime?                  @db.Timestamptz(3)
+  uploadId               String?                    @db.Uuid
+  answerFileId           String?                    @db.Uuid
+  answeredListVersionId  String?                    @db.Uuid
+  validTo                DateTime?                  @db.Date
+  /// The decision (ACCEPTED | REFUSED, set once): when, the office user (the partner never reads the id) and their name
+  /// as the supplier reads it; REFUSED: why, in words the supplier reads (3 to 500 characters).
+  decidedAt              DateTime?                  @db.Timestamptz(3)
+  decidedById            String?                    @db.Uuid
+  decidedByName          String?
+  refuseReason           String?
+  /// CANCELLED: when and why (1 to 500 characters).
+  cancelledAt            DateTime?                  @db.Timestamptz(3)
+  cancelReason           String?
+  /// The earlier request of the same party and kind this one asks again. Never changes.
+  supersedesId           String?                    @db.Uuid
+  /// The office's own words, never the supplier's to read.
+  /// @internal
+  internalNote           String?
+  version                Int                        @default(1)
+  createdAt              DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?                    @db.Uuid
+
+  company             Company                      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party               Party                        @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  svhcListVersion     SvhcListVersion?             @relation("SupplierDeclarationRequestListVersion", fields: [tenantId, svhcListVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  answeredListVersion SvhcListVersion?             @relation("SupplierDeclarationRequestAnsweredVersion", fields: [tenantId, answeredListVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  partnerTask         PartnerTask?                 @relation(fields: [tenantId, partyId, partnerTaskId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  link                OneOffLink?                  @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  upload              SupplierDocumentUpload?      @relation(fields: [tenantId, partyId, uploadId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  answerFile          StoredFile?                  @relation("SupplierDeclarationRequestAnswerFile", fields: [tenantId, answerFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes          SupplierDeclarationRequest?  @relation("SupplierDeclarationRequestSupersedes", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy        SupplierDeclarationRequest[] @relation("SupplierDeclarationRequestSupersedes")
+  lines               SupplierDeclarationLine[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of a line's and a later request's reference: of the same party.
+  @@unique([tenantId, partyId, id])
+  // A party's requests by state (the portal, the supplier record), and the office's list and the overdue job.
+  @@index([tenantId, partyId, status])
+  @@index([tenantId, status, dueOn])
+}
+
+/// What a declaration says for one material (PRD-326, PRD-329): the material asked about (our item, and how the supplier
+/// knows it), then the answer per line: whether it contains what was asked (null: not answered yet), whether above the
+/// threshold (0.1 % w/w for an SVHC, the rule's limit otherwise), which substance (of our list, or as the supplier named
+/// it) and its concentration with its unit. An item that contains several substances has one line each. Written by the
+/// office from the answer while the request is open; frozen once it is decided or cancelled.
+model SupplierDeclarationLine {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The request's party (the partner policy key; the reference pins it to the request's). Never changes.
+  partyId           String         @db.Uuid
+  requestId         String         @db.Uuid
+  /// Its place in the request, from 1, unique in it.
+  seq               Int
+  /// The material asked about (not a FINISHED garment), and how the supplier knows it (its article code and our name,
+  /// 1 to 200 characters: the partner reads no item). Never changes.
+  itemId            String         @db.Uuid
+  articleLabel      String
+  /// The answer: contains what was asked (null: not answered yet); above the threshold (exactly when it contains); the
+  /// substance (of our list, and/or the name the supplier gave, 1 to 300 characters: at least one when it contains, none
+  /// when it does not); its concentration, 0 or more, with its unit (both or neither, only when it contains).
+  contains          Boolean?
+  aboveThreshold    Boolean?
+  substanceId       String?        @db.Uuid
+  substanceName     String?
+  concentration     Decimal?       @db.Decimal(18, 6)
+  concentrationUnit SubstanceUnit?
+  note              String?
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  request   SupplierDeclarationRequest @relation(fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item      Item                       @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  substance RestrictedSubstance?       @relation(fields: [tenantId, substanceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, requestId, seq])
+  // What the suppliers said of one material (the profile's roll-up).
+  @@index([tenantId, itemId])
+}
+
+/// How often a test plan rule asks for its test (PRD-309).
+enum TestFrequency {
+  /// Every lot received.
+  EVERY_LOT
+  /// The first lot of the material (of a supplier).
+  FIRST_LOT
+  /// Once a year.
+  YEARLY
+  /// When something changes: a new colour, a new supplier, a new article.
+  ON_CHANGE
+}
+
+/// A test plan rule (PRD-309): which lab test a material needs (by its kind, or one material) and how often, for which
+/// market (null: every market), with the substance rule it proves and the method; switched OFF with its reason until a
+/// style or a market needs it (Owner answer 11-09, question 5 A); archived when no longer used, never deleted. Due tests
+/// appear on the lot as W1's chromium VI test does (B-W2b-256). Nothing is ordered from a lab, and no lab price is kept.
+model TestPlanRule {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1). Never changes.
+  companyId       String?        @db.Uuid
+  /// What it applies to: a kind of material, or one material (not a FINISHED garment), exactly one of them.
+  itemKind        ItemKind?
+  itemId          String?        @db.Uuid
+  test            LabTest
+  frequency       TestFrequency
+  /// A market code ("IT", "FR"); null: every market.
+  marketCode      String?
+  /// The substance rule the test proves (of the same company or tenant-wide); null: none named.
+  substanceRuleId String?        @db.Uuid
+  /// The method to ask the lab for ("EN ISO 17234-1"), up to 200 characters.
+  method          String?
+  /// OFF with the reason in words; when and by whom it was last switched, as SubstanceRule's.
+  switchedOn      Boolean        @default(true)
+  offReason       String?
+  switchedAt      DateTime?      @db.Timestamptz(3)
+  switchedById    String?        @db.Uuid
+  note            String?
+  status          MasterStatus   @default(ACTIVE)
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?        @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company       Company?       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item          Item?          @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  substanceRule SubstanceRule? @relation(fields: [tenantId, substanceRuleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The rules of a kind and a test (the lot's due tests).
+  @@index([tenantId, itemKind, test])
+  @@index([tenantId, itemId])
+}

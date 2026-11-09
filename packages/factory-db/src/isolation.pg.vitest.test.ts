@@ -73,6 +73,7 @@ import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedStylesDepth } from '../seed/styles-depth'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
+import { seed as seedSubstances } from '../seed/substances'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
@@ -350,6 +351,11 @@ beforeAll(async () => {
   // requirement, refusal (A1), operator, phrase, draft translation, change and (archived) body are the ones a copy may repeat.
   await seedComplianceRules({ db: factory, namespace: 'iso-a' })
   await seedComplianceRules({ db: factory, namespace: 'iso-b' })
+  // The materials and restricted substances schema of W2b-4 (wave 31/33): the substance list, its rules, Candidate List
+  // versions, test plans, material profiles, and declarations asked of P2 and of P1 (the brand that sends its own lining:
+  // the partner reads its request and line). Their first rows are the plain ones a copy may repeat.
+  await seedSubstances({ db: factory, namespace: 'iso-a' })
+  await seedSubstances({ db: factory, namespace: 'iso-b' })
   // The declarations, technical files and labels of W2b-4 (wave 32/33): documents and their batches, technical files with items,
   // risk assessments, production-control tests, evidence packs, label kinds, artwork and spoiled labels at A1; its first batch
   // record (typed), file (archived), item, assessment (draft) and row, test (due), pack (building), artwork (draft) and spoiled
@@ -544,6 +550,7 @@ it('covers every classified table and every runtime role', () => {
     'MaintenanceJob',
     'MaintenanceRequest',
     'MarketProfile',
+    'MaterialComplianceProfile',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
@@ -692,6 +699,7 @@ it('covers every classified table and every runtime role', () => {
     'RequirementPegging',
     'Reservation',
     'RestoreDrill',
+    'RestrictedSubstance',
     'ReturnAuthorisation',
     'ReturnLine',
     'ReturnReceipt',
@@ -772,8 +780,11 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReceipt',
     'SubcontractReceiptLine',
     'SubcontractReturnNotice',
+    'SubstanceRule',
     'SupplierClaim',
     'SupplierClaimLine',
+    'SupplierDeclarationLine',
+    'SupplierDeclarationRequest',
     'SupplierDocumentUpload',
     'SupplierInvoice',
     'SupplierInvoiceFile',
@@ -783,12 +794,14 @@ it('covers every classified table and every runtime role', () => {
     'SupplierQuestionnaire',
     'SupplierQuestionnaireResponse',
     'Suppression',
+    'SvhcListVersion',
     'Task',
     'Team',
     'TeamMember',
     'TechnicalFile',
     'TechnicalFileItem',
     'Tenant',
+    'TestPlanRule',
     'Thread',
     'TimesheetApproval',
     'TodayLayout',

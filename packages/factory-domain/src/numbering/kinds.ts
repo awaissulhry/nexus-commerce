@@ -65,6 +65,8 @@ export const NUMBER_KINDS = [
   'CHANGE_REQUEST',
   'CHANGE_ORDER',
   'SAMPLE_ROUND',
+  // W2b-4 wave 31/33 (factory-db numbering.prisma): a declaration asked of a supplier (SD-…), an office document kind.
+  'SUPPLIER_DECLARATION',
   // W2b-4 wave 32/33 (factory-db numbering.prisma): a technical file (TF-…) and an evidence pack (EP-…), office document kinds.
   'TECHNICAL_FILE',
   'EVIDENCE_PACK',
@@ -228,6 +230,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   CHANGE_REQUEST: 'CR',
   CHANGE_ORDER: 'ECO',
   SAMPLE_ROUND: 'SR',
+  SUPPLIER_DECLARATION: 'SD',
   TECHNICAL_FILE: 'TF',
   EVIDENCE_PACK: 'EP',
 }
