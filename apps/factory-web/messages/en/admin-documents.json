@@ -278,6 +278,8 @@
       "CHANGE_REQUEST": "Change request",
       "CHANGE_ORDER": "Change order",
       "SAMPLE_ROUND": "Sample round",
+      "TECHNICAL_FILE": "Technical file",
+      "EVIDENCE_PACK": "Evidence pack",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },

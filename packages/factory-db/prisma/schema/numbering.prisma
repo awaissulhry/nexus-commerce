@@ -149,6 +149,10 @@ enum NumberKind {
   CHANGE_REQUEST
   CHANGE_ORDER
   SAMPLE_ROUND
+  /// W2b-4 wave 32/33: a technical file's number (TF-…; techfiles.prisma TechnicalFile.number) and an evidence pack's
+  /// (EP-…; EvidencePack.number). Office document kinds.
+  TECHNICAL_FILE
+  EVIDENCE_PACK
 }
 
 enum NumberReset {

@@ -278,6 +278,8 @@
       "CHANGE_REQUEST": "Richiesta di modifica",
       "CHANGE_ORDER": "Ordine di modifica",
       "SAMPLE_ROUND": "Giro di campionatura",
+      "TECHNICAL_FILE": "Fascicolo tecnico",
+      "EVIDENCE_PACK": "Pacchetto di evidenze",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },

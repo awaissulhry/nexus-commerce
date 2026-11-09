@@ -119,6 +119,10 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       { id: `ffffffff${id(`series:${company}:CHANGE_REQUEST:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_REQUEST', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:CHANGE_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'ECO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:SAMPLE_ROUND:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAMPLE_ROUND', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-4 wave 32/33: technical files (one per style, master documents: a series that never resets) and evidence packs are
+      // numbered from these (B-W2b-251): without them, a file or a pack cannot be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:TECHNICAL_FILE:MAIN:ALL`).slice(8)}`, companyId, kind: 'TECHNICAL_FILE', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'TF-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:EVIDENCE_PACK:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'EVIDENCE_PACK', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'EP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

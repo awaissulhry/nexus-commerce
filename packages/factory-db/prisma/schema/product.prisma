@@ -553,6 +553,11 @@ model Style {
   // W2b-4 compliance-rules.prisma (wave 30/33): its own economic operators and the gate events about it.
   economicOperatorRoles EconomicOperatorRole[]
   gateEvents          GateEvent[]
+  // W2b-4 techfiles.prisma (wave 32/33): the batches its declarations went with, its technical files and production-control
+  // tests.
+  complianceDocumentBatches ComplianceDocumentBatch[]
+  technicalFiles            TechnicalFile[]
+  productionControlTests    ProductionControlTest[]
   // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
   clickingDies        ClickingDie[]
 

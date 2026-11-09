@@ -1,0 +1,543 @@
+// Declarations, technical files and labels (W2b-4, schema wave 32/33, B-W2b-218; features PRD-292, PRD-293, PRD-295, PRD-296,
+// PRD-299, PRD-300, PRD-301, PRD-302, PRD-336, PRD-346, PRD-347, PRD-349, PRD-350 to PRD-354, QHS-048, QHS-110, MES-140): the
+// documents that prove a style may be sold. Which revision of a Declaration of Conformity or of the user information went
+// with which batch and shipment; the technical file of a style (PPE Reg. (EU) 2016/425 Annex III) with each point's evidence
+// linked, never copied; the product risk assessment it holds; the production-control tests that show production still
+// matches the certified type (art. 8(2), Annex VIII module C2); the evidence packs built for an authority, a customer or a
+// shipment; the artwork versions of a label template, approved by someone other than their author; and the labels of a print
+// that did not end on a garment (spoiled or handed back). The columns this wave adds to W1's documents and label templates are
+// in compliance.prisma (generated content with its sources, translations, the market, the label kinds, the GPSR contact, the
+// QR target, the origin claim).
+//
+// Kept 10 years (PPE Reg. art. 8(3); QHS-110): the conformity records carry `retainUntil`, at least ten years after the fact
+// they record, and the database refuses to remove one before it, for every login; an open technical file, a signed risk
+// assessment and an approved artwork are never removed at all. A market is named by its code (MarketProfile.code) and a phrase
+// by its key (Phrase.key), never by a reference to the row (B-W2b-216's rule), so this wave keys into no parallel one.
+//
+// GATE-PPE-TEXTS (Owner answers 11-09): the generated DoC and user-information texts are checked once by a PPE consultant;
+// until then the signed W1 PDFs stay the live route. A generated document (ComplianceDocument.origin GENERATED) is a draft
+// the database tells apart from the signed one, and it never leaves DRAFT but to be withdrawn: the step that takes generated
+// documents live lifts that rule, on the Owner's word.
+//
+// apps/factory-api's modules/compliance writes these tables through command() (B-W2b-251 technical files, B-W2b-257 the DoC
+// generator, B-W2b-258 the user information builder, B-W2b-259 label artwork and reconciliation). The hand-written
+// …_techfiles_labels_w2b_guards migration holds their rules for every login.
+//
+// Who sees what (ownership/techfiles.json): the office reads and writes. The floor reads the APPROVED artwork versions (only
+// an approved artwork prints, PRD-347) and writes and reads its own site's spoiled and returned labels (MES-140). Portal and
+// link sessions read nothing here: a pack reaches an authority or a customer as a file through a link (W2b-3). No column here
+// is money; a pack never includes a cost, a price or a wage (the builder's rule).
+
+/// Which revision of a Declaration of Conformity or of the user information went with which batch, and with which shipment
+/// (PRD-295, PRD-352; art. 8(8): the DoC goes with the goods): the public DoC page and the customer documents show the right
+/// one. A batch is a work order's (its batch number) or a batch number typed (made before Nexus or by a workshop). Written
+/// once, never changed but its note and a later retainUntil; kept 10 years (QHS-110).
+model ComplianceDocumentBatch {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The batch's company (the work order's; the document's, when it names one).
+  companyId   String    @db.Uuid
+  /// The document's style.
+  styleId     String    @db.Uuid
+  /// The document revision (ISSUED when recorded; it may be superseded or withdrawn later, the record stays).
+  documentId  String    @db.Uuid
+  /// The work order that made the batch, with its site; both null for a batch number typed.
+  siteId      String?   @db.Uuid
+  workOrderId String?   @db.Uuid
+  /// The batch number: the work order's batchNumber, or the number typed.
+  batchNumber String
+  /// The shipment that carried the batch with this document (a Shipment of the company); null: the batch as made.
+  shipmentId  String?   @db.Uuid
+  /// Kept until (QHS-110): at least ten years after it was recorded (Rome day); never earlier, no removal before.
+  retainUntil DateTime  @db.Date
+  note        String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  company   Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style     Style              @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // compliance.prisma: a document of the same style.
+  document  ComplianceDocument @relation(fields: [tenantId, styleId, documentId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and styleId.
+  site      Site?              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: a work order of the same site and style.
+  workOrder WorkOrder?         @relation(fields: [tenantId, siteId, styleId, workOrderId], references: [tenantId, siteId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One record per document, batch and shipment (a batch as made, without a shipment, once: the partial unique index
+  // "ComplianceDocumentBatch_one_without_shipment" of …_techfiles_labels_w2b_guards).
+  @@unique([tenantId, documentId, batchNumber, shipmentId])
+  // A batch's documents (the public DoC page); a shipment's.
+  @@index([tenantId, batchNumber])
+  @@index([tenantId, shipmentId])
+  @@index([tenantId, workOrderId])
+}
+
+/// The technical file of a style (PRD-296; PPE Reg. (EU) 2016/425 Annex III, art. 8(3)): one live file per style, numbered
+/// from its company's TECHNICAL_FILE series, naming the EU type-examination certificate it supports. OPEN while its evidence
+/// is gathered; COMPLETE once every Annex III point is reviewed or marked not applicable (and, for a category II or III style,
+/// the certificate named); back to OPEN when something changes; ARCHIVED when the style leaves the market, then kept ten
+/// years (retainUntil) and frozen. Never removed before that (no runtime role removes one).
+model TechnicalFile {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String              @db.Uuid
+  /// TF-… from the company's TECHNICAL_FILE series, given when the file is made; never changes.
+  number        String
+  styleId       String              @db.Uuid
+  /// The EU type-examination certificate it supports (a certificate that covers the style); null: category I, not PPE, or
+  /// not certified yet.
+  certificateId String?             @db.Uuid
+  status        TechnicalFileStatus @default(OPEN)
+  /// Who keeps it up to date (a user id; the design's Owner column).
+  keeperId      String?             @db.Uuid
+  /// When and by whom it was last completed: set while COMPLETE, kept when archived from COMPLETE, null while OPEN.
+  completedAt   DateTime?           @db.Timestamptz(3)
+  completedById String?             @db.Uuid
+  /// Set exactly when ARCHIVED, with why (the style left the market) and how long it is kept: at least ten years after the
+  /// Rome day it was archived (art. 8(3)); only ever later.
+  archivedAt    DateTime?           @db.Timestamptz(3)
+  archivedById  String?             @db.Uuid
+  archiveReason String?
+  retainUntil   DateTime?           @db.Date
+  note          String?
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?             @db.Uuid
+
+  company         Company                 @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style           Style                   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // compliance.prisma. Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  certificate     Certificate?            @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  items           TechnicalFileItem[]
+  riskAssessments ProductRiskAssessment[]
+  evidencePacks   EvidencePack[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the items', assessments' and packs' references. One live file per style: the partial unique index
+  // "TechnicalFile_one_live_per_style" of …_techfiles_labels_w2b_guards.
+  @@unique([tenantId, id])
+  @@index([tenantId, styleId])
+}
+
+enum TechnicalFileStatus {
+  OPEN
+  COMPLETE
+  ARCHIVED
+}
+
+/// One piece of evidence of a technical file for one Annex III point (PRD-296): a record (its model name and id: the style,
+/// a revision and its files, the BOM, the measurement spec, a certificate, a DoC or the user information, the risk
+/// assessment, a production-control test, a lab result, an inspection or release, a register entry …) or a file, linked,
+/// never copied. MISSING (nothing yet) → LINKED → REVIEWED (signed by a person); NOT_APPLICABLE says why in its note and is
+/// signed too. Written, changed and removed only while its file is OPEN.
+model TechnicalFileItem {
+  id              String                 @id @db.Uuid
+  tenantId        String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  technicalFileId String                 @db.Uuid
+  point           AnnexIIIPoint
+  /// 1, 2, 3 … within the point.
+  seq             Int
+  state           TechnicalFileItemState @default(MISSING)
+  /// The evidence record (its model name and id), or the evidence file: exactly one while LINKED or REVIEWED, none while
+  /// MISSING or NOT_APPLICABLE.
+  recordType      String?
+  recordId        String?                @db.Uuid
+  fileId          String?                @db.Uuid
+  /// What the evidence shows; NOT_APPLICABLE: why the point does not apply (required).
+  note            String?
+  /// Reviewed (signed): set exactly while REVIEWED or NOT_APPLICABLE.
+  reviewedAt      DateTime?              @db.Timestamptz(3)
+  reviewedById    String?                @db.Uuid
+  version         Int                    @default(1)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                @db.Uuid
+
+  technicalFile TechnicalFile @relation(fields: [tenantId, technicalFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // files.prisma. Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file          StoredFile?   @relation("TechnicalFileItemFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, technicalFileId, point, seq])
+  // Where a record or a file is used as evidence.
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, fileId])
+}
+
+/// The points of the technical documentation, PPE Reg. (EU) 2016/425 Annex III (a) to (m).
+enum AnnexIIIPoint {
+  /// (a) a complete description of the PPE and of its intended use.
+  A_DESCRIPTION
+  /// (b) an assessment of the risks against which the PPE is designed to protect.
+  B_RISK_ASSESSMENT
+  /// (c) the essential health and safety requirements that apply.
+  C_REQUIREMENTS
+  /// (d) design and manufacturing drawings and schemes (patterns, the BOM).
+  D_DRAWINGS
+  /// (e) the descriptions and explanations needed to understand the drawings and how the PPE works.
+  E_EXPLANATIONS
+  /// (f) the harmonised standards applied (the parts, when applied in part).
+  F_STANDARDS
+  /// (g) the other technical specifications applied where the standards were not, or only in part.
+  G_OTHER_SPECIFICATIONS
+  /// (h) the results of design calculations, inspections and examinations.
+  H_CALCULATIONS
+  /// (i) the reports of the tests that verify conformity and the protection class.
+  I_TEST_REPORTS
+  /// (j) the means used in production to keep the PPE produced conforming (production control).
+  J_PRODUCTION_CONTROL
+  /// (k) a copy of the manufacturer's instructions and information (Annex II 1.4).
+  K_USER_INFORMATION
+  /// (l) PPE made as a single unit to fit one user: the instructions to make it from the approved basic model.
+  L_SINGLE_UNIT
+  /// (m) PPE made in series, each item fitted to its user: the measures that keep each item to the approved type.
+  M_SERIES_FITTED
+}
+
+enum TechnicalFileItemState {
+  MISSING
+  LINKED
+  REVIEWED
+  NOT_APPLICABLE
+}
+
+/// The product risk assessment of a technical file (PRD-301; Annex III (b); for a consumer line that is not PPE, the GPSR risk
+/// analysis): revision 1, 2, 3 … per file, DRAFT while its rows are written, SIGNED by a person (typed name and function, then
+/// frozen with its rows), SUPERSEDED when a later revision is signed (one SIGNED per file). A draft may be removed (its rows
+/// first); a signed one never.
+model ProductRiskAssessment {
+  id               String                      @id @db.Uuid
+  tenantId         String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  technicalFileId  String                      @db.Uuid
+  /// 1, 2, 3 … per technical file.
+  revision         Int
+  status           ProductRiskAssessmentStatus @default(DRAFT)
+  /// The reasoning for the class claimed (EN 17092: AAA, AA, A, B, C) or, for a line that is not PPE, the GPSR risk
+  /// analysis, in words.
+  classReasoning   String?
+  /// Signed (the design's SignOffPanel): set from SIGNED on.
+  signedAt         DateTime?                   @db.Timestamptz(3)
+  signedById       String?                     @db.Uuid
+  signedByName     String?
+  signedByFunction String?
+  /// Set exactly when SUPERSEDED.
+  supersededAt     DateTime?                   @db.Timestamptz(3)
+  note             String?
+  version          Int                         @default(1)
+  createdAt        DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?                     @db.Uuid
+
+  technicalFile TechnicalFile    @relation(fields: [tenantId, technicalFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  rows          ProductRiskRow[]
+
+  @@unique([tenantId, technicalFileId, revision])
+  // The target of the rows' reference. One SIGNED per file: the partial unique index
+  // "ProductRiskAssessment_one_signed_per_file" of …_techfiles_labels_w2b_guards.
+  @@unique([tenantId, id])
+}
+
+enum ProductRiskAssessmentStatus {
+  DRAFT
+  SIGNED
+  SUPERSEDED
+}
+
+/// One hazard of a risk assessment (PRD-301): the hazard, the garment zone, the intended use and the foreseeable misuse, how it
+/// is controlled, the standard clause that covers it and the residual risk. Written, changed and removed only while its
+/// assessment is DRAFT.
+model ProductRiskRow {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  assessmentId      String         @db.Uuid
+  /// 1, 2, 3 … within the assessment.
+  seq               Int
+  hazard            ProductHazard
+  /// The hazard in words: required for OTHER, a detail otherwise.
+  hazardNote        String?
+  /// The garment zone it concerns (the zone code of the garment zone map: "shoulder", "back-upper", "knee-left"); null: the
+  /// whole garment.
+  garmentZone       String?
+  intendedUse       String
+  foreseeableMisuse String?
+  /// How the hazard is controlled (the design, the material, the protector, the warning).
+  control           String
+  /// The standard clause that covers it ("EN 17092-4:2020 6.3"), as typed, and the register entry when there is one.
+  standardClause    String?
+  standardId        String?        @db.Uuid
+  residualRisk      ResidualRisk
+  note              String?
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  assessment ProductRiskAssessment @relation(fields: [tenantId, assessmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // compliance-rules.prisma. Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  standard   RegulationOrStandard? @relation(fields: [tenantId, standardId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, assessmentId, seq])
+}
+
+/// What a garment protects against (the design's list; OTHER in words).
+enum ProductHazard {
+  ABRASION
+  IMPACT
+  TEAR
+  SEAM_BURST
+  CUT
+  CHEMICAL
+  THERMAL
+  VISIBILITY
+  ERGONOMIC
+  OTHER
+}
+
+enum ResidualRisk {
+  NEGLIGIBLE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// A production-control test (QHS-048, PRD-302; Annex VIII module C2, art. 8(2)): a test that shows production still matches
+/// the certified type, of a style, for a batch (a work order's, or a batch number typed) or for the style's production as a
+/// whole, due by its frequency. Planned with its due day (result null; may be removed), then recorded once: PASS or FAIL, the
+/// day, who tested it (the lab or the person, in words), the lab's report file. A recorded test is kept ten years after the
+/// day it was done (QHS-110: retainUntil, never earlier; no removal before) and changes no more but its note and a later
+/// retainUntil.
+model ProductionControlTest {
+  id              String                     @id @db.Uuid
+  tenantId        String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String                     @db.Uuid
+  styleId         String                     @db.Uuid
+  /// The work order whose batch was tested, with its site; or a batchNumber typed; or neither (a test of the style's
+  /// production, by its frequency).
+  siteId          String?                    @db.Uuid
+  workOrderId     String?                    @db.Uuid
+  batchNumber     String?
+  test            ProductionControlTestKind
+  /// OTHER: the test's name (required); otherwise a detail ("main back seam").
+  testName        String?
+  standardClause  String?
+  /// How often it is due, and the day this one is due.
+  frequency       ProductionControlFrequency
+  dueOn           DateTime                   @db.Date
+  /// The sample tested, in words ("size 52, three pieces from the end of the batch").
+  sample          String?
+  /// null: due, not tested yet.
+  result          ControlTestResult?
+  testedOn        DateTime?                  @db.Date
+  /// The lab or the person who tested it, in words.
+  testedBy        String?
+  labReportFileId String?                    @db.Uuid
+  reportNumber    String?
+  /// What was measured; required for a FAIL (what failed).
+  resultNote      String?
+  /// Kept until: set with the result, at least ten years after testedOn; only ever later.
+  retainUntil     DateTime?                  @db.Date
+  note            String?
+  version         Int                        @default(1)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                    @db.Uuid
+
+  company       Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style         Style       @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and styleId.
+  site          Site?       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: a work order of the same site and style.
+  workOrder     WorkOrder?  @relation(fields: [tenantId, siteId, styleId, workOrderId], references: [tenantId, siteId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // files.prisma.
+  labReportFile StoredFile? @relation("ProductionControlTestReport", fields: [tenantId, labReportFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A style's tests by due day (the plan of periodic tests, conformity to type per batch); a work order's.
+  @@index([tenantId, styleId, dueOn])
+  @@index([tenantId, workOrderId])
+}
+
+/// The production-conformity tests (the design's seam strength, armour-pocket retention, label durability, and more; OTHER
+/// by name).
+enum ProductionControlTestKind {
+  SEAM_STRENGTH
+  POCKET_RETENTION
+  LABEL_DURABILITY
+  ABRASION
+  TEAR_STRENGTH
+  IMPACT
+  DIMENSIONS
+  COLOUR_FASTNESS
+  OTHER
+}
+
+enum ProductionControlFrequency {
+  EVERY_BATCH
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  ON_CHANGE
+  ONCE
+}
+
+enum ControlTestResult {
+  PASS
+  FAIL
+}
+
+/// An evidence pack (PRD-299, PRD-300): the documents of a technical file or of a shipment, built for an authority, a
+/// customer or to go with a shipment, in the recipient's language, numbered from the company's EVIDENCE_PACK series. BUILDING
+/// while its job runs; BUILT with the list of its documents and each one's SHA-256, the pack's own SHA-256, its PDF (and ZIP)
+/// as files of the pack; or FAILED with the reason. Then frozen; a built pack is kept ten years (retainUntil) and never
+/// removed before. A pack never includes a cost, a price or a wage (the builder's rule). The link an authority opens names the
+/// pack (OneOffLink recordType "EvidencePack"), so its expiry and views stay the link's.
+model EvidencePack {
+  id               String              @id @db.Uuid
+  tenantId         String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String              @db.Uuid
+  /// EP-… from the company's EVIDENCE_PACK series, given when the build starts; never changes.
+  number           String
+  purpose          EvidencePackPurpose
+  /// What it is built from: a technical file, or a shipment (a Shipment of the company); exactly one. A SHIPMENT pack is a
+  /// shipment's.
+  technicalFileId  String?             @db.Uuid
+  shipmentId       String?             @db.Uuid
+  /// What was asked (the design's scope and contents checklist), as given: { "batchNumbers": […], "serialFrom": "…",
+  /// "include": ["DOC", "CERTIFICATES", …] }.
+  scope            Json
+  /// The recipient's language (ISO 639: two or three small letters).
+  language         String
+  /// Who it is for, in words (the market surveillance authority, the customer), and the customer when it is a party.
+  recipient        String
+  recipientPartyId String?             @db.Uuid
+  status           EvidencePackStatus  @default(BUILDING)
+  /// BUILT: every document with its SHA-256: [{ "title": "…", "sha256": "…", "recordType": "…", "recordId": "…", "fileId":
+  /// "…" }].
+  contents         Json?
+  /// BUILT: the SHA-256 of the pack (lower-case hex), its PDF and optionally its ZIP (files of this pack).
+  fingerprint      String?
+  fileId           String?             @db.Uuid
+  zipFileId        String?             @db.Uuid
+  /// FAILED: why, in words.
+  failureReason    String?
+  /// When the build ended (BUILT or FAILED).
+  builtAt          DateTime?           @db.Timestamptz(3)
+  /// BUILT: kept until at least ten years after the Rome day it was built; only ever later.
+  retainUntil      DateTime?           @db.Date
+  note             String?
+  version          Int                 @default(1)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who built it (null: the system).
+  createdById      String?             @db.Uuid
+
+  company        Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  technicalFile  TechnicalFile? @relation(fields: [tenantId, technicalFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // parties.prisma.
+  recipientParty Party?         @relation("EvidencePackRecipient", fields: [tenantId, recipientPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // files.prisma.
+  file           StoredFile?    @relation("EvidencePackFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  zipFile        StoredFile?    @relation("EvidencePackZip", fields: [tenantId, zipFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, number])
+  @@index([tenantId, technicalFileId])
+  @@index([tenantId, shipmentId])
+}
+
+enum EvidencePackPurpose {
+  /// For a market surveillance authority (art. 8(9); Reg. (EU) 2019/1020 art. 4(3)).
+  AUTHORITY
+  /// For a customer who asks for the evidence.
+  CUSTOMER
+  /// To go with a shipment (the shipment compliance pack, PRD-300).
+  SHIPMENT
+}
+
+enum EvidencePackStatus {
+  BUILDING
+  BUILT
+  FAILED
+}
+
+/// An artwork version of a label template revision (PRD-347): the proof PDF (a file of the template), DRAFT while it is
+/// worked on, APPROVED by someone other than its author (one APPROVED per template revision; only an approved artwork prints,
+/// B-W2b-259), RETIRED when replaced. Once approved it changes no more but its retirement; a draft may be removed, an approved
+/// or retired one never.
+model LabelArtworkVersion {
+  id           String             @id @db.Uuid
+  tenantId     String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The label template revision it is the artwork of.
+  templateId   String             @db.Uuid
+  /// 1, 2, 3 … per template revision.
+  versionNo    Int
+  /// The proof PDF: a file of the label template (StoredFile recordType "LabelTemplate").
+  fileId       String             @db.Uuid
+  status       LabelArtworkStatus @default(DRAFT)
+  /// Who made the artwork (null: createdById); never its approver.
+  authorId     String?            @db.Uuid
+  /// Set from APPROVED on (kept when retired after approval).
+  approvedAt   DateTime?          @db.Timestamptz(3)
+  approvedById String?            @db.Uuid
+  /// Set exactly when RETIRED.
+  retiredAt    DateTime?          @db.Timestamptz(3)
+  note         String?
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?            @db.Uuid
+
+  // compliance.prisma.
+  template LabelTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // files.prisma.
+  file     StoredFile    @relation("LabelArtworkVersionFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One APPROVED per template revision: the partial unique index "LabelArtworkVersion_one_approved" of
+  // …_techfiles_labels_w2b_guards.
+  @@unique([tenantId, templateId, versionNo])
+}
+
+enum LabelArtworkStatus {
+  DRAFT
+  APPROVED
+  RETIRED
+}
+
+/// Labels of a print that did not end on a garment (MES-140, controlled issue of certified labels): SPOILED (damaged,
+/// misprinted, lost: the reason in words) or RETURNED (unused, handed back). Per work order, printed = used + spoiled +
+/// returned: printed is its prints' quantities, used the garments that carry a label (B-W2b-259 counts them), spoiled and
+/// returned these rows; at most the print's quantity per print. Written on the floor (or in the office); never changed or
+/// removed (the triggers, for every login): a mistake is a new row of the other kind only where it is true.
+/// @append-only
+model GarmentLabelSpoil {
+  id          String                @id @db.Uuid
+  tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The print's company, site and work order.
+  companyId   String                @db.Uuid
+  siteId      String                @db.Uuid
+  workOrderId String                @db.Uuid
+  printId     String                @db.Uuid
+  kind        GarmentLabelSpoilKind
+  /// Labels, from 1.
+  quantity    Int
+  /// SPOILED: why, in words (required); RETURNED: optional.
+  reason      String?
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  /// The office user, or the worker at a site that names workers; null at a site that records the station only.
+  createdById String?               @db.Uuid
+
+  site  Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: a print of the same site and work order.
+  print GarmentLabelPrint @relation(fields: [tenantId, siteId, workOrderId, printId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A work order's reconciliation; a print's.
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, printId])
+}
+
+enum GarmentLabelSpoilKind {
+  SPOILED
+  RETURNED
+}

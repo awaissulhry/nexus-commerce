@@ -90,6 +90,8 @@ model RegulationOrStandard {
   changes          StandardChange[]        @relation("StandardChangeOf")
   changesNamingNew StandardChange[]        @relation("StandardChangeNewEdition")
   requirements     ComplianceRequirement[]
+  // W2b-4 techfiles.prisma (wave 32/33): the risk assessment rows that cite it.
+  productRiskRows  ProductRiskRow[]
 
   // One row per reference and edition (an act without editions: a partial unique of the guards migration).
   @@unique([tenantId, code, edition])
