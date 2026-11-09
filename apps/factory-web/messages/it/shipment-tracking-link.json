@@ -1,0 +1,63 @@
+{
+  "title": "Pagina di tracciamento per il cliente",
+  "what": "Il cliente segue questa spedizione sulla nostra pagina con il nostro marchio, nella sua lingua: dove si trova, le notizie del corriere, i documenti senza prezzi.",
+  "loading": "Carichiamo i link di tracciamento…",
+  "failed": "Non è stato possibile leggere i link di tracciamento.",
+  "retry": "Riprova",
+  "send": "Invia il link di tracciamento",
+  "sendAgain": "Invialo di nuovo",
+  "to": "Va a: {names}.",
+  "noRecipients": "Il cliente non ha un contatto ordini attivo con un indirizzo e-mail: invialo a un altro indirizzo, oppure prendi un link da inoltrare.",
+  "copyLink": "Copia un link da inoltrare",
+  "other": {
+    "open": "A un altro indirizzo…",
+    "close": "Chiudi",
+    "label": "Indirizzo e-mail",
+    "hint": "Il link di tracciamento va solo a questo indirizzo.",
+    "send": "Invia a questo indirizzo",
+    "problem": { "EMPTY": "Scrivi l'indirizzo e-mail.", "FORMAT": "Scrivi un indirizzo come nome@azienda.it." }
+  },
+  "passOn": {
+    "ready": "Un link da inoltrare (mostrato solo ora):",
+    "copied": "Copiato. Un link da inoltrare (mostrato solo ora):",
+    "copy": "Copia di nuovo",
+    "once": "Nessuno può mostrarlo di nuovo: ne teniamo solo un'impronta."
+  },
+  "outcome": {
+    "sent_one": "Il link di tracciamento è stato inviato a {count} indirizzo.",
+    "sent_other": "Il link di tracciamento è stato inviato a {count} indirizzi.",
+    "skipped": "Non è stato inviato nulla: ogni indirizzo ha già il suo link, oppure è respinto.",
+    "failed": {
+      "forbidden": "Non puoi inviare link di tracciamento di questa spedizione.",
+      "refused": "Il link non è stato creato: controlla l'indirizzo e lo stato della spedizione.",
+      "error": "Il link non è stato creato: riprova."
+    }
+  },
+  "none": "Ancora nessun link di tracciamento. Quando la merce parte, i contatti ordini del cliente ricevono il loro per e-mail.",
+  "col": { "to": "A", "state": "Stato", "opened": "Ultima apertura", "until": "Aperto fino al", "action": "Azione" },
+  "passOnRow": "Un link da inoltrare",
+  "via": {
+    "SHIPPED": "Inviato alla partenza della merce · {date}",
+    "OFFICE": "Creato dall'ufficio · {date}",
+    "PORTAL": "Copiato nel portale · {date}",
+    "SEARCH": "Trovato con la ricerca pubblica · {date}",
+    "RENEWED": "Richiesto di nuovo · {date}"
+  },
+  "state": { "LIVE": "Aperto", "REVOKED": "Ritirato", "USED_UP": "Esaurito", "EXPIRED": "Scaduto", "ENDED": "Chiuso" },
+  "neverOpened": "Non ancora aperto",
+  "revoke": "Ritira",
+  "revokeOf": "Ritira il link a {to}",
+  "searches_one": "La ricerca pubblica ha trovato questa spedizione {count} volta (l'ultima il {when}): un link per una visita, senza documenti.",
+  "searches_other": "La ricerca pubblica ha trovato questa spedizione {count} volte (l'ultima il {when}): un link per una visita ciascuna, senza documenti.",
+  "auto": "La pagina resta aperta fino a 60 giorni dopo la consegna.",
+  "held": {
+    "noManage": "Solo chi gestisce le spedizioni invia i link di tracciamento.",
+    "busy": "Attendi: l'ultima azione è ancora in corso.",
+    "noRecipients": "Il cliente non ha un contatto ordini attivo con un indirizzo e-mail.",
+    "notLive": "Questo link non si apre più.",
+    "NOT_PACKED": "Il link di tracciamento si crea quando la spedizione è imballata.",
+    "CANCELLED": "La spedizione è stata annullata: non c'è nulla da tracciare.",
+    "RETURNED": "La merce è tornata a noi: non si crea un nuovo link di tracciamento.",
+    "ENDED": "La merce è arrivata più di 60 giorni fa: la pagina di tracciamento è chiusa."
+  }
+}

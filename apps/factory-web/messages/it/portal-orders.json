@@ -389,7 +389,14 @@
       "style": "Modello",
       "colour": "Variante colore",
       "pieces": "Pezzi"
-    }
+    },
+    "copyLink": "Copia il link di tracciamento",
+    "linkCopied": "Link copiato",
+    "copyLinkOf": "Copia il link di tracciamento della spedizione {number}",
+    "copyLinkHint": "La nostra pagina di tracciamento, da inoltrare a chi riceve la merce.",
+    "copyLinkFailed": "Il link di tracciamento non è stato creato: riprova.",
+    "copyLinkPreview": "Un'anteprima non crea link.",
+    "copyLinkTooMany": "I link di questa spedizione sono già stati copiati: inoltra uno di quelli."
   },
   "toShip": {
     "title": "Ancora da spedire",

@@ -13,6 +13,8 @@ import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
 // B-W2b-188: an APPROVAL link's request (SCR-198).
 import { Approve } from '../../links/approve/Approve'
+// B-W2b-170: a SHIPMENT_TRACK link's tracking page (SCR-194).
+import { TrackOrder } from '../../links/tracking/TrackOrder'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -102,6 +104,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-188
     case 'approve':
       return <Approve api={task.api} />
+    // B-W2b-170
+    case 'track-order':
+      return <TrackOrder api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

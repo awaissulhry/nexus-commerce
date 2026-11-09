@@ -655,6 +655,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.po', title: 'Confirm a PO', scr: ['SCR-100'], task: 'po-confirm' },
   // W2b: B-W2b-188 Approve (an APPROVAL link's request).
   { id: 'links.approve', title: 'Approve', scr: ['SCR-198'], task: 'approve' },
+  // W2b: B-W2b-170 Track an order (a SHIPMENT_TRACK link's tracking page; the public search /t is its section).
+  { id: 'links.tracking', title: 'Track an order', scr: ['SCR-194'], task: 'track-order' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [
