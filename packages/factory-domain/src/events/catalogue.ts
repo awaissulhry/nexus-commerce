@@ -123,6 +123,8 @@ import { events as approvalsOut } from '../approvals-out/events'
 import { events as shares } from '../shares/events'
 // B-W2b-136 (QHS-173): clicking dies (a die registered, changed or retired).
 import { events as plantDies } from '../plant-dies/events'
+// B-W2b-208: the textile, leather and origin checks (a check switched on or off).
+import { events as textileRules } from '../textile-rules/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -335,6 +337,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...measureLink,
   // B-W2b-172
   ...supplierQuestionnaire,
+  // B-W2b-208
+  ...textileRules,
   // B-W2b-214
   ...productionInstructions] as const satisfies readonly EventDefinition[]
 

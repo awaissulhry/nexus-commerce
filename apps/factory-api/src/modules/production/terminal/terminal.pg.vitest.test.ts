@@ -248,8 +248,10 @@ describe('a team operation from the tablet’s crew (MES-094)', () => {
 
 describe('the qualification check at the start (B-W2b-39; MES-024, MES-246)', () => {
   it('an authorisation missing on a kept machine class holds the start, never lifted; a skill missing only warns', async () => {
-    // The cutting table becomes kept at A1: the team leader is authorised on it (made up).
-    const tableClass = (await admin<{ id: string }>(`SELECT "classId" AS id FROM "Machine" WHERE "tenantId" = $1 AND "stationId" = $2 LIMIT 1`, [T, cut1]))[0]!.id
+    // The cutting table asks an authorisation, as the office says (B-W2b-139: MachineClass.authorisationRequired; an
+    // authorisation of the class at the site no longer keeps it): the team leader is authorised on it (made up).
+    const tableClass = (await admin<{ id: string }>(`SELECT c.id FROM "Machine" m JOIN "MachineClass" c ON c.id = m."classId" WHERE m."tenantId" = $1 AND m."stationId" = $2 AND c.code = 'CUTTING_TABLE'`, [T, cut1]))[0]!.id
+    await admin(`UPDATE "MachineClass" SET "authorisationRequired" = true, version = version + 1, "updatedAt" = now() WHERE id = $1`, [tableClass])
     const leadEmployee = (await admin<{ id: string }>('SELECT "employeeId" AS id FROM "Worker" WHERE id = $1', [lead]))[0]!.id
     await admin(`INSERT INTO "MachineAuthorisation" (id, "tenantId", "siteId", "employeeId", "machineClassId", "authorisedOn", "authorisedById", "createdAt", "updatedAt", "createdById") VALUES ($1, $2, $3, $4, $5, current_date - 30, $6, now(), now(), $6)`, [newId(), T, siteA1, leadEmployee, tableClass, idOf('actor')])
     const held = await no('opCut', 'POST', '/production/terminal/start', { clientScanId: cid('cut-held'), bundleId: bundles[3] }, 409)

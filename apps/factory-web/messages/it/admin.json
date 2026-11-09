@@ -1670,6 +1670,7 @@
     "compliance_labels_manage": "Creare e attivare i modelli delle etichette dei capi",
     "compliance_register_view": "Vedere il registro DPI",
     "compliance_register_manage": "Registrare reclami, non conformità e richiami",
+    "compliance_textileRules_manage": "Attivare o disattivare i controlli tessile, manutenzione e Made in Italy",
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
     "product_materials_cost": "Impostare il prezzo standard di un materiale",

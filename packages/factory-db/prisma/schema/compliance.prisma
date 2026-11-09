@@ -172,6 +172,8 @@ model LabelTemplate {
   style          Style?          @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   makerParty     Party?          @relation(fields: [tenantId, makerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   styleRevisions StyleRevision[]
+  // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default label template it is.
+  productTypeProfiles ProductTypeProfile[]
   // production.prisma: the work orders released with it.
   workOrders     WorkOrder[]
 

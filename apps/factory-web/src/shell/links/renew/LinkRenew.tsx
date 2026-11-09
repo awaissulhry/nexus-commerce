@@ -4,24 +4,28 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { ApiClient } from '../../../lib/api/client'
 import { askForNewLink } from './api'
 import { LinkRenewContext } from './context'
-import { renewFailure, type RenewState } from './model'
+import { noteToSend, renewFailure, type RenewState } from './model'
 
 /**
  * B-W2b-169: holds "Ask for a new link" for the link the landing opened (`api` carries its token; null: no token, no
  * button). One ask at a time; once answered it stays done (pressed once → held); a wait ends by itself when its time
- * passes. Keyed by the landing on the client, so a link pasted into the same tab starts again.
+ * passes. Keyed by the landing on the client, so a link pasted into the same tab starts again. B-W2b-F17: it keeps the
+ * reader's optional note (in memory only) and sends it with the ask.
  */
 export function LinkRenewProvider({ api, children }: { api: ApiClient | null; children?: ReactNode }) {
   const [state, setState] = useState<{ state: RenewState; waitUntil: string | null }>({ state: 'idle', waitUntil: null })
+  const [note, setNote] = useState('')
   const current = useRef(state)
   current.current = state
+  const noteNow = useRef(note)
+  noteNow.current = note
 
   const ask = useCallback(() => {
     if (!api) return
     const now = current.current.state
     if (now === 'busy' || now === 'checking' || now === 'done' || now === 'wait') return
     setState({ state: 'busy', waitUntil: null })
-    askForNewLink(api, () => setState({ state: 'checking', waitUntil: null }))
+    askForNewLink(api, () => setState({ state: 'checking', waitUntil: null }), noteToSend(noteNow.current))
       .then(() => setState({ state: 'done', waitUntil: null }))
       .catch((error: unknown) => setState(renewFailure(error, new Date())))
   }, [api])
@@ -33,6 +37,6 @@ export function LinkRenewProvider({ api, children }: { api: ApiClient | null; ch
     return () => clearTimeout(timer)
   }, [state])
 
-  const value = useMemo(() => (api ? { state: state.state, waitUntil: state.waitUntil, ask } : null), [api, state, ask])
+  const value = useMemo(() => (api ? { state: state.state, waitUntil: state.waitUntil, ask, note, setNote } : null), [api, state, ask, note])
   return <LinkRenewContext.Provider value={value}>{children}</LinkRenewContext.Provider>
 }

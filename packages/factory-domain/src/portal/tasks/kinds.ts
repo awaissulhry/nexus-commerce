@@ -1,4 +1,5 @@
 import type { Grain } from '../../auth/grains/grains'
+import type { PartnerKind } from '../../auth/partners/kinds'
 import { PORTAL_APPROVE, PORTAL_COMMENT, PORTAL_UPLOAD } from '../../auth/partners/permissions'
 import type { Permission } from '../../core/permissions'
 import type { PartnerEmailTopic } from '../notifications/topics'
@@ -81,6 +82,21 @@ export const KIND_RULES: Readonly<Record<PartnerTaskKind, KindRule>> = Object.fr
   ANSWER_QUESTIONNAIRE: rule({ it: 'Compila', en: 'Fill in' }, { it: 'Compila il questionario {label}', en: 'Fill in questionnaire {label}' }, [PORTAL_COMMENT], 'documents', { it: 'questionari da compilare', en: 'questionnaires to fill in' }, 'DOCUMENTS'),
   RECONFIRM_ORDER: rule({ it: 'Riconferma', en: 'Re-confirm' }, { it: "Riconferma l'ordine modificato {label}", en: 'Re-confirm the changed order {label}' }, [PORTAL_APPROVE], 'orders', { it: 'da riconfermare', en: 'to re-confirm' }, 'ORDERS', 'price'),
 })
+
+/**
+ * B-W2b-F17: where a kind's badge sits for a partner kind whose rail has no row of the kind's own area. APPROVE counts on
+ * Quotes & samples, which only customers have: a supplier, a workshop or a guest finds its approvals on Home (the one page
+ * of theirs that lists them: B-W2b-203's rule, a count leads to its requests), so their badge is Home's.
+ */
+export const AREA_FOR_PARTNER: Readonly<Partial<Record<PartnerTaskKind, Readonly<Partial<Record<PartnerKind, PortalArea>>>>>> = Object.freeze({
+  APPROVE: Object.freeze({ SUPPLIER: 'home', SUBCONTRACTOR: 'home', GUEST: 'home' }),
+})
+
+/** The rail area whose badge counts a task of this kind for a person of this partner kind (unknown or none: the kind's own). */
+export function taskArea(kind: PartnerTaskKind, partnerKind: string | null | undefined): PortalArea {
+  const byKind = AREA_FOR_PARTNER[kind]
+  return (partnerKind && byKind && Object.hasOwn(byKind, partnerKind) ? byKind[partnerKind as PartnerKind] : undefined) ?? KIND_RULES[kind].area
+}
 
 /** The request's sentence in a language, the record's label put in. */
 export const taskWords = (kind: PartnerTaskKind, label: string, locale: PortalLocale): string => KIND_RULES[kind].what[locale].replace('{label}', label)

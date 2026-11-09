@@ -8,6 +8,8 @@ import { ATTENTION_KINDS, KIND_RULES } from '../../insights/attention'
 import { decisionProblem, refuseReasonProblem, withdrawProblem } from './office'
 import { PORTAL_ADDRESSES_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDERING_PERMISSIONS } from './permissions'
 import { reorderPlan, type ReorderFacts } from './reorder'
+import { PPE_CATEGORIES } from '../../product/styles/rules'
+import { PPE_WORDS } from './rules'
 import { draftTotals, headerProblems, heldWords, lineProblems, lineShapeProblems, lowestPrice, mayOffer, offeredSizes, rangeLabel, type LineFacts } from './rules'
 import { linesOfReady, portalOrderLinesImporter, refusedRowsCsv, uploadVerdicts, type CatalogueEntry } from './upload'
 
@@ -164,5 +166,18 @@ describe('order upload (SAL-073)', () => {
     const csv = refusedRowsCsv(verdicts, 'en')
     expect(csv.split('\r\n')[0]).toBe('Row;Style;Colour;Size;Quantity;Your code;Reason')
     expect(csv.split('\r\n').filter((line) => line !== '')).toHaveLength(6)
+  })
+})
+
+describe('B-W2b-F17: the PPE category in words', () => {
+  it('has words in both languages for every stored code (Style.ppeCategory), never the code itself', () => {
+    expect(Object.keys(PPE_WORDS).sort()).toEqual([...PPE_CATEGORIES].sort())
+    for (const code of PPE_CATEGORIES) {
+      for (const locale of ['it', 'en'] as const) {
+        expect(PPE_WORDS[code][locale], `${code} ${locale}`).toBeTruthy()
+        expect(PPE_WORDS[code][locale], `${code} ${locale}`).not.toBe(code)
+      }
+    }
+    expect(PPE_WORDS.CATEGORY_II).toEqual({ it: 'DPI categoria II', en: 'PPE category II' })
   })
 })

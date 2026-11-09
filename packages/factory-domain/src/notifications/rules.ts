@@ -87,6 +87,10 @@ export const MESSAGE_TEMPLATES = {
   // B-W2b-177 (platform/files/expiry/notices.ts): a document of a record stops being valid soon, 30 then 7 days before
   // ({kind}: the file's name; {title}: the expiry date, Europe/Rome), to the record's owner and its followers.
   'notifications.files.expiryDue': { en: '{kind} on {record} expires on {title}', it: '{kind} su {record} scade il {title}' },
+  // B-W2b-F17 (platform/links/notices.ts): the holder of a dead link with no renewer asked for a new one, told to the person
+  // who made the link (SYSTEM), with the reader's note as {title} when they wrote one. No new link was made.
+  'notifications.links.renewAsked': { en: 'The link you sent for {record} no longer opens: its holder asks for a new one', it: 'Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo' },
+  'notifications.links.renewAskedNote': { en: 'The link you sent for {record} no longer opens: its holder asks for a new one ("{title}")', it: 'Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo ("{title}")' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES

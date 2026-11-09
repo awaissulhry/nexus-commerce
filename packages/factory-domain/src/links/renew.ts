@@ -30,6 +30,15 @@ import { linkTerms, PURPOSE_RULES, type LinkPurpose, type LinkState } from './pu
  * it), the files of the set that are still available (in their order), the old link's span and use limit within the
  * purpose's maximum, made by the system, naming the link it renews (OneOffLink.renewalOfId); sent by mail to the address
  * on file only. The old link stays as it is (dead already).
+ *
+ * B-W2b-F17 (Owner answer 11-09 = B): a dead link whose purpose and record type have NO renewer (QUOTE_ACCEPT,
+ * DEPOSIT_INFO, PAYMENT, JOB_ACCEPT, APPROVAL, RECORD_INVITE, the payroll file …) tells the person who MADE the link
+ * instead (their bell), with the record and the reader's optional note, so the one answer is true on every dead link. It
+ * never makes or sends a new link: whether to send again is that person's decision. Refused silently (logged by code):
+ *
+ *   STILL_LIVE             it still opens (and what it stands for still lives)
+ *   NO_MAKER               nobody made it, or its maker is no longer an active office person
+ *   ASKED_RECENTLY         its maker was told about this link in the last ten minutes
  */
 
 /** The one answer, whatever the token (links.frame). */
@@ -83,6 +92,48 @@ export function fileRenewalRefusal(facts: FileRenewalFacts): FileRenewRefusal | 
   if (facts.filesAvailable === 0) return 'NOTHING_TO_SHARE'
   if (facts.payProblem) return 'PAY_FIGURES'
   return null
+}
+
+// ---- B-W2b-F17: no renewer → the link's maker is told ---------------------------------------------------------------
+
+/** How a dead link is answered: its module's renewer, a set of files renewed here, else its maker told. */
+export type RenewalRoute = 'module' | 'files' | 'maker'
+
+/** The route for a link of this purpose and record type (`hasRenewer`: a module registered one for that pair). */
+export function renewalRoute(purpose: LinkPurpose, recordType: string, hasRenewer: boolean): RenewalRoute {
+  if (hasRenewer) return 'module'
+  return PURPOSE_RULES[purpose].renewal === 'files' && recordType === 'StoredFile' ? 'files' : 'maker'
+}
+
+/** The reader's note the request may carry to the link's maker: at most this many characters (trimmed). */
+export const LINK_RENEW_NOTE_MAX = 500
+
+export const MAKER_TOLD_REFUSALS = ['STILL_LIVE', 'NO_MAKER', 'ASKED_RECENTLY'] as const
+export type MakerToldRefusal = (typeof MAKER_TOLD_REFUSALS)[number]
+
+export interface MakerToldFacts {
+  readonly state: LinkState
+  /** What the link stands for still lives (its purpose's live check; true when it has none). */
+  readonly standsFor: boolean
+  /** The maker is an ACTIVE office person of the tenant. */
+  readonly makerActive: boolean
+  /** When the maker was last told about this link (null: never). */
+  readonly lastToldAt: Date | null
+  readonly now: Date
+}
+
+/** Why the maker is not told about a dead link now, or null when they are (the order of the table above). */
+export function makerToldRefusal(facts: MakerToldFacts): MakerToldRefusal | null {
+  if (facts.state === 'LIVE' && facts.standsFor) return 'STILL_LIVE'
+  if (!facts.makerActive) return 'NO_MAKER'
+  if (facts.lastToldAt && facts.lastToldAt.getTime() > facts.now.getTime() - LINK_RENEW_COALESCE_MS) return 'ASKED_RECENTLY'
+  return null
+}
+
+/** A second ask inside ten minutes, in words (the log's line; the page keeps its one answer). */
+export function askedRecentlyWords(lastToldAt: Date, now: Date): string {
+  const minutes = Math.max(1, Math.ceil((lastToldAt.getTime() + LINK_RENEW_COALESCE_MS - now.getTime()) / 60_000))
+  return `The person who made this link was told about it already; it is passed on again in ${minutes} minute${minutes === 1 ? '' : 's'} at the earliest.`
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000

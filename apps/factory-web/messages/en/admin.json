@@ -1670,6 +1670,7 @@
     "compliance_labels_manage": "Build and activate garment label templates",
     "compliance_register_view": "See the PPE register",
     "compliance_register_manage": "Record complaints, non-conformities and recalls",
+    "compliance_textileRules_manage": "Switch the textile, care and Made in Italy checks on or off",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",
