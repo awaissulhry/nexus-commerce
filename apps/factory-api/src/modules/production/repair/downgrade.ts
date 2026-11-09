@@ -27,7 +27,10 @@ import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { lockReservations } from '../../inventory/reservations/store'
 import { scrapPostingHeld } from '../scrap/over-limit'
 import { assertMay, bodyIssue, may, officeOf, refuse } from './access'
-import { DOWNGRADE_COLUMNS, downgradeMoves, downgradesOfSource, lockDowngrade, readDowngrade, readOrder, type DowngradeRow, type Reader } from './store'
+import { DOWNGRADE_COLUMNS, downgradesOfSource, lockDowngrade, readDowngrade, readOrder, type DowngradeRow, type Reader } from './store'
+// B-W2b-219: the second-quality move by the row's moveId.
+import { movesOfDowngrades, originalAmong, originalMoveOf } from './downgrade-move'
+import { inWords } from '../settings/cutting-rules'
 
 /**
  * Second quality instead of scrap (B-W2b-126; MES-133; design production.scrap pop:sc-downgrade "Downgrade to second quality":
@@ -182,7 +185,7 @@ export async function downgrade(caller: CommandCaller, body: DowngradeBody, idem
   if (!known?.order || !may(context, PRODUCTION_SCRAP_VIEW, known.order)) throw new NotFoundError('Scrap not found.')
   assertMay(context, PRODUCTION_DOWNGRADE, known.order, 'Scrap')
   if (body.target === 'ITEM' && !body.itemId) throw bodyIssue('itemId', 'Name the second-quality item the garments are kept as.')
-  const { result, replayed } = await command(caller, { name: 'production.downgrade', idempotencyKey, input: body }, async (tools) => {
+  const { result, replayed } = await inWords(() => command(caller, { name: 'production.downgrade', idempotencyKey, input: body }, async (tools) => {
     const { tx } = tools
     // The work order's issue lock (a scan takes it shared): its scrap does not change under the downgrade.
     await lockWorkOrderIssues(tx, context.tenantId, known.order!.id)
@@ -234,8 +237,8 @@ export async function downgrade(caller: CommandCaller, body: DowngradeBody, idem
       updatedAt: tools.now,
       createdById: context.actorId,
     }
-    await tx.garmentDowngrade.create({ data, select: { id: true } })
-    // The garments into the place: one ADJUSTMENT naming the work order, valued as a finished garment is (its frozen standard).
+    // The garments into the place: one ADJUSTMENT naming the work order, valued as a finished garment is (its frozen standard),
+    // posted before the row (B-W2b-219: the row names it).
     await lockReservations(tx, context.tenantId, [{ siteId: facts.workOrder.siteId, itemId, itemColourId: null }])
     const cost = await standardCostFor(tx, facts.workOrder.companyId, itemId, businessDate(tools.now))
     const draft: MoveDraft = {
@@ -257,6 +260,8 @@ export async function downgrade(caller: CommandCaller, body: DowngradeBody, idem
       ...(cost ? { cost } : {}),
     }
     const [move] = await postMoves(tools, [draft], { issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
+    // B-W2b-219: the row names its second-quality move (posted first, under the key the id chosen before gives it).
+    await tx.garmentDowngrade.create({ data: { ...data, moveId: move!.id }, select: { id: true } })
     const scope = { companyId: facts.workOrder.companyId, siteId: facts.workOrder.siteId }
     tools.audit({ action: 'production.downgrade', recordType: 'GarmentDowngrade', recordId: id, ...scope, after: { ...data, createdAt: undefined, updatedAt: undefined, moveId: move!.id, toLocationId: place.id, itemId } })
     tools.audit({ action: 'production.downgrade', recordType: 'WorkOrder', recordId: facts.workOrder.id, ...scope, after: { downgradeId: id, quantity: body.quantity, reasonCode: body.reasonCode, moveId: move!.id } })
@@ -283,7 +288,7 @@ export async function downgrade(caller: CommandCaller, body: DowngradeBody, idem
     })
     const [view] = await downgradeViews(tx, [(await readDowngrade(tx, id))!])
     return { downgrade: view! }
-  })
+  }))
   return { ...result, replayed }
 }
 
@@ -305,14 +310,15 @@ export async function withdrawDowngrade(caller: CommandCaller, downgradeId: stri
   const known = await caller.withClient((db) => readDowngrade(db, downgradeId))
   if (!known || !may(context, PRODUCTION_SCRAP_VIEW, known)) throw new NotFoundError('Downgrade not found.')
   assertMay(context, PRODUCTION_DOWNGRADE, known, 'Downgrade')
-  const { result, replayed } = await command(caller, { name: 'production.withdrawDowngrade', idempotencyKey, input: { downgradeId, ...body } }, async (tools) => {
+  const { result, replayed } = await inWords(() => command(caller, { name: 'production.withdrawDowngrade', idempotencyKey, input: { downgradeId, ...body } }, async (tools) => {
     const { tx } = tools
     const row = (await lockDowngrade(tx, downgradeId))!
     if (row.version !== body.version) throw new ConflictError(`This downgrade changed since you read it (version ${row.version}, not ${body.version}): read it again.`)
     const refusal = withdrawRefusal(row)
     if (refusal) refuse(refusal)
     const order = (await readOrder(tx, row.workOrderId))!
-    const original = (await downgradeMoves(tx, [row.id])).find((move) => move.idempotencyKey === downgradeMoveKey(row.id) && move.reversalOfId === null) ?? null
+    // B-W2b-219: the move the row names (rows before the column: by its key).
+    const original = await originalMoveOf(tx, row)
     let mirror: { id: string } | null = null
     if (original) {
       await lockReservations(tx, context.tenantId, [{ siteId: original.siteId, itemId: original.itemId, itemColourId: original.itemColourId }])
@@ -348,7 +354,7 @@ export async function withdrawDowngrade(caller: CommandCaller, downgradeId: stri
     tools.emit({ type: 'production.downgrade_withdrawn', subject: row.workOrderId, ...scope, payload: { workOrderId: row.workOrderId, number: order.number, downgradeId: row.id, quantity: row.quantity, moveId: mirror?.id ?? null } })
     const [view] = await downgradeViews(tx, [(await readDowngrade(tx, row.id))!])
     return { downgrade: view! }
-  })
+  }))
   return { ...result, replayed }
 }
 
@@ -391,14 +397,12 @@ export async function downgradeViews(db: Reader, rows: readonly DowngradeRow[]) 
   const bundles = new Map((await db.bundle.findMany({ where: { id: { in: unique(rows.map((row) => row.bundleId)) } }, select: { id: true, code: true, part: true } })).map((row) => [row.id, row]))
   const items = new Map((await db.item.findMany({ where: { id: { in: unique(rows.map((row) => row.secondQualityItemId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const variants = new Map((await db.variant.findMany({ where: { id: { in: unique(rows.map((row) => row.variantId)) } }, select: { id: true, sku: true } })).map((row) => [row.id, row]))
-  const moves = await downgradeMoves(
-    db,
-    rows.map((row) => row.id),
-  )
+  // B-W2b-219: the moves by key and the ones the rows name.
+  const moves = await movesOfDowngrades(db, rows)
   const places = new Map((await db.location.findMany({ where: { id: { in: unique(moves.map((move) => move.toLocationId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   return rows.map((row) => {
     const order = orders.get(row.workOrderId)
-    const move = moves.find((entry) => entry.idempotencyKey === downgradeMoveKey(row.id) && entry.reversalOfId === null) ?? null
+    const move = originalAmong(moves, row)
     const back = moves.find((entry) => entry.idempotencyKey === withdrawMoveKey(row.id)) ?? null
     const bundle = row.bundleId ? bundles.get(row.bundleId) : undefined
     const item = row.secondQualityItemId ? items.get(row.secondQualityItemId) : undefined

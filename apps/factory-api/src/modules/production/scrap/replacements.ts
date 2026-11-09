@@ -21,6 +21,9 @@ import { readPlannedParts } from '../cutting/store'
 import { lockReplacement, readCellLabels, readReplacement, REPLACEMENT_COLUMNS, replacementViews, type ReplacementRow } from './store'
 // B-W2b-53 (MES-128): held scrap posts no replacement.
 import { scrapPostingHeld } from './over-limit'
+// B-W2b-219: a RECUT done by its DONE recut ticket.
+import { doneByTicketRefusal } from '../rework/recut-close'
+import { inWords } from '../settings/cutting-rules'
 
 /**
  * Replace scrapped garments (B-W2a-13; MES-130; design production.scrap "Replace scrapped quantity"): a RECUT for the
@@ -198,13 +201,16 @@ export async function changeReplacement(caller: CommandCaller, replacementId: st
   if (!known || !may(context, PERMISSION[change], known)) throw new NotFoundError('Replacement not found.')
   if (change === 'refuse' && !body.note?.trim()) throw bodyIssue('note', 'Say why the reduction is refused.')
   if (change === 'cancel' && !body.reason?.trim()) throw bodyIssue('reason', 'Say why the request is cancelled.')
-  if (change === 'done' && !body.cutLogId) throw bodyIssue('cutLogId', 'Name the cut log entry that cut the recut.')
-  const { result, replayed } = await command(caller, { name: `production.${change}Replacement`, idempotencyKey, input: { replacementId, change, ...body } }, async (tools) => {
+  // B-W2b-219: a RECUT is done by its cut log entry, or (none named) by its DONE recut ticket (./rework/recut-close).
+  const byTicket = change === 'done' && !body.cutLogId
+  const { result, replayed } = await inWords(() => command(caller, { name: `production.${change}Replacement`, idempotencyKey, input: { replacementId, change, ...body } }, async (tools) => {
     const { tx } = tools
     const row = await lockReplacement(tx, replacementId)
     if (!row) throw new NotFoundError('Replacement not found.')
     if (row.version !== body.version) throw new ConflictError(`This request changed since you read it (version ${row.version}, not ${body.version}): read it again.`)
-    const refusal = refusalOf(change, row, context, await doneFacts(tools, row, body))
+    const ticketProblem = byTicket ? await doneByTicketRefusal(tx, row) : null
+    if (ticketProblem) throw new ConflictError(ticketProblem)
+    const refusal = byTicket ? null : refusalOf(change, row, context, await doneFacts(tools, row, body))
     if (refusal) refused(refusal)
     const status: ReplacementStatus = change === 'approve' ? 'APPROVED' : change === 'refuse' ? 'REFUSED' : change === 'done' ? 'DONE' : 'CANCELLED'
     const data: Prisma.ReplacementRequestUncheckedUpdateInput = {
@@ -212,7 +218,7 @@ export async function changeReplacement(caller: CommandCaller, replacementId: st
       version: { increment: 1 },
       updatedAt: tools.now,
       ...(change === 'approve' || change === 'refuse' ? { decidedAt: tools.now, decidedById: context.actorId, decisionNote: body.note?.trim() || null } : {}),
-      ...(change === 'done' ? { doneAt: tools.now, cutLogId: body.cutLogId! } : {}),
+      ...(change === 'done' ? { doneAt: tools.now, cutLogId: body.cutLogId ?? null } : {}),
       ...(change === 'cancel' ? { cancelledAt: tools.now, cancelReason: body.reason!.trim() } : {}),
       ...(change !== 'approve' && change !== 'refuse' && body.note?.trim() ? { note: body.note.trim() } : {}),
     }
@@ -225,18 +231,18 @@ export async function changeReplacement(caller: CommandCaller, replacementId: st
       recordId: row.id,
       ...scope,
       before: { status: row.status },
-      after: { status, ...(change === 'done' ? { cutLogId: body.cutLogId } : {}) },
+      after: { status, ...(change === 'done' ? (byTicket ? { byRecutTicket: true } : { cutLogId: body.cutLogId }) : {}) },
       ...(change === 'cancel' ? { reason: body.reason!.trim() } : body.note?.trim() ? { reason: body.note.trim() } : {}),
     })
     tools.emit({
       type: 'production.replacement_changed',
       subject: row.workOrderId,
       ...scope,
-      payload: { workOrderId: row.workOrderId, number: workOrder.number, replacementId: row.id, kind: row.kind, status, cutLogId: change === 'done' ? body.cutLogId! : null },
+      payload: { workOrderId: row.workOrderId, number: workOrder.number, replacementId: row.id, kind: row.kind, status, cutLogId: change === 'done' ? (body.cutLogId ?? null) : null },
     })
     const [view] = await replacementViews(tx, [(await readReplacement(tx, row.id))!])
     return { replacement: view! }
-  })
+  }))
   return { ...result, replayed }
 }
 

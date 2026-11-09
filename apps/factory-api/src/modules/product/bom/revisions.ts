@@ -13,7 +13,11 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
 import { readOperations, readSteps } from '../routing/read'
 import { openTypeChangeReviewsInCommand } from '../../compliance/type-changes/detect'
+import { requireEditRule } from '../lifecycle/edit-rule'
 import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
+// B-W2b-225: the routing's depth travels with its steps; the release closes the old revision's effective days.
+import { auditedDepthCopy, copyStepDepthInCommand } from '../routing-depth/copy'
+import { effectivityAtReleaseInCommand, effectivityAtWithdrawalInCommand } from '../routing-depth/effectivity'
 // B-W2b-223: B-W2b-211's columns travel with the copy; the release reads the BOM check's structure blockers.
 import { assertStructureReleasable, structureBlockersInCommand } from '../bom-structure/check'
 import { copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
@@ -64,6 +68,8 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     const revisions = await tx.styleRevision.findMany({ where: { styleId }, select: { revision: true, status: true } })
     const refusal = newRevisionRefusal(locked.status, revisions)
     if (refusal) throw new ConflictError(refusal)
+    // B-W2b-221: a new revision under the edit rule of the style's lifecycle state.
+    await requireEditRule(tx, styleId, 'NEW_REVISION')
     const id = newId()
     const revision = nextRevisionNumber(revisions)
     const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
@@ -90,6 +96,7 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     const routing = await tx.routingOperation.findMany({
       where: { revisionId: sourceId },
       select: {
+        id: true,
         seq: true,
         operationId: true,
         code: true,
@@ -106,11 +113,14 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       },
       orderBy: { seq: 'asc' },
     })
+    // B-W2b-225: each copy's new id, so its depth (minutes, cells, checkpoint, size times, settings) follows it.
+    const stepCopies = routing.map((step) => ({ from: step.id, to: newId() }))
     if (routing.length > 0) {
       await tx.routingOperation.createMany({
-        data: routing.map((step) => ({ ...step, id: newId(), styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, ...stamp })),
+        data: routing.map((step, index) => ({ ...step, id: stepCopies[index]!.to, styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, ...stamp })),
       })
     }
+    const depth = await copyStepDepthInCommand(tools, { styleId, revisionId: id }, stepCopies)
 
     const sourceLines = await readLines(tx, sourceId)
     const lines = copyLines(sourceLines, newId)
@@ -154,7 +164,7 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     if (!emptyCopy(structure)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, structure } })
     // B-W2b-95: the pattern pieces travel with the BOM, AFTER it (a piece names its line); the range is the style's now.
     const pieces = await copyPiecesInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines), (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })).sizes)
-    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null }
+    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
     tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, ...copied } })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id, revision, status: 'DRAFT', copiedFrom: source.revision } } })
     tools.emit({ type: 'style.revision_created', subject: styleId, companyId: locked.companyId, payload: { styleId, code: locked.code, revisionId: id, revision } })
@@ -211,6 +221,8 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     const row = await findRevision(tx, styleId, revisionId)
     const refusal = releaseRefusal(row, locked.status)
     if (refusal) throw new InvalidStateError(refusal)
+    // B-W2b-221: a release under the edit rule of the style's lifecycle state.
+    await requireEditRule(tx, styleId, 'RELEASE')
     assertTransition(styleRevisionMachine, row.status, 'RELEASED')
     const version = await bumpRevision(tx, revisionId, body.version, now)
 
@@ -247,12 +259,14 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
       data: { status: 'RELEASED', releasedAt: now, releasedById, ...(body.changeNote === undefined ? {} : { changeNote: body.changeNote }) },
       select: { id: true },
     })
+    // B-W2b-225 (PRD-124): it takes effect today (a draft planned for another day is refused); the old revision's days end.
+    const days = await effectivityAtReleaseInCommand(tools, { revisionId, revision: row.revision }, previous?.id ?? null)
     tools.audit({
       recordType: 'StyleRevision',
       recordId: revisionId,
       companyId: locked.companyId,
       before: { status: 'DRAFT', ...(body.changeNote === undefined ? {} : { changeNote: row.changeNote }) },
-      after: { status: 'RELEASED', releasedAt: toUtcIso(now), releasedById, version, lines: lines.length, ...(body.changeNote === undefined ? {} : { changeNote: body.changeNote }) },
+      after: { status: 'RELEASED', releasedAt: toUtcIso(now), releasedById, version, lines: lines.length, ...(body.changeNote === undefined ? {} : { changeNote: body.changeNote }), ...days },
     })
 
     let styleStatus: typeof locked.status = locked.status
@@ -300,12 +314,14 @@ export async function obsoleteRevision(caller: CommandCaller, styleId: string, r
     if (row.status === 'RELEASED') assertMayWrite(context, PRODUCT_BOM_RELEASE, locked.companyId)
     assertTransition(styleRevisionMachine, row.status, 'OBSOLETE')
     const version = await bumpRevision(tx, revisionId, body.version, now, { status: 'OBSOLETE' })
+    // B-W2b-225 (PRD-124): a released revision withdrawn stops applying today.
+    const effectiveTo = row.status === 'RELEASED' ? await effectivityAtWithdrawalInCommand(tools, revisionId) : null
     tools.audit({
       recordType: 'StyleRevision',
       recordId: revisionId,
       companyId: locked.companyId,
       before: { status: row.status },
-      after: { status: 'OBSOLETE', version },
+      after: { status: 'OBSOLETE', version, ...(effectiveTo ? { effectiveTo } : {}) },
       ...(body.reason === undefined ? {} : { reason: body.reason }),
     })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id: revisionId, revision: row.revision, status: 'OBSOLETE', from: row.status } } })

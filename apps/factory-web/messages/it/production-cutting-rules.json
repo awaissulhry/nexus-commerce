@@ -1,0 +1,85 @@
+{
+  "cr": {
+    "title": "Taglio",
+    "intro": "Come il tavolo di taglio di questo stabilimento controlla le pelli e tiene gli avanzi. Una modifica vale da ora: le pelli già riservate, prelevate, tagliate o etichettate restano come erano.",
+    "introDefault": "Questo stabilimento non ha ancora regole di reparto: segue le regole predefinite qui sotto (un lotto di tonalità per ordine, foto facoltativa, 10 dm² l'avanzo minimo). Applica una modifica per dargli le sue.",
+    "retry": "Riprova",
+    "busy": "Salvataggio…",
+    "apply": "Applica",
+    "reason": "Perché (resta nella storia delle modifiche)",
+    "reasonHint": "Facoltativo: qualche parola per chi leggerà la storia.",
+    "fromNow": "La nuova regola di tonalità vale da ora per riserve, prelievi e tagli; le riserve già fatte restano come sono.",
+    "lastChange": "Ultima modifica {when}.",
+    "default": "Le regole con cui parte ogni stabilimento.",
+    "viewOnly": "Solo il responsabile di produzione o il titolare lo modificano.",
+    "done": "Salvato: le regole di taglio valgono da ora.",
+    "unchanged": "Niente da cambiare: le regole erano già così.",
+    "shade": {
+      "title": "Regola di tonalità",
+      "ORDER": {
+        "title": "Un lotto di tonalità per ordine",
+        "body": "Tutte le pelli di un ordine di lavoro o di una riga d'ordine vengono da un solo lotto di tonalità: la riserva e il prelievo rifiutano un altro lotto (l'ufficio può farne passare uno con un motivo), il tavolo di taglio avvisa."
+      },
+      "GARMENT": {
+        "title": "Un lotto di tonalità per capo",
+        "body": "Un ordine può usare più lotti di tonalità; il tavolo di taglio avvisa quando un pezzo completerebbe un capo da un lotto diverso dagli altri suoi pezzi."
+      },
+      "OFF": {
+        "title": "Nessun controllo di tonalità",
+        "body": "Nessun lotto di tonalità è controllato alla riserva, al prelievo o al tavolo di taglio."
+      }
+    },
+    "photo": {
+      "title": "Foto della pelle prima del taglio",
+      "toggle": "Chiedi una foto della pelle prima del taglio",
+      "on": "Chiesta prima del primo taglio di ogni pelle",
+      "off": "Facoltativa",
+      "onHint": "Chi taglia fa una foto della pelle sul tavolo prima del primo taglio; senza, il taglio si ferma, con il motivo.",
+      "offHint": "Chi taglia può fare una foto della pelle sul tavolo; niente la aspetta."
+    },
+    "remnant": {
+      "title": "Avanzo minimo tenuto",
+      "area": "Avanzo minimo, superficie",
+      "unit": "Unità",
+      "hint": "Un avanzo più piccolo è scarto, non un ritaglio ({other}). Al massimo 10 m².",
+      "hintNone": "Un avanzo più piccolo è scarto, non un ritaglio. Al massimo 10 m²."
+    },
+    "held": {
+      "area": "Indica l'avanzo minimo come superficie sopra 0, con al massimo quattro decimali.",
+      "tooLarge": "L'avanzo minimo è al massimo 10 m² (una pelle intera è 4–6 m²).",
+      "reasonLong": "Il motivo è al massimo di 500 caratteri."
+    },
+    "read": {
+      "shade": "Regola di tonalità: {rule}.",
+      "photoOn": "Prima del primo taglio di una pelle si chiede una sua foto.",
+      "photoOff": "La foto della pelle prima del taglio è facoltativa.",
+      "remnant": "Un avanzo più piccolo di {area} è scarto, non un ritaglio."
+    },
+    "problem": {
+      "read": "Queste regole non si sono potute leggere. Riprova.",
+      "write": "La modifica non è stata salvata. Riprova.",
+      "changed": "Qualcuno ha cambiato nel frattempo le regole di questo stabilimento: ricaricale, poi applica di nuovo.",
+      "forbidden": "Il tuo ruolo non può modificarlo.",
+      "gone": "Questo stabilimento o questa azienda non c'è più.",
+      "invalid": "La modifica non è valida: controlla i valori.",
+      "offline": "Nessuna connessione: niente è stato salvato. Riprova quando sei di nuovo in linea."
+    },
+    "tolerance": {
+      "title": "Tolleranza di superficie della pelle",
+      "intro": "Di quanto la superficie misurata di un lotto di pelle può differire da quella della conceria prima che il controllo apra un reclamo, quando la sua riga d'ordine d'acquisto non ne indica una. La tolleranza della riga d'ordine vale sempre per prima.",
+      "now": {
+        "COMPANY": "Ora: {percent} % in più o in meno, quella di questa azienda.",
+        "TENANT": "Ora: {percent} % in più o in meno, quella di tutte le aziende.",
+        "DEFAULT": "Ora: {percent} % in più o in meno, quella predefinita (nessuna azienda ne indica una)."
+      },
+      "own": "Questa azienda tiene la sua tolleranza",
+      "ownHint": "Da 0 a 100 per cento, al massimo due decimali: il controllo della superficie in accettazione e la rimisurazione la leggono da ora.",
+      "fromTenant": "Spento: l'azienda segue il {percent} % di tutte le aziende.",
+      "fromDefault": "Spento: l'azienda segue quella predefinita, 2 %.",
+      "percent": "Tolleranza in percentuale",
+      "viewOnly": "Solo chi gestisce gli acquisti lo modifica.",
+      "held": "Indica la tolleranza come percentuale da 0 a 100, con al massimo due decimali.",
+      "done": "Salvato: la tolleranza di superficie della pelle vale da ora."
+    }
+  }
+}

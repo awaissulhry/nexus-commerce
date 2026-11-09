@@ -75,17 +75,17 @@ export interface FloorRulesActions {
  * widening asks a fresh code, narrowing asks "Record stations only"; the standard bundle size; the rules this version
  * fixes. Reason codes (SCR-088, B-W2a-46): the shared reason list editor, passed in by the page as `codes`. Fetches nothing.
  */
-export function FloorRulesView({ model, actions, codes, offstd, routing }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode }) {
+export function FloorRulesView({ model, actions, codes, offstd, routing, cutting }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode; cutting?: ReactNode }) {
   return (
     <WithMessages namespaces={FLOOR_RULES_NAMESPACES}>
-      <FloorRules model={model} actions={actions} codes={codes} offstd={offstd} routing={routing} />
+      <FloorRules model={model} actions={actions} codes={codes} offstd={offstd} routing={routing} cutting={cutting} />
     </WithMessages>
   )
 }
 
 const lineText = (t: (key: string, params?: Readonly<Record<string, string | number>>) => string, line: Line) => t(line.key, line.params)
 
-function FloorRules({ model, actions, codes, offstd, routing }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode }) {
+function FloorRules({ model, actions, codes, offstd, routing, cutting }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode; cutting?: ReactNode }) {
   const t = useT('floor-rules')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -183,7 +183,11 @@ function FloorRules({ model, actions, codes, offstd, routing }: { model: FloorRu
           {routing}
         </Slot>
       ) : detail ? (
-        <Rules key={`${detail.site.id}-${detail.rules.version ?? 0}`} model={model} actions={actions} detail={detail} />
+        <>
+          <Rules key={`${detail.site.id}-${detail.rules.version ?? 0}`} model={model} actions={actions} detail={detail} />
+          {/* B-W2b-219: the Cutting card (shade rule, photo before cutting, smallest remnant) and the leather area tolerance. */}
+          {cutting ?? null}
+        </>
       ) : model.detail.problem ? (
         <Failed actions={actions} problem={model.detail.problem} />
       ) : (

@@ -229,6 +229,10 @@
     "REMNANT_TOO_SMALL": {
       "message": "Questo pezzo è più piccolo dell'avanzo minimo tenuto: è scarto.",
       "fix": "Chiudi la pelle con Nessun avanzo · finita."
+    },
+    "PHOTO_REQUIRED": {
+      "message": "Questo reparto chiede una foto della pelle sul tavolo prima del taglio.",
+      "fix": "Fai la foto della pelle, poi taglia."
     }
   },
   "check": {

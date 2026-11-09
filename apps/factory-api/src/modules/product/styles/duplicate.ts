@@ -216,6 +216,9 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     const problems: Issue[] = [...(await brandProblems(tx, style.brandPartyId, companyId)), ...(await templateProblems(tx, style.measurementTemplateId, style, companyId))]
     if (problems.length > 0) throw invalid(problems)
 
+    // B-W2b-221 (PRD-008): the copy keeps its source's product type while that type is active (an archived one is not newly given).
+    const sourceTypeId = (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { productTypeProfileId: true } })).productTypeProfileId
+    const keptType = sourceTypeId === null ? null : await tx.productTypeProfile.findFirst({ where: { id: sourceTypeId, status: 'ACTIVE', productType: style.productType }, select: { id: true } })
     const notes: CopyNote[] = []
     if (range.dropped.length > 0) notes.push(leftOutNote('SIZES_ARCHIVED', { sizes: range.dropped }))
     const id = newId()
@@ -223,7 +226,7 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     const stamp = { createdAt: now, updatedAt: now, createdById }
     // W2b (B-W2b-25): the copy names its source and the revision its parts came from (the database sets them once).
     await tx.style.create({
-      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, garmentTracking: source.garmentTracking, copiedFromStyleId: styleId, copiedFromRevisionId: revision?.id ?? null, ...stamp },
+      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, garmentTracking: source.garmentTracking, copiedFromStyleId: styleId, copiedFromRevisionId: revision?.id ?? null, productTypeProfileId: keptType?.id ?? null, ...stamp },
       select: { id: true },
     })
     tools.emit({ type: 'style.created', subject: id, companyId, payload: { styleId: id, code: style.code } })

@@ -271,6 +271,8 @@ describe('fabric used at cut finish (MES-046)', () => {
     const key = idem()
     const confirmed = await ok('floor', 'POST', `/production/lays/${lay(0).id}/fabric-used`, {}, 200, key)
     expect(confirmed.fabricUsed).toMatchObject({ posted: true, confirmed: '12.6000', estimated: '12.0000', recorded: '12.6000' })
+    // B-W2b-221 (PRD-105): company A's tolerance (the seed's ProductSettings) warns above 3 % for the lining: +5 % is a warning.
+    expect(confirmed.warnings).toEqual([{ code: 'CONSUMPTION_ABOVE_TOLERANCE', message: '12.6 m of fabric is 0.6 m more than the estimate of 12 m (+5%): above the 3% tolerance.' }])
     expect((await ok('floor', 'POST', `/production/lays/${lay(0).id}/fabric-used`, {}, 200, key)).replayed).toBe(true)
     // Roll one gave 4 × 2.05 + 0.3 = 8.5 m, roll two 2 × 2.05 = 4.1 m; each split 5 : 3 between the work orders (garments a ply).
     const issues = await issuesOf(lay(0).id)
@@ -286,9 +288,16 @@ describe('fabric used at cut finish (MES-046)', () => {
         [R.two!.id, ['45.9000', 'PARTIAL']],
       ]),
     )
+    // B-W2b-221 (PRD-105): with "must match", a figure that differs is refused until a note explains it (the database's owner sets it).
+    await admin(`UPDATE "ProductSettings" SET "consumptionTolerance" = 'MATCH', "consumptionTolerancePct" = NULL WHERE id = $1`, [A.companyA])
+    const unexplained = await refused('planner', 'POST', `/production/lays/${lay(0).id}/fabric-used`, { confirmed: '1290', uom: 'CM' }, 409)
+    expect(refusal(unexplained)).toBe('refusal/CONSUMPTION_MUST_MATCH')
+    expect(unexplained.message).toBe('The fabric used must match the estimate: 12.9 m is 0.9 m more than the estimate of 12 m (+7.5%). Say why in a note, or confirm 12 m.')
     // The cutter's correction changes the confirmed figure only.
     const corrected = await ok('planner', 'POST', `/production/lays/${lay(0).id}/fabric-used`, { confirmed: '1290', uom: 'CM', note: 'Two plies laid again' })
     expect(corrected.fabricUsed).toMatchObject({ confirmed: '12.9000', note: 'Two plies laid again', words: { en: '0.9 m more than the estimate (+7.5%).' } })
+    expect(corrected.warnings).toEqual([])
+    await admin(`UPDATE "ProductSettings" SET "consumptionTolerance" = 'WARN_ABOVE', "consumptionTolerancePct" = 3 WHERE id = $1`, [A.companyA])
     expect(await issuesOf(lay(0).id)).toHaveLength(4)
     const consumed = await events('cut_consumption.changed')
     expect(consumed.map((event) => [event.change, event.moveIds.length, event.workOrderIds.length])).toEqual([

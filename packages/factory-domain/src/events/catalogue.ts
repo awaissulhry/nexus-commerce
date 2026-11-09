@@ -125,6 +125,8 @@ import { events as shares } from '../shares/events'
 import { events as plantDies } from '../plant-dies/events'
 // B-W2b-208: the textile, leather and origin checks (a check switched on or off).
 import { events as textileRules } from '../textile-rules/events'
+// B-W2b-221: the style lifecycle, product types and product settings (a move, a type changed, the settings changed).
+import { events as productLifecycle } from '../product-lifecycle/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -139,6 +141,10 @@ import { events as supplierQuestionnaire } from '../supplier-questionnaire/event
 import { events as productionInstructions } from '../production-instructions/events'
 // B-W2b-215: SMV versions and an operation's SMV taking an approved version.
 import { events as productMinutes } from '../product-minutes/events'
+// B-W2b-219: the cutting follow-ups' settings (a site's cutting rules, the leather area tolerance).
+import { events as productionCuttingRules } from '../production-cutting-rules/events'
+// B-W2b-225: a routing step's quality checkpoint opened a check.
+import { events as routingDepth } from '../routing-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -344,7 +350,13 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-214
   ...productionInstructions,
   // B-W2b-215
-  ...productMinutes] as const satisfies readonly EventDefinition[]
+  ...productMinutes,
+  // B-W2b-219
+  ...productionCuttingRules,
+  // B-W2b-225
+  ...routingDepth,
+  // B-W2b-221
+  ...productLifecycle] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

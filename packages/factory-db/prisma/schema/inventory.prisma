@@ -307,6 +307,8 @@ model Lot {
   recutTickets        CutTicket[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
+  // W2b-4 samples.prisma (wave 29/33): the swatches of it sent to brands.
+  sampleSwatches  SampleSwatch[]
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
   claimLines  SupplierClaimLine[]
   kitLines    SubcontractKitLine[]

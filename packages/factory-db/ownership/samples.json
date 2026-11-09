@@ -1,0 +1,56 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/samples.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 29/33 (B-W2b-212): samples and pre-production gates. The office (factory_runtime) reads and writes through apps/factory-api's modules/sales/samples, sales/sample-decisions and planning/milestones, always with command(). A portal or link session (factory_partner_runtime) reads its own party's sample rounds, swatches and shipments with their decisions, never who asked or decided in the office, the round's internal instructions (@internal) or a cost (the round's charge is a price: readable); it decides by answering the approval request (links-depth.prisma), never by writing these rows. Fit measurements, fit comments and order gates are the office's. The floor reads none (a sample work order is a WorkOrder of kind SAMPLE). No personal data. Nothing is deleted but measurements and comments of an open round, swatches and shipments not sent, and gates neither passed nor overridden (the …_changes_samples_w2b_guards triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SampleRound": {
+      "about": "The office requests a sample round, moves its stage, records its decision (its own, or the brand's answer to the approval request), the certification result and certificate, or cancels it; never deleted. The brand (partner) reads its own rounds with their decision, without the creator, the office decider or the internal instructions.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["instructions", "decidedById", "createdById"] }
+      }
+    },
+    "SampleMeasurement": {
+      "about": "The office records the fit measured against the frozen spec per point of measure and size while the round is open (an office session on a tablet too), and removes a wrong row while it is open.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SampleComment": {
+      "about": "The office writes fit comments per point of measure or body area while the round is open, resolves them at any time, and removes one while the round is open.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SampleSwatch": {
+      "about": "The office records a leather or colour swatch, sends it, asks the brand by an approval request and records the decision once; it removes one not yet sent. The brand (partner) reads its own swatches with their decision, without the creator or the office decider.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["decidedById", "createdById"] }
+      }
+    },
+    "SampleShipment": {
+      "about": "The office records a round's sample shipments (courier, tracking, sent, received) and removes one not yet sent. The party it goes to or comes from (partner) reads it, without the creator.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "OrderGate": {
+      "about": "The office (planning) sets a sales order's pre-production gates, passes them, lets the order start before one (an override by someone who is neither the gate's owner nor its maker, with a reason) and removes a gate neither passed nor overridden. The partner reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

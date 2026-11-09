@@ -47,7 +47,7 @@ type ShadeRow = Prisma.ShadeGroupGetPayload<{ select: typeof SHADE_SELECT }>
 const shadeViewOf = (row: ShadeRow) => ({ id: row.id, label: row.label, outOfShade: row.outOfShade, swatchRef: row.swatchRef, lotId: row.lotId })
 const byShadeOrder = (a: ShadeRow, b: ShadeRow) => a.sortOrder - b.sortOrder || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0)
 
-type Reader = Pick<CommandTx, 'leatherGrade' | 'itemGradeRule' | 'shadeGroup' | 'hideMeasure' | 'user' | 'worker' | 'peopleLegalGate' | 'stockMove' | 'cutLog' | 'auditLog' | 'lot'>
+type Reader = Pick<CommandTx, 'leatherGrade' | 'itemGradeRule' | 'shadeGroup' | 'hideMeasure' | 'user' | 'worker' | 'peopleLegalGate' | 'stockMove' | 'cutLog' | 'auditLog' | 'lot' | 'purchasingSettings' | '$queryRaw'>
 
 /** The hide's article: its grades, its rules, the shade groups the hide may be sorted into. */
 async function articleFacts(db: Reader, hide: HideData) {

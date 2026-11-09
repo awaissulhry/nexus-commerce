@@ -53,6 +53,8 @@ const SESSIONS: Record<string, SessionContext> = {
   cutter: { audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1, deviceId: deviceA1, grants: [grant(['floor.work', 'production.cut', 'inventory.issue'], [companyA], [siteA1])] },
   manager: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['workorders.view', 'production.cut', 'production.cut.correct', 'files.read'])] },
   reserver: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['inventory.reserve', 'inventory.stock.view'])] },
+  // B-W2b-219: sets the site's cutting rules (Floor rules & codes › Cutting).
+  rules: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['production.settings.view', 'production.settings.manage'])] },
 }
 
 type Json = Record<string, any>
@@ -345,5 +347,55 @@ describe('the wrong hide (MES-063) and the photo of the hide (MES-060)', () => {
     expect(await admin(`SELECT "recordType", "recordId", visibility::text[] AS visibility, "floorSiteId" FROM "StoredFile" WHERE id = $1`, [own])).toEqual([{ recordType: 'Hide', recordId: hides['RES-1']!.id, visibility: ['OFFICE', 'FLOOR'], floorSiteId: siteA1 }])
     // The reserved hide is issued: nothing waits any more, so the other one is no longer the wrong hide.
     expect((await scan('RES-2')).checks.standing).toEqual([])
+  })
+})
+
+describe('B-W2b-219: the site\'s shade rule and the photo before cutting (Floor rules & codes › Cutting)', () => {
+  /** The site's cutting rules from now on, through the office's route at the version read. */
+  async function setRules(change: Json): Promise<Json> {
+    const now = await ok('rules', 'GET', `/production/settings/${siteA1}/cutting-rules`)
+    return ok('rules', 'POST', `/production/settings/${siteA1}/cutting-rules`, { ...change, ...(now.version === null ? {} : { version: now.version }) }, 200, cid('rules'))
+  }
+  async function photoOf(hide: string): Promise<string> {
+    const bytes = Buffer.from(`made-up photo of ${hide} ${run}`)
+    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    const answer = await ok('cutter', 'POST', `/production/cutting/hides/${hides[hide]!.id}/photos`, { originalName: 'hide.jpg', contentType: 'image/jpeg', sizeBytes: bytes.length, sha256 }, 201, cid('photo'))
+    const sent = await app.inject({ method: 'PUT', url: answer.upload.url, headers: answer.upload.headers, payload: bytes })
+    expect(sent.statusCode, sent.body).toBeLessThan(300)
+    return (await ok('cutter', 'POST', `/production/cutting/hides/${hides[hide]!.id}/photos/${answer.file.id}/complete`, undefined, 200, cid('complete'))).file.id
+  }
+
+  it('reads the site\'s rule: OFF checks no shade lot, GARMENT none for the whole order, ORDER warns again', async () => {
+    // OTHER-LOT's SHADE was passed by a lead above (it no longer stands): the warnings themselves say what the rule checks.
+    const kinds = (card: Json): string[] => (card.checks.warnings as Json[]).map((warning) => warning.kind)
+    expect(kinds(await scan('OTHER-LOT'))).toContain('SHADE')
+    expect((await setRules({ shadeRule: 'OFF' })).rules.shadeRule).toBe('OFF')
+    const off = await scan('OTHER-LOT')
+    expect(off.checks.shade.rule).toBe('OFF')
+    expect(kinds(off)).not.toContain('SHADE')
+    await setRules({ shadeRule: 'GARMENT' })
+    const garment = await scan('OTHER-LOT')
+    expect(garment.checks.shade.rule).toBe('GARMENT')
+    expect(kinds(garment)).not.toContain('SHADE')
+    await setRules({ shadeRule: 'ORDER' })
+    expect(kinds(await scan('OTHER-LOT'))).toContain('SHADE')
+  })
+
+  it('asks a photo before the first cut of a hide where the site says so: refused in words without it, then not again', async () => {
+    await setRules({ hidePhotoRequired: true })
+    expect((await scan('RES-2')).checks.photo).toEqual({ required: true })
+    // RES-1 was cut with its photo (above): it was on the table already.
+    expect((await scan('RES-1')).checks.photo).toEqual({ required: false })
+    const before = await cutsOf('RES-2')
+    const error = await no('cutter', 'POST', cutUrl(), cutBody('RES-2'), 409)
+    expect(pathsOf(error)).toEqual(['refusal/PHOTO_REQUIRED'])
+    expect(error.message).toBe(`This site asks a photo of hide ${hides['RES-2']!.code} on the table before it is cut: take the photo, then cut.`)
+    expect(await cutsOf('RES-2')).toBe(before)
+    const photo = await photoOf('RES-2')
+    expect((await ok('cutter', 'POST', cutUrl(), cutBody('RES-2', { photoFileId: photo }), 201)).cut).toMatchObject({ photoFileId: photo })
+    // Photographed once: its next entry needs none.
+    expect((await scan('RES-2')).checks.photo).toEqual({ required: false })
+    await ok('cutter', 'POST', cutUrl(), cutBody('RES-2'), 201)
+    await setRules({ hidePhotoRequired: false })
   })
 })

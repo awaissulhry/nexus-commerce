@@ -275,6 +275,9 @@
       "INCOMING_INSPECTION": "Incoming inspection",
       "INCIDENT": "Incident",
       "WORK_INSTRUCTION": "Work instruction",
+      "CHANGE_REQUEST": "Change request",
+      "CHANGE_ORDER": "Change order",
+      "SAMPLE_ROUND": "Sample round",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },
