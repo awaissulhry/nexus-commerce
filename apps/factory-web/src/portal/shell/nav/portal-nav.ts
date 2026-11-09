@@ -50,6 +50,11 @@ export interface PortalAreaDef {
   kinds: readonly PortalKind[]
   /** The task list's area its badge counts (`badges[].area` of GET /portal/tasks). */
   badge?: string
+  /**
+   * B-W2b-203: the pages that show what the badge counts. Given, the row carries its badge only while the person keeps one
+   * of them: a count must lead to its requests (Home lists every one of them anyway).
+   */
+  badgePages?: readonly string[]
   /** On a phone: a tab of the bottom bar, or a row under More. */
   phone: 'tab' | 'more'
   /** The second key of its `g` chord (`g o` Orders). */
@@ -93,6 +98,9 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     permission: 'portal.home.view',
     kinds: ['CUSTOMER'],
     badge: 'quotes',
+    // B-W2b-203: quotes to accept and approvals are answered on Quotes & requests (W3) or Samples & tech packs (W2b-4); the
+    // Catalogue alone shows neither, so it carries no badge until one of them is built (Home lists them).
+    badgePages: ['quotes.list'],
     phone: 'more',
     built: false,
     pages: [
@@ -189,6 +197,15 @@ const collapse = (area: AreaNavArea): AreaNavArea => {
   return { ...rest, label: items[0].label, href: items[0].href }
 }
 
+/** B-W2b-203: an area keeps its badge only while the person keeps a page that shows what it counts (`badgePages`). */
+const badgeLeads = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavArea => {
+  if (!area.badge || !def?.badgePages) return area
+  const pages = area.sections?.flatMap((section) => section.items.map((item) => item.id)) ?? []
+  if (pages.some((id) => def.badgePages!.includes(id))) return area
+  const { badge: _badge, ...rest } = area
+  return rest
+}
+
 /** The navigation this person may open, in rail order (fails closed; unbuilt pages hidden unless `everyPage`). */
 export function portalNavFor(access: PortalAccess, defs: readonly PortalAreaDef[] = PORTAL_AREAS): AreaNav {
   const built = defs.flatMap((def): PortalAreaDef[] => {
@@ -201,7 +218,8 @@ export function portalNavFor(access: PortalAccess, defs: readonly PortalAreaDef[
   // A preview reads as every kind of its party: the union of each kind's areas, the first of an address kept.
   const ids = new Set<string>()
   const hrefs = new Set<string>()
-  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map(collapse))
+  const defOf = new Map(defs.map((def) => [def.id, def]))
+  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map((area) => collapse(badgeLeads(area, defOf.get(area.id)))))
   return {
     view: 'portal',
     areas: areas.filter((area) => {

@@ -167,14 +167,20 @@ p.fw-cl-hint[role='status'] {
   cursor: not-allowed;
 }
 
-/* A picked item's pieces and serial, under its card. */
+/* A picked item's pieces and serial, under its card. B-W2b-203: a wrapping row, not an auto-fit grid (at 390 px the grid made
+   a second 44 px column and the serial's Scan button ran 47 px off the screen). */
 .fw-cl-pick {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--nds-space-12);
   padding: var(--nds-space-12);
   margin-left: var(--nds-space-16);
   border-left: 3px solid var(--nds-border);
+}
+
+.fw-cl-pick > * {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .fw-cl-pair {

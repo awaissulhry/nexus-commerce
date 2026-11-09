@@ -292,7 +292,9 @@
     "sent": "Gli ordini già inviati mantengono il loro indirizzo; i nuovi ordini non potranno sceglierlo.",
     "confirm_one": "Rimuovi indirizzo",
     "confirm_other": "Rimuovi {count} indirizzi",
-    "back": "Per usarlo di nuovo, aggiungilo di nuovo (lo verifichiamo di nuovo)."
+    "back": "Per usarlo di nuovo, aggiungilo di nuovo (lo verifichiamo di nuovo).",
+    "acknowledge_one": "Ho capito: l'indirizzo viene rimosso; per usarlo di nuovo lo aggiungo di nuovo.",
+    "acknowledge_other": "Ho capito: questi {count} indirizzi vengono rimossi; per usarne uno di nuovo lo aggiungo di nuovo."
   },
   "company": {
     "title": "Dati aziendali",

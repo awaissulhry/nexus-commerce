@@ -6,7 +6,7 @@ import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { CheckList as DsCheckList } from '@nexus/ui/patterns/checklist/index'
 import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
-import { useT } from '../../../lib/i18n/provider'
+import { useScopedT, useT } from '../../../lib/i18n/provider'
 import type { JourneyStep, Phrase, StepState } from './model'
 
 /**
@@ -77,7 +77,8 @@ export function DialogFrame({
   tone?: 'primary' | 'danger'
   done?: ReactNode
 }) {
-  const t = useT('finance')
+  // B-W2b-203: a caller's problem may name its own catalogue (`finance-accounting:…`, `portal-accountant:…`): scoped, else the raw key showed.
+  const t = useScopedT('finance')
   return (
     <Modal
       open

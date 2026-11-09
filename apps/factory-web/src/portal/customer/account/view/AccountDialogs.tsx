@@ -112,6 +112,8 @@ export function AccountDialogs({ dialog, actions }: { dialog: AccountDialog | nu
         confirmLabel: dialog.busy ? t('state.saving') : t('remove.confirm', { count: dialog.lines.length }),
         consequences: [...dialog.lines, t('remove.sent')],
         reversal: { verb: t('remove.back'), fidelity: 'none' },
+        // B-W2b-203: a local change that cannot be undone asks an acknowledgement (the DS holds Confirm without one).
+        acknowledge: t('remove.acknowledge', { count: dialog.lines.length }),
         ...(dialog.failed ? { refusal: { reason: dialog.failed } } : {}),
       }}
       onConfirm={() => actions?.onRemoveConfirm?.()}

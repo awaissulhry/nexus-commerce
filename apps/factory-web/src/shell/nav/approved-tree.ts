@@ -10,7 +10,7 @@
  *    wave and why.
  *  - FLOOR: the W0–W2a floor tasks with their tile (floor/model.ts TILE_KEYS) and the station modes the tree gives them
  *    (My work: see its line).
- *  - LINKS: the W1 link pages with their task (links/_nav/link-types.ts).
+ *  - LINKS: the W1 link pages with their task (links/_nav/link-types.ts); LINKS_NO_TOKEN the ones a QR or a typed code opens.
  *  - FRAME: the top bar's own pages the palette finds (design 01 "Frame & me").
  */
 
@@ -673,6 +673,14 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.file.payroll', title: 'Payroll file', scr: ['SCR-272'], task: 'payroll-file' },
   // W2b: B-W2b-200 Join a record (a RECORD_INVITE link's shared record).
   { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
+]
+
+/**
+ * B-W2b-203: the tree's link pages that open with no token, so no link task (the label's QR, a typed code): their own
+ * addresses in the Links view. B-W2b-166 the public DoC (`/doc` Type the code, `/doc/<code>` the declaration).
+ */
+export const LINKS_NO_TOKEN: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly scr: readonly string[]; readonly hrefs: readonly string[] }> = [
+  { id: 'links.doc', title: 'Public DoC', titleIt: 'DoC pubblica', scr: ['SCR-102'], hrefs: ['/doc', '/doc/[code]'] },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [
