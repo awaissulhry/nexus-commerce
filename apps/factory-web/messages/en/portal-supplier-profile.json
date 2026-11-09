@@ -1,0 +1,408 @@
+{
+  "documents": {
+    "title": "Documents",
+    "upload": "Upload",
+    "uploadOne": "Upload a document",
+    "sendAnother": "Send another",
+    "withUs": "With us for our check",
+    "askTitle": "{kind} for {for}",
+    "failed": "We could not read your documents. Nothing is lost: try again.",
+    "openFailed": "We could not open this document. Try again in a moment.",
+    "downloadFailed": "Some documents could not be downloaded. Try again in a moment.",
+    "kind": {
+      "SUPPLIER_CERTIFICATE": "Certificate",
+      "TEST_REPORT": "Test report",
+      "DECLARATION": "Declaration",
+      "OTHER": "A document"
+    },
+    "for": {
+      "Party": "your company",
+      "PurchaseOrder": "purchase order {label}",
+      "ShipNotice": "ship notice {label}",
+      "SubcontractOrder": "job {label}"
+    },
+    "forCompany": "Your company",
+    "group": {
+      "NEEDED": "Needed for our work",
+      "RENEW": "To renew",
+      "AGAIN": "To send again",
+      "ASKED": "Asked by us"
+    },
+    "why": {
+      "ruleBlock_one": "Needed before we go on with {records}.",
+      "ruleBlock_other": "Needed before we go on with {records}.",
+      "ruleWarn_one": "We would like it for {records}.",
+      "ruleWarn_other": "We would like it for {records}.",
+      "ruleExpired_one": "The one we have expired: needed before we go on with {records}.",
+      "ruleExpired_other": "The one we have expired: needed before we go on with {records}.",
+      "company": "Needed to work with your company.",
+      "companyWarn": "We would like it to work with your company.",
+      "companyExpired": "The one we have expired: needed to work with your company.",
+      "expiry": "The one we have expires soon: send the new one.",
+      "asked": "We asked for it.",
+      "askedBy": "{name} asked for it.",
+      "refused": "We could not accept the last one: see Your documents for why.",
+      "refusedReason": "We could not accept the last one: “{reason}”"
+    },
+    "asked": {
+      "title": "We ask for",
+      "subtitle": "Documents we need, with why and by when.",
+      "empty": "We need nothing right now.",
+      "open_one": "1 to send",
+      "open_other": "{count} to send",
+      "allWithUs": "All with us"
+    },
+    "mine": {
+      "title": "Your documents",
+      "subtitle": "Certificates, test reports and declarations you sent us, with our check.",
+      "empty": "No documents yet.",
+      "emptyHint": "Send us your certificates, test reports and declarations: we check each one before it counts.",
+      "count_one": "1 document",
+      "count_other": "{count} documents",
+      "waiting_one": "1 waiting for our check",
+      "waiting_other": "{count} waiting for our check"
+    },
+    "col": {
+      "kind": "Kind and file",
+      "for": "For",
+      "issuer": "Issuer",
+      "number": "Number",
+      "issued": "Issued",
+      "expires": "Expires",
+      "status": "Our check",
+      "actions": "Actions"
+    },
+    "state": {
+      "NOT_RECEIVED": "Not received",
+      "CHECKING": "Being checked",
+      "HELD": "Held",
+      "WAITING": "Waiting for our check",
+      "ACCEPTED": "Accepted",
+      "EXPIRED": "Expired",
+      "REJECTED": "Not accepted"
+    },
+    "reason": "Why: {reason}",
+    "acceptedOn": "Accepted on {date}",
+    "sentOn": "Sent on {date}",
+    "noExpiry": "No expiry",
+    "expired": "Expired",
+    "expiresIn": "expires in {left}",
+    "open": "Open",
+    "openOne": "Open {name} in a new tab",
+    "opening": "Opening…",
+    "download": "Download",
+    "downloadN_one": "Download 1",
+    "downloadN_other": "Download {count}",
+    "replace": "Replace with a new version",
+    "again": "Upload again",
+    "rowMenu": "More for {name}"
+  },
+  "upload": {
+    "title": "Upload a document",
+    "titleReplace": "Replace with a new version",
+    "for": "For {what}",
+    "check": "We check it before it counts; you see our answer here.",
+    "checkReplace": "The one in force ({name}) stays until we accept the new one.",
+    "kind": "Kind",
+    "kindHint": {
+      "SUPPLIER_CERTIFICATE": "ISO 9001, LWG audit, insurance, DURC…",
+      "TEST_REPORT": "Cr VI, REACH tests of a lot or dye batch…",
+      "DECLARATION": "REACH declaration, signed code of conduct…"
+    },
+    "file": "File",
+    "fileHint": "PDF, JPG or PNG, at most 20 MB.",
+    "remove": "Remove",
+    "removeFile": "Remove {name}",
+    "issuer": "Issuer",
+    "issuerHint": "Who issued it (the laboratory, the certifying body).",
+    "number": "Number",
+    "issued": "Issued on",
+    "expires": "Expires on",
+    "expiresHint": "Leave it empty if it does not expire.",
+    "articles": "For which articles",
+    "lots": "For which lots or dye batches",
+    "codesHint": "Codes as you write them, separated by commas.",
+    "note": "A note for us",
+    "noteHint": "Optional.",
+    "cancel": "Cancel",
+    "send": "Send for review",
+    "sending": "Sending…",
+    "problem": {
+      "kind": "Choose what kind of document it is.",
+      "file": "Choose the file.",
+      "fileType": "Send a PDF, JPG or PNG.",
+      "fileSize": "The file is larger than 20 MB.",
+      "fileEmpty": "The file is empty.",
+      "issued": "The issue date cannot be after today.",
+      "expires": "Send a document valid today: it expires today or later, and after it was issued.",
+      "codes": "One code each, at most 60 characters, at most {max} codes.",
+      "tooLong": "This is too long."
+    },
+    "failed": {
+      "forbidden": "Your access does not let you send documents: ask your admin for the right to send files.",
+      "answered": "This request was answered or withdrawn meanwhile. We read the page again.",
+      "gone": "What this document was for is no longer open. We read the page again: choose again.",
+      "invalid": "This was not accepted as it is. Check the fields and try again.",
+      "wait": "Too many tries in a short time. Wait a minute and try again.",
+      "signedOut": "Your session ended. Sign in again: what you typed is kept until you leave.",
+      "store": "The file did not reach us. Check your connection and send it again.",
+      "network": "We could not reach the portal. Check your connection and try again."
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "readFailed": "We could not read your company data. Nothing is lost: try again.",
+    "failed": {
+      "clash": "A change of one of these waits for our check already, or it changed meanwhile. We read your profile again: withdraw that change first, or wait for our answer.",
+      "decided": "We answered this request meanwhile. We read your profile again.",
+      "invalid": "One of the changes was not accepted as it is. Check it and try again.",
+      "forbidden": "Your access does not let you change the company data: ask your admin.",
+      "wait": "Too many tries in a short time. Wait a minute and try again.",
+      "network": "We could not reach the portal. Check your connection and try again."
+    },
+    "notSentYet": "Not sent yet: send it with “Send changes for our check”.",
+    "keep": "Keep this change",
+    "cancel": "Cancel",
+    "edit": "Change",
+    "remove": "Remove",
+    "removeN_one": "Remove 1",
+    "removeN_other": "Remove {count}",
+    "undo": "Undo this change",
+    "drop": "Drop it",
+    "rowMenu": "More for {name}",
+    "send": "Send changes for our check",
+    "sending": "Sending…",
+    "changesTyped_one": "1 change for our check",
+    "changesTyped_other": "{count} changes for our check",
+    "company": {
+      "title": "Company",
+      "subtitle": "Your addresses and website. A change goes to our buyer for a check before it counts.",
+      "legalName": "Legal name",
+      "tradeName": "Trade name",
+      "vatNumber": "VAT number",
+      "fiscalCode": "Tax code",
+      "website": "Website",
+      "websiteHint": "It starts with https://",
+      "websiteWaiting": "A change of your website waits for our check.",
+      "taxHint": "A new legal name or VAT number is ours to record: write to us.",
+      "ask": "Write to us"
+    },
+    "addresses": {
+      "title": "Addresses",
+      "add": "Add an address",
+      "count_one": "1 address",
+      "count_other": "{count} addresses",
+      "empty": "No addresses yet.",
+      "emptyHint": "Add your registered office or a pickup address."
+    },
+    "address": {
+      "addTitle": "Add an address",
+      "editTitle": "Change an address",
+      "subtitle": "Our buyer checks it before it counts.",
+      "kinds": "What it is for",
+      "kindsStay": "Used for: {kinds}. What an address is used for stays as it is: add a new one for another use.",
+      "nameHint": "A short name (“Pickup warehouse”).",
+      "provinceHint": "For Italy the two letters (PI, FI, MI…).",
+      "countryHint": "Two letters (IT, DE, FR…).",
+      "notesHint": "Opening hours, the loading bay…"
+    },
+    "contacts": {
+      "title": "Contacts",
+      "subtitle": "Who handles orders, invoices and quality.",
+      "add": "Add a contact",
+      "count_one": "1 contact",
+      "count_other": "{count} contacts",
+      "empty": "No contacts yet.",
+      "emptyHint": "Add who handles orders, invoices and quality: our documents go to them."
+    },
+    "contact": {
+      "addTitle": "Add a contact",
+      "editTitle": "Change a contact",
+      "subtitle": "Our buyer checks it before it counts.",
+      "emailHint": "Our orders, invoices or quality documents go to this address.",
+      "roles": "What they handle",
+      "languageHint": "The language of our e-mails to them.",
+      "languageCompany": "As the company"
+    },
+    "users": {
+      "title": "Portal users",
+      "invite": "Invite a colleague",
+      "onlyYouHint": "Invite the colleagues who confirm orders, send invoices or certificates."
+    },
+    "changes": {
+      "title": "Changes for our check",
+      "subtitle": "What you sent us, and our answers.",
+      "waitingSince": "Waiting for our check since {date}",
+      "sentBy": "Sent by {name}.",
+      "answers": "Our last answers",
+      "on": "on {date}",
+      "reason": "Why: {reason}"
+    },
+    "request": {
+      "OPEN": "Waiting for our check",
+      "APPROVED": "Approved",
+      "REFUSED": "Not approved",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "change": {
+      "ADDRESS": {
+        "ADD": "New address: {what}",
+        "CHANGE": "Address changed: {what}",
+        "REMOVE": "Address removed: {what}"
+      },
+      "CONTACT": {
+        "ADD": "New contact: {what}",
+        "CHANGE": "Contact changed: {what}",
+        "REMOVE": "Contact removed: {what}"
+      },
+      "website": "Website changed",
+      "field": "{field}: {before} → {after}"
+    },
+    "line": {
+      "CURRENT": "As we have it",
+      "WAITING": "Waiting for our check",
+      "NEW": "New: not sent yet",
+      "CHANGED": "Changed: not sent yet",
+      "REMOVE": "To remove: not sent yet"
+    },
+    "col": {
+      "address": "Address",
+      "kinds": "Used for",
+      "contact": "Contact",
+      "check": "Our check",
+      "more": "More",
+      "name": "Name",
+      "email": "E-mail",
+      "phone": "Phone",
+      "roles": "Handles"
+    },
+    "kind": {
+      "REGISTERED": "Registered office",
+      "PICKUP": "Pickup",
+      "BILL_TO": "Our invoices",
+      "SHIP_TO": "Our deliveries"
+    },
+    "kindHint": {
+      "REGISTERED": "Your company's legal address.",
+      "PICKUP": "Where we or our carrier collect goods."
+    },
+    "role": {
+      "ORDERS": "Orders",
+      "INVOICES": "Invoices",
+      "QUALITY": "Quality",
+      "DESIGN": "Design",
+      "OWNER": "Owner",
+      "RIDER": "Rider"
+    },
+    "roleHint": {
+      "ORDERS": "Our purchase orders and deliveries.",
+      "INVOICES": "Invoices and payments.",
+      "QUALITY": "Certificates, tests and complaints.",
+      "DESIGN": "Samples and development.",
+      "OWNER": "The company's owner or manager."
+    },
+    "field": {
+      "name": "Name",
+      "line1": "Street and number",
+      "line2": "More of the address",
+      "postalCode": "Postal code",
+      "city": "City",
+      "province": "Province",
+      "country": "Country",
+      "contactName": "Contact on site",
+      "phone": "Phone",
+      "deliveryNotes": "Notes",
+      "contact": "Name",
+      "email": "E-mail",
+      "language": "Language",
+      "roles": "Handles",
+      "website": "Website",
+      "kinds": "Used for"
+    },
+    "problem": {
+      "kinds": "Choose what it is for: your registered office or a pickup address.",
+      "line1": "Type the street and number.",
+      "city": "Type the city.",
+      "postalCode": "Type the postal code: 1 to 12 letters, digits, spaces or dashes.",
+      "cap": "An Italian CAP has 5 digits.",
+      "sigla": "Type the two letters of the Italian province (PI, FI, MI…).",
+      "country": "Type the two letters of the country (IT, DE, FR…).",
+      "phone": "Type a phone number: digits, with + ( ) . / - and spaces.",
+      "name": "Type their name.",
+      "email": "Type a full e-mail address.",
+      "emailNeeded": "A contact for orders, invoices or quality needs an e-mail: our documents go to it.",
+      "language": "Choose a language.",
+      "roles": "Choose what they handle from the list.",
+      "website": "Type a web address that starts with http:// or https://, without spaces.",
+      "tooLong": "This is too long."
+    },
+    "withdraw": {
+      "button": "Withdraw",
+      "title": "Withdraw these changes?",
+      "confirm": "Withdraw",
+      "what": "We will not check them; nothing changes on our side.",
+      "back": "Send them again at any time"
+    }
+  },
+  "held": {
+    "loading": "Still reading the page.",
+    "preview": "This is a preview of the portal: nothing can be sent here.",
+    "previewChange": "This is a preview of the portal: nothing can be changed here.",
+    "offline": "No connection.",
+    "mayNotUpload": "Your access lets you read our requests, not send documents: ask {names} for the right to send files.",
+    "mayNotUploadNone": "Your access lets you read our requests, not send documents: ask your admin for the right to send files.",
+    "waiting": "We have it already and are checking it.",
+    "notShared": "It waits for our check: it opens here once we accept it.",
+    "notAccepted": "We did not accept it: send it again.",
+    "notCurrent": "A newer version is in force.",
+    "noneChosen": "Choose one or more rows first.",
+    "adminChanges": "Only your admin ({names}) sends changes of your company data.",
+    "adminChangesNone": "Only your organisation's admin sends changes of your company data.",
+    "waitingCheck": "A change of it waits for our check: withdraw it first, or wait for our answer.",
+    "ours": "We use this address for our invoices or deliveries: write to us to change it.",
+    "removing": "It is marked to remove: undo that first.",
+    "typedRow": "Typed here and not sent yet: undo it from its menu.",
+    "tooMany": "At most {max} changes at once: send these first.",
+    "sameEmail": "Two contacts would have {emails}: one address per contact."
+  },
+  "receipt": {
+    "hide": "Hide",
+    "sent": "We received {name}. We check it and tell you here.",
+    "held": "We received {name}, but our safety check held it: we look at it and tell you here.",
+    "downloaded_one": "1 document downloaded.",
+    "downloaded_other": "{count} documents downloaded.",
+    "changesSent_one": "We received 1 change. Nothing changes until our buyer checks it.",
+    "changesSent_other": "We received {count} changes. Nothing changes until our buyer checks them.",
+    "withdrawn": "Withdrawn. Nothing changes on our side."
+  },
+  "status": {
+    "sending": "Sending…",
+    "unsaved": "Changes not sent",
+    "waiting": "Changes waiting for our check",
+    "saved": "Saved"
+  },
+  "band": {
+    "updated": "Updated at {time}"
+  },
+  "keys": {
+    "upload": "Upload a document",
+    "open": "Open the document",
+    "send": "Send the changes for our check",
+    "cancel": "Close a pop-up (asks if you typed something)"
+  },
+  "unsaved": {
+    "upload": "The document you are sending is not sent yet.",
+    "changes": "Your changes are not sent for our check yet.",
+    "dialog": "The address or contact you typed is not kept yet."
+  },
+  "role": {
+    "sees": {
+      "supplier-orders": "Our purchase orders, deliveries and documents",
+      "supplier-invoices": "Invoices and documents",
+      "supplier-quality": "Certificates, test reports and documents",
+      "supplier-admin": "Everything, and invites and removes colleagues",
+      "subcontractor-jobs": "Our jobs and documents",
+      "subcontractor-admin": "Everything, and invites and removes colleagues"
+    }
+  }
+}

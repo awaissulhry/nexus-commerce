@@ -108,10 +108,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   "See it in the customer's portal" previews `/p/<code>/open/SalesOrder/<id>`.
 - `src/portal/customer/account/` — the customer's Account (B-W2b-196, SCR-188, `/p/<party>/account`; catalogue
   `portal-account`): `AccountRoute.tsx` (the gate: a customer with portal.colleagues.view), `AccountPage.tsx` (the container:
-  each card reads on its own; profile and e-mail drafts with ⌘S and the frame's unsaved guard; the admin's colleague acts
-  behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
-  chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
-  design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+  each card reads on its own; the profile draft with ⌘S and the frame's unsaved guard; delivery addresses and company data;
+  colleagues, the e-mail settings and the sessions are `../../shared/account/` — B-W2b-193's lift), `model.ts` (pure),
+  `view/` (its cards, the addresses list, its pop-ups, `AccountCase` for the design review). `RECORD_PAGES.PartyAddress`
+  opens `/account?address=<id>#addresses`.
+- `src/portal/shared/account/` — the account parts every partner kind shares (lifted from the customer's Account by B-W2b-193;
+  words `portal-account`, CSS `account.css` `fw-pacc-`): `api.ts` (colleagues, hand-over, step-up, sessions), `model.ts` (pure),
+  `usePortalPeople.ts` (the colleagues and the admin's acts behind the e-mail step-up — asked first and again on 403 `stepUp`;
+  Deactivate hands the leaver's assigned requests to the chosen colleague first, F14 —, the e-mail settings with ⌘S, the
+  sessions), `view/` (`AccountCard`, `SettingsCards`, `ColleaguesSection` and `PeopleDialogs` with `prices={false}` for a
+  supplier or workshop, C2). The customer's Account and the supplier's Profile both use it.
 - `src/portal/customer/returns/` — the customer's Returns & claims (B-W2b-197 on B-W2b-192's API, SCR-187; catalogue
   `portal-returns`, CSS prefix `fw-pret-`): `/p/<party>/returns?chip=&q=&start=RETURN|COMPLAINT&order=<id>` (the cases in
   the list frame with Export N, the Quality role's complaints, "Start a return or claim": what you need, details, check and
@@ -131,6 +137,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Idempotency-Key per body; the sheet is read with `apply: false`, kept with `apply: true`). `model.ts` says every check,
   sheet row and refusal from codes, columns and issue paths (the API's English is dropped by the zod schemas).
   `RECORD_PAGES.ShipNotice` opens `/deliveries/<id>`; the PO record's Ship notices tab has "Announce delivery".
+- `src/portal/supplier/documents/` and `src/portal/supplier/profile/` — a supplier's or a workshop's Documents (B-W2b-193 on
+  B-W2b-189's API, SCR-190, `/p/<party>/documents`: the route file's SUPPLIER/SUBCONTRACTOR line; CSS `fw-psdoc-`) and Profile
+  (SCR-191, `/p/<party>/profile`; CSS `fw-psprof-`); catalogue `portal-supplier-profile`. Documents: "We ask for" on the DS
+  ActionList (why in our words from the codes; Upload in the row), "Your documents" on the list frame (Open in a new tab,
+  Download N of what we shared back, Replace, Upload again), the upload pop-up in three steps (announce → the store → complete;
+  `u`). Profile: company, addresses and contacts typed on the page and sent together for our check (EditModeBar, ⌘S; Withdraw),
+  then the shared account cards. Both read again on their `live.events`.
 - `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
   `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER

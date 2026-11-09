@@ -4,10 +4,12 @@ import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { CompanyCard, EmailCard, ProfileCard, SecurityCard, type CompanyCardModel, type EmailCardActions, type EmailCardModel, type ProfileCardActions, type ProfileCardModel, type SecurityCardModel } from './AccountCards'
+import { ColleaguesSection, type ColleaguesActions, type ColleaguesModel } from '../../../shared/account/view/ColleaguesSection'
+import { EmailCard, SecurityCard, type EmailCardActions, type EmailCardModel, type SecurityCardModel } from '../../../shared/account/view/SettingsCards'
+import { CompanyCard, ProfileCard, type CompanyCardModel, type ProfileCardActions, type ProfileCardModel } from './AccountCards'
 import { AccountDialogs, type AccountDialog, type AccountDialogActions } from './AccountDialogs'
-import { AddressesSection, ColleaguesSection, type AddressesActions, type AddressesModel, type ColleaguesActions, type ColleaguesModel } from './AccountLists'
-import '../account.css'
+import { AddressesSection, type AddressesActions, type AddressesModel } from './AccountLists'
+import '../../../shared/account/account.css'
 
 /**
  * SCR-188 — the customer's Account (B-W2b-196; design portal.customer.account, archetype §2.8 portal page): the person's own
