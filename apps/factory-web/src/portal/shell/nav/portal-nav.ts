@@ -98,7 +98,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
       { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: false },
     ],
   },
-  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: false },
+  // B-W2b-195: the customer's Documents (SCR-186).
+  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: true },
   // B-W2b-197: the customer's Returns & claims (SCR-187).
   { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: true },
   // B-W2b-196: the customer's Account (SCR-188).
@@ -156,6 +157,8 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['CUSTOMER'], type: 'Complaint', href: (id) => `/returns/complaints/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
+  // B-W2b-195: an invoice (a "Pay invoice" request, a notification) opens Documents on it: its Pay pop-up, or why not.
+  { kinds: ['CUSTOMER'], type: 'Invoice', href: (id) => `/documents?invoice=${encodeURIComponent(id)}`, built: true },
 ]
 
 /** Who is looking: their permissions and partner kind(s) (a preview: every kind of the party). */
