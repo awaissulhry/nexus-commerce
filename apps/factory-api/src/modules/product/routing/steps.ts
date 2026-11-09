@@ -21,6 +21,8 @@ import {
   type StepData,
 } from '@nexus/factory-domain/product/routing/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+// B-W2b-225: the copied steps' depth (minutes, cells, checkpoint, size times, settings) follows them.
+import { auditedDepthCopy, copyStepDepthInCommand } from '../routing-depth/copy'
 import { findRevision } from '../bom/store'
 import { assertTypedStepSmv } from '../minutes/governance'
 import {
@@ -305,6 +307,7 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
       }),
     )
     await insertSteps(tools, { styleId, revisionId }, copied, copiedSubcontracts)
+    const depth = await copyStepDepthInCommand(tools, { styleId, revisionId }, copied.map((step, index) => ({ from: sourceSteps[index]!.id, to: step.id })))
     for (const step of copied) {
       const subcontract = copiedSubcontracts.get(step.id) ?? null
       tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, after: { revisionId, ...auditedStep(step), ...(subcontract ? { subcontract: auditedSubcontract(subcontract) } : {}) } })
@@ -313,6 +316,7 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
       copiedFrom: { styleId: body.fromStyleId, revisionId: source.id, revision: source.revision },
       replaced: body.replace ? current.length : 0,
       added: copied.length,
+      ...(auditedDepthCopy(depth) ? { depth: auditedDepthCopy(depth) } : {}),
     })
     return routingViewInTx(tx, styleId, revisionId)
   }).catch(placeTaken)
