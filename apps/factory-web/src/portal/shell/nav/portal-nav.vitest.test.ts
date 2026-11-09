@@ -42,8 +42,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       // B-W2b-186: a supplier's Ship notices.
       ['deliveries', 'nav.deliveries', '/deliveries'],
     ])
-    // B-W2b-196: the customer's Account.
-    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'account'])
+    // B-W2b-196: the customer's Account. B-W2b-195: the customer's Documents.
+    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'documents', 'account'])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
@@ -103,7 +103,10 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'ShipNotice', 'PartyAddress'])
+    // B-W2b-195: an invoice opens the customer's Documents on it.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'ShipNotice', 'PartyAddress', 'Invoice'])
+    expect(recordPageOf(['CUSTOMER'], 'Invoice', 'i1')).toBe('/documents?invoice=i1')
+    expect(recordPageOf(['SUPPLIER'], 'Invoice', 'i1')).toBeNull()
     // B-W2b-186: a supplier's ship notice opens its own page.
     expect(recordPageOf(['SUPPLIER'], 'ShipNotice', 'sn')).toBe('/deliveries/sn')
     expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')

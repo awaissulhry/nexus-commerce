@@ -100,6 +100,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
   chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
   design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+- `src/portal/customer/documents/` — the customer's Documents (B-W2b-195, SCR-186, `/p/<party>/documents?group=&q=&by=&versions=&invoice=`;
+  catalogue `portal-documents`, CSS prefix `fw-pdoc-`) on B-W2b-178's and B-W2b-185's APIs: the chips of the role's groups, To pay
+  (Finance/Admin: the open invoices and deposits, PDF/XML in new tabs, Pay = the DS PaymentPanel on the FAKE provider's own answers,
+  then the page polls the intent), All documents (the list frame; Download N, `d`), conformity per style received. `preview/` is
+  THE document pop-up (api, rules, `useDocumentPreview`, `view/DocumentPreview`), lifted from Home: Home and the order's Documents
+  tab use it. `RECORD_PAGES.Invoice` opens `/documents?invoice=<id>` (its Pay pop-up; `&tab=messages` its conversation).
 - `src/portal/supplier/deliveries/` — the supplier's Ship notices (B-W2b-186 on B-W2b-182's API, SCR-227; catalogue
   `portal-deliveries`, CSS prefix `fw-psn-`): `/p/<party>/deliveries?state=&q=` (the list frame, Export N, ⋯ Cancel…),
   `/deliveries/new?po=<id>` and `/deliveries/<id>?step=lines|packing|transport|review` (`NoticePage.tsx`: a draft on its
