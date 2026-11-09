@@ -85,7 +85,8 @@
   "who": {
     "you": "You",
     "bench": "At the bench",
-    "office": "In the office"
+    "office": "In the office",
+    "nobody": "Nobody yet (opened by a rule)"
   },
   "status": {
     "OPEN": "Open",
@@ -699,7 +700,8 @@
   "whereSigned": {
     "you": "by you",
     "bench": "at the bench",
-    "office": "in the office"
+    "office": "in the office",
+    "nobody": "by nobody yet"
   },
   "plan": {
     "heading": "Sampling plan",

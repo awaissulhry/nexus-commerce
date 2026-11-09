@@ -18,7 +18,8 @@ import { IN_PROCESS_KINDS, IN_PROCESS_OUTCOMES, IN_PROCESS_STATUSES } from '../q
 
 const kind = z.enum(IN_PROCESS_KINDS)
 
-export const CHECK_CHANGES = ['OPENED', 'RESULTS', 'DECIDED', 'RECORDED', 'CANCELLED'] as const
+// B-W2b-213: COUNTED (the units of its AQL sample inspected), DUE (the office moved by when it is due).
+export const CHECK_CHANGES = ['OPENED', 'RESULTS', 'DECIDED', 'RECORDED', 'CANCELLED', 'COUNTED', 'DUE'] as const
 export type CheckChange = (typeof CHECK_CHANGES)[number]
 
 export const events = [

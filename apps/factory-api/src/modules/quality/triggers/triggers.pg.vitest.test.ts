@@ -167,9 +167,10 @@ describe('"When inspections are created": the ordered rules (QHS-010)', () => {
     expect(share.frequencyWords).toEqual({ it: '10% delle operazioni', en: '10% of operations' })
     expect(share.eventWords).toEqual({ it: 'Operazione finita', en: 'Operation finished' })
     expect(receipt.opened).toEqual({ last30Days: 0, lastAt: null })
+    // B-W2b-213: packing opens a final inspection now; a return is still held.
     const packing = list.events.find((entry: Json) => entry.event === 'PACKING')
-    expect(packing).toMatchObject({ available: false, stages: [], frequencies: [] })
-    expect(packing.held.en).toMatch(/^Not yet: a final inspection names its inspector when it opens/)
+    expect(packing).toMatchObject({ available: true, held: null, stages: ['FINAL'] })
+    expect(list.events.find((entry: Json) => entry.event === 'RETURN_RECEIVED')).toMatchObject({ available: false, stages: [] })
     expect(list.events.find((entry: Json) => entry.event === 'GOODS_RECEIPT')).toMatchObject({ available: true, stages: ['INCOMING'], frequencies: [{ frequency: 'EVERY_LOT', words: { it: 'Ogni lotto', en: 'Every lot' }, takesValue: false }] })
     expect(list.canManage).toBe(true)
     expect((await ok('viewer', 'GET', '/quality/inspection-triggers')).canManage).toBe(false)
@@ -181,9 +182,12 @@ describe('"When inspections are created": the ordered rules (QHS-010)', () => {
 
   it('refuses in words: an event that cannot open anything yet, a plan of another stage, a chip the event never knows, a frequency', async () => {
     const base = { companyId: A.companyA, planId: A.inLine, event: 'BUNDLE_SCAN', frequency: 'EVERY_NTH_BUNDLE', frequencyValue: 5 }
-    const packing = await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, event: 'PACKING', planId: A.final, frequency: 'EVERY_LOT', frequencyValue: null }, 400)
-    expect(packing.message).toBe('Not yet: a final inspection names its inspector when it opens, so a rule cannot open one by itself. The inspector opens it at the bench.')
-    expect(paths(packing)).toEqual(['body/event'])
+    const returned = await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, event: 'RETURN_RECEIVED', planId: A.final, frequency: 'EVERY_LOT', frequencyValue: null }, 400)
+    expect(returned.message).toBe('Not yet: a return has no inspection record; its grading stays on the return.')
+    expect(paths(returned)).toEqual(['body/event'])
+    // B-W2b-213: packing names a final plan; due within 1 to 720 hours.
+    expect(paths(await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, event: 'PACKING', frequency: 'EVERY_LOT', frequencyValue: null }, 400))).toEqual(['body/planId'])
+    expect(paths(await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, dueHours: 0 }, 400))).toEqual(['body/dueHours'])
     expect(paths(await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, planId: A.incoming }, 400))).toEqual(['body/planId'])
     const chip = await refused('keeper', 'POST', '/quality/inspection-triggers', { ...base, appliesTo: [{ kind: 'MATERIAL', value: leatherItem }] }, 400)
     expect(chip.message).toBe('Bundle scanned at an operation does not know the material: this chip would never fit.')

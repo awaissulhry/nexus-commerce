@@ -75,6 +75,8 @@ export const nextLimit = (limit: number): number => Math.min(MAX, limit + PAGE)
 /** Who signed, released or opened, in words: "you", "at the bench", "in the office" (no person's name in a list: W1 rule). */
 export function whoKey(who: Who, me: string): { key: string; you: boolean } {
   if (who.kind === 'FLOOR') return { key: 'who.bench', you: false }
+  // B-W2b-213: an inspection a rule opened at packing names nobody until the first inspector records it.
+  if (who.userId === null && who.workerId === null) return { key: 'who.nobody', you: false }
   return who.userId === me ? { key: 'who.you', you: true } : { key: 'who.office', you: false }
 }
 

@@ -5,6 +5,7 @@ import { reasonProblem } from '@nexus/factory-domain/quality/aql/profiles'
 import { acceptanceOf, aqlStored, aqlWords, levelOf, levelText, type SamplingPlanResult } from '@nexus/factory-domain/quality/aql/sampling'
 import { QUALITY_INSPECTIONS_RECORD, QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { CHECKLIST_ITEMS, defectCounts, planProblems } from '@nexus/factory-domain/quality/final/rules'
+import { inspectedNow } from '@nexus/factory-domain/quality/final/plan'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { scanProgressOf } from '../../production/scans/progress'
 import { readCells, type LabelHeader } from '../../production/serials/store'
@@ -45,13 +46,19 @@ async function factsOf(db: Reader, inspectionId: string): Promise<Facts> {
   return (await db.inspection.findUnique({ where: { id: inspectionId }, select: { planVersionId: true, aqlProfileId: true, codeLetter: true } }))!
 }
 
-/** A defect, a result or a measurement is recorded: the profile and the code letter are frozen. */
+/**
+ * A defect, a result or a measurement is recorded, or (B-W2b-213) a unit is counted: the profile and the code letter are
+ * frozen (the database refuses a change once Inspection.inspectedCount is above 0; a count kept in the AQL_SAMPLE entry
+ * before the column freezes it here too).
+ */
 async function countingStarted(db: Reader, inspectionId: string): Promise<{ started: boolean; words: string | null }> {
   const defects = await db.inspectionDefect.count({ where: { inspectionId } })
   const results = await db.inspectionCheckResult.count({ where: { inspectionId } })
   const measurements = await db.inspectionMeasurement.count({ where: { inspectionId } })
-  if (defects + results + measurements === 0) return { started: false, words: null }
-  const parts = [defects ? `${defects} defect ${defects === 1 ? 'line' : 'lines'}` : null, results ? `${results} check ${results === 1 ? 'result' : 'results'}` : null, measurements ? `${measurements} ${measurements === 1 ? 'measurement' : 'measurements'}` : null].filter(Boolean)
+  const counted = await db.inspection.findUnique({ where: { id: inspectionId }, select: { inspectedCount: true, checklist: true } })
+  const units = counted ? inspectedNow(counted) : 0
+  if (defects + results + measurements + units === 0) return { started: false, words: null }
+  const parts = [units ? `${units} ${units === 1 ? 'unit' : 'units'} counted` : null, defects ? `${defects} defect ${defects === 1 ? 'line' : 'lines'}` : null, results ? `${results} check ${results === 1 ? 'result' : 'results'}` : null, measurements ? `${measurements} ${measurements === 1 ? 'measurement' : 'measurements'}` : null].filter(Boolean)
   return { started: true, words: `The profile is frozen once counting starts: ${parts.join(', ')} recorded.` }
 }
 
@@ -118,8 +125,9 @@ async function viewOf(db: Reader, row: InspectionRow, header: LabelHeader, conte
   const checks = await checksOf(db, row, facts.planVersionId)
   const result = aqlResult({
     sampleSize: row.sampleSize,
-    // W1 keeps no count of the units inspected (a schema need): the verdict stays open until it is decided.
-    inspected: row.status === 'OPEN' ? null : row.sampleSize,
+    // B-W2b-213: the units counted on a plan (Inspection.inspectedCount, else the AQL_SAMPLE entry), so "38 of 50" and a
+    // verdict before the decision; W1's plan-less inspection keeps no count: its verdict stays open until it is decided.
+    inspected: row.status === 'OPEN' ? (row.planVersionId ? inspectedNow(row) : null) : row.sampleSize,
     classes: [
       { defectClass: 'CRITICAL', aql: '0', accept: 0, found: counts.critical },
       { defectClass: 'MAJOR', aql: aqlWords(row.aqlMajor.toString()), accept: row.acceptMajor, found: counts.major },

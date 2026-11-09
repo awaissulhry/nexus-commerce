@@ -9,7 +9,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ReadState } from '../../_shared/parts'
 import type { EventInfo } from '../api'
 import { recordKindOf, TRIGGER_EVENTS, type ChipKind, type Frequency, type TriggerEvent } from '../constants'
-import { chipPickable, frequencyWords, planHref, ruleProblems, rulesChanges, rulesPlan, type EventFacts, type RuleDraft, type RulePlanFacts } from '../model'
+import { chipPickable, DUE_HOURS_MAX, frequencyWords, planHref, ruleProblems, rulesChanges, rulesPlan, type EventFacts, type RuleDraft, type RulePlanFacts } from '../model'
 import { AddIcon, ChipEditor, ChipsLine, problemAt, SectionHead, useSay } from './parts'
 import type { PlansModel } from './PlansView'
 
@@ -126,6 +126,7 @@ export function TriggersTab({ model, actions }: { model: PlansModel; actions?: T
                         {' · '}
                         {say(frequencyWords(draft.frequency, draft.frequencyValue))}
                         {kind && <> → {t(`recordKind.${kind}`)}</>}
+                        {draft.dueHours !== '' && <> · {t('rules.dueWithin', { hours: draft.dueHours })}</>}
                       </span>
                     </span>
                   </div>
@@ -290,6 +291,10 @@ function RuleDialog({ model, events, actions }: { model: PlansModel; events: rea
             </Field>
           )}
         </div>
+        {/* B-W2b-213: what the rule opens is due its hours later (empty: no due time); My inspections sorts by it. */}
+        <Field label={t('rules.dueHours')} hint={t('rules.dueHoursHint')} error={say(problemAt(problems, 'dueHours', shown)) || undefined}>
+          <NumberStepper value={draft.dueHours} min={1} max={DUE_HOURS_MAX} suffix="h" decrementLabel={t('common.less')} incrementLabel={t('common.more')} onChange={(value) => set({ dueHours: value })} />
+        </Field>
         <label className="fw-qp-inline">
           <Toggle checked={draft.active} aria-label={t('rules.activeLabel')} onChange={(next) => set({ active: next })} /> {draft.active ? t('rules.activeOn') : t('rules.activeOff')}
         </label>

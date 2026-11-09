@@ -2,11 +2,12 @@ import type { Prisma } from '@nexus/factory-db'
 import { PROCESS_WORDS, type CauseProcess } from '@nexus/factory-domain/quality/defects/causes'
 import { isHideDefect } from '@nexus/factory-domain/quality/defects/grades'
 import { appliesAt, type DefectClass, type QualityStage } from '@nexus/factory-domain/quality/defects/rules'
-import { classesAllowed, classLocked, classWordsIn, SEVERITY_CLASSES } from '@nexus/factory-domain/quality/defects/severity'
+import { classesAllowed, classLocked, SEVERITY_CLASSES } from '@nexus/factory-domain/quality/defects/severity'
 import { coverageOf, languageOf, otherFloorLanguages, wordsIn, type CoverageList, type CoverageRow, type VocabularyChange, type VocabularyList } from '@nexus/factory-domain/quality/defects/vocabulary'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import type { FloorContext, OfficeContext } from '../../../core/context'
 import { officeOf, officeOrFloorOf } from './access'
+import { classTextIn, tenantTexts } from './severity-words'
 
 /**
  * The defect vocabulary in the person's language (B-W2b-90; QHS-007; design floor.reasons, quality.defects): ONE read
@@ -92,6 +93,8 @@ export async function readVocabulary(caller: CommandCaller, query: VocabularyQue
     const library = await client.defectCode.findMany({ where: { active: true }, select: DEFECT_COLUMNS })
     const causes = await client.causeCode.findMany({ where: { active: true }, select: { id: true, code: true, labelIt: true, labelEn: true, labelI18n: true, process: true, sortOrder: true } })
     const grades = await client.leatherGrade.findMany({ where: { active: true }, select: { id: true, code: true, labelIt: true, labelEn: true, labelI18n: true, usableShare: true, sortOrder: true } })
+    // B-W2b-213: the tenant's severity words over the standard texts (the floor reads the tenant-wide settings row).
+    const severity = (await tenantTexts(client, context.tenantId)).texts
     const categories = new Map(library.filter((row) => row.parentId === null).map((row) => [row.id, row]))
     const inLibrary = library.filter((row) => row.parentId !== null && categories.has(row.parentId)).sort((a, b) => byOrder(categories.get(a.parentId!)!, categories.get(b.parentId!)!) || byOrder(a, b))
     const defectOf = (row: DefectRow) => {
@@ -118,13 +121,10 @@ export async function readVocabulary(caller: CommandCaller, query: VocabularyQue
     return {
       language,
       languages,
-      classes: SEVERITY_CLASSES.map((entry) => ({
-        class: entry.class,
-        label: classWordsIn(entry.class, language),
-        meaning: language === 'it' ? entry.meaning.it : entry.meaning.en,
-        locked: entry.locked,
-        missing: language !== 'it' && language !== 'en',
-      })),
+      classes: SEVERITY_CLASSES.map((entry) => {
+        const label = classTextIn(severity, entry.class, 'words', language)
+        return { class: entry.class, label: label.text, meaning: classTextIn(severity, entry.class, 'meaning', language).text, locked: entry.locked, missing: label.missing }
+      }),
       defects: inLibrary.filter((row) => query.stage === undefined || appliesAt(row.stages, query.stage)).map(defectOf),
       hideDefects: inLibrary.filter((row) => isHideDefect(row, categories.get(row.parentId!)!.code)).map(defectOf),
       causes: [...causes].sort(byOrder).map((row) => {

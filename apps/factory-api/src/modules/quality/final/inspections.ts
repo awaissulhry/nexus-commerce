@@ -17,6 +17,7 @@ import {
   inspectionOverdue,
   inspectionLabel,
   isOverride,
+  untaken,
   planProblems,
   reasonProblem,
   resultWords,
@@ -36,12 +37,11 @@ import {
   checksState,
   fixedSampling,
   identityEntry,
-  inspectedOf,
+  inspectedNow,
   isSystemEntry,
   photoSet,
   planChecklist,
   planDecisionProblems,
-  sampleEntry,
   sampleRejected,
   samplingChanges,
   type ChecklistEntry,
@@ -120,12 +120,14 @@ export async function inspectionFor(caller: CommandCaller, inspectionId: string,
 
 /**
  * The caller records and signs this inspection: its assignee when it is assigned (W2a, B-W2a-67: ./assign.ts), else its
- * inspector (the worker or office user who opened it).
+ * inspector (the worker or office user who opened it). B-W2b-213: an inspection a rule opened that nobody took yet
+ * (factory-domain `untaken`) is every inspector's to take: the first who records it is written as its inspector.
  */
 export const isOwn = (context: Inspector, inspection: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId' | 'assignedInspectorId' | 'assignedInspectorWorkerId'>): boolean => {
   const signer = signerOf(context)
   const assignee = assigneeOf(inspection)
   if (isAssigned(assignee)) return isAssignee(assignee, signer)
+  if (untaken(inspection)) return true
   return (signer.workerId !== null && signer.workerId === inspection.inspectorWorkerId) || (signer.userId !== null && signer.userId === inspection.inspectorUserId)
 }
 
@@ -136,10 +138,24 @@ export function assertOwnInspection(context: Inspector, inspection: InspectionRo
 }
 
 /**
+ * B-W2b-213: taking an inspection a rule opened. The write that takes it writes the caller as its inspector (`takeOver`),
+ * so the caller must have made none of its garments (the same check as the opening's, before anything is written).
+ */
+export async function assertMayTake(caller: CommandCaller, inspection: InspectionRow, header: LabelHeader): Promise<void> {
+  if (!untaken(inspection)) return
+  const identity = await callerIdentity(caller)
+  const maker = await caller.withClient(async (db) => makerCheck(identity, await makersOf(db, header.id), header.number))
+  if (maker.made) throw new MakerRefusedError(`${maker.words} An inspection a rule opened is taken by an inspector who made none of its garments.`)
+}
+
+/**
  * The inspector columns a write sets: the assignee who records it becomes its inspector (the signature and the four-eyes
  * rules name who signs); nothing changes when the caller already is.
  */
-export function takeOver(context: Inspector, row: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId'>): { inspectorWorkerId: string | null; inspectorUserId: string | null } | Record<string, never> {
+export function takeOver(context: Inspector, row: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId' | 'assignedInspectorId' | 'assignedInspectorWorkerId'>): { inspectorWorkerId: string | null; inspectorUserId: string | null } | Record<string, never> {
+  // B-W2b-213: said again on the locked row, so two inspectors never both take an inspection a rule opened (a queued write
+  // applies on the row as it stands).
+  if (!isOwn(context, row)) throw new ConflictError('Another inspector took this inspection meanwhile: it is theirs to record and sign.')
   const signer = signerOf(context)
   if (signer.workerId === row.inspectorWorkerId && signer.userId === row.inspectorUserId) return {}
   return { inspectorWorkerId: signer.workerId, inspectorUserId: signer.userId }
@@ -213,7 +229,7 @@ export function inspectionView(row: InspectionRow, defects: readonly DefectRow[]
     planVersion: context.planned ? { ...context.planned.planVersion } : null,
     aqlProfileId: row.aqlProfileId,
     codeLetter: row.codeLetter,
-    inspected: row.planVersionId ? inspectedOf(row.checklist) : null,
+    inspected: row.planVersionId ? inspectedNow(row) : null,
     defects: defects.filter((defect) => defect.inspectionId === row.id).map(defectView),
     counts: defectCounts(defects.filter((defect) => defect.inspectionId === row.id)),
     /** The rules' result now (an OPEN inspection: as it stands); a decided one: what the database wrote. */
@@ -232,6 +248,8 @@ export function inspectionView(row: InspectionRow, defects: readonly DefectRow[]
     note: row.note,
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
+    openedByRule: row.openedByTriggerId !== null,
+    taken: !untaken(row),
   }
 }
 
@@ -249,7 +267,7 @@ export async function plannedOf(db: Reader, row: InspectionRow): Promise<Planned
   const identity = Array.isArray(row.checklist) ? ((row.checklist as unknown[]).find((entry) => (entry as { code?: unknown } | null)?.code === 'IDENTITY') as ChecklistEntry | undefined) ?? null : null
   return {
     planVersion: { id: binding.version.id, planId: binding.plan.id, code: binding.plan.code, name: binding.plan.name, number: binding.version.number },
-    checklist: planChecklist(binding.checks, results, measurements, { inspected: inspectedOf(row.checklist), sampleSize: row.sampleSize, identity }),
+    checklist: planChecklist(binding.checks, results, measurements, { inspected: inspectedNow(row), sampleSize: row.sampleSize, identity }),
   }
 }
 
@@ -402,11 +420,12 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
         aqlMinor: aqlText(plan.aqlMinor),
         acceptMajor: plan.acceptMajor,
         acceptMinor: plan.acceptMinor,
-        // B-W2b-97: the plan version (frozen), the profile and code letter its sample came from, the counter at 0.
+        // B-W2b-97: the plan version (frozen), the profile and code letter its sample came from; B-W2b-213: the counter
+        // (Inspection.inspectedCount) at 0.
         planVersionId: named?.version.id ?? null,
         aqlProfileId: sampling.aqlProfileId,
         codeLetter: sampling.codeLetter,
-        ...(named ? { checklist: [sampleEntry(0, plan.sampleSize)] as unknown as Prisma.InputJsonValue } : {}),
+        ...(named ? { inspectedCount: 0 } : {}),
         inspectorWorkerId: signer.workerId,
         inspectorUserId: signer.userId,
         assignedInspectorId: assignee.userId,
@@ -459,6 +478,7 @@ export async function updateInspection(caller: CommandCaller, inspectionId: stri
   const context = inspectorOf(caller)
   const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
   assertOwnInspection(context, inspection)
+  await assertMayTake(caller, inspection, header)
   const { result } = await command(caller, { name: 'quality.inspection.record', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const before = await lockInspection(tx, inspection.id, body.version)
@@ -572,6 +592,7 @@ export async function putDefects(caller: CommandCaller, inspectionId: string, bo
   const context = inspectorOf(caller)
   const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
   assertOwnInspection(context, inspection)
+  await assertMayTake(caller, inspection, header)
   const { result } = await command(caller, { name: 'quality.inspection.defects', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const current = await lockInspection(tx, inspection.id, body.version)
@@ -627,7 +648,7 @@ async function planDecision(db: Reader, row: InspectionRow, header: LabelHeader,
   const measurements = (await measurementsOf(db, row.id)).map(measurementRow)
   const identity = await identityFacts(db, header, row)
   const identityRecord = identity.scans.length > 0 ? identityEntry(identity.mode, identity.scans, identity.summary) : null
-  const inspected = inspectedOf(row.checklist)
+  const inspected = inspectedNow(row)
   const checklist = planChecklist(binding.checks, results, measurements, { inspected, sampleSize: row.sampleSize, identity: identityRecord })
   const checks = checksState(binding.checks, results, measurements)
   const counts = defectCounts(await readDefects(db, [row.id]))
@@ -723,7 +744,8 @@ export async function cancelInspection(caller: CommandCaller, inspectionId: stri
   if (problem) throw invalid('Say why the inspection is cancelled.', [problem])
   const { result } = await command(caller, { name: 'quality.inspection.cancel', idempotencyKey, input: body }, async (tools) => {
     const current = await lockInspection(tools.tx, inspection.id, body.version)
-    await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', ...takeOver(context, current), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+    // B-W2b-213: an inspection a rule opened that nobody took is cancelled as it is (no inspector: the database allows it).
+    await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', ...(untaken(current) ? {} : takeOver(context, current)), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason: body.reason.trim() })
     tools.emit({ type: 'quality.inspection_cancelled', subject: current.id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: current.id, workOrderId: header.id, number: header.number } })
     return { id: current.id }

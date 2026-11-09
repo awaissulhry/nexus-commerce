@@ -21,29 +21,47 @@ const activeQuery = input({ active: z.enum(['true', 'false']).optional() })
 
 // ---- severity (QHS-002) ---------------------------------------------------------------------------------------------
 
-export const severityContract = defineContract({
-  response: {
-    200: output({
-      classes: z.array(
-        output({
-          class: klass,
-          /** 0 = worst. */
-          rank: z.number().int(),
-          words: itEn(),
-          meaning: itEn(),
-          /** The acceptance number every plan gives the class (critical: 0); null: the plan's AQL decides. */
-          acceptanceNumber: z.number().int().nullable(),
-          locked: z.boolean(),
-          law: z.string().nullable(),
-          /** Active defects of the library with this default class. */
-          defects: z.number().int().min(0),
-        }),
-      ),
-      safetyRule: output({ it: z.string(), en: z.string(), law: z.string() }),
-      /** False: the texts are fixed (no place keeps a tenant's own yet). */
-      editable: z.boolean(),
+const textsByLanguage = () => z.record(z.string().max(8), z.string())
+const severityAnswer = output({
+  classes: z.array(
+    output({
+      class: klass,
+      /** 0 = worst. */
+      rank: z.number().int(),
+      /** In force: the tenant's words, else the standard ones (B-W2b-213). */
+      words: itEn(),
+      meaning: itEn(),
+      /** The acceptance number every plan gives the class (critical: 0); null: the plan's AQL decides. */
+      acceptanceNumber: z.number().int().nullable(),
+      locked: z.boolean(),
+      law: z.string().nullable(),
+      /** Active defects of the library with this default class. */
+      defects: z.number().int().min(0),
+      /** B-W2b-213: what the tenant wrote per language (none: the standard text), and the standard texts. */
+      own: output({ words: textsByLanguage(), meaning: textsByLanguage() }),
+      standard: output({ words: itEn(), meaning: itEn() }),
     }),
-  },
+  ),
+  safetyRule: output({ it: z.string(), en: z.string(), law: z.string() }),
+  /** True since B-W2b-213 (QualitySettings.severityTexts): the words are the tenant's to write; critical's meaning stays locked. */
+  editable: z.boolean(),
+  /** Italian, English and the sites' other floor languages: the editor's columns. */
+  languages: z.array(z.string()),
+  canManage: z.boolean(),
+  /** The tenant-wide settings row's version (0: none yet): PUT sends it back. */
+  version: z.number().int().min(0),
+  updatedAt: instant().nullable(),
+})
+
+export const severityContract = defineContract({ response: { 200: severityAnswer } })
+
+/** B-W2b-213: the whole set of the tenant's words (a class, part or language left out: the standard text), or null. */
+export const saveSeverityContract = defineContract({
+  body: input({
+    version: z.number().int().min(0),
+    texts: z.record(z.string().max(12), z.record(z.string().max(12), z.record(z.string().max(8), z.string().max(1000)))).nullable(),
+  }),
+  response: { 200: severityAnswer },
 })
 
 // ---- cause codes (QHS-004) ------------------------------------------------------------------------------------------
