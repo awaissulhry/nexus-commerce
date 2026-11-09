@@ -24,6 +24,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 // B-W2b-225: the copied steps' depth (minutes, cells, checkpoint, size times, settings) follows them.
 import { auditedDepthCopy, copyStepDepthInCommand } from '../routing-depth/copy'
 import { findRevision } from '../bom/store'
+import { assertTypedStepSmv } from '../minutes/governance'
 import {
   assertMayWrite,
   assertNoLinesUse,
@@ -149,6 +150,8 @@ export async function updateStep(caller: CommandCaller, styleId: string, revisio
     const plan = planStepChange(current, change)
     if (!plan.ok) throw invalid(prefixed(plan.issues))
     const changed = stepChanges(current, plan.step)
+    // B-W2b-215: a step whose SMV is copied from a version or built from allowances changes it in its minutes (the database refuses a typed one).
+    if (changed.includes('standardMinutes')) await assertTypedStepSmv(tx, stepId)
     const was: Subcontract | null = (await readSubcontracts(tx, revisionId)).get(stepId) ?? null
     let next = was
     if (subcontractChange !== undefined) {

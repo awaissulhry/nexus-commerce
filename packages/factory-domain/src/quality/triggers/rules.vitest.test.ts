@@ -3,6 +3,9 @@ import {
   becauseText,
   decide,
   drawOf,
+  dueAtOf,
+  dueHoursProblem,
+  dueWords,
   EVENT_RULES,
   frequencyText,
   occurrencesOf,
@@ -24,6 +27,45 @@ const OP_SEW = '0190a000-0000-7000-8000-000000000003'
 const CUSTOMER = '0190a000-0000-7000-8000-000000000004'
 const MATERIAL = '0190a000-0000-7000-8000-000000000005'
 
+describe('B-W2b-213: packing opens a final inspection; what a rule opens is due', () => {
+  it('a packing rule names a final plan, every lot, a share or every Nth bundle, and the chips a bundle knows', () => {
+    expect(EVENT_RULES.PACKING.held).toBeNull()
+    expect(ruleProblems({ event: 'PACKING', stage: 'FINAL', appliesTo: [{ kind: 'STYLE', value: STYLE }], frequency: 'EVERY_LOT' })).toEqual([])
+    expect(ruleProblems({ event: 'PACKING', stage: 'FINAL', appliesTo: [], frequency: 'EVERY_NTH_BUNDLE', frequencyValue: 4 })).toEqual([])
+    expect(ruleProblems({ event: 'PACKING', stage: 'IN_LINE', appliesTo: [], frequency: 'EVERY_LOT' })).toEqual([{ path: 'planId', message: 'Packing opens a final inspection: pick a final plan.' }])
+    expect(ruleProblems({ event: 'PACKING', stage: 'FINAL', appliesTo: [], frequency: 'FIRST_PIECE' }).map((p) => p.path)).toEqual(['frequency'])
+    expect(ruleProblems({ event: 'PACKING', stage: 'FINAL', appliesTo: [{ kind: 'SUPPLIER', value: CUSTOMER }], frequency: 'EVERY_LOT' })).toEqual([{ path: 'appliesTo/0/kind', message: 'Packing does not know the supplier: this chip would never fit.' }])
+    // A final plan is still never opened by an operation or a scan rule.
+    expect(ruleProblems({ event: 'OPERATION_FINISHED', stage: 'FINAL', appliesTo: [], frequency: 'EVERY_LOT' }).map((p) => p.path)).toEqual(['planId'])
+  })
+
+  it('due within 1 to 720 hours, or none; the due time is the opening plus the hours', () => {
+    expect(dueHoursProblem(null)).toBeNull()
+    expect(dueHoursProblem(undefined)).toBeNull()
+    expect(dueHoursProblem(1)).toBeNull()
+    expect(dueHoursProblem(720)).toBeNull()
+    expect(dueHoursProblem(0)?.path).toBe('dueHours')
+    expect(dueHoursProblem(721)?.path).toBe('dueHours')
+    expect(dueHoursProblem(2.5)?.path).toBe('dueHours')
+    expect(ruleProblems({ event: 'GOODS_RECEIPT', stage: 'INCOMING', appliesTo: [], frequency: 'EVERY_LOT', dueHours: 0 }).map((p) => p.path)).toEqual(['dueHours'])
+    const opened = new Date('2026-11-09T08:30:00.000Z')
+    expect(dueAtOf(opened, 8)?.toISOString()).toBe('2026-11-09T16:30:00.000Z')
+    expect(dueAtOf(opened, 48)?.toISOString()).toBe('2026-11-11T08:30:00.000Z')
+    expect(dueAtOf(opened, null)).toBeNull()
+    expect(dueAtOf(opened, 0)).toBeNull()
+    expect(dueWords(8)).toEqual({ it: 'Da fare entro 8 h', en: 'Due within 8 h' })
+    expect(dueWords(24)).toEqual({ it: 'Da fare entro 1 giorno', en: 'Due within 1 day' })
+    expect(dueWords(72)?.en).toBe('Due within 3 days')
+    expect(dueWords(null)).toBeNull()
+  })
+
+  it('why a packing rule opened nothing, in words', () => {
+    expect(skipWords('NOTHING_WAITING', { subject: 'WO-0001 · PACK · bundle BN-1' }).en).toBe('WO-0001 · PACK · bundle BN-1: no finished garment waits for a final inspection (all released or in an open inspection already).')
+    expect(skipWords('NO_PROFILE', { subject: 'WO-0001', plan: 'FIN-JACKET' }).en).toMatch(/^No AQL profile applies to WO-0001 \(not plan FIN-JACKET/)
+    expect(skipWords('NO_INSPECTION_SERIES', { subject: 'WO-0001' }).it).toMatch(/serie dei numeri delle ispezioni finali/)
+  })
+})
+
 describe('a rule (QHS-010)', () => {
   it('an event that can open something, a plan of the stage it opens, a frequency it takes', () => {
     expect(ruleProblems({ event: 'GOODS_RECEIPT', stage: 'INCOMING', appliesTo: [{ kind: 'MATERIAL', value: MATERIAL }], frequency: 'EVERY_LOT' })).toEqual([])
@@ -36,8 +78,8 @@ describe('a rule (QHS-010)', () => {
     expect(ruleProblems({ event: 'BUNDLE_SCAN', stage: 'CUTTING', appliesTo: [], frequency: 'FIRST_PIECE' })).toEqual([{ path: 'frequency', message: 'The first piece is an in-line check: pick an in-line plan, or another frequency.' }])
   })
 
-  it("packing and a return are held in words; the frequency's number; a chip the event never knows", () => {
-    expect(ruleProblems({ event: 'PACKING', stage: 'FINAL', appliesTo: [], frequency: 'EVERY_LOT' })).toEqual([{ path: 'event', message: EVENT_RULES.PACKING.held!.en }])
+  it("a return is held in words; the frequency's number; a chip the event never knows", () => {
+    expect(EVENT_RULES.RETURN_RECEIVED.held).not.toBeNull()
     expect(ruleProblems({ event: 'RETURN_RECEIVED', stage: 'RETURN', appliesTo: [], frequency: 'EVERY_LOT' })[0]!.message).toBe('Not yet: a return has no inspection record; its grading stays on the return.')
     expect(ruleProblems({ event: 'OPERATION_FINISHED', stage: 'IN_LINE', appliesTo: [], frequency: 'PERCENT_OF_OPERATIONS', frequencyValue: 0 })).toEqual([{ path: 'frequencyValue', message: 'A share of the operations is 1 to 100 %.' }])
     expect(ruleProblems({ event: 'OPERATION_FINISHED', stage: 'IN_LINE', appliesTo: [], frequency: 'PERCENT_OF_OPERATIONS', frequencyValue: 101 }).map((p) => p.path)).toEqual(['frequencyValue'])
@@ -56,7 +98,7 @@ describe('a rule (QHS-010)', () => {
     expect(recordKindOf('IN_LINE', 'EVERY_NTH_BUNDLE')).toBe('ROVING')
     expect(recordKindOf('CUTTING', 'PERCENT_OF_OPERATIONS')).toBe('CUTTING')
     expect(recordKindOf('END_OF_LINE', 'EVERY_LOT')).toBe('END_OF_LINE')
-    expect(recordKindOf('FINAL', 'EVERY_LOT')).toBeNull()
+    expect(recordKindOf('FINAL', 'EVERY_LOT')).toBe('FINAL')
     expect(recordKindOf('RETURN', 'EVERY_LOT')).toBeNull()
   })
 

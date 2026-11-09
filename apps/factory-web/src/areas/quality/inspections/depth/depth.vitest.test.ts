@@ -83,6 +83,9 @@ describe('one list: final, incoming and in-line rows (design qi-grid; plan §12 
     expect(sampleOf({ key: '', kind: 'FINAL', id: planned.id, createdAt: planned.createdAt, row: planned })).toEqual({ key: 'sample.nOf', params: { done: 3, sample: planned.sampleSize } })
     expect(sampleOf({ key: '', kind: 'FINAL', id: w1.id, createdAt: w1.createdAt, row: w1 }).key).toBe('sample.only')
     expect(sampleOf({ key: '', kind: 'INCOMING', id: INCOMING_ROWS[0]!.id, createdAt: '', row: INCOMING_ROWS[0]! })).toEqual({ key: 'sample.nOf', params: { done: 2, sample: 5 } })
+    // B-W2b-213: an in-process check's frozen AQL sample, counted; none without a sample.
+    expect(sampleOf({ key: '', kind: 'INLINE', id: INLINE_ROWS[3]!.id, createdAt: '', row: INLINE_ROWS[3]! })).toEqual({ key: 'sample.nOf', params: { done: 2, sample: 3 } })
+    expect(sampleOf({ key: '', kind: 'INLINE', id: INLINE_ROWS[0]!.id, createdAt: '', row: INLINE_ROWS[0]! })).toEqual({ key: 'none' })
   })
 })
 

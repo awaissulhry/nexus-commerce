@@ -229,6 +229,10 @@
     "REMNANT_TOO_SMALL": {
       "message": "This piece is smaller than the smallest remnant kept: it is waste.",
       "fix": "Close the hide with No remnant · done."
+    },
+    "PHOTO_REQUIRED": {
+      "message": "This site asks a photo of the hide on the table before it is cut.",
+      "fix": "Take the photo of the hide, then cut."
     }
   },
   "check": {

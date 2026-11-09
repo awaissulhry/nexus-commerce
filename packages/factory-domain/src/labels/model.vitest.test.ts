@@ -44,3 +44,24 @@ describe('composeLabel', () => {
     expect([...labelText('x'.repeat(200))]).toHaveLength(80)
   })
 })
+
+describe('B-W2b-219: the roll and remnant tags', () => {
+  const roll = formatScanId({ type: 'ROLL', tenantTag: TAG, ref: 12 })
+  const remnant = formatScanId({ type: 'REMNANT', tenantTag: TAG, ref: 7 })
+
+  it('words a ROLL tag (RL code, length, width, shade, lot) and a REMNANT tag (RM code, area, grade, the hide)', () => {
+    const tag = composeLabel({ kind: 'ROLL', language: 'it', scanId: roll, maker: 'Seed A', title: 'LIN-01 · Fodera', fields: { article: 'LIN-01', length: '25,40 m', width: '145,50 cm', shade: '1', lot: 'L-9' } })
+    expect(tag).toMatchObject({ kind: 'ROLL', scanId: roll, heading: 'Rotolo · Seed A' })
+    expect(tag.fields.map((field) => field.label)).toEqual(['Articolo', 'Lunghezza', 'Altezza', 'Tonalità', 'Lotto'])
+    const piece = composeLabel({ kind: 'REMNANT', language: 'en', scanId: remnant, title: 'LEA-1 · Cowhide', fields: { article: 'LEA-1', area: '5.00 ft²', grade: 'A', hide: 'HD-1', lot: 'L-1' } })
+    expect(piece).toMatchObject({ kind: 'REMNANT', heading: 'Remnant' })
+    expect(piece.fields.map((field) => field.label)).toEqual(['Article', 'Area', 'Grade', 'Hide', 'Lot'])
+  })
+
+  it('refuses a tag that carries another kind\'s code (a hide code on a remnant tag), and a field the kind does not print', () => {
+    const hide = formatScanId({ type: 'HIDE', tenantTag: TAG, ref: 3 })
+    expect(labelProblems({ kind: 'REMNANT', language: 'it', scanId: hide, title: 'x' }).map((problem) => problem.path)).toEqual(['label/scanId'])
+    expect(labelProblems({ kind: 'ROLL', language: 'it', scanId: roll, title: 'x', fields: { grossWeight: '1 kg' } as LabelInput['fields'] }).map((problem) => problem.path)).toEqual(['label/fields/grossWeight'])
+  })
+})
+

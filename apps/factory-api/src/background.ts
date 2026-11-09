@@ -123,6 +123,8 @@ import { expiryRemindersCron } from './platform/files/expiry/remind'
 // B-W2b-184: approval requests to partners expire past their due time (and an answer's settle is caught up); office approvals by e-mail.
 import { approvalsSweepCron } from './platform/approvals-out/sweep'
 import { officeApprovalsMailCron } from './modules/insights/sources/approvals-mail'
+// B-W2b-215: an approved SMV version takes effect on its day (hourly).
+import { smvTakeEffectCron } from './modules/product/minutes/take-effect'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -319,6 +321,8 @@ if (mode === 'worker') {
   crons.push(approvalsSweepCron({ database, log }), officeApprovalsMailCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }))
   // B-W2b-171: hourly, the body photos' deletion day (90 days after the garment ships) and their deletion when it passes.
   crons.push(measurementPhotosCron({ database, log }))
+  // B-W2b-215: hourly at minute 7, approved SMV versions whose day came take effect.
+  crons.push(smvTakeEffectCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

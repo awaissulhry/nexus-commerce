@@ -1,0 +1,56 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/options.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 28/33 (B-W2b-211): BOM depth and the option library. The office (factory_runtime) reads and writes through apps/factory-api's modules/product, always with command(): a draft revision's line alternates (B-W2b-228), the option groups, their values, rules and effects, and the styles that offer a group (B-W2b-229). The floor (factory_floor_runtime) reads a line's alternates (a substitute at the station, MES-139) and the option groups and values (the names of what a work order's garment is made with); it reads no rule, no effect (an effect may carry a price) and not which styles offer a group. No table here has a site key, so a floor device reads its tenant's rows (styles and the library are tenant- or company-wide; the work order brings the site). Portal and link sessions read nothing here: W2b-5's configurator reads the library through the API. The only money column is OptionEffect.priceDelta / pricePct (@grain price), office only. No personal data. Groups and values are archived (status ARCHIVED), never deleted; a draft revision's alternates, rules, effects and a style's offers are removed by the office (an offer only while no BOM line or routing step of the style is for one of its values: triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "BomLineAlternate": {
+      "about": "The office adds, orders, changes and removes a draft revision's alternates of a BOM line (only while the revision is DRAFT: the …_product_guards part rule; removed with its line). The floor reads them (a substitute for a short material at the station).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "OptionGroup": {
+      "about": "The office keeps the option groups of the library (code, names, kind, minimum and maximum picks) and archives them. The floor reads them (the names of the options a work order's garment is made with).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "OptionValue": {
+      "about": "The office keeps a group's values (code, names, place, the free-text rule) and archives them. The floor reads them (the option names on a work order's garment).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "OptionRule": {
+      "about": "The office writes, changes, archives and removes the requires and excludes rules of a group (a group's rules are saved as a set). The floor reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "OptionEffect": {
+      "about": "The office writes, changes and removes what a value does: BOM lines added, replaced or left out, an operation or minutes added, the price delta (@grain price) and the certificate effect. The floor reads none (a price).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "StyleOptionGroup": {
+      "about": "The office offers a group on a style with its own minimum, maximum and default value, archives the offer, and removes it while no BOM line or routing step of the style is for one of its values (triggers). The floor reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

@@ -30,7 +30,9 @@ import {
 import { DefectDrawer } from './DefectDrawer'
 import { DeleteDialog, KeysDialog, NewDefectDialog, NewDispositionDialog, PhotoDialog, RetireDialog } from './dialogs'
 import { DispositionsTable } from './DispositionsTable'
-import { CausesTab, DeleteCauseDialog, GradesTab, NewCauseDialog, NewGradeDialog, SeverityTab, VOCAB_NAMESPACE } from './VocabularyTabs'
+import { CausesTab, DeleteCauseDialog, GradesTab, NewCauseDialog, NewGradeDialog, VOCAB_NAMESPACE } from './VocabularyTabs'
+import type { SeverityWordsActions } from '../severity/model'
+import { SeverityWordsView } from '../severity/view/SeverityWordsView'
 import { missingWordsNote, NEW_CAUSE, NEW_GRADE, type NewCauseDraft, type NewGradeDraft, type VocabularyField } from '../vocabulary'
 import { LibraryTable } from './LibraryTable'
 import { DEFECT_NAMESPACES, DefectsNotice, isTyping } from './parts'
@@ -77,6 +79,8 @@ export interface DefectsActions {
   onDeleteCause?: (id: string) => void
   onConfirmDeleteCause?: () => void
   onRetryVocab?: () => void
+  /** B-W2b-213: the severity words editor (Edit, a typed text, Discard, Save). */
+  severity?: SeverityWordsActions
 }
 
 /**
@@ -357,7 +361,7 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
         </>
       )}
 
-      {address.tab === 'severity' && vocab && <SeverityTab read={vocab.severity} onRetry={actions?.onRetryVocab} />}
+      {address.tab === 'severity' && vocab && <SeverityWordsView model={{ read: vocab.severity, edit: vocab.severityEdit ?? null }} actions={actions?.severity} onRetry={actions?.onRetryVocab} />}
       {address.tab === 'causes' && vocab && (
         <CausesTab
           read={vocab.causes}

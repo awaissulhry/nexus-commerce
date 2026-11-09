@@ -1,6 +1,6 @@
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
-import { inspectedOf } from '@nexus/factory-domain/quality/final/plan'
+import { countWords, inspectedNow } from '@nexus/factory-domain/quality/final/plan'
 import { sampleWords } from '@nexus/factory-domain/quality/incoming/rules'
 import {
   blockOf,
@@ -105,7 +105,7 @@ const finalRows = (caller: CommandCaller, viewer: Viewer, query: QueueQuery, now
 async function finalRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQuery, now: Date, today: string): Promise<QueueRow[]> {
   const rows = await db.inspection.findMany({
     where: { AND: [scopeOf(viewer, PERMISSIONS.final.view, query), { status: 'OPEN' }] },
-    select: { id: true, number: true, companyId: true, siteId: true, workOrderId: true, lotSize: true, sampleSize: true, checklist: true, planVersionId: true, inspectorWorkerId: true, inspectorUserId: true, assignedInspectorId: true, assignedInspectorWorkerId: true, dueAt: true, createdAt: true, version: true },
+    select: { id: true, number: true, companyId: true, siteId: true, workOrderId: true, lotSize: true, sampleSize: true, checklist: true, inspectedCount: true, planVersionId: true, inspectorWorkerId: true, inspectorUserId: true, assignedInspectorId: true, assignedInspectorWorkerId: true, dueAt: true, createdAt: true, version: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: PER_KIND,
   })
@@ -117,7 +117,8 @@ async function finalRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQuery,
     const number = order?.number ?? '—'
     const taken = takenOf({ workerId: row.inspectorWorkerId, userId: row.inspectorUserId }, viewer.person, { workerId: row.assignedInspectorWorkerId, userId: row.assignedInspectorId })
     const version = row.planVersionId ? versions.get(row.planVersionId) : undefined
-    const done = row.planVersionId ? inspectedOf(row.checklist) : null
+    // B-W2b-213: Inspection.inspectedCount (else the AQL_SAMPLE entry of an inspection counted before the column).
+    const done = row.planVersionId ? inspectedNow(row) : null
     return rowOf(
       {
         key: `Inspection:${row.id}`,
@@ -137,13 +138,14 @@ async function finalRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQuery,
         progress:
           done === null
             ? { done: null, of: row.sampleSize, words: { it: `Campione di ${row.sampleSize} su ${row.lotSize}`, en: `Sample of ${row.sampleSize} of ${row.lotSize}` } }
-            : { done, of: row.sampleSize, words: { it: `${done} di ${row.sampleSize} controllati`, en: `${done} of ${row.sampleSize} inspected` } },
+            : { done, of: row.sampleSize, words: countWords(done, row.sampleSize) },
         openedAt: iso(row.createdAt),
         waitingSince: iso(row.createdAt),
         dueAt: iso(row.dueAt),
         blocks: blockOf({ kind: 'FINAL', workOrder: number, garments: row.lotSize, dueDate: dayOf(order?.dueDate) }, today),
         taken,
-        may: { record: taken === 'MINE' && may(viewer, PERMISSIONS.final.record, row), start: false },
+        // B-W2b-213: an inspection a rule opened is nobody's until an inspector takes it (`isMine`: theirs or nobody's).
+        may: { record: isMine(taken) && may(viewer, PERMISSIONS.final.record, row), start: false },
         open: { method: 'GET', path: row.planVersionId ? `/quality/inspections/${row.id}/sheet` : `/quality/inspections/${row.id}` },
         start: null,
         version: row.version,
@@ -258,6 +260,7 @@ async function incomingRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQue
       lotSize: true,
       uom: true,
       sampleSize: true,
+      inspectedCount: true,
       inspectorWorkerId: true,
       inspectorUserId: true,
       dueAt: true,
@@ -305,7 +308,8 @@ async function incomingRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQue
         bundle: null,
         operation: null,
         plan: row.planVersion ? { code: row.planVersion.plan.code, number: row.planVersion.number } : null,
-        progress: { done: byHide ? row._count.hideResults : null, of: row.sampleSize, words: sampleWords(row.sampleSize, lotSize, row.uom, byHide ? row._count.hideResults : null) },
+        // B-W2b-213: a lot counted on the AqlCounter (not hide by hide) shows its IncomingInspection.inspectedCount.
+        progress: { done: byHide ? row._count.hideResults : row.inspectedCount, of: row.sampleSize, words: sampleWords(row.sampleSize, lotSize, row.uom, byHide ? row._count.hideResults : row.inspectedCount) },
         openedAt: iso(row.createdAt),
         waitingSince: iso(row.createdAt),
         dueAt: iso(row.dueAt),
@@ -331,7 +335,7 @@ const checkRows = (caller: CommandCaller, viewer: Viewer, query: QueueQuery, now
 async function checkRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQuery, now: Date, today: string): Promise<QueueRow[]> {
   const rows = await db.inProcessCheck.findMany({
     where: { AND: [scopeOf(viewer, PERMISSIONS.inprocess.view, query), { status: 'OPEN' }] },
-    select: { id: true, kind: true, companyId: true, siteId: true, lineId: true, workOrderId: true, bundleId: true, workOrderOperationId: true, planVersionId: true, inspectorWorkerId: true, inspectorUserId: true, createdAt: true, version: true },
+    select: { id: true, kind: true, companyId: true, siteId: true, lineId: true, workOrderId: true, bundleId: true, workOrderOperationId: true, planVersionId: true, inspectorWorkerId: true, inspectorUserId: true, sampleSize: true, inspectedCount: true, dueAt: true, createdAt: true, version: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: PER_KIND,
   })
@@ -371,10 +375,12 @@ async function checkRowsIn(db: FactoryClient, viewer: Viewer, query: QueueQuery,
         bundle: bundle ? { id: bundle.id, code: bundle.code } : null,
         operation: operation ? { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name } : null,
         plan: version ? { code: version.plan.code, number: version.number } : null,
-        progress: null,
+        // B-W2b-213: the AQL sample frozen at opening and the units counted (InProcessCheck.sampleSize, inspectedCount).
+        progress: row.sampleSize !== null ? { done: row.inspectedCount, of: row.sampleSize, words: countWords(row.inspectedCount ?? 0, row.sampleSize) } : null,
         openedAt: iso(row.createdAt),
         waitingSince: iso(row.createdAt),
-        dueAt: null,
+        // B-W2b-213: by when (a rule's due hours, or the office's); My inspections sorts by it.
+        dueAt: iso(row.dueAt),
         blocks: kind === 'FIRST_PIECE' ? blockOf({ kind, workOrder: order?.number ?? '—', operation: at, open: true }, today) : blockOf({ kind }, today),
         taken,
         // B-W2b-99 records a check's results for anyone with the right (a rule's check is nobody's; the floor takes it there).

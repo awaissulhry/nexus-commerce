@@ -1,0 +1,36 @@
+{
+  "head": {
+    "intro": "How each severity class is called and explained on screen, in every language of the factory. The rules do not change: a critical defect is never accepted (AQL 0)."
+  },
+  "edit": "Edit words",
+  "held": {
+    "noManage": "Changing the words needs quality.defects.manage over every company.",
+    "reading": "The words are still being read."
+  },
+  "col": {
+    "words": "Words",
+    "meaning": "Meaning",
+    "wordsIn": "Words of {klass} in {language}",
+    "meaningIn": "Meaning of {klass} in {language}"
+  },
+  "group": "{klass} in {language}",
+  "own_one": "Your words in {count} language; the rest are the standard words.",
+  "own_other": "Your words in {count} languages; the rest are the standard words.",
+  "standardOnly": "The standard words in every language.",
+  "lockedMeaning": "What critical means is set by the law: only how it is called is yours.",
+  "unsaved_one": "{count} unsaved change",
+  "unsaved_other": "{count} unsaved changes",
+  "save": "Save words",
+  "fixFirst_one": "Fix {count} text first",
+  "fixFirst_other": "Fix {count} texts first",
+  "nothingChanged": "Nothing changed yet: an empty box keeps the standard words.",
+  "problem": {
+    "title": "The words were not saved",
+    "tooLong": "At most {max} characters.",
+    "stale": "Someone changed the words meanwhile: discard and read them again.",
+    "forbidden": "You may not change the severity words.",
+    "invalid": "A text was refused: check each box.",
+    "offline": "No answer from the server: try again.",
+    "failed": "Not saved: try again."
+  }
+}

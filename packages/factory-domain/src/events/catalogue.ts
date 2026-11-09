@@ -135,6 +135,12 @@ import { events as productionCutissue } from '../production-cutissue/events'
 import { events as measureLink } from '../measure-link/events'
 // B-W2b-172: the supplier questionnaire (a version published, a link sent, an answer sent, an answer reviewed).
 import { events as supplierQuestionnaire } from '../supplier-questionnaire/events'
+// B-W2b-214: work instructions (an instruction changed, a version published, a version seen).
+import { events as productionInstructions } from '../production-instructions/events'
+// B-W2b-215: SMV versions and an operation's SMV taking an approved version.
+import { events as productMinutes } from '../product-minutes/events'
+// B-W2b-219: the cutting follow-ups' settings (a site's cutting rules, the leather area tolerance).
+import { events as productionCuttingRules } from '../production-cutting-rules/events'
 // B-W2b-225: a routing step's quality checkpoint opened a check.
 import { events as routingDepth } from '../routing-depth/events'
 import type { EventDefinition } from './define'
@@ -339,6 +345,12 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...supplierQuestionnaire,
   // B-W2b-208
   ...textileRules,
+  // B-W2b-214
+  ...productionInstructions,
+  // B-W2b-215
+  ...productMinutes,
+  // B-W2b-219
+  ...productionCuttingRules,
   // B-W2b-225
   ...routingDepth] as const satisfies readonly EventDefinition[]
 

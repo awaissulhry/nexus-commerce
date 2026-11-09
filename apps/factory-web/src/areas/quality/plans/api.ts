@@ -435,6 +435,8 @@ export const ruleSchema = z.object({
   frequency: z.enum(FREQUENCIES),
   frequencyValue: z.number().int().nullable(),
   recordKind: z.enum(RECORD_KINDS).nullable(),
+  /** B-W2b-213: within how many hours what the rule opens is due (null: no due time). */
+  dueHours: z.number().int().nullable().optional().default(null),
   active: z.boolean(),
   opened: z.object({ last30Days: z.number().int(), lastAt: z.string().nullable() }),
   skipped: z.object({ last30Days: z.number().int(), lastAt: z.string().nullable(), lastWords: itEn.nullable() }),
@@ -464,6 +466,8 @@ export interface RuleBody {
   appliesTo: { kind: (typeof CHIP_KINDS)[number]; value: string }[]
   frequency: (typeof FREQUENCIES)[number]
   frequencyValue: number | null
+  /** B-W2b-213: 1 to 720 hours, or null (no due time). */
+  dueHours: number | null
   active: boolean
 }
 

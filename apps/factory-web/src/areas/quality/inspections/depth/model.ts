@@ -1,3 +1,4 @@
+import { inlineSampleOf } from '../count/model'
 import type { Assigned, DefectBody, FinalCell, InspectionRow } from '../api'
 import type { AmendField, Amendments, ChartPoint, Correction, IncomingRow, InlineKind, InlineRow, Sheet, SheetCheck, WorkOrderPlans } from './api'
 
@@ -148,7 +149,8 @@ export function sampleOf(entry: ListRow): Words {
     return { key: 'sample.only', params: { sample: entry.row.sampleSize } }
   }
   if (entry.kind === 'INCOMING') return { key: 'sample.nOf', params: { done: entry.row.done, sample: entry.row.sampleSize } }
-  return { key: 'none' }
+  // B-W2b-213: an in-process check's frozen AQL sample, "2 of 3".
+  return inlineSampleOf(entry.row)
 }
 
 /** "Plan + version" (FIN-JACKET v3): W1's fixed checklist says so. */

@@ -4,6 +4,8 @@ import { openingTemplate } from '@nexus/factory-domain/inventory/opening/importe
 import { openingStockImporter } from '@nexus/factory-domain/inventory/opening/importer'
 // B-W2b-190: the customer portal's order sheet (its own made-up rows, shared with the portal's template).
 import { ORDER_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/sales/portal-ordering/upload'
+// B-W2b-209: a made-up Nexus Commerce product export (one family, its own row and four SKUs).
+import { COMMERCE_TEMPLATE_EXAMPLES } from '@nexus/factory-domain/product/commerce-import/sample'
 
 /**
  * The made-up example rows of each importer's template (B-W2a-41; PLT-177): one or two rows a person can copy, never
@@ -52,6 +54,8 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { notice: 'ASN-2026-0001', hideNumber: '2231-001', area: '21.40', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.20', dyeBatch: '2231' },
     { notice: 'ASN-2026-0001', hideNumber: '2231-002', area: '19.85', unit: 'FT2', line: '10', grade: 'A', thicknessMm: '1.25', dyeBatch: '2231' },
   ],
+  // B-W2b-209
+  'product.commerceStyles': COMMERCE_TEMPLATE_EXAMPLES,
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

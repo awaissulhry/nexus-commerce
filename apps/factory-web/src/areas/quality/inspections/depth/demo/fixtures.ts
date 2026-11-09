@@ -44,6 +44,11 @@ const inlineRow = (n: number, over: Partial<InlineRow>): InlineRow => ({
   dhu: '0.0',
   defect: null,
   hasPlan: false,
+  // B-W2b-213: no AQL sample to count, no due time, opened by a person (the rows below say otherwise).
+  sampleSize: null,
+  inspected: null,
+  dueAt: null,
+  openedByRule: false,
   decidedAt: at(29, 10, 5),
   createdAt: at(29, 10, 5),
   version: 1,
@@ -54,6 +59,8 @@ export const INLINE_ROWS: InlineRow[] = [
   inlineRow(1, { kind: 'FIRST_PIECE', status: 'OPEN', outcome: null, bundle: { id: uid('9431', 1), code: 'DEMO-BN-0151-01', quantity: 10 }, pieces: 0, dhu: null, hasPlan: true, decidedAt: null, createdAt: at(29, 8, 50) }),
   inlineRow(2, { kind: 'END_OF_LINE', outcome: 'FAIL', bundle: { id: uid('9431', 2), code: 'DEMO-BN-0151-02', quantity: 10 }, pieces: 10, defectivePieces: 2, defects: 3, dhu: '30.0', defect: { id: uid('9441', 1), code: 'STITCH-SKIP', labelIt: 'Punto saltato', labelEn: 'Skipped stitch', critical: false }, createdAt: at(29, 11, 40), decidedAt: at(29, 11, 40) }),
   inlineRow(3, { createdAt: at(28, 15, 20), decidedAt: at(28, 15, 20) }),
+  // B-W2b-213: a roving check a rule opened, due in 4 hours, 2 of its AQL sample of 3 counted.
+  inlineRow(4, { status: 'OPEN', outcome: null, bundle: { id: uid('9431', 4), code: 'DEMO-BN-0151-04', quantity: 10 }, pieces: 0, dhu: null, hasPlan: true, sampleSize: 3, inspected: 2, dueAt: at(29, 16, 0), openedByRule: true, decidedAt: null, createdAt: at(29, 12, 0) }),
 ]
 
 /** The final rows with the W2b facts: plan versions, units counted, an amended result. */

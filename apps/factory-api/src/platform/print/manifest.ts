@@ -15,6 +15,9 @@ export const manifest = defineManifest({
   'GET /print/stations': { audiences: ['office', 'floor'], permission: 'print.view', scope: 'record' },
   'PUT /print/stations/:stationId/label-printer': { audiences: ['office'], permission: 'print.manage', scope: 'record' },
   'POST /print/jobs/label': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
+  // B-W2b-219: a roll's and a remnant's tag, composed from the record (office: inventory.stock.view there; a tablet: its site's).
+  'POST /print/jobs/roll-tag/:rollId': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
+  'POST /print/jobs/remnant-tag/:remnantId': { audiences: ['office', 'floor'], permission: 'print.labels', scope: 'record' },
   'POST /print/jobs/document': { audiences: ['office', 'floor'], permission: 'print.documents', scope: 'record' },
   'GET /print/jobs': { audiences: ['office', 'floor'], permission: 'print.view', scope: 'record' },
   'GET /print/jobs/:jobId': { audiences: ['office', 'floor'], permission: 'print.view', scope: 'record' },

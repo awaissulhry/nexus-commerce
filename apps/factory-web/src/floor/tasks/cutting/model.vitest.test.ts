@@ -17,6 +17,7 @@ import {
   otherUnitOf,
   pendingSets,
   remnantMax,
+  remnantMinimum,
   remnantProblem,
   remnantText,
   shadeMatch,
@@ -48,6 +49,10 @@ describe('SCR-094 areas: the other unit beside, never a float in the cut', () =>
     expect(remnantProblem('52.4000', null, true)).toBe('empty')
     expect(remnantProblem('52.4000', 0, false)).toBe('empty')
     expect(remnantProblem('52.4000', 12.5, true)).toBeNull()
+    // B-W2b-219: the site's own smallest remnant (the hide answer's remnantMinimum, in the hide's unit) wins over the default.
+    expect(remnantProblem('52.4000', 12.5, true, 'DM2', '20.0000')).toBe('tooSmall')
+    expect(remnantProblem('52.4000', 5, true, 'DM2', '2.5000')).toBeNull()
+    expect(remnantMinimum('DM2', '2.5000')).toBe('2.50')
     // With pieces logged, they used some of it: the remnant is less than what is left.
     expect(remnantProblem('52.4000', 52.4, true)).toBe('tooLarge')
     expect(remnantProblem('52.4000', 52.4, false)).toBeNull()

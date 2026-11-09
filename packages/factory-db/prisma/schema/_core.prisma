@@ -131,9 +131,14 @@ model Company {
   colours              Colour[]
   items                Item[]
   sizeScales           SizeScale[]
+  // W2b-4 options.prisma (wave 28/33): its option groups.
+  optionGroups         OptionGroup[]
   styles               Style[]
   operations           Operation[]
   measurementTemplates MeasurementTemplate[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): its own points of measure and grade rules (tenant-wide ones have none).
+  pointsOfMeasure      PointOfMeasure[]
+  gradeRules           GradeRule[]
   // compliance.prisma: the certificates it holds, its label templates and compliance documents.
   certificates         Certificate[]
   labelTemplates       LabelTemplate[]

@@ -95,8 +95,9 @@ const keysOf = (value: unknown): string[] => (Array.isArray(value) ? value.flatM
 /** Words that name a person: never in a queue row. */
 const PERSON = /^(workerId|userId|employeeId|worker|operator|inspector|assigned|createdById|recordedById|recordedByWorkerId|displayName)$/
 const inspected = async (inspectionId: string) => {
-  const [row] = await admin<{ checklist: Json[] }>(`SELECT checklist FROM "Inspection" WHERE id = $1`, [inspectionId])
-  return Number((row!.checklist ?? []).find((entry: Json) => entry.code === 'AQL_SAMPLE')?.inspected ?? 0)
+  // B-W2b-213: Inspection.inspectedCount (an inspection counted before it keeps the AQL_SAMPLE entry).
+  const [row] = await admin<{ checklist: Json[]; inspectedCount: number | null }>(`SELECT checklist, "inspectedCount" FROM "Inspection" WHERE id = $1`, [inspectionId])
+  return row!.inspectedCount ?? Number((row!.checklist ?? []).find((entry: Json) => entry.code === 'AQL_SAMPLE')?.inspected ?? 0)
 }
 const queued = (session: string, kind: string, payload: Json, clientEventId = `q-${newId()}`) =>
   applyQueued(callerAs(session), { clientEventId, kind: kind as never, payload }, { key: `${A.device}.${clientEventId}` })

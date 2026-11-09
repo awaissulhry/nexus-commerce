@@ -326,6 +326,8 @@ export const listContract = defineContract({
           decision: quantities.nullable(),
           inspectorKind: z.enum(['FLOOR', 'OFFICE']).nullable(),
           dueAt: instant().nullable(),
+          /** B-W2b-213: a rule opened it (openedByTriggerId). */
+          openedByRule: z.boolean(),
           createdAt: instant(),
           /** B-W2b-127 (design qi-grid): the lot's supplier (office only), the plan version, a countersigned correction. */
           supplier: output({ id: id(), name: z.string() }).nullable(),
@@ -481,7 +483,8 @@ export const removeComponentContract = defineContract({ params: componentParams,
 
 export const putCountersContract = defineContract({
   params: inspectionParams,
-  body: input({ version, found: input({ critical: z.number().int().min(0).max(100000), major: z.number().int().min(0).max(100000), minor: z.number().int().min(0).max(100000) }) }),
+  // B-W2b-213: `inspected` the units of the sample inspected so far (the counter); left out: kept.
+  body: input({ version, found: input({ critical: z.number().int().min(0).max(100000), major: z.number().int().min(0).max(100000), minor: z.number().int().min(0).max(100000) }), inspected: z.number().int().min(0).max(100000).optional() }),
   response: { 200: incomingView },
 })
 

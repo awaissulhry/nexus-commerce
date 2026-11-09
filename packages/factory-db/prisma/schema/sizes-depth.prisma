@@ -1,0 +1,385 @@
+// Sizes, measurements and made-to-measure rules (W2b-4 schema wave 27/33, B-W2b-210; features PRD-049, PRD-051, PRD-052,
+// PRD-055, PRD-062, PRD-063, PRD-069, PRD-074, PRD-201, PRD-202, PRD-203, PRD-204; design products.sizes (Points of
+// measure, Grade rules), products.styles › Sizes & measurements (Measurement spec, Prepacks, Protector placement)): what a
+// finished garment of each size must measure, how sizes are graded, the fixed size mixes dealers buy and where each
+// protector goes. The columns on SizeScale, Size, MeasurementTemplate, MeasurementPoint and BomLine are in product.prisma;
+// the tables are here.
+//
+// Points of measure (PRD-062, PRD-069): one library per tenant (a company's own or tenant-wide), each point a BODY measure
+// (what a rider's body measures: a size's body measures, a made-to-measure template's points) or a GARMENT measure (what
+// the finished garment measures: the measurement spec), with its body zone, unit, how to measure and its picture. A garment
+// point may name the body point it answers to (garment chest width ↔ body chest girth): the body size chart (Size's body
+// measures) and the garment spec stay apart and linked.
+//
+// The measurement spec (PRD-063, PRD-052) is a part of a style revision: nominal, tolerance minus and plus per garment
+// point and size, typed for the base size and graded by a grade rule (a graded value is marked; a typed one on another size
+// is a manual override). A released revision's spec is frozen with it (the …_product_guards part rule,
+// factory_style_revision_part_guard): a change is a new revision. One live spec (DRAFT or APPROVED) per revision; an
+// approved spec's values change only after it is reopened. The final inspection's size check (B-W2b-97, B-W2b-224) reads
+// the work order's revision's spec.
+//
+// Grade rules (PRD-051) are a library per size scale: an increment per point of measure between two sizes, RELATIVE (from
+// one size to the next) or ABSOLUTE (from the base size), or a standard increment for every step of a point (no sizes).
+//
+// Prepacks (PRD-055) are fixed size mixes (1-2-3-2-1) of a style or of a whole size scale, used by orders and packing; a
+// line may be for one colourway of the style. A prepack is not a part of a revision: an assortment is commercial, and the
+// order line that takes one (W2b-5) keeps its own quantities.
+//
+// Protector placement (PRD-074; EN 17092, EN 1621-1, EN 1621-2) is a part of a style revision: which protector (the
+// material, its standard and level) goes in which pocket, for which sizes, where. Frozen with the revision.
+//
+// Made-to-measure rules (PRD-201, PRD-202, PRD-203, PRD-204) live on the measurement template (product.prisma) and here
+// (MeasurementRule): plausibility rules between a rider's measures, which measures pick the base size, the alteration
+// limits per point against the base size, and the BOM lines whose consumption follows one measure. They are built switched
+// off (Owner 11-09; GATE-MTM): a template's rules are checked only once MeasurementTemplate.rulesOn is set.
+//
+// Who sees what (ownership/sizes-depth.json): the office keeps all of it. The floor reads the points of measure, the specs
+// and their values, the prepacks and the protector placement (the spec and the pockets on the tablet, packing), never the
+// grade rules or the made-to-measure rules. Portal and link sessions read nothing here; no column here is money.
+
+/// What a point of measure measures (PRD-069).
+enum PointOfMeasureKind {
+  /// The body: a size's body measures, a made-to-measure rider's measures.
+  BODY
+  /// The finished garment: the measurement spec, samples and the final inspection.
+  GARMENT
+}
+
+/// Where on the body (or the garment) a point is: what the measurement link and the spec group points by.
+enum BodyZone {
+  /// Chest, waist, back, neck, shoulders.
+  UPPER
+  /// Sleeves and arms.
+  ARMS
+  /// Legs, seat, inseam, outseam.
+  LEGS
+  /// Taken in the riding position.
+  RIDING
+  OTHER
+}
+
+/// A point of measure of the library (PRD-062): "chest width, 1 cm below the armhole". Its code means the same on every
+/// style. Archived (status ARCHIVED), never deleted once used; its kind and unit change only while nothing names it.
+model PointOfMeasure {
+  id               String             @id @db.Uuid
+  tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1). Fixed.
+  companyId        String?            @db.Uuid
+  /// Unique in the tenant, no spaces ("CHEST_W").
+  code             String
+  name             String
+  /// The name per language: {"it": "…", "en": "…"}.
+  nameI18n         Json?
+  description      String?
+  /// How to measure it, and per language.
+  howTo            String?
+  howToI18n        Json?
+  /// Its how-to picture: a PHOTO file of this point (StoredFile recordType "PointOfMeasure").
+  pictureFileId    String?            @db.Uuid
+  kind             PointOfMeasureKind
+  bodyZone         BodyZone
+  /// A length: CM or MM.
+  uom              Uom                @default(CM)
+  /// The tolerance a spec takes by default, plus and minus, in its unit (0 or more).
+  defaultTolerance Decimal?           @db.Decimal(8, 2)
+  /// A GARMENT point's body point (PRD-069: garment chest width ↔ body chest girth); never on a BODY point.
+  bodyPointId      String?            @db.Uuid
+  status           MasterStatus       @default(ACTIVE)
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?            @db.Uuid
+
+  company        Company?               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  pictureFile    StoredFile?            @relation("PointOfMeasurePicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  bodyPoint      PointOfMeasure?        @relation("PointOfMeasureBodyPoint", fields: [tenantId, bodyPointId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  garmentPoints  PointOfMeasure[]       @relation("PointOfMeasureBodyPoint")
+  // product.prisma: the made-to-measure template points that take it.
+  templatePoints MeasurementPoint[]
+  specValues     MeasurementSpecValue[]
+  gradeRuleSteps GradeRuleStep[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// The life of a measurement spec.
+enum MeasurementSpecStatus {
+  /// Being typed and graded.
+  DRAFT
+  /// Checked by a person: what samples and the release are measured against. Its values change only after it is reopened
+  /// (back to DRAFT) while the revision is a draft.
+  APPROVED
+  /// Replaced by another spec of the same revision; kept.
+  ARCHIVED
+}
+
+/// How a spec value was written (PRD-052).
+enum MeasurementValueSource {
+  /// Typed by a person: the base size, or a manual override of a graded value (marked on screen).
+  TYPED
+  /// Filled from the base size by the spec's grade rule.
+  GRADED
+}
+
+/// A style revision's measurement spec (PRD-063): the garment measures its sizes must have, graded from the base size. A
+/// part of the revision (written only while it is DRAFT); one live spec (DRAFT or APPROVED) per revision, a partial unique
+/// index of …_sizes_measures_w2b_guards.
+model MeasurementSpec {
+  id           String                @id @db.Uuid
+  tenantId     String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId      String                @db.Uuid
+  revisionId   String                @db.Uuid
+  /// The size the values are typed for and graded from: one of the style's sizes.
+  baseSize     String
+  status       MeasurementSpecStatus @default(DRAFT)
+  /// The grade rule it was graded with (of the style's size scale); null: typed by hand.
+  gradeRuleId  String?               @db.Uuid
+  /// Who approved it and when: set exactly while APPROVED.
+  approvedAt   DateTime?             @db.Timestamptz(3)
+  approvedById String?               @db.Uuid
+  version      Int                   @default(1)
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?               @db.Uuid
+
+  revision  StyleRevision          @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  gradeRule GradeRule?             @relation(fields: [tenantId, gradeRuleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  values    MeasurementSpecValue[]
+
+  @@index([tenantId, styleId])
+  // The target of its values' reference: a spec of the same revision.
+  @@unique([tenantId, revisionId, id])
+}
+
+/// One cell of a measurement spec (PRD-063): a garment point of measure in one size, its nominal and tolerance, in the
+/// point's unit. A part of the spec's revision; written only while the spec is DRAFT.
+model MeasurementSpecValue {
+  id               String                 @id @db.Uuid
+  tenantId         String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The spec's revision (the part rule reads it).
+  revisionId       String                 @db.Uuid
+  specId           String                 @db.Uuid
+  /// A GARMENT point of measure. Fixed, as the spec and the size.
+  pointOfMeasureId String                 @db.Uuid
+  /// The size code: one of the style's sizes.
+  size             String
+  /// The point's place in the spec (the same on every size of a point), from 1.
+  seq              Int
+  /// What the garment must measure (above 0) and how far under and over it may be (0 or more).
+  nominal          Decimal                @db.Decimal(8, 2)
+  toleranceMinus   Decimal                @db.Decimal(8, 2)
+  tolerancePlus    Decimal                @db.Decimal(8, 2)
+  source           MeasurementValueSource @default(TYPED)
+  version          Int                    @default(1)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?                @db.Uuid
+
+  spec           MeasurementSpec @relation(fields: [tenantId, revisionId, specId], references: [tenantId, revisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  pointOfMeasure PointOfMeasure  @relation(fields: [tenantId, pointOfMeasureId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, specId, pointOfMeasureId, size])
+}
+
+/// How a grade rule's increments count (PRD-051).
+enum GradeIncrementFormat {
+  /// From one size to the next.
+  RELATIVE
+  /// From the base size.
+  ABSOLUTE
+}
+
+/// A grade rule of a size scale (PRD-051): the increments per point of measure between its sizes, reused by many specs.
+/// Archived, never deleted once used.
+model GradeRule {
+  id          String               @id @db.Uuid
+  tenantId    String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide. Fixed, as the scale.
+  companyId   String?              @db.Uuid
+  /// Unique in the tenant, no spaces.
+  code        String
+  name        String
+  sizeScaleId String               @db.Uuid
+  /// The size the increments start from: a size of the scale.
+  baseSize    String
+  format      GradeIncrementFormat @default(RELATIVE)
+  status      MasterStatus         @default(ACTIVE)
+  version     Int                  @default(1)
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?              @db.Uuid
+
+  company   Company?          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizeScale SizeScale         @relation(fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  steps     GradeRuleStep[]
+  specs     MeasurementSpec[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// One increment of a grade rule (PRD-051, PRD-049: a step between two sizes of either dimension, 52R → 52L too): the point
+/// of measure grows by `increment` (in its unit; 0 or negative too) from `fromSize` to `toSize`. Both sizes null: the
+/// standard increment of the point for every step (one per rule and point, a partial unique index).
+model GradeRuleStep {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  ruleId           String   @db.Uuid
+  pointOfMeasureId String   @db.Uuid
+  /// Size codes of the rule's scale, both or neither, never the same.
+  fromSize         String?
+  toSize           String?
+  increment        Decimal  @db.Decimal(8, 2)
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  rule           GradeRule      @relation(fields: [tenantId, ruleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  pointOfMeasure PointOfMeasure @relation(fields: [tenantId, pointOfMeasureId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, ruleId, pointOfMeasureId, fromSize, toSize])
+}
+
+/// A fixed size mix (PRD-055): "1-2-3-2-1 across 48-56", of one style (its scale is the style's) or of a whole size scale.
+/// Its lines change only while it is ACTIVE; archived, never deleted once used.
+model Prepack {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  sizeScaleId String       @db.Uuid
+  /// The style it is for; null: any style of the scale. Fixed, as the scale.
+  styleId     String?      @db.Uuid
+  /// Unique in the scale, no spaces.
+  code        String
+  name        String
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  sizeScale SizeScale     @relation(fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style     Style?        @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines     PrepackLine[]
+
+  @@unique([tenantId, sizeScaleId, code])
+  @@unique([tenantId, id])
+}
+
+/// The pieces of one size (and colourway) in a prepack. One line per size without a colourway (a partial unique index),
+/// one per size and colourway with one.
+model PrepackLine {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  prepackId   String   @db.Uuid
+  /// The size code. Fixed, as the prepack and the colourway.
+  size        String
+  /// A colourway of the prepack's style (with its style): only on a style's prepack; null: any colourway.
+  styleId     String?  @db.Uuid
+  colourwayId String?  @db.Uuid
+  /// Pieces of the size in one pack, from 1.
+  quantity    Int
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  prepack   Prepack    @relation(fields: [tenantId, prepackId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway Colourway? @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, prepackId, size, colourwayId])
+}
+
+/// The pocket a protector goes in (PRD-074; EN 1621-1 limb, EN 1621-2 back, EN 1621-3 chest).
+enum ProtectorPocket {
+  SHOULDER
+  ELBOW
+  BACK
+  CHEST
+  HIP
+  KNEE
+}
+
+/// Which protector goes in which pocket of a style revision (PRD-074), for some of its sizes or all: the protector material,
+/// the standard and level the certified type asks of it, where the pocket sits. A part of the revision: frozen once
+/// released.
+model ProtectorPlacement {
+  id              String          @id @db.Uuid
+  tenantId        String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId         String          @db.Uuid
+  revisionId      String          @db.Uuid
+  /// Its place in the list, unique per revision, from 1.
+  seq             Int
+  pocket          ProtectorPocket
+  /// A PROTECTOR material.
+  protectorItemId String          @db.Uuid
+  /// The standard with its edition ("EN 1621-1:2012") and the level ("1" or "2") the placement asks of the protector.
+  standard        String
+  level           String
+  /// The style's sizes it is for, once each; empty: every size.
+  sizes           String[]        @default([])
+  /// Where the pocket sits ("left and right, 2 cm above the elbow seam").
+  positionNote    String?
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?         @db.Uuid
+
+  revision      StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  protectorItem Item          @relation(fields: [tenantId, protectorItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, revisionId, seq])
+}
+
+/// What a made-to-measure rule checks (PRD-201).
+enum MeasurementRuleKind {
+  /// The point's measure is not above the other point's (an inseam not longer than the outseam).
+  ORDER
+  /// The point's measure divided by the other point's lies between minFactor and maxFactor (either may be open).
+  RATIO
+  /// The point's measure lies between minValue and maxValue (either may be open).
+  RANGE
+}
+
+/// What a broken rule does (PRD-201).
+enum MeasurementRuleSeverity {
+  /// The measures are not taken: someone measures again or a pattern maker decides.
+  BLOCK
+  /// Said in words; the measures may still be sent.
+  WARN
+}
+
+/// A plausibility rule of a made-to-measure template (PRD-201): checked on a rider's measures, before an order is accepted,
+/// only while the template's rules are on (MeasurementTemplate.rulesOn). Its words say what is wrong, per language.
+model MeasurementRule {
+  id           String                  @id @db.Uuid
+  tenantId     String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  templateId   String                  @db.Uuid
+  /// Unique in the template, no spaces ("INSEAM_LE_OUTSEAM").
+  code         String
+  kind         MeasurementRuleKind
+  /// The point it checks, and the point it is compared with (ORDER, RATIO; none for RANGE): points of the template.
+  pointId      String                  @db.Uuid
+  otherPointId String?                 @db.Uuid
+  /// RATIO: the bounds of point ÷ other point (above 0; at least one).
+  minFactor    Decimal?                @db.Decimal(8, 4)
+  maxFactor    Decimal?                @db.Decimal(8, 4)
+  /// RANGE: the bounds of the point's measure, in its unit (at least one).
+  minValue     Decimal?                @db.Decimal(8, 2)
+  maxValue     Decimal?                @db.Decimal(8, 2)
+  severity     MeasurementRuleSeverity
+  /// What is wrong, per language: {"it": "…", "en": "…"}.
+  messageI18n  Json
+  status       MasterStatus            @default(ACTIVE)
+  version      Int                     @default(1)
+  createdAt    DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?                 @db.Uuid
+
+  template   MeasurementTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  point      MeasurementPoint    @relation("MeasurementRulePoint", fields: [tenantId, templateId, pointId], references: [tenantId, templateId, id], onDelete: Restrict, onUpdate: Restrict)
+  otherPoint MeasurementPoint?   @relation("MeasurementRuleOtherPoint", fields: [tenantId, templateId, otherPointId], references: [tenantId, templateId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, templateId, code])
+}

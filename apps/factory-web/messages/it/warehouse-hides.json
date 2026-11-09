@@ -232,7 +232,7 @@
     "empty": "Nessun ritaglio a magazzino",
     "emptyBody": "Una parte di pelle che torna da un taglio riceve un'etichetta RM e compare qui.",
     "minimum": "pezzo più piccolo tenuto: {area}",
-    "minimumFixed": "pezzo più piccolo tenuto: {area} (uguale in ogni stabilimento finché non diventa un'impostazione)",
+    "minimumFixed": "pezzo più piccolo tenuto: {area} (il valore predefinito; ogni stabilimento imposta il suo in Regole di reparto › Taglio)",
     "outOfShade": "Fuori tonalità",
     "byFloor": "in reparto",
     "bySystem": "dal sistema",

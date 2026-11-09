@@ -38,6 +38,10 @@ export const INSPECTION_COLUMNS = {
   planVersionId: true,
   aqlProfileId: true,
   codeLetter: true,
+  // B-W2b-213 (W2b schema wave 24/33): the units of the sample inspected (null: not counted, or counted in the AQL_SAMPLE
+  // entry before the column) and the rule that opened it (null: a person did).
+  inspectedCount: true,
+  openedByTriggerId: true,
   notMakerStatement: true,
   decidedAt: true,
   signatureSha256: true,

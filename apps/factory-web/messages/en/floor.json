@@ -751,7 +751,8 @@
       "incomingRecord": "Incoming inspection: a hide or the checks",
       "inlineRecord": "In-line inspection: a check's result",
       "inlineResults": "In-line inspection: the plan's checks",
-      "finalRecord": "Final inspection: results and measurements"
+      "finalRecord": "Final inspection: results and measurements",
+      "instructionSeen": "Work instruction seen"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
