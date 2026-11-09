@@ -9,13 +9,14 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *
  *   purpose         record           task                    page
  *   QUOTE_ACCEPT    Quote            quote-accept            links/quote-accept (SCR-099)
- *   DEPOSIT_INFO    DepositRequest   deposit-pay             links/deposit-pay (SCR-199)
+ *   DEPOSIT_INFO    DepositRequest   deposit-pay             links/pay (SCR-199; W1's bank transfer, card since B-W2b-199)
  *   PO_CONFIRM      PurchaseOrder    po-confirm              links/po-confirm (SCR-100)
  *   DOCUMENT_VIEW   Shipment         shipment-documents      links/document (SCR-101)
  *   DOCUMENT_VIEW   StoredFile       — the frame (one file; the public DoC and secure-file pages are W2b)
  *   DOCUMENT_VIEW   PayrollExport    — the frame until the secure-file page (SCR-200, W2b-3); its API routes are B-W2b-54's
  *   APPROVAL        ApprovalRequest  approve                 links/approve (SCR-198; B-W2b-188)
  *   JOB_ACCEPT      SubcontractOrder job                     links/job (SCR-196; B-W2b-181)
+ *   PAYMENT         Invoice, DepositRequest  pay             links/pay (SCR-199; B-W2b-199)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -29,6 +30,8 @@ export const LINK_TASKS = [
   'approve',
   // B-W2b-181: a subcontract job to accept (SCR-196).
   'job',
+  // B-W2b-199: an invoice or a deposit to pay online (SCR-199).
+  'pay',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -48,6 +51,9 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   { purpose: 'APPROVAL', recordType: 'ApprovalRequest', task: 'approve' },
   // B-W2b-181: a job we offer a workshop (SCR-196).
   { purpose: 'JOB_ACCEPT', recordType: 'SubcontractOrder', task: 'job' },
+  // B-W2b-199: what we ask a customer to pay (SCR-199; DEPOSIT_INFO opens the same page as 'deposit-pay').
+  { purpose: 'PAYMENT', recordType: 'Invoice', task: 'pay' },
+  { purpose: 'PAYMENT', recordType: 'DepositRequest', task: 'pay' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

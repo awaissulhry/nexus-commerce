@@ -657,6 +657,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.approve', title: 'Approve', scr: ['SCR-198'], task: 'approve' },
   // W2b: B-W2b-181 Accept a job (a JOB_ACCEPT link's job).
   { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
+  // W2b: B-W2b-199 Pay online (a PAYMENT link's invoice or deposit; DEPOSIT_INFO opens it too as 'deposit-pay').
+  { id: 'links.pay', title: 'Pay online', scr: ['SCR-199'], task: 'pay' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

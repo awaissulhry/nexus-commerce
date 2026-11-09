@@ -146,8 +146,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
   symbols are named stand-ins). Catalogues `certificates`, `labels`.
 - `src/links/<task>/` — a one-off link's task page, in the Links view (`links/quote-accept`, SCR-099: the link landing
-  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
-  a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
+  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/pay`, SCR-199 (B-W2b-199):
+  a PAYMENT link's invoice or deposit and a DEPOSIT_INFO link's deposit — the bank transfer, each field with Copy, and card
+  or SEPA on the DS PaymentPanel, FAKE provider only; `src/lib/payments/online.ts` holds the shared pure parts). `src/areas/_shared/` — Office
   parts several areas share (`document-send`, SCR-037: the send dialog any document uses; the host passes its words).
 - B-W2b-165 (SAL-199) proofs signed with the quote: SCR-099's Proofs section (`links/quote-accept/view/ProofsSection.tsx`: tiles, the end state's list; the accept sends `proofFileIds`), the quote record's Documents › Proofs (`areas/sales/quotes/record/proofs/`, SCR-035-proofs, mounted through `QuoteRecordView`'s `proofs` slot), both on `src/lib/proofs/ProofViewer.tsx` (the DS Modal with a picture or the PdfViewer, Previous / Next, ← →; the DS Lightbox speaks English only) and `lib/proofs/address.ts`. Catalogue `quote-proofs`.
 - `src/list-frame/` — the ONE list frame of every Office list with actions over many rows (Owner rule 2026-10-29):

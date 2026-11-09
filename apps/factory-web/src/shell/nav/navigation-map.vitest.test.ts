@@ -497,10 +497,12 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
     // B-W2b-188: APPROVAL has its page (links/approve).
     // B-W2b-181: JOB_ACCEPT has its page (links/job).
-    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'PAYMENT', 'SUPPLIER_ONBOARD', 'RECORD_INVITE', 'SECURE_FILE']
+    // B-W2b-199: PAYMENT has its page (links/pay).
+    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'CLAIM', 'SUPPLIER_ONBOARD', 'RECORD_INVITE', 'SECURE_FILE']
     expect(frame.slice(2)).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
-    expect(LINK_TASK_RULES.map((rule) => rule.task).sort()).toEqual([...LINK_TASKS].sort())
+    // B-W2b-199: one task may take several record types (PAYMENT of an Invoice or a DepositRequest → pay).
+    expect([...new Set(LINK_TASK_RULES.map((rule) => rule.task))].sort()).toEqual([...LINK_TASKS].sort())
   })
 
   it('the tree\'s W1 link pages each have their task, plus the deposit page (SCR-199, the order screens)', () => {
@@ -514,6 +516,8 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     expect(linkTaskOf({ purpose: 'PO_CONFIRM', record: { type: 'PurchaseOrder' } })).toBe('po-confirm')
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'Shipment' } })).toBe('shipment-documents')
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'StoredFile' } })).toBeNull()
+    // B-W2b-199: a PAYMENT link of an invoice or a deposit request opens Pay online.
+    expect([linkTaskOf({ purpose: 'PAYMENT', record: { type: 'Invoice' } }), linkTaskOf({ purpose: 'PAYMENT', record: { type: 'DepositRequest' } })]).toEqual(['pay', 'pay'])
     expect(linkTaskOf({ purpose: 'SOMETHING_NEW', record: { type: 'Quote' } })).toBeNull()
   })
 
