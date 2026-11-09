@@ -52,6 +52,15 @@ model Certificate {
   /// from a later day); set once, when the renewal arrives, never changed after (the …_supply_w2a_guards trigger). A
   /// certificate renews at most one.
   successorId        String?           @db.Uuid
+  /// W2b-4 (schema wave 30/33, B-W2b-216; PRD-286, PRD-287, PRD-290): the notified body from the directory (its number
+  /// is the typed `notifiedBodyNumber`, which W1 keeps with the typed name); the performance levels the certificate grants
+  /// beyond its class, one level per property ({ "level": "2", "knuckle": "KP" } for EN 13594, { "shoulder": "2" } for
+  /// EN 1621-1); and, for an own-brand certificate a brand holds for a private-label style, the factory's base certificate
+  /// it rests on (held by a company, with no base of its own). Free while DRAFT; once registered each may be filled in
+  /// once (from null) and never changes after (the …_compliance_rules_w2b_guards trigger).
+  notifiedBodyId     String?           @db.Uuid
+  performanceLevels  Json?
+  baseCertificateId  String?           @db.Uuid
   version            Int               @default(1)
   createdAt          DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -71,6 +80,12 @@ model Certificate {
   // W2b (schema wave 2/7): its renewals' application log, and the renewals it is the new certificate of.
   renewalLog          CertificateRenewal[]  @relation("CertificateRenewalOf")
   renewalLogAsNew     CertificateRenewal[]  @relation("CertificateRenewalNew")
+  // W2b-4 compliance-rules.prisma (wave 30/33): its notified body from the directory; an own-brand certificate's base
+  // certificate and the own-brand certificates resting on this one. Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId.
+  notifiedBody         NotifiedBody?        @relation(fields: [tenantId, notifiedBodyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  baseCertificate      Certificate?         @relation("CertificateOwnBrandBase", fields: [tenantId, baseCertificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  ownBrandCertificates Certificate[]        @relation("CertificateOwnBrandBase")
 
   // One row per certificate of a notified body.
   @@unique([tenantId, notifiedBodyNumber, number])
@@ -107,6 +122,12 @@ model CertificateCoverage {
   /// Made-to-measure single units built on the covered style are covered while the rider's measures fall inside the
   /// body measures of the covered sizes (PRD-288; Reg. 2016/425 Annex III).
   allowsMadeToMeasure Boolean      @default(false)
+  /// W2b-4 (schema wave 30/33, B-W2b-216; QHS-106): a bought-in part's coverage (an item's only): the supplier it buys the
+  /// certified part from (a party with the SUPPLIER role) and that supplier's article code as the certificate names it.
+  /// The supplier is named once (it may be filled in on an older coverage) and never changes after; the article code only
+  /// with a supplier.
+  supplierPartyId     String?      @db.Uuid
+  supplierArticleCode String?
   note                String?
   status              MasterStatus @default(ACTIVE)
   version             Int          @default(1)
@@ -118,6 +139,9 @@ model CertificateCoverage {
   // product.prisma.
   style       Style?      @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   item        Item?       @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 30/33): a bought-in part's supplier (parties.prisma). Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId.
+  supplierParty Party?    @relation("CertificateCoverageSupplier", fields: [tenantId, supplierPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, certificateId])
   // The gate asks: which certificates cover this style (or item)?

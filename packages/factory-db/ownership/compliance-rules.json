@@ -1,0 +1,83 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/compliance-rules.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the register of laws and standards with the change watch, the markets, the requirements, the economic operators, the phrase library and the notified body directory through apps/factory-api's modules/compliance (B-W2b-249, B-W2b-254, B-W2b-255), always through command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The floor (factory_floor_runtime) runs the gate at label print and final release (PRD-272), so it reads, tenant-wide (no site key: markets, requirements, operators and phrases are tenant- or company-wide; the work order brings the site), the markets, the requirements, the operators, the phrases and of their translations only the APPROVED and SUPERSEDED ones (onlyValues), and it inserts and reads its own site's gate events; it never reads the register, the change watch or the notified bodies, and never writes a rule. Portal and link sessions read nothing here (a DoC reaches a customer as a file through a link). No column here is money, so no @grain and no wall on one; no personal data beyond who wrote a row (as everywhere). Nobody deletes but a register entry or a draft translation (archive the rest); gate events are append-only. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "RegulationOrStandard": {
+      "about": "The office keeps the register of the laws and standards in use, per edition, with their Official Journal citation and status (PRD-273), and removes an entry typed by mistake while nothing names it (the references refuse otherwise). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "StandardChange": {
+      "about": "The office (or the watch, in the tenant's system context) records a change to a standard, assesses its impact and closes it, with the certificates and type-change reviews it touches (PRD-274). Office only; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "MarketProfile": {
+      "about": "The office keeps the markets: their languages, marks, national rules, importer and GPSR needs, switched on or off with the reason, archived when no longer used (PRD-275). The floor reads them: the gate at label print needs the market's label languages. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ComplianceRequirement": {
+      "about": "The office keeps the requirements as data (PRD-271): their scope, legal reference, the gates they block and the law locks, who may override them, switched on or off with the reason, archived when no longer used. The floor reads them: the gate at label print and final release runs at the station (PRD-272). Never deleted (gate events name them).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "GateEvent": {
+      "about": "Every refusal and override at a gate (PRD-272). The office writes refusals at work-order release and shipment and every override (with a reason and a step-up), and reads every site's; the site's floor writes the refusals of its label print and final release and reads its site's events (an override lifts its refusal there). Append-only: nobody changes or removes an event.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "EconomicOperatorRole": {
+      "about": "The office names the manufacturer, authorised representative, importer, distributor or fulfilment provider per style, brand or default and market, with what is printed (PRD-298); a row ends by its last day, never removed. The floor reads them: a label printed for a market names its operators. The party key is the operator's (no partner access: portal and link sessions read nothing here).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "Phrase": {
+      "about": "The office keeps the phrase library: keys, kinds and source words, archived when no longer used (PRD-343). The floor reads the phrases: labels printed at the station assemble from them. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "PhraseTranslation": {
+      "about": "The office proposes a translation (DRAFT), a second person approves it, a newer approved one supersedes it; a draft nobody wants is removed (the trigger refuses removing any other). The floor reads only APPROVED and SUPERSEDED translations (what a label printed, or prints again).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "onlyValues": { "status": ["APPROVED", "SUPERSEDED"] } }
+      }
+    },
+    "NotifiedBody": {
+      "about": "The office keeps the notified body directory (PRD-286): number, name, address, NANDO entry, scopes and contact; archived when no longer notified, never deleted. Office only (the floor reads the number its certificate carries).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

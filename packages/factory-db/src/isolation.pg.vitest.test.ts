@@ -10,6 +10,7 @@ import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
+import { seed as seedComplianceRules } from '../seed/compliance-rules'
 import { seed as seedCosting } from '../seed/costing'
 import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
@@ -334,6 +335,11 @@ beforeAll(async () => {
   // effects and a style's offers; its first group, value, rule, effect, offer (archived) and alternate are the ones a copy may repeat.
   await seedOptions({ db: factory, namespace: 'iso-a' })
   await seedOptions({ db: factory, namespace: 'iso-b' })
+  // The compliance rule library of W2b-4 (wave 30/33): the register and its watch, markets, requirements, gate events at A1
+  // and B1, operators, phrases and translations, notified bodies, the certificates naming them; its first entry, market,
+  // requirement, refusal (A1), operator, phrase, draft translation, change and (archived) body are the ones a copy may repeat.
+  await seedComplianceRules({ db: factory, namespace: 'iso-a' })
+  await seedComplianceRules({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -387,6 +393,7 @@ it('covers every classified table and every runtime role', () => {
     'CompanyBranding',
     'Complaint',
     'ComplianceDocument',
+    'ComplianceRequirement',
     'CostingSettings',
     'CrewMember',
     'CrewSession',
@@ -409,6 +416,7 @@ it('covers every classified table and every runtime role', () => {
     'DispositionCode',
     'DueTimer',
     'EarningsEntry',
+    'EconomicOperatorRole',
     'EmailIdentity',
     'EmailOutbound',
     'Employee',
@@ -428,6 +436,7 @@ it('covers every classified table and every runtime role', () => {
     'GarmentLabelPrint',
     'GarmentProtectorLot',
     'GarmentSerial',
+    'GateEvent',
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
@@ -510,6 +519,7 @@ it('covers every classified table and every runtime role', () => {
     'MachineSymptom',
     'MaintenanceJob',
     'MaintenanceRequest',
+    'MarketProfile',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
@@ -527,6 +537,7 @@ it('covers every classified table and every runtime role', () => {
     'Nonconformance',
     'Notification',
     'NotificationDelivery',
+    'NotifiedBody',
     'NumberAllocation',
     'NumberBlock',
     'NumberBlockUse',
@@ -578,6 +589,8 @@ it('covers every classified table and every runtime role', () => {
     'PeopleLegalGate',
     'PeopleSettings',
     'PeriodLock',
+    'Phrase',
+    'PhraseTranslation',
     'PiecePaySwitch',
     'PieceRateEntry',
     'PieceRateTable',
@@ -639,6 +652,7 @@ it('covers every classified table and every runtime role', () => {
     'RecordFollower',
     'RecordShare',
     'Refund',
+    'RegulationOrStandard',
     'Remnant',
     'RepairOrder',
     'RepairStageEvent',
@@ -703,6 +717,7 @@ it('covers every classified table and every runtime role', () => {
     'SizeScale',
     'Skill',
     'StaffNoticeAck',
+    'StandardChange',
     'StandardCost',
     'Station',
     'StockCount',
