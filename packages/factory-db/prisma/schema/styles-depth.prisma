@@ -1,0 +1,355 @@
+// Styles and libraries in depth (W2b-4, schema wave 26/33, B-W2b-206; features PRD-006, PRD-007, PRD-008, PRD-010, PRD-016,
+// PRD-019, PRD-029, PRD-035, PRD-041, PRD-045, PRD-105, PRD-182, PRD-218): a style's names per language, its pictures and
+// image pages, a revision's pattern, marker and CAD files, product types with their defaults, GTIN ranges, the private-label
+// customers' branding sets and the product settings (the edit rule per lifecycle state, the consumption tolerance). The
+// columns this wave adds to W1's tables are in product.prisma: Style (lifecycle, replacement, product type, sold under our
+// name), Colour (system, reference, family), Item (approval, properties). apps/factory-api's modules/product writes them
+// through command() (B-W2b-221, -227, -236, -237, -238, -239, -247); the hand-written …_styles_libraries_w2b_guards
+// migration holds their rules for every login.
+//
+// Who sees what (ownership/styles-depth.json): the office reads and writes; the floor reads a style's names, pictures and
+// pattern files (the spec at the station) and the product settings (the tolerance at the cutting table); portal and link
+// sessions read none of it (the API reads a private-label style for its brand only, PRD-010). No money column.
+
+/// A style's name and descriptions in one language (PRD-019): what labels, the tech pack, the portal and search show in
+/// that language. A language without a row falls back to the company's language, then to Style.name (W1's one name).
+/// One per style and language; the office changes and removes it (what a style's lifecycle state allows is the product
+/// module's, B-W2b-221).
+model StyleText {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId          String   @db.Uuid
+  /// The language, a BCP 47 tag ("it", "en", "de-CH"); never changes.
+  language         String
+  /// The style's name in it, 1 to 200 characters.
+  name             String
+  /// One line for catalogues and the user information, up to 500 characters; null: none.
+  shortDescription String?
+  /// The long description (tech pack, portal), up to 10 000 characters; null: none.
+  longDescription  String?
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  style Style @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, styleId, language])
+}
+
+/// A picture of a style (PRD-016): a sketch (a front, back or detail flat), a photo, or an image page with numbered
+/// callouts; of the whole style, of one revision (a technical sketch of that specification) and/or of one colourway. At
+/// most one main picture per style (the partial unique index "StyleImage_one_main_per_style"): the list's thumbnail, the
+/// gallery card and the public DoC page's picture (through the file's stripped thumbnail, never the office file). The file
+/// is a StoredFile of the style, of one of its colourways or of one of its revisions. A picture of a revision that left
+/// DRAFT is frozen with it: only its place (seq) and the main mark still change, and it is not removed.
+model StyleImage {
+  id          String         @id @db.Uuid
+  tenantId    String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String         @db.Uuid
+  /// The revision it shows; null: the style's, whatever the revision.
+  revisionId  String?        @db.Uuid
+  /// The colourway it shows; null: no colourway in particular.
+  colourwayId String?        @db.Uuid
+  fileId      String         @db.Uuid
+  kind        StyleImageKind
+  /// Its place in the gallery, from 0, first first (ties: the oldest first).
+  seq         Int            @default(0)
+  /// The style's main picture.
+  isMain      Boolean        @default(false)
+  /// What it shows, 1 to 200 characters; null: none.
+  caption     String?
+  /// Numbered callouts on it, at most 60: [{ "n": 1, "x": "0.42", "y": "0.18", "text": "Double stitch, 4 mm" }]: n a whole
+  /// number from 1, each once; x and y the point as a share of the width and the height, decimal strings from 0 to 1 (no
+  /// floats); text 1 to 500 characters. null: none.
+  callouts    Json?
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?        @db.Uuid
+
+  style     Style          @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A revision and a colourway of the picture's own style. Restrict, not Prisma's SetNull default for an optional
+  // relation: that would also clear tenantId and styleId.
+  revision  StyleRevision? @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway Colourway?     @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  file      StoredFile     @relation("StyleImageFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, styleId])
+  @@index([tenantId, fileId])
+}
+
+enum StyleImageKind {
+  /// A flat: front, back or a detail.
+  SKETCH
+  PHOTO
+  /// An image page with numbered callouts (a tech-pack page).
+  PAGE
+}
+
+/// A file of a style revision's specification (PRD-218): a pattern (the pieces, for some or all sizes), a marker (a lay
+/// plan), a CAD file or another file, with the format the cutting room's software reads. The file is a StoredFile of the
+/// revision or of the style: one version of its file series (W2b-3), so a new version on a DRAFT revision is a new fileId.
+/// PATTERN and CAD files are the specification: added, changed and removed only while the revision is DRAFT, then frozen
+/// with it. Markers and other files are made for production: they may be added, changed and removed on a released
+/// revision too. A row never moves to another revision.
+model StyleRevisionFile {
+  id          String             @id @db.Uuid
+  tenantId    String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String             @db.Uuid
+  revisionId  String             @db.Uuid
+  fileId      String             @db.Uuid
+  kind        PatternFileKind
+  /// The format its software reads; null: another one (the file's name says it).
+  format      PatternFileFormat?
+  /// The sizes it is for: codes of the style's range, each once; empty: every size.
+  sizes       String[]           @default([])
+  /// What it is, up to 500 characters; null: nothing to add.
+  note        String?
+  version     Int                @default(1)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?            @db.Uuid
+
+  revision StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  file     StoredFile    @relation("StyleRevisionFileFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, revisionId])
+  @@index([tenantId, fileId])
+}
+
+enum PatternFileKind {
+  /// The pattern pieces (the specification).
+  PATTERN
+  /// A lay plan (nest) of the pieces for a cut.
+  MARKER
+  /// A CAD drawing of the garment (the specification).
+  CAD
+  OTHER
+}
+
+enum PatternFileFormat {
+  /// DXF in the AAMA/ASTM D6673 layout, read by most pattern software.
+  DXF_AAMA
+  LECTRA
+  GERBER
+  PDF
+}
+
+/// A product type of the catalogue (PRD-008): a kind of garment refined ("Touring jacket" of JACKET), with what its styles
+/// must fill in and the defaults a new style of it starts with (the product module copies them, B-W2b-221). A child type
+/// inherits: a default it leaves empty is its parent's (and so on up), and its required attributes add to its parent's.
+/// Its compliance rules are the requirements that name it (B-W2b-216's ComplianceRequirement; the `[tenantId, id]` target
+/// is here); its PPE defaults are below. Archived, never deleted.
+model ProductTypeProfile {
+  id                    String       @id @db.Uuid
+  tenantId              String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1). Never changes.
+  companyId             String?      @db.Uuid
+  /// Unique in the tenant.
+  code                  String
+  name                  String
+  /// The name per locale.
+  nameI18n              Json?
+  /// The kind of garment it refines: its styles have this product type, and so have its parent and children.
+  productType           ProductType
+  /// The type it refines (of its company or tenant-wide, never itself or a circle); null: a top type.
+  parentId              String?      @db.Uuid
+  /// What a style of this type must have before release (B-W2b-231's check): Style field or attribute names ("gender",
+  /// "hsCode", "ppeClass" …), each once; a child's add to its parent's.
+  requiredAttributes    String[]     @default([])
+  /// The defaults of a new style of this type (null: the parent's, else none): the size scale, the garment label template
+  /// and the measurement template (of the same kind of garment), each of its company or tenant-wide (a tenant-wide type's
+  /// tenant-wide); the PPE category, standard with its edition ("EN 17092-4:2020") and class aimed for ("A").
+  defaultSizeScaleId    String?      @db.Uuid
+  labelTemplateId       String?      @db.Uuid
+  measurementTemplateId String?      @db.Uuid
+  defaultPpeCategory    PpeCategory?
+  defaultPpeStandard    String?
+  defaultPpeClass       String?
+  status                MasterStatus @default(ACTIVE)
+  version               Int          @default(1)
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?      @db.Uuid
+
+  company             Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  parent              ProductTypeProfile?  @relation("ProductTypeProfileParent", fields: [tenantId, parentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  children            ProductTypeProfile[] @relation("ProductTypeProfileParent")
+  defaultSizeScale    SizeScale?           @relation(fields: [tenantId, defaultSizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  labelTemplate       LabelTemplate?       @relation(fields: [tenantId, labelTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementTemplate MeasurementTemplate? @relation(fields: [tenantId, measurementTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma: the styles of this type.
+  styles              Style[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from styles, child types and (B-W2b-216) compliance requirements.
+  @@unique([tenantId, id])
+}
+
+/// A block of GTIN-13 numbers of the company's GS1 membership (PRD-006): its GS1 company prefix and the item references
+/// still free in it. A GTIN given from it is the prefix and an item reference (12 digits together) and the check digit;
+/// the next one is `nextReference`, which only moves up and at most to `lastReference` + 1 (then the block is used up).
+/// The company, prefix and limits never change once a number was given. Archived, never deleted. GTINs of our own need a
+/// GS1 membership (GATE-SPEND): a brand's own barcodes are typed or imported per SKU without a range. Variant.gtin is the
+/// guarantee: unique in the tenant, and fixed once garments with it have shipped.
+model GtinRange {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String       @db.Uuid
+  /// What the office calls it ("GS1 Italy 2027"), 1 to 100 characters.
+  name           String
+  /// The GS1 company prefix: 4 to 12 digits.
+  gs1Prefix      String
+  /// The block's first and last item reference: 0 ≤ first ≤ last < 10^(12 − the prefix's digits).
+  firstReference Int
+  lastReference  Int
+  /// The next item reference to give, from first to last + 1 (none left).
+  nextReference  Int
+  status         MasterStatus @default(ACTIVE)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// A private-label customer's brand assets (PRD-045): its logos, label artwork, packaging rules and brand colours, which
+/// its styles' labels, hang tags, packaging and tech packs use (B-W2b-247, -259). At most one ACTIVE set per company and
+/// brand (the partial unique index "BrandingSet_one_active_per_brand"); an older one is archived, never deleted. Its files
+/// are StoredFile rows of the set (recordType "BrandingSet", recordId its id).
+model BrandingSet {
+  id                  String       @id @db.Uuid
+  tenantId            String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId           String       @db.Uuid
+  /// The brand: a party with the CUSTOMER or BRAND role. Never changes.
+  partyId             String       @db.Uuid
+  /// Unique in the tenant.
+  code                String
+  /// 1 to 200 characters.
+  name                String
+  /// Its logos (pictures, PHOTO) and its label artwork (pictures or documents): files of the set, each once, in order.
+  logoFileIds         String[]     @default([]) @db.Uuid
+  labelArtworkFileIds String[]     @default([]) @db.Uuid
+  /// Its brand colours: colours of the tenant's colour library, each once, in order.
+  brandColourIds      String[]     @default([]) @db.Uuid
+  /// How its garments are packed and tagged, at most 50 rules: [{ "key": "polybag", "text": "One garment per polybag with
+  /// the brand sticker", "itemId": "<uuid>", "quantity": "1", "per": "GARMENT" }]: key `^[a-z0-9][a-z0-9-]{0,39}$`, each
+  /// once (a BOM line a rule makes names it); text 1 to 500 characters; a material of the library (itemId) with a quantity
+  /// (a decimal string above 0) per GARMENT, PACK or CARTON, all three or none (a rule in words). null: none.
+  packagingRules      Json?
+  /// For the office, up to 2000 characters.
+  note                String?
+  status              MasterStatus @default(ACTIVE)
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?      @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, partyId])
+}
+
+/// The product settings of a company, or of the whole tenant (companyId null) (design products.settings, SCR-251): the
+/// edit rule per lifecycle state (PRD-182) and the consumption tolerance (PRD-105). A null field is not set on this row: a
+/// company row follows the tenant-wide one; no row: the product module's default (B-W2b-221). Never deleted.
+model ProductSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                         String                @id @db.Uuid
+  tenantId                   String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings. Never changes.
+  companyId                  String?               @db.Uuid
+  /// What a change to a style needs in each lifecycle state (Style.lifecycle; every product write asks it, B-W2b-221).
+  editRuleConcept            ProductEditRule?
+  editRuleDevelopment        ProductEditRule?
+  editRuleSampling           ProductEditRule?
+  editRuleApproved           ProductEditRule?
+  editRuleInProduction       ProductEditRule?
+  editRulePhaseOut           ProductEditRule?
+  editRuleDiscontinued       ProductEditRule?
+  /// How the material really used may differ from what the BOM and the marker planned (the cut consumption confirmation,
+  /// B-W2b-116): MATCH, MAY_DIFFER, or WARN_ABOVE a percent (consumptionTolerancePct: set exactly then, above 0 and at
+  /// most 100).
+  consumptionTolerance       ConsumptionTolerance?
+  consumptionTolerancePct    Decimal?              @db.Decimal(7, 4)
+  /// The same per material kind, over the rule above: { "LEATHER": { "rule": "WARN_ABOVE", "percent": "5" }, "TEXTILE":
+  /// { "rule": "MAY_DIFFER" } } (ItemKind names; a percent, a decimal string above 0 and at most 100, exactly with
+  /// WARN_ABOVE). null: none.
+  consumptionToleranceByKind Json?
+  version                    Int                   @default(1)
+  createdAt                  DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById                String?               @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// Where a style is in its life (PRD-007; Style.lifecycle), beside its record state (StyleStatus, which every W1 path
+/// reads).
+enum StyleLifecycle {
+  /// An idea: a name, a sketch.
+  CONCEPT
+  /// Being specified: BOM, routing, sizes.
+  DEVELOPMENT
+  /// Samples are being made and reviewed.
+  SAMPLING
+  /// The sample is approved; ready for release.
+  APPROVED
+  /// Released for production and sale (only with a RELEASED revision).
+  IN_PRODUCTION
+  /// Made and sold until stock or orders run out; replaced by Style.replacedById when known.
+  PHASE_OUT
+  /// No longer made or sold.
+  DISCONTINUED
+}
+
+/// What a change to a style needs in a lifecycle state (PRD-182).
+enum ProductEditRule {
+  /// Changed in place.
+  FREE
+  /// Only in a new draft revision.
+  NEW_REVISION
+  /// Only through a change order someone other than its author approves.
+  CHANGE_ORDER
+  /// No change.
+  BLOCKED
+}
+
+/// How the material really used may differ from the plan (PRD-105).
+enum ConsumptionTolerance {
+  /// It must match: a difference is refused until someone explains it.
+  MATCH
+  /// It may differ: the figure typed is kept.
+  MAY_DIFFER
+  /// It may differ, with a warning above the percent.
+  WARN_ABOVE
+}
+
+/// The colour system a library colour's reference is in (PRD-041; Colour.system).
+enum ColourSystem {
+  PANTONE
+  RAL
+  NCS
+  /// Our own swatch.
+  OWN
+}
+
+/// A material's approval for use (PRD-035; Item.approval).
+enum MaterialApproval {
+  /// In development: not reviewed yet.
+  PENDING
+  APPROVED
+  /// Approved on a condition (Item.approvalNote): restricted.
+  CONDITIONAL
+  /// Not to be used: refused on a BOM line, and a revision naming it is not released.
+  BLOCKED
+}

@@ -435,20 +435,5 @@
   "zone": {
     "category": "Per difetto",
     "none": "Nessuna zona"
-  },
-  "zoneMap": {
-    "clear": "Togli la zona",
-    "elsewhere": "Non nel disegno:",
-    "figure": {
-      "back": "Giacca, dietro",
-      "front": "Giacca, davanti",
-      "trousers": "Pantaloni, davanti"
-    },
-    "hint": "Tocca una zona; da tastiera le frecce passano da una zona all'altra e Invio sceglie. Sinistra e destra sono di chi indossa.",
-    "list": "Oppure scegli dall'elenco",
-    "none": "Nessuna zona",
-    "nonePicked": "Nessuna zona scelta",
-    "nothingToClear": "Nessuna zona è scelta.",
-    "picked": "Zona: {zone}"
   }
 }

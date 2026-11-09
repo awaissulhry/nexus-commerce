@@ -89,6 +89,8 @@ model Device {
   operationScans OperationScan[]
   // W2b pay.prisma (schema wave 6/7): the rate publications read on it.
   rateAcknowledgements RateAcknowledgement[]
+  // W2b-4 instructions.prisma (wave 25/33): the work instructions acknowledged on it.
+  instructionAcknowledgements InstructionAcknowledgement[]
   // B-W1-42: correction requests asked and scans refused on it.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
@@ -233,6 +235,8 @@ model Worker {
   rateAcknowledgements RateAcknowledgement[]
   earningsEntries      EarningsEntry[]
   heldScans            HeldScan[]
+  // W2b-4 instructions.prisma (wave 25/33): their acknowledgements of work instructions (a training record).
+  instructionAcknowledgements InstructionAcknowledgement[]
   // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

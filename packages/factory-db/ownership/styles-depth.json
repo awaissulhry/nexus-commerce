@@ -1,0 +1,65 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/styles-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 26/33 (B-W2b-206): styles and libraries in depth. The office (factory_runtime) reads and writes through apps/factory-api's modules/product, always with command(): names per language, pictures, a revision's pattern files, product types, GTIN ranges, branding sets and the product settings. The floor (factory_floor_runtime) reads what a station shows of a style (its names in the worker's language, its pictures and the revision's pattern and marker files: the spec at the station, B-W2b-232) and the product settings (the consumption tolerance at the cutting table's fabric-used confirmation, B-W2b-116); no table here has a site key, so a floor device reads its tenant's rows (styles are tenant- or company-wide; the work order brings the site). Portal and link sessions read nothing here: the API reads a private-label style (Style.brandPartyId) for its brand only (PRD-010). No money column, no personal data. Nothing is deleted but a style's texts and pictures and a revision's files (the …_styles_libraries_w2b_guards triggers keep a released revision's pictures and its pattern and CAD files); the libraries are archived (status ARCHIVED). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "StyleText": {
+      "about": "The office writes, changes and removes a style's name and descriptions per language (the style and language of a row never change). The floor reads them (the style's name in the worker's language on the station's spec).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "StyleImage": {
+      "about": "The office adds, orders, marks as main and removes a style's sketches, photos and image pages with callouts (a picture of a revision that left DRAFT is frozen with it, only its place and main mark change: triggers). The floor reads them (the spec at the station).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "StyleRevisionFile": {
+      "about": "The office adds, changes and removes a revision's pattern, marker, CAD and other files (pattern and CAD files only while the revision is DRAFT: triggers). The floor reads them (the cutting room's pattern and marker files).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ProductTypeProfile": {
+      "about": "The office keeps the product types with their parent, required attributes and defaults, and archives them. The floor reads none (a style's own columns say what it is).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "GtinRange": {
+      "about": "The office records the company's GS1 blocks and moves the next item reference as it gives GTINs (never back; the block's limits fixed once a number is given: triggers), and archives a block. The floor reads none (it reads a SKU's GTIN on the Variant).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "BrandingSet": {
+      "about": "The office keeps each private-label brand's logos, label artwork, packaging rules and brand colours, and archives an old set (one active set per company and brand). The floor reads none (labels are printed through the API); no portal session reads it either (the brand's own reads go through the API).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ProductSettings": {
+      "about": "The office keeps the product settings of the tenant and of each company: the edit rule per lifecycle state and the consumption tolerance. The floor reads them (the tolerance at the cutting table's fabric-used confirmation).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    }
+  }
+}
