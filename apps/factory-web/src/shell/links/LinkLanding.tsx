@@ -19,6 +19,8 @@ import { JobLink } from '../../links/job/JobLink'
 import { ReportProblem } from '../../links/claim/ReportProblem'
 // B-W2b-170: a SHIPMENT_TRACK link's tracking page (SCR-194).
 import { TrackOrder } from '../../links/tracking/TrackOrder'
+// B-W2b-171: a MEASUREMENTS link's form (SCR-195).
+import { SendMeasurements } from '../../links/measure/SendMeasurements'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -120,6 +122,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-199
     case 'pay':
       return <Pay api={task.api} purpose="PAYMENT" />
+    // B-W2b-171
+    case 'measure':
+      return <SendMeasurements api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

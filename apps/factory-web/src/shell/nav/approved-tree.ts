@@ -663,6 +663,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.tracking', title: 'Track an order', scr: ['SCR-194'], task: 'track-order' },
   // W2b: B-W2b-199 Pay online (a PAYMENT link's invoice or deposit; DEPOSIT_INFO opens it too as 'deposit-pay').
   { id: 'links.pay', title: 'Pay online', scr: ['SCR-199'], task: 'pay' },
+  // W2b: B-W2b-171 Send measurements (a MEASUREMENTS link of a rider's measurement profile).
+  { id: 'links.measure', title: 'Send measurements', scr: ['SCR-195'], task: 'measure' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

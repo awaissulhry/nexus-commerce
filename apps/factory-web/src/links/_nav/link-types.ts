@@ -20,6 +20,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   CLAIM           SalesOrder       report-problem          links/claim (SCR-197; B-W2b-198)
  *   SHIPMENT_TRACK  Shipment         track-order             links/tracking (SCR-194; B-W2b-170)
  *   PAYMENT         Invoice, DepositRequest  pay             links/pay (SCR-199; B-W2b-199)
+ *   MEASUREMENTS    MeasurementProfile  measure              links/measure (SCR-195; B-W2b-171)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -39,6 +40,8 @@ export const LINK_TASKS = [
   'track-order',
   // B-W2b-199: an invoice or a deposit to pay online (SCR-199).
   'pay',
+  // B-W2b-171: a rider sends measurements (SCR-195).
+  'measure',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -66,6 +69,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   // B-W2b-199: what we ask a customer to pay (SCR-199; DEPOSIT_INFO opens the same page as 'deposit-pay').
   { purpose: 'PAYMENT', recordType: 'Invoice', task: 'pay' },
   { purpose: 'PAYMENT', recordType: 'DepositRequest', task: 'pay' },
+  // B-W2b-171: a rider's measurement profile, sent again by link (SCR-195).
+  { purpose: 'MEASUREMENTS', recordType: 'MeasurementProfile', task: 'measure' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

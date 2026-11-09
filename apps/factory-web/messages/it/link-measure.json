@@ -1,0 +1,258 @@
+{
+  "title": "Invia le tue misure — {garment}",
+  "loading": {
+    "now": "Apertura del modulo…",
+    "slow": "Ancora un momento…"
+  },
+  "retry": "Riprova",
+  "problem": {
+    "read": "Non siamo riusciti ad aprire il modulo",
+    "readBody": "Non si è perso nulla. Riprova tra un momento.",
+    "notice": "Prima leggi come usiamo le tue misure",
+    "noticeBody": "Spunta la casella al primo passo: nessuna misura e nessuna foto prima di allora.",
+    "noticeChanged": "L'informativa privacy è cambiata",
+    "noticeChangedBody": "{sender} ha pubblicato una nuova versione da quando l'hai letta: leggila e spunta di nuovo la casella al primo passo.",
+    "noNotice": "Il modulo non è ancora aperto",
+    "noNoticeBody": "{sender} non ha ancora pubblicato la sua informativa privacy. Chiedilo a loro: il modulo si apre appena è pubblicata.",
+    "unavailable": "Non riusciamo a raggiungere il server",
+    "unavailableBody": "Nulla è stato inviato due volte. Riprova tra un momento.",
+    "internal": "Qualcosa non ha funzionato da parte nostra",
+    "internalBody": "Non si è perso nulla. Riprova; se succede ancora, scrivi a {sender}.",
+    "rateLimited": "Troppi tentativi in poco tempo",
+    "rateLimitedBody": "Aspetta un minuto, poi riprova.",
+    "uploadsClosed": "Al momento non si possono inviare foto",
+    "uploadsClosedBody": "Controlliamo ogni foto prima di conservarla e il controllo non è attivo. Invia il modulo senza foto se sono facoltative, oppure riprova più tardi.",
+    "photosFull": "Questo link ha già ricevuto abbastanza foto",
+    "photosFullBody": "Invia il modulo con le foto che hai, oppure chiedi a {sender} un nuovo link.",
+    "fix": "Alcune risposte vanno ricontrollate",
+    "fixBody": "Ti abbiamo portato alla prima. Ogni campo dice cosa cambiare.",
+    "photosBusy": "Una foto è ancora in invio",
+    "photosBusyBody": "Aspetta che risulti inviata, poi invia il modulo."
+  },
+  "draft": {
+    "restored": "Abbiamo conservato le tue risposte del {day}, {time}",
+    "restoredBody": "Riprendi da dove eri rimasto, oppure ricomincia con il modulo vuoto.",
+    "keep": "Riprendi",
+    "startAgain": "Ricomincia"
+  },
+  "later": {
+    "button": "Finisci dopo",
+    "held": "Prima scrivi qualcosa: non c'è ancora nulla da conservare.",
+    "saved": "Salvato da noi",
+    "savedBody": "Riapri questo link entro il {day} per finire. Su questo dispositivo non resta nulla."
+  },
+  "held": {
+    "notice": "Prima spunta di aver letto come usiamo le tue misure.",
+    "noNotice": "{sender} non ha ancora pubblicato la sua informativa privacy.",
+    "photos": "Una foto è ancora in invio."
+  },
+  "send": {
+    "busy": "Invio…",
+    "button": "Invia le misure"
+  },
+  "step": {
+    "count": "Passo {at} di {of}",
+    "start": {
+      "short": "I tuoi dati",
+      "title": "Prima di iniziare",
+      "lead": "{sender} ti chiede le tue misure. Leggi come le usiamo, poi inizia."
+    },
+    "basics": {
+      "short": "Su di te",
+      "title": "Su di te",
+      "lead": "Il reparto modelli ha bisogno di questi tre dati."
+    },
+    "points": {
+      "short": "Misure",
+      "title": "Misure",
+      "lead": "Punto per punto: la figura mostra dove va il metro. Invio porta al punto successivo."
+    },
+    "fit": {
+      "short": "Vestibilità",
+      "title": "Come ti piace",
+      "lead": "Cosa deve sapere il sarto su come guidi e come lo indossi."
+    },
+    "photos": {
+      "short": "Foto",
+      "title": "Foto",
+      "lead": "Davanti, di lato e dietro con un indumento aderente aiutano il modellista."
+    },
+    "review": {
+      "short": "Controlla e invia",
+      "title": "Controlla e invia",
+      "lead": "Tutti i valori in una tabella. Puoi cambiare qualsiasi cosa prima di inviare."
+    }
+  },
+  "nav": {
+    "back": "Indietro",
+    "next": "Continua: {step}"
+  },
+  "intro": {
+    "title": "Di cosa si tratta",
+    "who": "{sender} realizza su misura il tuo capo ({garment}) e ti chiede le misure.",
+    "whoOrder": "{sender} realizza su misura il tuo capo ({garment}, ordine {order}) e ti chiede le misure.",
+    "time": "Circa {minutes} minuti.",
+    "tape": "Un metro da sarta.",
+    "helper": "Una persona che aiuti: quasi tutti i punti non si misurano da soli.",
+    "layerRequired": "Un indumento aderente per le foto (richieste).",
+    "layerOptional": "Un indumento aderente per le foto (se vuoi aggiungerle).",
+    "later": "Puoi fermarti e finire dopo da questo link fino al {day}: conserviamo noi le tue risposte."
+  },
+  "privacy": {
+    "title": "I tuoi dati",
+    "lead": "Le tue misure e le tue foto sono dati personali",
+    "what": "Cosa raccogliamo: altezza, peso ed età, le misure qui sotto, come preferisci la vestibilità e, se le aggiungi, tre foto con un indumento aderente.",
+    "why": "Perché: {sender} le usa solo per realizzare su misura il tuo capo e controllarne la vestibilità.",
+    "keep": "Per quanto: le foto vengono cancellate {days} giorni dopo la spedizione del capo; le misure restano nel tuo profilo finché non ci chiedi di cancellarle.",
+    "who": "Chi le vede: le persone di {sender} che realizzano e controllano il tuo capo. Nessun altro.",
+    "full": "Leggi l'informativa privacy completa (versione {version}) in una nuova scheda",
+    "tick": "Ho letto come vengono usate le mie misure",
+    "ticked": "Letta il {when}",
+    "tickFirst": "Spunta la casella per iniziare: nessun campo si apre prima.",
+    "tickFailed": "Non siamo riusciti a registrare la spunta. Riprova.",
+    "held": "Tutti i campi restano chiusi finché non spunti la casella.",
+    "missing": "{sender} non ha ancora pubblicato la sua informativa privacy",
+    "missingBody": "Il modulo si apre appena è pubblicata. Chiedilo a loro."
+  },
+  "unit": {
+    "cm": "cm",
+    "in": "in",
+    "kg": "kg",
+    "lb": "lb",
+    "cmKg": "cm e kg",
+    "inLb": "pollici e libbre"
+  },
+  "basics": {
+    "units": "Unità",
+    "height": "Altezza",
+    "heightHint": "Senza scarpe, in {unit}.",
+    "weight": "Peso",
+    "weightHint": "In {unit}.",
+    "age": "Età",
+    "ageHint": "In anni.",
+    "why": "Conserviamo centimetri e chilogrammi; pollici e libbre vengono convertiti esattamente."
+  },
+  "issue": {
+    "REQUIRED": "{field}: obbligatorio.",
+    "NOT_A_NUMBER": "{field}: un numero, come 61,5.",
+    "OUT_OF_LIMITS": "{field}: questo non può essere giusto. Controlla il numero e le unità.",
+    "TOO_LONG": "Al massimo {limit} caratteri.",
+    "PHOTO_REQUIRED": "Questa foto è richiesta. Scattala, o scattala di nuovo.",
+    "UNKNOWN_POINT": "{field}: non è un punto di questo modulo.",
+    "SAME_PHOTO": "Scatta una foto diversa per ogni vista."
+  },
+  "points": {
+    "none": "Per il tuo capo non ci sono punti da misurare qui: invia i dati di base e le foto.",
+    "at": "Punto {at} di {of}",
+    "filled": "{done} di {of} punti misurati",
+    "progress": "Punti misurati",
+    "guide": "Come misurare: {point}"
+  },
+  "zone": {
+    "UPPER": "Busto",
+    "ARMS": "Braccia",
+    "LEGS": "Gambe",
+    "RIDING": "Posizione di guida",
+    "OTHER": "Altri punti"
+  },
+  "hint": {
+    "BELOW_RANGE": "{point} {value} è meno del solito (da {bound}): controllala. Puoi comunque inviarla.",
+    "ABOVE_RANGE": "{point} {value} è più del solito (fino a {bound}): controllala. Puoi comunque inviarla.",
+    "FOR_HEIGHT": "{point} {value} è insolito per un'altezza di {bound}: controllalo. Puoi comunque inviarlo."
+  },
+  "fit": {
+    "legend": "Vestibilità",
+    "SNUG": {
+      "title": "Aderente",
+      "body": "Vicina al corpo, come per la pista."
+    },
+    "REGULAR": {
+      "title": "Regolare",
+      "body": "Spazio per uno strato sotto, come per il turismo."
+    },
+    "posture": "Postura e guida",
+    "postureHint": "Come stai in sella: carenato, eretto, braccia lunghe…",
+    "asymmetry": "Asimmetrie",
+    "asymmetryHint": "Per esempio un braccio o una gamba più lunga, una spalla più bassa."
+  },
+  "photos": {
+    "leadRequired": "Servono tre foto: davanti, di lato e dietro.",
+    "leadOptional": "Tre foto aiutano il modellista: davanti, di lato e dietro. Puoi inviare il modulo anche senza.",
+    "howLayer": "Indossa un indumento aderente.",
+    "howStand": "Stai dritto, braccia un po' staccate dal corpo, tutto il corpo nell'immagine.",
+    "howFace": "Il viso non serve: tienilo fuori dall'immagine.",
+    "kept": "Conserviamo noi le foto (mai su questo dispositivo) e le cancelliamo {days} giorni dopo la spedizione del capo.",
+    "view": {
+      "FRONT": "Davanti",
+      "SIDE": "Di lato",
+      "BACK": "Dietro"
+    },
+    "needed": "richiesta",
+    "optional": "facoltativa",
+    "alt": "La tua foto: {view}",
+    "sending": "Invio…",
+    "loading": "Apertura…",
+    "failed": "Questa foto non ci è arrivata.",
+    "retake": "Scattala di nuovo",
+    "take": "Scatta la foto",
+    "dialogTitle": "Foto: {view}",
+    "dialogIntro": {
+      "FRONT": "Guarda verso la fotocamera; la sagoma mostra dove metterti.",
+      "SIDE": "Girati sul fianco destro; braccia rilassate.",
+      "BACK": "Girati di schiena alla fotocamera."
+    },
+    "surface": "Foto: {view}",
+    "cancel": "Annulla",
+    "readFailed": "Non riusciamo a mostrare questa foto ora; è conservata da noi. Riprova."
+  },
+  "review": {
+    "lead": "Controlla ogni valore. Cambia ti porta al suo passo; quello che hai scritto resta.",
+    "change": "Cambia",
+    "empty": "—",
+    "kept": "conservato come {value}",
+    "photoTaken": "Scattata",
+    "photoNone": "Non scattata",
+    "col": {
+      "what": "Cosa",
+      "value": "Valore",
+      "check": "Controllo",
+      "change": "Cambia"
+    },
+    "basics": "Su di te",
+    "points": "Misure",
+    "fit": "Come ti piace",
+    "photos": "Foto",
+    "hints": "{count} valori da ricontrollare",
+    "hintsBody": "Sembrano insoliti. Se sono giusti, inviali così.",
+    "name": "Il tuo nome (facoltativo)",
+    "nameHint": "Chi ha preso le misure: va con le misure."
+  },
+  "guide": {
+    "title": "Come misurare: {point}",
+    "close": "Chiudi",
+    "picture": "Dove va il metro per {point}",
+    "step": {
+      "stand": "Stai dritto e rilassato, con un indumento aderente, piedi leggermente divaricati.",
+      "tape": "Chi ti aiuta tiene il metro dove mostra la figura: aderente, non stretto, in piano tutto intorno.",
+      "read": "Leggi il numero alla fine del metro e scrivilo con le unità che hai scelto."
+    }
+  },
+  "done": {
+    "title": "Grazie, {name}",
+    "body": "Le tue misure ci sono arrivate.",
+    "next": {
+      "check": "Il nostro sarto le controlla. Se qualcosa non torna, ti scriviamo.",
+      "photos": "Cancelliamo le tue foto {days} giorni dopo la spedizione del capo; le misure restano nel tuo profilo.",
+      "noPhotos": "Non hai inviato foto: le misure restano nel tuo profilo.",
+      "again": "Questo link ora è usato. Per nuove misure, chiedi a {sender} un nuovo link."
+    },
+    "fact": {
+      "garment": "Capo",
+      "sent": "Inviate",
+      "version": "Versione",
+      "photos": "Foto"
+    },
+    "photoCount": "{count} di 3",
+    "contact": "Domande sulle tue misure o sui tuoi dati"
+  }
+}
