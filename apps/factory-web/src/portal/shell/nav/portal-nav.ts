@@ -97,7 +97,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     ],
   },
   { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: false },
-  { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: false },
+  // B-W2b-197: the customer's Returns & claims (SCR-187).
+  { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: true },
   // B-W2b-196: the customer's Account (SCR-188).
   { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'more', built: true },
   {
@@ -145,6 +146,9 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
   // B-W2b-186: a supplier's ship notice.
   { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: true },
+  // B-W2b-197: a customer's return and complaint open their own pages (Status first).
+  { kinds: ['CUSTOMER'], type: 'ReturnAuthorisation', href: (id) => `/returns/${id}`, built: true },
+  { kinds: ['CUSTOMER'], type: 'Complaint', href: (id) => `/returns/complaints/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
 ]
