@@ -48,8 +48,16 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['deliveries', 'nav.deliveries', '/deliveries'],
     ])
     // B-W2b-196: the customer's Account.
-    // B-W2b-191: the customer's Orders & tracking; B-W2b-195: Documents; B-W2b-197: Returns & claims.
-    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'orders', 'documents', 'returns', 'account'])
+    // B-W2b-191: the customer's Orders & tracking; B-W2b-194: New order & reorder joins Orders (two pages: the area keeps its own name), the
+    // Catalogue is the one page of Quotes & samples (it takes the page's name and address); B-W2b-195: Documents; B-W2b-197: Returns & claims.
+    expect(ids('CUSTOMER', false)).toEqual([
+      ['home', 'nav.home', '/'],
+      ['orders', 'nav.orders', '/orders'],
+      ['quotes', 'nav.catalogue', '/catalogue'],
+      ['documents', 'nav.documents', '/documents'],
+      ['returns', 'nav.returns', '/returns'],
+      ['account', 'nav.account', '/account'],
+    ])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {

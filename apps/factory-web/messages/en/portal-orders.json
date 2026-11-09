@@ -35,7 +35,8 @@
     "cancel": "Ask to cancel…",
     "pay": "Pay the deposit",
     "history": "Promise date history",
-    "confirmation": "Order confirmation PDF"
+    "confirmation": "Order confirmation PDF",
+    "newOrder": "New order"
   },
   "keys": {
     "search": "Search your orders",
@@ -330,7 +331,8 @@
     "showSizes": "Show the sizes",
     "askChange": "Ask for a change on this line",
     "sizesTitle": "Sizes of each line",
-    "sizesOf": "Line {seq} · {style} {colour}"
+    "sizesOf": "Line {seq} · {style} {colour}",
+    "reorder": "Reorder this line"
   },
   "sizes": {
     "size": "Size",

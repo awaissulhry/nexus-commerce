@@ -35,7 +35,8 @@
     "cancel": "Chiedi di annullare…",
     "pay": "Paga l’acconto",
     "history": "Storia della data promessa",
-    "confirmation": "PDF della conferma d’ordine"
+    "confirmation": "PDF della conferma d’ordine",
+    "newOrder": "Nuovo ordine"
   },
   "keys": {
     "search": "Cerca nei tuoi ordini",
@@ -330,7 +331,8 @@
     "showSizes": "Mostra le taglie",
     "askChange": "Chiedi una modifica su questa riga",
     "sizesTitle": "Taglie di ogni riga",
-    "sizesOf": "Riga {seq} · {style} {colour}"
+    "sizesOf": "Riga {seq} · {style} {colour}",
+    "reorder": "Riordina questa riga"
   },
   "sizes": {
     "size": "Taglia",

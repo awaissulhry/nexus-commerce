@@ -79,7 +79,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     pages: [
       // B-W2b-191: the customer's Orders & tracking (SCR-184).
       { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: true },
-      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: false },
+      // B-W2b-194: New order & reorder (SCR-185).
+      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: true },
     ],
   },
   {
@@ -95,7 +96,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     built: false,
     pages: [
       { id: 'quotes.list', label: 'nav.quotes', href: '/quotes', permission: 'portal.quotes.view', built: false },
-      { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: false },
+      // B-W2b-194: the Catalogue (SCR-226).
+      { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: true },
     ],
   },
   // B-W2b-195: the customer's Documents (SCR-186).
