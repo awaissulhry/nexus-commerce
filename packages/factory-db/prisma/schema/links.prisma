@@ -95,6 +95,8 @@ model OneOffLink {
   measurementSubmissions     MeasurementProfile[] @relation("MeasurementProfileSubmittedVia")
   // W2b portal-supply.prisma (wave 22/22): the supplier questionnaire answers sent through it (SUPPLIER_ONBOARD).
   questionnaireResponses     SupplierQuestionnaireResponse[]
+  // W2b-4 substances.prisma (wave 31/33): the declaration requests asked through it.
+  supplierDeclarationRequests SupplierDeclarationRequest[]
 
   // The target of the evidence rows' reference: an evidence row names its link's party.
   @@unique([tenantId, partyId, id])

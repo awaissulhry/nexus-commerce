@@ -152,6 +152,12 @@ model Company {
   complianceDocuments  ComplianceDocument[]
   // email-in.prisma: the mail received through the company's SES account.
   inboundEmails        InboundEmail[]
+  // W2b-4 substances.prisma (wave 31/33): its own restricted substances, substance rules and test plan rules, and the
+  // declarations it asked of suppliers.
+  restrictedSubstances        RestrictedSubstance[]
+  substanceRules              SubstanceRule[]
+  testPlanRules               TestPlanRule[]
+  supplierDeclarationRequests SupplierDeclarationRequest[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes               Quote[]
   salesOrders          SalesOrder[]

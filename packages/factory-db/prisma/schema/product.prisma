@@ -195,6 +195,10 @@ model Item {
   optionEffectTargets OptionEffect[]     @relation("OptionEffectTargetItem")
   // W2b-4 samples.prisma (wave 29/33): the swatches of it sent to brands.
   sampleSwatches  SampleSwatch[]
+  // W2b-4 substances.prisma (wave 31/33): its compliance profile, what suppliers declared of it, its own test plan rules.
+  complianceProfiles      MaterialComplianceProfile[]
+  supplierDeclarationLines SupplierDeclarationLine[]
+  testPlanRules           TestPlanRule[]
   // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut it, and the downgrades that keep garments as it (second quality).
   cutOrders       CutOrder[]
   secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")

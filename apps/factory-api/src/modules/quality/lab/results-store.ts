@@ -81,9 +81,13 @@ const COLUMNS = {
   createdById: true,
 } as const satisfies Prisma.LabResultSelect
 type Row = Prisma.LabResultGetPayload<{ select: typeof COLUMNS }>
+// W2b-4 (B-W2b-217): LabTest grew (AZO, NICKEL, PAH, DMFU, NPE, PFAS). This is W1's chromium VI store: it reads CR_VI rows
+// only (the other tests' results are B-W2b-256's).
+const CR_VI_ONLY = { test: 'CR_VI' } as const
 
 const rowOf = (row: Row): LabResultRow => ({
   ...row,
+  test: 'CR_VI',
   method: row.method as CrViMethod,
   valueMgKg: decimalOrNull(row.valueMgKg),
   detectionLimitMgKg: decimalOrNull(row.detectionLimitMgKg),
@@ -114,8 +118,8 @@ export const TABLE_LAB_RESULTS: LabResultStore = Object.freeze({
       after: { lotId: row.lotId, test: row.test, method: row.method, valueMgKg: row.valueMgKg, belowDetectionLimit: row.belowDetectionLimit, detectionLimitMgKg: row.detectionLimitMgKg, limitMgKg: row.limitMgKg, verdict: row.verdict, lab: row.lab, reportNumber: row.reportNumber, testedOn: row.testedOn, evidence: row.evidence, article: row.article, periodFrom: row.periodFrom, periodTo: row.periodTo, fileId: row.fileId, supersedesId: row.supersedesId },
     })
   },
-  list: async (client: Reader, lotId: string) => (await client.labResult.findMany({ where: { lotId }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
-  byFile: async (client: Reader, fileId: string) => (await client.labResult.findMany({ where: { fileId }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
+  list: async (client: Reader, lotId: string) => (await client.labResult.findMany({ where: { lotId, ...CR_VI_ONLY }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
+  byFile: async (client: Reader, fileId: string) => (await client.labResult.findMany({ where: { fileId, ...CR_VI_ONLY }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
 })
 
 let configured: LabResultStore | undefined

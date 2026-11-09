@@ -119,6 +119,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       { id: `ffffffff${id(`series:${company}:CHANGE_REQUEST:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_REQUEST', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:CHANGE_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'ECO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:SAMPLE_ROUND:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAMPLE_ROUND', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-4 wave 31/33: the declarations asked of suppliers are numbered from it when they are sent (B-W2b-256): without
+      // it, a declaration cannot be asked. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:SUPPLIER_DECLARATION:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SUPPLIER_DECLARATION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SD-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

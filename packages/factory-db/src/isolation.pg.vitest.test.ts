@@ -73,6 +73,7 @@ import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedStylesDepth } from '../seed/styles-depth'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
+import { seed as seedSubstances } from '../seed/substances'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
@@ -349,6 +350,11 @@ beforeAll(async () => {
   // requirement, refusal (A1), operator, phrase, draft translation, change and (archived) body are the ones a copy may repeat.
   await seedComplianceRules({ db: factory, namespace: 'iso-a' })
   await seedComplianceRules({ db: factory, namespace: 'iso-b' })
+  // The materials and restricted substances schema of W2b-4 (wave 31/33): the substance list, its rules, Candidate List
+  // versions, test plans, material profiles, and declarations asked of P2 and of P1 (the brand that sends its own lining:
+  // the partner reads its request and line). Their first rows are the plain ones a copy may repeat.
+  await seedSubstances({ db: factory, namespace: 'iso-a' })
+  await seedSubstances({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -533,6 +539,7 @@ it('covers every classified table and every runtime role', () => {
     'MaintenanceJob',
     'MaintenanceRequest',
     'MarketProfile',
+    'MaterialComplianceProfile',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
@@ -678,6 +685,7 @@ it('covers every classified table and every runtime role', () => {
     'RequirementPegging',
     'Reservation',
     'RestoreDrill',
+    'RestrictedSubstance',
     'ReturnAuthorisation',
     'ReturnLine',
     'ReturnReceipt',
@@ -758,8 +766,11 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReceipt',
     'SubcontractReceiptLine',
     'SubcontractReturnNotice',
+    'SubstanceRule',
     'SupplierClaim',
     'SupplierClaimLine',
+    'SupplierDeclarationLine',
+    'SupplierDeclarationRequest',
     'SupplierDocumentUpload',
     'SupplierInvoice',
     'SupplierInvoiceFile',
@@ -769,10 +780,12 @@ it('covers every classified table and every runtime role', () => {
     'SupplierQuestionnaire',
     'SupplierQuestionnaireResponse',
     'Suppression',
+    'SvhcListVersion',
     'Task',
     'Team',
     'TeamMember',
     'Tenant',
+    'TestPlanRule',
     'Thread',
     'TimesheetApproval',
     'TodayLayout',
