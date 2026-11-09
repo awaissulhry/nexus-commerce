@@ -36,6 +36,8 @@ import { mayWrite } from '../materials/store'
 import { readSubcontracts, readSteps } from '../routing/read'
 import { insertSteps } from '../routing/store'
 import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
+// B-W2b-223: B-W2b-211's columns, alternates, output and option offers travel with the copy.
+import { copyOffersInCommand, copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
   assertMayWrite,
@@ -263,6 +265,9 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
         select: REVISION_COLUMNS,
       })
       tools.emit({ type: 'style.revision_created', subject: id, companyId, payload: { styleId: id, code: style.code, revisionId, revision: 1 } })
+      // B-W2b-223: the source's active option offers first: the routing's steps and the BOM's lines name their values.
+      const offers = (parts.includes('ROUTING') || parts.includes('BOM')) && revision ? await copyOffersInCommand(tools, styleId, id) : 0
+      if (offers > 0) tools.audit({ recordType: 'Style', recordId: id, companyId, after: { optionOffersCopied: offers } })
       // B-W2b-88: the routing BEFORE the BOM: a line names its step by place (BomLine.routingSeq's key).
       if (parts.includes('ROUTING') && revision) {
         const steps = copyRoutingSteps(await readSteps(tx, revision.id), await readSubcontracts(tx, revision.id), newId)
@@ -308,6 +313,9 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
           const cells = lines.flatMap((line) => line.colours.map((cell) => ({ id: newId(), styleId: id, revisionId, bomLineId: line.id, itemId: line.itemId, colourwayId: cell.colourwayId, itemColourId: cell.itemColourId, ...stamp })))
           if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
         }
+        // B-W2b-223: the lines' structure, alternates and the output, AFTER the lines (said in their own audit row).
+        const structure = await copyStructureInCommand(tools, { revisionId: revision.id }, { styleId: id, revisionId }, lineMapBySeq(sourceLines, lines))
+        if (!emptyCopy(structure)) tools.audit({ recordType: 'StyleRevision', recordId: revisionId, companyId, after: { styleId: id, structure } })
         // B-W2b-95: the pieces AFTER the lines they name (a line left out leaves its pieces without a line); the copy's range.
         const copyRange = (await tx.style.findUniqueOrThrow({ where: { id }, select: { sizes: true } })).sizes
         pieces = await copyPiecesInCommand(tools, { revisionId: revision.id }, { styleId: id, revisionId }, lineMapBySeq(sourceLines, lines), copyRange)
