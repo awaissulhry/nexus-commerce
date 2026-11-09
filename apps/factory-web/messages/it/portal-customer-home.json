@@ -3,7 +3,8 @@
   "band": {
     "updated": "Aggiornato alle {time}",
     "statement": "Scarica l'estratto conto",
-    "emailSettings": "Impostazioni e-mail"
+    "emailSettings": "Impostazioni e-mail",
+    "newOrder": "Nuovo ordine"
   },
   "keys": {
     "todo": "Scorri Cosa ti aspetta",

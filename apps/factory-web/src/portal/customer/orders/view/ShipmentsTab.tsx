@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Download, ExternalLink, Eye, PackageCheck } from 'lucide-react'
+import { Copy, Download, ExternalLink, Eye, Link2, PackageCheck } from 'lucide-react'
 import { Card, Disclosure, EmptyState, KeyValue, SummaryTable, type KeyValueItem } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
@@ -55,6 +55,13 @@ function ShipmentCard({ shipment, model, actions }: { shipment: ShipmentRead; mo
       <div className="fw-pord-stack">
         <KeyValue columns={3} phoneColumns={2} labelCase="sentence" items={facts} />
         <MilestoneTracker steps={shipmentSteps(shipment, locale, at)} label={t('shipments.steps', { number: shipment.number })} labels={ds.milestoneTracker} />
+        {/* B-W2b-170: our branded tracking page (links.tracking), to pass on to whoever receives the goods. */}
+        <div className="fw-pord-tracking">
+          <Button size="sm" variant="secondary" heldReason={model.linkHeld ?? null} onClick={() => actions?.onCopyTrackingLink?.(shipment.id)} aria-label={t('shipments.copyLinkOf', { number: shipment.number })}>
+            <Link2 size={13} aria-hidden /> {model.copied === `link:${shipment.id}` ? t('shipments.linkCopied') : t('shipments.copyLink')}
+          </Button>
+          <span className="fw-pord-sub">{t('shipments.copyLinkHint')}</span>
+        </div>
         {shipment.parcels.length > 0 ? (
           <ul className="fw-pord-parcels" aria-label={t('shipments.parcelsOf', { number: shipment.number })}>
             {shipment.parcels.map((parcel) => (

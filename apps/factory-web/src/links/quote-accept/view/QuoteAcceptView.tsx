@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, Copy } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { Banner, Card, Disclosure, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { SignBlock } from '@nexus/ui/components/SignBlock/index'
@@ -13,8 +13,10 @@ import { pdfViewerLabels } from '../../../lib/pdf/labels'
 import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { LinkQuote } from '../api'
-import { answerOf, DECLINE_REASONS, groupedIban, privacyCompany, type DeclineReason, type QuoteAcceptActions, type QuoteAcceptViewModel } from '../model'
+import { answerOf, DECLINE_REASONS, privacyCompany, type DeclineReason, type QuoteAcceptActions, type QuoteAcceptViewModel } from '../model'
 import { AcceptedProofs, ProofsSection } from './ProofsSection'
+// B-W2b-199: the deposit's bank transfer and card step.
+import { QuoteDeposit } from '../deposit/QuoteDeposit'
 import '../quote-accept.css'
 
 export type { QuoteAcceptViewModel, QuoteAcceptActions } from '../model'
@@ -25,7 +27,7 @@ export type { QuoteAcceptViewModel, QuoteAcceptActions } from '../model'
  * payment, the deposit asked), what is in it, the exact PDF with its document code, the terms, then the SignBlock
  * (typed name, the email when the link asks it, the no-withdrawal statement when the law asks it; Accept held with its
  * reason, never disabled) and Decline. The end state says what happens next and how to pay the deposit by bank transfer
- * (each field with Copy). The expired, replaced, withdrawn states offer "Ask for a new link". No cost or margin, ever.
+ * (each field with Copy) or by card (B-W2b-199: links/quote-accept/deposit). The expired, replaced, withdrawn states offer "Ask for a new link". No cost or margin, ever.
  */
 export function QuoteAcceptView({ model, actions }: { model: QuoteAcceptViewModel; actions?: QuoteAcceptActions }) {
   return (
@@ -238,19 +240,7 @@ function Accepted({ quote, model, actions }: { quote: LinkQuote; model: QuoteAcc
   const acceptance = quote.acceptance!
   const deposit = quote.deposit
   const instructions = deposit?.instructions ?? null
-  const bank = instructions?.bank ?? null
   const money = (minor: number | undefined, currency: string) => (minor === undefined ? '—' : formatNumber(minor / 100, locale, { style: 'currency', currency }))
-  const copyable = (label: string, value: string, shown = value) => ({
-    label,
-    value: (
-      <span className="fw-qa-copy">
-        <span className="fw-qa-mono">{shown}</span>
-        <Button size="sm" variant="quiet" aria-label={t('deposit.copy', { what: label })} onClick={() => actions?.onCopy?.(value)}>
-          <Copy size={14} aria-hidden /> {t('deposit.copyShort')}
-        </Button>
-      </span>
-    ),
-  })
   return (
     <Card padded className="fw-qa-card fw-qa-done" role="status">
       <h2 className="fw-qa-h2">
@@ -273,32 +263,8 @@ function Accepted({ quote, model, actions }: { quote: LinkQuote; model: QuoteAcc
         {deposit && instructions && <li>{t('done.stepDeposit', { amount: money(instructions.amount, instructions.currency), date: day(instructions.dueDate, locale, model.timeZone) })}</li>}
         <li>{t('done.stepConfirm')}</li>
       </ol>
-      {deposit && instructions && (
-        <section className="fw-qa-deposit" aria-labelledby="fw-qa-deposit">
-          <h3 id="fw-qa-deposit" className="fw-qa-h3">
-            {t('deposit.title')}
-          </h3>
-          {bank ? (
-            <KeyValue
-              dense
-              labelCase="sentence"
-              items={[
-                copyable(t('deposit.holder'), bank.accountHolder),
-                copyable(t('deposit.iban'), bank.iban.replace(/\s+/g, ''), groupedIban(bank.iban)),
-                ...(bank.bic ? [copyable(t('deposit.bic'), bank.bic)] : []),
-                ...(bank.bankName ? [{ label: t('deposit.bank'), value: bank.bankName }] : []),
-                copyable(t('deposit.reference'), instructions.reference),
-                { label: t('deposit.amount'), value: money(instructions.amount, instructions.currency) },
-                { label: t('deposit.due'), value: day(instructions.dueDate, locale, model.timeZone) },
-                { label: t('deposit.kind'), value: t(`depositKind.${deposit.kind}`) },
-              ]}
-            />
-          ) : (
-            <Banner tone="info" title={t('deposit.noBank')} />
-          )}
-          <p className="fw-qa-hint">{t('deposit.production')}</p>
-        </section>
-      )}
+      {/* B-W2b-199: the deposit — the bank transfer and card or SEPA (links/quote-accept/deposit). */}
+      <QuoteDeposit quote={quote} timeZone={model.timeZone} onCopy={actions?.onCopy} />
     </Card>
   )
 }

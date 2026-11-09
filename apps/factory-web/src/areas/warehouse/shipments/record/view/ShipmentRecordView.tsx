@@ -37,15 +37,16 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
  * one price on a shipment, drawn only with the price grain), Void labels, the order's backorder, Other documents and the
  * driver's pack (a new tab).
  */
-export function ShipmentRecordView({ model, actions, panels }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode }) {
+// B-W2b-170: `trackingLink`, the container's tracking-page card (links.tracking) on the Tracking & delivery tab.
+export function ShipmentRecordView({ model, actions, panels, trackingLink }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
   return (
     <WithMessages namespaces={['shipments', 'lists', 'records']}>
-      <ShipmentRecord model={model} actions={actions} panels={panels} />
+      <ShipmentRecord model={model} actions={actions} panels={panels} trackingLink={trackingLink} />
     </WithMessages>
   )
 }
 
-function ShipmentRecord({ model, actions, panels }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode }) {
+function ShipmentRecord({ model, actions, panels, trackingLink }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
   const t = useT('shipments')
   const listHref = `${model.prefix}/warehouse/shipments`
   const loaded = model.shipment
@@ -90,12 +91,12 @@ function ShipmentRecord({ model, actions, panels }: { model: ShipmentRecordModel
       </div>
     )
   }
-  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} panels={panels} trackingLink={trackingLink} />
 }
 
 const STEP_DIALOG: Record<Exclude<StepKind, 'pack'>, 'issueDdt' | 'buyLabels' | 'handOver'> = { issueDdt: 'issueDdt', buyLabels: 'buyLabels', handOver: 'handOver' }
 
-function ReadyRecord({ shipment, model, actions, panels }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ shipment, model, actions, panels, trackingLink }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode }) {
   const t = useT('shipments')
   const locale = useLocale()
   const recordHref = `${model.prefix}/warehouse/shipments/${shipment.id}`
@@ -291,7 +292,7 @@ function ReadyRecord({ shipment, model, actions, panels }: { shipment: Shipment;
           {model.tab === 'lines' && <LinesTab shipment={shipment} checks={checks} model={model} actions={actions} />}
           {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} />}
-          {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} />}
+          {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} />}
           {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-sh-hint">{t('record.noPanels')}</p>)}
