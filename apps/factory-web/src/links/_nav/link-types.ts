@@ -15,6 +15,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   DOCUMENT_VIEW   StoredFile       — the frame (one file; the public DoC and secure-file pages are W2b)
  *   DOCUMENT_VIEW   PayrollExport    — the frame until the secure-file page (SCR-200, W2b-3); its API routes are B-W2b-54's
  *   APPROVAL        ApprovalRequest  approve                 links/approve (SCR-198; B-W2b-188)
+ *   MEASUREMENTS    MeasurementProfile  measure              links/measure (SCR-195; B-W2b-171)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -26,6 +27,8 @@ export const LINK_TASKS = [
   'shipment-documents',
   // B-W2b-188: an approval request (SCR-198).
   'approve',
+  // B-W2b-171: a rider sends measurements (SCR-195).
+  'measure',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -43,6 +46,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   { purpose: 'DOCUMENT_VIEW', recordType: 'Shipment', task: 'shipment-documents' },
   // B-W2b-188: what we ask a partner to approve (SCR-198).
   { purpose: 'APPROVAL', recordType: 'ApprovalRequest', task: 'approve' },
+  // B-W2b-171: a rider's measurement profile, sent again by link (SCR-195).
+  { purpose: 'MEASUREMENTS', recordType: 'MeasurementProfile', task: 'measure' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

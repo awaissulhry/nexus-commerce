@@ -18,6 +18,8 @@ import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approva
 import { CUT_ORDERS_ADDS } from '../../production/cutorders/permissions'
 // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (office and floor templates).
 import { CUTISSUE_ADDS, CUTISSUE_FLOOR_ADDS } from '../../production/cutissue/permissions'
+// B-W2b-171: measurements by link (sales and the administrator send and read them; the production manager reads them).
+import { MEASURE_LINK_ADDS } from '../../sales/measure-link/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -774,7 +776,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-112
   ...(audience === 'office' ? (CUT_ORDERS_ADDS[key] ?? []) : []),
   // B-W2b-117
-  ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-171
+  ...(audience === 'office' ? (MEASURE_LINK_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

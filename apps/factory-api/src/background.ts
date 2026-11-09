@@ -108,6 +108,8 @@ import { accessEndingCron } from './platform/auth/partners/access-ending'
 import { partnerNotificationsHandler } from './platform/portal/notifications/fan-out'
 // B-W2b-185: paying online (the PAY_INVOICE requests; after a payment ended: TD02, receipt, cancel at the provider).
 import { onlinePaymentHandlers } from './modules/payments/online/follow-up'
+// B-W2b-171: the body photos sent with measurements by link (their deletion day once the garment ships; deleted when it passes).
+import { measurementPhotosCron } from './modules/sales/measure-link/retention'
 import { partnerDigestCron } from './platform/portal/notifications/digest'
 import { partnerTaskRemindersCron } from './platform/portal/tasks/reminders'
 // B-W2b-177: document expiry reminders (30 and 7 days before; the partner asked for a new version).
@@ -303,6 +305,8 @@ if (mode === 'worker') {
   crons.push(expiryRemindersCron({ database, log }))
   // B-W2b-184: approval requests (expiry and settle catch-up, every 10 minutes); Home › Approvals by e-mail (every 5 minutes).
   crons.push(approvalsSweepCron({ database, log }), officeApprovalsMailCron({ database, log, cookieSecret: env.FACTORY_COOKIE_SECRET }))
+  // B-W2b-171: hourly, the body photos' deletion day (90 days after the garment ships) and their deletion when it passes.
+  crons.push(measurementPhotosCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
