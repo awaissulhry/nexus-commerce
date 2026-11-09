@@ -177,6 +177,16 @@ import { approveSupplierChange, listSupplierChanges, refuseSupplierChange } from
 import { announceDocument, completeDocument, supplierDocuments } from './portal-profile/documents'
 import { requestProfileChange, supplierProfile, withdrawProfileChange } from './portal-profile/profile'
 import { acceptDocument, listSupplierDocuments, refuseDocument } from './portal-profile/review'
+// B-W2b-172: the supplier questionnaire (versions, the link, the answer, the buyer's review).
+import * as questionnaireContracts from './questionnaire/contract'
+import * as questionnaireLink from './questionnaire/link'
+import { reviewAnswer, supplierQuestionnaire } from './questionnaire/review'
+import { sendQuestionnaireLink } from './questionnaire/send'
+import { createVersion, listVersions, publishVersion, updateVersion } from './questionnaire/versions'
+import { registerLinkRenewer } from '../../platform/links/renew'
+
+// B-W2b-172: "Ask for a new link" on a dead questionnaire link.
+registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
 /**
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
@@ -500,4 +510,37 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/supplier-changes/:requestId/approve', { schema: approveSupplierChangeContract }, async (request) => approveSupplierChange(app, request, request.params.requestId, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/supplier-changes/:requestId/refuse', { schema: refuseSupplierChangeContract }, async (request) => refuseSupplierChange(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-172 (SCM-023): the supplier questionnaire (./questionnaire): the company's versions (questions as data, the starter
+  // set), the link from the supplier's record, the supplier's link page (VAT check, documents, code of conduct, the signed
+  // answer kept as a PDF with a review task) and the buyer's review (accepted, or questions back on the supplier's thread).
+  app.get('/purchasing/questionnaires', { schema: questionnaireContracts.listVersionsContract }, async (request) => listVersions(request))
+
+  app.post('/purchasing/questionnaires', { schema: questionnaireContracts.createVersionContract }, async (request, reply) => reply.code(201).send(await createVersion(request, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/purchasing/questionnaires/:questionnaireId', { schema: questionnaireContracts.updateVersionContract }, async (request) => updateVersion(request, request.params.questionnaireId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/questionnaires/:questionnaireId/publish', { schema: questionnaireContracts.publishVersionContract }, async (request) => publishVersion(request, request.params.questionnaireId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/suppliers/:partyId/questionnaire', { schema: questionnaireContracts.supplierQuestionnaireContract }, async (request) => supplierQuestionnaire(app, request, request.params.partyId))
+
+  app.post('/purchasing/suppliers/:partyId/questionnaire-link', { schema: questionnaireContracts.sendLinkContract }, async (request, reply) => reply.code(201).send(await sendQuestionnaireLink(request, request.params.partyId, request.body)))
+
+  app.post('/purchasing/questionnaire-answers/:responseId/review', { schema: questionnaireContracts.reviewContract }, async (request) => reviewAnswer(app, request, request.params.responseId, request.body, idempotencyKeyFrom(request)))
+
+  const questionnaireLinkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
+  const questionnaireLimited = { rateLimit: { max: questionnaireLinkUse.max, timeWindow: questionnaireLinkUse.timeWindowMs } }
+  app.get('/link/supplier-questionnaire', { schema: questionnaireContracts.linkPageContract, config: questionnaireLimited }, async (request) => questionnaireLink.linkQuestionnaire(app, request, request.query.language))
+
+  app.post('/link/supplier-questionnaire', { schema: questionnaireContracts.linkSubmitContract, config: questionnaireLimited }, async (request) => questionnaireLink.linkSubmit(app, request, request.body, request.query.language))
+
+  app.post('/link/supplier-questionnaire/vat-check', { schema: questionnaireContracts.vatCheckContract, config: questionnaireLimited }, async (request) => questionnaireLink.linkVatCheck(request, request.body))
+
+  app.post('/link/supplier-questionnaire/documents', { schema: questionnaireContracts.linkUploadContract, config: questionnaireLimited }, async (request, reply) => reply.code(201).send(await questionnaireLink.linkAnnounceDocument(request, request.body)))
+
+  app.post('/link/supplier-questionnaire/documents/:fileId/complete', { schema: questionnaireContracts.linkUploadDoneContract, config: questionnaireLimited }, async (request) => questionnaireLink.linkCompleteDocument(request, request.params.fileId))
+
+  app.get('/link/supplier-questionnaire/code-of-conduct', { schema: questionnaireContracts.linkCodeContract, config: questionnaireLimited }, async (request, reply) => {
+    const { pdf, fileName } = await questionnaireLink.linkCodeOfConduct(request, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 })

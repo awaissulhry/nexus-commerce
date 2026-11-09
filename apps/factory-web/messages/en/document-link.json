@@ -77,7 +77,6 @@
     "label": "Ask for a new link",
     "again": "Ask again",
     "busy": "Sending your request…",
-    "asked": "Asked",
     "held": "Asked — we passed it on",
     "done": "We passed this on. If the link was ours, the sender will write to the address it was sent to.",
     "failed": "Your request did not reach us. Check the connection and ask again.",

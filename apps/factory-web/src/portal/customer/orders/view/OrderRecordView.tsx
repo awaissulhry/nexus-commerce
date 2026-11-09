@@ -61,6 +61,8 @@ export interface OrderRecordViewModel {
   openLine: string | null
   /** The tracking number just copied (its button says so). */
   copied: string | null
+  /** B-W2b-170: why "Copy tracking link" waits (a preview, offline), or null; `link:<shipment id>` in `copied` once copied. */
+  linkHeld?: string | null
   /** The promise history is open (the band's ⋯ opens it too). */
   historyOpen?: boolean
   dialog: OrderDialog | null
@@ -82,6 +84,8 @@ export interface OrderRecordActions {
   onLine?: (lineId: string) => void
   onHistory?: (open: boolean) => void
   onCopy?: (text: string) => void
+  /** B-W2b-170: a link to the shipment's branded tracking page, copied to the clipboard. */
+  onCopyTrackingLink?: (shipmentId: string) => void
   onPreview?: (file: { fileId: string; title: string }) => void
   onDownload?: (file: { fileId: string; name: string }) => void
   onDismissNotice?: () => void

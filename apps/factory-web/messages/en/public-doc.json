@@ -1,0 +1,135 @@
+{
+  "title": "{style} · EU declaration of conformity",
+  "titleLookup": "Declaration of conformity",
+  "intro": "The documents of the product on this label, kept at this address for at least ten years.",
+  "loading": {
+    "label": "Opening the declaration…",
+    "slow": "Still loading…"
+  },
+  "error": {
+    "title": "The declaration did not open",
+    "body": "We could not reach the server. Check your connection and try again.",
+    "retry": "Try again"
+  },
+  "standing": {
+    "CURRENT": "Current",
+    "EARLIER": "For batches before {month}"
+  },
+  "product": {
+    "heading": "This product",
+    "scannedBatch": "You scanned the label of batch {batch}.",
+    "scannedStyle": "This address is for the style {code}: it shows its current declaration.",
+    "style": "Style",
+    "styleValue": "{name} · {code}",
+    "batch": "Batch",
+    "made": "Batch released",
+    "maker": "Manufacturer",
+    "makerBrand": "The brand is the legal manufacturer of this product.",
+    "importer": "Importer",
+    "noMaker": "Not stated here: see the declaration."
+  },
+  "declaration": {
+    "heading": "Declaration of conformity",
+    "revision": "Style revision {revision}",
+    "forBatches": "It covers the batches made from {from} to {to}.",
+    "forBatchesOne": "It covers the batches made in {month}.",
+    "earlier": "A later revision of this product has its own declaration since {month}. This one stays valid for the batches made before.",
+    "language": "Language",
+    "languageHint": "Every language the declaration is published in.",
+    "number": "Declaration number",
+    "issued": "Issued on",
+    "fingerprint": "Fingerprint (SHA-256)",
+    "download": "Download the declaration",
+    "openTab": "Open the PDF in a new tab",
+    "notPublished": {
+      "title": "Not published here yet",
+      "body": "The declaration of conformity for this batch is not on this page yet. {sender} sends it with the goods; ask them for a copy.",
+      "bodyNoSender": "The declaration of conformity for this batch is not on this page yet. Ask the seller for a copy."
+    },
+    "notPpe": {
+      "title": "No declaration needed",
+      "body": "This product is not personal protective equipment: Regulation (EU) 2016/425 asks no declaration of conformity for it."
+    },
+    "pdf": {
+      "loading": "Opening the PDF…",
+      "failedTitle": "The PDF did not open",
+      "failedBody": "The file did not reach this page. Try again, or download it.",
+      "retry": "Try again"
+    }
+  },
+  "certificate": {
+    "heading": "Certificate summary",
+    "hint": "The facts an authority or a buyer checks.",
+    "category": "PPE category",
+    "categoryValue": {
+      "NOT_PPE": "Not personal protective equipment",
+      "CATEGORY_I": "Category I (simple design)",
+      "CATEGORY_II": "Category II",
+      "CATEGORY_III": "Category III (complex design)"
+    },
+    "standard": "Standard and class",
+    "standardClass": "{standard}, class {ppeClass}",
+    "notifiedBody": "Notified body",
+    "notifiedBodyValue": "{name}, number {number}",
+    "number": "EU type-examination certificate",
+    "validity": "Valid",
+    "validityValue": "from {from} to {to}",
+    "validOnBatch": "Valid when this batch was released ({day})",
+    "validToday": "Valid today",
+    "notValidOnBatch": "Not valid on {day}, when this batch was released",
+    "notValidToday": "Not valid today ({day})",
+    "selfCertified": "Category I: the manufacturer certifies it alone, with no notified body (Regulation (EU) 2016/425, Annex IV).",
+    "none": "No certificate is shown here. Ask {sender} for it.",
+    "noneNoSender": "No certificate is shown here. Ask the seller for it."
+  },
+  "instructions": {
+    "heading": "Instructions and safety information",
+    "hint": "How to wear, adjust, clean and store it, and what it protects against.",
+    "leaflet": "User information · {language}",
+    "download": "Download",
+    "open": "Open",
+    "openNamed": "Open {name}",
+    "downloadNamed": "Download {name}",
+    "care": "Care",
+    "none": "The user information for this revision is not published here yet. It comes with the product."
+  },
+  "versions": {
+    "heading": "Earlier versions",
+    "hint": "Older declarations stay here for the batches they cover.",
+    "summary": "Revision {revision}",
+    "issued": "issued on {date}",
+    "batches": "batches made from {from} to {to}",
+    "batchesOne": "batches made in {month}",
+    "noBatches": "no batch on record",
+    "declaration": "Declaration · {language}",
+    "leaflet": "User information · {language}",
+    "none": "There is no earlier version: this is the first declaration of this product."
+  },
+  "others": {
+    "title": "This code also fits another product",
+    "body": "Pick the one on your label:",
+    "batch": "{style} · batch {batch}",
+    "style": "{style}",
+    "open": "Open"
+  },
+  "lookup": {
+    "heading": "Type the code",
+    "hint": "When the QR is damaged: type the 8-character code under it.",
+    "label": "Type the 8-character code under the QR",
+    "placeholder": "e.g. 7K3Q-M2XA",
+    "open": "Open",
+    "opening": "Opening…",
+    "required": "Type the code printed under the QR.",
+    "format": "A code has 8 letters and digits, like 7K3Q-M2XA.",
+    "unknown": "We could not find this code. Check it on the label.",
+    "wait": "Wait {count} minutes before asking again.",
+    "waitOne": "Wait 1 minute before asking again.",
+    "waitSeconds": "Wait {count} seconds before asking again.",
+    "checking": "A short check runs on your device after many requests from your network…",
+    "checkFailed": "The check did not finish. Try again in a moment.",
+    "held": "Wait until the time above has passed."
+  },
+  "language": {
+    "only": "Published in {language} only."
+  }
+}

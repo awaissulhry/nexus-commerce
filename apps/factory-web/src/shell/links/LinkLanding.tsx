@@ -7,7 +7,7 @@ import { isApiError } from '../../lib/api/errors'
 import { openLink, type OpenedLink } from '../../lib/api/links'
 import { brandingTokensOf, readLinkBranding } from '../../lib/api/branding'
 import { takeLinkTokenFromLocation } from '../../lib/links/token'
-import { DepositPay } from '../../links/deposit-pay/DepositPay'
+import { Pay } from '../../links/pay/Pay'
 import { PoConfirm } from '../../links/po-confirm/PoConfirm'
 import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
@@ -17,6 +17,16 @@ import { Approve } from '../../links/approve/Approve'
 import { JobLink } from '../../links/job/JobLink'
 // B-W2b-198: a CLAIM link's report-a-problem page (SCR-197).
 import { ReportProblem } from '../../links/claim/ReportProblem'
+// B-W2b-170: a SHIPMENT_TRACK link's tracking page (SCR-194).
+import { TrackOrder } from '../../links/tracking/TrackOrder'
+// B-W2b-171: a MEASUREMENTS link's form (SCR-195).
+import { SendMeasurements } from '../../links/measure/SendMeasurements'
+// B-W2b-172: a SUPPLIER_ONBOARD link's questionnaire (SCR-269).
+import { Onboard } from '../../links/onboard/Onboard'
+// B-W2b-169: a set of files (DOCUMENT_VIEW / SECURE_FILE, SCR-272 and links.document's set) and the payroll file.
+import { FileLink } from '../../links/file/FileLink'
+// B-W2b-169: "Ask for a new link" on every dead link, with the token this page opened.
+import { LinkRenewProvider } from './renew/LinkRenew'
 // B-W2b-200: a RECORD_INVITE link's shared record (SCR-270).
 import { InviteLink } from '../../links/invite/InviteLink'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
@@ -35,8 +45,8 @@ const linkBody = (state: LinkState, link?: OpenedLink): LinkFrameViewModel['body
  * `/l#token=…` — where every one-off link lands. It takes the token from the fragment (and out of the address bar),
  * opens the link (`POST /link/open`, token in `x-factory-link`, never in a URL), and shows the link's state. A valid
  * link's task is its module's page, as the link-type registry says (links/_nav/link-types.ts): a QUOTE_ACCEPT link opens
- * the quote to accept (links/quote-accept, SCR-099), a DEPOSIT_INFO link the deposit to pay by bank transfer
- * (links/deposit-pay, SCR-199), a PO_CONFIRM link the purchase order its supplier confirms (links/po-confirm, SCR-100), a
+ * the quote to accept (links/quote-accept, SCR-099), a DEPOSIT_INFO or PAYMENT link what to pay by bank transfer or card
+ * (links/pay, SCR-199), a PO_CONFIRM link the purchase order its supplier confirms (links/po-confirm, SCR-100), a
  * DOCUMENT_VIEW link of a Shipment its documents (links/document, SCR-101), each with the same client (the token stays
  * in memory, in its header); any other link shows what it opens and when it expires.
  */
@@ -45,6 +55,8 @@ export function LinkLanding() {
   const [task, setTask] = useState<{ task: LinkTask; api: ApiClient } | null>(null)
   // B-W2b-161: the sender's branding (logo, colour) for the frame and every task page; null until read, or when it fails.
   const [branding, setBranding] = useState<LinkSender | null>(null)
+  // B-W2b-169: the client of the token this page opened (null: no token), for "Ask for a new link" once it is dead.
+  const [renew, setRenew] = useState<{ api: ApiClient; attempt: number } | null>(null)
   // The token taken from the address on arrival. React runs an effect twice in development (StrictMode): the second run
   // finds the address already clean, so it opens the token the first run took instead of saying the link is missing.
   const arrived = useRef<string | null>(null)
@@ -66,11 +78,12 @@ export function LinkLanding() {
       setBranding(null)
       setModel({ sender: null, title: null, body: linkBody('loading') })
       const api = browserApi({ linkToken: token })
+      setRenew({ api, attempt: mine }) // B-W2b-169
       openLink(api)
         .then((link) => {
           if (mine !== attempt) return
           const state = linkStateOfOpened(link, new Date())
-          // A DOCUMENT_VIEW link of one file (no task page yet) stays the frame's.
+          // A link no page takes yet stays the frame's (B-W2b-169: a set of files and the payroll file have theirs).
           const opens = state === 'valid' ? linkTaskOf(link) : null
           if (opens) setTask({ task: opens, api })
           setModel({ sender: null, title: null, body: linkBody(state, link) })
@@ -92,7 +105,14 @@ export function LinkLanding() {
     }
   }, [])
 
-  return <LinkBrandingContext.Provider value={branding}>{page(task, model)}</LinkBrandingContext.Provider>
+  return (
+    <LinkBrandingContext.Provider value={branding}>
+      {/* B-W2b-169: keyed by the opening, so a link pasted into this tab asks afresh. */}
+      <LinkRenewProvider key={renew?.attempt ?? 0} api={renew?.api ?? null}>
+        {page(task, model)}
+      </LinkRenewProvider>
+    </LinkBrandingContext.Provider>
+  )
 }
 
 function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameViewModel) {
@@ -100,7 +120,7 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     case 'quote-accept':
       return <QuoteAccept api={task.api} />
     case 'deposit-pay':
-      return <DepositPay api={task.api} />
+      return <Pay api={task.api} purpose="DEPOSIT_INFO" />
     case 'po-confirm':
       return <PoConfirm api={task.api} />
     case 'shipment-documents':
@@ -114,6 +134,23 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-198
     case 'report-problem':
       return <ReportProblem api={task.api} />
+    // B-W2b-170
+    case 'track-order':
+      return <TrackOrder api={task.api} />
+    // B-W2b-199
+    case 'pay':
+      return <Pay api={task.api} purpose="PAYMENT" />
+    // B-W2b-171
+    case 'measure':
+      return <SendMeasurements api={task.api} />
+    // B-W2b-172
+    case 'onboard':
+      return <Onboard api={task.api} />
+    // B-W2b-169
+    case 'files':
+      return <FileLink api={task.api} source="set" />
+    case 'payroll-file':
+      return <FileLink api={task.api} source="payroll" />
     // B-W2b-200
     case 'invite':
       return <InviteLink api={task.api} />

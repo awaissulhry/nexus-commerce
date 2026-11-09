@@ -493,15 +493,15 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 describe('the link-type registry (links/_nav/link-types.ts)', () => {
   it('every purpose × record type a link can have opens its task page or, by name, the link frame', () => {
     const frame = linkKinds().filter((kind) => linkTaskOf({ purpose: kind.purpose, record: { type: kind.recordType } }) === null)
-    expect(frame.slice(0, 2)).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }, { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport' }])
+    // B-W2b-169: DOCUMENT_VIEW of files and of a payroll export, and SECURE_FILE, have their page (links/file).
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
     // B-W2b-188: APPROVAL has its page (links/approve).
-    // B-W2b-181: JOB_ACCEPT has its page (links/job); B-W2b-198: CLAIM has its page (links/claim).
-    // B-W2b-200: RECORD_INVITE has its page (links/invite).
-    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'PAYMENT', 'SUPPLIER_ONBOARD', 'SECURE_FILE']
-    expect(frame.slice(2)).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
+    // B-W2b-181: JOB_ACCEPT has its page (links/job); B-W2b-198: CLAIM (links/claim); B-W2b-170: SHIPMENT_TRACK (links/tracking);
+    // B-W2b-199: PAYMENT (links/pay); B-W2b-171: MEASUREMENTS (links/measure); B-W2b-172: SUPPLIER_ONBOARD (links/onboard);
+    // B-W2b-200: RECORD_INVITE (links/invite). Every W2b-3 purpose has its page now: none shows the frame.
+    expect(frame).toEqual([])
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
-    // B-W2b-198: one task may serve several record types (CLAIM × Shipment and × SalesOrder): every task has a rule.
+    // B-W2b-198 / B-W2b-199: one task may serve several record types (CLAIM × Shipment and × SalesOrder; PAYMENT × Invoice and × DepositRequest): every task has a rule.
     expect([...new Set(LINK_TASK_RULES.map((rule) => rule.task))].sort()).toEqual([...LINK_TASKS].sort())
   })
 
@@ -515,7 +515,12 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     expect(linkTaskOf({ purpose: 'DEPOSIT_INFO', record: { type: 'DepositRequest' } })).toBe('deposit-pay')
     expect(linkTaskOf({ purpose: 'PO_CONFIRM', record: { type: 'PurchaseOrder' } })).toBe('po-confirm')
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'Shipment' } })).toBe('shipment-documents')
-    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'StoredFile' } })).toBeNull()
+    // B-W2b-169
+    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'StoredFile' } })).toBe('files')
+    expect(linkTaskOf({ purpose: 'SECURE_FILE', record: { type: 'StoredFile' } })).toBe('files')
+    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'PayrollExport' } })).toBe('payroll-file')
+    // B-W2b-199: a PAYMENT link of an invoice or a deposit request opens Pay online.
+    expect([linkTaskOf({ purpose: 'PAYMENT', record: { type: 'Invoice' } }), linkTaskOf({ purpose: 'PAYMENT', record: { type: 'DepositRequest' } })]).toEqual(['pay', 'pay'])
     expect(linkTaskOf({ purpose: 'SOMETHING_NEW', record: { type: 'Quote' } })).toBeNull()
   })
 

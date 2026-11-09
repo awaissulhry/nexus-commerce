@@ -4,33 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
-import type { DeliveryAddress, Handover } from './api'
+import type { Handover } from '../../shared/account/api'
+import { colleagueHeld, colleagueRows, deviceOf, handoverSummary, inviteProblems, maskedEmail, raisesToAdmin, seatsHeld, sessionRows, stepUpFresh, tasksToMove } from '../../shared/account/model'
+import type { DeliveryAddress } from './api'
 import { designScreen } from './fixtures'
-import {
-  addressBody,
-  addressLine,
-  addressProblems,
-  addressRows,
-  addressState,
-  colleagueHeld,
-  colleagueRows,
-  companyRows,
-  defaultHeld,
-  deviceOf,
-  EMPTY_ADDRESS,
-  handoverSummary,
-  inviteProblems,
-  maskedEmail,
-  profileBody,
-  profileChanges,
-  profileProblem,
-  raisesToAdmin,
-  removeHeld,
-  seatsHeld,
-  sessionRows,
-  stepUpFresh,
-  tasksToMove,
-} from './model'
+import { addressBody, addressLine, addressProblems, addressRows, addressState, companyRows, defaultHeld, EMPTY_ADDRESS, profileBody, profileChanges, profileProblem, removeHeld } from './model'
 
 /**
  * The customer's Account page (B-W2b-196, SCR-188): the pure rules of each section, the words of every role the invite offers,

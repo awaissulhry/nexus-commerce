@@ -93,15 +93,15 @@ export interface OverviewSlot {
  * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
  * (thread, files, history) come in as `panels` and `documents`.
  */
-export function PartyRecordView({ model, actions, panels, documents, terms, items, overview, portal }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode }) {
+export function PartyRecordView({ model, actions, panels, documents, terms, items, overview, portal, questionnaire }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} portal={portal} />
+      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents, terms, items, overview, portal }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode }) {
+function PartyRecord({ model, actions, panels, documents, terms, items, overview, portal, questionnaire }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -266,6 +266,8 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         {tab === 'items' && side === 'suppliers' && items}
         {/* B-W2b-180: Portal access (areas/sales/customers/portal, both sides). */}
         {tab === 'portal' && portal}
+        {/* B-W2b-172: the supplier questionnaire (areas/purchasing/suppliers/questionnaire). */}
+        {tab === 'questionnaire' && side === 'suppliers' && questionnaire}
         {tab === 'documents' && documents}
         {tab === 'activity' && panels}
       </RecordFrame>
