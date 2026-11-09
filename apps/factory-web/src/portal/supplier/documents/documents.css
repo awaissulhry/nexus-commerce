@@ -1,0 +1,126 @@
+/*
+ * SCR-190 — the supplier's Documents (B-W2b-193). Layout only, semantic --nds-* tokens (no raw colours). The page fills the
+ * portal's main area (no max-width of its own): "We ask for" and "Your documents" across the whole width, one column on a
+ * phone (the list frame draws cards there). The upload pop-up's fields go two by two from 720 px.
+ */
+
+.fw-psdoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-psdoc-strong {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psdoc-muted {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+}
+
+.fw-psdoc-danger {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psdoc-soon {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psdoc-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── the list's cells ────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-psdoc-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-6) 0;
+  line-height: 1.35;
+  white-space: normal;
+  min-width: 0;
+}
+
+.fw-psdoc-name {
+  overflow-wrap: anywhere;
+}
+
+.fw-psdoc-links {
+  overflow-wrap: anywhere;
+}
+
+.fw-psdoc-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ── the upload pop-up ───────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-psdoc-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-psdoc-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+.fw-psdoc-kinds {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-psdoc-kinds legend {
+  margin-bottom: var(--nds-space-6);
+}
+
+@media (min-width: 720px) {
+  .fw-psdoc-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-psdoc-kinds {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-psdoc-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-psdoc-picked {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-psdoc-picked-name {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text);
+}
