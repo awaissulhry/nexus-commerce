@@ -1,0 +1,63 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/substances.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 31/33 (B-W2b-217): materials and restricted substances. The office (factory_runtime) reads and writes through apps/factory-api's modules/compliance/substances, material-profiles, declarations-asked and test-plans (B-W2b-250, -256), always with command(). A supplier (factory_partner_runtime: a portal or link session of its party) reads its own declaration requests and their lines, never who decided in the office, the office's internal note (@internal) or the creator; it answers by an upload of its portal (SupplierDocumentUpload) or a file through a link, never by writing these rows. The floor reads none. No money column (no cost, no lab price) and no personal data. Nothing is deleted but an SVHC list version nothing names and a line of an open request (the …_substances_w2b_guards triggers); master data is archived. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "RestrictedSubstance": {
+      "about": "The office keeps the substance list (the starter list, a yearly AFIRM import, a brand's RSL entries) and archives a substance no longer listed; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SubstanceRule": {
+      "about": "The office keeps the substance rules (the law's, an industry list's, a brand's), switches one on or off with the reason and archives it; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SvhcListVersion": {
+      "about": "The office records each Candidate List version ECHA publishes (its day, entries and source; only its note changes afterwards) and removes one nothing names.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MaterialComplianceProfile": {
+      "about": "The office (and the evaluator, in the office scope) keeps one compliance profile per material: the confirmations, the origin, the SVHC answer, the rules, tests and declarations it needs and its state; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SupplierDeclarationRequest": {
+      "about": "The office asks a supplier for a declaration, records reminders, its answer and the decision, or cancels it; never deleted. The supplier (partner) reads its own requests, without the office decider's id, the internal note or the creator.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["decidedById", "internalNote", "createdById"] }
+      }
+    },
+    "SupplierDeclarationLine": {
+      "about": "The office lists the materials a request covers and records what the answer says for each while the request is open, and removes a line while it is open. The supplier (partner) reads the lines of its own requests, without the creator.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "TestPlanRule": {
+      "about": "The office keeps the test plan rules (which test, how often, for which material and market), switches one on or off with the reason and archives it; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

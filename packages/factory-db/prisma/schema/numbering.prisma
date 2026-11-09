@@ -149,6 +149,9 @@ enum NumberKind {
   CHANGE_REQUEST
   CHANGE_ORDER
   SAMPLE_ROUND
+  /// W2b-4 wave 31/33: a declaration asked of a supplier (SD-…; substances.prisma SupplierDeclarationRequest.number). An
+  /// office document kind: the API numbers it when it is sent.
+  SUPPLIER_DECLARATION
 }
 
 enum NumberReset {
