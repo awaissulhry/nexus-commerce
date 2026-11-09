@@ -1,0 +1,184 @@
+/*
+ * DS — GarmentZoneMap (B-W2b-207; moved from the factory's quality area). Layout and the sketch's strokes, semantic tokens
+ * only (light and dark). A picked zone is never colour alone: a thick outline, a pin and its words. A marked zone is drawn
+ * stronger in four steps and carries its number; the table under the map says the same.
+ */
+.nds-zone-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-zone-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+}
+.nds-zone-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  flex: 1 1 120px;
+  max-width: 180px;
+  min-width: 96px;
+}
+.nds-zone-map.is-compact .nds-zone-figure {
+  flex-basis: 84px;
+  max-width: 120px;
+  min-width: 72px;
+}
+.nds-zone-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.nds-zone-shape {
+  fill: var(--nds-surface);
+  stroke: var(--nds-border-strong);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.nds-zone-shape[role='button'],
+.nds-zone-shape[aria-hidden='true'][data-zone] {
+  cursor: pointer;
+}
+.nds-zone-map:not(:has([role='button'])) .nds-zone-shape {
+  cursor: default;
+}
+.nds-zone-shape:hover {
+  fill: var(--nds-surface-hover);
+}
+/* Marks: the danger role, stronger per step (the number and the table carry the value). */
+.nds-zone-shape[data-level] {
+  fill: var(--nds-danger);
+}
+.nds-zone-shape[data-level='1'] {
+  fill-opacity: 0.14;
+}
+.nds-zone-shape[data-level='2'] {
+  fill-opacity: 0.28;
+}
+.nds-zone-shape[data-level='3'] {
+  fill-opacity: 0.44;
+}
+.nds-zone-shape[data-level='4'] {
+  fill-opacity: 0.6;
+}
+.nds-zone-shape[data-picked='true'] {
+  fill: var(--nds-primary-soft);
+  fill-opacity: 1;
+  stroke: var(--nds-primary);
+  stroke-width: 2.5;
+}
+.nds-zone-shape:focus {
+  outline: none;
+}
+.nds-zone-shape:focus-visible {
+  stroke: rgb(var(--nds-focus-rgb));
+  stroke-width: 3;
+  stroke-dasharray: 3 2;
+}
+.nds-zone-pin circle {
+  fill: var(--nds-primary);
+  stroke: var(--nds-surface);
+  stroke-width: 1.5;
+}
+.nds-zone-pin .nds-zone-pin-dot {
+  fill: var(--nds-surface);
+  stroke: none;
+}
+.nds-zone-mark-words {
+  font-size: 9px;
+  font-weight: var(--nds-font-weight-semibold);
+  fill: var(--nds-text-strong);
+  stroke: var(--nds-surface);
+  stroke-width: 2.5;
+  paint-order: stroke;
+}
+.nds-zone-elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-zone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+.nds-zone-chip.is-static {
+  cursor: default;
+}
+.nds-zone-chip[data-level] {
+  border-color: var(--nds-danger);
+}
+.nds-zone-chip-mark {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-zone-chip[data-picked='true'] {
+  border-color: var(--nds-primary);
+  border-width: 2px;
+  background: var(--nds-primary-soft);
+}
+.nds-zone-chip:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+.nds-zone-picked {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.nds-zone-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-zone-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.nds-zone-marks {
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  max-width: 100%;
+}
+.nds-zone-marks caption {
+  text-align: start;
+  padding-bottom: var(--nds-space-4);
+}
+.nds-zone-marks th,
+.nds-zone-marks td {
+  text-align: start;
+  padding: var(--nds-space-2) var(--nds-space-12) var(--nds-space-2) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+.nds-zone-marks thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-zone-marks tbody th {
+  font-weight: var(--nds-font-weight-normal);
+}
+.nds-zone-marks td {
+  font-variant-numeric: tabular-nums;
+}
+.nds-zone-marks tr[data-picked='true'] th {
+  font-weight: var(--nds-font-weight-semibold);
+}
