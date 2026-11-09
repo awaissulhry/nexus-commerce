@@ -46,7 +46,9 @@ const NOT_KEYS: ReadonlySet<string> = new Set<string>(FACTORY_PERMISSIONS.assign
 function literalKeys(): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
-  for (const file of sources(SRC)) for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
+  // B-W2b-180: users/partners speaks its own catalogue (`portal-access`), held by its own test (sales/customers/portal).
+  for (const file of sources(SRC).filter((path) => !path.includes(join('users', 'partners'))))
+    for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
   return [...keys].sort()
 }
 

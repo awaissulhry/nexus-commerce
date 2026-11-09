@@ -13,6 +13,8 @@ import { defineEvent } from '../events/define'
  *   partner_user.changed              a portal person's role, capabilities, end of access or status changed, or their
  *                                     open invitation was revoked
  *   partner_user.access_ending        a portal person's access ends within 7 days (once per end of access; PLT-022)
+ *   partner_user.signed_in            a portal person signed in (B-W2b-180: the Portal access tab's live line; the
+ *                                     first sign-in also accepted the invitation: INVITED → ACTIVE)
  *
  * Reach the Portal access tabs and Admin › Users of the office (partners.view over the party's company): ids, kinds,
  * keys and states only; never a name or an address.
@@ -59,6 +61,18 @@ export const events = [
       byPartner: z.boolean(),
     }),
     live: live(['userId', 'partyId', 'status']),
+  }),
+  defineEvent({
+    type: 'partner_user.signed_in',
+    context: 'partners',
+    description: 'A portal person signed in (their first sign-in also accepted the invitation).',
+    payload: z.strictObject({
+      userId: z.uuid(),
+      partyId: z.uuid(),
+      /** The first sign-in: the invitation was accepted (INVITED → ACTIVE). */
+      firstSignIn: z.boolean(),
+    }),
+    live: live(['userId', 'partyId', 'firstSignIn']),
   }),
   defineEvent({
     type: 'partner_user.access_ending',

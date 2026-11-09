@@ -1,0 +1,464 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "saving": "Salvataggio…",
+    "sending": "Invio…"
+  },
+  "form": {
+    "required": "Compila questo campo.",
+    "email": "Scrivi un indirizzo e-mail, come nome@example.com."
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "kind": {
+    "CUSTOMER": "Portale clienti",
+    "SUPPLIER": "Portale fornitori",
+    "SUBCONTRACTOR": "Portale terzisti",
+    "GUEST": "Accesso consulente"
+  },
+  "status": {
+    "INVITED": "Invitato",
+    "ACTIVE": "Attivo",
+    "SUSPENDED": "Sospeso",
+    "DEACTIVATED": "Disattivato"
+  },
+  "role": {
+    "customer-buyer": "Acquisti",
+    "customer-finance": "Amministrazione",
+    "customer-quality": "Qualità",
+    "customer-designer": "Stilista",
+    "customer-viewer": "Consultazione",
+    "customer-admin": "Amministratore",
+    "supplier-orders": "Ordini",
+    "supplier-invoices": "Fatture",
+    "supplier-quality": "Qualità",
+    "supplier-admin": "Amministratore",
+    "subcontractor-jobs": "Lavorazioni",
+    "subcontractor-admin": "Amministratore",
+    "guest-accountant": "Commercialista",
+    "partner-comment": "Può commentare",
+    "partner-upload": "Può inviare file",
+    "partner-approve": "Può approvare"
+  },
+  "roleLine": {
+    "customer-buyer": "Ordini e riordini, preventivi, consegne e documenti.",
+    "customer-finance": "Fatture, estratti conto e pagamenti.",
+    "customer-quality": "Certificati, rapporti di prova, reclami e resi.",
+    "customer-designer": "Campioni, grafiche e approvazioni dei modelli.",
+    "customer-viewer": "Legge ordini e consegne; non cambia nulla.",
+    "customer-admin": "Tutto il portale clienti, e l'accesso dei colleghi.",
+    "supplier-orders": "Ordini d'acquisto da confermare, avvisi di spedizione e consegne.",
+    "supplier-invoices": "Le sue fatture e i nostri pagamenti, senza prezzi sugli ordini.",
+    "supplier-quality": "Certificati, rapporti di prova e contestazioni.",
+    "supplier-admin": "Tutto il portale fornitori, e l'accesso dei colleghi.",
+    "subcontractor-jobs": "Lavorazioni da accettare, kit ricevuti, avanzamento e resi.",
+    "subcontractor-admin": "Tutto il portale terzisti, e l'accesso dei colleghi.",
+    "guest-accountant": "Gli export contabili, per un tempo limitato.",
+    "partner-comment": "Scrive messaggi su ciò che può vedere.",
+    "partner-upload": "Invia file su ciò che può vedere.",
+    "partner-approve": "Approva, accetta o firma ciò che chiediamo."
+  },
+  "capability": {
+    "comment": "Messaggi",
+    "upload": "File",
+    "approve": "Approvazioni"
+  },
+  "capabilityLine": {
+    "comment": "Può scriverci messaggi.",
+    "upload": "Può inviarci file.",
+    "approve": "Può approvare, accettare o firmare ciò che chiediamo."
+  },
+  "right": {
+    "view": "Vedere l'accesso al portale di un partner",
+    "invite": "Invitare persone dei partner",
+    "manage": "Cambiare l'accesso delle persone dei partner e le impostazioni del portale",
+    "preview": "Vedere in anteprima il portale di un partner",
+    "requests": "Chiedere qualcosa ai partner"
+  },
+  "held": {
+    "needs": "Serve il permesso: {right}.",
+    "noKind": "Questa organizzazione non ha un portale: nei suoi ruoli non è né cliente, né marchio, né fornitore, né terzista, né consulente.",
+    "blocked": "Questa organizzazione è bloccata o archiviata: sbloccala prima di dare accesso alle sue persone.",
+    "noTerms": "Le condizioni del portale di questa azienda non sono ancora pubblicate: prima non si invita nessuno (vincolo privacy).",
+    "seatsFull": "Tutti i posti di questo portale sono occupati: disattiva qualcuno o alza il numero massimo di persone.",
+    "left": "Questa persona non c'è più: è stata disattivata.",
+    "nobody": "Nessuna delle persone scelte può ricevere questa azione.",
+    "suspendNone": "Si sospende solo una persona attiva.",
+    "reactivateNone": "Si riattiva solo una persona sospesa.",
+    "deactivateNone": "Si disattiva solo una persona attiva o sospesa (un invitato: revoca l'invito).",
+    "resendNone": "Si rimanda l'invito solo a una persona invitata.",
+    "revokeNone": "Solo una persona invitata con un invito aperto."
+  },
+  "problem": {
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Non puoi farlo per questa organizzazione.",
+    "stepUp": "Questa modifica chiede un codice nuovo.",
+    "notFound": "Organizzazione o persona non trovata.",
+    "conflict": "Qualcun altro ha appena cambiato questo dato. È stato riletto: controlla e riprova.",
+    "invalid": "Qualcosa di ciò che hai scritto non è valido. Controlla e riprova.",
+    "rateLimited": "Troppi tentativi. Aspetta un minuto e riprova.",
+    "unavailable": "Il server non ha risposto. Riprova tra poco.",
+    "contract": "La risposta non si può leggere. Riprova; se continua, avvisa un amministratore.",
+    "internal": "Qualcosa è andato storto. Riprova.",
+    "blocked": "Questa organizzazione è bloccata o archiviata: sbloccala prima di dare accesso alle sue persone.",
+    "officeAddress": "Questo indirizzo è di una persona dell'ufficio. Un account del portale vuole un altro indirizzo.",
+    "otherOrganisation": "Questo indirizzo è di una persona di un'altra organizzazione: un indirizzo, un account.",
+    "alreadyIn": "Questa persona ha già accesso (o è sospesa): cambia invece il suo ruolo.",
+    "rolesNotReady": "I ruoli del portale non sono ancora impostati: un amministratore aggiorna i modelli di ruolo (Sistema › Ruoli e permessi).",
+    "noKind": "Questa organizzazione non ha un portale: nei suoi ruoli non è né cliente, né marchio, né fornitore, né terzista, né consulente.",
+    "notInvited": "Questa persona non ha un invito aperto.",
+    "stillInvited": "Questa persona non ha ancora fatto l'accesso: rimanda invece l'invito.",
+    "noPortalCompany": "Indica per quale azienda è il portale: l'organizzazione lavora con tutte le aziende.",
+    "progressOnlyCustomers": "L'avanzamento di produzione si mostra solo a un cliente o a un marchio.",
+    "seatsFull": "Tutti i posti di questo portale sono occupati: disattiva qualcuno o alza il numero massimo di persone.",
+    "roleNotOffered": "Il portale di questa organizzazione non offre quel ruolo.",
+    "accessUntil": "La fine dell'accesso deve essere un giorno dopo oggi (l'accesso di un consulente finisce sempre).",
+    "capability": "Quel ruolo non permette ciò che hai spuntato.",
+    "email": "Controlla l'indirizzo e-mail.",
+    "noTerms": "Le condizioni del portale di questa azienda non sono ancora pubblicate (Sistema › Privacy e informative): prima non si può invitare nessuno."
+  },
+  "stepUp": {
+    "title": "Conferma con un codice nuovo",
+    "confirm": "Conferma",
+    "sentence": {
+      "default": "Scrivi il codice a 6 cifre della tua app di autenticazione per fare questa modifica.",
+      "invite": "Invitare persone dei partner (o fermare un invito) chiede un codice nuovo della tua app di autenticazione.",
+      "settings": "Cambiare il portale di un partner chiede un codice nuovo della tua app di autenticazione.",
+      "person": "Cambiare l'accesso di una persona di un partner chiede un codice nuovo della tua app di autenticazione.",
+      "status": "Sospendere, riattivare o disattivare persone dei partner chiede un codice nuovo della tua app di autenticazione."
+    },
+    "problem": {
+      "wrong": "Il codice è sbagliato o già usato. Scrivi il prossimo.",
+      "locked": "Troppi codici sbagliati. Aspetta qualche minuto e riprova.",
+      "noAuthenticator": "Prima imposta l'app di autenticazione nel tuo profilo.",
+      "tooMany": "Troppi tentativi. Aspetta un minuto e riprova.",
+      "failed": "Il codice non si è potuto controllare. Riprova."
+    }
+  },
+  "noAccess": {
+    "title": "Non puoi vedere l'accesso al portale"
+  },
+  "failed": {
+    "title": "Impossibile caricare l'accesso al portale"
+  },
+  "terms": {
+    "missing": "Le condizioni del portale di questa azienda non sono ancora pubblicate: prima non si può invitare nessuno (vincolo privacy)."
+  },
+  "live": {
+    "on": "In diretta",
+    "offline": "Offline: le modifiche compaiono quando torna la connessione",
+    "connecting": "Connessione…",
+    "asOf": "Letto alle {time}",
+    "signedIn": "{name} ha fatto l'accesso alle {time}",
+    "firstSignIn": "{name} ha fatto il primo accesso alle {time}"
+  },
+  "settings": {
+    "title": "Portale",
+    "intro": {
+      "customers": "Se {name} ha un portale clienti, quante persone ospita e quali ruoli offre.",
+      "suppliers": "Se {name} ha un portale fornitori, quante persone ospita e quali ruoli offre. I link mandati per un ordine funzionano anche senza."
+    },
+    "on": "Attivo",
+    "off": "Spento",
+    "portalOn": "Portale attivo",
+    "portalOnHint": "Le sue persone possono accedere, vedere ciò che è loro e ricevere le nostre e-mail.",
+    "portalOffHint": "Spento: nessuna sua persona accede e dal portale non arriva loro nulla; i link funzionano ancora.",
+    "progress": "Avanzamento di produzione",
+    "progressHint": "Mostra nel suo portale le fasi di produzione di ogni ordine. Spento per impostazione.",
+    "maxUsers": "Persone al massimo",
+    "maxUsersHint": "Vuoto: nessun limite. Ora {taken} invitate o attive.",
+    "noLimit": "Nessun limite",
+    "maxRange": "Un numero da 1 a 1000, o vuoto per nessun limite.",
+    "maxBelowTaken": "{taken} persone sono invitate o attive: prima disattivane qualcuna, o metti almeno {taken}.",
+    "roles": "Ruoli offerti",
+    "rolesAll": "Il portale offre tutti i suoi ruoli. Togli la spunta a quelli che non può dare.",
+    "rolesSome": "Solo i ruoli spuntati si offrono alle persone nuove; chi ha già un ruolo tolto dall'elenco lo tiene.",
+    "unsaved_one": "1 modifica al portale non salvata",
+    "unsaved_other": "{count} modifiche al portale non salvate",
+    "save": "Salva",
+    "fixFirst": "Prima correggi ciò che è segnato."
+  },
+  "preview": {
+    "title": "Cosa vedono",
+    "intro": {
+      "customers": "Apri il portale esattamente come lo vede {name}, senza accedere al suo posto.",
+      "suppliers": "Apri il portale esattamente come lo vede {name}, senza accedere al suo posto."
+    },
+    "readOnly": "Sola lettura: da qui non si invia, approva o cambia nulla, e nessun prezzo compare.",
+    "hour": "Si apre in una nuova scheda e finisce dopo un'ora.",
+    "recorded": "Ogni anteprima è registrata nel registro delle attività.",
+    "whileOff": "Il suo portale è spento: vedi ciò che vedrebbe una volta attivo.",
+    "open": "Apri l'anteprima",
+    "opening": "Apertura del portale…"
+  },
+  "people": {
+    "title": "Persone con accesso",
+    "intro": {
+      "customers": "Chi di questo cliente può accedere al portale, con quale ruolo, fino a quando.",
+      "suppliers": "I contatti del fornitore invitati al portale, con quale ruolo, fino a quando."
+    },
+    "noPricesLine": "I ruoli di fornitori e terzisti non vedono mai un prezzo.",
+    "invite": "Invita",
+    "admin": "Amministratore",
+    "noRole": "Nessun ruolo nel portale",
+    "noEnd": "Nessuna scadenza",
+    "ended": "Scaduto",
+    "endsSoon": "Scade presto",
+    "never": "Mai",
+    "invitationEnds": "invito fino al {date}",
+    "invitationExpired": "invito scaduto",
+    "prices": {
+      "yes": "Sì",
+      "no": "No"
+    },
+    "col": {
+      "name": "Nome",
+      "email": "E-mail",
+      "role": "Ruolo nel portale",
+      "prices": "Vede i prezzi",
+      "until": "Fine accesso",
+      "lastSignIn": "Ultimo accesso",
+      "status": "Stato",
+      "more": "Altro"
+    },
+    "count_one": "1 persona",
+    "count_other": "{count} persone",
+    "seats": "{taken} posti su {max}",
+    "seatsOpen_one": "1 posto occupato",
+    "seatsOpen_other": "{count} posti occupati",
+    "full": "pieno",
+    "showLeft": "Mostra chi non c'è più",
+    "tableLabel": "Persone con accesso al portale",
+    "rowMenu": "Azioni per {name}",
+    "empty": {
+      "customers": "Nessuno di questo cliente usa il portale",
+      "suppliers": "Nessuno ha accesso al portale"
+    },
+    "emptyHint": {
+      "customers": "Invita la prima persona: riceve un'e-mail e accede con un codice.",
+      "suppliers": "I link funzionano anche senza account. Invita un contatto per dargli il portale."
+    }
+  },
+  "row": {
+    "change": "Cambia accesso…",
+    "resend": "Rimanda l'invito",
+    "revoke": "Revoca l'invito",
+    "suspend": "Sospendi",
+    "reactivate": "Riattiva",
+    "deactivate": "Disattiva"
+  },
+  "bulk": {
+    "resend_one": "Rimanda a 1",
+    "resend_other": "Rimanda a {count}",
+    "revoke_one": "Revoca 1 invito",
+    "revoke_other": "Revoca {count} inviti",
+    "suspend_one": "Sospendi 1",
+    "suspend_other": "Sospendi {count}",
+    "reactivate_one": "Riattiva 1",
+    "reactivate_other": "Riattiva {count}",
+    "deactivate_one": "Disattiva 1",
+    "deactivate_other": "Disattiva {count}"
+  },
+  "confirm": {
+    "resend": {
+      "title_one": "Rimandare l'invito a {name}?",
+      "title_other": "Rimandare l'invito a {count} persone?",
+      "body": "Parte una nuova e-mail di invito, valida 7 giorni, con lo stesso ruolo e la stessa fine dell'accesso; il vecchio link smette di funzionare."
+    },
+    "revoke": {
+      "title_one": "Revocare l'invito di {name}?",
+      "title_other": "Revocare {count} inviti?",
+      "body": "Il link dell'invito smette subito di funzionare e la persona viene disattivata. Invitala di nuovo per darle accesso."
+    },
+    "suspend": {
+      "title_one": "Sospendere {name}?",
+      "title_other": "Sospendere {count} persone?",
+      "body": "Le sue sessioni finiscono ora e non può accedere finché non viene riattivata. Ruolo e fine dell'accesso restano."
+    },
+    "reactivate": {
+      "title_one": "Riattivare {name}?",
+      "title_other": "Riattivare {count} persone?",
+      "body": "Può accedere di nuovo con il ruolo che aveva."
+    },
+    "deactivate": {
+      "title_one": "Disattivare {name}?",
+      "title_other": "Disattivare {count} persone?",
+      "body": "Le sue sessioni finiscono ora, i suoi ruoli terminano e non può più accedere. Il suo nome resta su ciò che ha fatto."
+    },
+    "andMore_one": "e 1 altra",
+    "andMore_other": "e altre {count}",
+    "skipped_one": "1 persona scelta è esclusa: l'azione non vale per lei.",
+    "skipped_other": "{count} persone scelte sono escluse: l'azione non vale per loro.",
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Resta nel registro delle attività."
+  },
+  "done": {
+    "settings": "Il portale è salvato.",
+    "invited": "Invito mandato a {name} ({email}).",
+    "changed": "L'accesso di {name} è salvato.",
+    "until": "La fine dell'accesso di {name} è salvata.",
+    "removed": "{name} è stato tolto dall'organizzazione.",
+    "preview": "Il portale di {name} si è aperto in una nuova scheda, in sola lettura, per un'ora.",
+    "asked": "La richiesta è stata mandata a {name}.",
+    "cancelled_one": "1 richiesta annullata",
+    "cancelled_other": "{count} richieste annullate",
+    "resend_one": "1 invito rimandato",
+    "resend_other": "{count} inviti rimandati",
+    "revoke_one": "1 invito revocato",
+    "revoke_other": "{count} inviti revocati",
+    "suspend_one": "1 persona sospesa",
+    "suspend_other": "{count} persone sospese",
+    "reactivate_one": "1 persona riattivata",
+    "reactivate_other": "{count} persone riattivate",
+    "deactivate_one": "1 persona disattivata",
+    "deactivate_other": "{count} persone disattivate"
+  },
+  "notice": {
+    "refused_one": "1 rifiutata",
+    "refused_other": "{count} rifiutate"
+  },
+  "invite": {
+    "title": "Invita qualcuno di {name}",
+    "hint": "Riceve un'e-mail e accede con un codice; nessuna password.",
+    "valid": "L'invito vale 7 giorni.",
+    "go": "Manda l'invito",
+    "name": "Nome",
+    "email": "E-mail",
+    "kind": "Quale portale",
+    "kindPick": "Scegli il portale",
+    "kindNeeded": "Scegli per quale portale è la persona.",
+    "role": "Il suo ruolo",
+    "noRoles": "Questo portale non offre ruoli: prima spuntane uno in Ruoli offerti.",
+    "seesPrices": "Vede i prezzi.",
+    "noPrices": "Non vede prezzi.",
+    "also": "Cosa può fare in più",
+    "until": "Accesso fino al (facoltativo)",
+    "untilHint": "L'accesso finisce alla fine di quel giorno. Vuoto: nessuna scadenza.",
+    "untilGuest": "L'accesso di un consulente finisce sempre: indica il giorno.",
+    "untilClear": "Nessuna scadenza",
+    "untilFuture": "Scegli un giorno dopo oggi.",
+    "guestNeedsEnd": "L'accesso di un consulente finisce sempre: indica il giorno.",
+    "language": "Lingua dell'invito e del portale",
+    "exists": "Questo indirizzo ha già accesso a questo portale.",
+    "roleNeeded": "Scegli un ruolo.",
+    "roleNotOffered": "Questo portale non offre quel ruolo."
+  },
+  "person": {
+    "title": "Accesso di {name}",
+    "save": "Salva",
+    "nothing": "Nessuna modifica ancora.",
+    "fixFirst": "Prima correggi ciò che è segnato.",
+    "untilHint": "L'accesso finisce alla fine di quel giorno. Vuoto: nessuna scadenza.",
+    "invitedNote": "Non ha ancora fatto l'accesso: la modifica vale per il suo invito aperto."
+  },
+  "requests": {
+    "title": "Richieste in attesa",
+    "intro": "Ciò che abbiamo chiesto tramite il portale e aspetta ancora la sua risposta.",
+    "ask": "Chiedi qualcosa",
+    "tableLabel": "Richieste in attesa di questa organizzazione",
+    "count_one": "1 richiesta",
+    "count_other": "{count} richieste",
+    "col": {
+      "what": "Richiesta",
+      "record": "Su",
+      "due": "Entro",
+      "askedBy": "Chiesta da"
+    },
+    "noDue": "Senza data",
+    "overdue": "In ritardo",
+    "today": "Oggi",
+    "system": "Automatica",
+    "rowMenu": "Azioni per {what}",
+    "cancel": "Annulla la richiesta",
+    "cancelN_one": "Annulla 1 richiesta",
+    "cancelN_other": "Annulla {count} richieste",
+    "cancelTitle_one": "Annullare questa richiesta?",
+    "cancelTitle_other": "Annullare {count} richieste?",
+    "cancelBody": "Esce dal suo elenco e i promemoria si fermano. Chiedere di nuovo crea una nuova richiesta.",
+    "keep": "Tieni",
+    "dueOn": "entro il {date}",
+    "empty": "Nulla è in attesa",
+    "emptyHint": "Qui compaiono le richieste nate da ordini, ordini d'acquisto e documenti, e quelle che chiedi tu.",
+    "failed": "Impossibile caricare le richieste"
+  },
+  "ask": {
+    "title": "Chiedi qualcosa a {name}",
+    "hint": "La richiesta compare nel suo portale con un promemoria prima della data. I dettagli scrivili nei messaggi dell'organizzazione.",
+    "what": "Cosa deve fare",
+    "kind": {
+      "UPLOAD_DOCUMENT": "Caricare un documento",
+      "ANSWER_MESSAGE": "Rispondere al nostro messaggio",
+      "SEND_MEASUREMENTS": "Inviare le misure",
+      "REPORT_PROGRESS": "Comunicare l'avanzamento"
+    },
+    "kindLine": {
+      "UPLOAD_DOCUMENT": "Un certificato, una dichiarazione o un file che ci serve.",
+      "ANSWER_MESSAGE": "Una domanda che gli abbiamo scritto nei messaggi.",
+      "SEND_MEASUREMENTS": "Le misure del corpo per un ordine su misura.",
+      "REPORT_PROGRESS": "A che punto è il suo lavoro."
+    },
+    "due": "Entro",
+    "dueHint": "Vuoto: senza data (nessun promemoria).",
+    "noDue": "Senza data",
+    "go": "Manda la richiesta"
+  },
+  "partners": {
+    "tableLabel": "Persone delle organizzazioni partner",
+    "count": "{shown} di {total}",
+    "more_one": "Mostra 1 in più",
+    "more_other": "Mostra altri {count}",
+    "col": {
+      "organisation": "Organizzazione",
+      "language": "Lingua"
+    },
+    "orgHidden": "Non visibile per te",
+    "roleOnAccept": "Dato al primo accesso",
+    "tile": {
+      "invited": "Invitati, non entrati",
+      "endsSoon": "Accesso in scadenza",
+      "suspended": "Sospesi",
+      "deactivated": "Disattivati"
+    },
+    "tileHint": {
+      "invited": "L'invito vale 7 giorni",
+      "endsSoon": "Entro 7 giorni; sono stati avvisati per e-mail",
+      "suspended": "Non possono accedere finché non riattivati",
+      "deactivated": "Usciti; restano nello storico"
+    },
+    "filtered": "Mostra: {tile}",
+    "clear": "Mostra tutti",
+    "noMatch": "Nessuno corrisponde",
+    "empty": "Nessun partner usa ancora un portale",
+    "emptyHint": "Invita clienti e fornitori dalla loro scheda Accesso al portale (Vendite › Clienti, Acquisti › Fornitori).",
+    "failed": "Impossibile caricare le persone dei partner",
+    "inviteWhere": "Un partner si invita dalla scheda Accesso al portale della sua organizzazione: Vendite › Clienti o Acquisti › Fornitori."
+  },
+  "org": {
+    "title": "Organizzazione",
+    "intro": "Di quale cliente o fornitore fa parte questa persona, e il suo accesso.",
+    "organisation": "Organizzazione",
+    "admin": "Il suo amministratore",
+    "noAdmin": "Ancora nessun amministratore",
+    "noAdminHint": "Intanto i suoi colleghi li gestisce l'azienda.",
+    "userType": "Tipo di utente",
+    "also": "Può anche",
+    "alsoNone": "Nient'altro",
+    "until": "Fine accesso",
+    "lastSignIn": "Ultimo accesso",
+    "pricesAtMost": "I partner vedono al massimo i prezzi; mai costi o margini.",
+    "changeTitle": "Cambia accesso",
+    "changeHint": "Una nuova fine dell'accesso, oppure togli la persona dall'organizzazione.",
+    "changeInvited": "Non ha ancora fatto l'accesso: la fine vale per il suo invito aperto; Togli lo revoca.",
+    "saveUntil": "Salva la data di fine",
+    "remove": "Togli dall'organizzazione",
+    "removeTitle": "Togliere {name} da {organisation}?",
+    "removeBody": "Le sue sessioni finiscono ora, i suoi ruoli terminano e non può più accedere. Il suo nome resta su ciò che ha fatto.",
+    "failed": "Impossibile caricare l'organizzazione",
+    "notFound": "Questa persona non è più nell'organizzazione",
+    "notFoundHint": "Rileggi la pagina; forse qualcun altro l'ha spostata."
+  }
+}

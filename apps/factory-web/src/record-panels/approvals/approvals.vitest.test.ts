@@ -71,7 +71,11 @@ describe('record panels › Approvals (ask a partner to approve)', () => {
   it('the made-up requests parse as the API answers them; both catalogues match', () => {
     const read = designScreen.cases.find((item) => item.id === 'list')!.model.approvals!.read
     if (read.status !== 'ready') throw new Error('ready')
-    expect(() => recordRequestsSchema.parse({ record: { type: 'SalesOrder', id: 'x', label: 'SO' }, kinds: read.kinds, held: null, requests: read.requests })).not.toThrow()
+    expect(() => recordRequestsSchema.parse({ record: { type: 'SalesOrder', id: 'x', words: { it: 'SO', en: 'SO' } }, kinds: read.kinds, held: null, requests: read.requests })).not.toThrow()
+    // B-W2b-F16: the API sends codes and the record's words; the old English-only fields are gone from what we read.
+    const parsed = recordRequestsSchema.parse({ record: { type: 'SalesOrder', id: 'x', words: { it: 'SO · revisione 2', en: 'SO · revision 2' } }, kinds: read.kinds, held: null, requests: read.requests })
+    expect(parsed.record.words.it).toBe('SO · revisione 2')
+    for (const field of ['kindName', 'stateWords', 'dueWords']) expect(parsed.requests[0]).not.toHaveProperty(field)
     const it = flat(catalogue('it'))
     const en = flat(catalogue('en'))
     expect(Object.keys(it).sort()).toEqual(Object.keys(en).sort())

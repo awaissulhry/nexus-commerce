@@ -228,7 +228,7 @@ export async function portalApprovals(app: FastifyInstance, request: FastifyRequ
     const row = (await request.withClient((client) => readPartner(client, id)))!
     if (!sees(request, row)) continue
     const page = await partnerPage(system, row, who.locale, now)
-    items.push({ id: row.id, kind: page.request.kind, kindName: page.request.kindName, label: page.request.label, question: row.question, dueAt: page.request.dueAt, dueWords: page.request.dueWords, status: page.request.status, stateWords: page.request.stateWords, decided: page.request.decided })
+    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided })
   }
   return { state, items }
 }

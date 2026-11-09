@@ -52,6 +52,21 @@ describe('Home\'s scan router: the job for this station, with the label loaded',
     expect(taskForScan('inspection', readScan('WO-0042', TAG), homeTiles('inspection', ALL, false))).toBe('final')
   })
 
+  it("a cut ticket's number opens Fabric cutting at a cutting table with it; elsewhere Scan anything names it (B-W2b-F16)", () => {
+    const CARTON = formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 })
+    for (const ticket of ['CTA-2026-00001', 'CT-2026-00042', 'cta-2027-00003']) {
+      expect(taskForScan('cutting', readScan(ticket, TAG), homeTiles('cutting', ALL, false)), ticket).toBe('fabriccut')
+      expect(TASK_ROUTES.fabriccut).toBe('/floor/fabriccut')
+      // Never Pick & issue or Final inspection as a work order number, nor the packing bench as a pack slip.
+      for (const mode of ['sewing', 'warehouse', 'inspection', 'packing'] as const) expect(taskForScan(mode, readScan(ticket, TAG), homeTiles(mode, [...ALL, 'shipping.pack'], false)), `${mode} ${ticket}`).toBeNull()
+    }
+    // Without the Fabric cutting tile (no production.cut, or held by the notice): Scan anything.
+    expect(taskForScan('cutting', readScan('CTA-2026-00001', TAG), homeTiles('cutting', ['floor.work', 'production.scan'], false))).toBeNull()
+    expect(taskForScan('cutting', readScan('CTA-2026-00001', TAG), homeTiles('cutting', ALL, true))).toBeNull()
+    // A carton's label at the cutting table is still a carton's: Scan anything names it.
+    expect(taskForScan('cutting', readScan(CARTON, TAG), homeTiles('cutting', ALL, false))).toBeNull()
+  })
+
   it('never opens a task the person has no open tile for (fail closed, held by the notice)', () => {
     expect(taskForScan('sewing', readScan(BUNDLE, TAG), homeTiles('sewing', ['floor.work'], false))).toBeNull()
     expect(taskForScan('sewing', readScan(BUNDLE, TAG), homeTiles('sewing', ALL, true))).toBeNull()

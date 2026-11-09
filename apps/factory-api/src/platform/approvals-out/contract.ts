@@ -8,10 +8,13 @@ import { LINE_CHANGES } from '@nexus/factory-domain/sales/amendments/amendments'
 /**
  * Approval requests to partners (B-W2b-184). Money only in a revised order's panel, behind the price grain (the APPROVAL
  * link's, a portal person's, an office person's); every other field is words, ids, times and states. Words come in the
- * reader's language where a partner reads them (it/en).
+ * reader's language where a partner reads them (it/en). B-W2b-F16: the kind, the state and the due date go as codes
+ * (`kind`, `status`, `dueAt`) and the record's label in both languages (`words`): the screens say them in their own words.
  */
 
 const kind = z.enum(APPROVAL_KINDS)
+/** The record's label in both languages ("SO-2026-0042 · revisione 2" / "… · revision 2"). */
+const words = output({ it: z.string(), en: z.string() })
 const status = z.enum(APPROVAL_STATUSES)
 const locale = z.enum(['it', 'en'])
 const version = () => z.number().int().min(1)
@@ -32,15 +35,12 @@ const officeRequestView = output({
   id: id(),
   companyId: id(),
   kind,
-  kindName: z.string(),
-  record: output({ type: z.string(), id: id(), label: z.string() }),
+  record: output({ type: z.string(), id: id(), words }),
   party: output({ id: id(), name: z.string() }),
   contactId: id().nullable(),
   question: z.string(),
   dueAt: instant(),
-  dueWords: z.string(),
   status,
-  stateWords: z.string(),
   answer: output({
     at: instant(),
     typedName: z.string(),
@@ -77,7 +77,7 @@ export const askContract = defineContract({
 
 export const recordRequestsContract = defineContract({
   querystring: input({ recordType: z.string().min(1).max(64), recordId: id() }),
-  response: { 200: output({ record: output({ type: z.string(), id: id(), label: z.string() }), kinds: z.array(kind), held: z.string().nullable(), requests: z.array(officeRequestView) }) },
+  response: { 200: output({ record: output({ type: z.string(), id: id(), words }), kinds: z.array(kind), held: z.string().nullable(), requests: z.array(officeRequestView) }) },
 })
 
 const requestParams = input({ requestId: id() })
@@ -112,14 +112,13 @@ const pageView = {
   request: output({
     id: id(),
     kind,
-    kindName: z.string(),
+    words,
+    /** The English of `words` (B-W2b-187's customer Home reads it; drop it once nothing does). */
     label: z.string(),
     question: z.string(),
     from: output({ companyName: z.string() }),
     dueAt: instant(),
-    dueWords: z.string(),
     status,
-    stateWords: z.string(),
     /** The design's "Decided": "Approved — signed by Anna Rossi at 10:42 on 3 Nov. We can go ahead with cutting." */
     decided: z.string().nullable(),
     answer: output({ at: instant(), typedName: z.string(), words: z.string().nullable(), markupFileId: id().nullable() }).nullable(),
@@ -178,7 +177,7 @@ export const portalListContract = defineContract({
   response: {
     200: output({
       state: z.enum(['OPEN', 'DONE']),
-      items: z.array(output({ id: id(), kind, kindName: z.string(), label: z.string(), question: z.string(), dueAt: instant(), dueWords: z.string(), status, stateWords: z.string(), decided: z.string().nullable() })),
+      items: z.array(output({ id: id(), kind, words, question: z.string(), dueAt: instant(), status, decided: z.string().nullable() })),
     }),
   },
 })

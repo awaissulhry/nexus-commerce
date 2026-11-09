@@ -17,6 +17,7 @@ import {
   portalPathOf,
   portalPrefix,
   RESERVED_SEGMENTS,
+  sessionEndOf,
   shownNotice,
   signInHref,
   stillThereAt,
@@ -52,6 +53,16 @@ describe('the portal address (B-W2b-173)', () => {
   it('sends a person without a session to sign in and back to the whole address, anchor included', () => {
     expect(signInHref('/p/SEED-C1/open/Quote/x#task:t1')).toBe('/p/signin?next=%2Fp%2FSEED-C1%2Fopen%2FQuote%2Fx%23task%3At1')
     expect(signInHref(null)).toBe('/p/signin')
+  })
+
+  it("tells the sign-in why the session ended (B-W2b-164's banner), keeping next; a chosen sign-out says nothing", () => {
+    expect(signInHref('/p/SEED-C1/orders', 'idle')).toBe('/p/signin?next=%2Fp%2FSEED-C1%2Forders&ended=idle')
+    expect(signInHref('/p/SEED-C1/open/Quote/x#task:t1', 'revoked')).toBe('/p/signin?next=%2Fp%2FSEED-C1%2Fopen%2FQuote%2Fx%23task%3At1&ended=revoked')
+    expect(signInHref(null, 'idle')).toBe('/p/signin?ended=idle')
+    expect(signInHref('/p/SEED-C1', null)).toBe('/p/signin?next=%2Fp%2FSEED-C1')
+    // What the sign-in page reads back.
+    const read = new URL(signInHref('/p/SEED-C1/orders?q=a b', 'idle'), 'https://portal.example.test').searchParams
+    expect([read.get('next'), read.get('ended')]).toEqual(['/p/SEED-C1/orders?q=a b', 'idle'])
   })
 
   it("keeps the API's own links and puts a bare one under the prefix", () => {
@@ -100,6 +111,16 @@ describe('Still there? (the idle sign-out after 30 minutes)', () => {
     expect(stillThereAt(absolute + 60_000, absolute)).toBe(absolute - 2 * 60_000)
     expect(staying(t0 + PORTAL_IDLE_MS, absolute)).toBe(true)
     expect(staying(absolute, absolute)).toBe(false)
+  })
+
+  it('says why the session ended: the idle clock ran out → idle; refused before it, or the 12 hours → revoked', () => {
+    const idleEnd = t0 + PORTAL_IDLE_MS
+    expect(sessionEndOf(idleEnd, idleEnd, absolute)).toBe('idle')
+    expect(sessionEndOf(idleEnd + 5_000, idleEnd, absolute)).toBe('idle')
+    // The API answered 401 ten minutes before the frame's idle end: the office (or another tab) ended it.
+    expect(sessionEndOf(idleEnd - 10 * 60_000, idleEnd, absolute)).toBe('revoked')
+    // The idle end clamped to the 12 hours: not idleness.
+    expect(sessionEndOf(absolute, absolute, absolute)).toBe('revoked')
   })
 })
 

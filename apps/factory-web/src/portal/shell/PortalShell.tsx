@@ -44,6 +44,7 @@ import {
   portalLink,
   portalPathOf,
   portalPrefix,
+  sessionEndOf,
   shownNotice,
   signInHref,
   stillThereAt,
@@ -53,6 +54,7 @@ import {
   withNonEssential,
   type EmailDraft,
   type PortalNotice,
+  type SessionEnd,
 } from './model'
 import { portalChords, portalNavFor } from './nav/portal-nav'
 import { PortalThread } from './thread/PortalThread'
@@ -318,11 +320,17 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
     return () => window.clearTimeout(timer)
   }, [idleEnd, absoluteEnd])
   const endsAt = new Date(Math.min(idleEnd, absoluteEnd)).toISOString()
-  const goSignIn = useCallback(() => {
-    void signOutPortal(api)
-      .catch(() => undefined)
-      .finally(() => window.location.assign(signInHref(`${window.location.pathname}${window.location.search}`)))
-  }, [api])
+  // To sign in and back here; `ended` (B-W2b-164's banner) when the session ended rather than the person choosing to leave.
+  const goSignIn = useCallback(
+    (ended: SessionEnd | null) => {
+      void signOutPortal(api)
+        .catch(() => undefined)
+        .finally(() => window.location.assign(signInHref(`${window.location.pathname}${window.location.search}`, ended)))
+    },
+    [api],
+  )
+  // The countdown reached the end: the idle end (or the 12 hours) ended the session.
+  const sessionEnded = () => goSignIn(sessionEndOf(Math.max(Date.now(), Math.min(idleEnd, absoluteEnd)), idleEnd, absoluteEnd))
   const stay = async () => {
     setStillThere({ open: true, busy: true, failed: false })
     try {
@@ -330,7 +338,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
       setIdleEnd(Date.parse(times.idleExpiresAt))
       setStillThere({ open: false, busy: false, failed: false })
     } catch (error) {
-      if (isApiError(error) && error.kind === 'signed_out') goSignIn()
+      // The API no longer knows the session: past the idle clock it is the idle end, before it the session was ended elsewhere.
+      if (isApiError(error) && error.kind === 'signed_out') goSignIn(sessionEndOf(Date.now(), idleEnd, absoluteEnd))
       else setStillThere({ open: true, busy: false, failed: true })
     }
   }
@@ -696,7 +705,7 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
               onRetry={() => void readAccess()}
             />
             <DisplayView model={{ open: dialog === 'display', locale, theme, saving: display.saving, failed: display.failed, preview: me.preview }} onLocale={(next) => void setLanguage(next)} onTheme={setTheme} onClose={close} />
-            <StillThereView model={{ open: stillThere.open, endsAt, canStay: staying(idleEnd, absoluteEnd), busy: stillThere.busy, failed: stillThere.failed }} onStay={() => void stay()} onSignOut={goSignIn} onEnded={goSignIn} />
+            <StillThereView model={{ open: stillThere.open, endsAt, canStay: staying(idleEnd, absoluteEnd), busy: stillThere.busy, failed: stillThere.failed }} onStay={() => void stay()} onSignOut={() => goSignIn(null)} onEnded={sessionEnded} />
             <Modal open={asking !== null} onClose={() => setAsking(null)} sheet size="lg" title={asking?.type === 'Party' ? t('thread.accountTitle') : (asking?.label ?? t('thread.title'))}>
               {asking ? <PortalThread type={asking.type} id={asking.id} focus headingLevel={3} title={asking.type === 'Party' ? t('thread.accountHeading') : t('thread.title')} /> : null}
             </Modal>
