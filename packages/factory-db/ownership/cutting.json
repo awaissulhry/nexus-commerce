@@ -109,7 +109,7 @@
       }
     },
     "GarmentDowngrade": {
-      "about": "Garments of a cell sent to second quality instead of scrap. The office and the site's floor (the repair station) record it; only the office withdraws a wrong row.",
+      "about": "Garments of a cell sent to second quality instead of scrap. The office and the site's floor (the repair station) record it; only the office withdraws a wrong row. W2b-4 (wave 24/33): it names its second-quality move (moveId), at insert or once later (the office).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

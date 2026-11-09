@@ -386,6 +386,9 @@ model InspectionTrigger {
   frequency      InspectionFrequency
   /// The percent (PERCENT_OF_OPERATIONS, 1 to 100) or the N (EVERY_NTH_BUNDLE, from 1); none otherwise.
   frequencyValue Int?
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-101, -106): hours after it opens by which what the rule opens is due (the
+  /// record's dueAt, which the office may move later), 1 to 720; null: no due time.
+  dueHours       Int?
   active         Boolean                @default(true)
   version        Int                    @default(1)
   createdAt      DateTime               @default(now()) @db.Timestamptz(3)
@@ -393,10 +396,16 @@ model InspectionTrigger {
   createdById    String?                @db.Uuid
 
   plan InspectionPlan @relation(fields: [tenantId, companyId, planId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 24/33): the records it opened (openedByTriggerId).
+  openedInspections         Inspection[]
+  openedIncomingInspections IncomingInspection[]
+  openedInProcessChecks     InProcessCheck[]
 
   // The company's rules in order, for one event.
   @@index([tenantId, companyId, event, sortOrder])
   @@index([tenantId, planId])
+  // W2b-4: the target of the opened records' references: a rule of the record's company.
+  @@unique([tenantId, companyId, id])
 }
 
 /// The incoming inspection of a lot, or of goods back from a workshop (QHS-025 … QHS-036; floor.incoming): its plan
@@ -440,6 +449,10 @@ model IncomingInspection {
   foundCritical        Int                      @default(0)
   foundMajor           Int                      @default(0)
   foundMinor           Int                      @default(0)
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-93, -98, -111): units of the sample inspected so far (the bench's counter
+  /// of a counted lot; a hide lot counts its hide rows), from 0 up to the sample; null: not counted. Once a unit is counted
+  /// the AQL profile and code letter stay fixed.
+  inspectedCount       Int?
   status               IncomingInspectionStatus @default(OPEN)
   /// The decision (QHS-034): exactly when DECIDED, each from 0, adding up to the lot.
   acceptedQuantity     Decimal?                 @db.Decimal(18, 4)
@@ -456,6 +469,10 @@ model IncomingInspection {
   inspectorUserId      String?                  @db.Uuid
   /// By when it is to be done; null: no date.
   dueAt                DateTime?                @db.Timestamptz(3)
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-101): the GOODS_RECEIPT rule that opened it (InspectionTrigger of its
+  /// company), on a version of the rule's plan; given when it is opened (never by a floor session) and never changed.
+  /// Null: a person opened it.
+  openedByTriggerId    String?                  @db.Uuid
   /// When it was decided, and the SHA-256 (hex) of the decision as the inspector signed it: set exactly then.
   decidedAt            DateTime?                @db.Timestamptz(3)
   signatureSha256      String?
@@ -470,6 +487,8 @@ model IncomingInspection {
 
   site               Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   planVersion        InspectionPlanVersion @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 24/33): the rule that opened it (Restrict: a rule that opened records is set inactive, not deleted).
+  openedByTrigger    InspectionTrigger?    @relation(fields: [tenantId, companyId, openedByTriggerId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and companyId.
   lot                Lot?                  @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   subcontractReceipt SubcontractReceipt?   @relation(fields: [tenantId, siteId, workOrderId, subcontractReceiptId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -493,6 +512,8 @@ model IncomingInspection {
   @@index([tenantId, lotId])
   @@index([tenantId, subcontractReceiptId])
   @@index([tenantId, status, dueAt])
+  // W2b-4: what a rule opened.
+  @@index([tenantId, openedByTriggerId])
 }
 
 /// One hide of an incoming inspection's sample (QHS-025, QHS-028, MES-054): the area measured against the tannery's, the
@@ -642,6 +663,20 @@ model InProcessCheck {
   planVersionId        String?              @db.Uuid
   aqlProfileId         String?              @db.Uuid
   codeLetter           String?
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-93, -99): the AQL sample frozen when the check is opened, from 1; null: none
+  /// (a first piece, a roving tile, a check with no profile). It stays fixed with the profile once counting starts (a unit
+  /// counted, a result or a measurement).
+  sampleSize           Int?
+  /// W2b-4 (B-W2b-204): units of the sample inspected so far (the bench's counter, "8 of 13"), from 0, up to the sample when
+  /// it has one; null: not counted. `pieces` stays what the decision counts.
+  inspectedCount       Int?
+  /// W2b-4 (B-W2b-204; B-W2b-106): by when it is to be done; null: no date. A rule's dueHours sets it when the rule opens
+  /// it; the office moves it while OPEN (a floor session neither sets nor moves it).
+  dueAt                DateTime?            @db.Timestamptz(3)
+  /// W2b-4 (B-W2b-204; B-W2b-101): the OPERATION_FINISHED or BUNDLE_SCAN rule that opened it (InspectionTrigger of its
+  /// company), on a version of the rule's plan; given when it is opened (never by a floor session) and never changed.
+  /// Null: a person opened it.
+  openedByTriggerId    String?              @db.Uuid
   /// Pieces looked at: from 1 when decided; those with a defect, from 0 up to them; the defects found, from 0 (the line's
   /// DHU: defects per 100 pieces).
   pieces               Int                  @default(0)
@@ -676,6 +711,8 @@ model InProcessCheck {
   operation       WorkOrderOperation?    @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   planVersion     InspectionPlanVersion? @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   aqlProfile      AqlProfile?            @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 24/33): the rule that opened it (Restrict: a rule that opened records is set inactive, not deleted).
+  openedByTrigger InspectionTrigger?     @relation(fields: [tenantId, companyId, openedByTriggerId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   defectCode      DefectCode?            @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   inspectorWorker Worker?                @relation("InProcessCheckInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker          Worker?                @relation("InProcessCheckOperator", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -690,6 +727,9 @@ model InProcessCheck {
   @@index([tenantId, workOrderId, kind, status])
   @@index([tenantId, siteId, lineId, kind])
   @@index([tenantId, employeeId])
+  // W2b-4: the open checks by due date (My inspections), and what a rule opened.
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, openedByTriggerId])
 }
 
 /// The result of one plan check on a record (QHS-009, QHS-016): of a final inspection, an incoming inspection or an

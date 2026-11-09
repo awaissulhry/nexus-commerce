@@ -55,7 +55,7 @@
       }
     },
     "QualitySettings": {
-      "about": "The office keeps what counts as chromium VI evidence (Q14, B-W1-34) and who releases finished garments (Q1, B-W1-45: the four-eyes rule and the customers that always need a second person): a row per company or the tenant-wide one (its id is the company's or the tenant's). The floor reads them (the release trigger of a floor inspector's release reads the four-eyes rule). Nobody deletes one.",
+      "about": "The office keeps what counts as chromium VI evidence (Q14, B-W1-34) and who releases finished garments (Q1, B-W1-45: the four-eyes rule and the customers that always need a second person): a row per company or the tenant-wide one (its id is the company's or the tenant's). The floor reads them (the release trigger of a floor inspector's release reads the four-eyes rule). W2b-4 (wave 24/33): the tenant's severity words, on the tenant-wide row only, which the floor reads in its languages. Nobody deletes one.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
