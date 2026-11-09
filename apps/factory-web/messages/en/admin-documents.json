@@ -274,6 +274,7 @@
       "HOLD": "Quality hold",
       "INCOMING_INSPECTION": "Incoming inspection",
       "INCIDENT": "Incident",
+      "WORK_INSTRUCTION": "Work instruction",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },

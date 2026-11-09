@@ -206,10 +206,14 @@ model InspectionPlan {
   company  Company                 @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   versions InspectionPlanVersion[]
   triggers InspectionTrigger[]
+  // W2b-4 product.prisma (wave 25/33): the routing steps that name it as their quality checkpoint.
+  routingSteps RoutingOperation[]
 
   @@unique([tenantId, companyId, code])
   // The target of the versions' and triggers' references: a plan of the same company.
   @@unique([tenantId, companyId, id])
+  // W2b-4 (wave 25/33): the target of a routing step's checkpoint reference (a style may be tenant-wide).
+  @@unique([tenantId, id])
   @@index([tenantId, companyId, stage])
 }
 
