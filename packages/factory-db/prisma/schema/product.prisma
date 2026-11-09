@@ -23,6 +23,8 @@
 // to a released style is a new revision (the product module copies the released one into a new DRAFT). A style's
 // current revision is its RELEASED one, and it has at most one (a partial unique index of …_product_guards, which
 // Prisma cannot express): a release obsoletes the previous revision first, then releases the new one, in one command.
+// W2b-4 (wave 25/33, instructions.prisma): a routing step's extra minutes per size and machine settings are parts of the
+// revision under the same rule; a revision's effective days (effectiveFrom, effectiveTo) are fixed once released.
 //
 // Who sees what (ownership/product.json): the office reads and writes; the floor reads the styles, materials (never a
 // cost), BOMs and routings it works from; portal and link sessions read none of it. Master data in use is archived
@@ -599,6 +601,12 @@ model StyleRevision {
   /// When and by whom it was released; set exactly from RELEASED on.
   releasedAt          DateTime?           @db.Timestamptz(3)
   releasedById        String?             @db.Uuid
+  /// W2b (B-W2b-205; PRD-124): the days its routing applies to new work orders (a work order made before keeps its frozen
+  /// copy). effectiveFrom may be planned on a DRAFT; a release that names none takes the release's day (Europe/Rome);
+  /// fixed once released. effectiveTo, the first day it no longer applies (the next revision's effectiveFrom), is set once,
+  /// when or after a released revision goes OBSOLETE. Null on revisions released before W2b-4 (read releasedAt).
+  effectiveFrom       DateTime?           @db.Date
+  effectiveTo         DateTime?           @db.Date
   version             Int                 @default(1)
   createdAt           DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -624,6 +632,8 @@ model StyleRevision {
   comparedTypeChangeReviews TypeChangeReview[] @relation("TypeChangeReviewComparedRevision")
   // W2b: the styles copied from this revision.
   copies                    Style[]            @relation("StyleCopiedFromRevision")
+  // W2b-4 instructions.prisma (wave 25/33): the work instructions written for this revision only.
+  workInstructions          WorkInstruction[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.
@@ -759,6 +769,15 @@ model Operation {
   skill           String?
   /// Standard minutes per garment.
   standardMinutes Decimal        @db.Decimal(10, 3)
+  /// W2b (B-W2b-205; PRD-111): how the SMV is built: basic minutes per garment and the personal, fatigue and delay
+  /// allowances in percent, so standardMinutes = basicMinutes × (1 + (personalPct + fatiguePct + delayPct) / 100), to the
+  /// thousandth. All four or none (none: an SMV typed as in W1). Once the operation has an APPROVED OperationTimeVersion,
+  /// the five numbers change only to those of an approved version (PRD-113: a second person approves an SMV change); the
+  /// …_routings_instructions_w2b_guards trigger holds both rules.
+  basicMinutes    Decimal?       @db.Decimal(10, 3)
+  personalPct     Decimal?       @db.Decimal(7, 4)
+  fatiguePct      Decimal?       @db.Decimal(7, 4)
+  delayPct        Decimal?       @db.Decimal(7, 4)
   /// How it is done, for the traveller and the floor screen.
   instructions    String?
   status          MasterStatus   @default(ACTIVE)
@@ -769,6 +788,10 @@ model Operation {
 
   company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   routing RoutingOperation[]
+  // W2b-4 instructions.prisma (wave 25/33): its SMV versions, machine settings and work instructions.
+  timeVersions     OperationTimeVersion[]
+  machineSettings  OperationMachineSetting[]
+  workInstructions WorkInstruction[]
   // W2b skills.prisma (wave 4/7): the skills about it.
   skills  Skill[]
   // W2b pay.prisma (schema wave 6/7): the piece rates that pay it.
@@ -798,6 +821,28 @@ model RoutingOperation {
   workCentreKind  WorkCentreKind
   /// Standard minutes per garment.
   standardMinutes Decimal        @db.Decimal(10, 3)
+  /// W2b (B-W2b-205; PRD-111): the basic minutes and allowances the SMV was built from, frozen with the revision as the
+  /// SMV is (Operation's rule: all four or none, standardMinutes = basicMinutes × (1 + allowances / 100)).
+  basicMinutes    Decimal?       @db.Decimal(10, 3)
+  personalPct     Decimal?       @db.Decimal(7, 4)
+  fatiguePct      Decimal?       @db.Decimal(7, 4)
+  delayPct        Decimal?       @db.Decimal(7, 4)
+  /// W2b (PRD-113): the APPROVED OperationTimeVersion of its own operation the minutes were copied from (its five numbers
+  /// equal the version's when it is named); null: minutes typed for this routing, or a W1 copy.
+  timeVersionId   String?        @db.Uuid
+  /// W2b (PRD-126): the minutes beside the run (standardMinutes per garment), per work order, for planning: set-up before
+  /// its first piece, waiting after the step before the next one starts, moving the work to the next step. Null: none said.
+  setupMinutes    Decimal?       @db.Decimal(10, 3)
+  waitMinutes     Decimal?       @db.Decimal(10, 3)
+  moveMinutes     Decimal?       @db.Decimal(10, 3)
+  /// W2b (PRD-128): the step only for some cells: size codes of the style's range, colourways of the style, option values
+  /// (B-W2b-211's OptionValue, no reference until that wave merges). Empty: every size, every colourway, whatever option.
+  appliesToSizes          String[] @default([])
+  appliesToColourwayIds   String[] @default([]) @db.Uuid
+  appliesToOptionValueIds String[] @default([]) @db.Uuid
+  /// W2b (PRD-119): the quality checkpoint at this step, an inspection plan of the style's company (not an incoming or a
+  /// return plan); the in-process rule of B-W2b-101 reads it. Null: no checkpoint.
+  inspectionPlanId String?       @db.Uuid
   /// Every bundle is scanned at it (floor scans, B-W1-42).
   scanRequired    Boolean        @default(true)
   /// W2b-2 (B-W2b-74; MES-025): steps of the routing with the same number run side by side and count as one step; null:
@@ -825,8 +870,16 @@ model RoutingOperation {
   workOrderOperations WorkOrderOperation[]
   // W2b-2 (B-W2b-74): the BOM lines it uses.
   bomLines            BomLine[]
+  // W2b-4 instructions.prisma (wave 25/33): the approved minutes it copied, its checkpoint, its extra minutes per size and
+  // its machine settings (both frozen with the revision).
+  timeVersion     OperationTimeVersion?      @relation(fields: [tenantId, operationId, timeVersionId], references: [tenantId, operationId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspectionPlan  InspectionPlan?            @relation(fields: [tenantId, inspectionPlanId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizeTimes       RoutingOperationSizeTime[]
+  machineSettings OperationMachineSetting[]  @relation("RoutingOperationMachineSetting")
 
   @@unique([tenantId, revisionId, seq])
+  // W2b-4: the target of its size times' and machine settings' reference: a step of the same revision.
+  @@unique([tenantId, revisionId, id])
 }
 
 /// Which body measures to take for a made-to-measure garment of one type (PRD-200; about 23 for a race suit). A

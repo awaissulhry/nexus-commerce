@@ -187,7 +187,15 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    APPROVED approval request of its version for the appointment of the request's party, and no other safety register is
    signed LINK; a partner task's assignee, a parcel's https tracking page, the cancel fee, a party's website; it redefines
    W2a's `factory_purchase_order_guard`, F1's `factory_shipment_guard` (the carrier's ETA after the goods left) and wave
-   15's `factory_risk_assessment_signature_check`): triggers, partial unique indexes and deferred
+   15's `factory_risk_assessment_signature_check`), `…_routings_instructions_w2b_guards` (W2b-4 schema wave 25/33, B-W2b-205:
+   an operation's and a routing step's minutes from basic minutes and allowances, an approved SMV version as the only way to
+   change a governed operation's SMV, SMV versions proposed and decided once by a second person, a routing step's
+   checkpoint, cells and set-up/wait/move minutes, per-size times and machine settings as parts of the revision (W1's
+   `factory_style_revision_part_guard` as it is), a revision's effective days, work instructions (one ACTIVE per operation
+   and revision: partial uniques) with versions published by a second person and frozen (one PUBLISHED per instruction: a
+   partial unique), steps and media only while DRAFT carrying their version's status (ON UPDATE CASCADE), acknowledgements
+   append-only; it redefines W1's `factory_style_revision_guard`: a released revision freezes every column but its status
+   and effectiveTo, a later one too): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

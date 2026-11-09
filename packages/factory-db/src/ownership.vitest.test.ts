@@ -134,6 +134,7 @@ describe('model ownership', () => {
       'InspectionPlanCheck',
       'InspectionPlanVersion',
       'InspectionTrigger',
+      'InstructionAcknowledgement',
       'InstructionRecord',
       'IntegrationAccount',
       'IntegrationCall',
@@ -199,9 +200,11 @@ describe('model ownership', () => {
       'OneOffLink',
       'Operation',
       'OperationChecklistResult',
+      'OperationMachineSetting',
       'OperationScan',
       'OperationScanDefect',
       'OperationScanMember',
+      'OperationTimeVersion',
       'OrderChangeRequest',
       'OrderChangeRequestLine',
       'OrgArea',
@@ -316,6 +319,7 @@ describe('model ownership', () => {
       'RoleSheetItem',
       'RosterEntry',
       'RoutingOperation',
+      'RoutingOperationSizeTime',
       'SafetyAppointment',
       'SafetyCourse',
       'SafetyDataSheet',
@@ -400,6 +404,10 @@ describe('model ownership', () => {
       'WorkCalendar',
       'WorkCentre',
       'WorkCentreCapacity',
+      'WorkInstruction',
+      'WorkInstructionMedia',
+      'WorkInstructionStep',
+      'WorkInstructionVersion',
       'WorkOrder',
       'WorkOrderCostEntry',
       'WorkOrderKit',
@@ -607,6 +615,8 @@ describe('model ownership', () => {
           // W2b protected safety data (wave 16/16): visits, judgements, the view log, the people of an incident and their INAIL
           // filings, purpose SAFETY only; a filing's person is the person involved it names.
           ...['FitnessJudgement', 'HealthVisit', 'InailFiling', 'IncidentPerson', 'ProtectedView'],
+          // W2b-4 work instructions (wave 25/33): who saw which instruction version, a training record, purpose SAFETY.
+          'InstructionAcknowledgement',
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!

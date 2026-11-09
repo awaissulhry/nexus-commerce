@@ -53,6 +53,8 @@ model MachineClass {
   // W2b safety.prisma (wave 15/16): the courses it asks of who operates it, the instruction given on it.
   trainingRequirements TrainingRequirement[]
   instructionRecords   InstructionRecord[]
+  // W2b-4 instructions.prisma (wave 25/33): the operations' machine settings of the class.
+  operationSettings    OperationMachineSetting[]
 
   @@unique([tenantId, code])
   // The target of the symptoms' and machines' tenant-safe references.

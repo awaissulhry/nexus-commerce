@@ -207,6 +207,8 @@ model Company {
   offStandardCodes     OffStandardCode[]
   // W2b inspection-plans.prisma (wave 10/16): its inspection plans and AQL profiles.
   inspectionPlans      InspectionPlan[]
+  // W2b-4 instructions.prisma (wave 25/33): its work instructions.
+  workInstructions     WorkInstruction[]
   aqlProfiles          AqlProfile[]
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]

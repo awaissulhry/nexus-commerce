@@ -274,6 +274,7 @@
       "HOLD": "Blocco qualità",
       "INCOMING_INSPECTION": "Controllo in accettazione",
       "INCIDENT": "Segnalazione di incidente",
+      "WORK_INSTRUCTION": "Istruzione di lavoro",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },
