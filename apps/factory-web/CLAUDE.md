@@ -52,6 +52,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
+  B-W2b-170: `/t?tenant=<slug>&company=<code>` — Find your order (the public tracking search, `links/tracking/TrackSearch.tsx`);
+  a SHIPMENT_TRACK link opens `links/tracking` (SCR-194, task `track-order`).
 - `src/app/(floor)/` + `src/floor/` — the Floor view (SCR-020 … 025): `/floor` (tile home), `/floor/enrol`,
   `/floor/sign-in`, `/floor/notice`, `/floor/scan`, `/floor/sync` (Waiting to send, SCR-023), the web app manifest
   `/floor/manifest.webmanifest` and icon (no service worker yet). The offline queue (B-W0-30, `floor/queue/`): every
@@ -108,10 +110,28 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   "See it in the customer's portal" previews `/p/<code>/open/SalesOrder/<id>`.
 - `src/portal/customer/account/` — the customer's Account (B-W2b-196, SCR-188, `/p/<party>/account`; catalogue
   `portal-account`): `AccountRoute.tsx` (the gate: a customer with portal.colleagues.view), `AccountPage.tsx` (the container:
-  each card reads on its own; profile and e-mail drafts with ⌘S and the frame's unsaved guard; the admin's colleague acts
-  behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
-  chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
-  design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+  each card reads on its own; the profile draft with ⌘S and the frame's unsaved guard; delivery addresses and company data;
+  colleagues, the e-mail settings and the sessions are `../../shared/account/` — B-W2b-193's lift), `model.ts` (pure),
+  `view/` (its cards, the addresses list, its pop-ups, `AccountCase` for the design review). `RECORD_PAGES.PartyAddress`
+  opens `/account?address=<id>#addresses`.
+- `src/portal/shared/account/` — the account parts every partner kind shares (lifted from the customer's Account by B-W2b-193;
+  words `portal-account`, CSS `account.css` `fw-pacc-`): `api.ts` (colleagues, hand-over, step-up, sessions), `model.ts` (pure),
+  `usePortalPeople.ts` (the colleagues and the admin's acts behind the e-mail step-up — asked first and again on 403 `stepUp`;
+  Deactivate hands the leaver's assigned requests to the chosen colleague first, F14 —, the e-mail settings with ⌘S, the
+  sessions), `view/` (`AccountCard`, `SettingsCards`, `ColleaguesSection` and `PeopleDialogs` with `prices={false}` for a
+  supplier or workshop, C2). The customer's Account and the supplier's Profile both use it.
+- `src/portal/customer/returns/` — the customer's Returns & claims (B-W2b-197 on B-W2b-192's API, SCR-187; catalogue
+  `portal-returns`, CSS prefix `fw-pret-`): `/p/<party>/returns?chip=&q=&start=RETURN|COMPLAINT&order=<id>` (the cases in
+  the list frame with Export N, the Quality role's complaints, "Start a return or claim": what you need, details, check and
+  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status|messages` (`CasePage.tsx`: Add photos, Cancel
+  this request?, the return label and credit note PDFs in a new tab, the case's thread). `RECORD_PAGES.ReturnAuthorisation`
+  and `.Complaint` open them; their partner views are in factory-api `platform/search/partner/views/`.
+- `src/portal/customer/documents/` — the customer's Documents (B-W2b-195, SCR-186, `/p/<party>/documents?group=&q=&by=&versions=&invoice=`;
+  catalogue `portal-documents`, CSS prefix `fw-pdoc-`) on B-W2b-178's and B-W2b-185's APIs: the chips of the role's groups, To pay
+  (Finance/Admin: the open invoices and deposits, PDF/XML in new tabs, Pay = the DS PaymentPanel on the FAKE provider's own answers,
+  then the page polls the intent), All documents (the list frame; Download N, `d`), conformity per style received. `preview/` is
+  THE document pop-up (api, rules, `useDocumentPreview`, `view/DocumentPreview`), lifted from Home: Home and the order's Documents
+  tab use it. `RECORD_PAGES.Invoice` opens `/documents?invoice=<id>` (its Pay pop-up; `&tab=messages` its conversation).
 - `src/portal/supplier/deliveries/` — the supplier's Ship notices (B-W2b-186 on B-W2b-182's API, SCR-227; catalogue
   `portal-deliveries`, CSS prefix `fw-psn-`): `/p/<party>/deliveries?state=&q=` (the list frame, Export N, ⋯ Cancel…),
   `/deliveries/new?po=<id>` and `/deliveries/<id>?step=lines|packing|transport|review` (`NoticePage.tsx`: a draft on its
@@ -119,11 +139,26 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Idempotency-Key per body; the sheet is read with `apply: false`, kept with `apply: true`). `model.ts` says every check,
   sheet row and refusal from codes, columns and issue paths (the API's English is dropped by the zod schemas).
   `RECORD_PAGES.ShipNotice` opens `/deliveries/<id>`; the PO record's Ship notices tab has "Announce delivery".
+- `src/portal/supplier/documents/` and `src/portal/supplier/profile/` — a supplier's or a workshop's Documents (B-W2b-193 on
+  B-W2b-189's API, SCR-190, `/p/<party>/documents`: the route file's SUPPLIER/SUBCONTRACTOR line; CSS `fw-psdoc-`) and Profile
+  (SCR-191, `/p/<party>/profile`; CSS `fw-psprof-`); catalogue `portal-supplier-profile`. Documents: "We ask for" on the DS
+  ActionList (why in our words from the codes; Upload in the row), "Your documents" on the list frame (Open in a new tab,
+  Download N of what we shared back, Replace, Upload again), the upload pop-up in three steps (announce → the store → complete;
+  `u`). Profile: company, addresses and contacts typed on the page and sent together for our check (EditModeBar, ⌘S; Withdraw),
+  then the shared account cards. Both read again on their `live.events`.
 - `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
   `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
   re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
   record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
+- `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
+  SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
+  &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
+  write queued with the version the last one left and one Idempotency-Key per body; Send held while `request.problems`, saves what
+  was typed first), `/p/<party>/catalogue?q=&category=&season=&ppe=&range=&view=&style=` (`CataloguePage.tsx`; "Add to order" =
+  `/orders/new?styles=…`: the newest draft takes them, else a new one), `/p/<party>/catalogue/<style>/sheet` (tab:style-sheet).
+  Problems, reorder differences and sheet reasons are said from codes and figures (`model.ts`); the address pop-up uses
+  `portal-account`'s field words. The Orders band, its empty state, a line's ⋯ "Reorder this line" and Home's band link here.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -145,9 +180,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `src/areas/compliance/labels/` (SCR-053 list, `SCR-053-label` the PPE label builder: the preview re-rendered as you
   type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
   symbols are named stand-ins). Catalogues `certificates`, `labels`.
+- `src/links/public-doc/` + `app/(links)/doc/{page,[code]/page}.tsx` — the public DoC (B-W2b-166, SCR-102, catalogue `public-doc`): `/doc/<code>` (a batch's label QR or a style's address) and `/doc` (Type the code); no token, no session: `POST /public/doc/lookup` (a 429 `challenge` solved once, `pow.ts`), the declaration in the reader's language (navigator.languages first) in the PdfViewer, the PDFs' permanent `/api/public/doc/<code>/files/<id>` addresses for Download and the new tab.
 - `src/links/<task>/` — a one-off link's task page, in the Links view (`links/quote-accept`, SCR-099: the link landing
-  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
-  a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
+  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/pay`, SCR-199 (B-W2b-199):
+  a PAYMENT link's invoice or deposit and a DEPOSIT_INFO link's deposit — the bank transfer, each field with Copy, and card
+  or SEPA on the DS PaymentPanel, FAKE provider only; `src/lib/payments/online.ts` holds the shared pure parts). `src/areas/_shared/` — Office
   parts several areas share (`document-send`, SCR-037: the send dialog any document uses; the host passes its words).
 - B-W2b-165 (SAL-199) proofs signed with the quote: SCR-099's Proofs section (`links/quote-accept/view/ProofsSection.tsx`: tiles, the end state's list; the accept sends `proofFileIds`), the quote record's Documents › Proofs (`areas/sales/quotes/record/proofs/`, SCR-035-proofs, mounted through `QuoteRecordView`'s `proofs` slot), both on `src/lib/proofs/ProofViewer.tsx` (the DS Modal with a picture or the PdfViewer, Previous / Next, ← →; the DS Lightbox speaks English only) and `lib/proofs/address.ts`. Catalogue `quote-proofs`.
 - `src/list-frame/` — the ONE list frame of every Office list with actions over many rows (Owner rule 2026-10-29):

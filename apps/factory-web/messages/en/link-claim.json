@@ -1,0 +1,293 @@
+{
+  "title": "Report a problem — {record}",
+  "record": {
+    "Shipment": "shipment {label}",
+    "SalesOrder": "order {label}",
+    "of": {
+      "Shipment": "this shipment",
+      "SalesOrder": "this order"
+    }
+  },
+  "loading": {
+    "now": "Loading…",
+    "slow": "Still loading…"
+  },
+  "retry": "Try again",
+  "problem": {
+    "read": "We could not open your report form.",
+    "readBody": "Check your connection and try again. Nothing was sent.",
+    "gone": "This link no longer works.",
+    "goneBody": "Nothing was sent.",
+    "wrongPerson": "This link is not for you.",
+    "wrongPersonBody": "Nothing was sent.",
+    "invalid": "Some answers need a look before we can take the report.",
+    "invalidBody": "We took you to the first one. Nothing was sent.",
+    "aboveSold": "You asked to send back more than you can.",
+    "aboveSoldBody": "We read what can still come back again: lower the pieces where it says so. Nothing was sent.",
+    "changed": "Something changed while you were writing.",
+    "changedBody": "We read the page again. Check your answers and send again. Nothing was sent.",
+    "rateLimited": "Too many tries in a short time.",
+    "rateLimitedBody": "Wait a minute, then try again. Your answers are still here.",
+    "unavailable": "We could not reach the server.",
+    "unavailableBody": "Your answers are still here. Try again: the report goes only once.",
+    "internal": "Something went wrong on our side.",
+    "internalBody": "Your answers are still here. Try again: the report goes only once."
+  },
+  "step": {
+    "count": "Step {at} of {of}",
+    "type": {
+      "short": "What you need",
+      "title": "What do you need?",
+      "lead": "Choose one. Each choice asks only its own questions."
+    },
+    "item": {
+      "short": "Which item",
+      "title": "Which item?",
+      "lead": "Pick it from what {sender} sent you."
+    },
+    "details": {
+      "short": "Tell us more",
+      "title": "Tell us more",
+      "lead": "A few questions so we understand what happened."
+    },
+    "photos": {
+      "short": "Photos",
+      "title": "Photos",
+      "lead": "Show us the problem. You can circle it on the photo."
+    },
+    "review": {
+      "short": "Check and send",
+      "title": "Check and send",
+      "lead": "This is what {sender} receives. Change anything before you send."
+    }
+  },
+  "nav": {
+    "back": "Back",
+    "next": "Continue: {step}",
+    "keys": "← → move between the steps when no field is in use."
+  },
+  "type": {
+    "later": "For a repair or alteration, a made-to-measure remake or a safety incident, write to {sender} directly for now.",
+    "RETURN": {
+      "title": "Send something back",
+      "short": "Return",
+      "body": "A wrong size, a wrong item, or something damaged: ask to send it back, and say what you would like instead.",
+      "none": "Nothing of this delivery can be sent back now. You can still report a quality problem."
+    },
+    "COMPLAINT": {
+      "title": "Report a quality problem",
+      "short": "Quality complaint",
+      "body": "Something is not right with how it is made: tell us, our quality team looks into it and answers you."
+    }
+  },
+  "item": {
+    "legend": {
+      "RETURN": "The items that come back",
+      "COMPLAINT": "The item with the problem"
+    },
+    "nothingBack": "Nothing of {record} can be sent back now.",
+    "nothingBackBody": "It may already be on its way back, or not delivered yet. For a quality problem you can still write to us here; for anything else, ask {sender}.",
+    "toComplaint": "Report a quality problem instead",
+    "noneLeft": "Nothing left to send back",
+    "canReturn_one": "{count} of {received} can come back",
+    "canReturn_other": "{count} of {received} can come back",
+    "late": "Past the usual return period: you can still ask, we decide.",
+    "pieces": "Pieces that come back",
+    "piecesHint": "At most {max}.",
+    "less": "One piece less",
+    "more": "One piece more",
+    "serial": "Serial number",
+    "serialHint": "On the label inside the garment, if it has one. Scan it or type it.",
+    "scan": "Scan the label",
+    "batch": "Batch number",
+    "batchHint": "On the label, if there is no serial number.",
+    "whole": "Not one item: the whole delivery",
+    "wholeBody": "The problem is with the delivery as a whole, or with something not in the list.",
+    "size": "size {size}",
+    "order": "order {number}",
+    "delivered": "delivered on {day}",
+    "unknown": "An item no longer in the list"
+  },
+  "details": {
+    "reason": "Why does it come back?",
+    "reasonChoose": "Choose a reason",
+    "reasonNote": "What is wrong (optional)",
+    "reasonNoteNeeded": "What is wrong",
+    "reasonNoteHint": "Where on the garment, and since when.",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "outcome": "What would you like?",
+    "outcomeHint": "We decide once we have looked at it; your wish helps.",
+    "yourRef": "Your reference (optional)",
+    "yourRefHint": "Your own number for this, if you keep one: we quote it when we write.",
+    "note": "Anything else (optional)",
+    "noteHint": "For example when you can send the goods back.",
+    "description": "What happened?",
+    "descriptionHint": "What is wrong, where on the garment, when you noticed it, and how it was worn or used."
+  },
+  "outcome": {
+    "REPLACE": "A replacement",
+    "REPAIR": "A repair",
+    "CREDIT": "A credit note",
+    "none": "No preference: you decide"
+  },
+  "photos": {
+    "intro": "Photos help us decide faster. Take them in good light; keep faces out of the picture.",
+    "after": "The photos go with your report when you send it. They stay on this page until then.",
+    "case": "The problem",
+    "needed": "At least {needed} photos of the damage: {count} added.",
+    "optional_one": "Optional: {count} added.",
+    "optional_other": "Optional: {count} added.",
+    "alt": "Photo {n} of {title}",
+    "label": "Photo {n}",
+    "labelMarks_one": "Photo {n} · {count} mark",
+    "labelMarks_other": "Photo {n} · {count} marks",
+    "remove": "Remove",
+    "removeOne": "Remove photo {n} of {title}",
+    "add": "Add a photo",
+    "held": {
+      "max": "{max} photos at most here."
+    },
+    "dialogTitle": "A photo of {title}",
+    "dialogIntro": "Take the photo or pick one from your device, then circle the problem with an arrow or a circle.",
+    "surface": "Photo of {title}",
+    "cancel": "Close"
+  },
+  "review": {
+    "what": "What you need",
+    "items": "The items",
+    "item": "The item",
+    "details": "What you told us",
+    "photos": "Photos",
+    "pieces": "Pieces",
+    "none": "—",
+    "change": "Change",
+    "changeOf": "Change: {what}",
+    "photoCount_one": "{count} photo",
+    "photoCount_other": "{count} photos",
+    "name": "Your name (optional)",
+    "nameHint": "So we know whom to answer.",
+    "uses_one": "This link takes {count} more report.",
+    "uses_other": "This link takes {count} more reports."
+  },
+  "send": {
+    "button": {
+      "RETURN": "Send the return request",
+      "COMPLAINT": "Send the complaint"
+    },
+    "busy": "Sending…",
+    "held": {
+      "expired": "This link has expired: ask {sender} for a new one.",
+      "used": "This link takes no more reports: ask {sender} for a new one."
+    }
+  },
+  "later": {
+    "button": "Finish later",
+    "held": "Nothing to keep yet: choose what you need first.",
+    "saved": "Kept with us.",
+    "savedBody": "Open this same link again to finish, until {day}. Photos are not kept: add them again then."
+  },
+  "draft": {
+    "restored": "We kept what you wrote on {day} at {time}.",
+    "restoredBody": "Go on where you left off. Photos are not kept: add them again.",
+    "keep": "Go on",
+    "startAgain": "Start again"
+  },
+  "check": {
+    "type": "Choose what you need.",
+    "items": "Pick at least one item that comes back.",
+    "nothingBack": "Nothing can be sent back now: report a quality problem instead.",
+    "manyItems": "At most {max} items in one request.",
+    "itemGone": "This item can no longer come back: remove it.",
+    "quantityMin": "One piece or more.",
+    "quantityMax": "At most {max}.",
+    "long": "At most {max} characters.",
+    "reason": "Choose why it comes back.",
+    "reasonNote": "Say what is wrong.",
+    "complaintItem": "Pick the item, or “the whole delivery”.",
+    "description": "Tell us what happened.",
+    "photos_one": "Add {count} more photo: a damage needs at least {needed}.",
+    "photos_other": "Add {count} more photos: a damage needs at least {needed}."
+  },
+  "refusal": {
+    "field": "Check this answer.",
+    "quantity": "More than can still come back: lower it."
+  },
+  "done": {
+    "title": {
+      "RETURN": "Return request {number} sent",
+      "COMPLAINT": "Complaint {number} sent"
+    },
+    "answerBy": "We answer by {day}.",
+    "answerWithin": "We answer within {days} working days.",
+    "next": {
+      "RETURN": "We look at your request and tell you whether to send it back, with the return instructions to print.",
+      "COMPLAINT": "Our quality team looks into it and answers you."
+    },
+    "again": "Open this same link until {day} to see where it stands.",
+    "noMore": "This link takes no more reports: for news, ask {sender}.",
+    "fact": {
+      "type": "What you asked",
+      "items": "Items",
+      "item": "Item",
+      "yourRef": "Your reference",
+      "by": "Sent by"
+    },
+    "itemLine": "{item} × {pieces}",
+    "reference": "Case number",
+    "another": "Report another problem",
+    "contact": "Questions about this report",
+    "photos": {
+      "busy": "Sending the photos: {sent} of {total}…",
+      "failed_one": "{count} photo did not go: try again below.",
+      "failed_other": "{count} photos did not go: try again below.",
+      "sent_one": "Your photo is with the report.",
+      "sent_other": "Your {count} photos are with the report.",
+      "failedTitle_one": "{count} photo did not go.",
+      "failedTitle_other": "{count} photos did not go.",
+      "failedBody": "The report itself was sent. Try again; the photos already sent stay."
+    }
+  },
+  "cases": {
+    "title_one": "Reported with this link ({count})",
+    "title_other": "Reported with this link ({count})",
+    "hint": "Where your earlier reports stand. Report something new below.",
+    "yourMove": "Your move:",
+    "opened": "opened on {day}",
+    "yourRef": "your reference {ref}",
+    "instructions": "Print the return instructions",
+    "opening": "Opening…",
+    "openFailed": "It did not open: try again.",
+    "document": {
+      "ANSWER_LETTER": "Our answer (version {version})",
+      "EIGHT_D": "8D report (version {version})"
+    }
+  },
+  "case": {
+    "state": {
+      "REQUESTED": "Asked",
+      "SEND_IT_BACK": "Approved: send it back",
+      "BACK_WITH_US": "Back with us",
+      "INSPECTED": "Checked",
+      "DONE": "Done",
+      "NOT_ACCEPTED": "Not accepted",
+      "CANCELLED": "Cancelled",
+      "RECEIVED": "Received",
+      "INVESTIGATING": "Being looked into",
+      "ANSWERED": "Answered",
+      "CLOSED": "Closed"
+    }
+  },
+  "scan": {
+    "title": "Scan the label",
+    "intro": "Hold the label's code in the frame. The serial number fills in by itself.",
+    "video": "The camera's picture",
+    "cancel": "Close",
+    "state": {
+      "starting": "Starting the camera…",
+      "on": "Looking for the code…",
+      "failed": "The camera did not start (no camera, or not allowed). Close this and type the serial number.",
+      "none": "No camera here. Close this and type the serial number."
+    }
+  }
+}

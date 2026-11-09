@@ -132,8 +132,10 @@ export const designScreen = defineDesignScreen<QuoteAcceptViewModel>({
     { id: 'consumer', label: 'Open · a consumer (VAT included, no withdrawal)', model: model({ quote: consumer }), note: 'Total VAT included first (art. 49), the no-withdrawal tick (art. 59(c)), the email asked, a firm offer.' },
     { id: 'busy', label: 'Recording the acceptance', model: model({ answer: 'busy' }) },
     { id: 'refused', label: 'Refused: the quote changed meanwhile', model: model({ problem: 'problem.changed' }) },
-    { id: 'accepted', label: 'Accepted · deposit by bank transfer', model: model({ quote: ACCEPTED, answer: 'done' }), note: 'What happens next, the receipt, and each bank field with Copy.' },
+    { id: 'accepted', label: 'Accepted · deposit by bank transfer', model: model({ quote: ACCEPTED, answer: 'done' }), note: 'What happens next, the receipt, and each bank field with Copy; card or SEPA held with the reason (B-W2b-199).' },
     { id: 'accepted-no-bank', label: 'Accepted · no bank details yet', model: model({ quote: { ...ACCEPTED, deposit: { ...ACCEPTED.deposit!, instructions: { ...ACCEPTED.deposit!.instructions, bank: null } } }, answer: 'done' }) },
+    // B-W2b-199: the deposit's card step is held on this page (the accept used the link); a deposit received says so.
+    { id: 'accepted-deposit-paid', label: 'Accepted · the deposit already received', model: model({ quote: { ...ACCEPTED, deposit: { ...ACCEPTED.deposit!, status: 'PAID' } }, answer: 'done' }) },
     { id: 'decline', label: 'Decline dialog', model: model({ declineOpen: true }) },
     { id: 'declined', label: 'Declined', model: model({ quote: linkQuote({ state: 'DECLINED', answers: [] }) }) },
     { id: 'expired', label: 'The offer ended', model: model({ quote: linkQuote({ state: 'EXPIRED', answers: [] }) }), note: 'Ask for a new link.' },

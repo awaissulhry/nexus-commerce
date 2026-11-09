@@ -115,6 +115,8 @@ import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasi
 import { PORTAL_RETURNS_DEFINITIONS, PORTAL_RETURNS_PERMISSIONS } from '../../sales/portal-returns/permissions'
 // B-W2b-184: approval requests to partners (partners.approvals.*, the office's; portal.approvals.view, partner roles only).
 import { PARTNERS_APPROVALS_DEFINITIONS, PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_DEFINITIONS, PORTAL_APPROVALS_PERMISSIONS } from '../../approvals-out/permissions'
+// B-W2b-171: measurements by link (sales.measurements.view | manage).
+import { SALES_MEASUREMENTS_DEFINITIONS, SALES_MEASUREMENTS_PERMISSIONS } from '../../sales/measure-link/permissions'
 // B-W2b-112: cut orders and cut tickets (production.cutorders.manage; reading is production.cutting.view, the table's scans production.cut).
 import { PRODUCTION_CUTORDERS_DEFINITIONS, PRODUCTION_CUTORDERS_PERMISSIONS } from '../../production/cutorders/permissions'
 // B-W2b-117: after the cut (production.recuts, production.secondary, production.trolleys; shared with the floor).
@@ -746,6 +748,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_CUTORDERS_DEFINITIONS,
   // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (area `production`, declared above).
   PRODUCTION_CUTISSUE_DEFINITIONS,
+  // B-W2b-171: measurements by link (area `sales`, declared above).
+  SALES_MEASUREMENTS_DEFINITIONS,
   // B-W2b-172: the supplier questionnaire (area `purchasing`, declared above).
   QUESTIONNAIRE_DEFINITIONS,
 ])
@@ -981,6 +985,8 @@ for (const name of PORTAL_APPROVALS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(nam
 for (const name of PRODUCTION_CUTORDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-117: after the cut.
 for (const name of PRODUCTION_CUTISSUE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-171: measurements by link.
+for (const name of SALES_MEASUREMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-172: the supplier questionnaire.
 for (const name of QUESTIONNAIRE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

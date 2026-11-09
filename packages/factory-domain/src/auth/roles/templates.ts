@@ -18,6 +18,8 @@ import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approva
 import { CUT_ORDERS_ADDS } from '../../production/cutorders/permissions'
 // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (office and floor templates).
 import { CUTISSUE_ADDS, CUTISSUE_FLOOR_ADDS } from '../../production/cutissue/permissions'
+// B-W2b-171: measurements by link (sales and the administrator send and read them; the production manager reads them).
+import { MEASURE_LINK_ADDS } from '../../sales/measure-link/permissions'
 // B-W2b-172: the supplier questionnaire (the administrator and the buyer send, review and keep it; quality reads it).
 import { QUESTIONNAIRE_ADDS } from '../../purchasing/questionnaire/permissions'
 
@@ -777,6 +779,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (CUT_ORDERS_ADDS[key] ?? []) : []),
   // B-W2b-117
   ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-171
+  ...(audience === 'office' ? (MEASURE_LINK_ADDS[key] ?? []) : []),
   // B-W2b-172
   ...(audience === 'office' ? (QUESTIONNAIRE_ADDS[key] ?? []) : [])]
 /**

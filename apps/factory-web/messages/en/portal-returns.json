@@ -1,0 +1,453 @@
+{
+  "list": {
+    "title": "Returns & claims",
+    "cases": "Your returns and claims",
+    "label": "Your returns and claims",
+    "search": "Search your returns and claims",
+    "searchHint": "Case number, your reference, item or serial",
+    "count_one": "{count} case",
+    "count_other": "{count} cases",
+    "failed": "Your returns and claims could not be read.",
+    "failedBody": "Nothing is lost. Try again in a moment.",
+    "empty": "No returns or claims.",
+    "emptyBody": "When something we delivered is not right, start a return or a quality claim here and follow every step.",
+    "emptyOpenTitle": "No open returns or claims.",
+    "emptyOpen": "Nothing is open. Closed cases are under Closed and All.",
+    "noMatch": "No case matches these filters.",
+    "noMatchSearch": "Nothing found for “{q}”. Try your own reference or our case number.",
+    "noMatchChip": "No case under this filter.",
+    "clear": "Clear filters",
+    "yourMove": "Your move:",
+    "fileName": "returns-and-claims"
+  },
+  "chips": {
+    "label": "Which cases",
+    "chip": "{name}: {count}",
+    "clear": "Clear filters"
+  },
+  "chip": {
+    "OPEN": "Open",
+    "WAITING": "Waiting for you",
+    "CLOSED": "Closed",
+    "ALL": "All"
+  },
+  "col": {
+    "case": "Case",
+    "yourRef": "Your reference",
+    "type": "Type",
+    "item": "Item",
+    "opened": "Opened",
+    "status": "Status",
+    "next": "Next step",
+    "updated": "Last update",
+    "actions": "Actions"
+  },
+  "row": {
+    "status": "Status",
+    "request": "Request",
+    "messages": "Messages",
+    "menu": "Actions for {number}"
+  },
+  "ref": {
+    "yours": "Your ref.",
+    "ours": "Our ref."
+  },
+  "type": {
+    "RETURN": "Return",
+    "COMPLAINT": "Quality claim"
+  },
+  "typeShort": {
+    "RETURN": "Return",
+    "COMPLAINT": "Complaint"
+  },
+  "item": {
+    "size": "size {size}",
+    "serial": "serial {serial}",
+    "more_one": "+ {count} more item",
+    "more_other": "+ {count} more items"
+  },
+  "bulk": {
+    "export_one": "Export {count}",
+    "export_other": "Export {count}"
+  },
+  "state": {
+    "retry": "Try again",
+    "loading": "Loading…",
+    "stillLoading": "Still loading…",
+    "RETURN": {
+      "REQUESTED": "Requested",
+      "SEND_IT_BACK": "Approved — send it back",
+      "BACK_WITH_US": "Back with us",
+      "INSPECTED": "Inspected",
+      "DONE": "Closed",
+      "NOT_ACCEPTED": "Not accepted",
+      "CANCELLED": "Cancelled"
+    },
+    "COMPLAINT": {
+      "RECEIVED": "Received",
+      "INVESTIGATING": "Being investigated",
+      "ANSWERED": "Answered",
+      "CLOSED": "Closed"
+    }
+  },
+  "offline": {
+    "title": "No connection — showing what was loaded at {time}"
+  },
+  "noAccess": {
+    "title": "This page is not part of your access",
+    "ask": "Ask {names} for access.",
+    "askAdmin": "Ask your admin for access.",
+    "home": "Go to Home"
+  },
+  "band": {
+    "start": "Start a return or claim",
+    "updated": "Updated {time}",
+    "photos": "Add photos",
+    "label": "Print the return label",
+    "labelTab": "Return label PDF (new tab)",
+    "creditNote": "Credit note {number} PDF (new tab)",
+    "cancel": "Cancel this request…"
+  },
+  "keys": {
+    "search": "Search",
+    "open": "Open the case",
+    "tabs": "Previous / next tab",
+    "close": "Close a pop-up"
+  },
+  "tabs": {
+    "label": "Sections of the case",
+    "request": "Request",
+    "status": "Status",
+    "messages": "Messages"
+  },
+  "record": {
+    "titleReturn": "Return {number}",
+    "titleComplaint": "Quality claim {number}",
+    "missing": "Case not found",
+    "missingBody": "This case is not one of yours, or it no longer exists.",
+    "failed": "The case could not be read.",
+    "failedBody": "Nothing is lost. Try again in a moment.",
+    "toList": "Back to Returns & claims"
+  },
+  "via": {
+    "PORTAL": "In the portal",
+    "LINK": "By a link we sent",
+    "OFFICE": "Through our office",
+    "EMAIL": "By e-mail",
+    "PHONE": "By phone",
+    "OTHER": "Other"
+  },
+  "step": {
+    "ASKED": "Asked",
+    "DECIDED": "Decided",
+    "BACK_WITH_US": "Back with us",
+    "INSPECTED": "Inspected",
+    "OUTCOME": "Outcome",
+    "RECEIVED": "Received",
+    "INVESTIGATING": "Being investigated",
+    "ANSWERED": "Answered",
+    "CLOSED": "Closed"
+  },
+  "next": {
+    "forYou": "Next step for you",
+    "ours": "What we do next"
+  },
+  "held": {
+    "preview": "This is a preview: it reads the portal and never acts for the customer.",
+    "previewFiles": "Files do not open in a preview.",
+    "mayRequest": "Only colleagues who may ask for returns can do this. Ask your admin.",
+    "mayUpload": "Only colleagues who may send files can add photos. Ask your admin.",
+    "goodsBack": "The goods are with us already: write to us in the messages instead.",
+    "closed": "This return is closed already.",
+    "decided": "We decided already: write to us in the messages.",
+    "answered": "We answered already: write to us in the messages.",
+    "offline": "No connection: try again when you are back online.",
+    "busy": "Sending…",
+    "reading": "Still reading what you can send back…",
+    "noDocuments": "Documents are not part of your access. Ask your admin.",
+    "noPdf": "The credit note's PDF is not ready yet."
+  },
+  "notice": {
+    "hide": "Hide",
+    "cancelled": "Return {number} is cancelled. You can start a new one any time."
+  },
+  "messages": {
+    "hint": "Write to us about this case here; we answer in the same conversation. You can also answer our e-mails."
+  },
+  "unsaved": {
+    "start": "Your return or claim is not sent yet.",
+    "photos": "Your photos are not sent yet."
+  },
+  "problem": {
+    "internal": "Something went wrong on our side. Try again in a moment.",
+    "forbidden": "Your access does not allow this. Ask your admin.",
+    "missing": "This case is no longer here.",
+    "changed": "This case changed meanwhile: we read it again. Check and try again.",
+    "invalid": "This could not be sent as it is. Check the fields.",
+    "tooMany": "Too many tries: wait a minute and try again.",
+    "unavailable": "We cannot be reached right now. Try again in a moment.",
+    "signedOut": "Your session ended: sign in again.",
+    "documentForbidden": "This document is not part of your access: ask your quality contact or your admin.",
+    "documentFailed": "The document could not be opened. Try again."
+  },
+  "complaints": {
+    "title": "Complaints",
+    "hint": "Quality complaints and how far our investigation got.",
+    "failed": "The complaints could not be read.",
+    "empty": "No complaints.",
+    "open": "Open complaint {number}",
+    "opened": "Opened {date}",
+    "step": "Step reached: {step}",
+    "noStep": "No investigation report yet",
+    "progress": "{done} of {of} steps done",
+    "answeredOn": "Answered {date}",
+    "dueOn": "Answer due {date}"
+  },
+  "request": {
+    "what": "What you asked",
+    "reported": "What you reported",
+    "opened": "Opened",
+    "via": "Asked",
+    "outcome": "What you would like",
+    "yourRef": "Your reference",
+    "note": "Your note",
+    "items": "Items",
+    "line": "Item {seq} · {description}",
+    "pieces": "Pieces",
+    "size": "Size",
+    "serial": "Serial number",
+    "batch": "Batch",
+    "reason": "Reason",
+    "item": "Item",
+    "order": "Order",
+    "shipment": "Delivery",
+    "happened": "What happened",
+    "linePhotos": "Photos of this item",
+    "photos": "Photos",
+    "photosHint": "Photos help us decide faster: the damage, the label, how it fits.",
+    "photosClosed": "We decided already: the photos stay as they are.",
+    "photosAnswered": "We answered already: the photos stay as they are.",
+    "noPhotos": "No photos yet.",
+    "photoAdded": "Added {date}",
+    "view": "View",
+    "addPhotos": "Add photos"
+  },
+  "status": {
+    "where": "Where it is",
+    "steps": "Steps of {number}",
+    "decision": "Our decision:",
+    "label": "Return label and instructions",
+    "sendBy": "Send it back by {date}.",
+    "sendBack": "Send it back to us.",
+    "sendTo": "To: {site}",
+    "labelHint": "Print the instructions, put them in the parcel and write the case number on the outside.",
+    "print": "Print the return label",
+    "parcels": "Parcels we received",
+    "parcelsWaiting": "Nothing has reached us yet.",
+    "parcelsNone": "No parcel received.",
+    "receivedAt": "Received",
+    "parcelCount": "Parcels",
+    "carrier": "Carrier",
+    "tracking": "Tracking number",
+    "inspection": "Inspection result",
+    "inspectionNone": "Not inspected yet.",
+    "item": "Item",
+    "received": "Pieces received",
+    "grade": "Condition",
+    "outcome": "What happens",
+    "outcomePending": "To be decided",
+    "result": "Outcome",
+    "resultClosed": "Closed without a credit note or a replacement.",
+    "resultNone": "Nothing yet.",
+    "creditNotes": "Credit notes",
+    "creditNote": "Credit note {number}",
+    "issued": "Issued {date}",
+    "notIssued": "Not issued yet",
+    "openPdf": "Open PDF",
+    "replacement": "Replacement order:",
+    "answerBy": "We answer by {date}.",
+    "investigation": "Investigation steps",
+    "investigationQuality": "The investigation and our letter are for your quality contact.",
+    "eightD": "8D report {number}",
+    "capa": "Corrective action {number}",
+    "investigationSteps": "Investigation of {number}",
+    "investigationNone": "We have not opened an investigation report for this complaint.",
+    "answeredEmail": "We answered by e-mail on {date}.",
+    "answeredPortal": "We answered here on {date}.",
+    "documents": "Our letter and reports",
+    "documentAdded": "Shared {date}",
+    "documentsNone": "No letter or report shared yet.",
+    "letter": "Our answer letter",
+    "letterV": "Our answer letter (version {version})",
+    "eightDReport": "8D report"
+  },
+  "grade": {
+    "NEW": "As new",
+    "LIKE_NEW": "Like new",
+    "GOOD": "Good, used",
+    "DAMAGED": "Damaged",
+    "UNUSABLE": "Not usable"
+  },
+  "disposition": {
+    "REPAIR": "We repair it and send it back",
+    "REMAKE": "We make it again",
+    "REPLACE": "A replacement",
+    "CREDIT_ONLY": "A credit note",
+    "RETURN_UNCHANGED": "Sent back to you as it came",
+    "SCRAP": "Not sent back"
+  },
+  "outcome": {
+    "REPLACE": "A replacement",
+    "REPAIR": "A repair",
+    "CREDIT": "A credit note"
+  },
+  "cancel": {
+    "title": "Cancel this request?",
+    "what": "We will close {number}. You can start a new one any time.",
+    "told": "We see at once that you cancelled it; nothing is sent back.",
+    "again": "Start a new request",
+    "confirm": "Cancel request",
+    "busy": "Cancelling…"
+  },
+  "photos": {
+    "title": "Add photos",
+    "subtitle": "To {number}",
+    "of": "Photos of",
+    "ofRequest": "The request as a whole",
+    "ofComplaint": "The complaint",
+    "hint_one": "You can add {left} more photo here.",
+    "hint_other": "You can add {left} more photos here.",
+    "full": "This holds 10 photos already.",
+    "types": "JPEG, PNG, WebP or HEIC · up to 15 MB each",
+    "picked": "Photos picked",
+    "send_one": "Send {count} photo",
+    "send_other": "Send {count} photos",
+    "sending": "Sending…",
+    "sent_one": "{count} photo sent.",
+    "sent_other": "{count} photos sent.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "privacy": "Keep faces and personal details out of the picture. We remove the location from photos taken with a phone.",
+    "state": {
+      "waiting": "Ready to send",
+      "sending": "Sending…",
+      "sent": "Sent"
+    },
+    "held": {
+      "none": "Pick a photo first."
+    },
+    "problem": {
+      "type": "Not a photo we can take: JPEG, PNG, WebP or HEIC.",
+      "size": "Larger than 15 MB.",
+      "full": "This holds 10 photos already.",
+      "failed": "Not sent. Try again."
+    }
+  },
+  "viewer": {
+    "count": "{n} of {count}",
+    "previous": "Previous",
+    "next": "Next",
+    "only": "This is the only photo.",
+    "first": "This is the first photo.",
+    "last": "This is the last photo.",
+    "loading": "Opening the photo…",
+    "failed": "The photo could not be opened.",
+    "alt": "Photo {name}"
+  },
+  "start": {
+    "title": "Start a return or claim",
+    "stepOf": "Step {n} of {of} · {name}",
+    "step": {
+      "type": "What you need",
+      "details": "Details",
+      "review": "Check and send"
+    },
+    "what": "What do you need?",
+    "type": {
+      "RETURN": "Return items",
+      "COMPLAINT": "Report a quality problem"
+    },
+    "typeBody": {
+      "RETURN": "Send back something we delivered: the wrong size, damaged on the way, not what you ordered.",
+      "COMPLAINT": "A defect we should look into. You get our answer and, when we run one, our 8D report."
+    },
+    "items": "Which items come back",
+    "itemsHint": "What we delivered to you that may still come back. Pick each item, then say how many pieces and why.",
+    "noItems": "Nothing we delivered can come back now. For a quality problem, go back and report it instead.",
+    "orderLine": "order {number}, line {line}",
+    "invoice": "invoice {number}",
+    "canReturn": "{count} of {received} can come back",
+    "nothingLeft": "already back or asked for",
+    "window": "Outside the return window: delivered on {date}. We look at it anyway.",
+    "windowNoDate": "Outside the return window. We look at it anyway.",
+    "pieces": "Pieces",
+    "piecesHint_one": "Up to {count}",
+    "piecesHint_other": "Up to {count}",
+    "reason": "Reason",
+    "reasonPick": "Choose a reason",
+    "reasonNote": "A word more (optional)",
+    "reasonNoteNeeded": "Tell us more",
+    "serial": "Serial number",
+    "serialHint": "On the label inside, when it has one.",
+    "outcome": "What would you like?",
+    "outcomeNone": "Let us decide",
+    "yourRef": "Your reference",
+    "yourRefHint": "Your own number for this case, if you use one.",
+    "note": "A note for us",
+    "noteHint": "Anything that helps us decide.",
+    "item": "Which item",
+    "itemHint": "Pick it from what we delivered, or leave it out.",
+    "itemNone": "Not about one item",
+    "batch": "Batch",
+    "batchHint": "As printed on the label, if you have it.",
+    "description": "What happened",
+    "descriptionHint": "What you found, when and how it shows.",
+    "review": {
+      "return": "Your return request",
+      "items": "Items that come back",
+      "item": "Item",
+      "complaint": "Your quality complaint"
+    },
+    "photosLater": "Once it is sent, add photos on the case's Request tab.",
+    "readFailed": "What you can send back could not be read.",
+    "readFailedBody": "Nothing is lost. Try again in a moment.",
+    "next": "Next",
+    "back": "Back",
+    "cancel": "Cancel",
+    "sending": "Sending…",
+    "sendReturn": "Send the return request",
+    "sendComplaint": "Send the complaint",
+    "discardTitle": "Discard what you typed?",
+    "discardBody": "Your return or claim is not sent yet.",
+    "discard": "Discard",
+    "stay": "Stay",
+    "held": {
+      "problems": "Some fields need a look: go back to Details."
+    },
+    "problem": {
+      "type": "Choose what you need.",
+      "lines": "Pick at least one item that comes back.",
+      "tooManyLines": "At most 50 items in one request.",
+      "quantity": "One piece or more, as a whole number.",
+      "tooMany": "More than can come back.",
+      "tooManyNow": "Some pieces were asked for meanwhile: we read what can come back again. Check the pieces.",
+      "reason": "Choose a reason.",
+      "reasonNote": "This reason needs a word more.",
+      "long": "Too long: shorten it.",
+      "description": "Tell us what happened."
+    },
+    "sent": {
+      "return": "Return request {number} opened",
+      "complaint": "Complaint {number} opened",
+      "answerBy": "We answer by {date}.",
+      "answerSoon": "We answer within 2 working days.",
+      "photos": "Add photos on the case: they help us decide faster.",
+      "nextReturn": "Once we approve it, print the return label and send the items back.",
+      "nextComplaint": "We look into it and tell you here when we answer.",
+      "reference": "Case number",
+      "openReturn": "Open the request",
+      "openComplaint": "Open the complaint",
+      "close": "Close"
+    }
+  }
+}

@@ -35,7 +35,8 @@
     "cancel": "Chiedi di annullare…",
     "pay": "Paga l’acconto",
     "history": "Storia della data promessa",
-    "confirmation": "PDF della conferma d’ordine"
+    "confirmation": "PDF della conferma d’ordine",
+    "newOrder": "Nuovo ordine"
   },
   "keys": {
     "search": "Cerca nei tuoi ordini",
@@ -330,7 +331,8 @@
     "showSizes": "Mostra le taglie",
     "askChange": "Chiedi una modifica su questa riga",
     "sizesTitle": "Taglie di ogni riga",
-    "sizesOf": "Riga {seq} · {style} {colour}"
+    "sizesOf": "Riga {seq} · {style} {colour}",
+    "reorder": "Riordina questa riga"
   },
   "sizes": {
     "size": "Taglia",
@@ -389,7 +391,14 @@
       "style": "Modello",
       "colour": "Variante colore",
       "pieces": "Pezzi"
-    }
+    },
+    "copyLink": "Copia il link di tracciamento",
+    "linkCopied": "Link copiato",
+    "copyLinkOf": "Copia il link di tracciamento della spedizione {number}",
+    "copyLinkHint": "La nostra pagina di tracciamento, da inoltrare a chi riceve la merce.",
+    "copyLinkFailed": "Il link di tracciamento non è stato creato: riprova.",
+    "copyLinkPreview": "Un'anteprima non crea link.",
+    "copyLinkTooMany": "I link di questa spedizione sono già stati copiati: inoltra uno di quelli."
   },
   "toShip": {
     "title": "Ancora da spedire",

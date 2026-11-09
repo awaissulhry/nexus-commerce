@@ -40,6 +40,8 @@ export interface OrdersListViewModel {
   /** More rows than shown: the footer's "Show more". */
   more: { loading: boolean } | null
   transit: { state: 'loading' | 'error' | 'ready'; read: InTransitRead | null }
+  /** B-W2b-194: New order's address for a person who may order (the empty state's action), else null. */
+  newOrderHref?: string | null
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
 }
@@ -180,7 +182,13 @@ export function OrdersListView({ model, actions }: { model: OrdersListViewModel;
       filtered ? (
         <EmptyState title={t('list.noMatch')} description={searching ? t('list.noMatchSearch', { q: model.q.trim() }) : t('list.noMatchChip')} action={<Button size="sm" onClick={() => actions?.onClear?.()}>{t('list.clear')}</Button>} />
       ) : (
-        <EmptyState icon={<PackageSearch size={24} aria-hidden />} title={t('list.empty')} description={t('list.emptyBody')} />
+        <EmptyState
+          icon={<PackageSearch size={24} aria-hidden />}
+          title={t('list.empty')}
+          description={t('list.emptyBody')}
+          // B-W2b-194: New order from the empty list.
+          action={model.newOrderHref ? <Button size="sm" variant="primary" asChild><a href={model.newOrderHref}>{t('band.newOrder')}</a></Button> : undefined}
+        />
       )
     ) : undefined
 

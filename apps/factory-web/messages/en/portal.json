@@ -181,6 +181,8 @@
       "SubcontractOrder": "Job",
       "ShipNotice": "Ship notice",
       "Party": "Account",
+      "ReturnAuthorisation": "Return",
+      "Complaint": "Complaint",
       "other": "Record"
     }
   },

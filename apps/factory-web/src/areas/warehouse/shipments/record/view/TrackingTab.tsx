@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { MapPin, PackageCheck } from 'lucide-react'
 import { Card, EmptyState, KeyValue } from '@nexus/ui/components'
 import { Pill } from '@nexus/ui/primitives'
@@ -21,14 +22,18 @@ import { PartState } from './ShipmentRecordView'
 /** The carrier's page is opened only when it is an https address (the API keeps no other). */
 const safePage = (url: string | null | undefined): string | null => (url && /^https:\/\/\S+$/i.test(url) ? url : null)
 
-export function TrackingTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+// B-W2b-170: `trackingLink`, the customer's tracking-page card (the container's), under the tracking whatever the transport.
+export function TrackingTab({ shipment, model, actions, trackingLink }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; trackingLink?: ReactNode }) {
   const t = useT('shipments')
   const locale = useLocale()
   if (!model.tracking) {
     return (
-      <Card padded>
-        <EmptyState title={t('tracking.none.title')} description={shipment.transportBy === 'CARRIER' ? t('tracking.none.body') : t(`tracking.none.${shipment.transportBy}`)} />
-      </Card>
+      <div className="fw-sh-cards">
+        <Card padded>
+          <EmptyState title={t('tracking.none.title')} description={shipment.transportBy === 'CARRIER' ? t('tracking.none.body') : t(`tracking.none.${shipment.transportBy}`)} />
+        </Card>
+        {trackingLink}
+      </div>
     )
   }
   if (!model.tracking.value) return <PartState problem={model.tracking.problem} onRetry={() => actions?.onRetryPart?.('tracking')} label={t('tab.tracking')} />
@@ -100,6 +105,7 @@ export function TrackingTab({ shipment, model, actions }: { shipment: Shipment; 
         />
         <p className="fw-sh-hint">{t('tracking.podLater')}</p>
       </Card>
+      {trackingLink}
     </div>
   )
 }

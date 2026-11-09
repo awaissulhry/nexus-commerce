@@ -138,7 +138,9 @@ function ListContainer() {
     saveText(`${t('list.fileName')}.csv`, ordersCsv(shown, t, locale, read?.seesPrices ?? false, day))
   }
 
-  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: rows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null) }))
+  // B-W2b-194: New order (a person who may order, not in a preview).
+  const newOrder = frame.me.permissions.includes('portal.orderRequests.manage') && !frame.me.preview ? `${frame.prefix}/orders/new` : null
+  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: rows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null), newOrder }))
 
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
   useEffect(() => {
@@ -161,6 +163,8 @@ function ListContainer() {
         offlineSince: offline ? loadedAt : null,
         more: read && rows.length < read.count ? { loading: loadingMore } : null,
         transit,
+        // B-W2b-194: the empty state's New order.
+        newOrderHref: newOrder,
       }}
       actions={{
         onChip: (next) => go(next, q),

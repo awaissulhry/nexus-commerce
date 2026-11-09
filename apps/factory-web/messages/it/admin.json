@@ -2020,6 +2020,8 @@
     "partners_approvals_view": "Vedere le approvazioni chieste a clienti, fornitori e firmatari esterni su un documento: cosa abbiamo chiesto, entro quando, e la risposta firmata con le sue prove",
     "partners_approvals_ask": "Chiedere a un cliente, fornitore o firmatario esterno di approvare una concessione, un campione, un colore, un pellame, una grafica, una bozza del design, un ordine modificato o una firma; ritirare una richiesta aperta",
     "portal_approvals_view": "Vedere cosa chiediamo di approvare alla propria organizzazione (campioni, colori, pellami, grafiche, bozze del design, concessioni, ordini modificati) e le risposte date; rispondere richiede il diritto di approvare",
-    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
+    "sales_measurements_view": "Vedere le misure inviate tramite link e aprire le foto del corpo (ogni apertura registrata)",
+    "sales_measurements_manage": "Inviare ai piloti il link per le misure e decidere quando cancellare le foto del corpo"
   }
 }

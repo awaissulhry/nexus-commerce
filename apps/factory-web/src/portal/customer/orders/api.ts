@@ -222,6 +222,11 @@ export type ShipmentsRead = z.infer<typeof shipmentsSchema>
 
 export const fetchShipments = (api: ApiClient, id: string, signal?: AbortSignal): Promise<ShipmentsRead> => api.get(`/portal/sales-orders/${encodeURIComponent(id)}/shipments`, { schema: shipmentsSchema, signal })
 
+// B-W2b-170: "Copy tracking link" — a link to our branded tracking page of one shipment, its address in this answer only.
+const trackingLinkSchema = z.object({ link: z.object({ id: z.string(), expiresAt: z.string() }), url: z.string().nullable() })
+export const makeTrackingLink = (api: ApiClient, orderId: string, shipmentId: string, idempotencyKey: string): Promise<z.infer<typeof trackingLinkSchema>> =>
+  api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/tracking-link`, { body: {}, schema: trackingLinkSchema, idempotencyKey })
+
 // ── change and cancel requests (B-W2b-183; portal.salesOrders.ask to ask, .view to read) ─────────────────────────────
 export const VERDICT_CODES = ['FREE', 'NOT_ASKABLE', 'OPEN_REQUEST', 'STATUS', 'DAYS', 'MADE_TO_MEASURE', 'CLOSED_SHORT', 'CUT', 'LEATHER_CUT', 'WHOLE_ORDER_ONLY'] as const
 export type VerdictCode = (typeof VERDICT_CODES)[number]

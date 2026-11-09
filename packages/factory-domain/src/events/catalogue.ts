@@ -127,6 +127,8 @@ import { events as productionCutorders } from '../production-cutorders/events'
 import { events as productionLays } from '../production-lays/events'
 // B-W2b-117: after the cut (a recut ticket, a secondary process, a trolley to sewing changed).
 import { events as productionCutissue } from '../production-cutissue/events'
+// B-W2b-171: measurements by link (a link sent, measurements submitted, body photos deleted).
+import { events as measureLink } from '../measure-link/events'
 // B-W2b-172: the supplier questionnaire (a version published, a link sent, an answer sent, an answer reviewed).
 import { events as supplierQuestionnaire } from '../supplier-questionnaire/events'
 import type { EventDefinition } from './define'
@@ -323,6 +325,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productionLays,
   // B-W2b-117
   ...productionCutissue,
+  // B-W2b-171
+  ...measureLink,
   // B-W2b-172
   ...supplierQuestionnaire] as const satisfies readonly EventDefinition[]
 
