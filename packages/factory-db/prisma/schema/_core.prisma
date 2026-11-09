@@ -168,6 +168,9 @@ model Company {
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
   qualitySettings      QualitySettings[]
+  // W2b-4 recall.prisma (wave 33/33): the requests authorities sent it, and its sustainability claims.
+  authorityRequests    AuthorityRequest[]
+  sustainabilityClaims SustainabilityClaim[]
   // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
   branding             CompanyBranding[]
   // W2b-4 styles-depth.prisma (wave 26/33): its product types, GTIN ranges, private-label branding sets and product settings.

@@ -463,7 +463,8 @@ model PpeRegisterEntry {
   /// The office user who follows it up.
   ownerId                String?              @db.Uuid
   /// The record that opened it (QualityReleaseReversal, QualityRelease, Inspection, Shipment; later the complaint and the
-  /// NCR; W2b B-W2b-F1: the customer's return, ReturnAuthorisation), both or neither; one entry per source record.
+  /// NCR; W2b B-W2b-F1: the customer's return, ReturnAuthorisation; W2b-4 B-W2b-222: an authority's request,
+  /// AuthorityRequest), both or neither; one entry per source record.
   sourceType             String?
   sourceId               String?              @db.Uuid
   /// When it was received or found.
@@ -498,8 +499,17 @@ model PpeRegisterEntry {
   party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not SetNull: that would also clear tenantId and styleId.
   styleRevision StyleRevision? @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 recall.prisma (wave 33/33): its authority notices, recalls and withdrawals, distributor notices and the authority
+  // requests it keeps.
+  authorityNotices   AuthorityNotice[]
+  recallActions      RecallAction[]
+  distributorNotices DistributorNotice[]
+  authorityRequests  AuthorityRequest[]
 
   @@unique([tenantId, companyId, reference])
+  // W2b-4 recall.prisma (wave 33/33): the target of a notice's, a recall's and an authority request's reference: an entry
+  // of the row's own company.
+  @@unique([tenantId, companyId, id])
   @@index([tenantId, styleId])
   // The register's tiles: open entries that may present a risk.
   @@index([tenantId, status, risk])
@@ -510,6 +520,10 @@ enum PpeRegisterKind {
   COMPLAINT
   NON_CONFORMITY
   RECALL
+  /// W2b-4 wave 33/33 (B-W2b-222): a withdrawal from the distribution chain (recall.prisma RecallAction of kind WITHDRAWAL),
+  /// and a request from a market surveillance authority (recall.prisma AuthorityRequest; Reg. (EU) 2019/1020 art. 4(3)).
+  WITHDRAWAL
+  AUTHORITY_REQUEST
 }
 
 enum PpeRegisterStatus {
