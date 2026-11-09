@@ -22,6 +22,8 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import type { OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officeOf, payGuarded, PieceRateRefusedError, refuseProblems, refuseVersion } from './access'
+// B-W2b-215: piece rates take the approved SMV of the version's first day.
+import { copiedWithSmvOfDay, withSmvOfDay } from './smv-source'
 import type { VersionDetail } from './contract'
 import {
   audienceOf,
@@ -102,7 +104,7 @@ function emitVersion(tools: CommandTools, row: { id: string; tableId: string; si
 }
 
 /** The rates of a body made whole: every operation of the tenant library, SMV from the operation when not typed. */
-async function ratesFor(db: Db, table: Pick<TableRow, 'companyId'>, inputs: readonly RateInput[]): Promise<Rate[]> {
+async function ratesFor(db: Db, table: Pick<TableRow, 'companyId'>, inputs: readonly RateInput[], firstDay: string): Promise<Rate[]> {
   const operationIds = [...new Set(inputs.map((input) => input.operationId))]
   const operations = operationIds.length === 0 ? [] : await db.operation.findMany({ where: { id: { in: operationIds } }, select: { id: true, companyId: true, standardMinutes: true, status: true } })
   const byId = new Map(operations.map((row) => [row.id, row]))
@@ -113,7 +115,8 @@ async function ratesFor(db: Db, table: Pick<TableRow, 'companyId'>, inputs: read
     else if (operation.status !== 'ACTIVE') problems.push({ path: `rates/${index}/operationId`, message: 'This operation is archived in Products › Operations.' })
   })
   refuseProblems(problems, 'Some rates name an operation that cannot be paid.')
-  const filled = inputs.map((input) => (input.basis === 'SMV_RATE' && (input.standardMinutes === undefined || input.standardMinutes === null || input.standardMinutes.trim() === '') ? { ...input, standardMinutes: byId.get(input.operationId)!.standardMinutes.toString() } : input))
+  // B-W2b-215: the SMV of the version's first day (an approved version for a governed operation, never another typed one).
+  const filled = await withSmvOfDay(db, inputs, firstDay)
   const { rates, problems: rateProblems } = ratesOf(filled)
   refuseProblems(rateProblems, 'Some rates are not complete.')
   return rates
@@ -259,12 +262,12 @@ export async function createVersion(caller: CommandCaller, tableId: string, body
   const { context, table } = await tableOf(caller, tableId, PEOPLE_PIECERATES_MANAGE)
   if (table.status !== 'ACTIVE') throw new ConflictError('This table is archived: it takes no new version.')
   refuseProblems(termsProblems(body), 'This version cannot be made yet.')
-  const typed = body.rates === undefined ? null : await caller.withClient((client) => ratesFor(client, table, body.rates!))
+  const typed = body.rates === undefined ? null : await caller.withClient((client) => ratesFor(client, table, body.rates!, body.effectiveFrom))
   const { result, replayed } = await command(caller, { name: 'people.createRateVersion', idempotencyKey, input: body }, async (tools) => {
     await lockTable(tools, context.tenantId, table.id)
     const latest = await tools.tx.pieceRateVersion.findFirst({ where: { tableId: table.id }, select: { versionNo: true }, orderBy: { versionNo: 'desc' } })
     const source = body.copy === 'NONE' || typed !== null ? null : await tools.tx.pieceRateVersion.findFirst({ where: { tableId: table.id, status: { not: 'CANCELLED' } }, select: { id: true }, orderBy: { versionNo: 'desc' } })
-    const rates = typed ?? (source ? (await tools.tx.pieceRateEntry.findMany({ where: { versionId: source.id }, select: RATE_SELECT, orderBy: [{ sizeBand: 'asc' }, { id: 'asc' }] })).map(rateOfRecord) : [])
+    const rates = typed ?? (source ? await copiedWithSmvOfDay(tools.tx, (await tools.tx.pieceRateEntry.findMany({ where: { versionId: source.id }, select: RATE_SELECT, orderBy: [{ sizeBand: 'asc' }, { id: 'asc' }] })).map(rateOfRecord), body.effectiveFrom) : [])
     const id = newId()
     const versionNo = (latest?.versionNo ?? 0) + 1
     await tools.tx.pieceRateVersion.create({
@@ -329,7 +332,7 @@ export async function updateVersion(
 export async function setRates(caller: CommandCaller, versionId: string, body: { readonly version: number; readonly rates: readonly RateInput[] }, idempotencyKey?: string): Promise<VersionDetail> {
   const { context, version: current, table } = await versionOf(caller, versionId, PEOPLE_PIECERATES_MANAGE)
   refuseVersion(editRefusal(versionRowOf(current)))
-  const rates = await caller.withClient((client) => ratesFor(client, table, body.rates))
+  const rates = await caller.withClient((client) => ratesFor(client, table, body.rates, day(current.effectiveFrom)!))
   const { result } = await command(caller, { name: 'people.setRates', idempotencyKey, input: body, record: { type: 'PieceRateVersion', id: current.id, expectedVersion: body.version } }, async (tools) => {
     const state = (await tools.tx.pieceRateVersion.findUnique({ where: { id: current.id }, select: VERSION_SELECT }))!
     refuseVersion(editRefusal(versionRowOf(state)))

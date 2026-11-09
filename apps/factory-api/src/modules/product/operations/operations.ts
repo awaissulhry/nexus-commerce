@@ -6,6 +6,7 @@ import type { CreateOperationBody, ListOperationsQuery, OperationRow, OperationS
 import { changeOperation, newOperation, operationMachine, type OperationFields, type OperationPatch, type OperationStatus } from '@nexus/factory-domain/product/routing/operations'
 import { PRODUCT_ROUTING_VIEW } from '@nexus/factory-domain/product/routing/permissions'
 import { command, type CommandCaller } from '../../../core/command'
+import { assertTypedSmv } from '../minutes/governance'
 import { actorOf } from '../../../core/context'
 import {
   assertMayWrite,
@@ -175,6 +176,8 @@ export async function updateOperation(caller: CommandCaller, operationId: string
       if (!change.ok) throw invalid(prefixed(change.issues))
       const { operation: next, changed } = change
       if (changed.includes('code') && (await tx.operation.findFirst({ where: { code: next.code, id: { not: operationId } }, select: { id: true } }))) throw codeConflict(next.code)
+      // B-W2b-215: a typed SMV only where SMV governance allows it (else 'Propose SMV change'; the database refuses it too).
+      if (changed.includes('standardMinutes')) await assertTypedSmv(tx, operationId)
 
       const data = Object.fromEntries(changed.filter((field) => !(field === 'nameI18n' && next.nameI18n === null)).map((field) => [field, next[field]])) as Prisma.OperationUncheckedUpdateInput
       await tx.operation.update({ where: { id: operationId }, data: { ...data, updatedAt: now }, select: { id: true } })

@@ -1681,6 +1681,8 @@
     "product_routing_view": "Vedere cicli e minuti standard",
     "product_routing_manage": "Modificare un ciclo in bozza",
     "product_operations_manage": "Gestire la libreria delle operazioni",
+    "product_smv_propose": "Proporre una modifica dei minuti standard (SMV) di un'operazione",
+    "product_smv_approve": "Approvare o respingere la modifica SMV proposta da un altro",
     "inventory_locations_view": "Vedere le ubicazioni di uno stabilimento",
     "inventory_locations_manage": "Creare, spostare e archiviare ubicazioni",
     "inventory_stock_view": "Vedere le giacenze e i movimenti",
