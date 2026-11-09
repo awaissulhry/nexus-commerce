@@ -2,21 +2,22 @@ import { ValidationError, type Issue } from '../core/errors'
 import { parseScanId, type ScanType } from '../numbering/scan-id'
 
 /**
- * Labels for physical things (plan A1 §3.9; GAP-007; PLT-126): a hide, a lot, a bundle, a carton. Each carries its
+ * Labels for physical things (plan A1 §3.9; GAP-007; PLT-126): a hide, a lot, a bundle, a carton, a fabric roll, a remnant. Each carries its
  * scannable id (`HD-7K-0003RJ-M`, numbering/scan-id.ts) as a Code 128 barcode and as text a person can type, a heading
  * (what it is and whose), a title line and a few fields. The module that prints a label (receiving for hides and lots,
  * cutting for bundles, shipping for cartons) builds the input from its record; `composeLabel` checks and words it once,
  * and the same composition becomes ZPL for a label printer (./zpl.ts) or a PDF for any printer (the API).
  */
 
-export const LABEL_KINDS = ['HIDE', 'LOT', 'BUNDLE', 'CARTON'] as const
+// B-W2b-219: ROLL (a fabric roll's RL tag, B-W2b-107) and REMNANT (a hide's remnant's RM tag, B-W2b-100).
+export const LABEL_KINDS = ['HIDE', 'LOT', 'BUNDLE', 'CARTON', 'ROLL', 'REMNANT'] as const
 export type LabelKind = (typeof LABEL_KINDS)[number]
 
 export const LABEL_LANGUAGES = ['it', 'en'] as const
 export type LabelLanguage = (typeof LABEL_LANGUAGES)[number]
 
 /** The scan type each label carries: a hide label holds a hide's code, never a bundle's. */
-export const LABEL_SCAN_TYPE: Readonly<Record<LabelKind, ScanType>> = Object.freeze({ HIDE: 'HIDE', LOT: 'LOT', BUNDLE: 'BUNDLE', CARTON: 'CARTON' })
+export const LABEL_SCAN_TYPE: Readonly<Record<LabelKind, ScanType>> = Object.freeze({ HIDE: 'HIDE', LOT: 'LOT', BUNDLE: 'BUNDLE', CARTON: 'CARTON', ROLL: 'ROLL', REMNANT: 'REMNANT' })
 
 /** The fields each kind prints, in print order (two columns, at most six). */
 export const LABEL_FIELDS = Object.freeze({
@@ -24,12 +25,14 @@ export const LABEL_FIELDS = Object.freeze({
   LOT: ['article', 'supplier', 'supplierLot', 'quantity', 'received'],
   BUNDLE: ['workOrder', 'style', 'size', 'colour', 'pieces', 'operation'],
   CARTON: ['order', 'customer', 'carton', 'contents', 'grossWeight'],
+  ROLL: ['article', 'colour', 'length', 'width', 'shade', 'lot'],
+  REMNANT: ['article', 'colour', 'area', 'grade', 'hide', 'lot'],
 } as const satisfies Record<LabelKind, readonly string[]>)
 export type LabelFieldKey = (typeof LABEL_FIELDS)[LabelKind][number]
 
 const WORDS: Readonly<Record<LabelLanguage, { readonly kinds: Readonly<Record<LabelKind, string>>; readonly fields: Readonly<Record<LabelFieldKey, string>> }>> = {
   it: {
-    kinds: { HIDE: 'Pelle', LOT: 'Lotto', BUNDLE: 'Fascio', CARTON: 'Collo' },
+    kinds: { HIDE: 'Pelle', LOT: 'Lotto', BUNDLE: 'Fascio', CARTON: 'Collo', ROLL: 'Rotolo', REMNANT: 'Ritaglio' },
     fields: {
       article: 'Articolo',
       colour: 'Colore',
@@ -51,10 +54,14 @@ const WORDS: Readonly<Record<LabelLanguage, { readonly kinds: Readonly<Record<La
       carton: 'Collo',
       contents: 'Contenuto',
       grossWeight: 'Peso lordo',
+      length: 'Lunghezza',
+      width: 'Altezza',
+      shade: 'Tonalità',
+      hide: 'Pelle',
     },
   },
   en: {
-    kinds: { HIDE: 'Hide', LOT: 'Lot', BUNDLE: 'Bundle', CARTON: 'Carton' },
+    kinds: { HIDE: 'Hide', LOT: 'Lot', BUNDLE: 'Bundle', CARTON: 'Carton', ROLL: 'Roll', REMNANT: 'Remnant' },
     fields: {
       article: 'Article',
       colour: 'Colour',
@@ -76,6 +83,10 @@ const WORDS: Readonly<Record<LabelLanguage, { readonly kinds: Readonly<Record<La
       carton: 'Carton',
       contents: 'Contents',
       grossWeight: 'Gross weight',
+      length: 'Length',
+      width: 'Width',
+      shade: 'Shade',
+      hide: 'Hide',
     },
   },
 }

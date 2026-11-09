@@ -139,6 +139,10 @@ import { events as supplierQuestionnaire } from '../supplier-questionnaire/event
 import { events as productionInstructions } from '../production-instructions/events'
 // B-W2b-215: SMV versions and an operation's SMV taking an approved version.
 import { events as productMinutes } from '../product-minutes/events'
+// B-W2b-219: the cutting follow-ups' settings (a site's cutting rules, the leather area tolerance).
+import { events as productionCuttingRules } from '../production-cutting-rules/events'
+// B-W2b-225: a routing step's quality checkpoint opened a check.
+import { events as routingDepth } from '../routing-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -344,7 +348,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-214
   ...productionInstructions,
   // B-W2b-215
-  ...productMinutes] as const satisfies readonly EventDefinition[]
+  ...productMinutes,
+  // B-W2b-219
+  ...productionCuttingRules,
+  // B-W2b-225
+  ...routingDepth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

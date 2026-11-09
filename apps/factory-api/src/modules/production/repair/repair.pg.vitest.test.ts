@@ -274,8 +274,9 @@ describe('second quality instead of scrap', () => {
     expect(move).toEqual({ reason: 'ADJUSTMENT', itemId: finishedItem, toLocationId: quarantine, fromLocationId: null, quantity: '1.0000', workOrderId: workOrder, reasonCode: 'STAIN', idempotencyKey: `production.downgrade:${made.id}:1` })
     // Valued as a finished garment is: at its frozen standard when finance froze one (the seed has none: not valued yet).
     expect(await admin(`SELECT 1 FROM "StockValuation" WHERE "moveId" = $1`, [made.moveId])).toHaveLength(0)
-    const [row] = await admin(`SELECT "variantId", "secondQualityItemId", "reworkOrderId", "sourceScanId", "createdById" FROM "GarmentDowngrade" WHERE id = $1`, [made.id])
-    expect(row).toMatchObject({ secondQualityItemId: null, reworkOrderId: whole, sourceScanId: null, createdById: manager })
+    const [row] = await admin(`SELECT "variantId", "secondQualityItemId", "reworkOrderId", "sourceScanId", "createdById", "moveId" FROM "GarmentDowngrade" WHERE id = $1`, [made.id])
+    // B-W2b-219: the row names its second-quality move (posted first, under its key).
+    expect(row).toMatchObject({ secondQualityItemId: null, reworkOrderId: whole, sourceScanId: null, createdById: manager, moveId: made.moveId })
     expect(row!.variantId).not.toBeNull()
     expect((await events('production.garments_downgraded')).at(-1)).toMatchObject({ downgradeId: made.id, quantity: 1, target: 'SKU', moveId: made.moveId, toLocationId: quarantine })
     await refused('manager', '/production/downgrades', { ...source(), quantity: 1, reasonCode: 'STAIN', target: 'SKU', toLocationId: quarantine, ppeConfirmed: true }, 'MORE_THAN_SCRAPPED')
@@ -298,5 +299,20 @@ describe('second quality instead of scrap', () => {
     expect((await events('production.downgrade_withdrawn')).at(-1)).toMatchObject({ downgradeId: row!.id, moveId: answer.downgrade.withdrawnMoveId })
     // Withdrawn, its garment is free to go to second quality again.
     expect((await ok('manager', 'GET', `/production/downgrades/options?reworkOrderId=${whole}`)).left).toBe(1)
+  })
+
+  it('B-W2b-219: a downgrade made before the move column (no moveId) is still read and withdrawn by its key', async () => {
+    const made = (await ok('manager', 'POST', '/production/downgrades', { ...source(), quantity: 1, reasonCode: 'STAIN', target: 'SKU', toLocationId: quarantine, ppeConfirmed: true }, 201)).downgrade
+    // As a row from before the column: no moveId (the guards set aside for this one statement, as an old row was written).
+    await db.admin.query('BEGIN')
+    await db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    await db.admin.query('UPDATE "GarmentDowngrade" SET "moveId" = NULL WHERE id = $1', [made.id])
+    await db.admin.query('COMMIT')
+    const listed = (await ok('viewer', 'GET', '/production/downgrades')).downgrades.find((entry: Json) => entry.id === made.id)
+    expect(listed).toMatchObject({ moveId: made.moveId, place: { id: quarantine } })
+    const [row] = await admin<{ version: number }>(`SELECT version FROM "GarmentDowngrade" WHERE id = $1`, [made.id])
+    const answer = await ok('manager', 'POST', `/production/downgrades/${made.id}/withdraw`, { version: row!.version, reason: 'Old row withdrawn' }, 201)
+    const [back] = await admin(`SELECT "reversalOfId" FROM "StockMove" WHERE id = $1`, [answer.downgrade.withdrawnMoveId])
+    expect(back).toEqual({ reversalOfId: made.moveId })
   })
 })

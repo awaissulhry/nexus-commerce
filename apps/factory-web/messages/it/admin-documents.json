@@ -275,6 +275,9 @@
       "INCOMING_INSPECTION": "Controllo in accettazione",
       "INCIDENT": "Segnalazione di incidente",
       "WORK_INSTRUCTION": "Istruzione di lavoro",
+      "CHANGE_REQUEST": "Richiesta di modifica",
+      "CHANGE_ORDER": "Ordine di modifica",
+      "SAMPLE_ROUND": "Giro di campionatura",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },

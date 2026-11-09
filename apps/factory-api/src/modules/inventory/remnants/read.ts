@@ -6,6 +6,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { addArea, isAreaUom, noArea, twoNumbersWords, withOtherUnit, type AreaUom, type TwoNumbers } from '@nexus/factory-domain/inventory/hides/area'
 import { INVENTORY_ISSUE, INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { MINIMUM_REMNANT, minimumRemnantIn, type RemnantState } from '@nexus/factory-domain/inventory/remnants/rules'
+import { minimumRemnantFor } from './size'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, officeContextOf, stockContextOf } from '../ledger/access'
@@ -111,7 +112,8 @@ export async function listRemnants(caller: CommandCaller, query: RemnantsQuery) 
       rows: page.map((row) => pieceView(row, names.colours, names.workOrders)),
       nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
       totals: [...totals.values()].map((total) => ({ uom: total.uom, pieces: total.hides, area: total.area.toFixed(4), words: { it: twoNumbersWords(total, 'it', 'pieces'), en: twoNumbersWords(total, 'en', 'pieces') } })),
-      minimum: { area: MINIMUM_REMNANT.area, uom: MINIMUM_REMNANT.uom, setting: false },
+      // B-W2b-219: the site's own smallest remnant when the list is of one site, else the default every site starts from.
+      minimum: query.siteId ? await minimumRemnantFor(client, query.siteId) : { area: MINIMUM_REMNANT.area, uom: MINIMUM_REMNANT.uom, setting: false },
     }
   })
 }
@@ -131,10 +133,12 @@ export async function remnantRecord(caller: CommandCaller, remnantId: string) {
     })
     const officeIds = [...new Set(audit.filter((entry) => entry.audience === 'OFFICE' && entry.actorId).map((entry) => entry.actorId!))]
     const users = new Map((officeIds.length ? await client.user.findMany({ where: { id: { in: officeIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
-    const minimum = minimumRemnantIn(row.hide.lot.item.baseUom)
+    // B-W2b-219: the smallest remnant of the piece's site, in its leather's base unit.
+    const siteMinimum = await minimumRemnantFor(client, row.siteId)
+    const minimum = minimumRemnantIn(row.hide.lot.item.baseUom, siteMinimum)
     return {
       remnant: pieceView(row, names.colours, names.workOrders),
-      minimum: minimum ? { baseArea: minimum.toFixed(4), setting: false } : null,
+      minimum: minimum ? { baseArea: minimum.toFixed(4), setting: siteMinimum.setting } : null,
       history: audit.map((entry) => {
         const after = (entry.after ?? {}) as { state?: string; cause?: string; locationId?: string | null; source?: string }
         const before = (entry.before ?? {}) as { state?: string; locationId?: string | null }

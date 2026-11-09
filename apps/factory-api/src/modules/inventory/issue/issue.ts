@@ -18,8 +18,9 @@ import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reser
 import { holdOnIssue } from '../../quality/holds/checks'
 // B-W2b-100: one shade lot per order (SCM-206) and remnant stock (SCM-254).
 import { asksOneShadePerOrder, shadeRefusal } from '@nexus/factory-domain/inventory/reservations/shade'
-import { remnantSizeRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
 import { heldShades, shadeFactsOf, shadeOverrideOf, shadeRuleFor } from '../reservations/shade'
+// B-W2b-219: the site's smallest remnant (ProductionSettings).
+import { remnantSizeRefusalAt } from '../remnants/size'
 import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnIssue, remnantsOnIssueReversed, remnantsOnMoveReversed, remnantsOnWholeReturn, tagRemnantInCommand } from '../remnants/lifecycle'
 import {
   itemUnitsOf,
@@ -441,7 +442,7 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
       if (!decision.ok) refused(decision.refusal)
       // B-W2b-100 (SCM-254): a part of a hide comes back as a REMNANT with its own tag — not below the minimum remnant.
       if (hide && decision.reason === 'REMNANT') {
-        const small = remnantSizeRefusal({ hideCode: hide.code, baseArea: measured.baseQuantity, baseUom: item.baseUom })
+        const small = await remnantSizeRefusalAt(tx, workOrder.siteId, { hideCode: hide.code, baseArea: measured.baseQuantity, baseUom: item.baseUom })
         if (small) refused({ code: 'REMNANT_TOO_SMALL', message: small.message })
       }
       const [move] = await postMoves(
