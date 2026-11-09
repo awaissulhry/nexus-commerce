@@ -2,6 +2,11 @@
  * The shipment's tracking-page card (B-W2b-170) LAYOUT inside the record's Tracking & delivery tab. Controls are the
  * design system's; semantic tokens only.
  */
+.fw-stl-row {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .fw-stl,
 .fw-stl-other,
 .fw-stl-passon {

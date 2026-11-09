@@ -24,12 +24,16 @@
   overflow-wrap: anywhere;
 }
 
-p.fw-trk-hint,
 .fw-trk-hint[role='status'] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-6);
+}
+
+.fw-trk-hint > svg {
+  vertical-align: -2px;
+  margin-inline-end: var(--nds-space-4);
 }
 
 .fw-trk-again {

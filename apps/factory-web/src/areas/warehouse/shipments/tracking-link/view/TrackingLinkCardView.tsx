@@ -22,7 +22,10 @@ export type { TrackingLinkCardModel, TrackingLinkCardActions } from '../model'
 export function TrackingLinkCardView({ model, actions }: { model: TrackingLinkCardModel; actions?: TrackingLinkCardActions }) {
   return (
     <WithMessages namespaces={['shipment-tracking-link']}>
-      <CardBody model={model} actions={actions} />
+      {/* The whole row of the tab's card grid: its table needs the width. */}
+      <div className="fw-stl-row">
+        <CardBody model={model} actions={actions} />
+      </div>
     </WithMessages>
   )
 }
