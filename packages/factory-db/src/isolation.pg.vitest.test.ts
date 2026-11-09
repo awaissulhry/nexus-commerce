@@ -66,6 +66,7 @@ import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSizesDepth } from '../seed/sizes-depth'
 import { seed as seedSkills } from '../seed/skills'
 import { seed as seedSourcing } from '../seed/sourcing'
+import { seed as seedStylesDepth } from '../seed/styles-depth'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSupply } from '../seed/supply'
@@ -320,6 +321,10 @@ beforeAll(async () => {
   // settings, work instructions with versions, steps and media, the acknowledgements on A1's tablet.
   await seedInstructions({ db: factory, namespace: 'iso-a' })
   await seedInstructions({ db: factory, namespace: 'iso-b' })
+  // The styles and libraries schema of W2b-4 (wave 26/33): texts, pictures, revision files, product types, GTIN ranges, branding
+  // sets, product settings; its first picture, revision file, branding set and SKU are the plain ones a copy may repeat.
+  await seedStylesDepth({ db: factory, namespace: 'iso-a' })
+  await seedStylesDepth({ db: factory, namespace: 'iso-b' })
   // W2b-4 sizes, measurements and made-to-measure rules (schema wave 27/33): a fit scale, points of measure, specs, grade
   // rules, prepacks, protector placement, template rules and limits.
   await seedSizesDepth({ db: factory, namespace: 'iso-a' })
@@ -355,6 +360,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLine',
     'BomLineColour',
     'BomLineSize',
+    'BrandingSet',
     'Bundle',
     'BundleCoupon',
     'BundleReprint',
@@ -419,6 +425,7 @@ it('covers every classified table and every runtime role', () => {
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
+    'GtinRange',
     'GradeRule',
     'GradeRuleStep',
     'HandoverNote',
@@ -592,6 +599,8 @@ it('covers every classified table and every runtime role', () => {
     'PrivacyNotice',
     'PrivacyNoticeText',
     'ProcessingActivity',
+    'ProductSettings',
+    'ProductTypeProfile',
     'ProductionSettings',
     'ProtectedView',
     'ProtectorPlacement',
@@ -692,7 +701,10 @@ it('covers every classified table and every runtime role', () => {
     'StockValuation',
     'StoredFile',
     'Style',
+    'StyleImage',
     'StyleRevision',
+    'StyleRevisionFile',
+    'StyleText',
     'SubcontractBundle',
     'SubcontractKitLine',
     'SubcontractOperation',

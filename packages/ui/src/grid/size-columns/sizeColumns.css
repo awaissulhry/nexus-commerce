@@ -1,0 +1,131 @@
+/*
+ * DS — SizeColumns (B-W2b-207): the size cells of a grid and the SizeFill form. Semantic tokens only (light and dark).
+ * The base size is marked by its header words ("M · base") and a tone; a missing value by its words ("— missing") and
+ * the error tone; a value typed by hand among graded ones by a dot and its tooltip. Never colour alone.
+ */
+.nds-sizecol {
+  font-variant-numeric: tabular-nums;
+}
+.nds-sizecol.nds-sizecol-base {
+  background-color: var(--nds-info-soft);
+}
+.nds-sizecol-head.nds-sizecol-head-base {
+  font-weight: var(--nds-font-weight-semibold);
+  box-shadow: inset 0 -2px 0 var(--nds-primary);
+}
+.nds-sizecol.nds-sizecol-missing {
+  color: var(--nds-danger-text);
+  background-color: var(--nds-danger-soft);
+}
+.nds-sizecol.nds-sizecol-notneeded {
+  color: var(--nds-text-3);
+}
+.nds-sizecol.nds-sizecol-override::after {
+  content: '•';
+  margin-inline-start: var(--nds-space-2);
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-sizecol-editor {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--nds-space-8);
+  border: none;
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.nds-sizecol-editor:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: -2px;
+}
+
+/* SizeFill — fill from the base size by an increment. */
+.nds-sizefill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  color: var(--nds-text);
+}
+.nds-sizefill-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.nds-sizefill-base {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-sizefill-hint,
+.nds-sizefill-held {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.nds-sizefill-held {
+  color: var(--nds-warning-text);
+}
+.nds-sizefill-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-width: 16rem;
+}
+.nds-sizefill-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-sizefill-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-sizefill-count {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.nds-sizefill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-sizefill-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.nds-sizefill-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.nds-sizefill-chip b {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-sizefill-from {
+  color: var(--nds-text-2);
+}
+.nds-sizefill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

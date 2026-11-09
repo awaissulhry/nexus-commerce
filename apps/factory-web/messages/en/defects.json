@@ -435,20 +435,5 @@
   "zone": {
     "category": "Per defect",
     "none": "No zone"
-  },
-  "zoneMap": {
-    "clear": "Clear the zone",
-    "elsewhere": "Not on the sketch:",
-    "figure": {
-      "back": "Jacket, back",
-      "front": "Jacket, front",
-      "trousers": "Trousers, front"
-    },
-    "hint": "Tap a zone; on the keyboard the arrows move between zones and Enter picks. Left and right are the wearer's.",
-    "list": "Or pick from the list",
-    "none": "No zone",
-    "nonePicked": "No zone picked",
-    "nothingToClear": "No zone is picked.",
-    "picked": "Zone: {zone}"
   }
 }

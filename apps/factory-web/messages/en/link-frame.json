@@ -5,8 +5,11 @@
     "checking": "Checking the connection first…",
     "checkingBody": "Many requests came from your network: we check this one before passing it on. It takes a few seconds.",
     "done": "Asked — we passed it on",
-    "answer": "We passed this on. If the link was ours, the sender will write to the address it was sent to.",
+    "answer": "We passed this on to {sender}, who sent you this link. If the link was theirs, they will write to the address it was sent to.",
+    "answerAnonymous": "We passed this on to the person who sent you this link. If the link was theirs, they will write to the address it was sent to.",
     "onFile": "A new link only ever goes to the address this one was sent to, never to one typed here.",
+    "noteLabel": "A note for the sender (optional)",
+    "noteHint": "It goes with your request to the person who sent you this link.",
     "wait": "You asked several times already. You can ask again at {time}.",
     "waitHeld": "You can ask again at {time}.",
     "failed": "Your request did not reach us. Check the connection and ask again."

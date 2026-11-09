@@ -1,0 +1,212 @@
+/*
+ * DS — VersionCompare (B-W2b-207). Semantic tokens only (light and dark); the kind's words on its soft tone (the pairs the
+ * contrast gate measures: --nds-<tone>-text on --nds-<tone>-soft). A kind is never colour alone: a mark and a word.
+ * Each line is a card; its tables keep their three short columns at a phone's width (values wrap, nothing scrolls).
+ */
+.nds-vc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-vc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.nds-vc-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+.nds-vc-versions {
+  position: relative;
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-md);
+}
+.nds-vc-version {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+}
+.nds-vc-version b {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-arrow {
+  color: var(--nds-text-2);
+}
+.nds-vc-summary {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.nds-vc-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-inline-start: auto;
+}
+.nds-vc-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-normal);
+}
+.nds-vc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-vc-line {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.nds-vc-line[data-kind='added'] {
+  border-inline-start-color: var(--nds-success);
+}
+.nds-vc-line[data-kind='removed'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.nds-vc-line[data-kind='changed'] {
+  border-inline-start-color: var(--nds-info);
+}
+.nds-vc-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.nds-vc-line-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+.nds-vc-line-name b {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-6);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-vc-kind[data-kind='added'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-vc-kind[data-kind='removed'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-vc-kind[data-kind='changed'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-vc-fields,
+.nds-vc-totals {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.nds-vc-fields th,
+.nds-vc-fields td,
+.nds-vc-totals th,
+.nds-vc-totals td {
+  padding: var(--nds-space-4) var(--nds-space-8) var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.nds-vc-fields thead th,
+.nds-vc-totals thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-fields tbody th,
+.nds-vc-totals tbody th {
+  font-weight: var(--nds-font-weight-normal);
+  color: var(--nds-text-2);
+}
+.nds-vc-from {
+  color: var(--nds-text-2);
+}
+.nds-vc-to {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-from[data-empty='true'],
+.nds-vc-to[data-empty='true'] {
+  color: var(--nds-text-3);
+  font-weight: var(--nds-font-weight-normal);
+}
+.nds-vc-totals caption {
+  text-align: start;
+  padding-bottom: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-totals tbody tr:not([data-changed]) td {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+.nds-vc-sizes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-vc-size-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-vc-size {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  font-variant-numeric: tabular-nums;
+}
+.nds-vc-size b {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-vc-delta {
+  color: var(--nds-text-2);
+}

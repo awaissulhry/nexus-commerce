@@ -16,6 +16,8 @@ import { pdfViewerLabels } from '../../../lib/pdf/labels'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLinkRenew } from '../../../shell/links/renew/context'
 import { renewEnd, type LinkRenew } from '../../../shell/links/renew/model'
+// B-W2b-F17: the reader's optional note to the sender, with the ask.
+import { RenewNote } from '../../../shell/links/renew/RenewNote'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import {
   allClosesLink,
@@ -140,14 +142,19 @@ function UsedEnd({ page, model }: { page: FilePage; model: FileLinkDesignModel }
   const locale = useLocale()
   const ds = useDsLabels(model.timeZone)
   const renew = useLinkRenew(model.renew)
-  const end = renew ? renewEnd(renew, (key) => f(key, { time: renew.waitUntil ? formatTime(renew.waitUntil, { locale, timeZone: model.timeZone }) : '' })) : null
+  const end = renew ? renewEnd(renew, (key) => f(key, { time: renew.waitUntil ? formatTime(renew.waitUntil, { locale, timeZone: model.timeZone }) : '', sender: page.sender }), page.sender || null) : null
   const downloaded = page.files.filter((file) => model.downloads[file.id] === 'done').map((file) => file.name)
   return (
     <EndState
       tone="info"
       icon={<Link2Off size={28} aria-hidden />}
       title={t('used.title')}
-      body={t('used.body', { sender: page.sender })}
+      body={
+        <>
+          {t('used.body', { sender: page.sender })}
+          <RenewNote renew={renew} />
+        </>
+      }
       facts={[
         ...(downloaded.length > 0 ? [{ label: t('used.downloaded', { count: downloaded.length }), value: downloaded.join(', ') }] : []),
         ...(page.receipt.at ? [{ label: t('receipt.done.at'), value: formatDateTime(page.receipt.at, { locale, timeZone: model.timeZone }) }] : []),

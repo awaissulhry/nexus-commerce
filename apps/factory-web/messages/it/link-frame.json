@@ -5,8 +5,11 @@
     "checking": "Prima controlliamo la connessione…",
     "checkingBody": "Dalla tua rete sono arrivate molte richieste: controlliamo questa prima di inoltrarla. Ci vuole qualche secondo.",
     "done": "Richiesto — l’abbiamo inoltrato",
-    "answer": "Abbiamo inoltrato la richiesta. Se il link era nostro, il mittente scriverà all’indirizzo a cui era stato inviato.",
+    "answer": "Abbiamo inoltrato la richiesta a {sender}, che ti ha mandato questo link. Se il link era suo, scriverà all’indirizzo a cui era stato inviato.",
+    "answerAnonymous": "Abbiamo inoltrato la richiesta a chi ti ha mandato questo link. Se il link era suo, scriverà all’indirizzo a cui era stato inviato.",
     "onFile": "Un nuovo link va solo all’indirizzo a cui era stato inviato questo, mai a uno scritto qui.",
+    "noteLabel": "Una nota per il mittente (facoltativa)",
+    "noteHint": "Arriva con la richiesta alla persona che ti ha mandato questo link.",
     "wait": "Hai già chiesto più volte. Puoi chiedere di nuovo alle {time}.",
     "waitHeld": "Puoi chiedere di nuovo alle {time}.",
     "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo."

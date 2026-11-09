@@ -48,6 +48,13 @@ model Colour {
   nameI18n    Json?
   /// For screens and swatches: "#RRGGBB".
   hex         String?
+  /// W2b-4 (schema wave 26/33, B-W2b-206; PRD-041): the colour system its reference is in (PANTONE, RAL, NCS, or OWN: our
+  /// own swatch; null: not said); the reference in it ("19-4052 TCX", "RAL 9005", "S 9000-N"; 1 to 40 characters),
+  /// required for PANTONE, RAL and NCS, never without a system; the family it is filed under for filters ("black",
+  /// "blue"; 1 to 40 characters; null: none).
+  system      ColourSystem?
+  reference   String?
+  family      String?
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -133,6 +140,21 @@ model Item {
   animalOrigin        Boolean      @default(false)
   /// Other attributes of its kind, for screens and supplier documents: { "<name>": "<value>" }.
   attributes          Json?
+  /// W2b-4 (schema wave 26/33, B-W2b-206; PRD-029): the properties of its kind, typed (decimals as strings; the
+  /// …_styles_libraries_w2b_guards trigger): TEXTILE, LINING, MEMBRANE, PADDING { "weightGsm", "widthCm" (decimals above
+  /// 0), "construction" }; PROTECTOR { "standard" ("EN 1621-1:2012"), "type" ("shoulder"), "level" ("1" | "2"), "size" };
+  /// TRIM, HARDWARE { "material", "finish", "size", "nickelFree" (true | false) }; texts 1 to 100 characters. Other kinds
+  /// have none (leather's are the columns above; anything else is an attribute). null: none.
+  properties          Json?
+  /// W2b-4 (PRD-035): its approval for use: PENDING (in development; the default), APPROVED, CONDITIONAL (approved on the
+  /// condition in approvalNote) or BLOCKED (refused on a BOM line, and a revision whose BOM names it is not released).
+  /// approvedAt: when it was decided, set exactly when not PENDING; approvedById: who decided, with every decision since
+  /// W2b-4 (a material of a released BOM before it was approved by that release: its first release's time and releaser);
+  /// both change only with the approval. approvalNote: why, required for CONDITIONAL and BLOCKED, up to 1000 characters.
+  approval            MaterialApproval @default(PENDING)
+  approvedAt          DateTime?        @db.Timestamptz(3)
+  approvedById        String?          @db.Uuid
+  approvalNote        String?
   /// A component that is itself PPE or part of the protection (an EN 1621 protector): a certificate covers it, and a
   /// substitute needs the notified body's consent.
   isPpeComponent      Boolean      @default(false)
@@ -344,6 +366,8 @@ model SizeScale {
   gradeRules GradeRule[]
   prepacks   Prepack[]
   styles  Style[]
+  // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default scale it is.
+  productTypeProfiles ProductTypeProfile[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -396,8 +420,17 @@ model Style {
   /// The season or collection ("FW27"), as the office writes it.
   season                String?
   /// The brand it is made for (private label); null: our own collection. With a brand label, the brand is the legal PPE
-  /// maker (PLAN §2.8).
+  /// maker (PLAN §2.8). W2b-4 (B-W2b-206): this is PRD-010's private-label customer (only its partner users see the style
+  /// in the portal: the catalogue reads it since B-W2b-190); soldUnderOurName says whose name it is sold under.
   brandPartyId          String?     @db.Uuid
+  /// W2b-4 (schema wave 26/33, B-W2b-206; Owner 11-09, question 3): a private-label style the brand sells under OUR name
+  /// and mark (an exclusive design, not its own label): we stay the legal maker and the sender of its public DoC. false
+  /// (the default): the brand sells it under its own name or mark (PPE Reg. (EU) 2016/425 art. 12: the brand is the
+  /// manufacturer) and is the DoC page's sender. Never true without a brand.
+  soldUnderOurName      Boolean     @default(false)
+  /// W2b-4 (B-W2b-206; PRD-008): its product type (of its product type's kind of garment, of its company or tenant-wide);
+  /// null: none.
+  productTypeProfileId  String?     @db.Uuid
   sizeScaleId           String      @db.Uuid
   /// The size range (PRD-048): codes of the scale's sizes, in the scale's order. The SKU matrix is built from it.
   sizes                 String[]    @default([])
@@ -432,6 +465,16 @@ model Style {
   /// changed.
   copiedFromStyleId     String?     @db.Uuid
   copiedFromRevisionId  String?     @db.Uuid
+  /// W2b-4 (schema wave 26/33, B-W2b-206; PRD-007): where it is in its life, beside its record state `status` (which every
+  /// W1 path reads): CONCEPT → DEVELOPMENT → SAMPLING → APPROVED → IN_PRODUCTION → PHASE_OUT → DISCONTINUED, one command
+  /// per move (B-W2b-221; the database keeps IN_PRODUCTION for a style with a RELEASED revision). Styles made before it:
+  /// ARCHIVED → DISCONTINUED, with a released revision → IN_PRODUCTION, else DEVELOPMENT. When and by whom it last moved:
+  /// both change only with it (the time is the transaction's when the writer leaves it); null: not moved since W2b-4.
+  lifecycle             StyleLifecycle @default(CONCEPT)
+  lifecycleChangedAt    DateTime?   @db.Timestamptz(3)
+  lifecycleChangedById  String?     @db.Uuid
+  /// W2b-4 (B-W2b-206; B-W2b-190's need): the style that replaces it, only while PHASE_OUT or DISCONTINUED; never itself.
+  replacedById          String?     @db.Uuid
   status                StyleStatus @default(DRAFT)
   version               Int         @default(1)
   createdAt             DateTime    @default(now()) @db.Timestamptz(3)
@@ -447,6 +490,13 @@ model Style {
   copiedFrom          Style?                @relation("StyleCopiedFrom", fields: [tenantId, copiedFromStyleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   copiedFromRevision  StyleRevision?        @relation("StyleCopiedFromRevision", fields: [tenantId, copiedFromStyleId, copiedFromRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   copies              Style[]               @relation("StyleCopiedFrom")
+  // W2b-4 styles-depth.prisma (wave 26/33): the style that replaces it and those it replaces, its product type, its names
+  // per language and its pictures (Restrict, not Prisma's SetNull default: that would also clear tenantId).
+  replacedBy          Style?                @relation("StyleReplacedBy", fields: [tenantId, replacedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  replaces            Style[]               @relation("StyleReplacedBy")
+  productTypeProfile  ProductTypeProfile?   @relation(fields: [tenantId, productTypeProfileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  texts               StyleText[]
+  images              StyleImage[]
   colourways          Colourway[]
   revisions           StyleRevision[]
   // W2b-4 sizes-depth.prisma (wave 27/33): its own prepacks.
@@ -545,6 +595,8 @@ model Colourway {
   variants       Variant[]
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
+  // W2b-4 styles-depth.prisma (wave 26/33): its pictures.
+  images         StyleImage[]
   // W2b-4 sizes-depth.prisma (wave 27/33): the prepack lines of this colourway.
   prepackLines   PrepackLine[]
   // sales.prisma: its quote and sales order lines.
@@ -635,6 +687,9 @@ model StyleRevision {
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
   routing        RoutingOperation[]
+  // W2b-4 styles-depth.prisma (wave 26/33): its pictures and its pattern, marker and CAD files.
+  images         StyleImage[]
+  files          StyleRevisionFile[]
   // W2b-4 sizes-depth.prisma (wave 27/33): its measurement specs and protector placement (parts of the revision).
   measurementSpecs    MeasurementSpec[]
   protectorPlacements ProtectorPlacement[]
@@ -943,6 +998,8 @@ model MeasurementTemplate {
   // W2b-4 sizes-depth.prisma (wave 27/33): its plausibility rules.
   rules   MeasurementRule[]
   styles  Style[]
+  // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default template it is.
+  productTypeProfiles ProductTypeProfile[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])

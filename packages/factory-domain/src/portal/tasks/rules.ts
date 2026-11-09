@@ -2,7 +2,7 @@ import { heldGrains } from '../../auth/grains/grains'
 import type { Issue } from '../../core/errors'
 import { can, type Actor } from '../../core/permissions'
 import { businessDate } from '../../core/time'
-import { KIND_RULES, type PartnerTaskKind, type PartnerTaskStatus, type PortalArea } from './kinds'
+import { KIND_RULES, taskArea, type PartnerTaskKind, type PartnerTaskStatus, type PortalArea } from './kinds'
 
 /**
  * The rules of the one task list (B-W2b-167, COL-043): who in a party a task is for, the order it is read in, what the office
@@ -54,11 +54,14 @@ export function byDue(a: Pick<TaskFacts, 'dueAt' | 'createdAt'> & { readonly id:
   return a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
-/** The badges of the rail: per area, how many open tasks wait for the person ("Orders, 2 to confirm"). */
-export function badgesOf(tasks: readonly Pick<TaskFacts, 'kind'>[]): { area: PortalArea; count: number; kinds: Partial<Record<PartnerTaskKind, number>> }[] {
+/**
+ * The badges of the rail: per area, how many open tasks wait for the person ("Orders, 2 to confirm"); B-W2b-F17: the area
+ * as the person's partner kind has it (taskArea: a supplier's approvals on Home).
+ */
+export function badgesOf(tasks: readonly Pick<TaskFacts, 'kind'>[], partnerKind: string | null = null): { area: PortalArea; count: number; kinds: Partial<Record<PartnerTaskKind, number>> }[] {
   const areas = new Map<PortalArea, { count: number; kinds: Partial<Record<PartnerTaskKind, number>> }>()
   for (const task of tasks) {
-    const area = KIND_RULES[task.kind].area
+    const area = taskArea(task.kind, partnerKind)
     const entry = areas.get(area) ?? { count: 0, kinds: {} }
     entry.count += 1
     entry.kinds[task.kind] = (entry.kinds[task.kind] ?? 0) + 1

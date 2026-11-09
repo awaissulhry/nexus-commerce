@@ -40,8 +40,9 @@ import {
   withOutcome,
   withoutCode,
 } from './model'
+import { figureOf as figureIn, offSketch, primaryShapes, RIDER_GARMENT_SHAPES as ZONE_SHAPES, stepZone as stepIn } from '@nexus/ui/components/GarmentZoneMap/index'
 import { GarmentZoneMap } from './zones/GarmentZoneMap'
-import { figureOf, OFF_SKETCH, PRIMARY_SHAPES, stepZone, ZONE_SHAPES, zoneWords } from './zones/zones'
+import { zoneWords } from './zones/zones'
 
 const params = (query: string) => new URLSearchParams(query)
 const OPEN_SEAM = SEAMS.defects[0]!
@@ -214,6 +215,13 @@ describe('drafts: Add defect and Add disposition', () => {
 const renderIn = (locale: (typeof LOCALES)[number], node: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, node))
 
 describe('GarmentZoneMap', () => {
+  // The DS part's rider sketch (B-W2b-207) against the domain's zones.
+  const ZONE_IDS = GARMENT_ZONES.map((zone) => zone.id)
+  const OFF_SKETCH = offSketch(ZONE_IDS, ZONE_SHAPES)
+  const PRIMARY_SHAPES = primaryShapes(ZONE_IDS, ZONE_SHAPES)
+  const figureOf = (zone: string | null) => figureIn(zone, ZONE_SHAPES)
+  const stepZone = (zone: string | null, delta: 1 | -1) => stepIn(ZONE_IDS, zone, delta)
+
   it('every zone of the domain has exactly one pressable place (a shape on a sketch, or a chip)', () => {
     for (const zone of GARMENT_ZONES) {
       const primaries = ZONE_SHAPES.filter((shape) => shape.zone === zone.id && !shape.copy)
@@ -239,7 +247,7 @@ describe('GarmentZoneMap', () => {
     expect(html).toContain('aria-label="Petto"')
     expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1)
     expect((html.match(/tabindex="0"/gi) ?? []).length).toBe(1)
-    expect(html).toContain('fw-zone-pin')
+    expect(html).toContain('nds-zone-pin')
     expect(html).toContain('Zona: Petto')
     // The list holds every zone and "No zone".
     expect((html.match(/<option/g) ?? []).length).toBe(GARMENT_ZONES.length + 1)

@@ -48,6 +48,11 @@ import type { PartnerThreadLabels } from '@nexus/ui/patterns/PartnerThread/index
 import type { LineResponseListLabels } from '@nexus/ui/patterns/LineResponseList/index'
 import type { PortalActionBarLabels } from '@nexus/ui/patterns/PortalActionBar/index'
 import type { SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
+// B-W2b-207: the product parts (each its own entry point).
+import type { VersionCompareLabels } from '@nexus/ui/patterns/VersionCompare/index'
+import type { RuleBuilderLabels } from '@nexus/ui/patterns/RuleBuilder/index'
+import type { SizeColumnsLabels } from '@nexus/ui/grid/size-columns/index'
+import type { GarmentZoneMapLabels } from '@nexus/ui/components/GarmentZoneMap/index'
 import { formatDateTime, formatNumber, DEFAULT_TIME_ZONE } from './format'
 import { INTL_LOCALE, type Locale } from './locales'
 import type { Translate } from './messages'
@@ -136,6 +141,11 @@ export interface DsLabels {
   portalActionBar: PortalActionBarLabels
   /** The stacked size grid's words: spread into the grid's `copy` with the area's own (`{ ...words, ...ds.sizeGridStacked }`). */
   sizeGridStacked: Pick<SizeGridCopy, 'colourPicker' | 'colourTab' | 'sizeHeader' | 'leftHeader' | 'quantityHeader' | 'left' | 'less' | 'more' | 'atZero' | 'atMax' | 'stackTotals'>
+  // B-W2b-207
+  versionCompare: VersionCompareLabels
+  ruleBuilder: RuleBuilderLabels
+  sizeColumns: SizeColumnsLabels
+  garmentZoneMap: GarmentZoneMapLabels
 }
 
 const MINUTE = 60_000
@@ -508,6 +518,7 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     ...floorPeopleLabels(t),
     ...qualityFloorLabels(t),
     ...portalLinkLabels(t),
+    ...productPartsLabels(t),
   }
 }
 
@@ -955,6 +966,136 @@ function qualityFloorLabels(t: Translate): Pick<DsLabels, 'gateExplainer' | 'sig
       announceGroup: (group, count) => fc('announceGroup', { group, count }),
       left: (count, names) => fc('left', { count, names: names.join(fc('namesJoin')) }),
       none: fc('none'),
+    },
+  }
+}
+
+/** B-W2b-207 — the product parts' words (`ds-words`: versionCompare, ruleBuilder, sizeColumns, garmentZoneMap). */
+function productPartsLabels(t: Translate): Pick<DsLabels, 'versionCompare' | 'ruleBuilder' | 'sizeColumns' | 'garmentZoneMap'> {
+  const k = (part: string) => (key: string, params?: Record<string, string | number>) => t(`${part}.${key}`, params)
+  const vc = k('versionCompare')
+  const rb = k('ruleBuilder')
+  const sc = k('sizeColumns')
+  const gz = k('garmentZoneMap')
+  const op = (name: string) => (field: string, value: string) => rb(`operators.${name}`, { field, value })
+  const list = (values: readonly string[], join: 'or' | 'nor') =>
+    values.length <= 1 ? (values[0] ?? '') : `${values.slice(0, -1).join(rb('listComma'))} ${rb(join === 'or' ? 'listOr' : 'listNor')} ${values[values.length - 1]}`
+  return {
+    versionCompare: {
+      kinds: { added: vc('kinds.added'), removed: vc('kinds.removed'), changed: vc('kinds.changed'), unchanged: vc('kinds.unchanged') },
+      title: (before, after) => vc('title', { before, after }),
+      field: vc('field'),
+      none: vc('none'),
+      notIn: (version) => vc('notIn', { version }),
+      sizes: vc('sizes'),
+      sizeChange: (size, from, to, delta) => (delta ? vc('sizeChangeDelta', { size, from, to, delta }) : vc('sizeChange', { size, from, to })),
+      totals: vc('totals'),
+      summary: (added, removed, changed) =>
+        [added ? vc('summaryAdded', { count: added }) : null, removed ? vc('summaryRemoved', { count: removed }) : null, changed ? vc('summaryChanged', { count: changed }) : null]
+          .filter(Boolean)
+          .join(vc('summaryJoin')) || vc('summaryNone'),
+      same: vc('same'),
+      showUnchanged: (count) => vc('showUnchanged', { count }),
+      hideUnchanged: vc('hideUnchanged'),
+      useAsNote: vc('useAsNote'),
+      nothingToNote: vc('nothingToNote'),
+      noteHead: (before, after) => vc('noteHead', { before, after }),
+      noteAdded: (line) => vc('noteAdded', { line }),
+      noteRemoved: (line) => vc('noteRemoved', { line }),
+      noteChanged: (line, parts) => vc('noteChanged', { line, parts }),
+      noteField: (field, from, to) => vc('noteField', { field, from, to }),
+      noteSize: (size, from, to) => vc('noteSize', { size, from, to }),
+      noteTotal: (total, from, to) => vc('noteTotal', { total, from, to }),
+      join: vc('join'),
+    },
+    ruleBuilder: {
+      operators: { eq: op('eq'), ne: op('ne'), lt: op('lt'), lte: op('lte'), gt: op('gt'), gte: op('gte'), in: op('in'), notIn: op('notIn'), contains: op('contains'), isTrue: op('isTrue'), isFalse: op('isFalse') },
+      operatorNames: {
+        eq: rb('operatorNames.eq'),
+        ne: rb('operatorNames.ne'),
+        lt: rb('operatorNames.lt'),
+        lte: rb('operatorNames.lte'),
+        gt: rb('operatorNames.gt'),
+        gte: rb('operatorNames.gte'),
+        in: rb('operatorNames.in'),
+        notIn: rb('operatorNames.notIn'),
+        contains: rb('operatorNames.contains'),
+        isTrue: rb('operatorNames.isTrue'),
+        isFalse: rb('operatorNames.isFalse'),
+      },
+      combinator: rb('combinator'),
+      all: rb('all'),
+      any: rb('any'),
+      and: rb('and'),
+      or: rb('or'),
+      list,
+      withUnit: (value, unit) => rb('withUnit', { value, unit }),
+      row: (n) => rb('row', { n }),
+      fieldOf: (n) => rb('fieldOf', { n }),
+      operatorOf: (n) => rb('operatorOf', { n }),
+      valueOf: (n) => rb('valueOf', { n }),
+      pickField: rb('pickField'),
+      pickOperator: rb('pickOperator'),
+      pickValue: rb('pickValue'),
+      addRow: rb('addRow'),
+      removeRow: (n) => rb('removeRow', { n }),
+      lastRow: rb('lastRow'),
+      maxRows: (max) => rb('maxRows', { max }),
+      preview: rb('preview'),
+      unfinished: (n) => rb('unfinished', { n }),
+      noRows: rb('noRows'),
+      rowProblem: (n, problem) => rb('rowProblem', { n, problem }),
+      problems: {
+        field: rb('problems.field'),
+        fieldHeld: rb('problems.fieldHeld'),
+        operator: rb('problems.operator'),
+        value: rb('problems.value'),
+        number: rb('problems.number'),
+        choice: rb('problems.choice'),
+        range: (min, max) =>
+          min !== null && max !== null ? rb('problems.rangeBoth', { min, max }) : min !== null ? rb('problems.rangeMin', { min }) : rb('problems.rangeMax', { max: max ?? '' }),
+      },
+      apply: rb('apply'),
+    },
+    sizeColumns: {
+      missing: sc('missing'),
+      notNeeded: sc('notNeeded'),
+      baseHeader: (size) => sc('baseHeader', { size }),
+      headerTooltip: (size, unit, base) => [sc('headerSize', { size }), unit, base ? sc('headerBase') : null].filter(Boolean).join(sc('partsJoin')),
+      cellTooltip: (size, value, unit, typed) =>
+        [value === null ? sc('cellMissing', { size }) : sc('cellValue', { size, value: [value, unit].filter(Boolean).join(' ') }), typed ? sc('cellTyped') : null].filter(Boolean).join(sc('partsJoin')),
+      group: (unit) => (unit ? sc('group', { unit }) : sc('groupNoUnit')),
+      notNumber: (size, text) => sc('notNumber', { size, text }),
+      fillTitle: sc('fillTitle'),
+      fillBase: (size, value) => sc('fillBase', { size, value }),
+      fillIncrement: sc('fillIncrement'),
+      fillIncrementHint: sc('fillIncrementHint'),
+      fillKeep: (count) => sc('fillKeep', { count }),
+      fillChanges: (count) => sc('fillChanges', { count }),
+      fillChange: (size, from, to) => (from === null ? sc('fillChangeMissing', { size, to }) : sc('fillChange', { size, from, to })),
+      fillApply: sc('fillApply'),
+      fillCancel: sc('fillCancel'),
+      fillNoBase: sc('fillNoBase'),
+      fillBaseMissing: (size) => sc('fillBaseMissing', { size }),
+      fillNotNumber: sc('fillNotNumber'),
+      fillNoIncrement: sc('fillNoIncrement'),
+      fillBelowZero: (size) => sc('fillBelowZero', { size }),
+      fillNothing: sc('fillNothing'),
+    },
+    garmentZoneMap: {
+      picked: (zone) => gz('picked', { zone }),
+      nonePicked: gz('nonePicked'),
+      elsewhere: gz('elsewhere'),
+      list: gz('list'),
+      none: gz('none'),
+      clear: gz('clear'),
+      nothingToClear: gz('nothingToClear'),
+      hint: gz('hint'),
+      figures: { front: gz('figures.front'), back: gz('figures.back'), trousers: gz('figures.trousers') },
+      marks: gz('marks'),
+      marksZone: gz('marksZone'),
+      marksValue: gz('marksValue'),
+      marked: (zone, words) => (words ? gz('marked', { zone, words }) : zone),
     },
   }
 }
