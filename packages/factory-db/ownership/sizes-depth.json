@@ -1,0 +1,83 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sizes-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the points of measure, the measurement specs of draft revisions with their values, the grade rules, the prepacks, the protector placement of draft revisions and the made-to-measure rules, through apps/factory-api's modules/product/{measures,grading,prepacks,protectors,mtm-rules} (B-W2b-224, -233, -248), always through command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The floor (factory_floor_runtime) reads, tenant-wide (no site key: product data is tenant- or company-wide; the work order brings the site), the points of measure, the specs and their values (the spec for the size on the tablet, the final inspection's size check), the prepacks (packing) and the protector placement (which protector in which pocket); it never reads a grade rule or a made-to-measure rule. A spec, its values and the protector placement are parts of a style revision: written and removed only while it is DRAFT (the …_product_guards part rule). Portal and link sessions read nothing here (the measurement link reads a template's rules in the tenant's system context). No column here is money, so no @grain and no wall on one; nothing here is about one person. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PointOfMeasure": {
+      "about": "The office keeps the library of points of measure (body and garment), their words, units, zones, default tolerances and how-to pictures, and archives them. The floor reads them: the spec on the tablet names its points.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "MeasurementSpec": {
+      "about": "The office starts a draft revision's measurement spec, grades it, approves, reopens or archives it, and removes a draft revision's spec it does not want; a released revision's spec never changes. The floor reads them (the work order's revision's spec).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "MeasurementSpecValue": {
+      "about": "The office types, grades, changes and removes a draft spec's values (only while the spec is DRAFT and its revision a draft). The floor reads them: nominal and tolerance per point for its size.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "GradeRule": {
+      "about": "The office keeps the grade rules of its size scales and archives them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "GradeRuleStep": {
+      "about": "The office writes, changes and removes a grade rule's increments. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "Prepack": {
+      "about": "The office keeps the prepacks of a style or a size scale and archives them. The floor reads them (packing by prepack).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "PrepackLine": {
+      "about": "The office writes, changes and removes an active prepack's pieces per size (and colourway). The floor reads them (packing by prepack).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ProtectorPlacement": {
+      "about": "The office writes, changes and removes a draft revision's protector placement; a released revision's never changes. The floor reads it: which protector goes in which pocket, per size.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "MeasurementRule": {
+      "about": "The office writes, changes, archives and removes a made-to-measure template's plausibility rules (GET / PUT per template, B-W2b-248). Office only: the floor reads no template, and the measurement link checks them in the tenant's system context.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
