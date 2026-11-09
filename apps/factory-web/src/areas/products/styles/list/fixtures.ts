@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { BRANDS, CAN, COMPANY_ID, DEMO_PRICES, demoDuplicated, demoOffer, GRAINS, PREFIX, ROWS, SCALES, SIZES } from '../demo/fixtures'
 import { blankDraft, draftFor, type DuplicateModel } from '../duplicate/duplicate-model'
+import { COMMERCE_DEMO } from '../import/commerce/fixtures'
 import { pricesByStyle, type ListPrices, type NewStyleDraft, type StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
 
@@ -85,7 +86,7 @@ export const designScreen = defineDesignScreen<StylesListViewModel>({
     { id: 'owner', label: 'Owner: the open styles', model: base, note: 'Tiles = saved filters; the code is a real link; Revision shows "Rev 2 released · Rev 3 draft"; "Ready to make" counts what each style still lacks.' },
     { id: 'product', label: 'Product office', model: { ...base, can: CAN.product, grains: GRAINS.product, prices: { state: 'hidden' } }, note: 'The same list: creates, archives, exports. No price list right: no list price column.' },
     { id: 'production', label: 'Production manager', model: { ...base, can: CAN.production, grains: GRAINS.production, prices: { state: 'hidden' } }, note: 'No money anywhere on the list; the same columns.' },
-    { id: 'sales', label: 'Sales (reads)', model: { ...base, can: CAN.sales, grains: GRAINS.sales }, note: 'New style held with its reason; Archive N held in the selection bar. List price and margin % (S2: never cost).' },
+    { id: 'sales', label: 'Sales (reads)', model: { ...base, can: CAN.sales, grains: GRAINS.sales, importHeld: 'hold.noManage' }, note: 'New style and Import held with their reasons; Archive N held in the selection bar. List price and margin % (S2: never cost).' },
     { id: 'prices', label: 'W2a: list price and margin %', model: base, note: 'From the base price list in force (DEMO-LISTINO-27): "from" when only colourways are priced; "under the floor" below the sales margin floor; "Not priced" when the list has no row.' },
     { id: 'prices-none', label: 'W2a: no base price list in force', model: { ...base, prices: { state: 'none' } }, note: 'The columns stay; the head says no base list is in force.' },
     { id: 'prices-loading', label: 'W2a: prices being read', model: { ...base, prices: { state: 'loading' } } },
@@ -111,6 +112,7 @@ export const designScreen = defineDesignScreen<StylesListViewModel>({
     { id: 'new-style', label: 'New style', model: { ...base, newStyle: newStyle(draft) }, note: 'Create is held until the code, name and scale are given; ⌘↵ creates.' },
     { id: 'new-style-filled', label: 'New style, filled', model: { ...base, newStyle: newStyle(filled) }, note: 'EN 17092-3 sets class AA by itself; base size 52 among the chips.' },
     { id: 'new-style-gloves', label: 'New style: gloves', model: { ...base, newStyle: newStyle({ ...filled, code: 'DEMO-GLV-02', name: 'Guanto Estivo Demo', productType: 'GLOVES', range: { sizeScaleId: SCALES[1]!.id, sizes: ['S', 'M', 'L', 'XL'], baseSize: 'L' }, ppe: { ppeCategory: 'CATEGORY_II', ppeStandard: 'EN 13594:2015', ppeClass: '1KP' } }) }, note: 'Gloves are offered EN 13594 only, with its levels.' },
+    { id: 'commerce-import', label: 'W2b: New style › Nexus Commerce product', model: { ...base, commerce: { model: COMMERCE_DEMO.source(), sheet: null } }, note: 'The New style card and the header\'s Import open the same step: a Commerce export file; the live read is OFF. Every state is on SCR-273.' },
     { id: 'new-style-refused', label: 'New style: code taken', model: { ...base, newStyle: newStyle({ ...filled, code: 'DEMO-JKT-01' }, { problem: 'problem.write.codeTaken', refused: ['code'] }) } },
     { id: 'no-match', label: 'Nothing matches', model: { ...base, filters: { view: 'open', q: 'zzz', type: '', ppe: '' }, rows: { items: [], more: false, count: 0, problem: null } } },
     { id: 'empty', label: 'No styles yet', model: { ...base, rows: { items: [], more: false, count: 0, problem: null }, tiles: { drafts: 0, waiting: 0, active: 0, archived: 0 } } },

@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { archiveStyle, basePriceLists, countStyles, createStyle, listBrands, listScales, listStyles, priceEntries, startRevision } from '../api'
 import { useDuplicate } from '../duplicate/use-duplicate'
+import { commerceHeld } from '../import/commerce/commerce-model'
+import { useCommerceImport } from '../import/commerce/use-commerce-import'
+import { EVERY_COMPANY } from '../import/sheet-import'
 import { abilitiesOf, grainsOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from '../model'
 import { readProblem, writeProblem } from '../problems'
 import { pickBaseList, pricesByStyle, type ListPrices, type NewStyleDraft, type NewStyleModel, type StyleFilters, type StylesListViewModel } from './list-model'
@@ -86,6 +89,23 @@ function StylesContainer() {
   const duplicate = useDuplicate(api, () => {
     void load()
     loadTiles()
+  })
+  // W2b (B-W2b-209): styles started from a Nexus Commerce export (New style › Nexus Commerce product, the header's Import).
+  const locale = useLocale()
+  const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
+  const importRights = useMemo(() => ({ view: session.permissions.includes('imports.view'), run: can.imports, apply: can.importsApply, people: false }), [session.permissions, can.imports, can.importsApply])
+  const commerce = useCommerceImport(api, {
+    manage: can.manage,
+    rights: importRights,
+    // The styles are the open company's; with no company open, the person's only one, else every company.
+    companyId: companyId ?? (companies.length === 1 ? companies[0]!.id : EVERY_COMPANY),
+    companies,
+    everyCompany: t('newStyle.everyCompany'),
+    locale,
+    onApplied: () => {
+      void load()
+      loadTiles()
+    },
   })
 
   // The list prices (W2a): the BASE list in force for this company, read once; only with the right and a grain to show.
@@ -278,6 +298,8 @@ function StylesContainer() {
     asOf,
     updates,
     newStyle,
+    commerce: commerce.state,
+    importHeld: commerceHeld({ manage: can.manage, imports: importRights }),
     busy,
     notice,
   }
@@ -298,10 +320,17 @@ function StylesContainer() {
         onArchiveMany: archiveMany,
         onNewStyle: openNew,
         onStartFrom: (from) => {
-          if (from !== 'copy') return
-          openNew(false)
-          duplicate.open(null)
+          if (from === 'copy') {
+            openNew(false)
+            duplicate.open(null)
+          } else if (from === 'commerce') {
+            openNew(false)
+            commerce.open()
+          }
         },
+        onImport: () => commerce.open(),
+        commerce: commerce.actions,
+        commerceSheet: commerce.sheetActions,
         onDuplicate: (row) => duplicate.open({ id: row.id, code: row.code, name: row.name }),
         duplicate: duplicate.actions,
         onNewDraft: (draft) => setNewStyle((current) => (current ? { ...current, draft, refused: [] } : current)),

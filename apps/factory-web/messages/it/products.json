@@ -716,14 +716,13 @@
       "commerce": "Prodotto di Nexus Commerce"
     },
     "fromWhen": {
-      "template": "Più avanti",
-      "commerce": "W2b"
+      "template": "Più avanti"
     },
     "fromHint": {
       "blank": "Scrivi qui il modello; varianti, distinta e ciclo seguono nel suo studio.",
       "copy": "Scegli un modello e le parti da copiare: distinta, misure, ciclo, etichetta.",
       "template": "I modelli base arrivano più avanti.",
-      "commerce": "Partire da un prodotto di Nexus Commerce arriva con W2b."
+      "commerce": "Carica un'esportazione di Nexus Commerce: ogni famiglia di prodotti diventa un modello in bozza con colori, taglie e SKU."
     }
   },
   "compliance": {

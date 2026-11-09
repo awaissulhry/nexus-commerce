@@ -1,6 +1,9 @@
 import type { BrandRow, PriceEntry, PriceListRow, ScaleRow, StyleRow } from '../api'
 import type { DuplicateModel } from '../duplicate/duplicate-model'
 import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
+import type { WizardActions } from '../../../admin/import/view/ImportWizard'
+import type { CommerceImportActions } from '../import/commerce/commerce-model'
+import type { CommerceImportState } from '../import/commerce/use-commerce-import'
 import type { PpeValue, RangeValue } from '../forms'
 import type { Grains, StyleAbilities, StyleListView } from '../model'
 
@@ -42,7 +45,7 @@ export interface NewStyleModel {
   refused: string[]
 }
 
-/** New style › Start from (design pop:styles.new): Blank, Copy of a style (W2a); Template (Later) and a Nexus Commerce product (W2b) are held. */
+/** New style › Start from (design pop:styles.new): Blank, Copy of a style (W2a), a Nexus Commerce product (W2b, B-W2b-209); Template (Later) is held. */
 export type StartFrom = 'blank' | 'copy' | 'template' | 'commerce'
 export const START_FROM: readonly StartFrom[] = ['blank', 'copy', 'template', 'commerce']
 
@@ -105,6 +108,10 @@ export interface StylesListViewModel {
   /** Live changes waiting behind "N updates · Show". */
   updates: number
   newStyle: NewStyleModel | null
+  /** W2b (B-W2b-209): New style › Nexus Commerce product and the header's Import (its steps and the import wizard). */
+  commerce?: CommerceImportState
+  /** Why the header's Import is held (a key of `products-commerce-import`), null when it is not. */
+  importHeld?: string | null
   busy: boolean
   notice: { key: string; tone: 'info' | 'success' | 'warning' | 'danger'; params?: Record<string, string | number> } | null
   /** Design cases: the rows already selected, the focused row. */
@@ -125,8 +132,12 @@ export interface StylesListActions {
   onExport?: (ids: string[]) => void
   onArchiveMany?: (ids: string[], reason: string) => Promise<boolean>
   onNewStyle?: (open: boolean) => void
-  /** New style › Start from: Copy of a style opens the Duplicate dialog on its source picker. */
+  /** New style › Start from: Copy of a style opens the Duplicate dialog on its source picker; a Nexus Commerce product the import's source step. */
   onStartFrom?: (from: StartFrom) => void
+  /** W2b (B-W2b-209): the header's Import (a Nexus Commerce export, or a sheet in its columns). */
+  onImport?: () => void
+  commerce?: CommerceImportActions
+  commerceSheet?: WizardActions
   /** A row's ⋯ › Duplicate…. */
   onDuplicate?: (row: StyleRow) => void
   duplicate?: DuplicateActions
