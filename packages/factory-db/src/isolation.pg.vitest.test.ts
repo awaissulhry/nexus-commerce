@@ -24,6 +24,7 @@ import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
 import { seed as seedInspectionPlans } from '../seed/inspection-plans'
+import { seed as seedInstructions } from '../seed/instructions'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLabour } from '../seed/labour'
@@ -315,6 +316,10 @@ beforeAll(async () => {
   // that waits for the office's check (the first address: a partner session inserts only such a one), upload and request.
   await seedPortalFollowups({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
   await seedPortalFollowups({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
+  // W2b-4 routings, standard minutes and work instructions (schema wave 25/33): SMV versions, per-size times, machine
+  // settings, work instructions with versions, steps and media, the acknowledgements on A1's tablet.
+  await seedInstructions({ db: factory, namespace: 'iso-a' })
+  await seedInstructions({ db: factory, namespace: 'iso-b' })
   // The styles and libraries schema of W2b-4 (wave 26/33): texts, pictures, revision files, product types, GTIN ranges, branding
   // sets, product settings; its first picture, revision file, branding set and SKU are the plain ones a copy may repeat.
   await seedStylesDepth({ db: factory, namespace: 'iso-a' })
@@ -449,6 +454,7 @@ it('covers every classified table and every runtime role', () => {
     'InspectionPlanCheck',
     'InspectionPlanVersion',
     'InspectionTrigger',
+    'InstructionAcknowledgement',
     'InstructionRecord',
     'IntegrationAccount',
     'IntegrationCall',
@@ -514,9 +520,11 @@ it('covers every classified table and every runtime role', () => {
     'OneOffLink',
     'Operation',
     'OperationChecklistResult',
+    'OperationMachineSetting',
     'OperationScan',
     'OperationScanDefect',
     'OperationScanMember',
+    'OperationTimeVersion',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
     'OrgArea',
@@ -633,6 +641,7 @@ it('covers every classified table and every runtime role', () => {
     'RoleSheetItem',
     'RosterEntry',
     'RoutingOperation',
+    'RoutingOperationSizeTime',
     'SafetyAppointment',
     'SafetyCourse',
     'SafetyDataSheet',
@@ -720,6 +729,10 @@ it('covers every classified table and every runtime role', () => {
     'WorkCalendar',
     'WorkCentre',
     'WorkCentreCapacity',
+    'WorkInstruction',
+    'WorkInstructionMedia',
+    'WorkInstructionStep',
+    'WorkInstructionVersion',
     'WorkOrder',
     'WorkOrderCostEntry',
     'WorkOrderKit',

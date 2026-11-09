@@ -110,6 +110,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b wave 21/22: a customer's order request from the portal is numbered from it when it is sent (B-W2b-190; design
       // "our request RQ-0087"): without one, a portal draft cannot be sent. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:PORTAL_REQUEST:MAIN:ALL`).slice(8)}`, companyId, kind: 'PORTAL_REQUEST', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'RQ-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-4 wave 25/33: work instructions are numbered from it when they are made (B-W2b-214): without one, a new
+      // instruction is refused. Master documents: one series that never resets. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:WORK_INSTRUCTION:MAIN:ALL`).slice(8)}`, companyId, kind: 'WORK_INSTRUCTION', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'WI-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({
