@@ -25,7 +25,9 @@ permissions:
 jobs:
   web:
     name: Web production smoke (read-only)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became Ubuntu 26.04 (Nov 2026) and Playwright 1.60 refuses to install Chromium there,
+    # so the smoke failed before any test ran. Move back to ubuntu-latest once Playwright supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
