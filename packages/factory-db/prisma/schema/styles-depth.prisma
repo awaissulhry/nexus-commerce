@@ -182,6 +182,8 @@ model ProductTypeProfile {
   measurementTemplate MeasurementTemplate? @relation(fields: [tenantId, measurementTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // product.prisma: the styles of this type.
   styles              Style[]
+  // W2b-4 compliance-rules.prisma (wave 30/33): the compliance requirements of this type (and the types below it).
+  complianceRequirements ComplianceRequirement[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from styles, child types and (B-W2b-216) compliance requirements.

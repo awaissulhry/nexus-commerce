@@ -550,6 +550,9 @@ model Style {
   changeOrders        ChangeOrder[]
   sampleRounds        SampleRound[]
   sampleSwatches      SampleSwatch[]
+  // W2b-4 compliance-rules.prisma (wave 30/33): its own economic operators and the gate events about it.
+  economicOperatorRoles EconomicOperatorRole[]
+  gateEvents          GateEvent[]
   // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
   clickingDies        ClickingDie[]
 

@@ -1,0 +1,588 @@
+// The compliance rule library (W2b-4, schema wave 30/33, B-W2b-216; features PRD-271, PRD-272, PRD-273, PRD-274, PRD-275,
+// PRD-286, PRD-287, PRD-290, PRD-298, PRD-343, QHS-106): the register of the laws and standards in use with the watch on
+// their changes, the markets a style is sold in (their languages, marks and national rules), the requirements as data (what
+// must exist for a product type, PPE category and market, with its legal reference, and which gates it blocks), the gate
+// events (every refusal and every override), the economic operators per style, brand or company and market, the phrase
+// library with its translations, and the notified body directory. The columns this wave adds to W1's certificates are in
+// compliance.prisma (the body from the directory, the performance levels, an own-brand certificate's base certificate, a
+// bought-in part's supplier).
+//
+// Requirements are data, never code (PRD-271): a requirement names its kind and, when a check computes it, the check's key
+// (`checkKey`); B-W2b-254's one gate function reads the requirements of a style and market, refuses with the first one
+// missing and writes a GateEvent for every refusal and override. W1's two fixed gates (QHS-051 at the label, MES-004 at
+// release) become two requirements there. A requirement or a market that an Owner question still holds open (Q10, Q22, Q23,
+// Q37) is built switched OFF with the reason in words (`switchedOn`, `offReason`): the gates and the checklist skip it. The
+// textile checks of B-W2b-208 (the 80 % rule, the care label, Made in Italy) are switched per market here: a requirement
+// with their check key and the market's code.
+//
+// A later wave (and every API) names a market by its code (MarketProfile.code) and a phrase by its key (Phrase.key), never
+// by a reference to the row, so no wave keys into a parallel one. apps/factory-api's modules/compliance writes these tables
+// through command() (B-W2b-249 register, markets, operators and phrases; B-W2b-254 requirements and gates; B-W2b-255
+// certificates in depth). The hand-written …_compliance_rules_w2b_guards migration holds their rules for every login: a gate
+// event never changes, a translation is approved by someone other than its translator and is then frozen, a requirement the
+// law locks at a gate is never switched off there and never overridden there.
+//
+// Who sees what (ownership/compliance-rules.json): the office reads and writes. The floor (label print and final release
+// run the gate at the station, PRD-272) reads the markets, the requirements, the operators, the phrases and their APPROVED
+// and SUPERSEDED translations, and writes and reads its own site's gate refusals; it never reads the register, the change
+// watch or the notified bodies. Portal and link sessions read nothing here (a DoC reaches a customer as a file). No column
+// here is money.
+
+// =====================================================================================================================
+// The register of laws and standards (PRD-273) and the watch on their changes (PRD-274)
+
+/// What a register entry is.
+enum RegulationKind {
+  /// An EU regulation (Reg. (EU) 2016/425, Reg. (EU) 1007/2011, REACH).
+  REGULATION
+  DIRECTIVE
+  /// A standard cited in the Official Journal: it gives the presumption of conformity (EN 17092-2..6, EN 13594).
+  HARMONISED_STANDARD
+  /// A standard used but not (or no longer) cited in the Official Journal (EN 1621-x, PRD-273).
+  STANDARD
+  /// A national law of one market.
+  NATIONAL_LAW
+  /// Guidance: the Commission's PPE guidelines, a notified body's recommendation for use.
+  GUIDANCE
+}
+
+/// Where an entry stands in law.
+enum RegulationStatus {
+  IN_FORCE
+  /// A newer edition or another act took its place (`supersededById`, when it is in the register).
+  SUPERSEDED
+  /// Withdrawn, or its citation removed: it gives no presumption of conformity any more.
+  WITHDRAWN
+}
+
+/// A law or a standard the company works to (PRD-273): one row per edition ("EN 17092-4" edition "2020"), with its
+/// Official Journal citation and its status. Certificates (W1 types their standard as "EN 17092-4:2020"), requirements and
+/// the change watch name it. Tenant-wide: the law is the same for every company. A row typed by mistake may be removed
+/// while nothing names it.
+model RegulationOrStandard {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The reference without its edition: "EN 17092-4", "Reg. (EU) 2016/425", "REACH Annex XVII entry 47".
+  code           String
+  /// The edition or year ("2020", "2013+A1:2021"); null: an act without editions.
+  edition        String?
+  title          String
+  /// The title per language (BCP 47 → words); null: `title` only.
+  titleI18n      Json?
+  kind           RegulationKind
+  status         RegulationStatus @default(IN_FORCE)
+  /// The Official Journal citation ("OJ L 81, 31.3.2016") and its date; null: not cited (a national law, guidance).
+  ojReference    String?
+  ojDate         DateTime?        @db.Date
+  /// SUPERSEDED: the entry that took its place, when it is in the register (never itself; set only while SUPERSEDED).
+  supersededById String?          @db.Uuid
+  /// The text of the act or the standard's page (https).
+  link           String?
+  note           String?
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  supersededBy     RegulationOrStandard?   @relation("RegulationSupersededBy", fields: [tenantId, supersededById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes       RegulationOrStandard[]  @relation("RegulationSupersededBy")
+  changes          StandardChange[]        @relation("StandardChangeOf")
+  changesNamingNew StandardChange[]        @relation("StandardChangeNewEdition")
+  requirements     ComplianceRequirement[]
+
+  // One row per reference and edition (an act without editions: a partial unique of the guards migration).
+  @@unique([tenantId, code, edition])
+  // The target of the tenant-safe references from the change watch, the requirements and a successor.
+  @@unique([tenantId, id])
+}
+
+/// What happened to a standard.
+enum StandardChangeKind {
+  /// A new edition.
+  REVISION
+  AMENDMENT
+  /// Withdrawn, or its citation removed from the Official Journal.
+  WITHDRAWAL
+  /// Newly cited in the Official Journal.
+  NEW_CITATION
+  OTHER
+}
+
+/// OPEN → ASSESSED → CLOSED; never back.
+enum StandardChangeStatus {
+  /// Noticed; the impact is not assessed yet.
+  OPEN
+  /// The impact is assessed and filed (PPE Annex V 7.1-7.3: the assessment goes in the technical documentation).
+  ASSESSED
+  /// Done: the reviews and retests it asked for are finished, or it needed none.
+  CLOSED
+}
+
+/// What a change means for the certificates that cite the standard.
+enum StandardChangeImpact {
+  NONE
+  /// The certificates and their types are reviewed with the notified body (a type-change review, PRD-285).
+  REVIEW
+  /// The garments are tested again.
+  RETEST
+}
+
+/// A change to a standard in the register (PRD-274; PPE Annex V 7.1-7.3, the PPE guidelines): what changed, when it was
+/// noticed, the end of its transition, the impact assessed and the certificates and type-change reviews it touches. The
+/// watch (B-W2b-249) opens one and an impact task on the affected styles; compliance assesses it. Kept, never deleted; a
+/// CLOSED change never changes.
+model StandardChange {
+  id                  String                @id @db.Uuid
+  tenantId            String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The standard (or act) that changes.
+  standardId          String                @db.Uuid
+  /// The new edition, when it is in the register (never the standard itself).
+  newStandardId       String?               @db.Uuid
+  kind                StandardChangeKind
+  /// What changed, in words.
+  whatChanged         String
+  /// Where it was published ("Decision (EU) 2026/1279"); null: not known yet.
+  sourceReference     String?
+  /// When it was noticed, and by whom (null: the watch).
+  noticedAt           DateTime              @db.Timestamptz(3)
+  noticedById         String?               @db.Uuid
+  /// The last day the old edition still gives the presumption of conformity; null: none or not known.
+  transitionEndsOn    DateTime?             @db.Date
+  status              StandardChangeStatus  @default(OPEN)
+  /// The assessment (set exactly from ASSESSED on, then fixed): the impact, the words filed, when and by whom.
+  impact              StandardChangeImpact?
+  assessment          String?
+  assessedAt          DateTime?             @db.Timestamptz(3)
+  assessedById        String?               @db.Uuid
+  /// CLOSED: when and by whom.
+  closedAt            DateTime?             @db.Timestamptz(3)
+  closedById          String?               @db.Uuid
+  /// The certificates that cite the standard (registered certificates of the tenant, each once) and the type-change
+  /// reviews opened for it (reviews of those certificates, each once). No reference: the guards check each id.
+  certificateIds      String[]              @default([]) @db.Uuid
+  typeChangeReviewIds String[]              @default([]) @db.Uuid
+  /// The impact task on the affected styles (collab.prisma Task; no reference: a task has no tenant-safe target), named once.
+  taskId              String?               @db.Uuid
+  version             Int                   @default(1)
+  createdAt           DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?               @db.Uuid
+
+  standard    RegulationOrStandard  @relation("StandardChangeOf", fields: [tenantId, standardId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  newStandard RegulationOrStandard? @relation("StandardChangeNewEdition", fields: [tenantId, newStandardId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A standard's changes; the open ones.
+  @@index([tenantId, standardId])
+  @@index([tenantId, status])
+}
+
+// =====================================================================================================================
+// Markets (PRD-275)
+
+/// A market the company sells in (PRD-275; PPE art. 8(7), Reg. (EU) 1007/2011 art. 16(3)): the languages its label, its
+/// Declaration of Conformity and its user information must be in, the marks it needs (CE, UKCA), its national rules, and
+/// whether an importer and a GPSR contact must be named. Named by its code everywhere else (requirements, operators,
+/// later waves); one row per code in the tenant. A market not sold in yet (Owner question Q23) is switched OFF with the
+/// reason; archived when no longer used, never deleted.
+model MarketProfile {
+  id                String       @id @db.Uuid
+  tenantId          String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1). The market's rules are the destination's law: one row per
+  /// code in the tenant, whichever company sells there.
+  companyId         String?      @db.Uuid
+  /// The market's code: a country (ISO 3166-1 alpha-2, "UK" for Great Britain as the trade says it), optionally a part of
+  /// it ("US-CA"). Never changes.
+  code              String
+  name              String
+  /// The name per language (BCP 47 → words); null: `name` only.
+  nameI18n          Json?
+  /// The languages (ISO 639-1, in order) of the garment and textile label, the Declaration of Conformity and the user
+  /// information; empty: none required.
+  labelLanguages    String[]     @default([])
+  docLanguages      String[]     @default([])
+  userInfoLanguages String[]     @default([])
+  /// The marks a product placed there carries ("CE", "UKCA", a national recycling mark), each once.
+  markings          String[]     @default([])
+  /// The market's national extras, in words with their law: [{ "key": "fr-textile-extra", "words": { "it": "…", "en": "…" },
+  /// "law": "…", "href": "https://…" }] (law and href optional; keys unique). Requirements enforce them.
+  nationalRules     Json         @default("[]")
+  /// An importer or authorised representative established in the market must be named when the maker is not (Reg. (EU)
+  /// 2019/1020 art. 4).
+  importerNeeded    Boolean      @default(false)
+  /// A GPSR contact (responsible person, an electronic address) must be on the product or its papers (Owner question Q37).
+  gpsrContactNeeded Boolean      @default(false)
+  /// Its column on the status board, 0 or more.
+  seq               Int          @default(0)
+  /// OFF: built but not used yet, with the reason in words (the Owner question it waits for); ON has no reason. When and
+  /// by whom it was last switched.
+  switchedOn        Boolean      @default(true)
+  offReason         String?
+  switchedAt        DateTime?    @db.Timestamptz(3)
+  switchedById      String?      @db.Uuid
+  note              String?
+  status            MasterStatus @default(ACTIVE)
+  version           Int          @default(1)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?      @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+}
+
+// =====================================================================================================================
+// Requirements (PRD-271) and gate events (PRD-272)
+
+/// What a requirement asks for.
+enum ComplianceRequirementKind {
+  /// A valid certificate covering the style, colourway and size (W1's QHS-051 and MES-004 gates).
+  CERTIFICATE
+  /// The Declaration of Conformity in the market's languages.
+  DOC_LANGUAGE
+  /// The user information in the market's languages.
+  USER_INFO_LANGUAGE
+  /// The PPE, textile, care or origin label (its languages, its contents).
+  LABEL
+  /// A test or its evidence (the Cr VI evidence of the lots, a lab test).
+  TEST
+  /// An economic operator of the role `operatorRole` named for the market.
+  OPERATOR_ROLE
+  /// A declaration (a supplier's, the GPSR data of a non-PPE line).
+  DECLARATION
+  /// The evidence of a claim (Made in Italy, a sustainability claim).
+  CLAIM_EVIDENCE
+}
+
+/// The places a gate stands (PRD-272): what a requirement blocks, and where a gate event happened.
+enum ComplianceGate {
+  WORK_ORDER_RELEASE
+  /// The garment label print at the final operation.
+  LABEL_PRINT
+  /// The final release of the finished garments.
+  FINAL_RELEASE
+  SHIPMENT
+}
+
+/// A requirement as data (PRD-271, PRD-272): what must exist before a style of a product type, PPE category and market is
+/// made, labelled, released or shipped; its legal reference and its words; which gates it blocks (none: it shows on the
+/// checklist only), at which of them the law locks it, and who may override it elsewhere and for how long. An empty scope
+/// list (or a null) means every one. Switched OFF with its reason while an Owner question holds it (the gates skip it);
+/// archived when no longer used, never deleted (gate events name it).
+model ComplianceRequirement {
+  id                   String                    @id @db.Uuid
+  tenantId             String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1).
+  companyId            String?                   @db.Uuid
+  /// Unique in the tenant ("CERT-COVERAGE", "DOC-LANG"); never changes.
+  code                 String
+  /// What it asks, in words (the checklist line), and per language.
+  name                 String
+  nameI18n             Json?
+  kind                 ComplianceRequirementKind
+  /// The check that computes it ("certificate.coverage", "textile.careLabel"); null: the kind's own check.
+  checkKey             String?
+  /// OPERATOR_ROLE: the role that must be named for the market (exactly then).
+  operatorRole         EconomicOperatorKind?
+  /// The styles it applies to: their product types (empty: every type), a refined product type (it and the types below
+  /// it; of the requirement's company or tenant-wide), their PPE categories (empty: every category) and the market they
+  /// are sold in (a MarketProfile code; null: every market).
+  productTypes         ProductType[]             @default([])
+  productTypeProfileId String?                   @db.Uuid
+  ppeCategories        PpeCategory[]             @default([])
+  marketCode           String?
+  /// The gates it blocks while it is missing, each once (empty: none, the checklist only), and those the law locks
+  /// (among them): a locked gate is never overridden and never leaves either list, and the requirement stays switched on.
+  blocks               ComplianceGate[]          @default([])
+  lockedBlocks         ComplianceGate[]          @default([])
+  /// The roles (Role keys) that may override it at a gate it blocks and does not lock (empty: nobody), and the longest
+  /// override in days (1 to 7).
+  overrideRoleKeys     String[]                  @default([])
+  overrideMaxDays      Int                       @default(7)
+  /// The legal reference as cited ("Reg. (EU) 2016/425 art. 8(7)"), the register entry it rests on (when there), and why
+  /// in plain words per language (the gate's explanation).
+  legalReference       String
+  regulationId         String?                   @db.Uuid
+  explanationI18n      Json?
+  /// The days it applies from and until (null: always), for a rule that starts or ends on a date.
+  appliesFrom          DateTime?                 @db.Date
+  appliesUntil         DateTime?                 @db.Date
+  /// Its place on the checklist: a gate refuses with the first missing requirement in this order.
+  seq                  Int                       @default(0)
+  /// OFF: built but not used yet, with the reason in words (the Owner question it waits for); ON has no reason. When and
+  /// by whom it was last switched.
+  switchedOn           Boolean                   @default(true)
+  offReason            String?
+  switchedAt           DateTime?                 @db.Timestamptz(3)
+  switchedById         String?                   @db.Uuid
+  note                 String?
+  status               MasterStatus              @default(ACTIVE)
+  version              Int                       @default(1)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?                   @db.Uuid
+
+  company            Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // styles-depth.prisma. Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  productTypeProfile ProductTypeProfile?   @relation(fields: [tenantId, productTypeProfileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  regulation         RegulationOrStandard? @relation(fields: [tenantId, regulationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  gateEvents         GateEvent[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from the gate events.
+  @@unique([tenantId, id])
+  // A market's requirements.
+  @@index([tenantId, marketCode])
+}
+
+/// What happened at a gate.
+enum GateOutcome {
+  /// The gate refused: the requirement was missing.
+  REFUSED
+  /// A person allowed by the requirement overrode a refusal, with a reason and a fresh step-up, until a day.
+  OVERRIDDEN
+}
+
+/// One refusal or override at a gate (PRD-272): where (the gate, the company and site), what (the subject's record type
+/// and id: a work order, a garment label print, a release, a shipment; the style and market), which requirement, why in
+/// words (the refusal's explanation, the override's written reason) and the facts behind it, and who. An override names
+/// the refusal it lifts, its step-up and its end (at most the requirement's days); the floor never overrides. Kept and
+/// never changed or removed (the triggers, for every login): the PPE register's audit view and every garment's evidence
+/// trail read them.
+/// @append-only
+model GateEvent {
+  id             String         @id @db.Uuid
+  tenantId       String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The subject's company, and its site (null: a gate with no site, such as a shipment of no site).
+  companyId      String         @db.Uuid
+  siteId         String?        @db.Uuid
+  gate           ComplianceGate
+  /// The record the gate stood before: its model name ("WorkOrder", "GarmentLabelPrint", "QualityRelease", "Shipment")
+  /// and id.
+  subjectType    String
+  subjectId      String         @db.Uuid
+  outcome        GateOutcome
+  /// The requirement that refused (the first missing one), or that the override lifts.
+  requirementId  String         @db.Uuid
+  /// The style and the market it was for, when the gate knew them.
+  styleId        String?        @db.Uuid
+  marketCode     String?
+  /// REFUSED: the gate's explanation in words (who can fix it, how); OVERRIDDEN: the person's written reason.
+  reason         String
+  /// The facts behind it, to say it again in another language: { "code": "…", "colourway": "BLK", "size": "52", … }.
+  explanation    Json?
+  /// OVERRIDDEN (exactly then): the refusal it lifts (of the same gate, subject and requirement), the step-up of the
+  /// person's session (at most 15 minutes before) and its end (after it, at most the requirement's days).
+  refusedEventId String?        @db.Uuid
+  stepUpAt       DateTime?      @db.Timestamptz(3)
+  overrideUntil  DateTime?      @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  /// Who: the office user or the floor's worker (null: a station that records no worker, or the system); an override
+  /// always names its person.
+  createdById    String?        @db.Uuid
+
+  company      Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site         Site?                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requirement  ComplianceRequirement @relation(fields: [tenantId, requirementId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style        Style?                @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  refusedEvent GateEvent?            @relation("GateEventOverride", fields: [tenantId, refusedEventId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  overrides    GateEvent[]           @relation("GateEventOverride")
+
+  // The target of an override's reference to its refusal.
+  @@unique([tenantId, id])
+  // A subject's events; the feed by time; a requirement's.
+  @@index([tenantId, subjectType, subjectId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, requirementId])
+}
+
+// =====================================================================================================================
+// Economic operators (PRD-298)
+
+/// The roles of Reg. (EU) 2019/1020 art. 3 and 4.
+enum EconomicOperatorKind {
+  MANUFACTURER
+  AUTHORISED_REPRESENTATIVE
+  IMPORTER
+  DISTRIBUTOR
+  /// A fulfilment service provider.
+  FULFILMENT
+}
+
+/// Who is the manufacturer, authorised representative, importer, distributor or fulfilment service provider of a style,
+/// of a brand's styles or by default (PRD-298; Reg. (EU) 2019/1020 art. 4), for a market (or every market), from a day to a
+/// day, with the name, postal address and contact printed on labels and Declarations of Conformity. A private-label
+/// style sold under the brand's name has the brand as its manufacturer (Owner 11-09, question 3). The most specific row
+/// wins: the style's, then its brand's, then the company's, then the tenant's. Ended by its last day, never removed (the
+/// labels and DoCs printed with it stay traceable). One per scope, market and role on a day: the API's rule.
+model EconomicOperatorRole {
+  id             String               @id @db.Uuid
+  tenantId       String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is for (a style's row: the style's company); null: tenant-wide.
+  companyId      String?              @db.Uuid
+  /// The scope, at most one: a style, or a brand's styles (a party with the BRAND role); neither: the company's (or the
+  /// tenant's) default.
+  styleId        String?              @db.Uuid
+  brandPartyId   String?              @db.Uuid
+  /// The market (a MarketProfile code); null: every market.
+  marketCode     String?
+  role           EconomicOperatorKind
+  /// The operator: a party (required for every role but MANUFACTURER); null: our own company.
+  partyId        String?              @db.Uuid
+  /// What is printed: its name, postal address and contact (an e-mail or a web address, GPSR art. 19).
+  printedName    String
+  printedAddress String
+  contact        String?
+  /// The first and last day it holds (null: open).
+  validFrom      DateTime             @db.Date
+  validTo        DateTime?            @db.Date
+  note           String?
+  version        Int                  @default(1)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?              @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company    Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma and parties.prisma.
+  style      Style?   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  brandParty Party?   @relation("EconomicOperatorBrand", fields: [tenantId, brandPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party?   @relation("EconomicOperatorParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A style's, a brand's and a market's operators.
+  @@index([tenantId, styleId])
+  @@index([tenantId, brandPartyId])
+  @@index([tenantId, marketCode])
+}
+
+// =====================================================================================================================
+// The phrase library (PRD-343)
+
+/// What a phrase is used for.
+enum PhraseKind {
+  /// A warning on the label or in the leaflet (the class B and C warnings, removable protectors).
+  WARNING
+  /// A care instruction (ISO 3758 words).
+  CARE
+  /// The words of a marking (the animal-origin phrase, the CE marking's text).
+  MARKING
+  /// A sentence of the Declaration of Conformity.
+  DOC
+  /// A sentence of the user information.
+  USER_INFO
+  /// A claim (Made in Italy, a sustainability claim).
+  CLAIM
+}
+
+/// A phrase of the library (PRD-343): its key (labels, DoCs and leaflets name it by the key), its kind and the source words
+/// in the source language. Changing the source words moves `revision` up by one: a translation of an older revision is
+/// stale until it is translated again. Archived, never deleted.
+model Phrase {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1).
+  companyId      String?      @db.Uuid
+  /// Unique in the tenant ("warning.class-b", "care.wash-not"); never changes.
+  key            String
+  kind           PhraseKind
+  /// The language the source words are in (ISO 639-1) and the words.
+  sourceLanguage String       @default("it")
+  sourceText     String
+  /// 1, 2, 3 …: up by one exactly when the source words or their language change.
+  revision       Int          @default(1)
+  note           String?
+  status         MasterStatus @default(ACTIVE)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  company      Company?            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  translations PhraseTranslation[]
+
+  @@unique([tenantId, key])
+  // The target of the tenant-safe references from its translations.
+  @@unique([tenantId, id])
+}
+
+/// DRAFT → APPROVED → SUPERSEDED; a DRAFT nobody wants is removed.
+enum PhraseTranslationStatus {
+  /// Proposed; never printed.
+  DRAFT
+  /// Approved by a second person; labels and documents print it. One per phrase and language.
+  APPROVED
+  /// A newer approved translation took its place (kept: what was printed).
+  SUPERSEDED
+}
+
+/// A translation of a phrase into one language (PRD-343), numbered 1, 2, 3 … per phrase and language: proposed as DRAFT by
+/// its translator, approved by a second person (never the translator), then frozen; a new wording is the next revision,
+/// which supersedes it when approved. It translates one revision of the source words (`sourceRevision`); approving needs
+/// the phrase's current revision. One APPROVED and one DRAFT per phrase and language (partial uniques). A missing
+/// approved translation blocks printing for the markets that need the language (B-W2b-253).
+model PhraseTranslation {
+  id             String                  @id @db.Uuid
+  tenantId       String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  phraseId       String                  @db.Uuid
+  /// BCP 47 ("de", "fr", "pt-BR"); never the phrase's source language.
+  language       String
+  /// 1, 2, 3 … per phrase and language.
+  revision       Int
+  text           String
+  status         PhraseTranslationStatus @default(DRAFT)
+  /// The phrase revision it translates (1 up to the phrase's current one).
+  sourceRevision Int
+  /// Who wrote the words (a person, or null for an import: then the creator counts as its author).
+  translatedById String?                 @db.Uuid
+  /// APPROVED (exactly from then on): when and by whom (never its author).
+  approvedAt     DateTime?               @db.Timestamptz(3)
+  approvedById   String?                 @db.Uuid
+  version        Int                     @default(1)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                 @db.Uuid
+
+  phrase Phrase @relation(fields: [tenantId, phraseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, phraseId, language, revision])
+}
+
+// =====================================================================================================================
+// Notified bodies (PRD-286)
+
+/// A notified body of the directory (PRD-286; PPE Annex II 1.4(j), Annex IX 7): its four-digit NANDO number, name,
+/// postal address and country, its NANDO entry and the scopes it is notified for, and a contact. A certificate picks its
+/// body here (Certificate.notifiedBodyId; W1 keeps the typed name and number). One ACTIVE body per number (a partial
+/// unique); archived when no longer notified, never deleted. Tenant-wide.
+model NotifiedBody {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Four digits; never changes once a certificate names the body.
+  number       String
+  name         String
+  address      String
+  /// ISO 3166-1 alpha-2.
+  country      String
+  /// Its NANDO entry (https).
+  nandoUrl     String?
+  /// What it is notified for, as NANDO says it ("Regulation (EU) 2016/425 – protective clothing"), each once.
+  scopes       String[]     @default([])
+  contactEmail String?
+  contactPhone String?
+  note         String?
+  status       MasterStatus @default(ACTIVE)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  // compliance.prisma: the certificates that name it.
+  certificates Certificate[]
+
+  // The target of the certificates' tenant-safe reference.
+  @@unique([tenantId, id])
+}
