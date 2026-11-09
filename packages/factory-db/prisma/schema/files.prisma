@@ -154,6 +154,8 @@ model StoredFile {
   // W2b pay.prisma (wave 6/7): the rate sheets, signed rate receipts, worker statements and payroll export files it is.
   ratePublicationSheets     RatePublication[]     @relation("RatePublicationSheet")
   rateAcknowledgementPapers RateAcknowledgement[] @relation("RateAcknowledgementPaper")
+  // W2b-4 instructions.prisma (wave 25/33): the instruction steps whose photo or video it is.
+  workInstructionMedia      WorkInstructionMedia[]
   workerStatementFiles      WorkerStatement[]     @relation("WorkerStatementFile")
   payrollExportFiles        PayrollExportFile[]   @relation("PayrollExportFile")
   // quality.prisma: the lab results it is the report of, the lot documents it is.
