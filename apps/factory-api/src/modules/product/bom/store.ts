@@ -17,6 +17,7 @@ import { readOperations, readSteps, type OperationFacts, type StepRecord } from 
 // B-W2b-95: a line a pattern piece names is not removed, nor turned into a material its graded pieces cannot take.
 import { assertNoPiecesUse, assertPiecesFollowMaterial } from '../pieces/guards'
 import { lockStyle } from '../styles/store'
+import { requireEditRule } from '../lifecycle/edit-rule'
 
 /**
  * The BOM's rows (factory-db `StyleRevision`, `BomLine`, `BomLineSize`, `BomLineColour`) and what they name (`Style`,
@@ -465,6 +466,8 @@ export async function lockDraft(tools: CommandTools, styleId: string, revisionId
   const row = await findRevision(tx, styleId, revisionId)
   const refusal = editRefusal(row, style.status)
   if (refusal) throw new InvalidStateError(refusal)
+  // B-W2b-221: a write to a draft under the edit rule of the style's lifecycle state.
+  await requireEditRule(tx, styleId, 'DRAFT')
   const version = await bumpRevision(tx, revisionId, expectedVersion, now)
   return { style, revisionId, revision: row.revision, version }
 }

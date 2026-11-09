@@ -22,6 +22,12 @@ import {
 } from '@nexus/factory-domain/product/styles/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+// B-W2b-221: the edit rule per lifecycle state, the database's style rules said in words, a new style's type defaults.
+import { editKindOfFields } from '@nexus/factory-domain/product/lifecycle/rules'
+import { fillFromType } from '@nexus/factory-domain/product/types/rules'
+import { requireEditRule } from '../lifecycle/edit-rule'
+import { styleRowRefusal } from '../lifecycle/style-guards'
+import { typeDefaultsForNewStyle } from '../types/types'
 import { afterCursor, decodeCursor, encodeCursor } from './cursor'
 import { rowExtras } from './row-extras'
 import { applyMatrixPlan, emitSkus } from './skus'
@@ -141,8 +147,8 @@ export const releasedFacts = async (client: FactoryClient | CommandTx, styleId: 
 
 // ---- create ------------------------------------------------------------------------------------------------------------
 
-function styleInputOf(body: CreateStyleBody): StyleInput {
-  const { companyId: _company, colourways: _colourways, generateSkus: _generate, ...fields } = body
+function styleInputOf(body: CreateStyleBody & { readonly sizeScaleId: string }): StyleInput {
+  const { companyId: _company, colourways: _colourways, generateSkus: _generate, productTypeProfileId: _type, ...fields } = body
   return fields
 }
 
@@ -151,10 +157,15 @@ export async function createStyle(caller: CommandCaller, body: CreateStyleBody, 
   const context = contextOf(caller)
   const companyId = body.companyId ?? null
   assertMayWrite(context, PRODUCT_STYLES_MANAGE, companyId)
-  const input = styleInputOf(body)
+  // B-W2b-221 (PRD-008): a style of a product type takes what the body leaves out from the type's defaults.
+  const typeId = body.productTypeProfileId ?? null
+  const typed = typeId === null ? body : fillFromType(body, await caller.withClient((client) => typeDefaultsForNewStyle(client, typeId, { productType: body.productType, companyId })))
+  const sizeScaleId = typed.sizeScaleId
+  if (sizeScaleId === undefined) throw invalid([{ path: 'body/sizeScaleId', message: 'Pick a size scale (or a product type that gives one).' }])
+  const input = styleInputOf({ ...typed, sizeScaleId })
   const colourways = (body.colourways ?? []).map(normaliseColourway)
   // Checked here first against the scale as it is, so a refusal answers before any lock; again on the locked scale.
-  const preview = newStyle(input, await caller.withClient((client) => readScaleSizes(client, body.sizeScaleId)))
+  const preview = newStyle(input, await caller.withClient((client) => readScaleSizes(client, sizeScaleId)))
   const issues = [...(preview.ok ? [] : prefixed(preview.issues)), ...prefixed(colourwayListProblems(colourways))]
   if (issues.length > 0 || !preview.ok) throw invalid(issues)
   const code = preview.style.code
@@ -164,9 +175,11 @@ export async function createStyle(caller: CommandCaller, body: CreateStyleBody, 
     if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) {
       throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
     }
-    const scale = await scaleProblems(tx, body.sizeScaleId, companyId, true)
+    const scale = await scaleProblems(tx, sizeScaleId, companyId, true)
     if (scale.length > 0) throw invalid(scale)
-    const outcome = newStyle(input, await readScaleSizes(tx, body.sizeScaleId))
+    // B-W2b-221: the type checked again in the transaction (archived meanwhile: refused in words before the database).
+    if (typeId !== null) await typeDefaultsForNewStyle(tx, typeId, { productType: body.productType, companyId })
+    const outcome = newStyle(input, await readScaleSizes(tx, sizeScaleId))
     if (!outcome.ok) throw invalid(prefixed(outcome.issues))
     const style = outcome.style
     const problems: Issue[] = [
@@ -180,13 +193,13 @@ export async function createStyle(caller: CommandCaller, body: CreateStyleBody, 
     const id = newId()
     const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
     await tx.style.create({
-      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, createdAt: now, updatedAt: now, createdById },
+      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, productTypeProfileId: typeId, createdAt: now, updatedAt: now, createdById },
       select: { id: true },
     })
     if (colourways.length > 0) {
       await tx.colourway.createMany({ data: colourways.map((colourway) => ({ id: newId(), styleId: id, ...colourway, createdAt: now, updatedAt: now, createdById })) })
     }
-    tools.audit({ recordType: 'Style', recordId: id, companyId, after: { ...style, status: 'DRAFT', colourways: colourways.map((colourway) => ({ ...colourway })) } })
+    tools.audit({ recordType: 'Style', recordId: id, companyId, after: { ...style, status: 'DRAFT', productTypeProfileId: typeId, colourways: colourways.map((colourway) => ({ ...colourway })) } })
     tools.emit({ type: 'style.created', subject: id, companyId, payload: { styleId: id, code: style.code } })
     if (body.generateSkus) {
       const rows = await tx.colourway.findMany({ where: { styleId: id }, select: COLOURWAY_COLUMNS, orderBy: [{ createdAt: 'asc' }, { code: 'asc' }] })
@@ -232,6 +245,10 @@ export async function updateStyle(caller: CommandCaller, styleId: string, body: 
       const change = changeStyle(current, patch as StylePatch, await readScaleSizes(tx, scaleId))
       if (!change.ok) throw invalid(prefixed(change.issues))
       const { style: next, changed } = change
+      // B-W2b-221: the edit rule of the style's lifecycle state (its words, or its spec), and the database's style rules in words.
+      await requireEditRule(tx, styleId, editKindOfFields(changed))
+      const guarded = await styleRowRefusal(tx, styleId, next, changed)
+      if (guarded) throw new ConflictError(guarded)
       const variants = await tx.variant.findMany({ where: { styleId }, select: VARIANT_COLUMNS })
       const refusals = styleChangeRefusals(current, next, { variants: variants.length })
       if (refusals.length > 0) throw new ConflictError(refusals.join(' '))
@@ -291,6 +308,8 @@ export async function setGarmentTracking(caller: CommandCaller, styleId: string,
       const { tx } = tools
       const row = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { code: true, status: true, companyId: true, garmentTracking: true } })
       openOnly(row.status)
+      // B-W2b-221: how its garments are numbered is its spec (the edit rule of its lifecycle state).
+      await requireEditRule(tx, styleId, 'SPEC')
       const refusal = garmentTrackingRefusal({ code: row.code, tracking: row.garmentTracking }, await trackingUses(tx, styleId))
       if (refusal) throw new ConflictError(refusal)
       await tx.style.update({ where: { id: styleId }, data: { garmentTracking: body.tracking }, select: { id: true } })

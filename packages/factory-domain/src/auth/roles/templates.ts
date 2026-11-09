@@ -26,6 +26,8 @@ import { MEASURE_LINK_ADDS } from '../../sales/measure-link/permissions'
 import { QUESTIONNAIRE_ADDS } from '../../purchasing/questionnaire/permissions'
 // B-W2b-208: the textile, leather and origin checks (the quality inspector switches them).
 import { TEXTILE_RULES_ADDS } from '../../compliance/textile-rules/permissions'
+// B-W2b-221: the style lifecycle and the product settings (the production manager).
+import { PRODUCT_LIFECYCLE_ADDS } from '../../product/lifecycle/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -801,7 +803,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-172
   ...(audience === 'office' ? (QUESTIONNAIRE_ADDS[key] ?? []) : []),
   // B-W2b-208
-  ...(audience === 'office' ? (TEXTILE_RULES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (TEXTILE_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-221
+  ...(audience === 'office' ? (PRODUCT_LIFECYCLE_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
