@@ -1,0 +1,204 @@
+{
+  "title": "Il tuo ordine {order}",
+  "retry": "Riprova",
+  "carrierSite": "Segui sul sito del corriere",
+  "loading": {
+    "label": "Carichiamo dove si trova il tuo ordine…",
+    "slow": "Ancora un momento…"
+  },
+  "state": {
+    "error": {
+      "title": "Non siamo riusciti a leggere dove si trova il tuo ordine",
+      "body": "La connessione o il nostro servizio non hanno risposto. Non si è perso nulla: riprova."
+    },
+    "dead": {
+      "title": "Questo link di tracciamento non funziona più",
+      "body": "È stato ritirato, oppure la pagina si è chiusa 60 giorni dopo la consegna. Chiedi un nuovo link: lo inviamo all'indirizzo a cui era stato mandato."
+    }
+  },
+  "ask": {
+    "label": "Chiedi un nuovo link",
+    "again": "Chiedi di nuovo",
+    "busy": "Richiesta in corso…",
+    "asked": "Richiesto — l'abbiamo inoltrato",
+    "held": "Già richiesto: guarda nella casella a cui era arrivato il link.",
+    "done": "L'abbiamo inoltrato. Se il link era nostro, ne arriva uno nuovo all'indirizzo a cui era stato mandato.",
+    "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo.",
+    "onlyOnFile": "Un nuovo link va sempre e solo all'indirizzo che abbiamo, mai a uno scritto qui."
+  },
+  "pill": {
+    "PACKED": "Imballato",
+    "COLLECTED": "Ritirato",
+    "IN_TRANSIT": "In viaggio",
+    "OUT_FOR_DELIVERY": "In consegna",
+    "DELIVERED": "Consegnato",
+    "PROBLEM": "Problema"
+  },
+  "now": {
+    "PACKED": "Imballato, attende il corriere.",
+    "COLLECTED": "Il corriere l'ha ritirato.",
+    "IN_TRANSIT": "In viaggio verso di te.",
+    "OUT_FOR_DELIVERY": "In consegna oggi.",
+    "DELIVERED": "Consegnato.",
+    "PROBLEM": "Qualcosa non va come previsto."
+  },
+  "problem": {
+    "DELAYED": "Il corriere segnala un ritardo o una consegna mancata.",
+    "RETURNING": "Il corriere lo sta riportando a noi.",
+    "RETURNED": "La merce è tornata a noi. Ti scriveremo."
+  },
+  "step": {
+    "PACKED": "Imballato",
+    "COLLECTED": "Ritirato",
+    "IN_TRANSIT": "In viaggio",
+    "OUT_FOR_DELIVERY": "In consegna",
+    "DELIVERED": "Consegnato"
+  },
+  "event": {
+    "LABEL_CREATED": "Etichetta pronta, attende il corriere",
+    "IN_TRANSIT": "In viaggio",
+    "OUT_FOR_DELIVERY": "In consegna oggi",
+    "DELIVERED": "Consegnato",
+    "EXCEPTION": "In ritardo o fermo presso il corriere",
+    "RETURNED": "In ritorno al mittente"
+  },
+  "by": {
+    "CARRIER": "Un corriere",
+    "SENDER": "Il nostro furgone",
+    "RECIPIENT": "Ritiri tu da noi"
+  },
+  "fact": {
+    "expected": "Consegna prevista",
+    "expectedUnknown": "Il corriere non l'ha ancora indicata",
+    "delivered": "Consegnato il",
+    "returned": "Tornato a noi il",
+    "carrier": "Corriere",
+    "shipment": "Spedizione",
+    "ourOrder": "Nostro numero d'ordine"
+  },
+  "where": {
+    "title": "Dove si trova",
+    "sub": "Le ultime notizie della tua spedizione, nella tua lingua.",
+    "steps": "Dove si trova la spedizione {number}"
+  },
+  "parcels": {
+    "label_one": "{count} collo",
+    "label_other": "{count} colli",
+    "name": "Collo {seq} di {count}",
+    "noNumber": "Numero di tracciamento non ancora disponibile",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "copyOf": "Copia il numero di tracciamento {number}",
+    "copiedSay": "Numero di tracciamento {number} copiato.",
+    "carrierOf": "Segui il collo {seq} sul sito del corriere (si apre in una nuova scheda)"
+  },
+  "events": {
+    "title": "Notizie del corriere",
+    "sub": "Cosa ha segnalato il corriere, nella tua lingua.",
+    "ofParcel": "{event} · collo {seq}",
+    "none": {
+      "packed": "Ancora nessuna scansione del corriere: attende il ritiro.",
+      "packedEta": "Ancora nessuna scansione del corriere: attende il ritiro. Consegna prevista: {date}.",
+      "left": "Ancora nessuna scansione del corriere. Compaiono qui appena il corriere le invia.",
+      "SENDER": "Questa spedizione viaggia con il nostro furgone: non ci sono scansioni del corriere.",
+      "RECIPIENT": "Ritiri tu questa spedizione da noi: non ci sono scansioni del corriere."
+    }
+  },
+  "delivery": {
+    "title": "Consegna",
+    "sub": "Dove va.",
+    "where": "Località di consegna",
+    "unknown": "Non indicata",
+    "proof": "Consegnato",
+    "proofAt": "{when} · {place}",
+    "only": "Qui compaiono solo la località e il CAP, mai l'indirizzo completo."
+  },
+  "paper": {
+    "PACKING_LIST": "Packing list",
+    "DECLARATION_OF_CONFORMITY": "Dichiarazione UE di conformità",
+    "USER_INFORMATION": "Nota informativa del fabbricante",
+    "packingListOf": "Packing list {number}",
+    "styled": "{kind} · {style}"
+  },
+  "papers": {
+    "title": "Documenti",
+    "sub": "La packing list e le dichiarazioni di questa spedizione. Senza prezzi.",
+    "search": "I documenti arrivano con il link della nostra e-mail: aprilo per scaricarli.",
+    "none": "Ancora nessun documento per questa spedizione.",
+    "download": "Scarica",
+    "again": "Riprova",
+    "busy": "Download in corso…",
+    "failed": "Il download non è finito. Riprova.",
+    "language": "In {language} · senza prezzi",
+    "noPrice": "Senza prezzi",
+    "downloadOf": "Scarica {name}"
+  },
+  "claim": {
+    "title": "Qualcosa non va?",
+    "sub": "Merce danneggiata, mancante o diversa dall'ordine: dillo a noi da qui.",
+    "button": "Segnala un problema con questa consegna",
+    "busy": "Apriamo il modulo…",
+    "opened": "Il modulo si è aperto in una nuova scheda.",
+    "failed": "Il modulo non si è aperto. Controlla la connessione e riprova.",
+    "tooMany": "I moduli per questa spedizione sono già stati aperti: usa quello che hai aperto, oppure scrivici.",
+    "held": {
+      "SEARCH": "Per segnalare un problema apri il link della nostra e-mail, oppure scrivici.",
+      "NOT_LEFT": "Non è ancora partito: scrivici per cambiarlo.",
+      "RETURNED": "La merce è tornata a noi: ti scriveremo."
+    }
+  },
+  "foot": {
+    "ends": "Questa pagina resta aperta fino al {date}.",
+    "read": "Aggiornato alle {time}."
+  },
+  "search": {
+    "title": "Traccia la spedizione",
+    "cardTitle": "Trova il tuo ordine",
+    "sub": "Non hai il link? Scrivi il riferimento del tuo ordine e il CAP di consegna.",
+    "reference": "Riferimento del tuo ordine",
+    "referenceHint": "Come sul tuo ordine o sulla nostra conferma.",
+    "postcode": "CAP di consegna",
+    "postcodeHint": "Il CAP dell'indirizzo a cui va.",
+    "button": "Trova la mia spedizione",
+    "enter": "Puoi cercare anche con Invio.",
+    "again": "Cerca un altro ordine",
+    "foundLabel": "Spedizioni di questo ordine",
+    "several_one": "Questo ordine è partito in {count} spedizione. Sceglila:",
+    "several_other": "Questo ordine è partito in {count} spedizioni. Scegline una:",
+    "pickLeft": "Spedizione {number} · partita il {date}",
+    "pickPacked": "Spedizione {number} · imballata",
+    "checking": "Un rapido controllo di questo browser, poi cerchiamo…",
+    "error": "La ricerca non ci è arrivata. Controlla la connessione e riprova.",
+    "wait_one": "Troppe ricerche: attendi {count} minuto, poi riprova.",
+    "wait_other": "Troppe ricerche: attendi {count} minuti, poi riprova.",
+    "miss": {
+      "title": "Nessuna spedizione trovata con questi dati.",
+      "body": "Controlla il riferimento dell'ordine e il CAP dell'indirizzo di consegna. Un ordine compare qui quando è stato imballato."
+    },
+    "ended": {
+      "title": "Questa spedizione non si può più seguire qui",
+      "body": "Cerca di nuovo, oppure scrivici."
+    },
+    "missing": {
+      "title": "In questo indirizzo manca di chi è l'ordine",
+      "body": "Apri il link di tracciamento della nostra e-mail, oppure chiedicelo."
+    },
+    "held": {
+      "loading": "Carichiamo la pagina…",
+      "searching": "Ricerca in corso…",
+      "checking": "Controllo del browser…"
+    },
+    "problem": {
+      "reference": {
+        "empty": "Scrivi il riferimento del tuo ordine.",
+        "long": "Un riferimento d'ordine ha al massimo 60 caratteri.",
+        "format": "Scrivi il riferimento come sul tuo ordine."
+      },
+      "postcode": {
+        "empty": "Scrivi il CAP di consegna.",
+        "long": "Scrivi il CAP come nell'indirizzo di consegna.",
+        "format": "Scrivi il CAP come nell'indirizzo di consegna: lettere e cifre."
+      }
+    }
+  }
+}

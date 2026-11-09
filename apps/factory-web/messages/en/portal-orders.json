@@ -391,7 +391,14 @@
       "style": "Style",
       "colour": "Colourway",
       "pieces": "Pieces"
-    }
+    },
+    "copyLink": "Copy tracking link",
+    "linkCopied": "Link copied",
+    "copyLinkOf": "Copy tracking link of shipment {number}",
+    "copyLinkHint": "Our tracking page, to pass on to whoever receives the goods.",
+    "copyLinkFailed": "The tracking link was not made: try again.",
+    "copyLinkPreview": "A preview makes no link.",
+    "copyLinkTooMany": "Links of this shipment were copied already: pass on one of them."
   },
   "toShip": {
     "title": "Still to ship",

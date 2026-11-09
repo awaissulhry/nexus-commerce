@@ -2010,12 +2010,18 @@
     "portal_supplierProfile_change": "Send changes of your organisation's addresses and contacts for our check; they apply once the buyer approves them",
     "purchasing_supplierDocuments_review": "Accept a document a supplier sent in the portal (what it is, until when) or refuse it with the reason",
     "purchasing_supplierChanges_decide": "Approve a supplier's change of its addresses and contacts sent in the portal, or refuse it with the reason",
+    "purchasing_questionnaire_view": "See the company's supplier questionnaire, the links sent to a supplier and its answers, with their documents and the review",
+    "purchasing_questionnaire_send": "Send a supplier the due-diligence questionnaire by link (by e-mail, or the link given to pass on)",
+    "purchasing_questionnaire_review": "Accept a supplier's questionnaire answer (its documents then count, with their expiry) or send questions back on the supplier's thread",
+    "purchasing_questionnaire_manage": "Make, change and publish the company's supplier questionnaire versions (the questions, the code of conduct)",
     "portal_returns_view": "See your organisation's returns and complaints: each case with its next step, what was asked, where it is, the return instructions and, for roles that show prices, the credit note",
     "portal_returns_request": "Ask for a return or report a quality problem, add photos while it is not decided, and cancel a return request before the goods leave",
     "portal_complaints_view": "Follow your quality complaints: the investigation's steps, our answer letter and the 8D report once shared with you",
     "partners_approvals_view": "See the approvals asked of customers, suppliers and outside signers on a record: what we asked, by when, and the signed answer with its evidence",
     "partners_approvals_ask": "Ask a customer, supplier or outside signer to approve a concession, a sample, a colour, a leather, an artwork, a design proof, a revised order or a signature; withdraw an open request",
     "portal_approvals_view": "See what we ask your organisation to approve (samples, colours, leathers, artworks, design proofs, concessions, revised orders) and the answers given; answering takes the right to approve",
-    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request"
+    "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
+    "sales_measurements_view": "See measurements sent by link and open the body photos (each opening recorded)",
+    "sales_measurements_manage": "Send riders a measurement link and set when their body photos are deleted"
   }
 }

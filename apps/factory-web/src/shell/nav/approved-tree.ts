@@ -659,6 +659,14 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
   // W2b: B-W2b-198 Report a problem (a CLAIM link of a shipment or an order).
   { id: 'links.claim', title: 'Report a problem', scr: ['SCR-197'], task: 'report-problem' },
+  // W2b: B-W2b-170 Track an order (a SHIPMENT_TRACK link's tracking page; the public search /t is its section).
+  { id: 'links.tracking', title: 'Track an order', scr: ['SCR-194'], task: 'track-order' },
+  // W2b: B-W2b-199 Pay online (a PAYMENT link's invoice or deposit; DEPOSIT_INFO opens it too as 'deposit-pay').
+  { id: 'links.pay', title: 'Pay online', scr: ['SCR-199'], task: 'pay' },
+  // W2b: B-W2b-171 Send measurements (a MEASUREMENTS link of a rider's measurement profile).
+  { id: 'links.measure', title: 'Send measurements', scr: ['SCR-195'], task: 'measure' },
+  // B-W2b-172: the supplier questionnaire (a SUPPLIER_ONBOARD link of the supplier).
+  { id: 'links.onboard', title: 'Supplier questionnaire', scr: ['SCR-269'], task: 'onboard' },
   // W2b: B-W2b-169 Secure file (SECURE_FILE; the plan's SCR-200 is W1's Hides: SCR-272) and links.document's set of files.
   { id: 'links.file', title: 'Secure file', scr: ['SCR-272', 'SCR-101-set'], task: 'files' },
   // W2b: B-W2b-169 the payroll file by link (DOCUMENT_VIEW of a payroll export, hours only).

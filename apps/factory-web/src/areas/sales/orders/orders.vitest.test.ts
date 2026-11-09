@@ -84,7 +84,6 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
-import { designScreen as depositPayScreen } from '../../../links/deposit-pay/fixtures'
 
 const params = (query: string) => new URLSearchParams(query)
 
@@ -323,18 +322,7 @@ describe('every design case draws in both languages with no key left on screen',
     })
   }
 
-  it(`SCR-199 (the customer's deposit page): ${depositPayScreen.cases.length} cases × it, en`, () => {
-    const screen = depositPayScreen as unknown as DesignScreen<unknown>
-    for (const item of screen.cases) {
-      for (const locale of LOCALES) {
-        const html = render(screen, item.model, locale)
-        expect(html.length, `SCR-199/${item.id}`).toBeGreaterThan(200)
-        expect(html.match(/\b(?:what|bank|paid|kind|copy|copied|title)\.[a-zA-Z]+\b/)?.[0] ?? null, `SCR-199/${item.id} (${locale})`).toBeNull()
-      }
-    }
-    // No price but the party's own; the IBAN read in groups of four.
-    expect(render(screen, screen.cases[0]!.model, 'it')).toContain('IT60 X054 2811 1010 0000 0123 456')
-  })
+  // SCR-199 (the customer's deposit page) is held by links/pay/pay.vitest.test.ts since B-W2b-199.
 
   it('the dynamic words exist in both languages', () => {
     for (const locale of LOCALES) {

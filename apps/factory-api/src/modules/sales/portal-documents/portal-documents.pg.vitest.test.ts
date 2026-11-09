@@ -352,6 +352,9 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
       certificate: { number: 'SEED-CERT-0003', validOnShippingDate: true },
     })
     expect(row.reports.map((report: Json) => report.kind).sort()).toEqual(['CERTIFICATE_OF_CONFORMITY', 'INSPECTION_REPORT'])
+    // B-W2b-166: the style's public DoC address, and each batch's (the address its garment labels' QR holds).
+    expect(style.publicDocAddress).toMatch(/\/doc\/[0-9A-HJKMNP-TV-Z]{8}$/)
+    expect(row.batches).toEqual([{ number: 'SEED-BT-0001', publicDocAddress: expect.stringMatching(/\/doc\/[0-9A-HJKMNP-TV-Z]{8}$/) }])
     expect((await ok(browsers.quality, '/portal/customer-documents/conformity?q=nothing-like-this')).count).toBe(0)
     expect((await browsers.finance.get('/portal/customer-documents/conformity')).status).toBe(403)
   })

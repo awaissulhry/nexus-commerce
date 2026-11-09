@@ -1,0 +1,261 @@
+/*
+ * The supplier questionnaire link page (SCR-269) LAYOUT inside the link frame (comfortable density, phone first: the link
+ * column is centred, archetype §2.9). Controls are the design system's; semantic tokens only.
+ */
+.fw-ob-stack,
+.fw-ob-card,
+.fw-ob-fields,
+.fw-ob-group,
+.fw-ob-head,
+.fw-ob-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ob-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-ob-fields {
+  gap: var(--nds-space-20, var(--nds-space-16));
+}
+
+.fw-ob-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-ob-h2,
+.fw-ob-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-ob-h2 {
+  font-size: var(--nds-font-size-lg);
+  outline: none;
+}
+
+.fw-ob-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}
+
+.fw-ob-count,
+.fw-ob-hint,
+.fw-ob-text,
+.fw-ob-keys,
+.fw-ob-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-ob-text {
+  color: var(--nds-text);
+}
+
+.fw-ob-count,
+.fw-ob-keys,
+.fw-ob-sub {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ob-pre {
+  white-space: pre-wrap;
+}
+
+.fw-ob-points {
+  margin: 0;
+  padding-inline-start: var(--nds-space-20, var(--nds-space-16));
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  color: var(--nds-text);
+}
+
+.fw-ob-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ob-stepper {
+  overflow-x: auto;
+}
+
+.fw-ob-save,
+.fw-ob-actions,
+.fw-ob-inline,
+.fw-ob-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ob-save {
+  justify-content: flex-end;
+}
+
+.fw-ob-inline > :first-child {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+p.fw-ob-status {
+  margin: 0;
+}
+
+.fw-ob-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--nds-space-8);
+}
+
+.fw-ob-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  /* The same as a DS Field label: every question reads alike, whatever its kind. */
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-ob-required {
+  color: var(--nds-danger-text, var(--nds-text-strong));
+}
+
+.fw-ob-optional {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-regular, 400);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ob-error {
+  margin: 0;
+  color: var(--nds-danger-text, var(--nds-text-strong));
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Fields side by side where there is room, one under the other on a phone. */
+.fw-ob-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ob-yesno {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+  max-width: 420px;
+}
+
+.fw-ob-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-4);
+}
+
+.fw-ob-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+  background: var(--nds-surface-2, var(--nds-surface));
+  min-width: 0;
+}
+
+.fw-ob-file-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+
+.fw-ob-sites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-ob-site {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+  min-width: 0;
+}
+
+.fw-ob-site-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ob-steps {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ob-steps > legend {
+  width: 100%;
+  margin-bottom: var(--nds-space-4);
+}
+
+.fw-ob-review {
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-ob-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+/* On a phone the six step names do not fit: the badges stay, the names are for screen readers (the card says the step). */
+@media (max-width: 560px) {
+  .fw-ob-stepper .nds-step-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
