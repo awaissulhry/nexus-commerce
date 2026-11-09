@@ -1,0 +1,91 @@
+{
+  "common": {
+    "back": "Indietro",
+    "close": "Chiudi",
+    "retry": "Riprova"
+  },
+  "header": {
+    "import": "Importa",
+    "importHint": "Crea modelli da un file di esportazione di Nexus Commerce, o da un foglio con le stesse colonne"
+  },
+  "importer": {
+    "name": "Modelli da un'esportazione di Nexus Commerce",
+    "fills": "Una riga per SKU, come Nexus Commerce esporta una famiglia di prodotti: ogni famiglia diventa un modello in bozza con i suoi colori, le taglie, i codici SKU e i codici a barre. A Nexus Commerce non si invia nulla."
+  },
+  "source": {
+    "title": "Parti da un prodotto di Nexus Commerce",
+    "subtitle": "Modelli in bozza dalle famiglie di prodotti di un file esportato",
+    "label": "Da dove arrivano i modelli",
+    "continue": "Scegli il file",
+    "file": {
+      "title": "File esportato da Nexus Commerce",
+      "hint": "CSV o Excel, una riga per SKU, fino a {max} righe. Un'esportazione più grande si importa in parti, ogni famiglia intera in una parte."
+    },
+    "live": {
+      "title": "Lettura diretta da Nexus Commerce",
+      "off": "Spenta",
+      "on": "Accesa",
+      "reason": {
+        "OWNER_WORD": "Aspetta il via del titolare: per ora la fabbrica legge solo un file esportato e non ha alcun collegamento con Nexus Commerce."
+      }
+    }
+  },
+  "makes": {
+    "title": "Cosa crea l'importazione",
+    "family": "Ogni famiglia di prodotti diventa un modello in bozza in fase Concept, con la revisione 1 in bozza.",
+    "colours": "I colori diventano varianti colore e le taglie la gamma, sulla scala taglie che le contiene.",
+    "skus": "I codici SKU e i codici a barre EAN restano quelli di Nexus Commerce.",
+    "again": "Prima vedi ogni riga in una prova senza scrivere nulla; lo stesso file importato di nuovo non cambia niente.",
+    "nothingBack": "In Nexus Commerce non si scrive nulla."
+  },
+  "how": {
+    "title": "Come avere il file",
+    "export": "In Nexus Commerce esporta i prodotti con le loro varianti: SKU, SKU padre, nome, colore, taglia ed EAN, con categoria e stagione se le hai.",
+    "columns": "Oppure scarica il modello di file al passo successivo e compilalo con le stesse colonne."
+  },
+  "hold": {
+    "noManage": "Il tuo ruolo può vedere i modelli, non crearli.",
+    "noImport": "Per importare un file servono il permesso di avviare importazioni (imports.run) e di caricare file.",
+    "reading": "Sto leggendo da dove possono arrivare i modelli…",
+    "unread": "Non è stato possibile leggere da dove possono arrivare i modelli: riprova."
+  },
+  "fault": {
+    "signed_out": "Sei uscito: accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non può vedere questo.",
+    "not_found": "Questa importazione non esiste, o il tuo ruolo non può vederla.",
+    "unavailable": "In questo momento la fabbrica non risponde: riprova tra poco.",
+    "rate_limited": "Troppe richieste insieme: riprova tra poco.",
+    "internal": "Qualcosa non ha funzionato da parte nostra: riprova."
+  },
+  "done": {
+    "title": "Modelli dal file di Nexus Commerce",
+    "subtitle": "Cosa ha scritto l'importazione",
+    "summary": "Nuovi modelli in bozza: {started} · Modelli con nuovi colori o taglie: {added}",
+    "listLabel": "I modelli dell'importazione",
+    "started": "Nuova bozza",
+    "added": "Colori o taglie aggiunti",
+    "skus_one": "{count} SKU",
+    "skus_other": "{count} SKU",
+    "open": "Apri {code}",
+    "openLabel": "Apri il modello {code}",
+    "hidden_one": "Ancora {count} modello è fuori dalle tue aziende.",
+    "hidden_other": "Ancora {count} modelli sono fuori dalle tue aziende.",
+    "onlyHidden_one": "L'importazione ha scritto {count} modello fuori dalle tue aziende.",
+    "onlyHidden_other": "L'importazione ha scritto {count} modelli fuori dalle tue aziende.",
+    "none": {
+      "title": "Nessun modello scritto",
+      "body": "Ogni riga era già in fabbrica, o è stata rifiutata: Sistema › Importa ed esporta conserva l'importazione con le sue righe."
+    },
+    "unreadHint": "L'importazione è fatta: i modelli sono nell'elenco.",
+    "next": "Ogni nuovo modello è una bozza: imposta sul modello la categoria DPI, la taglia base, la distinta e il ciclo."
+  },
+  "lifecycle": {
+    "CONCEPT": "Concept",
+    "DEVELOPMENT": "Sviluppo",
+    "SAMPLING": "Campionatura",
+    "APPROVED": "Approvato",
+    "IN_PRODUCTION": "In produzione",
+    "PHASE_OUT": "In uscita",
+    "DISCONTINUED": "Fuori produzione"
+  }
+}

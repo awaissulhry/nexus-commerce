@@ -224,7 +224,8 @@ describe('every W2a key exists in it and en', () => {
       ...COPY_PARTS.map((part) => `duplicate.part.${part}`),
       ...['BOM', 'ROUTING', 'LABELS', 'MEASUREMENTS'].map((part) => `duplicate.reason.noRight.${part}`),
       ...['blank', 'copy', 'template', 'commerce'].flatMap((from) => [`newStyle.from.${from}`, `newStyle.fromHint.${from}`]),
-      ...['template', 'commerce'].map((from) => `newStyle.fromWhen.${from}`),
+      // W2b (B-W2b-209): only Template is still held ("Later"); a Nexus Commerce product starts the import.
+      ...['template'].map((from) => `newStyle.fromWhen.${from}`),
       ...['xlsx', 'csv', 'pdf'].flatMap((format) => [`bom.export.${format}`, `bom.export.${format}Hint`]),
     ]
     expect(literal.size).toBeGreaterThan(80)

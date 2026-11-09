@@ -22,6 +22,8 @@ import { employeesImportAdapter } from './importers/employees'
 import { portalOrderLinesImportAdapter } from '../../modules/sales/portal-ordering/importer'
 // W2b (B-W2b-182): a tannery's packing list mailed instead of sent in the portal, onto its sent ship notice.
 import { packingListImportAdapter } from '../../modules/purchasing/ship-notices/importer'
+// W2b (B-W2b-209): a Nexus Commerce product export starts draft styles (the file only: nothing reads or writes Commerce).
+import { commerceStylesImportAdapter } from '../../modules/product/commerce-import/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -120,6 +122,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   portalOrderLinesImportAdapter,
   // B-W2b-182
   packingListImportAdapter,
+  // B-W2b-209
+  commerceStylesImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

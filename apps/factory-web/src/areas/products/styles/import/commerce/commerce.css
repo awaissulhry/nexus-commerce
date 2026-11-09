@@ -1,0 +1,111 @@
+/* New style › "Nexus Commerce product" and the styles header's Import (B-W2b-209). Layout only, with --nds-* tokens. */
+
+.fw-cmi-body,
+.fw-cmi-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cmi-section {
+  gap: var(--nds-space-6);
+}
+
+.fw-cmi-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cmi-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-cmi-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cmi-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cmi-list {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cmi-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-cmi-styles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-cmi-style {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-block: var(--nds-space-8);
+  border-block-end: 1px solid var(--nds-border);
+}
+
+.fw-cmi-style-head,
+.fw-cmi-style-facts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cmi-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cmi-name {
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-cmi-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--nds-control-h-sm);
+  min-height: var(--nds-control-h-sm);
+}
+
+/* The styles header's actions: Import beside New style. */
+.fw-cmi-head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
