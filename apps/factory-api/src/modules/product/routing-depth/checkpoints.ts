@@ -38,7 +38,7 @@ import { readPlans, variantsOfRow, type Db, type PlanRow } from './store'
 export const OPENED_ACTION = 'product.checkpointOpened'
 export const SKIPPED_ACTION = 'product.checkpointSkipped'
 
-type InProcessKind = Exclude<RecordKind, 'INCOMING'>
+type InProcessKind = Exclude<RecordKind, 'INCOMING' | 'FINAL'>
 
 interface Planned {
   readonly subject: BundleSubject

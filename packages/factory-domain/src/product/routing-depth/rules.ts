@@ -271,10 +271,11 @@ export function checkpointRefusal(plan: { readonly code: string; readonly stage:
 }
 
 /** The record a checkpoint opens at a bundle's first report, with the plan version's frequency (none said: every lot). */
-export function checkpointKindOf(stage: PlanStage, frequency: Frequency | null): Exclude<RecordKind, 'INCOMING'> | null {
+export function checkpointKindOf(stage: PlanStage, frequency: Frequency | null): Exclude<RecordKind, 'INCOMING' | 'FINAL'> | null {
   if (!CHECKPOINT_STAGES.includes(stage)) return null
   const kind = recordKindOf(stage, frequency ?? 'EVERY_LOT')
-  return kind === null || kind === 'INCOMING' ? null : kind
+  // B-W2b-213 added FINAL to the record kinds (a rule's final inspection); a step checkpoint never opens one.
+  return kind === null || kind === 'INCOMING' || kind === 'FINAL' ? null : kind
 }
 
 export interface CheckpointFacts {
@@ -286,7 +287,7 @@ export interface CheckpointFacts {
 }
 
 /** What the checkpoint does, in words, and what to fix (no approved version: it opens nothing). */
-export function checkpointWords(plan: CheckpointFacts): { readonly kind: Exclude<RecordKind, 'INCOMING'> | null; readonly does: Words; readonly warning: Words | null } {
+export function checkpointWords(plan: CheckpointFacts): { readonly kind: Exclude<RecordKind, 'INCOMING' | 'FINAL'> | null; readonly does: Words; readonly warning: Words | null } {
   const frequency = plan.approved?.frequency ?? null
   const kind = checkpointKindOf(plan.stage, frequency)
   if (!plan.approved || kind === null) {
