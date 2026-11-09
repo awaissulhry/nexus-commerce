@@ -7,7 +7,7 @@ import {
   checksState,
   decimalWords,
   deviationWords,
-  inspectedOf,
+  inspectedNow,
   photoSet,
   planDecisionProblems,
   sampleRejected,
@@ -70,7 +70,7 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
     const checks = checksState(binding.checks, resultRows, measurements)
     const identity = await identityFacts(db, header, row)
     const photoState = photoSet(binding.checks, resultRows)
-    const inspected = inspectedOf(row.checklist)
+    const inspected = inspectedNow(row)
     const stop = await stopRule(db, context.tenantId, row.companyId, binding.version.stopAtReject)
     const failed: ChecksNow = { ...checks, failed: [...checks.failed, ...(identity.summary.ok === false ? ['Serial or batch check'] : [])] }
     const result = aqlResult({

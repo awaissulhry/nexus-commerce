@@ -303,7 +303,8 @@ describe('the severity classes with the safety rule (QHS-002)', () => {
     expect(view.classes[0]).toMatchObject({ class: 'CRITICAL', rank: 0, acceptanceNumber: 0, locked: true, law: expect.stringMatching(/2016\/425/), words: { it: 'Critico', en: 'Critical' }, defects: critical })
     expect(view.classes[1]).toMatchObject({ class: 'MAJOR', acceptanceNumber: null, locked: false, law: null })
     expect(view.safetyRule).toMatchObject({ en: SAFETY_RULE.en, it: SAFETY_RULE.it, law: expect.stringMatching(/2016\/425/) })
-    expect(view.editable).toBe(false)
+    // B-W2b-213: the words are the tenant's to write (QualitySettings.severityTexts); a viewer may not (canManage false).
+    expect(view).toMatchObject({ editable: true, canManage: false })
     expect((await refused('nobody', 'GET', '/quality/severity', undefined, 403)).code).toBe('forbidden')
     expect((await call('floor', 'GET', '/quality/severity')).statusCode).toBe(403)
   })

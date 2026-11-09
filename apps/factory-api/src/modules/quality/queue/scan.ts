@@ -3,6 +3,7 @@ import { ConflictError, DomainError, NotFoundError, ValidationError, type Issue 
 import { parseScanId, tenantTag, type ScanType } from '@nexus/factory-domain/numbering/scan-id'
 import {
   garmentsToInspect,
+  isMine,
   scanTargets,
   takenOf,
   unknownCodeWords,
@@ -247,7 +248,8 @@ async function workOrderFinal(caller: CommandCaller, viewer: Viewer, workOrderId
   if (!order) return none(unknownCodeWords(workOrderId))
   const open = await caller.withClient((db) => db.inspection.findMany({ where: { workOrderId, status: 'OPEN' }, select: OPEN_FINAL_SELECT, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }))
   const refs = open.map((row) => finalRef(row, viewer))
-  const mine = refs.filter((ref) => ref.taken === 'MINE')
+  // B-W2b-213: an inspection a rule opened (nobody's yet) opens like one's own: the scanner takes it, never a second one.
+  const mine = refs.filter((ref) => isMine(ref.taken))
   if (mine.length > 0) return { opens: mine, starts: [], nothing: null }
   const bench = (await benchWorkOrders(caller, { number: order.number, limit: 1 })).workOrders.find((row) => row.id === order.id)
   const garments = bench ? garmentsToInspect({ finished: bench.finished, released: bench.released, inOpenInspections: open.reduce((sum, row) => sum + row.lotSize, 0) }) : 0

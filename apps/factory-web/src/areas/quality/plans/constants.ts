@@ -63,7 +63,8 @@ export const PLAN_LIMITS = Object.freeze({
 export const TRIGGER_EVENTS = ['GOODS_RECEIPT', 'OPERATION_FINISHED', 'BUNDLE_SCAN', 'PACKING', 'RETURN_RECEIVED'] as const
 export type TriggerEvent = (typeof TRIGGER_EVENTS)[number]
 
-export const RECORD_KINDS = ['INCOMING', 'CUTTING', 'FIRST_PIECE', 'ROVING', 'END_OF_LINE'] as const
+// B-W2b-213: FINAL, a final inspection a PACKING rule opens.
+export const RECORD_KINDS = ['INCOMING', 'CUTTING', 'FIRST_PIECE', 'ROVING', 'END_OF_LINE', 'FINAL'] as const
 export type RecordKind = (typeof RECORD_KINDS)[number]
 
 /** What a rule opens for a plan's stage and the rule's frequency (factory-domain recordKindOf). */
@@ -77,6 +78,8 @@ export function recordKindOf(stage: PlanStage, frequency: Frequency): RecordKind
       return frequency === 'FIRST_PIECE' ? 'FIRST_PIECE' : 'ROVING'
     case 'END_OF_LINE':
       return 'END_OF_LINE'
+    case 'FINAL':
+      return 'FINAL'
     default:
       return null
   }

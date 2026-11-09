@@ -1,7 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { portalRecordPath } from '@nexus/factory-domain/portal/home/links'
-import { KIND_RULES, taskWords } from '@nexus/factory-domain/portal/tasks/kinds'
+import { KIND_RULES, taskArea, taskWords } from '@nexus/factory-domain/portal/tasks/kinds'
 import { dueStateOf, UNDO_WINDOW_MS } from '@nexus/factory-domain/portal/tasks/rules'
 import type { CommandTx } from '../../../core/command'
 import type { TaskRow } from './store'
@@ -43,10 +43,12 @@ export function taskView(row: TaskRow, now: Date, names: ReadonlyMap<string, str
  * B-W2b-F14: whether it is handed to this person (`mine`) and whether they may take it or hand it on (an open task, not a
  * preview).
  */
-export function partnerTaskView(row: TaskRow, now: Date, facts: { readonly partyCode: string; readonly personId: string; readonly preview: boolean; readonly names?: ReadonlyMap<string, string> }) {
+export function partnerTaskView(row: TaskRow, now: Date, facts: { readonly partyCode: string; readonly personId: string; readonly preview: boolean; readonly names?: ReadonlyMap<string, string>; readonly partnerKind?: string | null }) {
   const source = sourceOf(row.sourceKey)
   return {
     ...taskView(row, now, facts.names),
+    // B-W2b-F17: the area as the person's partner kind has it (a supplier's approvals on Home), as the badges count it.
+    area: taskArea(row.kind, facts.partnerKind),
     mine: row.assigneeId === facts.personId,
     canAssign: !facts.preview && row.status === 'OPEN',
     link: portalRecordPath(facts.partyCode, row.recordType, row.recordId, `task:${row.id}`),

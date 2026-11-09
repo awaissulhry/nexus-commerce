@@ -391,3 +391,13 @@ export function receiptNextWords(split: { readonly accepted: number; readonly re
 
 /** A note on an inspection is short. */
 export const noteProblem = (note: string | null | undefined): Issue | null => ((note ?? '').length > INCOMING_LIMITS.note ? { path: 'note', message: `At most ${INCOMING_LIMITS.note} characters.` } : null)
+
+/**
+ * B-W2b-213 (IncomingInspection.inspectedCount): the units of the sample of a counted lot inspected so far (the AqlCounter
+ * of a lot not inspected hide by hide or roll by roll): a whole number from 0 up to the sample (path `inspected`).
+ */
+export function inspectedProblem(inspected: number | undefined, sampleSize: number): Issue | null {
+  if (inspected === undefined) return null
+  if (!(Number.isInteger(inspected) && inspected >= 0 && inspected <= sampleSize)) return { path: 'inspected', message: `Units of the sample inspected: a whole number from 0 to ${sampleSize}.` }
+  return null
+}

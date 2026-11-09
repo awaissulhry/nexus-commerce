@@ -22,6 +22,8 @@ export const manifest = defineManifest({
   // picker in the person's language). The same two permissions; the vocabulary read is any office or floor session's,
   // as the picker's: codes and words, nothing personal or secret.
   'GET /quality/severity': { audiences: ['office'], permission: 'quality.defects.view', scope: 'tenant' },
+  // B-W2b-213: the tenant's severity words per class and language (CRITICAL's meaning stays locked).
+  'PUT /quality/severity': { audiences: ['office'], permission: 'quality.defects.manage', scope: 'tenant' },
   'GET /quality/causes': { audiences: ['office'], permission: 'quality.defects.view', scope: 'tenant' },
   'POST /quality/causes': { audiences: ['office'], permission: 'quality.defects.manage', scope: 'tenant' },
   'PATCH /quality/causes/:causeId': { audiences: ['office'], permission: 'quality.defects.manage', scope: 'tenant' },

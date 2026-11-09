@@ -68,6 +68,9 @@ export const INCOMING_COLUMNS = {
   inspectorWorkerId: true,
   inspectorUserId: true,
   dueAt: true,
+  // B-W2b-213 (W2b schema wave 24/33): the units of a counted lot's sample inspected; the rule that opened it.
+  inspectedCount: true,
+  openedByTriggerId: true,
   decidedAt: true,
   signatureSha256: true,
   cancelledAt: true,

@@ -670,6 +670,34 @@
     display: none;
   }
 
+  /* B-W2b-F17: a record's band stacks its reference (RefPair) and status pill BELOW the title, on a line of their own,
+     instead of squeezing them beside a long title (the reference wrapped letter by letter at 390 px). The band grows by
+     that line; the title keeps its one line beside the ⋯. The frame's own rules: the DS band is untouched. */
+  .fw-pband .nds-detailhdr.dense {
+    height: auto;
+    min-height: var(--nds-space-48);
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-row {
+    align-self: stretch;
+    align-items: flex-start;
+    padding-block: var(--nds-space-8);
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title {
+    flex-wrap: wrap;
+    row-gap: var(--nds-space-4);
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    flex: 1 1 0;
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
+    flex: 1 0 100%;
+    max-width: 100%;
+  }
+
   .fw-pmain {
     padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-16);
   }

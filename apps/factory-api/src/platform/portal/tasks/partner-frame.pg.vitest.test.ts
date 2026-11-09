@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { textOf } from '../../../adapters/ses/fake'
-import { callerFor } from '../../../core/command'
+import { callerFor, command } from '../../../core/command'
 import type { Log } from '../../../core/queue'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { useAbuseGuard } from '../../abuse/guard'
@@ -13,6 +13,7 @@ import { runPartnerDigests } from '../notifications/digest'
 import { partnerFanOut, partnerFanOutEvents } from '../notifications/fan-out'
 import { unsubscribeKeyOf } from '../notifications/mail'
 import { remindPartnerTasks } from './reminders'
+import { openTaskInCommand } from './store'
 
 /**
  * Tasks and notifications for partners on the local stack (B-W2b-167; COL-043, PLT-148, COL-063), through the real app: the
@@ -37,10 +38,10 @@ const people = { buyer: 'bea.buyer@brand-alpha.example', viewer: 'vic.viewer@bra
 const ids: Record<keyof typeof people, string> = { buyer: '', viewer: '', admin: '', otherBuyer: '' }
 
 /** A partner person of a party with template roles over every company of the tenant (as an accepted invitation gives). */
-async function partnerPerson(email: string, partyId: string, roleKeys: string[]): Promise<string> {
+async function partnerPerson(email: string, partyId: string, roleKeys: string[], partnerKind: 'CUSTOMER' | 'SUPPLIER' | 'SUBCONTRACTOR' = 'CUSTOMER'): Promise<string> {
   const id = newId()
   await inWorld(h, world, async (client) => {
-    await client.user.create({ data: { id, email, displayName: email.split('@')[0]!.replace('.', ' '), locale: 'en', status: 'ACTIVE', audience: 'PARTNER', partyId, partnerKind: 'CUSTOMER' }, select: { id: true } })
+    await client.user.create({ data: { id, email, displayName: email.split('@')[0]!.replace('.', ' '), locale: 'en', status: 'ACTIVE', audience: 'PARTNER', partyId, partnerKind }, select: { id: true } })
     for (const key of roleKeys) {
       const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenant.id, key } }, select: { id: true } })
       await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
@@ -304,5 +305,47 @@ describe('notifications, e-mail settings and summaries (PLT-148, COL-063)', { ti
     const viewer = await signedIn(people.viewer)
     expect((await viewer.get(`/portal/tasks/handover/${ids.buyer}`)).status).toBe(403)
     expect((await admin.get(`/portal/tasks/handover/${ids.otherBuyer}`)).status).toBe(404)
+  })
+})
+
+// B-W2b-F17: an approval's badge sits where the person's partner kind can see it — a customer's on Quotes & samples, a
+// supplier's or a workshop's on Home (the one page of theirs that lists it), never on an area their rail has not.
+describe('approval badges per partner kind (B-W2b-F17)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  /** A partner's party of a kind, with its portal on. */
+  async function partyOf(role: 'SUPPLIER' | 'SUBCONTRACTOR', name: string): Promise<string> {
+    const partyId = newId()
+    await inWorld(h, world, async (client) => {
+      await client.party.create({ data: { id: partyId, code: `P${partyId.slice(-6)}`, kind: 'ORGANISATION', legalName: name, roles: [role] }, select: { id: true } })
+      await client.portalSettings.create({ data: { id: partyId, partyId, portalOn: true }, select: { id: true } })
+    })
+    return partyId
+  }
+  /** An approval asked of the party (as B-W2b-184's ask opens it), made up. */
+  async function approvalAsked(partyId: string, label: string): Promise<void> {
+    const requestId = newId()
+    await command(system(), { name: 'partnerTasks.open', input: { requestId } }, async (tools) => {
+      await openTaskInCommand(tools, { companyId: world.companyId, partyId, kind: 'APPROVE', record: { type: 'ApprovalRequest', id: requestId, label }, sourceKey: `ApprovalRequest:${requestId}`, dueAt: null, askedBy: null })
+      return { requestId }
+    })
+  }
+  const approveBadge = (body: { badges: { area: string; kinds: Record<string, number> }[] }) => body.badges.filter((badge) => badge.kinds.APPROVE).map((badge) => badge.area)
+
+  it('a supplier and a workshop count theirs on Home; a customer on Quotes & samples', async () => {
+    const tannery = await partyOf('SUPPLIER', 'Made-up Tannery S.r.l.')
+    const workshop = await partyOf('SUBCONTRACTOR', 'Made-up Workshop S.n.c.')
+    await partnerPerson('olga.orders@tannery.example', tannery, ['supplier-orders', 'partner-approve'], 'SUPPLIER')
+    await partnerPerson('jon.jobs@workshop.example', workshop, ['subcontractor-jobs', 'partner-approve'], 'SUBCONTRACTOR')
+    await approvalAsked(tannery, 'Made-up leather lot · sample 1')
+    await approvalAsked(workshop, 'Made-up job · proof 1')
+    await approvalAsked(world.partyId, 'Made-up artwork · proof 1')
+
+    const supplier = await (await signedIn('olga.orders@tannery.example')).get('/portal/tasks')
+    expect(supplier.status, JSON.stringify(supplier.body)).toBe(200)
+    expect(approveBadge(supplier.body)).toEqual(['home'])
+    expect(supplier.body.items.filter((item: { kind: string }) => item.kind === 'APPROVE').map((item: { area: string }) => item.area)).toEqual(['home'])
+    const job = await (await signedIn('jon.jobs@workshop.example')).get('/portal/home')
+    expect(approveBadge(job.body)).toEqual(['home'])
+    const customer = await (await signedIn(people.buyer)).get('/portal/tasks')
+    expect(approveBadge(customer.body)).toEqual(['quotes'])
   })
 })

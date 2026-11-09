@@ -67,6 +67,23 @@ describe('Home\'s scan router: the job for this station, with the label loaded',
     expect(taskForScan('cutting', readScan(CARTON, TAG), homeTiles('cutting', ALL, false))).toBeNull()
   })
 
+  it("a trolley's label opens the line's receipt (Fabric cutting) at a sewing station; elsewhere Scan anything names it (B-W2b-F17)", () => {
+    const LINE = [...ALL, 'production.trolleys']
+    for (const label of ['T-3', 'SEED-T-1', 't-12']) {
+      expect(taskForScan('sewing', readScan(label, TAG), homeTiles('sewing', LINE, false), LINE, false), label).toBe('fabriccut')
+      // Never the packing bench as a pack slip, Pick & issue or Final inspection as a work order number, nor Fabric cutting's
+      // ticket at the cutting table: Scan anything says what the label is.
+      for (const mode of ['cutting', 'warehouse', 'inspection', 'packing', null] as const) expect(taskForScan(mode, readScan(label, TAG), homeTiles(mode, [...LINE, 'shipping.pack'], false), [...LINE, 'shipping.pack'], false), `${mode} ${label}`).toBeNull()
+    }
+    // The receipt takes the person's production.cut (the page) and production.trolleys (the step); a notice holding the scans holds it.
+    expect(taskForScan('sewing', readScan('T-3', TAG), homeTiles('sewing', ALL, false), ALL, false)).toBeNull()
+    expect(taskForScan('sewing', readScan('T-3', TAG), homeTiles('sewing', LINE, true), LINE, true)).toBeNull()
+    expect(taskForScan('sewing', readScan('T-3', TAG), homeTiles('sewing', LINE, false))).toBeNull()
+    // A bundle at the line still opens Operation; a free code there still opens Scan anything.
+    expect(taskForScan('sewing', readScan(BUNDLE, TAG), homeTiles('sewing', LINE, false), LINE, false)).toBe('operation')
+    expect(taskForScan('sewing', readScan('SEED-MC-0001', TAG), homeTiles('sewing', LINE, false), LINE, false)).toBeNull()
+  })
+
   it('never opens a task the person has no open tile for (fail closed, held by the notice)', () => {
     expect(taskForScan('sewing', readScan(BUNDLE, TAG), homeTiles('sewing', ['floor.work'], false))).toBeNull()
     expect(taskForScan('sewing', readScan(BUNDLE, TAG), homeTiles('sewing', ALL, true))).toBeNull()

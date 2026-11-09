@@ -127,6 +127,10 @@ import { PRODUCT_SMV_DEFINITIONS, PRODUCT_SMV_PERMISSIONS } from '../../product/
 import { PRODUCTION_CUTISSUE_DEFINITIONS, PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS, PRODUCTION_CUTISSUE_PERMISSIONS } from '../../production/cutissue/permissions'
 // B-W2b-172: the supplier questionnaire (purchasing.questionnaire.view | send | review | manage).
 import { QUESTIONNAIRE_DEFINITIONS, QUESTIONNAIRE_PERMISSIONS } from '../../purchasing/questionnaire/permissions'
+// B-W2b-208: the textile, leather and origin checks (compliance.textileRules.manage; reading is compliance.certificates.view).
+import { TEXTILE_RULES_DEFINITIONS, TEXTILE_RULES_PERMISSIONS } from '../../compliance/textile-rules/permissions'
+// B-W2b-214: work instructions.
+import { PRODUCTION_INSTRUCTIONS_DEFINITIONS, PRODUCTION_INSTRUCTIONS_PERMISSIONS } from '../../production/instructions/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -764,6 +768,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SALES_MEASUREMENTS_DEFINITIONS,
   // B-W2b-172: the supplier questionnaire (area `purchasing`, declared above).
   QUESTIONNAIRE_DEFINITIONS,
+  // B-W2b-208: the textile, leather and origin checks' switches (area `compliance`, declared above).
+  TEXTILE_RULES_DEFINITIONS,
+  // B-W2b-214: work instructions (production.instructions.view | manage | approve | people).
+  PRODUCTION_INSTRUCTIONS_DEFINITIONS,
   // B-W2b-215: SMV governance (area `product`, declared above).
   PRODUCT_SMV_DEFINITIONS,
 ])
@@ -1008,6 +1016,10 @@ for (const name of PRODUCTION_CUTISSUE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isD
 for (const name of SALES_MEASUREMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-172: the supplier questionnaire.
 for (const name of QUESTIONNAIRE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-208: the textile, leather and origin checks.
+for (const name of TEXTILE_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-214: work instructions.
+for (const name of PRODUCTION_INSTRUCTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-215: SMV governance.
 for (const name of PRODUCT_SMV_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

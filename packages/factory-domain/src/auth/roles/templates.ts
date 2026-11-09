@@ -24,6 +24,10 @@ import { CUTISSUE_ADDS, CUTISSUE_FLOOR_ADDS } from '../../production/cutissue/pe
 import { MEASURE_LINK_ADDS } from '../../sales/measure-link/permissions'
 // B-W2b-172: the supplier questionnaire (the administrator and the buyer send, review and keep it; quality reads it).
 import { QUESTIONNAIRE_ADDS } from '../../purchasing/questionnaire/permissions'
+// B-W2b-208: the textile, leather and origin checks (the quality inspector switches them).
+import { TEXTILE_RULES_ADDS } from '../../compliance/textile-rules/permissions'
+// B-W2b-214: work instructions (the production office writes and approves, the floor supervisor writes, quality approves, HR keeps the training record).
+import { INSTRUCTIONS_ADDS } from '../../production/instructions/permissions'
 // B-W2b-215: SMV governance (the production manager proposes and approves; never their own proposal).
 import { SMV_ADDS } from '../../product/minutes/permissions'
 
@@ -800,6 +804,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (MEASURE_LINK_ADDS[key] ?? []) : []),
   // B-W2b-172
   ...(audience === 'office' ? (QUESTIONNAIRE_ADDS[key] ?? []) : []),
+  // B-W2b-208
+  ...(audience === 'office' ? (TEXTILE_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-214
+  ...(audience === 'office' ? (INSTRUCTIONS_ADDS[key] ?? []) : []),
   // B-W2b-215
   ...(audience === 'office' ? (SMV_ADDS[key] ?? []) : [])]
 /**

@@ -209,15 +209,8 @@ export const addStandardDispositions = (api: ApiClient, idempotencyKey: string) 
 
 const itEn = z.object({ it: z.string(), en: z.string() })
 
-export const severitySchema = z.object({
-  classes: z.array(z.object({ class: klass, rank: z.number().int(), words: itEn, meaning: itEn, acceptanceNumber: z.number().int().nullable(), locked: z.boolean(), law: z.string().nullable(), defects: z.number().int() })),
-  safetyRule: z.object({ it: z.string(), en: z.string(), law: z.string() }),
-  editable: z.boolean(),
-})
-export type Severity = z.infer<typeof severitySchema>
-
-/** GET /quality/severity (quality.defects.view): the classes, the safety rule; the texts are fixed (`editable` false). */
-export const readSeverity = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/severity', { schema: severitySchema, signal })
+// B-W2b-213: the severity classes with the tenant's words (GET / PUT /quality/severity): ./severity/api.ts.
+export { readSeverity, severitySchema, type Severity } from './severity/api'
 
 const process = z.enum(CAUSE_PROCESSES)
 

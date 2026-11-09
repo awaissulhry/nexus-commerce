@@ -1,7 +1,7 @@
 import { ConflictError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { lengthIn, isLengthUom } from '@nexus/factory-domain/inventory/rolls/rolls'
-import { componentDraftProblems, counterProblems, isRollLot, rollDraftProblems, ROLL_UNIT_LIMITS, COMPONENT_LIMITS, type ComponentDraft, type CountersDraft, type RollDraft } from '@nexus/factory-domain/quality/incoming/units'
+import { componentDraftProblems, counterProblems, inspectedProblem, isRollLot, rollDraftProblems, ROLL_UNIT_LIMITS, COMPONENT_LIMITS, type ComponentDraft, type CountersDraft, type RollDraft } from '@nexus/factory-domain/quality/incoming/units'
 import type { UnitDecision } from '@nexus/factory-domain/quality/incoming/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
@@ -193,22 +193,27 @@ export async function removeComponent(caller: CommandCaller, inspectionId: strin
   return viewOf(caller, result.id, found, context)
 }
 
-/** PUT /quality/incoming/:inspectionId/counters */
-export async function putCounters(caller: CommandCaller, inspectionId: string, body: Version & { readonly found: CountersDraft }, idempotencyKey: string | undefined) {
+/**
+ * PUT /quality/incoming/:inspectionId/counters. B-W2b-213: with `inspected`, the units of the sample inspected so far
+ * (IncomingInspection.inspectedCount: "38 of 50" and a verdict before the decision; the database keeps it 0..sample and
+ * freezes the AQL profile once a unit is counted).
+ */
+export async function putCounters(caller: CommandCaller, inspectionId: string, body: Version & { readonly found: CountersDraft; readonly inspected?: number | undefined }, idempotencyKey: string | undefined) {
   const found = await writable(caller, inspectionId)
   const { row: seen, context } = found
   if (seen.uom === 'HIDE' && found.lot) throw new ConflictError(`Incoming inspection ${seen.number} is inspected hide by hide: its counts follow from the marks on each hide.`)
-  const problems = counterProblems(body.found, seen.sampleSize)
+  const inspected = inspectedProblem(body.inspected, seen.sampleSize)
+  const problems = [...counterProblems(body.found, seen.sampleSize), ...(inspected ? [inspected] : [])]
   if (problems.length > 0) throw invalid(problems, 'The counts are not valid.')
   const { result } = await command(caller, { name: 'quality.incoming.recordCounters', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
     const row = await lockIncoming(tools.tx, seen.id, body.version)
     const before = { critical: row.foundCritical, major: row.foundMajor, minor: row.foundMinor }
     await tools.tx.incomingInspection.update({
       where: { id: row.id },
-      data: { foundCritical: body.found.critical, foundMajor: body.found.major, foundMinor: body.found.minor, ...takeOver(context, row), version: { increment: 1 }, updatedAt: tools.now },
+      data: { foundCritical: body.found.critical, foundMajor: body.found.major, foundMinor: body.found.minor, ...(body.inspected !== undefined ? { inspectedCount: body.inspected } : {}), ...takeOver(context, row), version: { increment: 1 }, updatedAt: tools.now },
       select: { id: true },
     })
-    tools.audit({ recordType: 'IncomingInspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { found: before }, after: { found: body.found, by: postedBy(context) } })
+    tools.audit({ recordType: 'IncomingInspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { found: before, inspected: row.inspectedCount }, after: { found: body.found, ...(body.inspected !== undefined ? { inspected: body.inspected } : {}), by: postedBy(context) } })
     recorded(tools, row, 'COUNTERS', null, await done(tools.tx, row.id))
     return { id: row.id }
   })
