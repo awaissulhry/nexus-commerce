@@ -18,6 +18,8 @@ import { readOperations, readSteps, type OperationFacts, type StepRecord } from 
 import { assertNoPiecesUse, assertPiecesFollowMaterial } from '../pieces/guards'
 import { lockStyle } from '../styles/store'
 import { requireEditRule } from '../lifecycle/edit-rule'
+// B-W2b-223: B-W2b-206's and B-W2b-211's BomLine rules said in words before the database refuses (never a 500).
+import { assertLineKeepsStructure, assertNotGroupRow } from '../bom-structure/guards'
 
 /**
  * The BOM's rows (factory-db `StyleRevision`, `BomLine`, `BomLineSize`, `BomLineColour`) and what they name (`Style`,
@@ -552,6 +554,8 @@ export async function writeLine(tools: CommandTools, target: PartsTarget, line: 
   const { tx, now } = tools
   const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
   const { styleId, revisionId, lineId } = target
+  // B-W2b-223: a blocked material, a sub-assembly line's component, a customer's line, the alternates (in words, 400).
+  await assertLineKeepsStructure(tx, before ? { ...before, id: lineId } : null, line)
   const fields = {
     seq: line.seq,
     itemId: line.itemId,
@@ -615,6 +619,8 @@ export async function deleteLine(tools: CommandTools, line: LineRecord): Promise
   const { tx } = tools
   // B-W2b-95: no pattern piece is cut from it (the key's Restrict would refuse it without saying which).
   await assertNoPiecesUse(tx, line)
+  // B-W2b-223: a group row is not removed while lines are grouped under it (409 in words; the key's Restrict would be a 500).
+  await assertNotGroupRow(tx, line)
   if (line.colours.length > 0) removed((await tx.bomLineColour.deleteMany({ where: { bomLineId: line.id } })).count, line.colours.length, 'grid cells')
   if (line.sizes.length > 0) removed((await tx.bomLineSize.deleteMany({ where: { bomLineId: line.id } })).count, line.sizes.length, 'size quantities')
   removed((await tx.bomLine.deleteMany({ where: { id: line.id } })).count, 1, 'BOM line')

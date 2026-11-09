@@ -18,6 +18,9 @@ import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
 // B-W2b-225: the routing's depth travels with its steps; the release closes the old revision's effective days.
 import { auditedDepthCopy, copyStepDepthInCommand } from '../routing-depth/copy'
 import { effectivityAtReleaseInCommand, effectivityAtWithdrawalInCommand } from '../routing-depth/effectivity'
+// B-W2b-223: B-W2b-211's columns travel with the copy; the release reads the BOM check's structure blockers.
+import { assertStructureReleasable, structureBlockersInCommand } from '../bom-structure/check'
+import { copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -155,6 +158,10 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
     }
 
+    // B-W2b-223: each line's section, group row, sub-assembly, customer, kit, rule, option and made-to-measure point, the
+    // alternates and the output (what is no longer true is left out and said in its own audit row).
+    const structure = await copyStructureInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines))
+    if (!emptyCopy(structure)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, structure } })
     // B-W2b-95: the pattern pieces travel with the BOM, AFTER it (a piece names its line); the range is the style's now.
     const pieces = await copyPiecesInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines), (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })).sizes)
     const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
@@ -235,6 +242,9 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
       steps,
       operations: await readOperations(tx, steps.map((step) => step.operationId)),
     })
+    // B-W2b-223 (PRD-087, PRD-106): the BOM check's structure blockers (a draft or obsolete sub-assembly, a blocked material
+    // or alternate, a circle, a size or colourway its sub-assembly lacks) refused in words with W1's, before the database.
+    assertStructureReleasable(blockers, await structureBlockersInCommand(tools, { styleId, revisionId }))
     if (blockers.length > 0) throw releaseBlocked(blockers)
 
     const previous = await tx.styleRevision.findFirst({ where: { styleId, status: 'RELEASED' }, select: { id: true, revision: true, version: true } })
