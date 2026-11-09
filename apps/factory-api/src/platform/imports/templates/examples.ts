@@ -56,6 +56,15 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   ],
   // B-W2b-209
   'product.commerceStyles': COMMERCE_TEMPLATE_EXAMPLES,
+  // B-W2b-224: the point of measure library and grade rule steps (made-up points and increments).
+  'product.pointsOfMeasure': [
+    { code: 'CHEST_W', name: 'Chest width', nameIt: 'Mezzo torace', kind: 'GARMENT', bodyZone: 'UPPER', uom: 'CM', defaultTolerance: '1', howTo: 'Flat, 2 cm below the armhole, side to side.', bodyPoint: 'chest' },
+    { code: 'chest', name: 'Chest girth', nameIt: 'Circonferenza torace', kind: 'BODY', bodyZone: 'UPPER', uom: 'CM', howTo: 'Around the fullest part of the chest.' },
+  ],
+  'product.gradeRules': [
+    { rule: 'GR-JKT-EU', point: 'CHEST_W', step: '*', increment: '2', ruleName: 'Jacket EU', scale: 'EU-46-58', baseSize: '52', format: 'RELATIVE' },
+    { rule: 'GR-JKT-EU', point: 'BACK_LEN', step: '52-54', increment: '1.5' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

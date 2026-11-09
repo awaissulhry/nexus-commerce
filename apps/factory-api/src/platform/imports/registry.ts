@@ -24,6 +24,9 @@ import { portalOrderLinesImportAdapter } from '../../modules/sales/portal-orderi
 import { packingListImportAdapter } from '../../modules/purchasing/ship-notices/importer'
 // W2b (B-W2b-209): a Nexus Commerce product export starts draft styles (the file only: nothing reads or writes Commerce).
 import { commerceStylesImportAdapter } from '../../modules/product/commerce-import/importer'
+// W2b (B-W2b-224): the point of measure library and grade rule steps (Products › Sizes & measurements › Import).
+import { pointsOfMeasureImportAdapter } from '../../modules/product/measures/importer'
+import { gradeRulesImportAdapter } from '../../modules/product/grading/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -124,6 +127,9 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   packingListImportAdapter,
   // B-W2b-209
   commerceStylesImportAdapter,
+  // B-W2b-224
+  pointsOfMeasureImportAdapter,
+  gradeRulesImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

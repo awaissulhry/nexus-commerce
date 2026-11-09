@@ -69,6 +69,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-171 (SAL-286): a rider's body photos (front, side, back) sent with measurements by link (modules/sales/measure-link):
   // PHOTO files only, after the privacy notice, kept until their retention ends (GDPR: body photos are personal data).
   MeasurementProfile: { kinds: ['PHOTO'], route: 'POST /link/measure/photos, then POST /link/measure/photos/:fileId/complete (the rider\'s MEASUREMENTS link)' },
+  // B-W2b-224 (PRD-062): a point of measure's how-to picture (modules/product/measures): PHOTO files only; the database takes
+  // only an AVAILABLE PHOTO of the point as its picture, set by the completion.
+  PointOfMeasure: { kinds: ['PHOTO'], route: 'POST /product/points-of-measure/:pomId/picture, then POST …/picture/:fileId/complete' },
 })
 
 /**

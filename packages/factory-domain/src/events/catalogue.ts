@@ -147,6 +147,8 @@ import { events as productMinutes } from '../product-minutes/events'
 import { events as productionCuttingRules } from '../production-cutting-rules/events'
 // B-W2b-225: a routing step's quality checkpoint opened a check.
 import { events as routingDepth } from '../routing-depth/events'
+// B-W2b-224: points of measure, grade rules and the measurement spec (a point or a rule changed, a spec changed).
+import { events as productMeasures } from '../product-measures/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -360,7 +362,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-221
   ...productLifecycle,
   // B-W2b-227
-  ...stylesDepth] as const satisfies readonly EventDefinition[]
+  ...stylesDepth,
+  // B-W2b-224
+  ...productMeasures] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
