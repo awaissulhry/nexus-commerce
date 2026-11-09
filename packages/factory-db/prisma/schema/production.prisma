@@ -87,6 +87,17 @@ model ProductionSettings {
   /// default the API has answered so far), held for a team leader's PIN (STRICT) or let through (FREE). Read by the API's
   /// qualificationRuleFor from B-W2b-81 on, edited as one more floor rule.
   qualificationRule      FloorRuleMode      @default(WARN)
+  /// W2b-4 (schema wave 24/33, B-W2b-204; SCM-206, MES-053; plan §12 "the shade rule is a setting", Q18): the
+  /// site's shade rule, read by the reserve, the pick and the cutting table (factory-domain inventory/reservations/shade
+  /// shadeRuleFor). ORDER, the default, is the rule every site had before.
+  shadeRule              ShadeRule          @default(ORDER)
+  /// W2b-4 (B-W2b-204; MES-060, B-W2b-103): the cutting table asks a photo of the hide on the table before Cut. Off by
+  /// default (optional per site).
+  hidePhotoRequired      Boolean            @default(false)
+  /// W2b-4 (B-W2b-204; SCM-254, B-W2b-100): the smallest leftover kept as a remnant, in an area unit (M2, DM2 or FT2),
+  /// above 0 and at most 10 m². The default 10 dm² is what every site used before.
+  minimumRemnantArea     Decimal            @default(10) @db.Decimal(18, 4)
+  minimumRemnantUom      Uom                @default(DM2)
   version                Int                @default(1)
   createdAt              DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -103,6 +114,17 @@ enum ScanSubject {
   WORKER
   /// The station only, never the worker (Q16 (b)).
   STATION
+}
+
+/// W2b-4 (schema wave 24/33, B-W2b-204; Q18): how a site keeps the hides of an order in one shade lot (a lot's dye batch and
+/// its shade group).
+enum ShadeRule {
+  /// One shade lot per work order or order line: checked when hides are reserved, picked and cut (Q18's default).
+  ORDER
+  /// One shade lot per garment: the cutting table checks a garment's pieces; the reserve and the pick do not.
+  GARMENT
+  /// No check.
+  OFF
 }
 
 /// The legal basis on record for naming workers in floor records (L. 300/1970 art. 4 c.1).

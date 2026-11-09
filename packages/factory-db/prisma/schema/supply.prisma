@@ -452,6 +452,10 @@ model PurchasingSettings {
   companyId                    String?  @db.Uuid
   /// The Owner's switch: automatic confirmation reminders reach suppliers only when true.
   confirmationRemindersEnabled Boolean  @default(false)
+  /// W2b-4 (schema wave 24/33, B-W2b-204; SCM-249, QHS-025; B-W2b-80, -94, -98): the area tolerance in percent, 0 to 100, for
+  /// a leather lot whose order line names none (PurchaseOrderLine.areaTolerancePct wins): the incoming area check and the
+  /// re-measure read it. null: not set on this row (a company row follows the tenant-wide one; no row: 2 %, the domain's).
+  leatherAreaTolerancePct      Decimal? @db.Decimal(7, 4)
   version                      Int      @default(1)
   createdAt                    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt                    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
