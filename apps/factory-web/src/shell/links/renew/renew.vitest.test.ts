@@ -10,7 +10,8 @@ import { designScreen as frameScreen } from '../fixtures'
 import { designScreen as draftScreen } from '../drafts/fixtures'
 import { draftBandStep, draftBytes, DRAFT_MAX_BYTES, finishLaterHeld, idleBand } from '../drafts/model'
 import { askForNewLink } from './api'
-import { ASKS_FOR_NEW_LINK, renewButton, renewEnd, renewFailure, renewLine, RENEW_STATES, wantsChallenge } from './model'
+import { LINK_RENEW_NOTE_MAX } from '@nexus/factory-domain/links/renew'
+import { ASKS_FOR_NEW_LINK, noteToSend, offersNote, renewButton, renewEnd, renewFailure, renewLine, RENEW_NOTE_MAX, RENEW_STATES, wantsChallenge } from './model'
 
 const catalogue = (locale: 'it' | 'en') => JSON.parse(readFileSync(new URL(`../../../../messages/${locale}/link-frame.json`, import.meta.url), 'utf8')) as Record<string, unknown>
 const flat = (tree: Record<string, unknown>, prefix = ''): Record<string, string> =>
@@ -28,10 +29,28 @@ describe('Ask for a new link (links.frame sec:ask-new-link)', () => {
     expect(renewButton({ state: 'busy' })).toMatchObject({ busy: true })
     expect(renewButton({ state: 'wait' })).toMatchObject({ held: 'ask.waitHeld' })
     expect(renewButton({ state: 'failed' })).toMatchObject({ label: 'ask.again', held: null })
-    expect(renewLine({ state: 'done' })).toBe('ask.answer')
+    expect(renewLine({ state: 'done' })).toBe('ask.answerAnonymous')
     expect(renewLine({ state: 'idle' })).toBe('ask.onFile')
     const end = renewEnd({ state: 'done', waitUntil: null, ask: () => undefined }, (key) => `<${key}>`)
     expect(end.action).toMatchObject({ label: '<ask.label>', done: '<ask.done>', variant: 'primary' })
+  })
+
+  it('B-W2b-F17: the answer says who was told (the sender by name when the page knows it); the note goes with the ask', () => {
+    expect(renewLine({ state: 'done' }, 'Made-up Srl')).toBe('ask.answer')
+    expect(renewEnd({ state: 'done', waitUntil: null, ask: () => undefined }, (key) => `<${key}>`, 'Made-up Srl').next).toBe('<ask.answer>')
+    for (const locale of ['it', 'en'] as const) {
+      const words = flat(catalogue(locale))
+      expect(words['ask.answer'], locale).toContain('{sender}')
+      expect(words['ask.answerAnonymous'], locale).not.toContain('{sender}')
+      expect([words['ask.noteLabel'], words['ask.noteHint']].every(Boolean), locale).toBe(true)
+    }
+    // The note: offered while nothing was asked (or it may be asked again), only where the page keeps one.
+    const setNote = () => undefined
+    expect(RENEW_STATES.filter((state) => offersNote({ state, setNote }))).toEqual(['idle', 'wait', 'failed'])
+    expect(offersNote({ state: 'idle' })).toBe(false)
+    expect([noteToSend(undefined), noteToSend('   '), noteToSend('  by Friday please ')]).toEqual([undefined, undefined, 'by Friday please'])
+    expect(RENEW_NOTE_MAX).toBe(LINK_RENEW_NOTE_MAX)
+    expect(noteToSend('x'.repeat(RENEW_NOTE_MAX + 20))).toHaveLength(RENEW_NOTE_MAX)
   })
 
   it('a 429 waits for its Retry-After; anything else did not reach us', () => {
@@ -66,6 +85,10 @@ describe('Ask for a new link (links.frame sec:ask-new-link)', () => {
     expect(calls[0]).toBe('POST /link/renew {}')
     expect(calls[1]).toBe('GET /abuse/challenge links.renew')
     expect(calls[2]).toMatch(/^POST \/link\/renew \{"proof":\{"challenge":"made-up","nonce":"[0-9a-z]+"\}\}$/)
+    // B-W2b-F17: the reader's note travels in the body.
+    first = false
+    await askForNewLink(api, checking, 'Made-up: by Friday please')
+    expect(calls.at(-1)).toBe('POST /link/renew {"note":"Made-up: by Friday please"}')
   })
 })
 

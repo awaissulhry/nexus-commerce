@@ -28,7 +28,8 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  *
- * B-W2b-203: a dead link offers "Ask for a new link" (B-W2b-169) unless its purpose is in NO_NEW_LINK (below).
+ * Every dead link offers "Ask for a new link" (B-W2b-169): a purpose without a renewer tells the person who made the link
+ * (B-W2b-F17, the API's platform fallback), so B-W2b-203's exception for RECORD_INVITE is gone.
  */
 
 export const LINK_TASKS = [
@@ -94,17 +95,6 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   // B-W2b-200: a partner invited to one record (SCR-270): every record type a RECORD_INVITE link opens.
   ...PURPOSE_RULES.RECORD_INVITE.recordTypes.map((recordType) => ({ purpose: 'RECORD_INVITE' as const, recordType, task: 'invite' as const })),
 ])
-
-/**
- * B-W2b-203: the purposes whose dead link does NOT offer "Ask for a new link", where the page knows the purpose (a link
- * that opened and then ran out, or a task page's own dead end; the API's one 404 names no purpose, so that state still
- * offers it). RECORD_INVITE: a new invitation is the office's decision and the API has no renewer for it (B-W2b-200), so
- * the button would pass nothing on; the dead page still says to ask the sender.
- */
-export const NO_NEW_LINK: ReadonlySet<string> = new Set<LinkPurpose>(['RECORD_INVITE'])
-
-/** Whether a dead link of this purpose offers "Ask for a new link" (an unknown purpose: yes, the one answer). */
-export const offersNewLink = (purpose: string | null | undefined): boolean => !purpose || !NO_NEW_LINK.has(purpose)
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */
 export function linkKinds(): Array<{ purpose: LinkPurpose; recordType: string }> {

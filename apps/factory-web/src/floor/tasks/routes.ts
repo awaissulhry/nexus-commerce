@@ -7,9 +7,14 @@ import type { ScanRead } from '../scan/scan-model'
  * sewing station opens Operation, a hide at a cutting table opens Cut a hide, a bundle there opens Bundles (to fix its
  * ticket), a work order's label opens Pick & issue at the warehouse and Final inspection at the bench, a garment's serial
  * or a shipment's pack slip opens the packing bench (SCR-098) at a packing station, a cut ticket's number opens Fabric
- * cutting at a cutting table (B-W2b-F16; elsewhere Scan anything says what it is and where it is used). Anything else
- * opens Scan anything. Pure, so the tests hold it.
+ * cutting at a cutting table (B-W2b-F16; elsewhere Scan anything says what it is and where it is used), a trolley's label
+ * opens Fabric cutting's receipt at a sewing station — the line confirms the trolley arrived, B-W2b-121's page, which has no
+ * tile there (B-W2b-F17; elsewhere Scan anything says what it is). Anything else opens Scan anything. Pure, so the tests hold
+ * it.
  */
+
+/** B-W2b-F17: what the line's receipt takes (Fabric cutting's page and its trolley step): the person's own permissions. */
+export const TROLLEY_RECEIPT_PERMISSIONS = ['floor.work', 'production.cut', 'production.trolleys'] as const
 
 export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine' | /* B-W2a-76 */ 'returnsin' | 'kits' | /* B-W2b-67 */ 'clock' | /* B-W2b-70 */ 'help' | 'lineview' | /* B-W2b-68 */ 'myday' | /* B-W2b-137 */ 'incident' | /* B-W2b-145 */ 'training' | /* B-W2b-105 */ 'inline' | /* B-W2b-121 */ 'fabriccut' | /* B-W2b-115 */ 'incoming'>
 
@@ -58,19 +63,25 @@ export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-i
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),
- * or null: Scan anything shows its card.
+ * or null: Scan anything shows its card. `permissions` and `noticeBlocksScans`: the person's (B-W2b-F17: the trolley receipt
+ * has no tile at a line, so its rule is read here: the permissions it takes, and no notice holding the scans).
  */
-export function taskForScan(mode: FloorMode | null, read: ScanRead, tiles: readonly { key: TileKey; held: string | null }[]): TaskKey | null {
+export function taskForScan(mode: FloorMode | null, read: ScanRead, tiles: readonly { key: TileKey; held: string | null }[], permissions: readonly string[] = [], noticeBlocksScans = false): TaskKey | null {
   const open = (key: TaskKey) => tiles.some((tile) => tile.key === key && tile.held === null)
   const pick = (key: TaskKey): TaskKey | null => (open(key) ? key : null)
   // A work order's traveller carries its office number (a free code): at the warehouse and the bench the task looks it
   // up as a work order number and, when it is none, hands the code on to Scan anything (`store.openScan`).
   // A cut ticket's number is a free code only Fabric cutting opens (B-W2b-F16).
   const cutTicket = read.kind === 'free' && read.cutTicket === true
-  const free = read.kind === 'free' && !cutTicket
+  // B-W2b-F17: a trolley's label is a free code only the line's receipt (Fabric cutting at a sewing station) opens.
+  const trolley = read.kind === 'free' && read.trolley === true
+  const free = read.kind === 'free' && !cutTicket && !trolley
   const workOrder = (read.kind === 'label' && read.type === 'workOrder') || free
   switch (mode) {
     case 'sewing':
+      // B-W2b-F17: the trolley's label at the line opens its receipt (no tile at a sewing station: the person's permissions,
+      // and no notice holding the scans, as it holds the tiles that take them).
+      if (trolley) return TROLLEY_RECEIPT_PERMISSIONS.every((permission) => permissions.includes(permission)) && !noticeBlocksScans ? 'fabriccut' : null
       return read.kind === 'label' && read.type === 'bundle' ? pick('operation') : null
     case 'packing':
       // A bundle is still reported at its packing operation; a garment's serial label or a free code (a shipment's
