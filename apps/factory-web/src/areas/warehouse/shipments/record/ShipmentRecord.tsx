@@ -69,6 +69,8 @@ import { useCoalesced, useLive, useThreadDock } from '../hooks'
 import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
+// B-W2b-170
+import { TrackingLinkCard } from '../tracking-link/TrackingLinkCard'
 
 /**
  * `/w/<company>/warehouse/shipments/<id>` (SCR-067): loads the shipment (shipping.view; the API checks its company,
@@ -405,6 +407,8 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     <ShipmentRecordView
       model={model}
       panels={value ? <RecordPanels record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: [] }} /> : null}
+      // B-W2b-170: the customer's tracking page (links.tracking) on the Tracking & delivery tab.
+      trackingLink={value ? <TrackingLinkCard shipmentId={value.id} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryPart: (which) => {

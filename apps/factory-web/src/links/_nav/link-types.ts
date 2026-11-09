@@ -18,6 +18,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   JOB_ACCEPT      SubcontractOrder job                     links/job (SCR-196; B-W2b-181)
  *   CLAIM           Shipment         report-problem          links/claim (SCR-197; B-W2b-198)
  *   CLAIM           SalesOrder       report-problem          links/claim (SCR-197; B-W2b-198)
+ *   SHIPMENT_TRACK  Shipment         track-order             links/tracking (SCR-194; B-W2b-170)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -33,6 +34,8 @@ export const LINK_TASKS = [
   'job',
   // B-W2b-198: report a problem with a shipment or an order (SCR-197).
   'report-problem',
+  // B-W2b-170: a shipment's branded tracking page (SCR-194).
+  'track-order',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -55,6 +58,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   // B-W2b-198: a claim link of a shipment that left us, or of an order (SCR-197).
   { purpose: 'CLAIM', recordType: 'Shipment', task: 'report-problem' },
   { purpose: 'CLAIM', recordType: 'SalesOrder', task: 'report-problem' },
+  // B-W2b-170: where a shipment is, in the reader's language (SCR-194).
+  { purpose: 'SHIPMENT_TRACK', recordType: 'Shipment', task: 'track-order' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

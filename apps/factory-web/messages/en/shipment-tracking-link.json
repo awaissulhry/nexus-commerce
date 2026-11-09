@@ -1,0 +1,63 @@
+{
+  "title": "Tracking page for the customer",
+  "what": "The customer follows this shipment on our branded page, in their language: where it is, the carrier's news, the papers without prices.",
+  "loading": "Loading the tracking links…",
+  "failed": "The tracking links could not be read.",
+  "retry": "Try again",
+  "send": "Send the tracking link",
+  "sendAgain": "Send it again",
+  "to": "Goes to: {names}.",
+  "noRecipients": "The customer has no active orders contact with an e-mail address: send it to another address, or take a link to pass on.",
+  "copyLink": "Copy a link to pass on",
+  "other": {
+    "open": "To another address…",
+    "close": "Close",
+    "label": "E-mail address",
+    "hint": "The tracking link is mailed to this address only.",
+    "send": "Send to this address",
+    "problem": { "EMPTY": "Type the e-mail address.", "FORMAT": "Type an e-mail like name@company.com." }
+  },
+  "passOn": {
+    "ready": "A link to pass on (shown this once):",
+    "copied": "Copied. A link to pass on (shown this once):",
+    "copy": "Copy again",
+    "once": "Nobody can show it again: we keep only a fingerprint of it."
+  },
+  "outcome": {
+    "sent_one": "The tracking link was sent to {count} address.",
+    "sent_other": "The tracking link was sent to {count} addresses.",
+    "skipped": "Nothing was sent: every address already has its link, or bounced.",
+    "failed": {
+      "forbidden": "You may not send tracking links of this shipment.",
+      "refused": "The link was not made: check the address and the shipment's state.",
+      "error": "The link was not made: try again."
+    }
+  },
+  "none": "No tracking link yet. When the goods leave, the customer's orders contacts get theirs by e-mail.",
+  "col": { "to": "To", "state": "State", "opened": "Last opened", "until": "Open until", "action": "Action" },
+  "passOnRow": "A link to pass on",
+  "via": {
+    "SHIPPED": "Sent when the goods left · {date}",
+    "OFFICE": "Made by the office · {date}",
+    "PORTAL": "Copied in the portal · {date}",
+    "SEARCH": "Found by the public search · {date}",
+    "RENEWED": "Asked for again · {date}"
+  },
+  "state": { "LIVE": "Open", "REVOKED": "Withdrawn", "USED_UP": "Used up", "EXPIRED": "Expired", "ENDED": "Ended" },
+  "neverOpened": "Not opened yet",
+  "revoke": "Withdraw",
+  "revokeOf": "Withdraw the link to {to}",
+  "searches_one": "The public search found this shipment {count} time (last {when}): a link for one visit, without papers.",
+  "searches_other": "The public search found this shipment {count} times (last {when}): a link for one visit each, without papers.",
+  "auto": "The page stays open until 60 days after delivery.",
+  "held": {
+    "noManage": "Only people who manage shipments send tracking links.",
+    "busy": "Wait: the last action is still running.",
+    "noRecipients": "The customer has no active orders contact with an e-mail address.",
+    "notLive": "This link no longer opens.",
+    "NOT_PACKED": "A tracking link is made once the shipment is packed.",
+    "CANCELLED": "The shipment was cancelled: there is nothing to track.",
+    "RETURNED": "The goods came back to us: no new tracking link is made.",
+    "ENDED": "The goods arrived more than 60 days ago: the tracking page has ended."
+  }
+}
