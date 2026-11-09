@@ -514,6 +514,8 @@ model StockMove {
   kitLines     SubcontractKitLine[]
   // W2b leather.prisma (wave 12/16): the remnants it put into stock.
   remnants     Remnant[]
+  // W2b-4 cutting.prisma (wave 24/33): the downgrade whose garments it put into second-quality stock.
+  garmentDowngrades GarmentDowngrade[]
   // W2b (B-W2b-01): the return line a CUSTOMER_RETURN puts into stock and the shipment line a SHIPMENT takes out
   // (Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId).
   returnLine   ReturnLine?       @relation(fields: [tenantId, returnPartyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)

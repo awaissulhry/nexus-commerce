@@ -42,7 +42,7 @@
       }
     },
     "PurchasingSettings": {
-      "about": "W2b (schema wave 2/7): the office keeps the purchasing settings of each company and the tenant-wide ones: the Owner's switch for automatic PO confirmation reminders (off by default), read by the daily reminder run in the tenant's system context. Office only. Changed, never deleted.",
+      "about": "W2b (schema wave 2/7): the office keeps the purchasing settings of each company and the tenant-wide ones: the Owner's switch for automatic PO confirmation reminders (off by default), read by the daily reminder run in the tenant's system context; W2b-4 (wave 24/33): the leather area tolerance of a lot whose order line names none. Office only. Changed, never deleted.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
