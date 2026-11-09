@@ -7,6 +7,8 @@ import { changeBundleSizeContract, changeScanSubjectContract, floorRulesContract
 import { addFullReasonsContract, changeFloorRulesContract, getFloorRulesContract, reasonListsContract } from './contract'
 import { changeFloorRules, floorChecksRead, getFloorRules } from './floor-rules'
 import { manifest } from './manifest'
+// B-W2b-219: the site's cutting rules (shade rule, photo before cutting, smallest remnant).
+import { changeCuttingRules, changeCuttingRulesContract, getCuttingRules, getCuttingRulesContract } from './cutting-rules'
 import { addFullReasons, reasonLists } from './reason-lists'
 import { changeBundleSize, changeScanSubject, floorRules, getRules, listNoticeAcks, listRules, recordLegalBasis } from './settings'
 
@@ -42,6 +44,11 @@ export default defineRoutes('production.settings', manifest, async (app) => {
   app.get('/production/settings/:siteId/floor-rules', { schema: getFloorRulesContract }, async (request) => getFloorRules(request, request.params.siteId))
 
   app.post('/production/settings/:siteId/floor-rules', { schema: changeFloorRulesContract }, async (request) => changeFloorRules(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-219: the site's cutting rules (the Cutting card of Floor rules & codes).
+  app.get('/production/settings/:siteId/cutting-rules', { schema: getCuttingRulesContract }, async (request) => getCuttingRules(request, request.params.siteId))
+
+  app.post('/production/settings/:siteId/cutting-rules', { schema: changeCuttingRulesContract }, async (request) => changeCuttingRules(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
 
   // B-W2b-53 (MES-293): the floor's full reason lists through the W2a editor's stores.
   app.get('/production/settings/reasons', { schema: reasonListsContract }, async (request) => reasonLists(request))

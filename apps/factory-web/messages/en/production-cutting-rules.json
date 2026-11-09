@@ -1,0 +1,85 @@
+{
+  "cr": {
+    "title": "Cutting",
+    "intro": "How this site's cutting table checks hides and keeps their leftovers. A change applies from now on: hides already reserved, issued, cut or tagged keep what they were.",
+    "introDefault": "This site has no floor rules yet: it runs on the defaults below (one shade lot per order, the photo optional, 10 dm² the smallest remnant). Apply a change to give it its own.",
+    "retry": "Try again",
+    "busy": "Saving…",
+    "apply": "Apply",
+    "reason": "Why (kept in the change history)",
+    "reasonHint": "Optional: a few words for whoever reads the history later.",
+    "fromNow": "The new shade rule applies to reservations, picks and cuts from now on; reservations already made stay as they are.",
+    "lastChange": "Last changed {when}.",
+    "default": "The defaults every site starts with.",
+    "viewOnly": "Only the production manager or the Owner changes this.",
+    "done": "Saved: the cutting rules apply from now on.",
+    "unchanged": "Nothing to change: the rules were already so.",
+    "shade": {
+      "title": "Shade rule",
+      "ORDER": {
+        "title": "One shade lot per order",
+        "body": "Every hide of a work order or order line comes from one shade lot: the reserve and the pick refuse another (an office override with a reason lets one through), the cutting table warns."
+      },
+      "GARMENT": {
+        "title": "One shade lot per garment",
+        "body": "An order may use several shade lots; the cutting table warns when a part would complete a garment from another shade lot than its other parts."
+      },
+      "OFF": {
+        "title": "No shade check",
+        "body": "No shade lot is checked at the reserve, the pick or the cutting table."
+      }
+    },
+    "photo": {
+      "title": "Photo of the hide before cutting",
+      "toggle": "Ask a photo of the hide before cutting",
+      "on": "Asked before the first cut of each hide",
+      "off": "Optional",
+      "onHint": "The cutter takes a photo of the hide on the table before its first cut; without it the cut is held, in words.",
+      "offHint": "The cutter may take a photo of the hide on the table; nothing waits for it."
+    },
+    "remnant": {
+      "title": "Smallest remnant kept",
+      "area": "Smallest remnant, area",
+      "unit": "Unit",
+      "hint": "A leftover smaller than this is waste, not a remnant ({other}). At most 10 m².",
+      "hintNone": "A leftover smaller than this is waste, not a remnant. At most 10 m²."
+    },
+    "held": {
+      "area": "Give the smallest remnant as an area above 0, with up to four decimals.",
+      "tooLarge": "The smallest remnant is at most 10 m² (a whole hide is 4–6 m²).",
+      "reasonLong": "The reason is at most 500 characters."
+    },
+    "read": {
+      "shade": "Shade rule: {rule}.",
+      "photoOn": "A photo of the hide is asked before its first cut.",
+      "photoOff": "A photo of the hide before cutting is optional.",
+      "remnant": "A leftover smaller than {area} is waste, not a remnant."
+    },
+    "problem": {
+      "read": "These rules could not be read. Try again.",
+      "write": "The change was not saved. Try again.",
+      "changed": "Someone changed the floor rules of this site meanwhile: reload them, then apply again.",
+      "forbidden": "Your role may not change this.",
+      "gone": "This site or company is no longer there.",
+      "invalid": "The change is not valid: check the values.",
+      "offline": "No connection: nothing was saved. Try again when you are back online."
+    },
+    "tolerance": {
+      "title": "Leather area tolerance",
+      "intro": "How far a leather lot's measured area may differ from the tannery's before the area check opens a claim, when its purchase order line names none. The order line's own tolerance always wins.",
+      "now": {
+        "COMPANY": "Now: {percent} % either way, this company's own.",
+        "TENANT": "Now: {percent} % either way, the value of every company.",
+        "DEFAULT": "Now: {percent} % either way, the default (no company sets one)."
+      },
+      "own": "This company keeps its own tolerance",
+      "ownHint": "From 0 to 100 percent, up to two decimals: the incoming area check and the re-measure read it from now on.",
+      "fromTenant": "Off: the company follows every company's {percent} %.",
+      "fromDefault": "Off: the company follows the default, 2 %.",
+      "percent": "Tolerance in percent",
+      "viewOnly": "Only a person who manages purchasing changes this.",
+      "held": "Give the tolerance as a percent from 0 to 100, with up to two decimals.",
+      "done": "Saved: the leather area tolerance applies from now on."
+    }
+  }
+}

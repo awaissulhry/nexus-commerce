@@ -133,6 +133,8 @@ import { events as productionCutissue } from '../production-cutissue/events'
 import { events as measureLink } from '../measure-link/events'
 // B-W2b-172: the supplier questionnaire (a version published, a link sent, an answer sent, an answer reviewed).
 import { events as supplierQuestionnaire } from '../supplier-questionnaire/events'
+// B-W2b-219: the cutting follow-ups' settings (a site's cutting rules, the leather area tolerance).
+import { events as productionCuttingRules } from '../production-cutting-rules/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -332,7 +334,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-171
   ...measureLink,
   // B-W2b-172
-  ...supplierQuestionnaire] as const satisfies readonly EventDefinition[]
+  ...supplierQuestionnaire,
+  // B-W2b-219
+  ...productionCuttingRules] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

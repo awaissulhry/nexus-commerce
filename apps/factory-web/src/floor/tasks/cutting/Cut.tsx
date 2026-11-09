@@ -530,6 +530,8 @@ export function FloorCut() {
   }
 
   const baseUom: AreaUom = hide && isAreaUom(hide.hide.baseUom) ? hide.hide.baseUom : 'M2'
+  // B-W2b-219: the site's smallest remnant (Floor rules & codes, the Cutting card), in the hide's unit.
+  const siteMinimum = hide?.hide.remnantMinimum ?? null
   const left = entry?.left ?? '0'
 
   const onAction = async (action: CutAction) => {
@@ -581,7 +583,7 @@ export function FloorCut() {
       case 'pickPlace':
         return setPlaceId(action.id)
       case 'saveRemnant': {
-        const problem = remnantProblem(left, remnant, draft.length > 0, baseUom)
+        const problem = remnantProblem(left, remnant, draft.length > 0, baseUom, siteMinimum)
         if (problem || !placeId || remnant === null) return feedback('warning')
         const place = places?.find((entry) => entry.id === placeId) ?? null
         if (await save({ remnant: { area: remnantText(remnant), uom: baseUom, toLocationId: placeId } }, place?.code ?? null)) await go({ kind: 'scan' })
@@ -795,7 +797,7 @@ export function FloorCut() {
         draft: draftLines(draft, cells).map((line) => ({ label: line.label, sets: line.sets })),
         remnant:
           stage === 'remnant'
-            ? { value: remnant, uom: baseUom, max: remnantMax(left), left, used: areaUsed(left, remnant), problem: remnantProblem(left, remnant, draft.length > 0, baseUom), places, placeId, placesHeld, minimum: remnantMinimum(baseUom) }
+            ? { value: remnant, uom: baseUom, max: remnantMax(left), left, used: areaUsed(left, remnant), problem: remnantProblem(left, remnant, draft.length > 0, baseUom, siteMinimum), places, placeId, placesHeld, minimum: remnantMinimum(baseUom, siteMinimum) }
             : null,
         last: lastCut,
         refusal,
