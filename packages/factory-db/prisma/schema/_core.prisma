@@ -139,6 +139,13 @@ model Company {
   // W2b-4 sizes-depth.prisma (wave 27/33): its own points of measure and grade rules (tenant-wide ones have none).
   pointsOfMeasure      PointOfMeasure[]
   gradeRules           GradeRule[]
+  // W2b-4 compliance-rules.prisma (wave 30/33): its own markets, requirements, operators and phrases, and the gate
+  // events of its work.
+  marketProfiles         MarketProfile[]
+  complianceRequirements ComplianceRequirement[]
+  economicOperatorRoles  EconomicOperatorRole[]
+  phrases                Phrase[]
+  gateEvents             GateEvent[]
   // compliance.prisma: the certificates it holds, its label templates and compliance documents.
   certificates         Certificate[]
   labelTemplates       LabelTemplate[]
@@ -392,6 +399,8 @@ model Site {
   // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
   incomingInspections IncomingInspection[]
   inProcessChecks     InProcessCheck[]
+  // W2b-4 compliance-rules.prisma (wave 30/33): the gate refusals and overrides at the site.
+  gateEvents          GateEvent[]
   // W2b leather.prisma (wave 12/16): its remnants and fabric rolls.
   remnants            Remnant[]
   fabricRolls         FabricRoll[]
