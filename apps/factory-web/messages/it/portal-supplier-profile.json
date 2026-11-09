@@ -1,0 +1,408 @@
+{
+  "documents": {
+    "title": "Documenti",
+    "upload": "Carica",
+    "uploadOne": "Carica un documento",
+    "sendAnother": "Inviane un altro",
+    "withUs": "Da noi per la verifica",
+    "askTitle": "{kind} per {for}",
+    "failed": "Non siamo riusciti a leggere i tuoi documenti. Non si è perso nulla: riprova.",
+    "openFailed": "Non siamo riusciti ad aprire questo documento. Riprova tra un momento.",
+    "downloadFailed": "Alcuni documenti non sono stati scaricati. Riprova tra un momento.",
+    "kind": {
+      "SUPPLIER_CERTIFICATE": "Certificato",
+      "TEST_REPORT": "Rapporto di prova",
+      "DECLARATION": "Dichiarazione",
+      "OTHER": "Un documento"
+    },
+    "for": {
+      "Party": "la tua azienda",
+      "PurchaseOrder": "l’ordine d’acquisto {label}",
+      "ShipNotice": "l’avviso di spedizione {label}",
+      "SubcontractOrder": "la lavorazione {label}"
+    },
+    "forCompany": "La tua azienda",
+    "group": {
+      "NEEDED": "Necessari per il nostro lavoro",
+      "RENEW": "Da rinnovare",
+      "AGAIN": "Da inviare di nuovo",
+      "ASKED": "Richiesti da noi"
+    },
+    "why": {
+      "ruleBlock_one": "Serve prima di procedere con {records}.",
+      "ruleBlock_other": "Serve prima di procedere con {records}.",
+      "ruleWarn_one": "Lo vorremmo per {records}.",
+      "ruleWarn_other": "Lo vorremmo per {records}.",
+      "ruleExpired_one": "Quello che abbiamo è scaduto: serve prima di procedere con {records}.",
+      "ruleExpired_other": "Quello che abbiamo è scaduto: serve prima di procedere con {records}.",
+      "company": "Serve per lavorare con la tua azienda.",
+      "companyWarn": "Lo vorremmo per lavorare con la tua azienda.",
+      "companyExpired": "Quello che abbiamo è scaduto: serve per lavorare con la tua azienda.",
+      "expiry": "Quello che abbiamo scade a breve: inviaci il nuovo.",
+      "asked": "Te lo abbiamo chiesto noi.",
+      "askedBy": "Te lo ha chiesto {name}.",
+      "refused": "Non abbiamo potuto accettare l’ultimo: vedi il motivo in I tuoi documenti.",
+      "refusedReason": "Non abbiamo potuto accettare l’ultimo: «{reason}»"
+    },
+    "asked": {
+      "title": "Ti chiediamo",
+      "subtitle": "I documenti che ci servono, perché e per quando.",
+      "empty": "Al momento non ci serve nulla.",
+      "open_one": "1 da inviare",
+      "open_other": "{count} da inviare",
+      "allWithUs": "Tutti già da noi"
+    },
+    "mine": {
+      "title": "I tuoi documenti",
+      "subtitle": "Certificati, rapporti di prova e dichiarazioni che ci hai inviato, con la nostra verifica.",
+      "empty": "Ancora nessun documento.",
+      "emptyHint": "Inviaci certificati, rapporti di prova e dichiarazioni: verifichiamo ciascuno prima che valga.",
+      "count_one": "1 documento",
+      "count_other": "{count} documenti",
+      "waiting_one": "1 in attesa della nostra verifica",
+      "waiting_other": "{count} in attesa della nostra verifica"
+    },
+    "col": {
+      "kind": "Tipo e file",
+      "for": "Per",
+      "issuer": "Emesso da",
+      "number": "Numero",
+      "issued": "Emesso il",
+      "expires": "Scade il",
+      "status": "La nostra verifica",
+      "actions": "Azioni"
+    },
+    "state": {
+      "NOT_RECEIVED": "Non ricevuto",
+      "CHECKING": "In controllo",
+      "HELD": "Trattenuto",
+      "WAITING": "In attesa della nostra verifica",
+      "ACCEPTED": "Accettato",
+      "EXPIRED": "Scaduto",
+      "REJECTED": "Non accettato"
+    },
+    "reason": "Motivo: {reason}",
+    "acceptedOn": "Accettato il {date}",
+    "sentOn": "Inviato il {date}",
+    "noExpiry": "Senza scadenza",
+    "expired": "Scaduto",
+    "expiresIn": "scade tra {left}",
+    "open": "Apri",
+    "openOne": "Apri {name} in una nuova scheda",
+    "opening": "Apertura…",
+    "download": "Scarica",
+    "downloadN_one": "Scarica 1",
+    "downloadN_other": "Scarica {count}",
+    "replace": "Sostituisci con una nuova versione",
+    "again": "Carica di nuovo",
+    "rowMenu": "Altro per {name}"
+  },
+  "upload": {
+    "title": "Carica un documento",
+    "titleReplace": "Sostituisci con una nuova versione",
+    "for": "Per {what}",
+    "check": "Lo verifichiamo prima che valga; trovi qui la nostra risposta.",
+    "checkReplace": "Quello in vigore ({name}) resta valido finché non accettiamo il nuovo.",
+    "kind": "Tipo",
+    "kindHint": {
+      "SUPPLIER_CERTIFICATE": "ISO 9001, audit LWG, assicurazione, DURC…",
+      "TEST_REPORT": "Cromo VI, prove REACH di un lotto o di una partita di tintura…",
+      "DECLARATION": "Dichiarazione REACH, codice di condotta firmato…"
+    },
+    "file": "File",
+    "fileHint": "PDF, JPG o PNG, al massimo 20 MB.",
+    "remove": "Togli",
+    "removeFile": "Togli {name}",
+    "issuer": "Emesso da",
+    "issuerHint": "Chi lo ha emesso (il laboratorio, l’ente certificatore).",
+    "number": "Numero",
+    "issued": "Emesso il",
+    "expires": "Scade il",
+    "expiresHint": "Lascialo vuoto se non scade.",
+    "articles": "Per quali articoli",
+    "lots": "Per quali lotti o partite di tintura",
+    "codesHint": "I codici come li scrivi tu, separati da virgole.",
+    "note": "Una nota per noi",
+    "noteHint": "Facoltativa.",
+    "cancel": "Annulla",
+    "send": "Invia per la verifica",
+    "sending": "Invio…",
+    "problem": {
+      "kind": "Scegli che tipo di documento è.",
+      "file": "Scegli il file.",
+      "fileType": "Invia un PDF, JPG o PNG.",
+      "fileSize": "Il file supera i 20 MB.",
+      "fileEmpty": "Il file è vuoto.",
+      "issued": "La data di emissione non può essere dopo oggi.",
+      "expires": "Invia un documento valido oggi: scade oggi o dopo, e dopo la data di emissione.",
+      "codes": "Un codice ciascuno, al massimo 60 caratteri, al massimo {max} codici.",
+      "tooLong": "Troppo lungo."
+    },
+    "failed": {
+      "forbidden": "Il tuo accesso non ti permette di inviare documenti: chiedi al tuo amministratore il permesso di inviare file.",
+      "answered": "Nel frattempo questa richiesta è stata evasa o ritirata. Abbiamo riletto la pagina.",
+      "gone": "Ciò a cui era destinato il documento non è più aperto. Abbiamo riletto la pagina: scegli di nuovo.",
+      "invalid": "Così com’è non è stato accettato. Controlla i campi e riprova.",
+      "wait": "Troppi tentativi in poco tempo. Attendi un minuto e riprova.",
+      "signedOut": "La sessione è terminata. Accedi di nuovo: ciò che hai scritto resta finché non esci.",
+      "store": "Il file non ci è arrivato. Controlla la connessione e invialo di nuovo.",
+      "network": "Non riusciamo a raggiungere il portale. Controlla la connessione e riprova."
+    }
+  },
+  "profile": {
+    "title": "Profilo",
+    "readFailed": "Non siamo riusciti a leggere i dati della tua azienda. Non si è perso nulla: riprova.",
+    "failed": {
+      "clash": "Una modifica di uno di questi attende già la nostra verifica, oppure è cambiato nel frattempo. Abbiamo riletto il profilo: ritira prima quella modifica o attendi la nostra risposta.",
+      "decided": "Nel frattempo abbiamo risposto a questa richiesta. Abbiamo riletto il profilo.",
+      "invalid": "Una delle modifiche non è stata accettata così com’è. Controllala e riprova.",
+      "forbidden": "Il tuo accesso non ti permette di modificare i dati dell’azienda: chiedi al tuo amministratore.",
+      "wait": "Troppi tentativi in poco tempo. Attendi un minuto e riprova.",
+      "network": "Non riusciamo a raggiungere il portale. Controlla la connessione e riprova."
+    },
+    "notSentYet": "Non ancora inviato: invialo con «Invia le modifiche per la verifica».",
+    "keep": "Tieni questa modifica",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "remove": "Rimuovi",
+    "removeN_one": "Rimuovi 1",
+    "removeN_other": "Rimuovi {count}",
+    "undo": "Annulla questa modifica",
+    "drop": "Scartala",
+    "rowMenu": "Altro per {name}",
+    "send": "Invia le modifiche per la verifica",
+    "sending": "Invio…",
+    "changesTyped_one": "1 modifica da verificare",
+    "changesTyped_other": "{count} modifiche da verificare",
+    "company": {
+      "title": "Azienda",
+      "subtitle": "I tuoi indirizzi e il sito web. Una modifica passa dal nostro buyer per una verifica prima di valere.",
+      "legalName": "Ragione sociale",
+      "tradeName": "Nome commerciale",
+      "vatNumber": "Partita IVA",
+      "fiscalCode": "Codice fiscale",
+      "website": "Sito web",
+      "websiteHint": "Inizia con https://",
+      "websiteWaiting": "Una modifica del tuo sito web attende la nostra verifica.",
+      "taxHint": "Una nuova ragione sociale o partita IVA la registriamo noi: scrivici.",
+      "ask": "Scrivici"
+    },
+    "addresses": {
+      "title": "Indirizzi",
+      "add": "Aggiungi un indirizzo",
+      "count_one": "1 indirizzo",
+      "count_other": "{count} indirizzi",
+      "empty": "Ancora nessun indirizzo.",
+      "emptyHint": "Aggiungi la sede legale o un indirizzo di ritiro."
+    },
+    "address": {
+      "addTitle": "Aggiungi un indirizzo",
+      "editTitle": "Modifica un indirizzo",
+      "subtitle": "Il nostro buyer lo verifica prima che valga.",
+      "kinds": "A cosa serve",
+      "kindsStay": "Usato per: {kinds}. L’uso di un indirizzo resta com’è: aggiungine uno nuovo per un altro uso.",
+      "nameHint": "Un nome breve («Magazzino ritiro»).",
+      "provinceHint": "Per l’Italia la sigla (PI, FI, MI…).",
+      "countryHint": "Due lettere (IT, DE, FR…).",
+      "notesHint": "Orari, la baia di carico…"
+    },
+    "contacts": {
+      "title": "Contatti",
+      "subtitle": "Chi segue ordini, fatture e qualità.",
+      "add": "Aggiungi un contatto",
+      "count_one": "1 contatto",
+      "count_other": "{count} contatti",
+      "empty": "Ancora nessun contatto.",
+      "emptyHint": "Aggiungi chi segue ordini, fatture e qualità: i nostri documenti vanno a loro."
+    },
+    "contact": {
+      "addTitle": "Aggiungi un contatto",
+      "editTitle": "Modifica un contatto",
+      "subtitle": "Il nostro buyer lo verifica prima che valga.",
+      "emailHint": "A questo indirizzo arrivano i nostri ordini, fatture o documenti di qualità.",
+      "roles": "Di cosa si occupa",
+      "languageHint": "La lingua delle nostre e-mail per questa persona.",
+      "languageCompany": "Come l’azienda"
+    },
+    "users": {
+      "title": "Utenti del portale",
+      "invite": "Invita un collega",
+      "onlyYouHint": "Invita i colleghi che confermano gli ordini, inviano fatture o certificati."
+    },
+    "changes": {
+      "title": "Modifiche da verificare",
+      "subtitle": "Cosa ci hai inviato, e le nostre risposte.",
+      "waitingSince": "In attesa della nostra verifica dal {date}",
+      "sentBy": "Inviate da {name}.",
+      "answers": "Le nostre ultime risposte",
+      "on": "il {date}",
+      "reason": "Motivo: {reason}"
+    },
+    "request": {
+      "OPEN": "In attesa della nostra verifica",
+      "APPROVED": "Approvate",
+      "REFUSED": "Non approvate",
+      "WITHDRAWN": "Ritirate"
+    },
+    "change": {
+      "ADDRESS": {
+        "ADD": "Nuovo indirizzo: {what}",
+        "CHANGE": "Indirizzo modificato: {what}",
+        "REMOVE": "Indirizzo rimosso: {what}"
+      },
+      "CONTACT": {
+        "ADD": "Nuovo contatto: {what}",
+        "CHANGE": "Contatto modificato: {what}",
+        "REMOVE": "Contatto rimosso: {what}"
+      },
+      "website": "Sito web modificato",
+      "field": "{field}: {before} → {after}"
+    },
+    "line": {
+      "CURRENT": "Come l’abbiamo noi",
+      "WAITING": "In attesa della nostra verifica",
+      "NEW": "Nuovo: non ancora inviato",
+      "CHANGED": "Modificato: non ancora inviato",
+      "REMOVE": "Da rimuovere: non ancora inviato"
+    },
+    "col": {
+      "address": "Indirizzo",
+      "kinds": "Usato per",
+      "contact": "Referente",
+      "check": "La nostra verifica",
+      "more": "Altro",
+      "name": "Nome",
+      "email": "E-mail",
+      "phone": "Telefono",
+      "roles": "Si occupa di"
+    },
+    "kind": {
+      "REGISTERED": "Sede legale",
+      "PICKUP": "Ritiro",
+      "BILL_TO": "Le nostre fatture",
+      "SHIP_TO": "Le nostre consegne"
+    },
+    "kindHint": {
+      "REGISTERED": "L’indirizzo legale della tua azienda.",
+      "PICKUP": "Dove noi o il nostro corriere ritiriamo la merce."
+    },
+    "role": {
+      "ORDERS": "Ordini",
+      "INVOICES": "Fatture",
+      "QUALITY": "Qualità",
+      "DESIGN": "Sviluppo",
+      "OWNER": "Titolare",
+      "RIDER": "Pilota"
+    },
+    "roleHint": {
+      "ORDERS": "I nostri ordini d’acquisto e le consegne.",
+      "INVOICES": "Fatture e pagamenti.",
+      "QUALITY": "Certificati, prove e reclami.",
+      "DESIGN": "Campioni e sviluppo.",
+      "OWNER": "Il titolare o responsabile dell’azienda."
+    },
+    "field": {
+      "name": "Nome",
+      "line1": "Via e numero civico",
+      "line2": "Altre indicazioni",
+      "postalCode": "CAP",
+      "city": "Città",
+      "province": "Provincia",
+      "country": "Paese",
+      "contactName": "Referente sul posto",
+      "phone": "Telefono",
+      "deliveryNotes": "Note",
+      "contact": "Nome",
+      "email": "E-mail",
+      "language": "Lingua",
+      "roles": "Si occupa di",
+      "website": "Sito web",
+      "kinds": "Usato per"
+    },
+    "problem": {
+      "kinds": "Scegli a cosa serve: la sede legale o un indirizzo di ritiro.",
+      "line1": "Scrivi via e numero civico.",
+      "city": "Scrivi la città.",
+      "postalCode": "Scrivi il codice postale: da 1 a 12 lettere, cifre, spazi o trattini.",
+      "cap": "Un CAP italiano ha 5 cifre.",
+      "sigla": "Scrivi la sigla della provincia (PI, FI, MI…).",
+      "country": "Scrivi le due lettere del Paese (IT, DE, FR…).",
+      "phone": "Scrivi un numero di telefono: cifre, con + ( ) . / - e spazi.",
+      "name": "Scrivi il nome.",
+      "email": "Scrivi un indirizzo e-mail completo.",
+      "emailNeeded": "Un contatto per ordini, fatture o qualità ha bisogno di un’e-mail: i nostri documenti vanno lì.",
+      "language": "Scegli una lingua.",
+      "roles": "Scegli dall’elenco di cosa si occupa.",
+      "website": "Scrivi un indirizzo web che inizia con http:// o https://, senza spazi.",
+      "tooLong": "Troppo lungo."
+    },
+    "withdraw": {
+      "button": "Ritira",
+      "title": "Ritirare queste modifiche?",
+      "confirm": "Ritira",
+      "what": "Non le verificheremo; da noi non cambia nulla.",
+      "back": "Puoi inviarle di nuovo quando vuoi"
+    }
+  },
+  "held": {
+    "loading": "Stiamo ancora leggendo la pagina.",
+    "preview": "Questa è un’anteprima del portale: qui non si può inviare nulla.",
+    "previewChange": "Questa è un’anteprima del portale: qui non si può cambiare nulla.",
+    "offline": "Nessuna connessione.",
+    "mayNotUpload": "Il tuo accesso ti permette di leggere le nostre richieste, non di inviare documenti: chiedi a {names} il permesso di inviare file.",
+    "mayNotUploadNone": "Il tuo accesso ti permette di leggere le nostre richieste, non di inviare documenti: chiedi al tuo amministratore il permesso di inviare file.",
+    "waiting": "Lo abbiamo già e lo stiamo verificando.",
+    "notShared": "Attende la nostra verifica: si apre qui quando lo accettiamo.",
+    "notAccepted": "Non lo abbiamo accettato: invialo di nuovo.",
+    "notCurrent": "È in vigore una versione più recente.",
+    "noneChosen": "Scegli prima una o più righe.",
+    "adminChanges": "Solo il tuo amministratore ({names}) invia le modifiche dei dati dell’azienda.",
+    "adminChangesNone": "Solo l’amministratore della tua organizzazione invia le modifiche dei dati dell’azienda.",
+    "waitingCheck": "Una sua modifica attende la nostra verifica: ritirala prima, o attendi la nostra risposta.",
+    "ours": "Usiamo questo indirizzo per le nostre fatture o consegne: scrivici per cambiarlo.",
+    "removing": "È segnato da rimuovere: annulla prima quella modifica.",
+    "typedRow": "Scritto qui e non ancora inviato: annullalo dal suo menu.",
+    "tooMany": "Al massimo {max} modifiche alla volta: invia prima queste.",
+    "sameEmail": "Due contatti avrebbero {emails}: un indirizzo per contatto."
+  },
+  "receipt": {
+    "hide": "Nascondi",
+    "sent": "Abbiamo ricevuto {name}. Lo verifichiamo e ti rispondiamo qui.",
+    "held": "Abbiamo ricevuto {name}, ma il nostro controllo di sicurezza lo ha trattenuto: lo esaminiamo e ti rispondiamo qui.",
+    "downloaded_one": "1 documento scaricato.",
+    "downloaded_other": "{count} documenti scaricati.",
+    "changesSent_one": "Abbiamo ricevuto 1 modifica. Non cambia nulla finché il nostro buyer non la verifica.",
+    "changesSent_other": "Abbiamo ricevuto {count} modifiche. Non cambia nulla finché il nostro buyer non le verifica.",
+    "withdrawn": "Ritirate. Da noi non cambia nulla."
+  },
+  "status": {
+    "sending": "Invio…",
+    "unsaved": "Modifiche non inviate",
+    "waiting": "Modifiche in attesa della nostra verifica",
+    "saved": "Salvato"
+  },
+  "band": {
+    "updated": "Aggiornato alle {time}"
+  },
+  "keys": {
+    "upload": "Carica un documento",
+    "open": "Apri il documento",
+    "send": "Invia le modifiche per la verifica",
+    "cancel": "Chiudi una finestra (chiede se hai scritto qualcosa)"
+  },
+  "unsaved": {
+    "upload": "Il documento che stai inviando non è ancora inviato.",
+    "changes": "Le tue modifiche non sono ancora inviate per la verifica.",
+    "dialog": "L’indirizzo o il contatto che hai scritto non è ancora tenuto."
+  },
+  "role": {
+    "sees": {
+      "supplier-orders": "I nostri ordini d’acquisto, le consegne e i documenti",
+      "supplier-invoices": "Fatture e documenti",
+      "supplier-quality": "Certificati, rapporti di prova e documenti",
+      "supplier-admin": "Tutto, e invita e rimuove i colleghi",
+      "subcontractor-jobs": "Le nostre lavorazioni e i documenti",
+      "subcontractor-admin": "Tutto, e invita e rimuove i colleghi"
+    }
+  }
+}

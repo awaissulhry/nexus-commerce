@@ -1,0 +1,547 @@
+{
+  "noPrices": "Nessun prezzo su questa pagina: dei compensi parliamo nei messaggi.",
+  "state": {
+    "TO_ANSWER": "Aspetta la tua risposta",
+    "DECLINED": "Rifiutata",
+    "WAITING_KIT": "Il kit è in arrivo",
+    "IN_WORK": "Nel tuo laboratorio",
+    "PARTLY_BACK": "In parte rientrata",
+    "BACK": "Tutto rientrato",
+    "CLOSED": "Chiusa",
+    "CANCELLED": "Annullata",
+    "loading": "Caricamento…",
+    "slow": "Ancora un momento…",
+    "retry": "Riprova"
+  },
+  "next": {
+    "ACCEPT": "Accetta o rifiuta",
+    "CONFIRM_KIT": "Conferma il kit",
+    "REPORT": "Comunica i pezzi finiti",
+    "SEND_BACK": "Annuncia il reso",
+    "WAIT_KIT": "Aspetta il nostro kit",
+    "NONE": "Niente da fare"
+  },
+  "chip": {
+    "NEW": "Da accettare",
+    "KIT": "Kit da confermare",
+    "WORK": "In lavorazione",
+    "BACK": "Pronti da rendere",
+    "DONE": "Conclusi"
+  },
+  "chips": {
+    "label": "Quali lavorazioni",
+    "chip": "{name}: {count}"
+  },
+  "held": {
+    "ended": "Questa lavorazione è conclusa.",
+    "declined": "Hai rifiutato questa lavorazione.",
+    "answered": "Hai già risposto a questa lavorazione.",
+    "declinePartly": "Parte del lavoro è già rientrata: scrivici nei messaggi.",
+    "notSent": "Questa lavorazione non ti è ancora stata inviata.",
+    "acceptFirst": "Prima accetta la lavorazione.",
+    "kitNone": "Nessuna riga del kit aspetta il tuo conteggio.",
+    "noKitYet": "Il nostro kit non è ancora partito: niente da rendere.",
+    "nothingToAnnounce": "Tutto quello che hai è già annunciato o rientrato.",
+    "generic": "Questa lavorazione ora non lo consente.",
+    "preview": "Un'anteprima dell'ufficio legge il portale; non agisce mai.",
+    "may": {
+      "approve": "Il tuo accesso ti fa leggere le lavorazioni, non rispondere: chiedi al tuo amministratore.",
+      "comment": "Il tuo accesso ti fa leggere le lavorazioni, non comunicare l'avanzamento: chiedi al tuo amministratore.",
+      "upload": "Il tuo accesso ti fa leggere le lavorazioni, non inviare foto: chiedi al tuo amministratore."
+    },
+    "offline": "Nessuna connessione: riprova quando sei di nuovo in linea.",
+    "busy": "Invio in corso…",
+    "noneToAccept": "Nessuna delle lavorazioni scelte aspetta la tua risposta.",
+    "reading": "Leggo la lavorazione…",
+    "noRows": "Niente da esportare in questa vista."
+  },
+  "accept": {
+    "title": "Accetta la lavorazione {number}",
+    "toDecline": "Rifiuta invece…",
+    "goMove": "Accetta con questa data",
+    "go": "Accetta la lavorazione",
+    "how": "Come accetti",
+    "asked": "Accetta come richiesto",
+    "askedHint": "Da rendere entro il {date}.",
+    "move": "Proponi un'altra data di rientro",
+    "moveHint": "Accetti la lavorazione e ci dici il giorno in cui puoi renderla.",
+    "date": "Il giorno in cui puoi renderla",
+    "reason": "Perché ti serve un altro giorno",
+    "who": "Rispondi come {name}.",
+    "held": {
+      "date": "Scegli il giorno che proponi.",
+      "past": "Proponi un giorno da oggi in poi.",
+      "same": "È il giorno che abbiamo chiesto: accetta come richiesto.",
+      "reason": "Di' perché ti serve un altro giorno."
+    }
+  },
+  "decline": {
+    "title": "Rifiuta la lavorazione {number}",
+    "go": "Rifiuta la lavorazione",
+    "body": "Cerchiamo un altro laboratorio. Dicci il motivo, così la prossima volta pianifichiamo meglio.",
+    "reason": "Perché rifiuti",
+    "reasons": {
+      "NO_CAPACITY": "Non ho capacità",
+      "DATES": "Le date non vanno bene",
+      "OTHER": "Un altro motivo"
+    },
+    "noteRequired": "Di' il motivo in poche parole",
+    "note": "Una nota per noi (facoltativa)",
+    "held": {
+      "reason": "Scegli un motivo.",
+      "note": "Di' il motivo in poche parole."
+    }
+  },
+  "dialog": {
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "close": "Chiudi"
+  },
+  "facts": {
+    "operations": "Lavorazione",
+    "style": "Modello",
+    "pieces": "Pezzi",
+    "kit": "Kit spedito il",
+    "kitNotYet": "Non ancora spedito",
+    "dueBack": "Da rendere il",
+    "noDay": "Nessun giorno ancora",
+    "instructions": "Le nostre note",
+    "from": "Da",
+    "workOrder": "Nostro ordine di lavoro",
+    "finishBy": "Finisci entro il",
+    "notesOf": "Le nostre note: {note}",
+    "more": "Altro sulla lavorazione"
+  },
+  "grid": {
+    "caption": "Pezzi per colore e taglia",
+    "captionOf": "{operation}: pezzi per colore e taglia",
+    "colour": "Colore",
+    "total": "Totale",
+    "cellName": "{colour}, taglia {size}",
+    "notOffered": "– non prodotta",
+    "empty": "Nessuna taglia",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. In tutto: {grand}.",
+    "notWhole": "{cell}: pezzi interi da 0 a {max}.",
+    "cutToMax": "{cell}: ridotto a {max}.",
+    "pasted": "{applied} incollati, {skipped} lasciati fuori.",
+    "issues": "Da controllare"
+  },
+  "bulkAccept": {
+    "title_one": "Accetti {count} lavorazione come richiesto?",
+    "title_other": "Accetti {count} lavorazioni come richiesto?",
+    "go_one": "Accetta {count} lavorazione",
+    "go_other": "Accetta {count} lavorazioni",
+    "result": "{accepted} accettate, {refused} rifiutate: apri una lavorazione rifiutata per vedere il motivo.",
+    "body": "Ogni lavorazione è accettata con le date che abbiamo chiesto. Per proporre un altro giorno, apri la lavorazione.",
+    "jobs": "Le lavorazioni"
+  },
+  "card": {
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "dueBackOn": "da rendere il {date}",
+    "styleOf": "{code} · {workOrder}",
+    "finishedOf": "{done} di {total} finiti",
+    "kitNotYet": "Kit non ancora spedito",
+    "proposed": "Hai proposto il {date}",
+    "parcels_one": "{count} collo",
+    "parcels_other": "{count} colli"
+  },
+  "kit": {
+    "photoTitle": "Foto della riga {line}: {name}",
+    "photoHint": "Mostra cosa manca o è danneggiato. Tieni i volti fuori dalla foto.",
+    "photoLabel": "Foto del danno",
+    "title": "Cosa ti abbiamo mandato",
+    "toCount_one": "{count} riga da contare",
+    "toCount_other": "{count} righe da contare",
+    "lead": "Il kit come sul nostro DDT. Controllalo quando arriva: tutto come elencato con un solo pulsante, o riga per riga.",
+    "none": "Nessun kit per questa lavorazione.",
+    "lines": "Righe del kit",
+    "line": "Riga {seq}",
+    "lot": "lotto {lot}",
+    "hide": "pelle {hide}",
+    "sentOn": "spedito il {date}",
+    "ddtOf": "nostro DDT {number} del {date}",
+    "ddt": "nostro DDT {number}",
+    "notSent": "Non ancora spedito",
+    "checkedShort": "Hai contato {quantity} il {time}",
+    "checked": "Hai confermato {quantity} il {time}",
+    "counted": "Cosa è arrivato (abbiamo mandato {sent})",
+    "shortNote": "Cosa manca o è danneggiato",
+    "photos": "Le tue foto",
+    "addPhoto": "Aggiungi una foto del danno",
+    "backToAll": "Indietro",
+    "sendCount": "Invia il conteggio",
+    "lineByLine": "Conta riga per riga",
+    "all": "Tutto ricevuto come elencato",
+    "bundles": "Pacchi che ti abbiamo mandato",
+    "held": {
+      "count": "Riga {line}: conta cosa è arrivato (0 o più).",
+      "more": "Riga {line}: abbiamo mandato {sent}. Conta di nuovo, o scrivici nei messaggi.",
+      "note": "Riga {line}: di' cosa manca o è danneggiato."
+    }
+  },
+  "returns": {
+    "reviewTitle": "Controlla prima di inviare",
+    "change": "Modifica",
+    "send": "Invia",
+    "reviewLead_one": "Aspettiamo {count} pezzo il {date}.",
+    "reviewLead_other": "Aspettiamo {count} pezzi il {date}.",
+    "reviewPieces": "Cosa rientra",
+    "reviewFinished": "{count} finiti",
+    "reviewScrapped": "{count} scartati ({reason})",
+    "reviewMaterial": "{item}: {quantity} di ritorno",
+    "parcels": "Colli",
+    "who": "Chi lo porta",
+    "weCollect": "Lo ritiriamo noi",
+    "youDeliver": "Lo consegni tu",
+    "ddt": "Il tuo DDT",
+    "ddtOf": "{number} del {date}",
+    "ddtNone": "Non indicato",
+    "note": "Una nota per noi",
+    "title": "Annuncia cosa rientra",
+    "lead": "Pezzi finiti, scarti e materiale non usato, con il tuo DDT. Puoi rendere anche solo una parte.",
+    "withYou": "{count} presso di te · {ready} finiti",
+    "finished": "Pezzi finiti",
+    "scrapped": "Pezzi scartati",
+    "scrapReason": "Perché scartati",
+    "pickReason": "Scegli un motivo",
+    "material": "Materiale non usato di ritorno",
+    "materialHint": "Solo quello che rientra con questo reso.",
+    "materialOf": "{item} (abbiamo mandato {sent})",
+    "ddtNumber": "Numero del tuo DDT",
+    "ddtHint": "Il DDT viaggia con la merce (DPR 472/1996).",
+    "ddtDate": "Data del tuo DDT",
+    "day": "Il giorno in cui arriva da noi",
+    "ddtPhotoLater": "Una foto del tuo DDT: per ora porta la carta con la merce.",
+    "review": "Controlla e invia",
+    "sofar": "Resi finora",
+    "none": "Ancora nessun reso annunciato.",
+    "notice": "Reso {seq}",
+    "noticeLine_one": "{count} pezzo il {date}",
+    "noticeLine_other": "{count} pezzi il {date}",
+    "status": {
+      "ANNOUNCED": "In viaggio",
+      "RECEIVED": "Ricevuto",
+      "CANCELLED": "Annullato"
+    },
+    "yourDdt": "tuo DDT {number}",
+    "cancelled": "Annullato da noi: {reason}",
+    "held": {
+      "whole": "Fase {line}: pezzi interi, 0 o più.",
+      "reason": "Fase {line}: di' perché i pezzi sono scartati.",
+      "more": "Fase {line}: al massimo {left} presso di te e non ancora annunciati.",
+      "nothing": "Di' cosa rientra: almeno un pezzo.",
+      "material": "Materiale della riga {line}: una quantità sopra 0.",
+      "materialMore": "Materiale della riga {line}: abbiamo mandato {sent}.",
+      "parcels": "Da 1 a 9999 colli.",
+      "day": "La merce arriva da noi oggi o dopo.",
+      "ddtNumber": "Indica il numero del DDT con la sua data.",
+      "ddtDate": "Il DDT ha la data del giorno in cui la merce arriva o prima."
+    }
+  },
+  "scrap": {
+    "LEATHER_FLAW": "Difetto della pelle",
+    "CUT_WRONG": "Taglio sbagliato",
+    "STITCHING": "Cucitura irrecuperabile",
+    "STAIN": "Macchia",
+    "TEAR": "Strappo o foro",
+    "MACHINE": "Danno della macchina",
+    "OTHER": "Altro",
+    "unknown": "Un altro motivo"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole",
+    "unknown": "unità"
+  },
+  "col": {
+    "job": "Lavorazione",
+    "style": "Modello",
+    "progress": "Avanzamento",
+    "kit": "Kit",
+    "due": "Da rendere",
+    "status": "Stato",
+    "step": "Prossimo passo",
+    "actions": "Azioni",
+    "kitNone": "Non spedito"
+  },
+  "due": {
+    "none": "Nessun giorno ancora",
+    "inLeft": "rientro {left}",
+    "today": "Da rendere oggi",
+    "late_one": "In ritardo di {count} giorno",
+    "late_other": "In ritardo di {count} giorni",
+    "in_one": "Tra {count} giorno",
+    "in_other": "Tra {count} giorni",
+    "ended": "Conclusa"
+  },
+  "row": {
+    "open": "Apri",
+    "accept": "Accetta…",
+    "decline": "Rifiuta…",
+    "sheet": "Scheda di lavoro (nuova scheda)",
+    "menu": "Altro per {number}"
+  },
+  "bulk": {
+    "accept": "Accetta {count} di {of} come richiesto",
+    "export": "Esporta {count}"
+  },
+  "list": {
+    "failed": "Non è stato possibile leggere le lavorazioni.",
+    "failedBody": "Non si è perso nulla. Riprova tra un momento.",
+    "none": "Nessuna lavorazione qui.",
+    "noMatch": "Nessuna lavorazione corrisponde a “{q}”.",
+    "clear": "Cancella la ricerca",
+    "empty": "Nessuna lavorazione al momento.",
+    "emptyBody": "Quando ti mandiamo una lavorazione, compare qui e te lo diciamo per e-mail.",
+    "noneIn": {
+      "NEW": "Nessuna nuova lavorazione aspetta la tua risposta.",
+      "KIT": "Nessun kit aspetta il tuo conteggio.",
+      "WORK": "Nessuna lavorazione in corso.",
+      "BACK": "Niente è pronto da rendere.",
+      "DONE": "Nessuna lavorazione è ancora conclusa."
+    },
+    "label": "Le tue lavorazioni",
+    "title": "Lavorazioni",
+    "count_one": "{count} lavorazione",
+    "count_other": "{count} lavorazioni",
+    "search": "Cerca nelle lavorazioni",
+    "searchHint": "N. lavorazione, ordine di lavoro o modello",
+    "capped": "Sono mostrate solo le ultime 500 lavorazioni: cerca per trovarne una più vecchia.",
+    "fileName": "lavorazioni"
+  },
+  "keys": {
+    "open": "Apri la lavorazione",
+    "search": "Cerca",
+    "rows": "Lavorazione successiva o precedente",
+    "closeSheet": "Chiudi la finestra"
+  },
+  "offline": {
+    "since": "Nessuna connessione — mostro quanto caricato alle {time}.",
+    "held": "I pulsanti che inviano aspettano che torni in linea; quello che hai scritto resta.",
+    "sinceRecord": "Nessuna connessione — mostro la lavorazione come caricata l'ultima volta."
+  },
+  "notice": {
+    "hide": "Nascondi"
+  },
+  "band": {
+    "updated": "Aggiornato alle {time}",
+    "acceptNew_one": "Accetta {count} nuova lavorazione",
+    "acceptNew_other": "Accetta {count} nuove lavorazioni",
+    "export": "Esporta questa vista (CSV)",
+    "sheet": "Scheda di lavoro (nuova scheda)"
+  },
+  "record": {
+    "title": "Lavorazione {number}",
+    "titleLoading": "Lavorazione",
+    "missing": "Questa lavorazione non è tua.",
+    "missingBody": "Forse è stata ritirata, o l'indirizzo è sbagliato.",
+    "failed": "Non è stato possibile leggere la lavorazione."
+  },
+  "answer": {
+    "label": "La tua risposta",
+    "waiting": "Aspettiamo la tua risposta: accetta la lavorazione, proponi un altro giorno, o rifiutala.",
+    "decline": "Rifiuta…",
+    "accept": "Accetta la lavorazione",
+    "declineMore": "Rifiuta questa lavorazione…",
+    "acceptedBy": "Accettata da {name} il {time}.",
+    "declinedBy": "Rifiutata da {name} il {time}.",
+    "dateAccepted": "D'accordo: il {date} è il nuovo giorno di rientro.",
+    "dateRefused": "Ci serve la lavorazione entro il giorno che abbiamo chiesto: il {date} non va bene per noi.",
+    "proposed": "Hai proposto il {date}: ti diciamo se va bene.",
+    "because": "Motivo: {reason}"
+  },
+  "progress": {
+    "title": "Comunica i pezzi finiti",
+    "lead": "Per taglia: quello che hai finito oggi. L'ordine di lavoro lo vede subito.",
+    "offline": "Non inviato — nessuna connessione. Il tuo avanzamento resta su questa pagina; premi di nuovo Invia.",
+    "soFar": "{done} di {total} finiti",
+    "allFinished": "Tutti i pezzi di questa fase sono finiti.",
+    "today": "Finiti oggi",
+    "left": "{count} rimasti",
+    "gridOf": "{operation}: finiti oggi per colore e taglia",
+    "finishBy": "Finirai entro il",
+    "finishByHint": "Cambialo quando si sposta.",
+    "note": "Una nota per noi (facoltativa)",
+    "sendCount_one": "Invia {count} pezzo finito",
+    "sendCount_other": "Invia {count} pezzi finiti",
+    "send": "Invia l'avanzamento",
+    "history": "Avanzamenti finora",
+    "noReports": "Ancora nessun avanzamento.",
+    "reportLine": "{count} finiti · {operation} · {size}",
+    "wholeOperation": "tutte le taglie",
+    "byOffice": "inserito da noi per {name}",
+    "by": "da {name}",
+    "finishByOn": "finisce entro il {date}",
+    "held": {
+      "whole": "Fase {line}: pezzi interi.",
+      "cell": "Fase {line}, {size}: al massimo altri {left}.",
+      "operation": "Fase {line}: al massimo altri {left}.",
+      "nothing": "Prima aggiungi i pezzi finiti oggi.",
+      "finishBy": "Il giorno di fine è dopo l'ordine della lavorazione."
+    }
+  },
+  "problem": {
+    "title": "Segnala un problema",
+    "lead": "Diccelo presto quando qualcosa non va: arriva al nostro ufficio nei messaggi della lavorazione.",
+    "what": "Cosa non va",
+    "kind": {
+      "MATERIAL": "Manca materiale",
+      "DEFECT": "Difetto nei pezzi tagliati",
+      "MACHINE": "Macchina ferma",
+      "OTHER": "Altro"
+    },
+    "note": "Cosa è successo",
+    "send": "Invia al nostro ufficio",
+    "held": {
+      "kind": "Scegli cosa non va.",
+      "note": "Di' cosa è successo."
+    },
+    "write": "Non inviato: riprova tra un momento.",
+    "invalid": "Non inviato: controlla quello che hai scritto.",
+    "changed": "La lavorazione è cambiata nel frattempo: l'abbiamo riletta. Controlla e invia di nuovo.",
+    "state": "La lavorazione non lo consente più: l'abbiamo riletta.",
+    "forbidden": "Il tuo accesso non lo consente: chiedi al tuo amministratore.",
+    "offline": "Non inviato — nessuna connessione. Quello che hai scritto resta; premi di nuovo Invia.",
+    "slowDown": "Troppi tentativi: aspetta un minuto e invia di nuovo.",
+    "gone": "Questa lavorazione non è più tua da rispondere.",
+    "read": "Non è stato possibile leggere la lavorazione."
+  },
+  "refused": {
+    "proposedDate": "Non inviato: proponi un giorno da oggi in poi.",
+    "scrapReason": "Non inviato: scegli perché i pezzi sono scartati.",
+    "note": "Non inviato: controlla la nota.",
+    "reason": "Non inviato: controlla il motivo.",
+    "kit": "Non inviato: controlla i conteggi del kit.",
+    "progress": "Non inviato: un conteggio supera quanto resta da finire.",
+    "material": "Non inviato: controlla il materiale non usato.",
+    "returns": "Non inviato: più pezzi di quelli presso di te e non ancora annunciati.",
+    "parcels": "Non inviato: da 1 a 9999 colli.",
+    "day": "Non inviato: la merce arriva da noi oggi o dopo.",
+    "ddt": "Non inviato: controlla numero e data del tuo DDT.",
+    "photo": "Non inviata: una foto (JPEG, PNG, WebP o HEIC) fino a 15 MB."
+  },
+  "end": {
+    "acceptedMoved": "Accettata — hai proposto il {date}: ti diciamo se va bene.",
+    "acceptedKit": "Accettata — il kit parte il {date} con il nostro DDT.",
+    "accepted": "Accettata — ti avvisiamo quando parte il kit.",
+    "acceptedKitOf": "{number} accettata — il kit parte il {date} con il nostro DDT.",
+    "acceptedOf": "{number} accettata — ti avvisiamo quando parte il kit.",
+    "declined": "Rifiutata — grazie di averci avvisato.",
+    "declinedOf": "{number} rifiutata — grazie di averci avvisato.",
+    "kit_one": "Kit confermato: {count} riga ricevuta come elencato.",
+    "kit_other": "Kit confermato: {count} righe ricevute come elencato.",
+    "kitShort_one": "Kit confermato: {count} riga con differenze, la guardiamo noi.",
+    "kitShort_other": "Kit confermato: {count} righe con differenze, le guardiamo noi.",
+    "progress_one": "Inviato: {count} pezzo finito. Il nostro ordine di lavoro lo vede subito.",
+    "progress_other": "Inviato: {count} pezzi finiti. Il nostro ordine di lavoro li vede subito.",
+    "returns_one": "Aspettiamo {count} pezzo il {date}.",
+    "returns_other": "Aspettiamo {count} pezzi il {date}.",
+    "photo": "Foto inviata: {name}.",
+    "problem": "Inviato al nostro ufficio: lo trovi nei messaggi della lavorazione."
+  },
+  "tabs": {
+    "label": "La lavorazione",
+    "kit": "Kit ricevuto",
+    "progress": "Avanzamento",
+    "sendback": "Reso",
+    "documents": "Documenti",
+    "messages": "Messaggi",
+    "toDo": "Da fare"
+  },
+  "docs": {
+    "title": "Documenti",
+    "sheet": "Scheda di lavoro {number}",
+    "sheetHint": "Per il banco: si apre in una nuova scheda, stampala o salvala come PDF.",
+    "ourDdtOf": "Nostro DDT del kit {number} del {date}",
+    "ourDdt": "Nostro DDT del kit {number}",
+    "ourDdtHint": "La carta viaggia con il kit.",
+    "yourDdtOf": "Tuo DDT {number} del {date}",
+    "yourDdt": "Tuo DDT {number}",
+    "photoOf": "La tua foto della riga {line} del kit",
+    "more": "Foto del modello e istruzioni arrivano per ora nei messaggi della lavorazione."
+  },
+  "sheet": {
+    "print": "Stampa",
+    "title": "Scheda di lavoro {number}",
+    "titleLoading": "Scheda di lavoro",
+    "from": "Da {company}",
+    "operation_one": "{seq} · {name} · {count} pezzo",
+    "operation_other": "{seq} · {name} · {count} pezzi"
+  },
+  "csv": {
+    "job": "Lavorazione",
+    "operations": "Fasi",
+    "style": "Modello",
+    "workOrder": "Ordine di lavoro",
+    "pieces": "Pezzi",
+    "finished": "Finiti",
+    "kitDate": "Kit spedito il",
+    "dueBack": "Da rendere il",
+    "state": "Stato"
+  },
+  "unsaved": {
+    "job": "Quello che hai scritto per questa lavorazione non è ancora inviato."
+  },
+  "link": {
+    "title": "Lavorazione {number}",
+    "readBody": "Non si è perso nulla: riprova tra un momento.",
+    "kitArrives": "Il kit arriva il",
+    "kitWeTell": "Ti avvisiamo quando parte",
+    "kit": "Il kit che ti mandiamo",
+    "print": "Stampa la lavorazione",
+    "answer": "La tua risposta",
+    "how": "Cosa rispondi",
+    "mode": {
+      "accept": "Accetta come richiesto",
+      "move": "Proponi un'altra data di rientro",
+      "decline": "Rifiuta"
+    },
+    "modeHint": {
+      "accept": "Le date come le abbiamo chieste.",
+      "move": "Accetti e ci dici il giorno in cui puoi renderla.",
+      "decline": "Cerchiamo un altro laboratorio."
+    },
+    "goMove": "Accetta con questa data",
+    "name": "Il tuo nome (facoltativo)",
+    "nameHint": "Così sappiamo chi ha risposto.",
+    "end": {
+      "by": "Risposta di",
+      "at": "Quando",
+      "portal": "Seguila in Lavorazioni nel nostro portale.",
+      "closed": "Questo link ora è usato: non apre più nulla.",
+      "reference": "Lavorazione",
+      "contact": "Domande? Rispondi alla nostra e-mail o chiamaci.",
+      "openPortal": "Apri il portale",
+      "acceptedTitle": "Accettata",
+      "declinedTitle": "Rifiutata",
+      "declined": "Grazie di averci avvisato: cerchiamo un altro laboratorio."
+    },
+    "closed": {
+      "declined": "Hai già rifiutato questa lavorazione.",
+      "accepted": "Hai già accettato questa lavorazione.",
+      "ended": "Questa lavorazione è conclusa.",
+      "notSent": "Questa lavorazione ora non accetta risposte.",
+      "accept": "Questa lavorazione ora non si può accettare: scrivici.",
+      "decline": "Parte del lavoro è già rientrata: scrivici."
+    },
+    "held": {
+      "name": "Il tuo nome: al massimo 200 caratteri."
+    }
+  }
+}

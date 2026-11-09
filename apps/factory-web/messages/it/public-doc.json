@@ -1,0 +1,135 @@
+{
+  "title": "{style} · Dichiarazione UE di conformità",
+  "titleLookup": "Dichiarazione di conformità",
+  "intro": "I documenti del prodotto di questa etichetta, conservati a questo indirizzo per almeno dieci anni.",
+  "loading": {
+    "label": "Apertura della dichiarazione…",
+    "slow": "Ancora in caricamento…"
+  },
+  "error": {
+    "title": "La dichiarazione non si è aperta",
+    "body": "Non riusciamo a raggiungere il server. Controlla la connessione e riprova.",
+    "retry": "Riprova"
+  },
+  "standing": {
+    "CURRENT": "In vigore",
+    "EARLIER": "Per i lotti prima di {month}"
+  },
+  "product": {
+    "heading": "Questo prodotto",
+    "scannedBatch": "Hai inquadrato l'etichetta del lotto {batch}.",
+    "scannedStyle": "Questo indirizzo è del modello {code}: mostra la sua dichiarazione in vigore.",
+    "style": "Modello",
+    "styleValue": "{name} · {code}",
+    "batch": "Lotto",
+    "made": "Lotto rilasciato",
+    "maker": "Fabbricante",
+    "makerBrand": "Il marchio è il fabbricante legale di questo prodotto.",
+    "importer": "Importatore",
+    "noMaker": "Non indicato qui: vedi la dichiarazione."
+  },
+  "declaration": {
+    "heading": "Dichiarazione di conformità",
+    "revision": "Revisione del modello {revision}",
+    "forBatches": "Vale per i lotti prodotti da {from} a {to}.",
+    "forBatchesOne": "Vale per i lotti prodotti a {month}.",
+    "earlier": "Una revisione successiva di questo prodotto ha una propria dichiarazione da {month}. Questa resta valida per i lotti prodotti prima.",
+    "language": "Lingua",
+    "languageHint": "Tutte le lingue in cui la dichiarazione è pubblicata.",
+    "number": "Numero della dichiarazione",
+    "issued": "Emessa il",
+    "fingerprint": "Impronta (SHA-256)",
+    "download": "Scarica la dichiarazione",
+    "openTab": "Apri il PDF in una nuova scheda",
+    "notPublished": {
+      "title": "Non ancora pubblicata qui",
+      "body": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. {sender} la invia con la merce; chiedine una copia.",
+      "bodyNoSender": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. Chiedine una copia al venditore."
+    },
+    "notPpe": {
+      "title": "Nessuna dichiarazione richiesta",
+      "body": "Questo prodotto non è un dispositivo di protezione individuale: il Regolamento (UE) 2016/425 non richiede una dichiarazione di conformità."
+    },
+    "pdf": {
+      "loading": "Apertura del PDF…",
+      "failedTitle": "Il PDF non si è aperto",
+      "failedBody": "Il file non è arrivato a questa pagina. Riprova, oppure scaricalo.",
+      "retry": "Riprova"
+    }
+  },
+  "certificate": {
+    "heading": "Sintesi del certificato",
+    "hint": "I dati che un'autorità o un acquirente verifica.",
+    "category": "Categoria DPI",
+    "categoryValue": {
+      "NOT_PPE": "Non è un dispositivo di protezione individuale",
+      "CATEGORY_I": "Categoria I (progettazione semplice)",
+      "CATEGORY_II": "Categoria II",
+      "CATEGORY_III": "Categoria III (progettazione complessa)"
+    },
+    "standard": "Norma e classe",
+    "standardClass": "{standard}, classe {ppeClass}",
+    "notifiedBody": "Organismo notificato",
+    "notifiedBodyValue": "{name}, numero {number}",
+    "number": "Certificato di esame UE del tipo",
+    "validity": "Validità",
+    "validityValue": "dal {from} al {to}",
+    "validOnBatch": "Valido quando questo lotto è stato rilasciato ({day})",
+    "validToday": "Valido oggi",
+    "notValidOnBatch": "Non valido il {day}, quando questo lotto è stato rilasciato",
+    "notValidToday": "Non valido oggi ({day})",
+    "selfCertified": "Categoria I: il fabbricante la certifica da sé, senza organismo notificato (Regolamento (UE) 2016/425, allegato IV).",
+    "none": "Nessun certificato è indicato qui. Chiedilo a {sender}.",
+    "noneNoSender": "Nessun certificato è indicato qui. Chiedilo al venditore."
+  },
+  "instructions": {
+    "heading": "Istruzioni e informazioni di sicurezza",
+    "hint": "Come indossarlo, regolarlo, pulirlo e conservarlo, e da cosa protegge.",
+    "leaflet": "Nota informativa · {language}",
+    "download": "Scarica",
+    "open": "Apri",
+    "openNamed": "Apri {name}",
+    "downloadNamed": "Scarica {name}",
+    "care": "Manutenzione",
+    "none": "La nota informativa di questa revisione non è ancora pubblicata qui. Accompagna il prodotto."
+  },
+  "versions": {
+    "heading": "Versioni precedenti",
+    "hint": "Le dichiarazioni precedenti restano qui per i lotti che coprono.",
+    "summary": "Revisione {revision}",
+    "issued": "emessa il {date}",
+    "batches": "lotti prodotti da {from} a {to}",
+    "batchesOne": "lotti prodotti a {month}",
+    "noBatches": "nessun lotto registrato",
+    "declaration": "Dichiarazione · {language}",
+    "leaflet": "Nota informativa · {language}",
+    "none": "Non ci sono versioni precedenti: questa è la prima dichiarazione di questo prodotto."
+  },
+  "others": {
+    "title": "Questo codice vale anche per un altro prodotto",
+    "body": "Scegli quello della tua etichetta:",
+    "batch": "{style} · lotto {batch}",
+    "style": "{style}",
+    "open": "Apri"
+  },
+  "lookup": {
+    "heading": "Digita il codice",
+    "hint": "Se il QR è rovinato: digita il codice di 8 caratteri stampato sotto.",
+    "label": "Digita il codice di 8 caratteri sotto il QR",
+    "placeholder": "es. 7K3Q-M2XA",
+    "open": "Apri",
+    "opening": "Apertura…",
+    "required": "Digita il codice stampato sotto il QR.",
+    "format": "Un codice ha 8 lettere e cifre, come 7K3Q-M2XA.",
+    "unknown": "Non troviamo questo codice. Controllalo sull'etichetta.",
+    "wait": "Attendi {count} minuti prima di chiedere di nuovo.",
+    "waitOne": "Attendi 1 minuto prima di chiedere di nuovo.",
+    "waitSeconds": "Attendi {count} secondi prima di chiedere di nuovo.",
+    "checking": "Dopo molte richieste dalla tua rete, sul tuo dispositivo gira un breve controllo…",
+    "checkFailed": "Il controllo non è terminato. Riprova tra un momento.",
+    "held": "Attendi che passi il tempo indicato sopra."
+  },
+  "language": {
+    "only": "Pubblicata solo in {language}."
+  }
+}

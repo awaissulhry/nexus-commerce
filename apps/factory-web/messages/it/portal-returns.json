@@ -1,0 +1,453 @@
+{
+  "list": {
+    "title": "Resi e reclami",
+    "cases": "I tuoi resi e reclami",
+    "label": "I tuoi resi e reclami",
+    "search": "Cerca nei tuoi resi e reclami",
+    "searchHint": "Numero pratica, tuo riferimento, articolo o matricola",
+    "count_one": "{count} pratica",
+    "count_other": "{count} pratiche",
+    "failed": "Non è stato possibile leggere i tuoi resi e reclami.",
+    "failedBody": "Non si è perso nulla. Riprova tra un momento.",
+    "empty": "Nessun reso o reclamo.",
+    "emptyBody": "Se qualcosa che ti abbiamo consegnato non va, apri qui un reso o un reclamo di qualità e segui ogni passaggio.",
+    "emptyOpenTitle": "Nessun reso o reclamo aperto.",
+    "emptyOpen": "Nessuna pratica aperta. Le pratiche chiuse sono in Chiuse e Tutte.",
+    "noMatch": "Nessuna pratica corrisponde a questi filtri.",
+    "noMatchSearch": "Nessun risultato per «{q}». Prova con il tuo riferimento o con il nostro numero di pratica.",
+    "noMatchChip": "Nessuna pratica con questo filtro.",
+    "clear": "Azzera i filtri",
+    "yourMove": "Tocca a te:",
+    "fileName": "resi-e-reclami"
+  },
+  "chips": {
+    "label": "Quali pratiche",
+    "chip": "{name}: {count}",
+    "clear": "Azzera i filtri"
+  },
+  "chip": {
+    "OPEN": "Aperte",
+    "WAITING": "In attesa di te",
+    "CLOSED": "Chiuse",
+    "ALL": "Tutte"
+  },
+  "col": {
+    "case": "Pratica",
+    "yourRef": "Tuo riferimento",
+    "type": "Tipo",
+    "item": "Articolo",
+    "opened": "Aperta il",
+    "status": "Stato",
+    "next": "Prossimo passo",
+    "updated": "Ultimo aggiornamento",
+    "actions": "Azioni"
+  },
+  "row": {
+    "status": "Stato",
+    "request": "Richiesta",
+    "messages": "Messaggi",
+    "menu": "Azioni per {number}"
+  },
+  "ref": {
+    "yours": "Tuo rif.",
+    "ours": "Nostro rif."
+  },
+  "type": {
+    "RETURN": "Reso",
+    "COMPLAINT": "Reclamo di qualità"
+  },
+  "typeShort": {
+    "RETURN": "Reso",
+    "COMPLAINT": "Reclamo"
+  },
+  "item": {
+    "size": "taglia {size}",
+    "serial": "matricola {serial}",
+    "more_one": "+ {count} altro articolo",
+    "more_other": "+ altri {count} articoli"
+  },
+  "bulk": {
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}"
+  },
+  "state": {
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "stillLoading": "Ancora in caricamento…",
+    "RETURN": {
+      "REQUESTED": "Richiesto",
+      "SEND_IT_BACK": "Approvato — da rispedire",
+      "BACK_WITH_US": "Arrivato da noi",
+      "INSPECTED": "Controllato",
+      "DONE": "Chiuso",
+      "NOT_ACCEPTED": "Non accettato",
+      "CANCELLED": "Annullato"
+    },
+    "COMPLAINT": {
+      "RECEIVED": "Ricevuto",
+      "INVESTIGATING": "In analisi",
+      "ANSWERED": "Risposto",
+      "CLOSED": "Chiuso"
+    }
+  },
+  "offline": {
+    "title": "Nessuna connessione — dati caricati alle {time}"
+  },
+  "noAccess": {
+    "title": "Questa pagina non fa parte del tuo accesso",
+    "ask": "Chiedi l'accesso a {names}.",
+    "askAdmin": "Chiedi l'accesso al tuo amministratore.",
+    "home": "Vai alla Home"
+  },
+  "band": {
+    "start": "Apri un reso o un reclamo",
+    "updated": "Aggiornato alle {time}",
+    "photos": "Aggiungi foto",
+    "label": "Stampa l'etichetta di reso",
+    "labelTab": "PDF dell'etichetta di reso (nuova scheda)",
+    "creditNote": "PDF della nota di credito {number} (nuova scheda)",
+    "cancel": "Annulla questa richiesta…"
+  },
+  "keys": {
+    "search": "Cerca",
+    "open": "Apri la pratica",
+    "tabs": "Scheda precedente / successiva",
+    "close": "Chiudi una finestra"
+  },
+  "tabs": {
+    "label": "Sezioni della pratica",
+    "request": "Richiesta",
+    "status": "Stato",
+    "messages": "Messaggi"
+  },
+  "record": {
+    "titleReturn": "Reso {number}",
+    "titleComplaint": "Reclamo di qualità {number}",
+    "missing": "Pratica non trovata",
+    "missingBody": "Questa pratica non è tua, oppure non esiste più.",
+    "failed": "Non è stato possibile leggere la pratica.",
+    "failedBody": "Non si è perso nulla. Riprova tra un momento.",
+    "toList": "Torna a Resi e reclami"
+  },
+  "via": {
+    "PORTAL": "Nel portale",
+    "LINK": "Con un link che ti abbiamo inviato",
+    "OFFICE": "Tramite il nostro ufficio",
+    "EMAIL": "Per e-mail",
+    "PHONE": "Per telefono",
+    "OTHER": "Altro"
+  },
+  "step": {
+    "ASKED": "Richiesto",
+    "DECIDED": "Deciso",
+    "BACK_WITH_US": "Arrivato da noi",
+    "INSPECTED": "Controllato",
+    "OUTCOME": "Esito",
+    "RECEIVED": "Ricevuto",
+    "INVESTIGATING": "In analisi",
+    "ANSWERED": "Risposto",
+    "CLOSED": "Chiuso"
+  },
+  "next": {
+    "forYou": "Il tuo prossimo passo",
+    "ours": "Cosa facciamo adesso"
+  },
+  "held": {
+    "preview": "Questa è un'anteprima: legge il portale e non agisce mai per il cliente.",
+    "previewFiles": "In anteprima i file non si aprono.",
+    "mayRequest": "Possono farlo solo i colleghi abilitati a chiedere resi. Chiedi al tuo amministratore.",
+    "mayUpload": "Possono aggiungere foto solo i colleghi abilitati a inviare file. Chiedi al tuo amministratore.",
+    "goodsBack": "La merce è già da noi: scrivici nei messaggi.",
+    "closed": "Questo reso è già chiuso.",
+    "decided": "Abbiamo già deciso: scrivici nei messaggi.",
+    "answered": "Abbiamo già risposto: scrivici nei messaggi.",
+    "offline": "Nessuna connessione: riprova quando sei di nuovo online.",
+    "busy": "Invio in corso…",
+    "reading": "Stiamo ancora leggendo cosa puoi rendere…",
+    "noDocuments": "I documenti non fanno parte del tuo accesso. Chiedi al tuo amministratore.",
+    "noPdf": "Il PDF della nota di credito non è ancora pronto."
+  },
+  "notice": {
+    "hide": "Nascondi",
+    "cancelled": "Il reso {number} è annullato. Puoi aprirne uno nuovo quando vuoi."
+  },
+  "messages": {
+    "hint": "Scrivici qui su questa pratica: rispondiamo nella stessa conversazione. Puoi anche rispondere alle nostre e-mail."
+  },
+  "unsaved": {
+    "start": "Il tuo reso o reclamo non è ancora stato inviato.",
+    "photos": "Le tue foto non sono ancora state inviate."
+  },
+  "problem": {
+    "internal": "Qualcosa non ha funzionato da parte nostra. Riprova tra un momento.",
+    "forbidden": "Il tuo accesso non lo consente. Chiedi al tuo amministratore.",
+    "missing": "Questa pratica non c'è più.",
+    "changed": "Nel frattempo la pratica è cambiata: l'abbiamo riletta. Controlla e riprova.",
+    "invalid": "Non è stato possibile inviarla così. Controlla i campi.",
+    "tooMany": "Troppi tentativi: attendi un minuto e riprova.",
+    "unavailable": "Non siamo raggiungibili in questo momento. Riprova tra un momento.",
+    "signedOut": "La sessione è terminata: accedi di nuovo.",
+    "documentForbidden": "Questo documento non fa parte del tuo accesso: chiedi al tuo referente qualità o al tuo amministratore.",
+    "documentFailed": "Non è stato possibile aprire il documento. Riprova."
+  },
+  "complaints": {
+    "title": "Reclami",
+    "hint": "I reclami di qualità e a che punto è la nostra analisi.",
+    "failed": "Non è stato possibile leggere i reclami.",
+    "empty": "Nessun reclamo.",
+    "open": "Apri il reclamo {number}",
+    "opened": "Aperto il {date}",
+    "step": "Fase raggiunta: {step}",
+    "noStep": "Nessun rapporto di analisi per ora",
+    "progress": "{done} fasi su {of} completate",
+    "answeredOn": "Risposto il {date}",
+    "dueOn": "Risposta entro il {date}"
+  },
+  "request": {
+    "what": "Cosa hai chiesto",
+    "reported": "Cosa hai segnalato",
+    "opened": "Aperta il",
+    "via": "Richiesta",
+    "outcome": "Cosa preferiresti",
+    "yourRef": "Tuo riferimento",
+    "note": "La tua nota",
+    "items": "Articoli",
+    "line": "Articolo {seq} · {description}",
+    "pieces": "Pezzi",
+    "size": "Taglia",
+    "serial": "Matricola",
+    "batch": "Lotto",
+    "reason": "Motivo",
+    "item": "Articolo",
+    "order": "Ordine",
+    "shipment": "Consegna",
+    "happened": "Cosa è successo",
+    "linePhotos": "Foto di questo articolo",
+    "photos": "Foto",
+    "photosHint": "Le foto ci aiutano a decidere prima: il danno, l'etichetta, come veste.",
+    "photosClosed": "Abbiamo già deciso: le foto restano come sono.",
+    "photosAnswered": "Abbiamo già risposto: le foto restano come sono.",
+    "noPhotos": "Nessuna foto per ora.",
+    "photoAdded": "Aggiunta il {date}",
+    "view": "Vedi",
+    "addPhotos": "Aggiungi foto"
+  },
+  "status": {
+    "where": "A che punto è",
+    "steps": "Fasi di {number}",
+    "decision": "La nostra decisione:",
+    "label": "Etichetta e istruzioni di reso",
+    "sendBy": "Rispediscilo entro il {date}.",
+    "sendBack": "Rispediscilo a noi.",
+    "sendTo": "A: {site}",
+    "labelHint": "Stampa le istruzioni, mettile nel pacco e scrivi il numero della pratica all'esterno.",
+    "print": "Stampa l'etichetta di reso",
+    "parcels": "Colli che abbiamo ricevuto",
+    "parcelsWaiting": "Non ci è ancora arrivato nulla.",
+    "parcelsNone": "Nessun collo ricevuto.",
+    "receivedAt": "Ricevuto",
+    "parcelCount": "Colli",
+    "carrier": "Corriere",
+    "tracking": "Numero di tracciamento",
+    "inspection": "Esito del controllo",
+    "inspectionNone": "Non ancora controllato.",
+    "item": "Articolo",
+    "received": "Pezzi ricevuti",
+    "grade": "Condizione",
+    "outcome": "Cosa succede",
+    "outcomePending": "Da decidere",
+    "result": "Esito",
+    "resultClosed": "Chiuso senza nota di credito né sostituzione.",
+    "resultNone": "Ancora nulla.",
+    "creditNotes": "Note di credito",
+    "creditNote": "Nota di credito {number}",
+    "issued": "Emessa il {date}",
+    "notIssued": "Non ancora emessa",
+    "openPdf": "Apri il PDF",
+    "replacement": "Ordine di sostituzione:",
+    "answerBy": "Rispondiamo entro il {date}.",
+    "investigation": "Fasi dell'analisi",
+    "investigationQuality": "L'analisi e la nostra lettera sono per il vostro referente qualità.",
+    "eightD": "Rapporto 8D {number}",
+    "capa": "Azione correttiva {number}",
+    "investigationSteps": "Analisi di {number}",
+    "investigationNone": "Non abbiamo aperto un rapporto di analisi per questo reclamo.",
+    "answeredEmail": "Abbiamo risposto per e-mail il {date}.",
+    "answeredPortal": "Abbiamo risposto qui il {date}.",
+    "documents": "La nostra lettera e i rapporti",
+    "documentAdded": "Condiviso il {date}",
+    "documentsNone": "Nessuna lettera o rapporto condiviso per ora.",
+    "letter": "La nostra lettera di risposta",
+    "letterV": "La nostra lettera di risposta (versione {version})",
+    "eightDReport": "Rapporto 8D"
+  },
+  "grade": {
+    "NEW": "Come nuovo",
+    "LIKE_NEW": "Quasi nuovo",
+    "GOOD": "Buono, usato",
+    "DAMAGED": "Danneggiato",
+    "UNUSABLE": "Non utilizzabile"
+  },
+  "disposition": {
+    "REPAIR": "Lo ripariamo e te lo rispediamo",
+    "REMAKE": "Lo rifacciamo",
+    "REPLACE": "Una sostituzione",
+    "CREDIT_ONLY": "Una nota di credito",
+    "RETURN_UNCHANGED": "Ti viene rispedito com'è arrivato",
+    "SCRAP": "Non viene rispedito"
+  },
+  "outcome": {
+    "REPLACE": "Una sostituzione",
+    "REPAIR": "Una riparazione",
+    "CREDIT": "Una nota di credito"
+  },
+  "cancel": {
+    "title": "Annullare questa richiesta?",
+    "what": "Chiuderemo {number}. Puoi aprirne una nuova quando vuoi.",
+    "told": "Vediamo subito che l'hai annullata; non si rispedisce nulla.",
+    "again": "Aprire una nuova richiesta",
+    "confirm": "Annulla la richiesta",
+    "busy": "Annullamento…"
+  },
+  "photos": {
+    "title": "Aggiungi foto",
+    "subtitle": "A {number}",
+    "of": "Foto di",
+    "ofRequest": "La richiesta nel suo insieme",
+    "ofComplaint": "Il reclamo",
+    "hint_one": "Puoi aggiungere ancora {left} foto qui.",
+    "hint_other": "Puoi aggiungere ancora {left} foto qui.",
+    "full": "Qui ci sono già 10 foto.",
+    "types": "JPEG, PNG, WebP o HEIC · fino a 15 MB ciascuna",
+    "picked": "Foto scelte",
+    "send_one": "Invia {count} foto",
+    "send_other": "Invia {count} foto",
+    "sending": "Invio in corso…",
+    "sent_one": "{count} foto inviata.",
+    "sent_other": "{count} foto inviate.",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "privacy": "Non inquadrare volti né dati personali. Dalle foto scattate col telefono togliamo la posizione.",
+    "state": {
+      "waiting": "Pronta per l'invio",
+      "sending": "Invio in corso…",
+      "sent": "Inviata"
+    },
+    "held": {
+      "none": "Scegli prima una foto."
+    },
+    "problem": {
+      "type": "Non è una foto che possiamo ricevere: JPEG, PNG, WebP o HEIC.",
+      "size": "Più grande di 15 MB.",
+      "full": "Qui ci sono già 10 foto.",
+      "failed": "Non inviata. Riprova."
+    }
+  },
+  "viewer": {
+    "count": "{n} di {count}",
+    "previous": "Precedente",
+    "next": "Successiva",
+    "only": "Questa è l'unica foto.",
+    "first": "Questa è la prima foto.",
+    "last": "Questa è l'ultima foto.",
+    "loading": "Apertura della foto…",
+    "failed": "Non è stato possibile aprire la foto.",
+    "alt": "Foto {name}"
+  },
+  "start": {
+    "title": "Apri un reso o un reclamo",
+    "stepOf": "Passo {n} di {of} · {name}",
+    "step": {
+      "type": "Cosa ti serve",
+      "details": "Dettagli",
+      "review": "Controlla e invia"
+    },
+    "what": "Cosa ti serve?",
+    "type": {
+      "RETURN": "Rendere degli articoli",
+      "COMPLAINT": "Segnalare un problema di qualità"
+    },
+    "typeBody": {
+      "RETURN": "Rispedire qualcosa che ti abbiamo consegnato: taglia sbagliata, danneggiato durante il trasporto, non quello che hai ordinato.",
+      "COMPLAINT": "Un difetto da analizzare. Ricevi la nostra risposta e, quando lo facciamo, il nostro rapporto 8D."
+    },
+    "items": "Quali articoli rendi",
+    "itemsHint": "Quello che ti abbiamo consegnato e che può ancora tornare. Scegli ogni articolo, poi indica quanti pezzi e perché.",
+    "noItems": "Niente di quanto consegnato può tornare adesso. Per un problema di qualità, torna indietro e segnalalo.",
+    "orderLine": "ordine {number}, riga {line}",
+    "invoice": "fattura {number}",
+    "canReturn": "{count} su {received} possono tornare",
+    "nothingLeft": "già tornati o già richiesti",
+    "window": "Fuori dal periodo di reso: consegnato il {date}. Lo valutiamo comunque.",
+    "windowNoDate": "Fuori dal periodo di reso. Lo valutiamo comunque.",
+    "pieces": "Pezzi",
+    "piecesHint_one": "Fino a {count}",
+    "piecesHint_other": "Fino a {count}",
+    "reason": "Motivo",
+    "reasonPick": "Scegli un motivo",
+    "reasonNote": "Qualche parola in più (facoltativo)",
+    "reasonNoteNeeded": "Raccontaci di più",
+    "serial": "Matricola",
+    "serialHint": "Sull'etichetta interna, se c'è.",
+    "outcome": "Cosa preferiresti?",
+    "outcomeNone": "Decidete voi",
+    "yourRef": "Tuo riferimento",
+    "yourRefHint": "Il tuo numero per questa pratica, se ne usi uno.",
+    "note": "Una nota per noi",
+    "noteHint": "Tutto ciò che ci aiuta a decidere.",
+    "item": "Quale articolo",
+    "itemHint": "Sceglilo tra quelli consegnati, oppure lascialo vuoto.",
+    "itemNone": "Non riguarda un solo articolo",
+    "batch": "Lotto",
+    "batchHint": "Come stampato sull'etichetta, se lo hai.",
+    "description": "Cosa è successo",
+    "descriptionHint": "Cosa hai trovato, quando e come si vede.",
+    "review": {
+      "return": "La tua richiesta di reso",
+      "items": "Articoli che tornano",
+      "item": "Articolo",
+      "complaint": "Il tuo reclamo di qualità"
+    },
+    "photosLater": "Dopo l'invio, aggiungi le foto nella scheda Richiesta della pratica.",
+    "readFailed": "Non è stato possibile leggere cosa puoi rendere.",
+    "readFailedBody": "Non si è perso nulla. Riprova tra un momento.",
+    "next": "Avanti",
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "sending": "Invio in corso…",
+    "sendReturn": "Invia la richiesta di reso",
+    "sendComplaint": "Invia il reclamo",
+    "discardTitle": "Eliminare quanto hai scritto?",
+    "discardBody": "Il tuo reso o reclamo non è ancora stato inviato.",
+    "discard": "Elimina",
+    "stay": "Resta",
+    "held": {
+      "problems": "Alcuni campi vanno controllati: torna a Dettagli."
+    },
+    "problem": {
+      "type": "Scegli cosa ti serve.",
+      "lines": "Scegli almeno un articolo da rendere.",
+      "tooManyLines": "Al massimo 50 articoli in una richiesta.",
+      "quantity": "Uno o più pezzi, un numero intero.",
+      "tooMany": "Più di quanti possono tornare.",
+      "tooManyNow": "Nel frattempo alcuni pezzi sono già stati richiesti: abbiamo riletto cosa può tornare. Controlla i pezzi.",
+      "reason": "Scegli un motivo.",
+      "reasonNote": "Questo motivo richiede qualche parola in più.",
+      "long": "Troppo lungo: accorcialo.",
+      "description": "Raccontaci cosa è successo."
+    },
+    "sent": {
+      "return": "Richiesta di reso {number} aperta",
+      "complaint": "Reclamo {number} aperto",
+      "answerBy": "Rispondiamo entro il {date}.",
+      "answerSoon": "Rispondiamo entro 2 giorni lavorativi.",
+      "photos": "Aggiungi le foto nella pratica: ci aiutano a decidere prima.",
+      "nextReturn": "Quando lo approviamo, stampa l'etichetta di reso e rispedisci gli articoli.",
+      "nextComplaint": "Lo analizziamo e ti avvisiamo qui quando rispondiamo.",
+      "reference": "Numero pratica",
+      "openReturn": "Apri la richiesta",
+      "openComplaint": "Apri il reclamo",
+      "close": "Chiudi"
+    }
+  }
+}

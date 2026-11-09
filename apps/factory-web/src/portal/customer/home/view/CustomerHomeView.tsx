@@ -12,7 +12,7 @@ import type { Conversation } from '../api'
 import type { DocumentRow, NextOrderRow, Tile } from '../model'
 import { useHomeWords } from '../words'
 import { ApproveDialog, type ApproveActions, type ApproveDialogModel } from './ApproveDialog'
-import { DocumentDialog, type DocumentActions, type DocumentDialogModel } from './DocumentDialog'
+import { DocumentPreview, type DocumentPreviewActions, type DocumentPreviewModel } from '../../documents/preview/view/DocumentPreview'
 import '../customer-home.css'
 
 /**
@@ -21,7 +21,8 @@ import '../customer-home.css'
  * five numbers at a glance that are links to their lists, the next five deliveries by promise, the documents new since
  * the last visit, our last three messages — or, for a new customer with nothing yet, a clear first step. Two columns on a
  * desktop (what waits and the deliveries; the numbers, documents and messages), one column in the design's order on a
- * phone. Draws one view model and fetches nothing; the pop-ups are its own (Approve, Document).
+ * phone. Draws one view model and fetches nothing; the pop-ups are Approve (its own) and the document pop-up (lifted to
+ * documents/preview by B-W2b-195: Home and the Documents page open a document the same way).
  */
 
 type Async = 'loading' | 'error' | 'ready'
@@ -62,7 +63,7 @@ export interface CustomerHomeViewModel {
   /** A read takes longer than a second: "Still loading…". */
   slow?: boolean
   approve: ApproveDialogModel | null
-  document: DocumentDialogModel | null
+  document: DocumentPreviewModel | null
 }
 
 export interface CustomerHomeActions {
@@ -84,7 +85,7 @@ export interface CustomerHomeActions {
   onDownload?: (documentId: string) => void
   onAsk?: () => void
   approve?: ApproveActions
-  document?: DocumentActions
+  document?: DocumentPreviewActions
 }
 
 export function CustomerHomeView({ model, actions, tasks }: { model: CustomerHomeViewModel; actions?: CustomerHomeActions; tasks: ReactNode }) {
@@ -144,7 +145,7 @@ export function CustomerHomeView({ model, actions, tasks }: { model: CustomerHom
         </div>
       )}
       {model.approve ? <ApproveDialog model={model.approve} actions={actions?.approve} /> : null}
-      {model.document ? <DocumentDialog model={model.document} actions={actions?.document} /> : null}
+      {model.document ? <DocumentPreview model={model.document} actions={actions?.document} /> : null}
     </div>
   )
 }

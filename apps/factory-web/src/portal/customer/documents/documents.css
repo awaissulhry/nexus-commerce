@@ -1,0 +1,362 @@
+/*
+ * SCR-186 — the customer's Documents (B-W2b-195): layout only, semantic tokens only. The page fills the portal's main area
+ * (no page max-width: Owner rule 2026-10-29): the lists use the whole width, the conformity cards too; it stacks on a phone.
+ */
+
+.fw-pdoc,
+.fw-pdoc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-24);
+  min-width: 0;
+}
+
+.fw-pdoc-stack {
+  gap: var(--nds-space-8);
+}
+
+/* ── which documents ── */
+.fw-pdoc-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pdoc-kinds-title {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-pdoc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pdoc-noprices {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── sections ── */
+.fw-pdoc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pdoc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-pdoc-headtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.fw-pdoc-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pdoc-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pdoc-warn {
+  color: var(--nds-warning-text);
+}
+
+.fw-pdoc-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-pdoc-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-2);
+}
+
+/* ── cells ── */
+.fw-pdoc-doc {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  min-height: 100%;
+}
+
+.fw-pdoc-icon {
+  flex: none;
+  color: var(--nds-text-2);
+}
+
+.fw-pdoc-two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.fw-pdoc-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-pdoc-line {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  flex-wrap: nowrap;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fw-pdoc-ellipsis {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pdoc-mono {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pdoc-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fw-pdoc-nowrap {
+  flex: none;
+  white-space: nowrap;
+}
+
+.fw-pdoc-linkbtn:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+
+.fw-pdoc-actions,
+.fw-pdoc-files {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-height: 100%;
+}
+
+.fw-pdoc-num {
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pdoc-numcell {
+  text-align: right;
+}
+
+.fw-pdoc-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-pdoc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  white-space: nowrap;
+}
+
+/* ── conformity ── */
+.fw-pdoc-styles,
+.fw-pdoc-received,
+.fw-pdoc-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-pdoc-style {
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  padding: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-pdoc-stylehead {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pdoc-stylebody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pdoc-styleacts {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-pdoc-received {
+  gap: var(--nds-space-16);
+}
+
+/* On a wide screen the shipment's facts and its documents sit side by side. */
+.fw-pdoc-shipment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-pdoc-shipment {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    column-gap: var(--nds-space-24);
+  }
+
+  .fw-pdoc-shipment > .fw-pdoc-files-list {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+}
+
+.fw-pdoc-shiphead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pdoc-cert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+
+.fw-pdoc-certlabel {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-pdoc-filestatus {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pdoc-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── the Pay pop-up ── */
+.fw-pdoc-pay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pdoc-fake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pdoc-fakebtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-pdoc-transfer {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A narrow card keeps the icons of a row's buttons; the words go first. */
+@media (max-width: 719px) {
+  .fw-pdoc-btnword {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

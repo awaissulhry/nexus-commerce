@@ -4,6 +4,9 @@ import { classificationOf } from '@nexus/factory-domain/product/compliance/rules
 import { certificateFor, certificateValidOn, RECEIVED_WORDS, receivedStateOf, type CertificateFacts } from '@nexus/factory-domain/sales/portal-documents/conformity'
 import { fingerprintOf, matchesSearch, type PortalDocumentKind } from '@nexus/factory-domain/sales/portal-documents/library'
 import { styleFactsOf } from '../../product/compliance/read'
+// B-W2b-166: the public DoC's address of a style and of each batch received (what a store or a retailer links to).
+import { publicDocAddress, publicDocCodeOf } from '@nexus/factory-domain/compliance/public-doc/code'
+import { processEmail } from '../../../platform/email-out/service'
 import { readLibrary, visibleEntries, type LibraryEntry } from './library'
 import { coveringCertificates, frozenRevisions, readCertificates, readOrderLines, readOrders, readShipmentLines, readShipmentsThatLeft, readStyles, type CertificateRow } from './store'
 
@@ -56,20 +59,26 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
     const styles = await readStyles(client, styleIds)
     const cited = await readCertificates(client, citedIds)
     const covering = await coveringCertificates(client, styleIds)
-    return { revisions, styles, cited, covering }
+    // B-W2b-166: the batch numbers of the work orders the garments came from (printed on every garment label).
+    const workOrderIds = [...new Set(own.lines.map((line) => line.workOrderId))]
+    const batches = workOrderIds.length > 0 ? await client.workOrder.findMany({ where: { id: { in: workOrderIds }, batchNumber: { not: null } }, select: { id: true, batchNumber: true } }) : []
+    return { revisions, styles, cited, covering, batches }
   })
+  const batchOf = new Map(tenant.batches.map((row) => [row.id, row.batchNumber!]))
+  const webOrigin = processEmail().webOrigin
   const citedOf = new Map(tenant.cited.map((row) => [row.id, certificateFacts(row)]))
   const orderOf = new Map(own.orders.map((row) => [row.id, row]))
 
   // Garments per style × shipment × frozen revision.
-  const received = new Map<string, { styleId: string; shipmentId: string; revision: number | null; pieces: number }>()
+  const received = new Map<string, { styleId: string; shipmentId: string; revision: number | null; pieces: number; workOrderIds: Set<string> }>()
   for (const line of own.lines) {
     const styleId = styleOfLine.get(line.salesOrderLineId)
     if (!styleId) continue
     const revision = tenant.revisions.get(line.workOrderId) ?? null
     const key = `${styleId}|${line.shipmentId}|${revision ?? 'none'}`
-    const row = received.get(key) ?? { styleId, shipmentId: line.shipmentId, revision, pieces: 0 }
+    const row = received.get(key) ?? { styleId, shipmentId: line.shipmentId, revision, pieces: 0, workOrderIds: new Set<string>() }
     row.pieces += line.quantity
+    row.workOrderIds.add(line.workOrderId)
     received.set(key, row)
   }
 
@@ -118,6 +127,10 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
                 }
               : null,
             reports: onShipment.filter((entry) => SHIPMENT_QUALITY_KINDS.includes(entry.kind)).map(ref),
+            // B-W2b-166: the batches of these garments, each with the public DoC address its labels' QR holds.
+            batches: [...row.workOrderIds]
+              .flatMap((workOrderId) => (batchOf.has(workOrderId) ? [{ number: batchOf.get(workOrderId)!, publicDocAddress: publicDocAddress(webOrigin, publicDocCodeOf(workOrderId)) }] : []))
+              .sort((a, b) => a.number.localeCompare(b.number)),
           }
         })
       return {
@@ -126,6 +139,8 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
         certificateRequired: classification.certificateRequired,
         standard: classification.standard,
         ppeClass: classification.ppeClass,
+        // B-W2b-166: the style's public DoC address (its current declaration and the earlier ones), for PPE.
+        publicDocAddress: classification.isPpe ? publicDocAddress(webOrigin, publicDocCodeOf(style.id)) : null,
         received: rows,
       }
     })
