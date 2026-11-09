@@ -109,9 +109,12 @@ function FoundBody({ page, model, actions }: { page: PublicDocPage; model: Publi
       <InstructionsSection page={page} model={model} />
       {page.ppe.category !== 'NOT_PPE' && <VersionsSection page={page} model={model} />}
       <LookupCard model={model} actions={actions} />
-      <p className="fw-pd-hint fw-pd-code">
-        <QrIcon size={14} aria-hidden /> <span className="fw-pd-mono">{page.code}</span> · {t('intro')}
-      </p>
+      <div className="fw-pd-foot">
+        <p className="fw-pd-hint fw-pd-code">
+          <QrIcon size={14} aria-hidden /> <span className="fw-pd-mono">{page.code}</span>
+        </p>
+        <p className="fw-pd-hint">{t('intro')}</p>
+      </div>
     </div>
   )
 }
@@ -237,7 +240,6 @@ function DeclarationSection({ page, model, actions }: { page: PublicDocPage; mod
             items={[
               ...(shown.number ? [{ label: t('declaration.number'), value: <span className="fw-pd-mono">{shown.number}</span> }] : []),
               ...(shown.issuedOn ? [{ label: t('declaration.issued'), value: day(shown.issuedOn) }] : []),
-              { label: t('declaration.language'), value: languageName(shown.language, locale) },
               { label: t('declaration.fingerprint'), value: <span className="fw-pd-mono fw-pd-sha">{shown.sha256}</span> },
             ]}
           />

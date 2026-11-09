@@ -141,6 +141,12 @@ p.fw-pd-hint[role='status'] {
   margin-top: var(--nds-space-8);
 }
 
+.fw-pd-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
 .fw-pd-code {
   display: flex;
   flex-wrap: wrap;
