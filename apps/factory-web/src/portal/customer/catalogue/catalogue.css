@@ -1,0 +1,312 @@
+/*
+ * SCR-226 — the customer's Catalogue, and the style cards New order's picker shares (B-W2b-194): layout only, semantic
+ * tokens only. The page fills the portal's main area (no page max-width: Owner rule 2026-10-29); the cards use the width
+ * (more columns on a wider screen) and stack to one column on a phone.
+ */
+
+.fw-pcat,
+.fw-pcat-section,
+.fw-pcat-detail,
+.fw-pcat-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pcat-section {
+  gap: var(--nds-space-8);
+}
+
+.fw-pcat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pcat-search {
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 480px;
+}
+
+.fw-pcat-search input,
+input.fw-pcat-search {
+  width: 100%;
+}
+
+.fw-pcat-count {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pcat-spacer {
+  flex: 1 1 auto;
+}
+
+.fw-pcat-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pcat-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pcat-chiprow-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  min-width: 110px;
+}
+
+.fw-pcat-filters-toggle {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .fw-pcat-filters-toggle {
+    display: inline-flex;
+  }
+  .fw-pcat-filters.is-closed {
+    display: none;
+  }
+  .fw-pcat-chiprow-label {
+    min-width: 0;
+    width: 100%;
+  }
+  .fw-pcat-search {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
+.fw-pcat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-16);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pcat-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.fw-pcat-grid > li > *,
+.fw-pcat-card {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 559px) {
+  .fw-pcat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pcat-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fw-pcat-card.is-selected {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+
+.fw-pcat-card:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pcat-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  height: 120px;
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pcat-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-pcat-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pcat-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pcat-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-strong);
+  font: inherit;
+  font-weight: var(--nds-font-weight-semibold);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.fw-pcat-name {
+  cursor: pointer;
+}
+
+button.fw-pcat-name:hover,
+button.fw-pcat-name:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pcat-code {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pcat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-pcat-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pcat-facts > div {
+  display: flex;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pcat-facts dt {
+  color: var(--nds-text-2);
+  flex: 0 0 auto;
+  min-width: 72px;
+}
+
+.fw-pcat-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pcat-price {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pcat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+  margin-top: auto;
+}
+
+/* The style detail. */
+.fw-pcat-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+}
+
+@media (max-width: 719px) {
+  .fw-pcat-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pcat-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pcat-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-pcat-quiet {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pcat-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.fw-pcat-cell-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The style sheet (a new tab to print or save as PDF). */
+.fw-pcat-sheet {
+  padding: var(--nds-space-16) 0;
+}
+
+.fw-pcat-sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  padding-bottom: var(--nds-space-8);
+}
+
+.fw-pcat-sheet-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  color: var(--nds-text-strong);
+}
+
+@media print {
+  .fw-pcat-noprint {
+    display: none !important;
+  }
+}

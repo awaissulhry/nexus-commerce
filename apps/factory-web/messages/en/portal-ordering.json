@@ -1,0 +1,465 @@
+{
+  "band": {
+    "title": "New order",
+    "pill": "Request",
+    "pillSent": "Request sent",
+    "send": "Send order request",
+    "discard": "Discard draft",
+    "template": "Download order template (XLSX)",
+    "sentTitle": "Order request sent"
+  },
+  "keys": {
+    "search": "Search the styles",
+    "cells": "Move between the size cells",
+    "down": "Next row of the grid",
+    "restore": "Put back the cell's quantity",
+    "send": "Send the request (from the summary)",
+    "openStyle": "Open the style",
+    "nextStyle": "Next or previous style in the detail",
+    "close": "Close"
+  },
+  "start": {
+    "title": "How do you want to order?",
+    "intro": "Three ways in, one draft: you can mix them before you send.",
+    "keeps": "Choosing a way keeps what is already in the draft.",
+    "way": {
+      "pick": "Pick styles",
+      "reorder": "Reorder a past order",
+      "upload": "Upload a sheet"
+    },
+    "wayHint": {
+      "pick": "From your catalogue, with the whole size run in one grid.",
+      "reorder": "Copy a past order at today's prices; every difference is spelled out.",
+      "upload": "A spreadsheet for big size runs, checked row by row before anything is added."
+    },
+    "drafts": "Your drafts",
+    "draftsFailed": "We could not read your drafts.",
+    "draft_one": "Continue your draft from {day} · {count} line",
+    "draft_other": "Continue your draft from {day} · {count} lines",
+    "draftRef_one": "Continue your draft {ref} from {day} · {count} line",
+    "draftRef_other": "Continue your draft {ref} from {day} · {count} lines"
+  },
+  "head": {
+    "title": "Order details",
+    "intro": "What we need to process the request. Each field is saved when you leave it.",
+    "ref": "Your PO number",
+    "refHint": "Your own number for this order: we print it on every document.",
+    "shipTo": "Ship to",
+    "shipToChoose": "Choose a delivery address",
+    "shipToHint": "Addresses checked by us. A new one can be added here.",
+    "shipToWaiting": "We check this new address before the first delivery. You can still send the request: we check it when we confirm.",
+    "shipToGone": "This address is no longer in use: choose another one.",
+    "shipToNone": "You have no delivery address yet: add one.",
+    "default": "default",
+    "waiting": "waits for our check",
+    "archived": "no longer in use",
+    "addAddress": "Add a new address",
+    "addAddressAdmin": "Only your admin adds delivery addresses: ask {names}.",
+    "addAddressAdminNone": "Only your admin adds delivery addresses.",
+    "date": "Requested delivery date",
+    "dateHint": "We confirm the date when we confirm the request.",
+    "note": "Note to us",
+    "noteHint": "Anything we should know about this order.",
+    "problem": {
+      "refLong": "At most 100 characters.",
+      "noteLong": "At most 4,000 characters.",
+      "datePast": "Choose today or a later day."
+    }
+  },
+  "lines": {
+    "title_one": "Lines ({count})",
+    "title_other": "Lines ({count})",
+    "addStyles": "Add styles",
+    "empty": "No lines yet.",
+    "emptyBody": "Add a style, reorder a past order or upload a sheet.",
+    "lineTitle": "Line {seq}: {title}",
+    "fromOrder": "from order {order}",
+    "fromOrderRef": "from order {order} (your PO {ref})",
+    "colour": "Colour",
+    "colourGone": "{colour} (discontinued)",
+    "menu": "More for line {seq}",
+    "remove": "Remove line",
+    "gridCaption": "Pieces by size for {title}, {colour}",
+    "note": "Your code or a note",
+    "noteHint": "Saved with the line; we see it on the request.",
+    "pieces": "Pieces",
+    "unitPrice": "Unit price",
+    "amount": "Line amount",
+    "held": {
+      "empty": "A line asks at least one piece: type the sizes, or remove the line."
+    },
+    "dropSize": "Leave size {size} out"
+  },
+  "size": {
+    "caption": "Pieces by size",
+    "colour": "Colour",
+    "total": "Total",
+    "cellName": "{colour}, size {size}",
+    "notOffered": "not offered",
+    "empty": "No sizes.",
+    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
+    "notWhole": "{cell}: whole pieces only, 0 to {max}.",
+    "cutToMax": "{cell}: cut to {max}.",
+    "pasted": "{applied} pasted, {skipped} left out.",
+    "issues": "Check these sizes"
+  },
+  "reorder": {
+    "title": "Reorder a past order",
+    "intro": "Pick a past order, then the lines to copy. They come at today's prices, and every difference is written out before anything is added.",
+    "search": "Search your past orders",
+    "searchHint": "Your PO or our order number",
+    "ordersLabel": "Your past orders",
+    "ordersCount_one": "{count} order",
+    "ordersCount_other": "{count} orders",
+    "ordersFailed": "We could not read your past orders.",
+    "empty": "No past orders to reorder.",
+    "noMatch": "No past order matches “{q}”.",
+    "back": "All past orders",
+    "orderFailed": "We could not read this order.",
+    "todayPrices": "Lines that can be copied are chosen already. A line with a discontinued colour can be chosen once you pick another colour.",
+    "linesLabel": "Lines of {order}",
+    "linesCount_one": "{count} line",
+    "linesCount_other": "{count} lines",
+    "noLines": "This order has no lines to copy.",
+    "lineNo": "line {seq}",
+    "chooseColour": "Another colour for line {seq}",
+    "colourGone": "{colour} — choose another colour",
+    "sizeRun": "{size} × {quantity}",
+    "same": "As ordered",
+    "addN_one": "Add {count} line to the draft",
+    "addN_other": "Add {count} lines to the draft",
+    "col": {
+      "order": "Order",
+      "date": "Ordered on",
+      "lines": "Lines",
+      "pieces": "Pieces",
+      "style": "Style",
+      "colour": "Colour",
+      "sizes": "Sizes copied",
+      "priceNow": "Price today",
+      "differences": "What changed"
+    },
+    "held": {
+      "colour": "Choose another colour first: this one is discontinued.",
+      "notAddable": "This line cannot be copied: see what changed."
+    }
+  },
+  "upload": {
+    "title": "Upload a sheet",
+    "intro": "One row per style, colour and size. We check every row first; nothing is added until you say so.",
+    "template": "Order template (XLSX)",
+    "templateHint": "Columns: style, colour, size, quantity, your code.",
+    "dropHint": "CSV or Excel, at most 700 KB.",
+    "reading": "Reading {file}…",
+    "failedTitle": "We could not read {file}",
+    "unreadable": "Check that the first row has the column names of the template, and try again.",
+    "tooBig": "The sheet is larger than 700 KB: split it in two.",
+    "rows_one": "{count} row",
+    "rows_other": "{count} rows",
+    "readyN_one": "{count} ready",
+    "readyN_other": "{count} ready",
+    "refusedN_one": "{count} refused",
+    "refusedN_other": "{count} refused",
+    "dryRun_one": "This was a dry run: nothing is in your draft yet. The ready rows make {count} line.",
+    "dryRun_other": "This was a dry run: nothing is in your draft yet. The ready rows make {count} lines.",
+    "nothingReady": "No row is ready: fix the refused rows and upload the sheet again.",
+    "ignored": "Columns we did not use: {columns}.",
+    "verdictsLabel": "Rows of {file}",
+    "ready": "Ready",
+    "refused": "Refused",
+    "cellProblem": "The {column} cell could not be read.",
+    "rowProblem": "A cell of this row could not be read.",
+    "refusedCsv": "Download refused rows",
+    "refusedFile": "refused-rows.csv",
+    "other": "Choose another file",
+    "apply_one": "Add {count} row to the order",
+    "apply_other": "Add {count} rows to the order",
+    "held": {
+      "none": "No row is ready to add."
+    },
+    "col": {
+      "row": "Row",
+      "verdict": "Result",
+      "style": "Style",
+      "colour": "Colour",
+      "size": "Size",
+      "quantity": "Quantity",
+      "yourCode": "Your code",
+      "reason": "Reason"
+    }
+  },
+  "summary": {
+    "title": "Summary",
+    "lines": "Lines",
+    "pieces": "Pieces",
+    "net": "Net total",
+    "netHint": "At the prices of your price list shown on each line; VAT and shipping come with our confirmation.",
+    "notice": "This is a request. We confirm price, quantities and date within 1 working day; you will see it under Orders.",
+    "pricesChanged_one": "Prices changed since you started — {count} line",
+    "pricesChanged_other": "Prices changed since you started — {count} lines",
+    "takePrices": "Take today's prices",
+    "problems_one": "{count} problem",
+    "problems_other": "{count} problems",
+    "showMe": "Show me",
+    "sendKeys": "⌘ Enter sends from here when nothing holds it."
+  },
+  "problem": {
+    "thisStyle": "This style",
+    "NO_LINES": "Add at least one line.",
+    "TOO_MANY_LINES": "At most {max} lines per request.",
+    "DATE_PAST": "The requested delivery date has passed: choose today or a later day.",
+    "SHIP_TO_ARCHIVED": "The delivery address is no longer in use: choose another one.",
+    "STYLE_NOT_SOLD": "{style} is no longer sold to you: remove the line.",
+    "COLOUR_DISCONTINUED": "{colour} is discontinued: choose another colour.",
+    "SIZE_NOT_OFFERED": "Size {size} is not offered for {style}.",
+    "NO_SIZES": "The line asks no size.",
+    "PRICE_CHANGED": "Price now {now} (was {was}).",
+    "PRICE_NEW": "Price now {now}: take today's prices.",
+    "PRICE_ANY": "The price changed: take today's prices."
+  },
+  "notice": {
+    "PRICE_CHANGED": "Price now {now} (was {was})",
+    "PRICE_ANY": "The price changed since that order",
+    "REVISION_CHANGED": "Now made to a newer revision of the style",
+    "SIZES_DROPPED": "Sizes no longer offered, left out: {sizes}",
+    "SIZES_DROPPED_SOME": "Some sizes are no longer offered and were left out",
+    "COLOUR_DISCONTINUED": "{colour} is discontinued — choose another colour",
+    "STYLE_NOT_SOLD": "{style} is no longer sold",
+    "MADE_TO_MEASURE": "A made-to-measure unit is not reordered here: ask us",
+    "NO_SIZES_LEFT": "None of its sizes is offered any more",
+    "removed": "Line {seq} removed: {style}, {colour}.",
+    "back": "{style}, {colour} is back in the draft at today's price.",
+    "undo": "Undo",
+    "hide": "Hide"
+  },
+  "done": {
+    "added_one": "{count} line added to the draft.",
+    "added_other": "{count} lines added to the draft.",
+    "merged": "Size {size} added to the {style} line you had.",
+    "kept": "Size {size} of {style} was on the draft already: your quantity was kept."
+  },
+  "sent": {
+    "title": "Order request sent",
+    "body": "Our request {number}. We confirm by {day}.",
+    "bodyNoDay": "Our request {number}. We confirm within 1 working day.",
+    "bodyRef": "Your PO {ref}, our request {number}. We confirm by {day}.",
+    "bodyRefNoDay": "Your PO {ref}, our request {number}. We confirm within 1 working day.",
+    "next": "Until then you can follow it under Orders as To be confirmed by us.",
+    "reference": "Our request",
+    "open": "Open the order",
+    "newOrder": "New order"
+  },
+  "closed": {
+    "title": "Request {number}",
+    "titleNone": "This request",
+    "SENT": "This request was sent: we confirm it within 1 working day. To change it, withdraw it in Orders or ask us.",
+    "ACCEPTED": "We confirmed this request as order {order}.",
+    "REFUSED": "We did not accept this request: the reason is in Orders.",
+    "WITHDRAWN": "This request was withdrawn.",
+    "DRAFT": "This draft is open."
+  },
+  "missing": {
+    "title": "This draft no longer exists",
+    "body": "It was sent or discarded, perhaps by a colleague. Start a new order or look under Orders."
+  },
+  "draft": {
+    "failed": "We could not read this draft.",
+    "stale": "This draft changed elsewhere (a colleague, another tab). What you typed is still here.",
+    "reload": "Read it again"
+  },
+  "address": {
+    "title": "New delivery address",
+    "check": "We check new addresses before the first delivery. This order request can go to it at once: we check it when we confirm the request.",
+    "failed": "The address was not accepted as it is. Check the fields and try again.",
+    "refused": {
+      "province": "An Italian address has its province: the two letters (MI, FI, BO…).",
+      "field": "We could not accept this field as it is: check it."
+    }
+  },
+  "picker": {
+    "title": "Add styles",
+    "subtitleStyles": "Choose the styles: Space chooses a card, / searches.",
+    "subtitleSizes": "Type the pieces per colour and size: one line per colour.",
+    "search": "Search the styles",
+    "searchHint": "Code or name",
+    "cardsLabel": "Styles you can buy",
+    "cardLabel": "{code}, {name}",
+    "choose": "Choose {code}",
+    "chosen_one": "{count} style chosen",
+    "chosen_other": "{count} styles chosen",
+    "next_one": "Next: sizes for {count} style",
+    "next_other": "Next: sizes for {count} styles",
+    "back": "Back to the styles",
+    "add_one": "Add {count} line",
+    "add_other": "Add {count} lines",
+    "onDraft": "{colour} is on line {seq} already: change its sizes there.",
+    "gridCaption": "Pieces by colour and size for {style}",
+    "styleFailed": "We could not read {style}.",
+    "refused": "These lines were not added as they are: a style or size may have changed. Read the styles again and check the sizes.",
+    "held": {
+      "none": "Choose at least one style.",
+      "noPieces": "Type the pieces of at least one colour."
+    }
+  },
+  "discard": {
+    "title": "Discard this draft?",
+    "confirm": "Discard draft",
+    "lines_one": "{count} line will be deleted.",
+    "lines_other": "{count} lines will be deleted.",
+    "noNumber": "The draft was never sent: we never saw it.",
+    "back": "start a new order",
+    "acknowledge": "I understand: the draft and its lines are deleted."
+  },
+  "catalogue": {
+    "title": "Catalogue",
+    "updated": "Updated {time}",
+    "start": "Start an order",
+    "stylesTitle": "Styles you can buy",
+    "stylesLabel": "Styles you can buy",
+    "count_one": "{count} style",
+    "count_other": "{count} styles",
+    "countOf": "{count} of {total} styles",
+    "viewLabel": "Show as",
+    "cards": "Cards",
+    "list": "List",
+    "failed": "We could not read your catalogue.",
+    "empty": "No styles are open to you yet.",
+    "emptyBody": "Ask us: we open the styles you buy for your account.",
+    "ask": "Ask us",
+    "noMatch": "No style matches",
+    "noMatchSearch": "Nothing matches “{q}” with these filters.",
+    "noMatchFilters": "No style matches these filters.",
+    "changed": "Catalogue updated: prices or styles changed.",
+    "show": "Show",
+    "addN_one": "Add {count} to the order",
+    "addN_other": "Add {count} to the order"
+  },
+  "filters": {
+    "title": "Find a style",
+    "search": "Search the catalogue",
+    "searchHint": "Code or name",
+    "toggle": "Filters",
+    "toggleN": "Filters ({count})",
+    "clear": "Clear all",
+    "category": "Category",
+    "season": "Season",
+    "ppe": "Certificate class",
+    "range": "Range"
+  },
+  "card": {
+    "noPhoto": "No photo yet",
+    "ownLabel": "Your label",
+    "openRange": "Open range",
+    "type": "Type",
+    "colours_one": "{count} colour",
+    "colours_other": "{count} colours",
+    "sizes": "Sizes",
+    "from": "from {price}",
+    "add": "Add to order",
+    "sheet": "Style sheet"
+  },
+  "col": {
+    "style": "Style",
+    "type": "Type",
+    "colours": "Colours",
+    "sizes": "Sizes",
+    "ppe": "Certificate class",
+    "range": "Range",
+    "priceFrom": "Your price from"
+  },
+  "type": {
+    "JACKET": "Jacket",
+    "TROUSERS": "Trousers",
+    "SUIT": "Suit",
+    "GLOVES": "Gloves",
+    "VEST": "Vest",
+    "OTHER": "Other"
+  },
+  "ppe": {
+    "none": "Not PPE",
+    "cat1": "PPE category I",
+    "cat2": "PPE category II",
+    "cat3": "PPE category III",
+    "other": "PPE",
+    "class": "class {class}"
+  },
+  "detail": {
+    "reading": "Reading the style…",
+    "noun": "style",
+    "failed": "We could not read this style.",
+    "missing": "This style is not in your catalogue.",
+    "facts": "The style",
+    "baseSize": "Base size {size}",
+    "revision": "Made to",
+    "revisionValue": "revision {revision}",
+    "price": "Your price",
+    "certificate": "Certificate",
+    "category": "Category",
+    "standard": "Standard",
+    "class": "Class",
+    "sizeChart": "Size chart (PDF)",
+    "sizeChartHeld": "The size chart is not in the portal yet: ask us and we send it.",
+    "publicDoc": "Declaration of conformity",
+    "docHeld": "The public declaration page is not published yet: ask us and we send the declaration.",
+    "colours_one": "{count} colour and its sizes",
+    "colours_other": "{count} colours and their sizes",
+    "colour": "Colour",
+    "offered": "offered",
+    "notOffered": "not offered",
+    "later": "Photos, care and user information, the minimum order and the lead time are not in the portal yet: ask us."
+  },
+  "sheet": {
+    "title": "Style sheet {code}",
+    "titleNone": "Style sheet",
+    "for": "For {party} · {at}",
+    "print": "Print or save as PDF",
+    "sizesOffered": "Sizes offered"
+  },
+  "prices": {
+    "none": "Prices are not part of your access."
+  },
+  "held": {
+    "preview": "This is a preview of the portal: nothing is saved.",
+    "offline": "No connection: try again when you are back online.",
+    "busy": "Saving…",
+    "notDraft": "This request was sent already.",
+    "problems_one": "{count} problem to fix — Show me",
+    "problems_other": "{count} problems to fix — Show me",
+    "mayNotOrder": "Only colleagues who may order can start an order: ask your admin."
+  },
+  "refusal": {
+    "conflict": "Someone changed this draft at the same time: read it again, then try once more.",
+    "invalid": "That was not accepted as it is: check the line and try again.",
+    "forbidden": "This is not part of your access.",
+    "notFound": "This draft or line no longer exists.",
+    "rateLimited": "Too many tries: wait a moment and try again.",
+    "unavailable": "We could not reach the server: nothing was lost, try again.",
+    "other": "Something went wrong on our side: nothing was lost, try again."
+  },
+  "unsaved": {
+    "what": "Some of what you typed in the draft is not saved yet."
+  },
+  "offline": {
+    "title": "No connection — showing what was loaded at {time}"
+  },
+  "dialog": {
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "state": {
+    "loading": "Loading",
+    "stillLoading": "Still loading…",
+    "retry": "Try again",
+    "saving": "Saving…"
+  },
+  "noAccess": {
+    "title": "This page is not part of your access",
+    "ask": "Ask {names} if you need it.",
+    "askAdmin": "Ask your admin if you need it.",
+    "home": "Go to Home"
+  },
+  "ref": {
+    "yours": "Your PO",
+    "ours": "Our order"
+  }
+}

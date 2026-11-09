@@ -1,0 +1,401 @@
+/*
+ * SCR-185 — the customer's New order & reorder (B-W2b-194): layout only, semantic tokens only. The page fills the
+ * portal's main area (no page max-width: Owner rule 2026-10-29): the draft on the left, the summary always in view in a
+ * side column on a wide screen (sticky), at the foot on a phone.
+ */
+
+.fw-pno,
+.fw-pno-main,
+.fw-pno-section,
+.fw-pno-dialog,
+.fw-pno-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pno,
+.fw-pno-main {
+  gap: var(--nds-space-16);
+}
+
+.fw-pno-section,
+.fw-pno-stack {
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-dialog {
+  gap: var(--nds-space-16);
+}
+
+.fw-pno-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-pno-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
+  .fw-pno-side {
+    position: sticky;
+    top: var(--nds-space-16);
+  }
+}
+
+.fw-pno-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pno-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pno-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pno-headrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pno-quiet,
+.fw-pno-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-loading-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-16);
+}
+
+.fw-pno-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-danger-text);
+}
+
+/* How do you want to order? */
+.fw-pno-ways {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+@media (max-width: 899px) {
+  .fw-pno-ways {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pno-ways legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-8);
+}
+
+.fw-pno-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Order details. */
+.fw-pno-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pno-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pno-field-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-pno-shipto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pno-shipto > :first-child {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* Lines. */
+.fw-pno-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pno-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pno-line:focus {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pno-linehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pno-linetitle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pno-linename {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-pno-lineactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-linefoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pno-linefoot > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.fw-pno-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-16);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pno-figures > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-pno-figures dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-figures dd {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pno-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-pno-note.is-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-pno-note.is-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-pno-note.is-info {
+  color: var(--nds-text-2);
+}
+
+/* Summary. */
+.fw-pno-totals {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pno-totals dt {
+  color: var(--nds-text-2);
+}
+
+.fw-pno-totals dd {
+  margin: 0;
+  text-align: right;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pno-sendrow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The picker and the sheet. */
+.fw-pno-pickergrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pno-pickergrid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.fw-pno-pickergrid > li > * {
+  flex: 1 1 auto;
+}
+
+.fw-pno-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-pno-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.fw-pno-cell-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  white-space: normal;
+}
+
+.fw-pno-address-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-pno-address-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+}
+
+@media (max-width: 719px) {
+  .fw-pno-address-grid,
+  .fw-pno-address-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pno-waytitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* The note to us: two or three lines, it grows when typed into. */
+.fw-pno-notefield textarea {
+  min-height: 4.5rem;
+}

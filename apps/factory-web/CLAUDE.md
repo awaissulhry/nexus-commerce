@@ -136,6 +136,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
   re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
   record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
+- `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
+  SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
+  &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
+  write queued with the version the last one left and one Idempotency-Key per body; Send held while `request.problems`, saves what
+  was typed first), `/p/<party>/catalogue?q=&category=&season=&ppe=&range=&view=&style=` (`CataloguePage.tsx`; "Add to order" =
+  `/orders/new?styles=…`: the newest draft takes them, else a new one), `/p/<party>/catalogue/<style>/sheet` (tab:style-sheet).
+  Problems, reorder differences and sheet reasons are said from codes and figures (`model.ts`); the address pop-up uses
+  `portal-account`'s field words. The Orders band, its empty state, a line's ⋯ "Reorder this line" and Home's band link here.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
