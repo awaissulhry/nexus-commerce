@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { hashPin, pinKeyring } from '@nexus/factory-domain/auth/floor/pin'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase, type Prisma } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -18,7 +19,8 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import type { Log } from '../../../core/queue'
-import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../env'
+import { createOfficeAuth } from '../../../platform/auth/sessions/office-auth'
 import { runScanFindings } from './findings'
 import { runStuckBundles } from './jobs'
 
@@ -29,7 +31,9 @@ import { runStuckBundles } from './jobs'
  * two tenants up to production (plant A1 names workers on a made-up union agreement, its operator acknowledged the
  * notice; plant B1 records stations), the numbering seed, a made-up certificate, two made-up lots of large black hides
  * at A1 (shade A and shade B), a made-up label printer (FAKE relay). Released work orders of black jackets are made,
- * cut and bundled through their routes; reports go through the scans route. Statuto dei Lavoratori art. 4: the
+ * cut and bundled through their routes; reports go through the scans route. One shade lot per order (B-W2b-100/-103): the
+ * work order meant to mix shades has its shade B hide cut through "Cut anyway", signed by the seed's team leader with a
+ * made-up PIN and a reason tile (the rule is not weakened). Statuto dei Lavoratori art. 4: the
  * findings are about bundles; names come only inside ONE finding, behind the site's PERFORMANCE purpose (a made-up gate
  * row switched on and off here), with a purpose, written in the audit log. Every name and number is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/production/bundles`.
@@ -57,11 +61,14 @@ const A = {
   station: idOf(ns.a, 'site:A1:station:CUT-01'),
   deviceA1: idOf(ns.a, 'device:A1:cutting'),
   operatorA1: idOf(ns.a, 'worker:A1:operator'),
+  /** The seed's team leader (production.cut.override from the team_leader template): signs "Cut anyway". */
+  leadA1: idOf(ns.a, 'worker:A1:lead'),
   notice: idOf(ns.a, 'privacy:notice:A:WORKER_FLOOR:1'),
   dpia: idOf(ns.a, 'privacy:dpia:A:1'),
   printer: newId(),
 }
 const B = { tenant: idOf(ns.b, 'tenant') }
+const LEAD_PIN = '135790'
 const TAG = tenantTag(A.tenant)
 
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all', sites: Grant['sites'] = 'all'): Grant => ({ permissions, companies, sites, parties: 'all' })
@@ -168,6 +175,21 @@ async function cut(workOrder: Json, hideKey: string, sets?: number): Promise<Jso
   return response.json().cut
 }
 
+/**
+ * A cut of a hide of ANOTHER shade lot than the work order is cut from (B-W2b-103: 409 CUT_WARNING SHADE_LOT on the plain
+ * route): the team leader lets it be cut anyway with their PIN and a reason tile, the same cut body, its clientEventId as key.
+ */
+async function cutAnyway(workOrder: Json, hideKey: string, sets?: number): Promise<Json> {
+  const body = { clientEventId: clientEvent(), code: hides[hideKey], lines: workOrder.cells.map((cell: Json) => ({ workOrderSizeId: cell.id, sets: sets ?? cell.quantity })) }
+  const plain = await call('floor', 'POST', `/production/cutting/work-orders/${workOrder.id}/cuts`, body, freshKey())
+  expect(plain.statusCode, plain.body).toBe(409)
+  expect(plain.json().error.issues.map((issue: Json) => issue.path)).toEqual(['refusal/CUT_WARNING', 'warnings/SHADE/SHADE_LOT'])
+  const response = await call('floor', 'POST', `/production/cutting/work-orders/${workOrder.id}/cuts/anyway`, { cut: body, lead: { workerId: A.leadA1, pin: LEAD_PIN }, reasonCode: 'CHECKED_BY_EYE', warnings: ['SHADE'] }, body.clientEventId)
+  expect(response.statusCode, response.body).toBe(201)
+  expect(response.json().override).toEqual({ overrides: ['SHADE'], reasonCode: 'CHECKED_BY_EYE' })
+  return response.json().cut
+}
+
 async function makeBundles(workOrder: Json, body: Json): Promise<Json[]> {
   return (await ok('floor', 'POST', `/production/bundles/work-orders/${workOrder.id}/bundles`, { printerId: null, ...body }, 201, freshKey())).bundles
 }
@@ -200,6 +222,7 @@ beforeAll(async () => {
   // Two smaller hides of two shades for one work order (one hide alone does not cover it: no over-issue).
   await addLot('A', ['A3'], '300.0000')
   await addLot('B', ['B1'], '300.0000')
+  await admin(`UPDATE "Worker" SET "pinHash" = $2, "pinChangedAt" = now(), "pinMustChange" = false WHERE id = $1`, [A.leadA1, await hashPin(LEAD_PIN, pinKeyring(LOCAL_PIN_PEPPER))])
   await admin(`INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-CP', 'Made-up coupon printer', 'LABEL_ZPL', 'FAKE', 'test-coupon-printer:9100', 203, 100, 50)`, [
     A.printer,
     A.tenant,
@@ -208,7 +231,13 @@ beforeAll(async () => {
   ])
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
-    { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
+    {
+      database,
+      // "Cut anyway" proves the lead's PIN through the office sign-in's keyring (B-W2b-103's proveLead).
+      officeAuth: createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: 'http://localhost:3200' }),
+      routesRoot: fileURLToPath(new URL('../../..', import.meta.url)),
+      authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null),
+    },
   )
   const line = await salesOrder({ '50': 48, '52': 6 })
   WO.track = await releasedWorkOrder(line, { '50': 12 })
@@ -217,11 +246,12 @@ beforeAll(async () => {
   WO.coupon = await releasedWorkOrder(line, { '50': 12 })
   await cut(WO.coupon, 'A2')
   BUNDLES.coupon = await makeBundles(WO.coupon, { bundleSize: 6 })
-  // Half from shade A, bundled; then half from shade B: the second bundle names both cuts (W1's genealogy rule).
+  // Half from shade A, bundled; then half from shade B, which a lead lets through ("Cut anyway"): the second bundle names
+  // both cuts (W1's genealogy rule).
   WO.mixed = await releasedWorkOrder(line, { '50': 12 })
   await cut(WO.mixed, 'A3', 6)
   const first = await makeBundles(WO.mixed, {})
-  await cut(WO.mixed, 'B1', 6)
+  await cutAnyway(WO.mixed, 'B1', 6)
   BUNDLES.mixed = [...first, ...(await makeBundles(WO.mixed, {}))]
   WO.other = await releasedWorkOrder(line, { '52': 6 })
   await cut(WO.other, 'A4')

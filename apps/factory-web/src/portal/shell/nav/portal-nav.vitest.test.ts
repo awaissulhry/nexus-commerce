@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { CAPABILITY_ROLE_KEYS } from '@nexus/factory-domain/auth/partners/kinds'
-import { PORTAL_AREAS as TASK_AREAS } from '@nexus/factory-domain/portal/tasks/kinds'
+import { PORTAL_AREAS as TASK_AREAS, taskArea } from '@nexus/factory-domain/portal/tasks/kinds'
 import { bottomBarLayout } from '@nexus/ui/components/BottomBar/index'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { PORTAL_AREAS, PORTAL_PENDING_PERMISSIONS, portalChords, portalNavFor, portalNavLabelKeys, portalNavPermissions, recordPageOf, RECORD_PAGES, type PortalKind } from './portal-nav'
@@ -193,6 +193,14 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       // The accountant's room (B-W2b-201); the auditor's room is W3.
       'guest-accountant': ['home:nav.home#home', 'accounting:nav.accounting#documents'],
     })
+  })
+
+  it('B-W2b-F17: an approval counts on a row the partner kind has — Home for every supplier, workshop and guest role', () => {
+    for (const entry of PARTNER_ROLE_TEMPLATES.filter((template) => template.kind && template.kind !== 'CUSTOMER')) {
+      expect(asSigned(entry.key).rail, entry.key).toContain(`home:nav.home#${taskArea('APPROVE', entry.kind)}`)
+    }
+    // A customer's on Quotes & samples (its badge once a page that shows approvals is built; Home lists them meanwhile).
+    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.badge === taskArea('APPROVE', 'CUSTOMER'))?.id).toBe('quotes')
   })
 
   it('a count leads to its requests: Quotes & samples carries its badge once a page that shows quotes or approvals is built', () => {

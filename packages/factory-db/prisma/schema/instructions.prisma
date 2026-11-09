@@ -1,0 +1,361 @@
+// Routings, standard minutes and work instructions (W2b-4 schema wave 25/33, B-W2b-205; features PRD-111, PRD-113,
+// PRD-114, PRD-117, PRD-118, PRD-119, PRD-124, PRD-126, PRD-128, MES-110, MES-119; design products.operations,
+// products.styles › Operations (routing), production.instructions, floor.instructions): what the floor reads at every
+// operation and what the office keeps about time. The columns on Operation, RoutingOperation and StyleRevision are in
+// product.prisma; the tables are here.
+//
+// Standard minutes (PRD-111, PRD-113): an operation's SMV is basic minutes × (1 + personal + fatigue + delay allowances).
+// An SMV is never changed in place once it is governed: a change is a new OperationTimeVersion, PROPOSED with its reason,
+// source and effective day, and APPROVED (or REJECTED) by someone who is not its proposer. Once an operation has an
+// approved version, its numbers change only to an approved version's (…_routings_instructions_w2b_guards). A routing step
+// copies the numbers and may name the approved version it copied (RoutingOperation.timeVersionId).
+//
+// Per size and per step (PRD-114, PRD-118, PRD-126, PRD-128): extra minutes for a size (RoutingOperationSizeTime), the
+// machine and stitch settings of a library operation or of one routing step (OperationMachineSetting), set-up, wait and
+// move minutes and the cells a step is for (RoutingOperation's columns). A routing step's rows are parts of its revision:
+// the …_product_guards rule (factory_style_revision_part_guard) refuses any write to them once the revision is released.
+//
+// Work instructions (PRD-117, MES-110, MES-119): one instruction per library operation of a company, for every style or
+// for one style revision only, numbered from the company's WORK_INSTRUCTION series. Its content lives in versions: a
+// DRAFT is written (steps with words per language, critical points, safety notes, an icon and the tick the tablet asks,
+// and their photos and videos), approved by someone who is not its author and so PUBLISHED, then SUPERSEDED by the next.
+// A published version never changes: a change is a new version. Its steps replace the `[ ] CODE words` lines of
+// RoutingOperation.instructions that B-W2b-47 reads until B-W2b-214 moves the reader; a step's code is what
+// OperationChecklistResult.stepCode names.
+//
+// Acknowledgements (MES-119) are a training record (D.Lgs. 81/2008 art. 37: information and training), never a figure per
+// worker: a worker saw this version, on this device, at this time, in this language. Append-only.
+//
+// Who sees what (ownership/instructions.json): the office keeps all of it. The floor reads the operation's settings and a
+// step's extra minutes per size, and the instructions with only their PUBLISHED and SUPERSEDED versions, steps and media
+// (a step and a medium carry their version's status, kept by the reference: ON UPDATE CASCADE). It inserts an
+// acknowledgement on its own site and never reads one. Portal and link sessions read nothing here; no column here is money.
+
+/// Where a version of an operation's minutes comes from (PRD-113).
+enum OperationTimeSource {
+  /// Timed on the floor (a time study); its sheet is a file of the version.
+  TIME_STUDY
+  /// Built from a predetermined time system (MTM, GSD).
+  PREDETERMINED
+  /// An estimate (a new operation, before a study).
+  ESTIMATE
+}
+
+/// The life of a version of an operation's minutes (PRD-113).
+enum OperationTimeVersionStatus {
+  /// Proposed, waiting for a second person.
+  PROPOSED
+  /// Approved by someone who is not its proposer: the operation's numbers may be set to it.
+  APPROVED
+  /// Refused by someone who is not its proposer, with why.
+  REJECTED
+  /// No longer the one in force: a later version was approved (or, before any decision, proposed in its place).
+  SUPERSEDED
+}
+
+/// One version of an operation's standard minutes (PRD-111, PRD-113): basic minutes, the three allowances and the SMV they
+/// give, where they come from and from which day they apply. PROPOSED → APPROVED | REJECTED by a second person (never the
+/// proposer); APPROVED → SUPERSEDED when a later one takes over; PROPOSED → SUPERSEDED when a new proposal replaces it.
+/// Its numbers, source, day and reason never change (a change is a new version); never deleted.
+model OperationTimeVersion {
+  id              String                     @id @db.Uuid
+  tenantId        String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  operationId     String                     @db.Uuid
+  /// 1, 2, 3 … per operation; fixed.
+  number          Int
+  status          OperationTimeVersionStatus @default(PROPOSED)
+  /// Basic minutes per garment (above 0) and the allowances in percent (each from 0, below 100).
+  basicMinutes    Decimal                    @db.Decimal(10, 3)
+  personalPct     Decimal                    @db.Decimal(7, 4)
+  fatiguePct      Decimal                    @db.Decimal(7, 4)
+  delayPct        Decimal                    @db.Decimal(7, 4)
+  /// The SMV they give: basicMinutes × (1 + (personalPct + fatiguePct + delayPct) / 100), to the thousandth.
+  standardMinutes Decimal                    @db.Decimal(10, 3)
+  source          OperationTimeSource
+  /// The first day (Europe/Rome) the operation's numbers may be this version's.
+  effectiveFrom   DateTime                   @db.Date
+  /// Why it is proposed, in words.
+  reason          String
+  /// The office user who proposed it; never its decider.
+  proposedById    String                     @db.Uuid
+  /// Who approved or rejected it, and when: set together, exactly from the decision on (kept when SUPERSEDED).
+  decidedById     String?                    @db.Uuid
+  decidedAt       DateTime?                  @db.Timestamptz(3)
+  /// The decider's words; required with a rejection.
+  decisionNote    String?
+  version         Int                        @default(1)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                    @db.Uuid
+
+  operation    Operation          @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The routing steps that copied it.
+  routingSteps RoutingOperation[]
+
+  @@unique([tenantId, operationId, number])
+  // The target of the routing steps' reference: a version of the step's own operation.
+  @@unique([tenantId, operationId, id])
+  // "SMV changes waiting for approval" (design products.operations tiles).
+  @@index([tenantId, status])
+}
+
+/// Extra minutes of a routing step in one size (PRD-114): a big size takes longer (a negative figure: a small size takes
+/// less). The step's minutes in the size = its standardMinutes + extraMinutes, above 0. A size without a row takes the
+/// step's minutes. A part of the revision: frozen once it is released; a draft step removed takes its rows along.
+model RoutingOperationSizeTime {
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The step's revision (the …_product_guards part rule reads it).
+  revisionId         String   @db.Uuid
+  routingOperationId String   @db.Uuid
+  /// The size code: one of the style's sizes (the product module checks it; the database only that it has no spaces).
+  size               String
+  extraMinutes       Decimal  @db.Decimal(10, 3)
+  version            Int      @default(1)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?  @db.Uuid
+
+  routingStep RoutingOperation @relation(fields: [tenantId, revisionId, routingOperationId], references: [tenantId, revisionId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([tenantId, routingOperationId, size])
+}
+
+/// The machine and stitch settings of an operation (PRD-118): of a library operation (its default), or of one routing step
+/// (that style's, frozen with its revision), exactly one of the two. One row per machine the work uses, in order. The
+/// tablet shows them with the instruction.
+model OperationMachineSetting {
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// A library operation's setting.
+  operationId        String?  @db.Uuid
+  /// A routing step's setting: the step and its revision (the …_product_guards part rule reads it), both or neither.
+  revisionId         String?  @db.Uuid
+  routingOperationId String?  @db.Uuid
+  /// Its place in the operation's or step's list, from 1.
+  seq                Int
+  /// The class of machine (plant.prisma MachineClass: lockstitch, post-bed, bar-tack, skiving …); null: not said.
+  machineClassId     String?  @db.Uuid
+  /// The stitch type (ISO 4915: "301" lockstitch, "401" chainstitch, "504" overlock).
+  stitchType         String?
+  /// The needle system and size ("134 LR, Nm 110").
+  needle             String?
+  /// The thread ticket and fibre ("Tkt 40, polyester").
+  thread             String?
+  /// Stitches per centimetre, above 0.
+  stitchesPerCm      Decimal? @db.Decimal(6, 2)
+  /// The thread tension as the floor sets it ("upper 4, lower medium").
+  tension            String?
+  /// The presser foot or attachment ("roller foot", "binder 20 mm").
+  foot               String?
+  notes              String?
+  version            Int      @default(1)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?  @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  operation    Operation?        @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A draft step removed takes its settings along.
+  routingStep  RoutingOperation? @relation("RoutingOperationMachineSetting", fields: [tenantId, revisionId, routingOperationId], references: [tenantId, revisionId, id], onDelete: Cascade, onUpdate: Restrict)
+  machineClass MachineClass?     @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, operationId, seq])
+  @@unique([tenantId, routingOperationId, seq])
+}
+
+/// The work instruction of a library operation (PRD-117): for every style the operation is done on, or for one style
+/// revision only (both styleId and styleRevisionId, or neither). At most one ACTIVE per company, operation and revision
+/// (or none) (partial unique indexes of …_routings_instructions_w2b_guards): the floor finds the revision's own first, then
+/// the operation's. Numbered from its company's WORK_INSTRUCTION series; its company, number, operation and revision never
+/// change. Archived, never deleted. Its content is its versions.
+model WorkInstruction {
+  id              String       @id @db.Uuid
+  tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose instruction it is (and whose series numbers it); the operation is of this company or tenant-wide.
+  companyId       String       @db.Uuid
+  /// Its number (WI-…), unique in the company; given when it is made, never changed.
+  number          String
+  operationId     String       @db.Uuid
+  styleId         String?      @db.Uuid
+  styleRevisionId String?      @db.Uuid
+  status          MasterStatus @default(ACTIVE)
+  version         Int          @default(1)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?      @db.Uuid
+
+  company       Company                  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation     Operation                @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  styleRevision StyleRevision?           @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions      WorkInstructionVersion[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the versions' reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, operationId])
+}
+
+/// The life of a version of a work instruction (PRD-117).
+enum InstructionVersionStatus {
+  /// Being written: its steps and media change.
+  DRAFT
+  /// Approved by someone who is not its author and shown on the floor from publishedAt; at most one per instruction.
+  PUBLISHED
+  /// Replaced by a later published version; kept, with the acknowledgements of it.
+  SUPERSEDED
+  /// A draft nobody published; kept.
+  DISCARDED
+}
+
+/// One version of a work instruction (PRD-117, MES-110): DRAFT while it is written; PUBLISHED when a second person (never
+/// its author) approves it, and then never changed with its steps and media; SUPERSEDED when the next is published (the
+/// command supersedes the old first: one PUBLISHED per instruction, a partial unique index); DISCARDED, a draft nobody
+/// wants. Never deleted. A new version due for acknowledgement opens before Start (B-W2b-214).
+model WorkInstructionVersion {
+  id                      String                   @id @db.Uuid
+  tenantId                String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  instructionId           String                   @db.Uuid
+  /// 1, 2, 3 … per instruction ("v4"); fixed.
+  number                  Int
+  status                  InstructionVersionStatus @default(DRAFT)
+  /// What changed from the version before, in words (required to publish a version after the first).
+  changeNote              String?
+  /// The office user who wrote it; never its approver.
+  authorId                String                   @db.Uuid
+  /// Who approved it and from when the floor shows it: set together, exactly from PUBLISHED on.
+  approvedById            String?                  @db.Uuid
+  publishedAt             DateTime?                @db.Timestamptz(3)
+  /// Whether a worker of the operation is asked to acknowledge it at the next Start (a wording fix may not ask).
+  acknowledgementRequired Boolean                  @default(true)
+  /// Set exactly when SUPERSEDED.
+  supersededAt            DateTime?                @db.Timestamptz(3)
+  version                 Int                      @default(1)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById             String?                  @db.Uuid
+
+  instruction      WorkInstruction              @relation(fields: [tenantId, instructionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  steps            WorkInstructionStep[]
+  media            WorkInstructionMedia[]
+  acknowledgements InstructionAcknowledgement[]
+
+  @@unique([tenantId, instructionId, number])
+  // The target of the acknowledgements' reference.
+  @@unique([tenantId, id])
+  // The target of the steps' and media's reference, with the status they carry (the floor's grant reads it).
+  @@unique([tenantId, id, status])
+  @@index([tenantId, instructionId, status])
+}
+
+/// One step of an instruction version (PRD-117), in the order of sortOrder: its words per language, a critical point, a
+/// safety note, the icon of the tablet's steps panel and whether Finish waits for a tick of it. Written, changed and removed
+/// only while its version is DRAFT. Its code is kept from version to version: a ticked step names it
+/// (OperationChecklistResult.stepCode).
+model WorkInstructionStep {
+  id             String                   @id @db.Uuid
+  tenantId       String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId      String                   @db.Uuid
+  /// Its version's status, kept by the reference (ON UPDATE CASCADE); the floor reads only PUBLISHED and SUPERSEDED.
+  versionStatus  InstructionVersionStatus @default(DRAFT)
+  /// Its place in the version (not unique: the editor renumbers).
+  sortOrder      Int
+  /// Its code, unique in the version, no spaces ("SEAM_ALLOWANCE").
+  code           String
+  /// The words per language: { "it": "…", "en": "…", "ro": "…" }, at least one, none blank.
+  textI18n       Json
+  /// A critical point (shown first and marked on the tablet).
+  critical       Boolean                  @default(false)
+  /// A safety note per language, as textI18n; null: none.
+  safetyNoteI18n Json?
+  /// The steps panel's icon (a key of factory-domain's list, lower case); null: the plain mark.
+  icon           String?
+  /// Finish waits for a tick of it (B-W2b-47's `[ ]` line); false: a tick is optional (`[o]`).
+  requiredTick   Boolean                  @default(false)
+  version        Int                      @default(1)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                  @db.Uuid
+
+  instructionVersion WorkInstructionVersion @relation(fields: [tenantId, versionId, versionStatus], references: [tenantId, id, status], onDelete: Restrict, onUpdate: Cascade)
+  media              WorkInstructionMedia[]
+
+  @@unique([tenantId, versionId, code])
+  // The target of the media's reference: a step of the same version.
+  @@unique([tenantId, versionId, id])
+}
+
+/// What a medium of an instruction step is.
+enum InstructionMediaKind {
+  /// A picture (an image/* file).
+  PHOTO
+  /// A short video, shown muted and looping with its caption (a video/* file).
+  VIDEO
+}
+
+/// A photo or video of an instruction step (PRD-117), in the order of sortOrder, with its caption per language. Written,
+/// changed and removed only while its version is DRAFT; a draft step removed takes its media along. The file is a
+/// StoredFile (a copy of a version may name the files of the version it copies).
+model WorkInstructionMedia {
+  id            String                   @id @db.Uuid
+  tenantId      String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId     String                   @db.Uuid
+  /// Its version's status, as the step's (the floor reads only PUBLISHED and SUPERSEDED).
+  versionStatus InstructionVersionStatus @default(DRAFT)
+  stepId        String                   @db.Uuid
+  fileId        String                   @db.Uuid
+  kind          InstructionMediaKind
+  /// Its place among the step's media (not unique).
+  sortOrder     Int
+  /// The caption per language, as a step's words; null: none.
+  captionI18n   Json?
+  version       Int                      @default(1)
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?                  @db.Uuid
+
+  step               WorkInstructionStep    @relation(fields: [tenantId, versionId, stepId], references: [tenantId, versionId, id], onDelete: Cascade, onUpdate: Restrict)
+  instructionVersion WorkInstructionVersion @relation(fields: [tenantId, versionId, versionStatus], references: [tenantId, id, status], onDelete: Restrict, onUpdate: Cascade)
+  file               StoredFile             @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, stepId])
+}
+
+/// A worker's acknowledgement of an instruction version (MES-119): the worker saw this PUBLISHED (or since SUPERSEDED)
+/// version, in this language, on this device of the row's site (or on paper, recorded by the office: no device). A training
+/// record (D.Lgs. 81/2008 art. 37), never a performance figure: per person only to HR and the person, never a count, a
+/// ranking or a filter per worker (Owner answers F2, H3, W1). "Once per worker and version" is the API's (under a lock;
+/// the floor sync's ledger drops a resent event): the generated isolation tests copy a row. Never changed or removed.
+/// @append-only
+model InstructionAcknowledgement {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId         String    @db.Uuid
+  versionId      String    @db.Uuid
+  /// The worker (their floor sign-in at the row's site).
+  workerId       String    @db.Uuid
+  /// The worker's employee (Worker.employeeId; null while it has none).
+  employeeId     String?   @db.Uuid
+  /// The language it was shown in (ISO 639-1, lower case).
+  locale         String
+  /// The floor device it was seen on (required from a floor session); null: recorded by the office from paper.
+  deviceId       String?   @db.Uuid
+  /// The device's id for the event (unique per device: a resent acknowledgement is recorded once) and its clock.
+  clientEventId  String?
+  deviceTime     DateTime? @db.Timestamptz(3)
+  acknowledgedAt DateTime  @default(now()) @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+
+  instructionVersion WorkInstructionVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker             Worker                 @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  employee           Employee?              @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device             Device?                @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // "Has this worker acknowledged the version in force?" (the Start check, B-W2b-214).
+  @@index([tenantId, versionId, workerId])
+  // The person's training record (HR, and the person).
+  @@index([tenantId, employeeId])
+}

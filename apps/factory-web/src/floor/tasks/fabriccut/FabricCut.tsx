@@ -7,7 +7,7 @@ import { useLiveChanges } from '../../../record-panels/live'
 import { zxingCamera } from '../../camera'
 import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
-import { readScan } from '../../scan/scan-model'
+import { isTrolleyLabel, readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
 import { queuedView } from '../shared/queued'
 import type { TaskProblem } from '../shared/task-api'
@@ -303,8 +303,10 @@ export function FloorFabricCut() {
     taken.current = true
     const handed = store.takeScan()
     void loadStart()
-    if (handed) void openTicket(handed)
-  }, [me, mayCut, store, loadStart, openTicket])
+    // B-W2b-F17: Home hands a trolley's label at the sewing line (its receipt) and a cut ticket at the cutting table.
+    if (handed && isTrolleyLabel(handed) && may.trolleys) void openTrolley(handed)
+    else if (handed) void openTicket(handed)
+  }, [me, mayCut, may.trolleys, store, loadStart, openTicket, openTrolley])
 
   // Another tablet or the office moved what is on screen: read it again (a hint, never applied as it came).
   const refresh = useCallback(() => {

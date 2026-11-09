@@ -140,6 +140,9 @@ enum NumberKind {
   /// W2b wave 22/22: a ship notice's number (ASN-…; portal-supply.prisma ShipNotice.number), given when it is sent. An
   /// office document kind: the API numbers it in the tenant's system context (the partner role has no numbering grant).
   ASN
+  /// W2b-4 wave 25/33: a work instruction's number (WI-…; instructions.prisma WorkInstruction.number). An office document
+  /// kind, one series per company that never resets.
+  WORK_INSTRUCTION
 }
 
 enum NumberReset {

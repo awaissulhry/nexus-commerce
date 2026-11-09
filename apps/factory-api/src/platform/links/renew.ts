@@ -6,7 +6,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { localeOf } from '@nexus/factory-domain/email/rules'
 import { linkFilesMail } from '@nexus/factory-domain/links/mail'
 import { isLinkPurpose, linkState, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
-import { fileRenewalRefusal, LINK_RENEW_COALESCE_MS, renewalTerms } from '@nexus/factory-domain/links/renew'
+import { askedRecentlyWords, fileRenewalRefusal, LINK_RENEW_COALESCE_MS, makerToldRefusal, renewalRoute, renewalTerms } from '@nexus/factory-domain/links/renew'
 import { linkTokenHash, matchesLinkHash, mintLinkToken, parseLinkToken } from '@nexus/factory-domain/links/token'
 import { SYSTEM_ACTOR_ID, type RequestContext } from '../../core/context'
 import { officeAuthOf } from '../auth/sessions/office-auth'
@@ -15,6 +15,7 @@ import { systemContext } from '../outbox/system'
 import { LINK_HEADER } from './authenticator'
 import { deliverLinkMail, LINK_MAIL_TEMPLATES, queueLinkMail } from './mail'
 import { payProblemOf } from './pay'
+import { linkLiveCheck } from './records'
 import { linkCommand } from './use'
 
 /**
@@ -25,8 +26,9 @@ import { linkCommand } from './use'
  *   1. the token parses and names an ACTIVE tenant; the link is read in that tenant's system scope; its hash and party
  *      match the token (constant time). Else NOT_A_TOKEN / UNKNOWN.
  *   2. a module renewer for the link's purpose and record type (registerLinkRenewer; W1's two below) decides and sends.
- *   3. else a set of files (purpose renewal `files`) is renewed here (renewFileLink); any other purpose: NO_RENEWER
- *      until its module registers one (it knows whether its record still waits for an answer).
+ *   3. else a set of files (purpose renewal `files`, a StoredFile) is renewed here (renewFileLink);
+ *   4. else (B-W2b-F17, Owner answer 11-09 = B) the person who MADE the link is told (tellLinkMaker): their bell, with the
+ *      record and the reader's note; no new link is made or sent — whether to send again is theirs.
  *
  * The abuse guard holds the route (policy links.renew); a token that names nothing counts as a failure there.
  */
@@ -86,6 +88,7 @@ const LINK_FACTS = {
   uses: true,
   revokedAt: true,
   createdAt: true,
+  createdById: true,
 } as const satisfies Prisma.OneOffLinkSelect
 
 /** The work behind "Ask for a new link" (see above). */
@@ -101,9 +104,66 @@ export async function renewLink(email: EmailRuntime, request: FastifyRequest, he
   if (!link || link.partyId !== token.partyId || !matchesLinkHash(token, link.tokenHash) || !isLinkPurpose(link.purpose)) return 'UNKNOWN'
 
   const renewer = await renewerOf(link.purpose, link.recordType)
-  if (renewer) return renewer(email, request, header)
-  if (PURPOSE_RULES[link.purpose].renewal !== 'files') return 'NO_RENEWER'
-  return renewFileLink(email, system, { ...link, purpose: link.purpose })
+  const route = renewalRoute(link.purpose, link.recordType, renewer !== null)
+  if (route === 'module') return renewer!(email, request, header)
+  if (route === 'files') return renewFileLink(email, system, { ...link, purpose: link.purpose })
+  return tellLinkMaker(system, { ...link, purpose: link.purpose }, noteOf(request))
+}
+
+/** The reader's note of the request (the contract trimmed it and held its length), or null. */
+const noteOf = (request: FastifyRequest): string | null => {
+  const note = (request.body as { note?: unknown } | undefined)?.note
+  return typeof note === 'string' && note !== '' ? note : null
+}
+
+/** What the request names as the dead link's maker: an ACTIVE office person of the tenant, or null. */
+async function makerOf(system: FastifyRequest, createdById: string | null): Promise<string | null> {
+  if (!createdById || createdById === SYSTEM_ACTOR_ID) return null
+  const user = await system.withClient((client) => client.user.findFirst({ where: { id: createdById, status: 'ACTIVE' }, select: { id: true } }))
+  return user?.id ?? null
+}
+
+const TOLD_ACTION = 'links.renewAsked'
+
+/**
+ * B-W2b-F17: no renewer for this kind of link — the person who made it is told (factory-domain links/renew
+ * makerToldRefusal), as the tenant's system: ONE command under the link's row lock (a second ask inside ten minutes is
+ * refused in words there: the log's line), one audit row on the dead link, and `link.renewal_asked`, which the fan-out puts
+ * on the maker's bell with the record and the reader's note (platform/links/notices.ts). Nothing else: no link, no mail.
+ */
+async function tellLinkMaker(system: FastifyRequest, link: DeadLink, note: string | null): Promise<string> {
+  const now = officeAuthOf(system.server).clock.now()
+  const live = linkLiveCheck(link.purpose)
+  const standsFor = live ? await system.withClient((client) => live(client, link, now)).catch(() => false) : true
+  const makerId = await makerOf(system, link.createdById)
+  const refusal = makerToldRefusal({ state: linkState(link, now), standsFor, makerActive: makerId !== null, lastToldAt: null, now })
+  if (refusal) return refusal
+  try {
+    await linkCommand(system, { name: TOLD_ACTION, input: { linkId: link.id } }, async (tools) => {
+      const { tx } = tools
+      // One ask at a time per link: the row lock orders two requests, so the second sees the first's audit row.
+      await tx.$queryRaw`SELECT id FROM "OneOffLink" WHERE id = ${link.id}::uuid FOR UPDATE`
+      const last = await tx.auditLog.findFirst({ where: { recordType: 'OneOffLink', recordId: link.id, action: TOLD_ACTION, at: { gt: new Date(tools.now.getTime() - LINK_RENEW_COALESCE_MS) } }, orderBy: { at: 'desc' }, select: { at: true } })
+      if (makerToldRefusal({ state: linkState(link, tools.now), standsFor, makerActive: true, lastToldAt: last?.at ?? null, now: tools.now }) === 'ASKED_RECENTLY') throw new InvalidStateError(askedRecentlyWords(last!.at, tools.now))
+      tools.audit({
+        action: TOLD_ACTION,
+        recordType: 'OneOffLink',
+        recordId: link.id,
+        companyId: link.companyId,
+        after: { purpose: link.purpose, recordType: link.recordType, recordId: link.recordId, partyId: link.partyId, makerId, note: note !== null, state: linkState(link, tools.now) },
+        ...(note !== null ? { reason: note } : {}),
+      })
+      tools.emit({ type: 'link.renewal_asked', subject: link.id, companyId: link.companyId, payload: { linkId: link.id, purpose: link.purpose, recordType: link.recordType, recordId: link.recordId, makerId: makerId!, note } })
+      return { told: makerId! }
+    })
+  } catch (error) {
+    if (error instanceof InvalidStateError) {
+      system.log.info({ outcome: 'ASKED_RECENTLY' }, error.message)
+      return 'ASKED_RECENTLY'
+    }
+    throw error
+  }
+  return 'MAKER_TOLD'
 }
 
 type DeadLink = Prisma.OneOffLinkGetPayload<{ select: typeof LINK_FACTS }> & { readonly purpose: LinkPurpose }

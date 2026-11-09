@@ -129,6 +129,8 @@ model Employee {
   earningsEntries       EarningsEntry[]
   heldScans             HeldScan[]
   workerStatements      WorkerStatement[]
+  // W2b-4 instructions.prisma (wave 25/33): the person's acknowledgements of work instructions (a training record).
+  instructionAcknowledgements InstructionAcknowledgement[]
   // W2b labour.prisma, andon.prisma (wave 7/7): the person's team-operation memberships, ticked steps, off-standard time,
   // the edits of their labour records and their disputes, their dispatch, crews and help calls (their floor sign-in's).
   scanMemberships       OperationScanMember[]

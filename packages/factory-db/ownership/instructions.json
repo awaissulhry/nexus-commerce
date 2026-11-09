@@ -1,0 +1,88 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/instructions.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the SMV versions, the per-size and machine settings of operations and routing steps, and the work instructions with their versions, steps and media, through apps/factory-api's modules/product/{minutes,routing-depth} and modules/production/instructions (B-W2b-214, -215, -225), always through command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The floor (factory_floor_runtime) reads, tenant-wide (no site key: operations, routings and instructions are tenant- or company-wide; the work order brings the site), the machine settings and extra minutes per size it works with, the work instructions, and of their versions, steps and media only the PUBLISHED and SUPERSEDED ones (onlyValues on the version's status, which a step and a medium carry by their reference); it inserts acknowledgements on its own site and reads none, not even its own (the Start check reads them in the tenant's system context, B-W2b-214). It never reads an SMV version (the office's governance). Portal and link sessions read nothing here. No column here is money, so no @grain and no wall on one. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OperationTimeVersion": {
+      "about": "The office proposes a version of an operation's minutes and a second person approves or rejects it; a later approval supersedes it. Office only (piece pay and capacity read it in the office or system context). Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RoutingOperationSizeTime": {
+      "about": "The office types, changes and removes a draft routing step's extra minutes per size (only while the revision is DRAFT: the …_product_guards part rule). The floor reads them (the minutes of a bundle's size).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "OperationMachineSetting": {
+      "about": "The office keeps the machine and stitch settings of library operations and of draft routing steps (a step's only while its revision is DRAFT), and removes them. The floor reads them: the tablet shows the settings with the instruction.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "WorkInstruction": {
+      "about": "The office makes, numbers and archives the work instruction of an operation (for every style or one revision). The floor reads them: it finds the instruction of the operation in hand. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "WorkInstructionVersion": {
+      "about": "The office writes a DRAFT version, a second person approves (publishes) it, the next one supersedes it, a draft nobody wants is discarded. The floor reads only PUBLISHED and SUPERSEDED versions (a superseded one: an old printed page's version, and the acknowledgements' rule). Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "onlyValues": { "status": ["PUBLISHED", "SUPERSEDED"] } }
+      }
+    },
+    "WorkInstructionStep": {
+      "about": "The office writes, changes and removes the steps of a DRAFT version; a published version's steps are frozen. The floor reads the steps of PUBLISHED and SUPERSEDED versions only (the step's versionStatus, kept by its reference).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "onlyValues": { "versionStatus": ["PUBLISHED", "SUPERSEDED"] } }
+      }
+    },
+    "WorkInstructionMedia": {
+      "about": "The office adds, changes and removes the photos and videos of a DRAFT version's steps; a published version's media are frozen. The floor reads the media of PUBLISHED and SUPERSEDED versions only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "onlyValues": { "versionStatus": ["PUBLISHED", "SUPERSEDED"] } }
+      }
+    },
+    "InstructionAcknowledgement": {
+      "about": "A worker's acknowledgement of an instruction version: the site's floor device inserts it (Seen), or the office records a paper one; the office reads them (HR and the person: a training record, never a count per worker). The floor reads none. Append-only: nobody changes or removes one. Personal: see \"personal\" (the person = employeeId), purpose SAFETY (training, D.Lgs. 81/2008 art. 37).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "workerId": ["SAFETY"],
+          "versionId": ["SAFETY"],
+          "locale": ["SAFETY"],
+          "deviceId": ["SAFETY"],
+          "clientEventId": ["SAFETY"],
+          "deviceTime": ["SAFETY"],
+          "acknowledgedAt": ["SAFETY"]
+        }
+      }
+    }
+  }
+}

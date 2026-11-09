@@ -59,7 +59,7 @@ export async function myTasks(request: FastifyRequest, state: 'OPEN' | 'DONE', n
   const code = await partyCode(request, session)
   // B-W2b-F14: the names of the colleagues tasks are handed to (the partner reads its own party's people).
   const names = await request.withClient((client) => assigneeNames(client, mine))
-  const facts = { partyCode: code, personId: session.userId, preview: session.preview, names }
+  const facts = { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind }
   const open = state === 'OPEN' ? mine : []
   // "Mine": only the ones handed to this person; the badges and counts stay the whole list's.
   const shown = onlyMine ? mine.filter((row) => row.assigneeId === session.userId) : mine
@@ -68,7 +68,8 @@ export async function myTasks(request: FastifyRequest, state: 'OPEN' | 'DONE', n
     state,
     mine: onlyMine,
     items: shown.map((row) => partnerTaskView(row, now, facts)),
-    badges: badgesOf(open).map((badge) => ({ ...badge, words: { it: badgeWords(badge, 'it'), en: badgeWords(badge, 'en') } })),
+    // B-W2b-F17: per the person's partner kind (a supplier's or a workshop's approvals count on Home).
+    badges: badgesOf(open, session.person.partnerKind).map((badge) => ({ ...badge, words: { it: badgeWords(badge, 'it'), en: badgeWords(badge, 'en') } })),
     counts: {
       open: open.length,
       overdue: open.filter((row) => dueStateOf(row.dueAt, now) === 'OVERDUE').length,
@@ -117,7 +118,7 @@ async function viewOf(request: FastifyRequest, session: PortalSession, taskId: s
     const found = (await taskById(client, taskId))!
     return { row: found, names: await assigneeNames(client, [found]) }
   })
-  return partnerTaskView(row, now, { partyCode: code, personId: session.userId, preview: session.preview, names })
+  return partnerTaskView(row, now, { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind })
 }
 
 export async function undoDone(app: FastifyInstance, request: FastifyRequest, taskId: string, idempotencyKey: string | undefined, now: Date) {

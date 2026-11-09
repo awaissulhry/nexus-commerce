@@ -20,7 +20,7 @@ import { LOCALES, type Locale } from '../../lib/i18n/locales'
 import { CATALOGUE, createScopedTranslator, messagesFor } from '../../lib/i18n/messages'
 import { attentionAddress, hasRecordPage, LIST_PAGES, listAddress, RECORD_PAGES, recordAddress } from '../../lib/records/record-links'
 import { permissionCheck } from '../../lib/session/session'
-import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf, NO_NEW_LINK, offersNewLink } from '../../links/_nav/link-types'
+import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf } from '../../links/_nav/link-types'
 import { matchPages } from '../palette/palette-model'
 import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, LINKS_NO_TOKEN, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
@@ -556,11 +556,10 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     expect(LINKS_NO_TOKEN.map((page) => page.id).filter((id) => LINKS.some((page) => page.id === id))).toEqual([])
   })
 
-  it('a dead link offers "Ask for a new link" except a record invitation, the office\'s to send again (B-W2b-200)', () => {
-    expect([...NO_NEW_LINK]).toEqual(['RECORD_INVITE'])
-    expect(LINK_PURPOSES.filter((purpose) => !offersNewLink(purpose))).toEqual(['RECORD_INVITE'])
-    // The API's one 404 names no purpose: that dead link still offers it (the one answer).
-    expect([offersNewLink(null), offersNewLink('SOMETHING_NEW')]).toEqual([true, true])
+  it('every dead link offers "Ask for a new link": the registry holds no exception any more (B-W2b-F17)', async () => {
+    // A purpose with no renewer tells the person who made the link (the API's fallback), RECORD_INVITE included.
+    const registry = (await import('../../links/_nav/link-types')) as Record<string, unknown>
+    expect(['NO_NEW_LINK', 'offersNewLink'].filter((name) => name in registry)).toEqual([])
   })
 })
 
