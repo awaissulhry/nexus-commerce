@@ -14,7 +14,8 @@ export function threadHeldKey(reason: string | null): string {
 }
 
 /** The record types a portal person can open (factory-domain search/partner views, THREAD_RECORDS), by their words' key. */
-export const RECORD_TYPE_WORDS: readonly string[] = ['SalesOrder', 'Quote', 'Shipment', 'Invoice', 'Ddt', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'Party']
+// B-W2b-197: a customer's return and complaint (their own partner views: Messages, search).
+export const RECORD_TYPE_WORDS: readonly string[] = ['SalesOrder', 'Quote', 'Shipment', 'Invoice', 'Ddt', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'Party', 'ReturnAuthorisation', 'Complaint']
 
 /** The words' key of a record type ("Order", "Purchase order"); an unknown type is "Record". */
 export const recordTypeKey = (type: string): string => (RECORD_TYPE_WORDS.includes(type) ? `record.type.${type}` : 'record.type.other')

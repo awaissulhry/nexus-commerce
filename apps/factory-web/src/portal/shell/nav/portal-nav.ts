@@ -98,8 +98,10 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
       { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: false },
     ],
   },
-  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: false },
-  { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: false },
+  // B-W2b-195: the customer's Documents (SCR-186).
+  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: true },
+  // B-W2b-197: the customer's Returns & claims (SCR-187).
+  { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: true },
   // B-W2b-196: the customer's Account (SCR-188).
   { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'more', built: true },
   {
@@ -116,7 +118,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     pages: [
       // B-W2b-179: the supplier's purchase orders.
       { id: 'work.orders', label: 'nav.purchaseOrders', href: '/orders', permission: 'portal.purchaseOrders.view', kinds: ['SUPPLIER'], built: true },
-      { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: false },
+      // B-W2b-181: a workshop's Jobs (SCR-192, SCR-193).
+      { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: true },
     ],
   },
   // B-W2b-186: the supplier's Ship notices (SCR-227).
@@ -145,11 +148,17 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['CUSTOMER'], type: 'Quote', href: (id) => `/quotes/${id}`, built: false },
   // B-W2b-179: the supplier's purchase order (its Lines tab first).
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },
-  { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
+  // B-W2b-181: a workshop's job opens its own page.
+  { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: true },
   // B-W2b-186: a supplier's ship notice.
   { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: true },
+  // B-W2b-197: a customer's return and complaint open their own pages (Status first).
+  { kinds: ['CUSTOMER'], type: 'ReturnAuthorisation', href: (id) => `/returns/${id}`, built: true },
+  { kinds: ['CUSTOMER'], type: 'Complaint', href: (id) => `/returns/complaints/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
+  // B-W2b-195: an invoice (a "Pay invoice" request, a notification) opens Documents on it: its Pay pop-up, or why not.
+  { kinds: ['CUSTOMER'], type: 'Invoice', href: (id) => `/documents?invoice=${encodeURIComponent(id)}`, built: true },
 ]
 
 /** Who is looking: their permissions and partner kind(s) (a preview: every kind of the party). */

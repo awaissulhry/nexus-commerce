@@ -13,6 +13,10 @@ import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
 // B-W2b-188: an APPROVAL link's request (SCR-198).
 import { Approve } from '../../links/approve/Approve'
+// B-W2b-181: a JOB_ACCEPT link's job (SCR-196).
+import { JobLink } from '../../links/job/JobLink'
+// B-W2b-198: a CLAIM link's report-a-problem page (SCR-197).
+import { ReportProblem } from '../../links/claim/ReportProblem'
 // B-W2b-170: a SHIPMENT_TRACK link's tracking page (SCR-194).
 import { TrackOrder } from '../../links/tracking/TrackOrder'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
@@ -104,6 +108,12 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-188
     case 'approve':
       return <Approve api={task.api} />
+    // B-W2b-181
+    case 'job':
+      return <JobLink api={task.api} />
+    // B-W2b-198
+    case 'report-problem':
+      return <ReportProblem api={task.api} />
     // B-W2b-170
     case 'track-order':
       return <TrackOrder api={task.api} />

@@ -1,10 +1,12 @@
 import type { PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import type { PartnerView } from './view'
+import complaint from './views/complaint'
 import ddt from './views/ddt'
 import invoice from './views/invoice'
 import party from './views/party'
 import purchaseOrder from './views/purchase-order'
 import quote from './views/quote'
+import returnAuthorisation from './views/return-authorisation'
 import salesOrder from './views/sales-order'
 import shipment from './views/shipment'
 import subcontractOrder from './views/subcontract-order'
@@ -23,6 +25,9 @@ export const PARTNER_VIEWS: readonly PartnerView[] = Object.freeze([
   purchaseOrder,
   subcontractOrder,
   party,
+  // B-W2b-197: a customer's returns and complaints (their Messages tab, the Returns group of the portal search).
+  returnAuthorisation,
+  complaint,
 ])
 
 const byType = new Map<string, PartnerView>()
