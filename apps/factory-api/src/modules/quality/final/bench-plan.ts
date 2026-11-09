@@ -32,6 +32,8 @@ import { readCells, type LabelHeader } from '../../production/serials/store'
 import { inspectorOf, type Inspector } from './access'
 import { assertMayTake, assertOwnInspection, inspectionFor, invalid, lockInspection, takeOver } from './inspections'
 import { bindingOf, factsReader, identityFacts, measurementsOf, mtmFacts, RESULT_COLUMNS, RESULT_RECORD, type Binding } from './plan'
+// B-W2b-224 (SZ1:01): the approved graded spec of the work order's revision gives a size chart point's nominal ± tolerance.
+import { sizeSpecFor } from './size-spec'
 import { readDefects, type InspectionRow } from './store'
 import { sheetOf } from './sheet'
 
@@ -154,7 +156,8 @@ export async function recordMeasurements(caller: CommandCaller, inspectionId: st
   // a released work order's cells and a profile revision never change).
   const mtm = await factsReader(caller).withClient((client) => mtmFacts(client, header))
   const sizes = (await caller.withClient((client) => readCells(client, header.id))).map((cell) => cell.size)
-  const { rows, problems } = resolveMeasurements(body.measurements, { checks: binding.checks, sampleSize: inspection.sampleSize, sizes, mtm: mtm ? { size: mtm.size, points: mtm.points } : null })
+  const graded = mtm ? null : (await factsReader(caller).withClient((client) => sizeSpecFor(client, header))).spec
+  const { rows, problems } = resolveMeasurements(body.measurements, { checks: binding.checks, sampleSize: inspection.sampleSize, sizes, mtm: mtm ? { size: mtm.size, points: mtm.points } : null, spec: graded })
   if (problems.length > 0) throw invalid(problems.length === 1 ? problems[0]!.message : 'The measurements are not valid.', problems)
   const recorder = recorderOf(context)
   await command(caller, { name: 'quality.inspection.measurements', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {

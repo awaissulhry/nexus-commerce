@@ -669,11 +669,13 @@ export const sheetOut = output({
         checkCode: z.string().nullable(),
         label: z.string(),
         size: z.string().nullable(),
-        /** PLAN: the plan's nominal; SIZE_CHART: typed from the size chart; PROFILE: the rider's measurement profile (QHS-053); TYPED: a point measured outside the plan. */
-        source: z.enum(['PLAN', 'SIZE_CHART', 'PROFILE', 'TYPED']),
+        /** PLAN: the plan's nominal; SIZE_CHART: typed from the size chart; PROFILE: the rider's measurement profile (QHS-053); SPEC: the approved graded spec of the work order's revision, per size (B-W2b-224); TYPED: a point measured outside the plan. */
+        source: z.enum(['PLAN', 'SIZE_CHART', 'PROFILE', 'SPEC', 'TYPED']),
         nominal: z.string().nullable(),
         tolerance: z.string().nullable(),
         uom: z.string().nullable(),
+        /** B-W2b-224: a SPEC point's nominal ± tolerance per size of the work order (the band as one nominal ± one tolerance; `words` as the spec writes it). */
+        bySize: z.array(output({ size: z.string(), nominal: z.string(), tolerance: z.string(), words: z.string() })),
         spec: z.string(),
         values: z.array(output({ id: id(), size: z.string(), sampleIndex: z.number().int(), measured: z.string(), nominal: z.string(), tolerance: z.string(), pass: z.boolean(), words })),
       }),
@@ -688,6 +690,8 @@ export const sheetOut = output({
       points: z.array(output({ code: z.string(), name: z.string(), nominal: z.string(), uom: z.string() })),
       pointsWithout: z.array(z.string()),
     }).nullable(),
+    /** B-W2b-224: the graded spec the size check reads (null: a made-to-measure unit, checked against the rider's profile). */
+    gradedSpec: output({ revision: z.number().int().nullable(), approved: z.boolean(), words: z.string() }).nullable(),
   }),
   identity: output({
     mode: z.enum(IDENTITY_MODES),

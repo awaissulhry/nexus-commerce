@@ -263,14 +263,17 @@ export function hintsOf(form: MeasureForm, points: readonly MeasurePoint[]): Mea
 
 // ---- grouping and progress ---------------------------------------------------------------------------------------------
 
-/** The points by body zone in the page's order (zones without a point left out), each zone's points in template order. */
-export function pointsByZone<P extends Pick<MeasurePoint, 'code' | 'seq'>>(points: readonly P[]): Array<{ zone: BodyZone; points: P[] }> {
+/**
+ * The points by body zone in the page's order (zones without a point left out), each zone's points in template order.
+ * B-W2b-224 (SZ1:02): a point's own zone (its library point of measure's body zone) first; its code only when it has none.
+ */
+export function pointsByZone<P extends Pick<MeasurePoint, 'code' | 'seq'> & { readonly zone?: BodyZone | null }>(points: readonly P[]): Array<{ zone: BodyZone; points: P[] }> {
   const sorted = [...points].sort((a, b) => a.seq - b.seq || (a.code < b.code ? -1 : 1))
-  return BODY_ZONES.map((zone) => ({ zone, points: sorted.filter((point) => zoneOf(point.code) === zone) })).filter((group) => group.points.length > 0)
+  return BODY_ZONES.map((zone) => ({ zone, points: sorted.filter((point) => (point.zone ?? zoneOf(point.code)) === zone) })).filter((group) => group.points.length > 0)
 }
 
 /** The points in the order the page walks them (zone by zone): what "Point 9 of 24" counts. */
-export function walkOrder<P extends Pick<MeasurePoint, 'code' | 'seq'>>(points: readonly P[]): P[] {
+export function walkOrder<P extends Pick<MeasurePoint, 'code' | 'seq'> & { readonly zone?: BodyZone | null }>(points: readonly P[]): P[] {
   return pointsByZone(points).flatMap((group) => group.points)
 }
 
