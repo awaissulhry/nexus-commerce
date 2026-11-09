@@ -184,6 +184,9 @@ model StoredFile {
   // W2b portal-auth.prisma (wave 17/22): the company brandings whose light or dark logo it is.
   brandingLogos         CompanyBranding[] @relation("CompanyBrandingLogo")
   brandingDarkLogos     CompanyBranding[] @relation("CompanyBrandingLogoDark")
+  // W2b-4 styles-depth.prisma (wave 26/33): the style pictures and the revision pattern, marker and CAD files it is.
+  styleImages           StyleImage[]        @relation("StyleImageFile")
+  styleRevisionFiles    StyleRevisionFile[] @relation("StyleRevisionFileFile")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")

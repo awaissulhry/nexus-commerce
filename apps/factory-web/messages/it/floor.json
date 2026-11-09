@@ -455,6 +455,10 @@
       "title": "Buono di taglio letto",
       "body": "Si usa al tavolo di taglio: apri Taglio tessuto lì e scansionalo."
     },
+    "trolley": {
+      "title": "Etichetta del carrello letta",
+      "body": "Si scansiona alla linea di cucito per confermare che il carrello è arrivato (lì la Home apre la ricezione), e si carica al tavolo di taglio in Taglio tessuto › Invia al cucito."
+    },
     "notOnFloor": {
       "title": "Etichetta {type} letta",
       "body": "La sua scheda non è ancora sul tablet. Chiedi all'ufficio."
@@ -531,7 +535,8 @@
     "roll": "Rotolo",
     "remnant": "Ritaglio",
     "machine": "Macchina",
-    "cutTicket": "Buono di taglio"
+    "cutTicket": "Buono di taglio",
+    "trolley": "Carrello"
   },
   "labelPlural": {
     "hide": "le pelli",
@@ -746,7 +751,8 @@
       "incomingRecord": "Controllo in accettazione: una pelle o i controlli",
       "inlineRecord": "Controllo in linea: l'esito di un controllo",
       "inlineResults": "Controllo in linea: i controlli del piano",
-      "finalRecord": "Collaudo finale: risultati e misure"
+      "finalRecord": "Collaudo finale: risultati e misure",
+      "instructionSeen": "Istruzione di lavoro vista"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

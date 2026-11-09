@@ -271,6 +271,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { target: text(p.trolley, 40) }
     case 'production.trolley.receive':
       return { target: text(p.trolley, 40), ...(Array.isArray(p.missing) ? { quantity: p.missing.length } : {}) }
+    // B-W2b-214: the version seen; never who, never the language.
+    case 'production.instruction.ack':
+      return { target: text(p.versionId, 40) }
   }
 }
 

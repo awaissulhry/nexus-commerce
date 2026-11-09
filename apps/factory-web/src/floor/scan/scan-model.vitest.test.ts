@@ -1,6 +1,6 @@
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { describe, expect, it } from 'vitest'
-import { isCutTicketNumber, planScan, readScan, resultCode, resultType } from './scan-model'
+import { isCutTicketNumber, isTrolleyLabel, planScan, readScan, resultCode, resultType } from './scan-model'
 
 const TAG = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
 const OTHER = tenantTag('0190f0e2-0000-7000-8000-000000000001')
@@ -53,6 +53,31 @@ describe("a cut ticket's number beside a carton's label (B-W2b-F16: both start w
     expect(planScan(readScan(formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 }), TAG), OPERATOR)).toEqual({ kind: 'notOnFloor', type: 'carton' })
     expect(resultType({ kind: 'cutTicket', code: 'CTA-2026-00001' })).toBe('cutTicket')
     expect(resultCode({ kind: 'cutTicket', code: 'CTA-2026-00001' })).toBe('CTA-2026-00001')
+  })
+})
+
+describe("a trolley's label (B-W2b-F17; B-W2b-117's trolley to sewing)", () => {
+  it('reads T-3, its number with or without the hyphen, and one word before it, in any case, as the trolley it is', () => {
+    for (const label of ['T-3', 'T3', 'T-12', 'T-9999', 'SEED-T-1', 'A1-T-12']) expect(readScan(label, TAG), label).toEqual({ kind: 'free', code: label, trolley: true })
+    expect(readScan(' t-3 ', TAG)).toEqual({ kind: 'free', code: 'T-3', trolley: true })
+    expect(readScan('seed-t-2', TAG)).toEqual({ kind: 'free', code: 'SEED-T-2', trolley: true })
+    // Not a trolley's shape: an office number, a location code, a hide tag, a cut ticket, a carton, two words before it.
+    for (const other of ['WO-2026-00001', 'A1-STORE-01', 'SEED-HIDE-0001', 'LOT-1', 'PT-3', 'T-', 'T-12345', 'A-B-T-1', 'CTA-2026-00001']) expect(isTrolleyLabel(other), other).toBe(false)
+    expect(readScan('CTA-2026-00001', TAG)).toEqual({ kind: 'free', code: 'CTA-2026-00001', cutTicket: true })
+    const carton = formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 })
+    expect(isTrolleyLabel(carton)).toBe(false)
+    expect(readScan(carton, TAG)).toEqual({ kind: 'label', type: 'carton', code: carton })
+    // Every label code of the factory keeps its type (four parts never read as a trolley).
+    for (const type of ['HIDE', 'BUNDLE', 'LOT', 'BATCH', 'SERIAL', 'LOCATION', 'WORK_ORDER', 'ROLL', 'REMNANT', 'COUPON'] as const) {
+      for (const ref of [1, 3, 12, 4211]) expect(readScan(formatScanId({ type, tenantTag: TAG, ref }), TAG).kind, `${type} ${ref}`).toBe('label')
+    }
+    expect(readScan('0123456789ABCDEFGHJKMNPQRS', TAG).kind).toBe('badge')
+  })
+
+  it('asks no lookup for a trolley: Scan anything names it and where it is used', () => {
+    expect(planScan(readScan('T-3', TAG), OPERATOR)).toEqual({ kind: 'trolley' })
+    expect(resultType({ kind: 'trolley', code: 'T-3' })).toBe('trolley')
+    expect(resultCode({ kind: 'trolley', code: 'T-3' })).toBe('T-3')
   })
 })
 

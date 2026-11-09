@@ -81,6 +81,10 @@ describe('machines in depth: the rules', () => {
   })
 
   it('filters the wall by status and keeps only lines with a tile', () => {
+    // B-W2b-F17: the fixture is the API's shape — one group per line and ONE line-less group per site (StatusWall's key).
+    const keys = WALL.lines.map((line) => line.line?.id ?? `site-${line.siteCode}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const line of WALL.lines) expect(line.machines.map((tile) => tile.assetNumber)).toEqual(line.machines.map((tile) => tile.assetNumber).sort())
     expect(wallTilesOf(WALL.lines, 'ALL').flatMap((line) => line.machines)).toHaveLength(8)
     const down = wallTilesOf(WALL.lines, 'NOT_RUNNING')
     expect(down.flatMap((line) => line.machines.map((tile) => tile.status))).toEqual(['DO_NOT_USE', 'DOWN', 'UNDER_MAINTENANCE'])

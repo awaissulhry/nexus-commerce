@@ -19,8 +19,8 @@ import { seed as seedInspectionPlans } from './inspection-plans'
  *                size 54 (+4.000) and 50 (−1.500) and its own machine setting; the library's sewing operation its default
  *                setting (post-bed, 301, 134 LR Nm 110, Tkt 40, 3.5 per cm).
  *   instructions WI SEED-WI-0001: an old one for cutting, ARCHIVED (its v1 PUBLISHED). SEED-WI-0002 for sewing on every
- *                style: v1 SUPERSEDED, v2 PUBLISHED (three steps, the seam a critical point with a safety note and a
- *                required tick; a photo and a video), v3 a DRAFT (one step, one photo). SEED-WI-0003 for sewing on
+ *                style: v1 SUPERSEDED, v2 PUBLISHED (three steps, the seam a critical point with a safety note; a photo and
+ *                a video), v3 a DRAFT (one step, one photo). SEED-WI-0003 for sewing on
  *                SEED-JKT-02 revision 1 only (the production seed's released revision): v1 PUBLISHED. Written by the
  *                seed's office user, approved by a made-up methods engineer (the author never approves).
  *   seen         A1's operator saw SEED-WI-0002 v1 and v2 on the cutting tablet (Italian); the office recorded the team
@@ -248,7 +248,7 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
       await tx.workInstructionStep.createMany({
         data: [
           step(id('instructions:wi:1:v1:LAY'), result.versionIds.archivedV1, 10, 'LAY_HIDE', words('Stendere la pelle con il fiore in alto.', 'Lay the hide grain side up.')),
-          step(id('instructions:wi:3:v1:ZIP_GUARD'), result.versionIds.revisionV1, 10, 'ZIP_GUARD', words('Cucire la pattina del cursore prima del collo.', 'Sew the zip guard before the collar.'), { requiredTick: true, icon: 'needle' }),
+          step(id('instructions:wi:3:v1:ZIP_GUARD'), result.versionIds.revisionV1, 10, 'ZIP_GUARD', words('Cucire la pattina del cursore prima del collo.', 'Sew the zip guard before the collar.'), { icon: 'needle' }),
           step(id('instructions:wi:2:v1:SEAM'), result.versionIds.sewingV1, 10, 'SEAM', words('Cucire il fianco a 10 mm dal bordo.', 'Sew the side seam 10 mm from the edge.'), { critical: true }),
         ],
       })
@@ -258,7 +258,8 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
       await publish(result.versionIds.revisionV1, T.published)
       await publish(result.versionIds.sewingV1, T.published)
 
-      // SEED-WI-0002 v2: three steps with media, published in v1's place.
+      // SEED-WI-0002 v2: three steps with media, published in v1's place. Its steps are optional ticks (B-W2b-214: the published
+      // steps are the operation's checklist, and a required one holds Finish; every seeded work order is sewn on this operation).
       await tx.workInstructionVersion.create({
         data: { id: result.versionIds.sewingV2, instructionId: result.instructionIds.sewing, number: 2, changeNote: 'Adds the seam check and its photo and video.', authorId: actorId, ...stamp(T.rewritten) },
         select: { id: true },
@@ -275,7 +276,7 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
             { critical: true, safetyNoteI18n: words('Tenere le dita lontane dal piedino.', 'Keep your fingers away from the foot.'), icon: 'ruler' },
             T.rewritten,
           ),
-          step(result.stepIds.check, result.versionIds.sewingV2, 30, 'CHECK_SEAM', words('Verificare la tenuta della cucitura.', 'Check the seam holds.'), { requiredTick: true, icon: 'check' }, T.rewritten),
+          step(result.stepIds.check, result.versionIds.sewingV2, 30, 'CHECK_SEAM', words('Verificare la tenuta della cucitura.', 'Check the seam holds.'), { icon: 'check' }, T.rewritten),
         ],
       })
       await tx.workInstructionMedia.createMany({

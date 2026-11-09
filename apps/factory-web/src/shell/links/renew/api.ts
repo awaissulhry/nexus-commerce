@@ -10,10 +10,12 @@ const challengeSchema = z.object({ challenge: z.string(), bits: z.number().int()
  * `POST /link/renew` with the dead link's token in `x-factory-link` (the landing's client): always 202 with ONE answer
  * whatever the token (the page shows its own words, never the API's English). When the API asks for a solved challenge
  * (429 `challenge`, only after suspicious traffic), the page gets one (`GET /abuse/challenge?policy=links.renew`),
- * solves it (`onChecking` tells the screen) and sends again with the proof — once.
+ * solves it (`onChecking` tells the screen) and sends again with the proof — once. The reader's note (B-W2b-F17) goes
+ * with it when they wrote one.
  */
-export async function askForNewLink(api: ApiClient, onChecking?: () => void): Promise<void> {
-  const send = (proof?: { challenge: string; nonce: string }) => api.post('/link/renew', { body: proof ? { proof } : {}, schema: answerSchema, idempotencyKey: newIdempotencyKey() })
+export async function askForNewLink(api: ApiClient, onChecking?: () => void, note?: string): Promise<void> {
+  const send = (proof?: { challenge: string; nonce: string }) =>
+    api.post('/link/renew', { body: { ...(proof ? { proof } : {}), ...(note ? { note } : {}) }, schema: answerSchema, idempotencyKey: newIdempotencyKey() })
   try {
     await send()
   } catch (error) {

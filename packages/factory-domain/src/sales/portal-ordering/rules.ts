@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../../core/time'
+import type { PpeCategory } from '../../product/styles/rules'
 import { Dec, type Decimal } from '../../tax/decimal'
 import { listPriceText } from '../pricelists/pricelists'
 import { MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '../quotes/quotes'
@@ -79,11 +80,12 @@ export function lowestPrice(prices: readonly (string | null)[]): string | null {
 export const RANGE_FILTERS = ['ALL', 'OWN_LABEL', 'OPEN_RANGE'] as const
 export type RangeFilter = (typeof RANGE_FILTERS)[number]
 
-export const PPE_WORDS: Readonly<Record<'NONE' | 'CAT_I' | 'CAT_II' | 'CAT_III', Words>> = Object.freeze({
-  NONE: { it: 'Non DPI', en: 'Not PPE' },
-  CAT_I: { it: 'DPI categoria I', en: 'PPE category I' },
-  CAT_II: { it: 'DPI categoria II', en: 'PPE category II' },
-  CAT_III: { it: 'DPI categoria III', en: 'PPE category III' },
+/** A style's PPE category in words, keyed by the stored code (Style.ppeCategory; B-W2b-F17: was NONE / CAT_I …, never found). */
+export const PPE_WORDS: Readonly<Record<PpeCategory, Words>> = Object.freeze({
+  NOT_PPE: { it: 'Non DPI', en: 'Not PPE' },
+  CATEGORY_I: { it: 'DPI categoria I', en: 'PPE category I' },
+  CATEGORY_II: { it: 'DPI categoria II', en: 'PPE category II' },
+  CATEGORY_III: { it: 'DPI categoria III', en: 'PPE category III' },
 })
 
 // ---- a line ------------------------------------------------------------------------------------------------------------

@@ -141,3 +141,9 @@
   min-height: var(--nds-density-target-min);
   color: var(--nds-text-link);
 }
+
+/* B-W2b-F17: the reader's optional note with "Ask for a new link", under the dead link's words. */
+.fw-link-renew-note {
+  margin-top: var(--nds-space-12);
+  text-align: start;
+}

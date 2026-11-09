@@ -86,6 +86,8 @@ export const designScreen = defineDesignScreen<ScanViewModel>({
     { id: 'location', label: 'A location', model: scan({ kind: 'location', code: 'A1-STORE-01', name: 'Magazzino pelli', locationKind: 'BIN', path: ['A1-STORE', 'A1-STORE-01'] }) },
     { id: 'bundle', label: 'A bundle (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'bundle', code: BUNDLE }), note: 'The bundles step adds its card; until then the label is named, nothing pretends.' },
     { id: 'lot', label: 'A lot (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'lot', code: LOT }) },
+    // B-W2b-F17: a trolley's label away from the sewing line (Home there opens its receipt in Fabric cutting).
+    { id: 'trolley', label: 'A trolley label (away from the sewing line)', model: scan({ kind: 'trolley', code: 'T-3' }), note: 'At a sewing station Home opens the line\'s receipt (Fabric cutting, B-W2b-121); here the card says where it is used.' },
     { id: 'no-permission', label: 'A type this role may not open', model: scan({ kind: 'noPermission', type: 'location', code: 'A1-STORE-01' }), note: 'Fail closed: the lookup is never asked.' },
     { id: 'other-factory', label: 'Another factory\'s label', model: scan({ kind: 'unknown', code: OTHER, reason: 'otherFactory' }) },
     { id: 'typo', label: 'A misread code', model: scan({ kind: 'unknown', code: 'HD-7K-0003RJ-X', reason: 'typo' }) },
