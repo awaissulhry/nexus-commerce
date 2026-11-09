@@ -1678,6 +1678,7 @@
     "product_styles_manage": "Creare e modificare articoli",
     "product_styles_lifecycle": "Spostare un articolo nel suo ciclo di vita",
     "product_settings_manage": "Gestire tipi di prodotto, regole di modifica e tolleranza di consumo",
+    "product_gtins_manage": "Gestire gli intervalli GTIN GS1 e assegnare i GTIN agli SKU",
     "product_bom_view": "Vedere le distinte base",
     "product_bom_manage": "Modificare una distinta base in bozza",
     "product_bom_release": "Rilasciare una revisione (blocca distinta, ciclo ed etichetta)",

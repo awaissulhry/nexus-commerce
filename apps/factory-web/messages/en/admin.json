@@ -1678,6 +1678,7 @@
     "product_styles_manage": "Create and edit styles",
     "product_styles_lifecycle": "Move a style through its lifecycle",
     "product_settings_manage": "Keep product types, edit rules and the consumption tolerance",
+    "product_gtins_manage": "Keep the GS1 GTIN ranges and give SKUs GTINs from them",
     "product_bom_view": "See bills of materials",
     "product_bom_manage": "Edit a draft bill of materials",
     "product_bom_release": "Release a revision (freezes BOM, routing and label)",
