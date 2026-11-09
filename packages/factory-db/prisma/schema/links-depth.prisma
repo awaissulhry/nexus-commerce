@@ -175,6 +175,9 @@ model ApprovalRequest {
   ncrConcession   NcrConcession?
   // W2b safety.prisma (schema wave 23): the DVR signature an outside signer's approval became (LINK).
   riskAssessmentSignatures RiskAssessmentSignature[]
+  // W2b-4 samples.prisma (wave 29/33): the sample round (SAMPLE) or swatch (COLOUR, LEATHER) it asks the brand to decide.
+  sampleRounds             SampleRound[]
+  sampleSwatches           SampleSwatch[]
 
   // The target of the concession's reference: a concession names a request of its own customer.
   @@unique([tenantId, partyId, id])

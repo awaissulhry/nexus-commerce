@@ -1,0 +1,378 @@
+// Samples and pre-production gates (W2b-4, schema wave 29/33, B-W2b-212; features SAL-311, SAL-312, SAL-314, SAL-316,
+// PRD-070, PRD-152, PRD-158, MES-018, PLN-186): sample rounds (proto, fit, salesman, pre-production, certification and brand
+// samples) of a style made from a pinned revision, with their cells, stage and decision; the fit measured against the frozen
+// spec and the comments per point of measure or body area; leather and colour swatches sent to a brand; the sample shipments;
+// and the gates a sales order waits on before it may start. A brand decides a round or a swatch through an ApprovalRequest
+// (links-depth.prisma, kinds SAMPLE, COLOUR, LEATHER) by an APPROVAL link or in the portal, so the link and portal pages stay
+// one; the office copies the answer into the round's or swatch's decision. WorkOrderKind SAMPLE and WorkOrder.sampleRoundId
+// (production.prisma) make a sample on the floor. apps/factory-api's modules/sales/samples and sample-decisions (B-W2b-246,
+// -252) and planning/milestones (B-W2b-263) write these tables through command(); the hand-written
+// …_changes_samples_w2b_guards migration holds their rules for every login.
+//
+// Who sees what (ownership/samples.json): the office reads and writes. A portal or link session reads its own party's rounds,
+// swatches and shipments with their decisions (never who asked or decided in the office, the round's internal instructions,
+// a cost); it answers the approval request, never these rows. Measurements, comments and gates are the office's. The floor
+// reads none (a sample work order is a work order). No personal data (no wearer, no maker by name); the one money column is a
+// price (the round's charge).
+
+/// A sample round (SAL-311, SAL-312, PRD-158): what is asked (kind, round number, the cells), of which style and pinned
+/// revision, for whom (partyId: the brand or customer; null: internal), by when, where it is on the board (stage), and the
+/// decision. REQUESTED, IN_MAKING, SENT and UNDER_REVIEW are a manual stage (moved in any order); DECIDED exactly with the
+/// decision (written once); CANCELLED with a reason. DECIDED and CANCELLED are final. Numbered from the company's
+/// SAMPLE_ROUND series. Never deleted.
+model SampleRound {
+  id                String             @id @db.Uuid
+  tenantId          String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that makes it and numbers it; never changes.
+  companyId         String             @db.Uuid
+  /// From the company's SAMPLE_ROUND series (SR-…), unique in the company; given at insert, never changed.
+  number            String
+  styleId           String             @db.Uuid
+  /// The revision it is made from (pinned; a DRAFT one for a proto or fit round): changes only while REQUESTED.
+  revisionId        String             @db.Uuid
+  /// Never changes.
+  kind              SampleKind
+  /// The round of this kind for the style ("Fit · round 2"), from 1.
+  roundNo           Int                @default(1)
+  /// The brand or customer it is for (the partner wall's key); null: an internal round. Never changes.
+  partyId           String?            @db.Uuid
+  /// What is made: a JSON array of 1 to 200 cells {"colourwayId"?: a colourway of the style, "size": a size of the style's
+  /// range, "quantity": 1 to 1000}, each colourway and size once; frozen once DECIDED or CANCELLED.
+  cells             Json
+  dueDate           DateTime?          @db.Date
+  stage             SampleStage        @default(REQUESTED)
+  /// What the sample room is told, up to 4000 characters.
+  /// @internal
+  instructions      String?
+  /// What the customer is charged for the round, in minor units of chargeCurrency (ISO 4217), 0 or more; both or neither
+  /// (null: not charged). Invoiced as a CHARGE line.
+  /// @grain price
+  chargeAmountMinor Int?
+  chargeCurrency    String?
+  /// The decision (SAL-312), exactly when DECIDED, written once: what, the words (required for APPROVED_WITH_COMMENTS and
+  /// REJECTED), when, how (OFFICE: recorded by an office user, decidedById; PORTAL: the brand's partner user, decidedById =
+  /// the approval request's answeredByUserId; LINK: the brand through an APPROVAL link, decidedById null) — a PORTAL or LINK
+  /// decision is the answer of its approval request, at its time.
+  decision          SampleDecision?
+  decisionComments  String?
+  decidedAt         DateTime?          @db.Timestamptz(3)
+  decidedVia        SampleDecisionVia?
+  decidedById       String?            @db.Uuid
+  /// The approval request (kind SAMPLE, about this round) the brand answers by link or in the portal: of the round's party
+  /// (the reference); set or changed until it is decided.
+  approvalRequestId String?            @db.Uuid
+  /// CERTIFICATION only (PRD-158): the sizes and zones sent to the notified body (words, up to 1000), its result, and the
+  /// certificate it led to. The result and certificate may come after the decision, each written once.
+  testZones         String?
+  testResult        SampleTestResult?
+  certificateId     String?            @db.Uuid
+  /// Exactly when CANCELLED: when and why (1 to 1000 characters).
+  cancelledAt       DateTime?          @db.Timestamptz(3)
+  cancelReason      String?
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?            @db.Uuid
+
+  company         Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style           Style            @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  revision        StyleRevision    @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  party           Party?           @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  approvalRequest ApprovalRequest? @relation(fields: [tenantId, partyId, approvalRequestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  certificate     Certificate?     @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurements    SampleMeasurement[]
+  comments        SampleComment[]
+  swatches        SampleSwatch[]
+  shipments       SampleShipment[]
+  gates           OrderGate[]
+  // production.prisma: the sample work orders that make it; changes.prisma: the change requests it raised.
+  workOrders      WorkOrder[]
+  changeRequests  ChangeRequest[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of its parts' and the gates' references.
+  @@unique([tenantId, id])
+  // The target of the references that must stay with the style (work orders, swatches, change requests).
+  @@unique([tenantId, styleId, id])
+  // The board: rounds by stage and due day.
+  @@index([tenantId, stage, dueDate])
+  @@index([tenantId, partyId])
+  @@index([tenantId, styleId])
+}
+
+/// What a sample round makes (SAL-311).
+enum SampleKind {
+  /// The first prototype of a new style.
+  PROTO
+  /// A fit sample, measured against the spec.
+  FIT
+  /// Salesman samples (a set for the sales force or a fair).
+  SALESMAN
+  /// The pre-production sample the brand approves before the order starts (a gate, PLN-186).
+  PRE_PRODUCTION
+  /// The test samples sent to the notified body (PRD-158).
+  CERTIFICATION
+  /// A sample the brand asked for itself.
+  BRAND
+}
+
+/// Where a round is on the board (SCR-110 lanes); the first four move by hand in any order.
+enum SampleStage {
+  REQUESTED
+  IN_MAKING
+  SENT
+  UNDER_REVIEW
+  /// Exactly with its decision.
+  DECIDED
+  CANCELLED
+}
+
+/// A decision on a sample round or swatch (SAL-312, SAL-314).
+enum SampleDecision {
+  APPROVED
+  APPROVED_WITH_COMMENTS
+  REJECTED
+}
+
+/// How a decision was made.
+enum SampleDecisionVia {
+  /// Recorded by an office user (the brand's word by mail or phone, or our own decision).
+  OFFICE
+  /// The brand's partner user answered its approval request in the portal.
+  PORTAL
+  /// The brand answered its approval request through an APPROVAL link.
+  LINK
+}
+
+/// A certification sample's result at the notified body (PRD-158).
+enum SampleTestResult {
+  PASSED
+  FAILED
+}
+
+/// The fit measured against the spec (PRD-070): one point of measure in one size of the round, its nominal value and
+/// tolerances frozen from the spec when the row is made (they never change), the measured value and whether it passed (set
+/// exactly with the measured value: within nominal − toleranceMinus … nominal + tolerancePlus). Written, changed and removed
+/// only while the round is neither DECIDED nor CANCELLED.
+model SampleMeasurement {
+  id               String    @id @db.Uuid
+  tenantId         String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  roundId          String    @db.Uuid
+  /// Its row in the grid, from 1.
+  seq              Int
+  /// The point of measure of the library (sizes-depth.prisma PointOfMeasure, B-W2b-210: no reference until that wave is
+  /// merged; the API checks it), and its code and name as they were (frozen). Never change.
+  pointOfMeasureId String?   @db.Uuid
+  pomCode          String
+  pomName          String?
+  /// A size of the round (no spaces, up to 40 characters); never changes.
+  size             String
+  /// Frozen from the spec: the nominal value (above 0) and the tolerances (0 or more), in uom (CM or MM).
+  nominal          Decimal   @db.Decimal(8, 2)
+  toleranceMinus   Decimal   @db.Decimal(8, 2)
+  tolerancePlus    Decimal   @db.Decimal(8, 2)
+  uom              Uom
+  /// What was measured (above 0), when, and whether it is within tolerance: all three or none.
+  measured         Decimal?  @db.Decimal(8, 2)
+  measuredAt       DateTime? @db.Timestamptz(3)
+  pass             Boolean?
+  /// Up to 1000 characters.
+  note             String?
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?   @db.Uuid
+
+  round SampleRound @relation(fields: [tenantId, roundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, roundId, pomCode, size])
+}
+
+/// A fit comment (PRD-152): about a point of measure, a body area or the sample as a whole, in words, with its photos
+/// (StoredFile rows of record type "SampleComment"), and whether it is resolved. Written and removed only while the round is
+/// neither DECIDED nor CANCELLED; resolving moves at any time (a comment carried to the next round).
+model SampleComment {
+  id               String    @id @db.Uuid
+  tenantId         String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  roundId          String    @db.Uuid
+  /// The point of measure (as SampleMeasurement: no reference until wave 27; its code as it was) and/or the body area
+  /// ("left shoulder", up to 100 characters); neither: the sample as a whole.
+  pointOfMeasureId String?   @db.Uuid
+  pomCode          String?
+  bodyArea         String?
+  /// The comment, 1 to 2000 characters.
+  text             String
+  /// Resolved exactly with when and by whom.
+  resolved         Boolean   @default(false)
+  resolvedAt       DateTime? @db.Timestamptz(3)
+  resolvedById     String?   @db.Uuid
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?   @db.Uuid
+
+  round SampleRound @relation(fields: [tenantId, roundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, roundId])
+}
+
+/// A leather or colour swatch sent to a brand for its decision (SAL-314): of a style (and of one of its rounds, or none),
+/// an item colour and/or a hide lot of the material, when it was sent, the approval request (kind COLOUR or LEATHER, about
+/// this swatch) the brand answers, and the decision (as a round's: written once). Removed only before it is sent.
+model SampleSwatch {
+  id                String             @id @db.Uuid
+  tenantId          String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId           String             @db.Uuid
+  /// The round it belongs to (of the style); null: the style's. Never changes.
+  roundId           String?            @db.Uuid
+  /// The brand it is sent to (the partner wall's key); never changes.
+  partyId           String             @db.Uuid
+  /// COLOUR or LEATHER (a LEATHER swatch is of a leather material); never changes.
+  kind              SwatchKind
+  /// The material; never changes. Its colour and/or one of its lots (at least one; the lot with its site, both or
+  /// neither); they change until it is sent.
+  itemId            String             @db.Uuid
+  itemColourId      String?            @db.Uuid
+  lotSiteId         String?            @db.Uuid
+  lotId             String?            @db.Uuid
+  /// What it is, in words ("lot 12, slightly darker"), up to 500 characters.
+  note              String?
+  /// When it was sent; set once.
+  sentAt            DateTime?          @db.Timestamptz(3)
+  /// The approval request the brand answers (of this swatch's party: the reference); only once sent, until decided.
+  approvalRequestId String?            @db.Uuid
+  /// As SampleRound's decision columns.
+  decision          SampleDecision?
+  decisionComments  String?
+  decidedAt         DateTime?          @db.Timestamptz(3)
+  decidedVia        SampleDecisionVia?
+  decidedById       String?            @db.Uuid
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?            @db.Uuid
+
+  style           Style            @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, styleId, partyId,
+  // itemId or the lot's site.
+  round           SampleRound?     @relation(fields: [tenantId, styleId, roundId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  party           Party            @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item            Item             @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour      ItemColour?      @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot             Lot?             @relation(fields: [tenantId, lotSiteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  approvalRequest ApprovalRequest? @relation(fields: [tenantId, partyId, approvalRequestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, styleId])
+  @@index([tenantId, roundId])
+  @@index([tenantId, partyId])
+}
+
+/// What a swatch shows (and the approval request kind it is asked with).
+enum SwatchKind {
+  COLOUR
+  LEATHER
+}
+
+/// A sample shipment (SAL-316): a round's samples sent to a party (the brand, a notified body, an agent) or coming back
+/// from it, by which courier with which tracking, sent and received (each set once; received only after sent). Removed
+/// only before it is sent.
+model SampleShipment {
+  id              String                  @id @db.Uuid
+  tenantId        String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  roundId         String                  @db.Uuid
+  /// Who it goes to (OUTBOUND) or comes from (RETURN): the partner wall's key. Never changes.
+  partyId         String                  @db.Uuid
+  /// Never changes.
+  direction       SampleShipmentDirection @default(OUTBOUND)
+  /// OUTBOUND: the party's address it goes to; null: typed on the label. A RETURN names none.
+  shipToAddressId String?                 @db.Uuid
+  /// The courier as named on the label and its tracking number (each up to 100 characters), the courier's tracking page
+  /// (https, up to 2000 characters).
+  carrierName     String?
+  trackingNumber  String?
+  trackingUrl     String?
+  sentAt          DateTime?               @db.Timestamptz(3)
+  receivedAt      DateTime?               @db.Timestamptz(3)
+  /// Up to 1000 characters.
+  note            String?
+  version         Int                     @default(1)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                 @db.Uuid
+
+  round         SampleRound   @relation(fields: [tenantId, roundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party         Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  shipToAddress PartyAddress? @relation(fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, roundId])
+  @@index([tenantId, partyId])
+}
+
+/// Which way a sample shipment goes.
+enum SampleShipmentDirection {
+  /// From us to the party.
+  OUTBOUND
+  /// From the party back to us (a sample returned with its comments).
+  RETURN
+}
+
+/// A pre-production gate of a sales order (PLN-186): what must be true before its work may start (a sample approved, the
+/// leather approved, the trims in, the pre-production sample approved, the lab passed, or something else in words), by
+/// when, and when and by whom it passed. Passing a sample gate that names a round needs that round approved. A planner may
+/// let the order start before the gate (an override): only someone who is neither the gate's owner nor its maker, with a
+/// reason. Passing and the override are each written once. One gate per kind and order (OTHER: as many as needed); removed
+/// only while neither passed nor overridden.
+model OrderGate {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and party (the reference's keys); never change.
+  companyId      String    @db.Uuid
+  partyId        String    @db.Uuid
+  salesOrderId   String    @db.Uuid
+  /// Never changes.
+  kind           GateKind
+  /// What the gate is, in words (1 to 200 characters): required for OTHER.
+  label          String?
+  targetDate     DateTime? @db.Date
+  /// SAMPLE_APPROVED or PP_SAMPLE: the round whose approval passes it (PP_SAMPLE: a PRE_PRODUCTION round); null: none named.
+  sampleRoundId  String?   @db.Uuid
+  /// The planner who owns the gate; null: its maker.
+  ownerId        String?   @db.Uuid
+  /// When and by whom it passed: both or neither, written once.
+  passedAt       DateTime? @db.Timestamptz(3)
+  passedById     String?   @db.Uuid
+  /// Started before the gate: when, by whom (never the owner or the maker), why (1 to 1000 characters): all or none,
+  /// written once.
+  overriddenAt   DateTime? @db.Timestamptz(3)
+  overriddenById String?   @db.Uuid
+  overrideReason String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+
+  company     Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party       Party        @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder  SalesOrder   @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  sampleRound SampleRound? @relation(fields: [tenantId, sampleRoundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // What waits on a gate: the gates of an order.
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, sampleRoundId])
+}
+
+/// What a pre-production gate waits for (PLN-186).
+enum GateKind {
+  SAMPLE_APPROVED
+  LEATHER_APPROVED
+  TRIMS_IN
+  /// The pre-production sample approved.
+  PP_SAMPLE
+  /// The lab tests passed.
+  LAB_PASSED
+  /// Something else, in words (label).
+  OTHER
+}

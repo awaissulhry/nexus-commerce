@@ -113,6 +113,12 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b-4 wave 25/33: work instructions are numbered from it when they are made (B-W2b-214): without one, a new
       // instruction is refused. Master documents: one series that never resets. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:WORK_INSTRUCTION:MAIN:ALL`).slice(8)}`, companyId, kind: 'WORK_INSTRUCTION', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'WI-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-4 wave 29/33: change requests, change orders and sample rounds are numbered from these (B-W2b-226, B-W2b-246):
+      // without them, a change or a round cannot be made (a floor request waits for its number until the office takes it up).
+      // Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:CHANGE_REQUEST:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_REQUEST', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:CHANGE_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CHANGE_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'ECO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:SAMPLE_ROUND:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAMPLE_ROUND', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

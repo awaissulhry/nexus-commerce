@@ -8,6 +8,7 @@ import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
+import { seed as seedChanges } from '../seed/changes'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedCosting } from '../seed/costing'
@@ -60,6 +61,7 @@ import { seed as seedReasons } from '../seed/reasons'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
@@ -324,6 +326,13 @@ beforeAll(async () => {
   // sets, product settings; its first picture, revision file, branding set and SKU are the plain ones a copy may repeat.
   await seedStylesDepth({ db: factory, namespace: 'iso-a' })
   await seedStylesDepth({ db: factory, namespace: 'iso-b' })
+  // The change control, release and samples schema of W2b-4 (wave 29/33): sample rounds with their fit, swatches, shipments and
+  // order gates; change requests (one from A1's floor, which a floor session copies), a DRAFT change order with its lines and
+  // an undecided approval. Their first rows are the plain ones a copy may repeat.
+  for (const seedChangesSamples of [seedSamples, seedChanges]) {
+    await seedChangesSamples({ db: factory, namespace: 'iso-a' })
+    await seedChangesSamples({ db: factory, namespace: 'iso-b' })
+  }
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -367,6 +376,10 @@ it('covers every classified table and every runtime role', () => {
     'Certificate',
     'CertificateCoverage',
     'CertificateRenewal',
+    'ChangeApproval',
+    'ChangeOrder',
+    'ChangeOrderItem',
+    'ChangeRequest',
     'Chemical',
     'ClickingDie',
     'ClockEvent',
@@ -527,6 +540,7 @@ it('covers every classified table and every runtime role', () => {
     'OperationTimeVersion',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
+    'OrderGate',
     'OrgArea',
     'OutboxEvent',
     'OvertimeAgreement',
@@ -652,6 +666,11 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrderLineSize',
     'SalesOrderMilestone',
     'SalesSettings',
+    'SampleComment',
+    'SampleMeasurement',
+    'SampleRound',
+    'SampleShipment',
+    'SampleSwatch',
     'SavedView',
     'ScanCorrectionRequest',
     'ScanPatternFinding',

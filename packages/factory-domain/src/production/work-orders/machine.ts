@@ -20,8 +20,9 @@ import { defineMachine, nextStates } from '../../state/machine'
 export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
 
-// W2a wave 5: REPAIR, a repair of returned garments (MES-019).
-export const WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE', 'REPAIR'] as const
+// W2a wave 5: REPAIR, a repair of returned garments (MES-019). W2b-4 wave 29/33 (factory-db production.prisma): SAMPLE, the
+// samples of a sample round (MES-018; WorkOrder.sampleRoundId).
+export const WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE', 'REPAIR', 'SAMPLE'] as const
 export type WorkOrderKind = (typeof WORK_ORDER_KINDS)[number]
 
 /** What a move's guard reads. */

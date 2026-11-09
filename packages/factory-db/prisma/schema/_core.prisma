@@ -215,6 +215,12 @@ model Company {
   // W2b-4 instructions.prisma (wave 25/33): its work instructions.
   workInstructions     WorkInstruction[]
   aqlProfiles          AqlProfile[]
+  // W2b-4 changes.prisma and samples.prisma (wave 29/33): its change requests and orders, sample rounds and the gates
+  // of its orders.
+  changeRequests       ChangeRequest[]
+  changeOrders         ChangeOrder[]
+  sampleRounds         SampleRound[]
+  orderGates           OrderGate[]
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]
   shiftPatterns        ShiftPattern[]
@@ -397,6 +403,8 @@ model Site {
   attendanceDays     AttendanceDay[]
   overtimeEntries    OvertimeEntry[]
   workingTimeRules   WorkingTimeRule[]
+  // W2b-4 changes.prisma (wave 29/33): the change requests from or about the site.
+  changeRequests     ChangeRequest[]
   // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
   supplierClaims     SupplierClaim[]
   subcontractOrders  SubcontractOrder[]
