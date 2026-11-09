@@ -1,3 +1,34 @@
+## Product parts — VersionCompare, RuleBuilder, SizeColumns (with SizeFill), GarmentZoneMap (B-W2b-207) — 2026-11-09
+
+Additive only: four new parts in new folders, each its own entry point with its stylesheet imported by the part (none in a
+barrel the web pulls into its pages); no existing part, token, barrel or generated stylesheet changed, so Commerce renders
+as before. Every part speaks through `labels?: Partial<XLabels>` (English `X_LABELS` beside it, `mergeLabels`); numbers,
+amounts and names come written from the app. Data in, events out: none reads an API.
+- **`VersionCompare`** (`patterns/VersionCompare/`): two versions of a structured record side by side — lines added,
+  removed and changed (a word and a mark each, never colour alone), the changed fields before and after in two columns
+  ("Not in Rev 3" for a side a line does not have), the quantities per size that moved (from → to and the exact
+  difference), the totals before → after, unchanged lines counted and shown on request, and "Use as change note", which
+  hands the same facts in plain words to the page (held when nothing changed, or with the page's reason). Quantities are
+  compared as exact decimals (`quantityOf`, `quantityDelta`); `versionLineViews`, `versionSummary`, `versionChangeNote`.
+- **`RuleBuilder`** (`patterns/RuleBuilder/`): condition rows (what, how it compares, the value: a number with its unit,
+  text, one choice or several, yes / no) joined by AND or OR, the whole rule in plain words with the page's lead and
+  outcome, Apply held while a row is incomplete naming the first ("Condition 2: enter a value") or with the page's reason
+  (offline), a field the person may not use listed with its reason, read only drawn as words. Add / Remove move the focus.
+  `ruleRowProblem`, `ruleHeldReason`, `rulePreview`, `withRuleField`, `withRuleOperator`.
+- **`sizeColumns` / `sizeColumnGroup`** (`grid/size-columns/`): the column kind for a decimal per size — one AG column
+  per size sharing the grid's width, the base size marked by its header words ("M · base") and a tone, a missing value
+  "— missing" in the error tone (never 0), a value typed by hand among graded ones marked, written in the page's language;
+  typed in a decimal text field (`SizeValueEditor`: "62,5" or "62.5", no grouping), pasted through the same rule, a word
+  refused with the value kept (`onRefused`), one `onChange(row, size, value)` per changed cell (the column never changes
+  the row). Values are decimal strings and the arithmetic is exact (`addSizeValues`, `fillFromBase`, `sizeTotals`).
+  **`SizeFill`**: "Fill from the base size" — the increment per size step, values typed by hand kept, the preview of each
+  change, Fill held with the reason (no base value, not a number, a size at 0 or below, nothing to change, the page's).
+- **`GarmentZoneMap`** (`components/GarmentZoneMap/`, moved from the factory's quality area, where B-W2a-67 built it): the
+  rider jacket's front and back and the trousers' front, each zone a pressable region with ONE Tab stop and the arrows,
+  the pick by outline, pin and words, the zones off the sketch as chips, the list as the keyboard and screen-reader way;
+  new: `marks` (a heat map's counts, a risk assessment's hazards) drawn in four steps with the number on the sketch and a
+  table of the marked zones; `shapes` / `figures` for another sketch. The zones and their words are the app's (`zones`).
+
 ## Portal and link parts — EndState, CodeInput, RefPair, MilestoneTracker, PaymentPanel, ActionList, PartnerThread, LineResponseList, PortalActionBar, the Modal phone sheet (R1), the stacked SizeGridEditor, branding for pop-ups (D24) (B-W2b-155) — 2026-11-07
 
 Additive only: nine new parts in new folders, each its own entry point with its stylesheet imported by the part (none in a

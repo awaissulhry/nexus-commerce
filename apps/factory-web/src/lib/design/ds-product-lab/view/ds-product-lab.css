@@ -1,0 +1,59 @@
+/* The product parts lab (/design/ds-product-parts, B-W2b-207): cards that fill the main area (no page max-width). */
+.fw-dpl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dpl-card {
+  min-width: 0;
+}
+
+.fw-dpl-stack,
+.fw-dpl-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dpl-zones {
+  display: grid;
+  /* At most three maps side by side; one column on a phone. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--nds-space-24);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-dpl-grid-box {
+  min-width: 0;
+}
+
+.fw-dpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-dpl-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dpl-note {
+  margin: 0 0 var(--nds-space-12);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dpl-status {
+  margin: 0;
+  min-height: 1.2em;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
