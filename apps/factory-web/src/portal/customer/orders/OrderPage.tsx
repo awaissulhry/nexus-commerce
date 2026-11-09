@@ -649,6 +649,8 @@ function OrderContainer({ id }: { id: string }) {
         record,
         tab,
         prefix: frame.prefix,
+        // B-W2b-194: a line's ⋯ "Reorder this line" opens New order's reorder of this order.
+        reorderHref: frame.me.permissions.includes('portal.orderRequests.manage') && !preview ? `${frame.prefix}/orders/new?reorder=${encodeURIComponent(id)}` : null,
         offlineSince: offline ? loadedAt : null,
         notice,
         revision,

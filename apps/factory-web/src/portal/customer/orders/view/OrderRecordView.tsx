@@ -66,6 +66,8 @@ export interface OrderRecordViewModel {
   /** The promise history is open (the band's ⋯ opens it too). */
   historyOpen?: boolean
   dialog: OrderDialog | null
+  /** B-W2b-194: "Reorder this line" (New order's reorder of this order; a person who may order), else null. */
+  reorderHref?: string | null
 }
 
 export interface OrderRecordActions {

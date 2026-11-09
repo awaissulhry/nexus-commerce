@@ -1,0 +1,465 @@
+{
+  "band": {
+    "title": "Nuovo ordine",
+    "pill": "Richiesta",
+    "pillSent": "Richiesta inviata",
+    "send": "Invia la richiesta d'ordine",
+    "discard": "Elimina la bozza",
+    "template": "Scarica il modello d'ordine (XLSX)",
+    "sentTitle": "Richiesta d'ordine inviata"
+  },
+  "keys": {
+    "search": "Cerca tra i modelli",
+    "cells": "Spostati tra le celle delle taglie",
+    "down": "Riga successiva della griglia",
+    "restore": "Rimetti la quantità della cella",
+    "send": "Invia la richiesta (dal riepilogo)",
+    "openStyle": "Apri il modello",
+    "nextStyle": "Modello successivo o precedente nel dettaglio",
+    "close": "Chiudi"
+  },
+  "start": {
+    "title": "Come vuoi ordinare?",
+    "intro": "Tre modi, una bozza: puoi combinarli prima di inviare.",
+    "keeps": "Scegliere un modo mantiene quanto è già nella bozza.",
+    "way": {
+      "pick": "Scegli i modelli",
+      "reorder": "Riordina un ordine passato",
+      "upload": "Carica un foglio"
+    },
+    "wayHint": {
+      "pick": "Dal tuo catalogo, con tutta la serie di taglie in una griglia.",
+      "reorder": "Copia un ordine passato ai prezzi di oggi: ogni differenza è scritta.",
+      "upload": "Un foglio di calcolo per grandi serie di taglie, controllato riga per riga prima di aggiungere."
+    },
+    "drafts": "Le tue bozze",
+    "draftsFailed": "Non è stato possibile leggere le tue bozze.",
+    "draft_one": "Continua la bozza del {day} · {count} riga",
+    "draft_other": "Continua la bozza del {day} · {count} righe",
+    "draftRef_one": "Continua la bozza {ref} del {day} · {count} riga",
+    "draftRef_other": "Continua la bozza {ref} del {day} · {count} righe"
+  },
+  "head": {
+    "title": "Dati dell'ordine",
+    "intro": "Quello che ci serve per gestire la richiesta. Ogni campo si salva quando lo lasci.",
+    "ref": "Il tuo numero d'ordine",
+    "refHint": "Il tuo numero per questo ordine: lo stampiamo su ogni documento.",
+    "shipTo": "Consegna a",
+    "shipToChoose": "Scegli un indirizzo di consegna",
+    "shipToHint": "Indirizzi verificati da noi. Qui puoi aggiungerne uno nuovo.",
+    "shipToWaiting": "Verifichiamo questo nuovo indirizzo prima della prima consegna. Puoi comunque inviare la richiesta: lo verifichiamo quando confermiamo.",
+    "shipToGone": "Questo indirizzo non è più in uso: scegline un altro.",
+    "shipToNone": "Non hai ancora un indirizzo di consegna: aggiungine uno.",
+    "default": "predefinito",
+    "waiting": "in attesa della nostra verifica",
+    "archived": "non più in uso",
+    "addAddress": "Aggiungi un nuovo indirizzo",
+    "addAddressAdmin": "Solo il tuo amministratore aggiunge indirizzi di consegna: chiedi a {names}.",
+    "addAddressAdminNone": "Solo il tuo amministratore aggiunge indirizzi di consegna.",
+    "date": "Data di consegna richiesta",
+    "dateHint": "Confermiamo la data quando confermiamo la richiesta.",
+    "note": "Nota per noi",
+    "noteHint": "Quello che dobbiamo sapere su questo ordine.",
+    "problem": {
+      "refLong": "Al massimo 100 caratteri.",
+      "noteLong": "Al massimo 4.000 caratteri.",
+      "datePast": "Scegli oggi o un giorno successivo."
+    }
+  },
+  "lines": {
+    "title_one": "Righe ({count})",
+    "title_other": "Righe ({count})",
+    "addStyles": "Aggiungi modelli",
+    "empty": "Ancora nessuna riga.",
+    "emptyBody": "Aggiungi un modello, riordina un ordine passato o carica un foglio.",
+    "lineTitle": "Riga {seq}: {title}",
+    "fromOrder": "dall'ordine {order}",
+    "fromOrderRef": "dall'ordine {order} (tuo numero {ref})",
+    "colour": "Colore",
+    "colourGone": "{colour} (fuori produzione)",
+    "menu": "Altro per la riga {seq}",
+    "remove": "Togli la riga",
+    "gridCaption": "Pezzi per taglia di {title}, {colour}",
+    "note": "Il tuo codice o una nota",
+    "noteHint": "Si salva con la riga; la vediamo nella richiesta.",
+    "pieces": "Pezzi",
+    "unitPrice": "Prezzo unitario",
+    "amount": "Importo riga",
+    "held": {
+      "empty": "Una riga chiede almeno un pezzo: scrivi le taglie o togli la riga."
+    },
+    "dropSize": "Lascia fuori la taglia {size}"
+  },
+  "size": {
+    "caption": "Pezzi per taglia",
+    "colour": "Colore",
+    "total": "Totale",
+    "cellName": "{colour}, taglia {size}",
+    "notOffered": "non offerta",
+    "empty": "Nessuna taglia.",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
+    "notWhole": "{cell}: solo pezzi interi, da 0 a {max}.",
+    "cutToMax": "{cell}: ridotto a {max}.",
+    "pasted": "{applied} incollati, {skipped} lasciati fuori.",
+    "issues": "Controlla queste taglie"
+  },
+  "reorder": {
+    "title": "Riordina un ordine passato",
+    "intro": "Scegli un ordine passato, poi le righe da copiare. Arrivano ai prezzi di oggi e ogni differenza è scritta prima di aggiungere qualcosa.",
+    "search": "Cerca nei tuoi ordini passati",
+    "searchHint": "Il tuo numero o il nostro numero d'ordine",
+    "ordersLabel": "I tuoi ordini passati",
+    "ordersCount_one": "{count} ordine",
+    "ordersCount_other": "{count} ordini",
+    "ordersFailed": "Non è stato possibile leggere i tuoi ordini passati.",
+    "empty": "Nessun ordine passato da riordinare.",
+    "noMatch": "Nessun ordine passato corrisponde a “{q}”.",
+    "back": "Tutti gli ordini passati",
+    "orderFailed": "Non è stato possibile leggere questo ordine.",
+    "todayPrices": "Le righe che si possono copiare sono già scelte. Una riga con un colore fuori produzione si sceglie quando indichi un altro colore.",
+    "linesLabel": "Righe di {order}",
+    "linesCount_one": "{count} riga",
+    "linesCount_other": "{count} righe",
+    "noLines": "Questo ordine non ha righe da copiare.",
+    "lineNo": "riga {seq}",
+    "chooseColour": "Un altro colore per la riga {seq}",
+    "colourGone": "{colour} — scegli un altro colore",
+    "sizeRun": "{size} × {quantity}",
+    "same": "Come ordinato",
+    "addN_one": "Aggiungi {count} riga alla bozza",
+    "addN_other": "Aggiungi {count} righe alla bozza",
+    "col": {
+      "order": "Ordine",
+      "date": "Ordinato il",
+      "lines": "Righe",
+      "pieces": "Pezzi",
+      "style": "Modello",
+      "colour": "Colore",
+      "sizes": "Taglie copiate",
+      "priceNow": "Prezzo di oggi",
+      "differences": "Cosa è cambiato"
+    },
+    "held": {
+      "colour": "Scegli prima un altro colore: questo è fuori produzione.",
+      "notAddable": "Questa riga non si può copiare: vedi cosa è cambiato."
+    }
+  },
+  "upload": {
+    "title": "Carica un foglio",
+    "intro": "Una riga per modello, colore e taglia. Controlliamo prima ogni riga; nulla viene aggiunto finché non lo dici tu.",
+    "template": "Modello d'ordine (XLSX)",
+    "templateHint": "Colonne: modello, colore, taglia, quantità, il tuo codice.",
+    "dropHint": "CSV o Excel, al massimo 700 KB.",
+    "reading": "Lettura di {file}…",
+    "failedTitle": "Non è stato possibile leggere {file}",
+    "unreadable": "Controlla che la prima riga abbia i nomi delle colonne del modello e riprova.",
+    "tooBig": "Il foglio supera i 700 KB: dividilo in due.",
+    "rows_one": "{count} riga",
+    "rows_other": "{count} righe",
+    "readyN_one": "{count} pronta",
+    "readyN_other": "{count} pronte",
+    "refusedN_one": "{count} rifiutata",
+    "refusedN_other": "{count} rifiutate",
+    "dryRun_one": "Questa è una prova: nella bozza non c'è ancora nulla. Le righe pronte formano {count} riga d'ordine.",
+    "dryRun_other": "Questa è una prova: nella bozza non c'è ancora nulla. Le righe pronte formano {count} righe d'ordine.",
+    "nothingReady": "Nessuna riga è pronta: correggi le righe rifiutate e carica di nuovo il foglio.",
+    "ignored": "Colonne non usate: {columns}.",
+    "verdictsLabel": "Righe di {file}",
+    "ready": "Pronta",
+    "refused": "Rifiutata",
+    "cellProblem": "Non è stato possibile leggere la cella {column}.",
+    "rowProblem": "Non è stato possibile leggere una cella di questa riga.",
+    "refusedCsv": "Scarica le righe rifiutate",
+    "refusedFile": "righe-rifiutate.csv",
+    "other": "Scegli un altro file",
+    "apply_one": "Aggiungi {count} riga all'ordine",
+    "apply_other": "Aggiungi {count} righe all'ordine",
+    "held": {
+      "none": "Nessuna riga è pronta da aggiungere."
+    },
+    "col": {
+      "row": "Riga",
+      "verdict": "Esito",
+      "style": "Modello",
+      "colour": "Colore",
+      "size": "Taglia",
+      "quantity": "Quantità",
+      "yourCode": "Il tuo codice",
+      "reason": "Motivo"
+    }
+  },
+  "summary": {
+    "title": "Riepilogo",
+    "lines": "Righe",
+    "pieces": "Pezzi",
+    "net": "Totale netto",
+    "netHint": "Ai prezzi del tuo listino mostrati su ogni riga; IVA e spedizione arrivano con la nostra conferma.",
+    "notice": "Questa è una richiesta. Confermiamo prezzo, quantità e data entro 1 giorno lavorativo; la vedrai negli Ordini.",
+    "pricesChanged_one": "I prezzi sono cambiati da quando hai iniziato — {count} riga",
+    "pricesChanged_other": "I prezzi sono cambiati da quando hai iniziato — {count} righe",
+    "takePrices": "Prendi i prezzi di oggi",
+    "problems_one": "{count} problema",
+    "problems_other": "{count} problemi",
+    "showMe": "Mostrami",
+    "sendKeys": "⌘ Invio invia da qui quando nulla lo trattiene."
+  },
+  "problem": {
+    "thisStyle": "Questo modello",
+    "NO_LINES": "Aggiungi almeno una riga.",
+    "TOO_MANY_LINES": "Al massimo {max} righe per richiesta.",
+    "DATE_PAST": "La data di consegna richiesta è passata: scegli oggi o un giorno successivo.",
+    "SHIP_TO_ARCHIVED": "L'indirizzo di consegna non è più in uso: scegline un altro.",
+    "STYLE_NOT_SOLD": "{style} non è più in vendita per te: togli la riga.",
+    "COLOUR_DISCONTINUED": "{colour} è fuori produzione: scegli un altro colore.",
+    "SIZE_NOT_OFFERED": "La taglia {size} non è offerta per {style}.",
+    "NO_SIZES": "La riga non chiede nessuna taglia.",
+    "PRICE_CHANGED": "Prezzo ora {now} (era {was}).",
+    "PRICE_NEW": "Prezzo ora {now}: prendi i prezzi di oggi.",
+    "PRICE_ANY": "Il prezzo è cambiato: prendi i prezzi di oggi."
+  },
+  "notice": {
+    "PRICE_CHANGED": "Prezzo ora {now} (era {was})",
+    "PRICE_ANY": "Il prezzo è cambiato da quell'ordine",
+    "REVISION_CHANGED": "Ora prodotto a una revisione più recente del modello",
+    "SIZES_DROPPED": "Taglie non più offerte, lasciate fuori: {sizes}",
+    "SIZES_DROPPED_SOME": "Alcune taglie non sono più offerte e sono state lasciate fuori",
+    "COLOUR_DISCONTINUED": "{colour} è fuori produzione — scegli un altro colore",
+    "STYLE_NOT_SOLD": "{style} non è più in vendita",
+    "MADE_TO_MEASURE": "Un capo su misura non si riordina da qui: chiedicelo",
+    "NO_SIZES_LEFT": "Nessuna delle sue taglie è ancora offerta",
+    "removed": "Riga {seq} tolta: {style}, {colour}.",
+    "back": "{style}, {colour} è di nuovo nella bozza al prezzo di oggi.",
+    "undo": "Annulla",
+    "hide": "Nascondi"
+  },
+  "done": {
+    "added_one": "{count} riga aggiunta alla bozza.",
+    "added_other": "{count} righe aggiunte alla bozza.",
+    "merged": "Taglia {size} aggiunta alla riga di {style} che avevi.",
+    "kept": "La taglia {size} di {style} era già nella bozza: abbiamo tenuto la tua quantità."
+  },
+  "sent": {
+    "title": "Richiesta d'ordine inviata",
+    "body": "La nostra richiesta {number}. Confermiamo entro il {day}.",
+    "bodyNoDay": "La nostra richiesta {number}. Confermiamo entro 1 giorno lavorativo.",
+    "bodyRef": "Il tuo numero {ref}, la nostra richiesta {number}. Confermiamo entro il {day}.",
+    "bodyRefNoDay": "Il tuo numero {ref}, la nostra richiesta {number}. Confermiamo entro 1 giorno lavorativo.",
+    "next": "Fino ad allora la segui negli Ordini come «Da confermare da noi».",
+    "reference": "La nostra richiesta",
+    "open": "Apri l'ordine",
+    "newOrder": "Nuovo ordine"
+  },
+  "closed": {
+    "title": "Richiesta {number}",
+    "titleNone": "Questa richiesta",
+    "SENT": "Questa richiesta è stata inviata: la confermiamo entro 1 giorno lavorativo. Per cambiarla ritirala negli Ordini o chiedici.",
+    "ACCEPTED": "Abbiamo confermato questa richiesta come ordine {order}.",
+    "REFUSED": "Non abbiamo accettato questa richiesta: il motivo è negli Ordini.",
+    "WITHDRAWN": "Questa richiesta è stata ritirata.",
+    "DRAFT": "Questa bozza è aperta."
+  },
+  "missing": {
+    "title": "Questa bozza non esiste più",
+    "body": "È stata inviata o eliminata, forse da un collega. Inizia un nuovo ordine o guarda negli Ordini."
+  },
+  "draft": {
+    "failed": "Non è stato possibile leggere questa bozza.",
+    "stale": "Questa bozza è cambiata altrove (un collega, un'altra scheda). Quello che hai scritto è ancora qui.",
+    "reload": "Rileggila"
+  },
+  "address": {
+    "title": "Nuovo indirizzo di consegna",
+    "check": "Verifichiamo i nuovi indirizzi prima della prima consegna. Questa richiesta d'ordine può andarci subito: lo verifichiamo quando confermiamo la richiesta.",
+    "failed": "Così com'è l'indirizzo non è stato accettato. Controlla i campi e riprova.",
+    "refused": {
+      "province": "Un indirizzo italiano ha la sua provincia: la sigla di due lettere (MI, FI, BO…).",
+      "field": "Così com’è questo campo non è stato accettato: controllalo."
+    }
+  },
+  "picker": {
+    "title": "Aggiungi modelli",
+    "subtitleStyles": "Scegli i modelli: Spazio sceglie una scheda, / cerca.",
+    "subtitleSizes": "Scrivi i pezzi per colore e taglia: una riga per colore.",
+    "search": "Cerca tra i modelli",
+    "searchHint": "Codice o nome",
+    "cardsLabel": "Modelli che puoi acquistare",
+    "cardLabel": "{code}, {name}",
+    "choose": "Scegli {code}",
+    "chosen_one": "{count} modello scelto",
+    "chosen_other": "{count} modelli scelti",
+    "next_one": "Avanti: taglie per {count} modello",
+    "next_other": "Avanti: taglie per {count} modelli",
+    "back": "Torna ai modelli",
+    "add_one": "Aggiungi {count} riga",
+    "add_other": "Aggiungi {count} righe",
+    "onDraft": "{colour} è già nella riga {seq}: cambia lì le sue taglie.",
+    "gridCaption": "Pezzi per colore e taglia di {style}",
+    "styleFailed": "Non è stato possibile leggere {style}.",
+    "refused": "Queste righe non sono state aggiunte così come sono: un modello o una taglia può essere cambiato. Rileggi i modelli e controlla le taglie.",
+    "held": {
+      "none": "Scegli almeno un modello.",
+      "noPieces": "Scrivi i pezzi di almeno un colore."
+    }
+  },
+  "discard": {
+    "title": "Eliminare questa bozza?",
+    "confirm": "Elimina la bozza",
+    "lines_one": "{count} riga verrà eliminata.",
+    "lines_other": "{count} righe verranno eliminate.",
+    "noNumber": "La bozza non è mai stata inviata: non l'abbiamo mai vista.",
+    "back": "inizia un nuovo ordine",
+    "acknowledge": "Ho capito: la bozza e le sue righe vengono eliminate."
+  },
+  "catalogue": {
+    "title": "Catalogo",
+    "updated": "Aggiornato alle {time}",
+    "start": "Inizia un ordine",
+    "stylesTitle": "Modelli che puoi acquistare",
+    "stylesLabel": "Modelli che puoi acquistare",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "countOf": "{count} di {total} modelli",
+    "viewLabel": "Mostra come",
+    "cards": "Schede",
+    "list": "Elenco",
+    "failed": "Non è stato possibile leggere il tuo catalogo.",
+    "empty": "Ancora nessun modello aperto per te.",
+    "emptyBody": "Chiedici: apriamo per il tuo account i modelli che acquisti.",
+    "ask": "Chiedici",
+    "noMatch": "Nessun modello corrisponde",
+    "noMatchSearch": "Nessun risultato per “{q}” con questi filtri.",
+    "noMatchFilters": "Nessun modello corrisponde a questi filtri.",
+    "changed": "Catalogo aggiornato: prezzi o modelli sono cambiati.",
+    "show": "Mostra",
+    "addN_one": "Aggiungi {count} all'ordine",
+    "addN_other": "Aggiungi {count} all'ordine"
+  },
+  "filters": {
+    "title": "Trova un modello",
+    "search": "Cerca nel catalogo",
+    "searchHint": "Codice o nome",
+    "toggle": "Filtri",
+    "toggleN": "Filtri ({count})",
+    "clear": "Togli tutti",
+    "category": "Categoria",
+    "season": "Stagione",
+    "ppe": "Classe di certificazione",
+    "range": "Gamma"
+  },
+  "card": {
+    "noPhoto": "Ancora nessuna foto",
+    "ownLabel": "Il tuo marchio",
+    "openRange": "Gamma aperta",
+    "type": "Tipo",
+    "colours_one": "{count} colore",
+    "colours_other": "{count} colori",
+    "sizes": "Taglie",
+    "from": "da {price}",
+    "add": "Aggiungi all'ordine",
+    "sheet": "Scheda modello"
+  },
+  "col": {
+    "style": "Modello",
+    "type": "Tipo",
+    "colours": "Colori",
+    "sizes": "Taglie",
+    "ppe": "Classe di certificazione",
+    "range": "Gamma",
+    "priceFrom": "Il tuo prezzo da"
+  },
+  "type": {
+    "JACKET": "Giacca",
+    "TROUSERS": "Pantaloni",
+    "SUIT": "Tuta",
+    "GLOVES": "Guanti",
+    "VEST": "Gilet",
+    "OTHER": "Altro"
+  },
+  "ppe": {
+    "none": "Non DPI",
+    "cat1": "DPI categoria I",
+    "cat2": "DPI categoria II",
+    "cat3": "DPI categoria III",
+    "other": "DPI",
+    "class": "classe {class}"
+  },
+  "detail": {
+    "reading": "Lettura del modello…",
+    "noun": "modello",
+    "failed": "Non è stato possibile leggere questo modello.",
+    "missing": "Questo modello non è nel tuo catalogo.",
+    "facts": "Il modello",
+    "baseSize": "Taglia base {size}",
+    "revision": "Prodotto alla",
+    "revisionValue": "revisione {revision}",
+    "price": "Il tuo prezzo",
+    "certificate": "Certificazione",
+    "category": "Categoria",
+    "standard": "Norma",
+    "class": "Classe",
+    "sizeChart": "Tabella taglie (PDF)",
+    "sizeChartHeld": "La tabella taglie non è ancora nel portale: chiedicela e te la mandiamo.",
+    "publicDoc": "Dichiarazione di conformità",
+    "docHeld": "La pagina pubblica della dichiarazione non è ancora pubblicata: chiedicela e te la mandiamo.",
+    "colours_one": "{count} colore e le sue taglie",
+    "colours_other": "{count} colori e le loro taglie",
+    "colour": "Colore",
+    "offered": "offerta",
+    "notOffered": "non offerta",
+    "later": "Foto, istruzioni di cura e d'uso, ordine minimo e tempi di consegna non sono ancora nel portale: chiedici."
+  },
+  "sheet": {
+    "title": "Scheda modello {code}",
+    "titleNone": "Scheda modello",
+    "for": "Per {party} · {at}",
+    "print": "Stampa o salva come PDF",
+    "sizesOffered": "Taglie offerte"
+  },
+  "prices": {
+    "none": "I prezzi non fanno parte del tuo accesso."
+  },
+  "held": {
+    "preview": "Questa è un'anteprima del portale: non si salva nulla.",
+    "offline": "Nessuna connessione: riprova quando sei di nuovo in linea.",
+    "busy": "Salvataggio…",
+    "notDraft": "Questa richiesta è già stata inviata.",
+    "problems_one": "{count} problema da risolvere — Mostrami",
+    "problems_other": "{count} problemi da risolvere — Mostrami",
+    "mayNotOrder": "Solo i colleghi che possono ordinare iniziano un ordine: chiedi al tuo amministratore."
+  },
+  "refusal": {
+    "conflict": "Qualcuno ha cambiato questa bozza nello stesso momento: rileggila e riprova.",
+    "invalid": "Così com'è non è stato accettato: controlla la riga e riprova.",
+    "forbidden": "Questo non fa parte del tuo accesso.",
+    "notFound": "Questa bozza o questa riga non esiste più.",
+    "rateLimited": "Troppi tentativi: aspetta un momento e riprova.",
+    "unavailable": "Non siamo riusciti a raggiungere il server: non si è perso nulla, riprova.",
+    "other": "Qualcosa non è andato da parte nostra: non si è perso nulla, riprova."
+  },
+  "unsaved": {
+    "what": "Una parte di quanto hai scritto nella bozza non è ancora salvata."
+  },
+  "offline": {
+    "title": "Nessuna connessione — vedi quanto caricato alle {time}"
+  },
+  "dialog": {
+    "cancel": "Annulla",
+    "close": "Chiudi"
+  },
+  "state": {
+    "loading": "Caricamento",
+    "stillLoading": "Ancora in caricamento…",
+    "retry": "Riprova",
+    "saving": "Salvataggio…"
+  },
+  "noAccess": {
+    "title": "Questa pagina non fa parte del tuo accesso",
+    "ask": "Se ti serve chiedi a {names}.",
+    "askAdmin": "Se ti serve chiedi al tuo amministratore.",
+    "home": "Vai alla Home"
+  },
+  "ref": {
+    "yours": "Tuo ordine",
+    "ours": "Nostro ordine"
+  }
+}

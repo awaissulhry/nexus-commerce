@@ -18,11 +18,14 @@ export function homeBandOf(input: {
   emailSettings: boolean
   /** `g o` opens Orders (the page is built and theirs). */
   ordersKey: boolean
+  /** B-W2b-194: New order's address for a buyer (not in a preview), else null. */
+  newOrder?: string | null
 }): PortalBand {
   const { t } = input
   return {
     status: input.asOf ? { label: t('band.updated', { time: input.asOf }), tone: 'neutral' } : null,
-    actions: [],
+    // B-W2b-194: the design's primary "New order" (h.act), a buyer's.
+    actions: input.newOrder ? [{ id: 'new-order', label: t('band.newOrder'), variant: 'primary', href: input.newOrder }] : [],
     more: [
       ...(input.statement ? [{ id: 'statement', label: t('band.statement'), href: input.statement, target: '_blank' as const }] : []),
       ...(input.emailSettings ? [{ id: 'email', label: t('band.emailSettings'), href: '?dialog=email-settings' }] : []),
