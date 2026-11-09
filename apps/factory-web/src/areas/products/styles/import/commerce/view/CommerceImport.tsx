@@ -254,7 +254,7 @@ function ImportButton({ held, onImport }: { held: string | null; onImport?: () =
   )
 }
 
-/** The design index's view (SCR-273): one model, the steps as the styles list draws them. */
+/** The design index's view (SCR-274): one model, the steps as the styles list draws them. */
 export function CommerceImportDesign({ model }: { model: CommerceImportProps }) {
   return <CommerceImport {...model} />
 }

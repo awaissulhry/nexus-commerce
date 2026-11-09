@@ -8,7 +8,7 @@ import type { CommerceImportModel } from './commerce-model'
 import { CommerceImportDesign, type CommerceImportProps } from './view/CommerceImport'
 
 /**
- * SCR-273 Start from a Nexus Commerce product (B-W2b-209; PRD-265; design products.styles pop:styles.new "Start from …
+ * SCR-274 Start from a Nexus Commerce product (B-W2b-209; PRD-265; design products.styles pop:styles.new "Start from …
  * Nexus Commerce product (W2b)" and page.h "Import (W2b: from Nexus Commerce or a sheet)"): the source step (the file
  * chosen, the live read OFF waiting for the Owner's word), the import wizard on `product.commerceStyles`, and the styles
  * the file started. Made-up data only: an invented export of the demo touring jacket, codes, names and barcodes invented.
@@ -134,7 +134,7 @@ function sheet(step: 'upload' | 'planned' | 'applied'): SheetImport {
 const view = (model: CommerceImportModel | null, wizard: SheetImport | null = null): CommerceImportProps => ({ model, sheet: wizard, prefix: PREFIX })
 
 export const designScreen = defineDesignScreen<CommerceImportProps>({
-  screen: 'SCR-273',
+  screen: 'SCR-274',
   title: 'Start from a Nexus Commerce product',
   view: CommerceImportDesign,
   cases: [

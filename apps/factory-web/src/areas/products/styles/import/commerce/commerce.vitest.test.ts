@@ -13,7 +13,7 @@ import { commerceHeld, continueHeld, liveReasonKey, onlyStarted, readProblemKey 
 import { COMMERCE_DEMO, designScreen } from './fixtures'
 import { CommerceImportButton } from './view/CommerceImport'
 
-/** B-W2b-209: New style › Nexus Commerce product and the styles header's Import (SCR-273). Made-up data only. */
+/** B-W2b-209: New style › Nexus Commerce product and the styles header's Import (SCR-274). Made-up data only. */
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 
@@ -71,7 +71,7 @@ describe('the words', () => {
   })
 
   it('the design screen has every state and role case', () => {
-    expect(designScreen.screen).toBe('SCR-273')
+    expect(designScreen.screen).toBe('SCR-274')
     expect(designScreen.cases.map((item) => item.id)).toEqual(
       expect.arrayContaining(['source', 'source-loading', 'source-error', 'source-no-manage', 'source-no-import', 'upload', 'planned', 'applied', 'done', 'done-many', 'done-none', 'done-loading', 'done-error', 'no-permission']),
     )
