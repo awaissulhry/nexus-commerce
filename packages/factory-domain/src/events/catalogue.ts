@@ -137,6 +137,8 @@ import { events as measureLink } from '../measure-link/events'
 import { events as supplierQuestionnaire } from '../supplier-questionnaire/events'
 // B-W2b-214: work instructions (an instruction changed, a version published, a version seen).
 import { events as productionInstructions } from '../production-instructions/events'
+// B-W2b-215: SMV versions and an operation's SMV taking an approved version.
+import { events as productMinutes } from '../product-minutes/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -340,7 +342,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-208
   ...textileRules,
   // B-W2b-214
-  ...productionInstructions] as const satisfies readonly EventDefinition[]
+  ...productionInstructions,
+  // B-W2b-215
+  ...productMinutes] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -22,6 +22,7 @@ import {
 } from '@nexus/factory-domain/product/routing/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { findRevision } from '../bom/store'
+import { assertTypedStepSmv } from '../minutes/governance'
 import {
   assertMayWrite,
   assertNoLinesUse,
@@ -147,6 +148,8 @@ export async function updateStep(caller: CommandCaller, styleId: string, revisio
     const plan = planStepChange(current, change)
     if (!plan.ok) throw invalid(prefixed(plan.issues))
     const changed = stepChanges(current, plan.step)
+    // B-W2b-215: a step whose SMV is copied from a version or built from allowances changes it in its minutes (the database refuses a typed one).
+    if (changed.includes('standardMinutes')) await assertTypedStepSmv(tx, stepId)
     const was: Subcontract | null = (await readSubcontracts(tx, revisionId)).get(stepId) ?? null
     let next = was
     if (subcontractChange !== undefined) {

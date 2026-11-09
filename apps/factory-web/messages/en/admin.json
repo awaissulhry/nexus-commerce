@@ -1682,6 +1682,8 @@
     "product_routing_view": "See routings and standard minutes",
     "product_routing_manage": "Edit a draft routing",
     "product_operations_manage": "Keep the operation library",
+    "product_smv_propose": "Propose a change of an operation's standard minutes (SMV)",
+    "product_smv_approve": "Approve or reject someone else's SMV change",
     "inventory_locations_view": "See a site's locations",
     "inventory_locations_manage": "Create, move and archive locations",
     "inventory_stock_view": "See the stock and its moves",
