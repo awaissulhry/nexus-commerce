@@ -299,11 +299,11 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Controllo reparto',
         hideLabel: false,
         pages: [
+          // W2b: B-W2b-57 Labour & corrections (SCR-139, SCR-143); B-W2b-151: first of Floor control, the tree's order.
+          { id: 'production.labour', title: 'Labour & corrections', titleIt: 'Manodopera e rettifiche', wave: 'W2b', href: '/production/labour' },
           { id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' },
           // W2b: B-W2b-58 Help calls (SCR-142).
           { id: 'production.calls', title: 'Help calls', titleIt: 'Chiamate di aiuto', wave: 'W2b', href: '/production/calls' },
-          // W2b: B-W2b-57 Labour & corrections (SCR-139, SCR-143).
-          { id: 'production.labour', title: 'Labour & corrections', titleIt: 'Manodopera e rettifiche', wave: 'W2b', href: '/production/labour' },
         ],
       },
       {
@@ -486,9 +486,9 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
           { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
-          { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
-          // B-W2b-142: Preventive & statutory checks (SCR-266).
+          // B-W2b-142: Preventive & statutory checks (SCR-266); B-W2b-151: before Machines & tools, the tree's order.
           { id: 'plant.preventive', title: 'Preventive & statutory checks', titleIt: 'Manutenzione programmata e verifiche', wave: 'W2b', href: '/plant/preventive' },
+          { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
         ],
       },
       // B-W2b-120: Health & safety ships its Safety calendar (SCR-267); the other Health & safety pages join with their steps.

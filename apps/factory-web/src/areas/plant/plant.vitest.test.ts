@@ -77,9 +77,9 @@ describe('plant: who may do what', () => {
     expect(officeArea.area.sections?.[0]?.items.map((item) => [item.href, item.permission])).toEqual([
       ['/plant/requests', 'plant.view'],
       ['/plant/jobs', 'plant.view'],
-      ['/plant/machines', 'plant.view'],
-      // B-W2b-142: Preventive & statutory checks (SCR-266).
+      // B-W2b-142: Preventive & statutory checks (SCR-266); B-W2b-151: before Machines & tools (the approved tree's order).
       ['/plant/preventive', 'plant.view'],
+      ['/plant/machines', 'plant.view'],
     ])
     expect(officeNavFor(permissionCheck(templateOf('sales')!.permissions)).areas.map((area) => area.id)).not.toContain('plant')
     expect(officeNavFor(permissionCheck(templateOf('maintenance')!.permissions)).areas.map((area) => area.id)).toContain('plant')

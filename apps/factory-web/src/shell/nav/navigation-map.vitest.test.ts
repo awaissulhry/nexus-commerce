@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { FLOOR_SYNC_KINDS } from '@nexus/factory-domain/floor-sync/kinds'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { LENS_RULES } from '@nexus/factory-domain/insights/flow'
 import { LINK_PURPOSES, PURPOSE_RULES } from '@nexus/factory-domain/links/purposes'
@@ -12,6 +13,7 @@ import { NEW_VERBS } from '../../areas/home/today/model'
 import { PANELS } from '../../areas/home/today/panels'
 import { SEARCH_TYPES } from '../../areas/search/model'
 import { FLOOR_MODES, homeTiles, MAX_TILES, TILE_KEYS, tilePage, TILE_RULES, type FloorMode, type TileKey } from '../../floor/model'
+import { whatKeyOf } from '../../floor/queue/actions'
 import { LABEL_TYPES, type ScanRead } from '../../floor/scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../../floor/tasks/routes'
 import { LOCALES, type Locale } from '../../lib/i18n/locales'
@@ -487,6 +489,11 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     }
     // A subcontract station (no floor mode): Scan anything shows every card.
     for (const read of Object.values(reads)) expect(taskForScan(null, read, homeTiles(null, everything, false))).toBeNull()
+  })
+
+  it('Waiting to send says every queued kind in its own words, never the bare "Action" (B-W2b-151: the W2b-2 kinds)', () => {
+    // Each key's words in both languages: floor/screens.vitest.test.ts.
+    expect(FLOOR_SYNC_KINDS.filter((kind) => whatKeyOf(kind) === 'other')).toEqual([])
   })
 })
 
