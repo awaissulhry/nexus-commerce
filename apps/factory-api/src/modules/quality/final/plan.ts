@@ -5,7 +5,6 @@ import type { Uom } from '@nexus/factory-domain/product/units/units'
 import type { DefectClass } from '@nexus/factory-domain/quality/defects/rules'
 import {
   identitySummary,
-  inspectedOf,
   mtmPoints,
   scansOf,
   stopRuleOf,
@@ -218,6 +217,3 @@ export async function becauseWords(db: Reader, chips: readonly Chip[]): Promise<
     })
     .join(', ')
 }
-
-/** The units inspected so far, kept in the inspection's AQL_SAMPLE entry. */
-export const inspectedIn = (row: Pick<InspectionRow, 'checklist'>): number => inspectedOf(row.checklist)

@@ -287,5 +287,11 @@
       "message": "This code leads to more than one inspection.",
       "fix": "Pick the one you are inspecting."
     }
+  },
+  "verdict": {
+    "accept": "Verdict before the decision: accepted ({inspected} of {sample} inspected, no class at its reject number).",
+    "reject": "Verdict before the decision: rejected ({klass} {found}, rejects at {reject}; {inspected} of {sample} inspected).",
+    "rejectCheck": "Verdict before the decision: rejected (a critical check failed; {inspected} of {sample} inspected).",
+    "open": "Verdict before the decision: under way ({inspected} of {sample} inspected, {remaining} to go)."
   }
 }

@@ -211,7 +211,7 @@ async function runHeld(tx: CommandTx, row: Pick<CheckRow, 'workOrderId' | 'workO
   return firstPieceHold(await firstPieceRows(tx, row.workOrderId!), { bundleId: '', workOrderOperationId: row.workOrderOperationId }).held
 }
 
-function changedEvent(tools: CommandTools, row: CheckRow, change: 'OPENED' | 'RESULTS' | 'DECIDED' | 'RECORDED' | 'CANCELLED') {
+export function changedEvent(tools: CommandTools, row: CheckRow, change: 'OPENED' | 'RESULTS' | 'DECIDED' | 'RECORDED' | 'CANCELLED' | 'COUNTED' | 'DUE') {
   tools.emit({
     type: 'in_process_check.changed',
     subject: row.id,
@@ -267,12 +267,15 @@ export async function openCheck(caller: CommandCaller, body: OpenBody, idempoten
     const planVersionId = await planVersionFor(tx, body, where)
     let aqlProfileId: string | null = null
     let codeLetter: string | null = null
+    // B-W2b-213: the AQL sample is frozen on the check when it opens (InProcessCheck.sampleSize; read only before).
+    let sampleSize: number | null = null
     const lot = body.kind === 'FIRST_PIECE' || body.decision ? null : await lotOf(tx, where)
     if (lot !== null && where.workOrder) {
       const answer = await aqlPlanFor(tx, { companyId: where.companyId, planVersionId, styleId: where.workOrder.styleId, customerIds: await customersOf(tx, where.workOrder.id), lotSize: lot })
       if (answer.profile && answer.plan) {
         aqlProfileId = answer.profile.id
         codeLetter = answer.plan.codeLetter ?? null
+        sampleSize = answer.plan.sampleSize
       }
     }
     const decided = body.decision ? findingOf(body.decision) : null
@@ -292,6 +295,7 @@ export async function openCheck(caller: CommandCaller, body: OpenBody, idempoten
         planVersionId,
         aqlProfileId,
         codeLetter,
+        sampleSize,
         pieces: decided?.pieces ?? 0,
         defectivePieces: decided?.defectivePieces ?? 0,
         defects: decided?.defects ?? 0,
@@ -314,7 +318,7 @@ export async function openCheck(caller: CommandCaller, body: OpenBody, idempoten
       recordId: id,
       companyId: where.companyId,
       siteId: where.siteId,
-      after: { kind: body.kind, status: row.status, outcome: row.outcome, lineId: row.lineId, workOrderId: row.workOrderId, bundleId: row.bundleId, workOrderOperationId: row.workOrderOperationId, planVersionId, aqlProfileId, codeLetter, pieces: row.pieces, defectivePieces: row.defectivePieces, defects: row.defects, defectCodeId: row.defectCodeId, inspector: signer, postedBy: postedBy(context), ...(context.audience === 'floor' ? { deviceId: context.deviceId } : {}), operatorNamed: operator !== null },
+      after: { kind: body.kind, status: row.status, outcome: row.outcome, lineId: row.lineId, workOrderId: row.workOrderId, bundleId: row.bundleId, workOrderOperationId: row.workOrderOperationId, planVersionId, aqlProfileId, codeLetter, sampleSize, pieces: row.pieces, defectivePieces: row.defectivePieces, defects: row.defects, defectCodeId: row.defectCodeId, inspector: signer, postedBy: postedBy(context), ...(context.audience === 'floor' ? { deviceId: context.deviceId } : {}), operatorNamed: operator !== null },
     })
     changedEvent(tools, row, decided ? 'RECORDED' : 'OPENED')
     await firstPieceEvent(tools, row)
@@ -326,7 +330,7 @@ export async function openCheck(caller: CommandCaller, body: OpenBody, idempoten
 // ---- record the plan results ----------------------------------------------------------------------------------------------------
 
 /** The check's row FOR UPDATE inside a command, then its version and its state (an OPEN one only: 409 in words). */
-async function lockCheck(tx: CommandTx, checkId: string, expectedVersion: number): Promise<CheckRow> {
+export async function lockCheck(tx: CommandTx, checkId: string, expectedVersion: number): Promise<CheckRow> {
   await tx.$queryRaw`SELECT "id" FROM "InProcessCheck" WHERE "id" = ${checkId}::uuid FOR UPDATE`
   const row = await readCheck(tx, checkId)
   if (!row) refuse({ code: 'NOT_FOUND', message: 'Check not found.', fix: 'Reload the line.' })
@@ -335,12 +339,12 @@ async function lockCheck(tx: CommandTx, checkId: string, expectedVersion: number
   return row!
 }
 
-function assertOpen(row: Pick<CheckRow, 'status'>): void {
+export function assertOpen(row: Pick<CheckRow, 'status'>): void {
   if (row.status !== 'OPEN') refuse({ code: 'NOT_OPEN', message: `This check is ${row.status.toLowerCase()}: a decided or cancelled check never changes (a correction is an amendment).`, fix: 'Open a new check.' })
 }
 
 /** The check as the caller may act on it with the permission (404 / 403). */
-async function checkFor(caller: CommandCaller, context: Checker, checkId: string): Promise<CheckRow> {
+export async function checkFor(caller: CommandCaller, context: Checker, checkId: string): Promise<CheckRow> {
   const row = await caller.withClient((db) => readCheck(db, checkId))
   if (!row) throw new NotFoundError('Check not found.')
   assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_RECORD, row, 'Check')

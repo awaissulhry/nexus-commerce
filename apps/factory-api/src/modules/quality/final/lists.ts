@@ -5,7 +5,7 @@ import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/pe
 import { inspectionLabel, inspectionOverdue, type InspectionStatus } from '@nexus/factory-domain/quality/final/rules'
 import { inspectionHold } from '@nexus/factory-domain/quality/release/rules'
 // B-W2b-127: the units counted on a plan (the counter's system entry).
-import { inspectedOf } from '@nexus/factory-domain/quality/final/plan'
+import { inspectedNow } from '@nexus/factory-domain/quality/final/plan'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeOf } from './access'
@@ -138,7 +138,7 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
         createdAt: toUtcIso(row.createdAt),
         // B-W2b-127: the plan version, the units counted on a plan (B-W2b-97's counter), a countersigned correction.
         planVersion: row.planVersionId ? (versions.get(row.planVersionId) ?? null) : null,
-        inspected: row.planVersionId ? inspectedOf(row.checklist) : null,
+        inspected: row.planVersionId ? inspectedNow(row) : null,
         amended: amendedIds.has(row.id),
       })
       if (out.length >= query.limit) break

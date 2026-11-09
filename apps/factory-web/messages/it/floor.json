@@ -751,7 +751,8 @@
       "incomingRecord": "Controllo in accettazione: una pelle o i controlli",
       "inlineRecord": "Controllo in linea: l'esito di un controllo",
       "inlineResults": "Controllo in linea: i controlli del piano",
-      "finalRecord": "Collaudo finale: risultati e misure"
+      "finalRecord": "Collaudo finale: risultati e misure",
+      "instructionSeen": "Istruzione di lavoro vista"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

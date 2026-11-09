@@ -46,6 +46,12 @@ const row = {
   dhu: z.string().nullable(),
   defect: output({ id: id(), code: z.string(), labelIt: z.string(), labelEn: z.string(), critical: z.boolean() }).nullable(),
   hasPlan: z.boolean(),
+  /** B-W2b-213: the AQL sample frozen when it opened, the units of it counted (null: no sample), by when it is due, a rule's. */
+  sampleSize: z.number().int().nullable(),
+  inspected: z.number().int().nullable(),
+  dueAt: instant().nullable(),
+  overdue: z.boolean(),
+  openedByRule: z.boolean(),
   decidedAt: instant().nullable(),
   createdAt: instant(),
   version: z.number().int(),
@@ -75,6 +81,7 @@ const check = output({
   results: z.array(output({ id: id(), code: z.string(), sampleIndex: z.number().int(), outcome: z.enum(RESULT_OUTCOMES), value: z.string().nullable(), note: z.string().nullable(), recordedAt: instant() })),
   blockers: z.array(z.string()),
   sample: output({ aqlProfileId: id(), profileCode: z.string(), codeLetter: z.string().nullable(), sampleSize: z.number().int().nullable(), words: z.string().nullable() }).nullable(),
+  progress: output({ inspected: z.number().int(), sampleSize: z.number().int(), words }).nullable(),
   suggested: z.enum(['GREEN', 'AMBER', 'RED']).nullable(),
   holdsRun: z.boolean().nullable(),
   sendBack: output({ workOrderOperationId: id(), bundleId: id(), pieces: z.number().int() }).nullable(),
@@ -130,6 +137,12 @@ export const decideContract = defineContract({
 })
 
 export const cancelContract = defineContract({ params, body: input({ version: version(), reason: z.string().min(1).max(LIMITS.reason) }), response: checkAnswer })
+
+/** B-W2b-213: the units of the check's AQL sample inspected ({ inspected } the count, or { add } units to it). */
+export const countContract = defineContract({ params, body: input({ version: version(), inspected: z.number().int().min(0).max(100_000).optional(), add: z.number().int().min(-100_000).max(100_000).optional() }), response: checkAnswer })
+
+/** B-W2b-213: by when the check is due (null: no due time); the office only. */
+export const dueContract = defineContract({ params, body: input({ version: version(), dueAt: instant().nullable() }), response: checkAnswer })
 
 export const dhuContract = defineContract({
   querystring: input({ lineId: id().optional(), date: businessDate().optional() }),

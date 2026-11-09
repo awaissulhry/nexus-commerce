@@ -20,9 +20,12 @@ import { NOTE_MAX, type DefectClass, type InspectionResult, type SamplingPlan } 
  *                  check gives both, else the rider's measurement profile (a made-to-measure unit: QHS-053, nominal by
  *                  the template's point code) or the inspector types them from the size chart (no graded garment spec is
  *                  kept yet: a schema need). The database writes `pass`.
- *   the counter    the units of the sample inspected so far (the bench's "+ one piece"), kept in the inspection's
- *                  `checklist` as its AQL_SAMPLE entry (no column yet: B-W2b-93's schema need Inspection.inspectedCount).
- *                  A PASS needs the whole sample; a FAIL too, unless the stop rule (the plan version's stopAtReject, else
+ *   the counter    the units of the sample inspected so far (the bench's "+ one piece"): Inspection.inspectedCount
+ *                  (B-W2b-213; W2b schema wave 24/33). Before the column the count was the AQL_SAMPLE entry of
+ *                  `checklist`: `inspectedNow` reads the column, else that entry (decided inspections keep it: W1's guard
+ *                  freezes them), and the next count of an OPEN one copies it into the column once and drops the entry.
+ *                  The decision still writes the entry into the signed checklist (W1's rule wants a non-empty list; a FAIL
+ *                  may be signed with no check answered). A PASS needs the whole sample; a FAIL too, unless the stop rule (the plan version's stopAtReject, else
  *                  the company's, else the tenant's QualitySettings.stopAtRejectNumber, else finish the sample) is on and
  *                  the sample already rejects (a class at its reject number, a critical defect or a failed critical check).
  *   the identity   the serial (a serial-tracked style: every garment of the lot) or the batch number (once) scanned
@@ -59,7 +62,7 @@ const entriesOf = (checklist: unknown): ChecklistEntry[] =>
 
 const entryOf = (checklist: unknown, code: string): ChecklistEntry | undefined => entriesOf(checklist).find((entry) => entry.code === code)
 
-/** The units of the sample inspected so far (0 when the counter never ran). */
+/** The units of the sample inspected so far as the AQL_SAMPLE entry of `checklist` kept them (0 when it never ran). */
 export function inspectedOf(checklist: unknown): number {
   const value = entryOf(checklist, SAMPLE_ENTRY)?.inspected
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0
@@ -72,6 +75,27 @@ export function withEntry(checklist: unknown, entry: ChecklistEntry): ChecklistE
 }
 
 export const sampleEntry = (inspected: number, sampleSize: number): ChecklistEntry => ({ code: SAMPLE_ENTRY, ok: null, note: `${inspected} of ${sampleSize} inspected`, inspected })
+
+/** The checklist without one system entry, the others in their order (an OPEN inspection's list may be empty). */
+export function withoutEntry(checklist: unknown, code: string): ChecklistEntry[] {
+  return entriesOf(checklist).filter((item) => item.code !== code)
+}
+
+/** Whether `checklist` still keeps the counter's AQL_SAMPLE entry (an inspection counted before the column). */
+export const keepsSampleEntry = (checklist: unknown): boolean => entryOf(checklist, SAMPLE_ENTRY) !== undefined
+
+/**
+ * B-W2b-213: the units of the sample inspected now: Inspection.inspectedCount, else (an inspection counted before the
+ * column, or a decided one) its AQL_SAMPLE entry, else 0.
+ */
+export function inspectedNow(row: { readonly inspectedCount: number | null; readonly checklist: unknown }): number {
+  return row.inspectedCount ?? inspectedOf(row.checklist)
+}
+
+/** "38 of 50 inspected" / "38 di 50 controllati". */
+export function countWords(inspected: number, sampleSize: number): { readonly it: string; readonly en: string } {
+  return { it: `${inspected} di ${sampleSize} controllati`, en: `${inspected} of ${sampleSize} inspected` }
+}
 
 // ---- the plan's checks and what was recorded ---------------------------------------------------------------------------
 

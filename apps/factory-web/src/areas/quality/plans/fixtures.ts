@@ -62,8 +62,10 @@ const DRAFTS = PROFILES.profiles.map(profileDraftOf)
 const PROFILES_CHANGED = [{ ...DRAFTS[0]!, isDefault: false }, { ...DRAFTS[1]!, isDefault: true, minor: '4.0' }, DRAFTS[2]!, DRAFTS[3]!, { ...newProfile(1, false), code: 'AQL-GLOVES', name: 'Gloves, small lots', level: 'S3' as const, major: '4.0', minor: '6.5' }]
 const PROFILES_BAD = [{ ...DRAFTS[0]!, active: false }, DRAFTS[1]!, DRAFTS[2]!, DRAFTS[3]!, { ...newProfile(2, false), code: 'aql gloves', name: '' }]
 const RULE_DRAFTS = RULES_ANSWER.rules.map(ruleDraftOf)
-const RULES_MOVED = [RULE_DRAFTS[1]!, RULE_DRAFTS[0]!, { ...RULE_DRAFTS[2]!, active: true }]
+const RULES_MOVED = [RULE_DRAFTS[1]!, RULE_DRAFTS[0]!, { ...RULE_DRAFTS[2]!, active: true }, RULE_DRAFTS[3]!]
 const NEW_RULE = { ...newRule(1, 'GOODS_RECEIPT', PLAN_IDS.inc), chips: [{ kind: 'CATEGORY' as const, value: 'PROTECTOR', label: 'PROTECTOR' }] }
+// B-W2b-213: a packing rule (a final inspection with no inspector yet), due 8 hours after it opens.
+const PACKING_RULE = { ...newRule(3, 'PACKING', PLAN_IDS.fin), dueHours: 8 as const }
 
 function PlansDesign({ model: design }: { model: DesignModel }) {
   const [current, setCurrent] = useState<PlansModel>(design.model)
@@ -134,9 +136,11 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'aql-problems', label: 'AQL profiles held: the default retired, a code with spaces, no name (Save held with why)', model: tab('aql', { profileDrafts: PROFILES_BAD }) },
     { id: 'aql-where', label: 'Where AQL-EXM applies: its customer, End, assign to a customer or a style', model: tab('aql', { assignments: { profileId: PROFILES.profiles[1]!.id, read: ready(ASSIGNMENTS), customer: null, style: null, customers: null, styles: null, problem: null } }) },
     { id: 'aql-saved', label: 'AQL profiles saved (the receipt)', model: tab('aql', { notice: { key: 'done.profiles', params: { count: 3 }, tone: 'success' } }) },
-    { id: 'triggers', label: 'When inspections are created: three rules in order, what each opened, why one skipped; packing and returns held in words', model: tab('triggers') },
+    { id: 'triggers', label: 'When inspections are created: four rules in order (a packing rule due within 8 h), what each opened, why one skipped; returns held in words', model: tab('triggers') },
     { id: 'triggers-moved', label: 'Rules reordered and one switched on (Save 2 changes)', model: tab('triggers', { ruleDrafts: RULES_MOVED }) },
     { id: 'rule-new', label: 'New rule: protectors received → DEMO-INC-LEATHER every lot, with the preview of last month', model: tab('triggers', { ruleDialog: { draft: NEW_RULE, shown: false, preview: ready(PREVIEW_WORDS) } }) },
+    { id: 'rule-packing', label: 'B-W2b-213 — New rule: packing → DEMO-FIN-JACKET every lot, due within 8 hours (a final inspection nobody took yet)', model: tab('triggers', { ruleDialog: { draft: PACKING_RULE, shown: false, preview: null } }) },
+    { id: 'rule-due-problem', label: 'B-W2b-213 — Due within 0 hours: refused at its field (1 to 720 or empty)', model: tab('triggers', { ruleDialog: { draft: { ...PACKING_RULE, dueHours: 0 }, shown: true, preview: null } }) },
     { id: 'rule-problems', label: 'A rule with problems: a plan with no approved version kept on, a share of 0% (Done held)', model: tab('triggers', { ruleDialog: { draft: { ...newRule(2, 'OPERATION_FINISHED', PLAN_IDS.cut), frequency: 'PERCENT_OF_OPERATIONS', frequencyValue: '' }, shown: true, preview: null } }) },
     { id: 'calculator', label: 'AQL calculator: lot 480 · general II → H → 50; critical locked', model: tab('calculator', { address: address({ tab: 'calculator', calc: { lot: 480, level: 'II', profile: null, major: '2.5', minor: '4.0' } }) }) },
     { id: 'calculator-arrows', label: 'Calculator: lot 50 with AQL-EXM — the arrows give two samples, the larger is inspected', model: tab('calculator', { address: address({ tab: 'calculator', calc: { lot: 50, level: 'II', profile: PROFILES.profiles[1]!.id, major: '1.5', minor: '2.5' } }) }) },
