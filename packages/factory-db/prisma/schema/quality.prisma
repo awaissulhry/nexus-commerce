@@ -714,6 +714,15 @@ model LabResult {
 /// The tests a lab result records (W1: chromium VI; tear strength, rub fastness, abrasion come with W2b).
 enum LabTest {
   CR_VI
+  /// W2b-4 (schema wave 31/33, B-W2b-217; substances.prisma): the restricted-substance tests a test plan rule asks for and
+  /// a lot's result records: azo amines (REACH Annex XVII entry 43), nickel release (27), PAHs (50), DMFu (61), NPE (46a),
+  /// PFAS (79 and national law). Their limits are the substance rules'.
+  AZO
+  NICKEL
+  PAH
+  DMFU
+  NPE
+  PFAS
 }
 
 enum LabVerdict {

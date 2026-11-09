@@ -116,6 +116,9 @@ model Party {
   approvalRequests    ApprovalRequest[]
   // W2b portal-frame.prisma (wave 20/22): what we asked of it (its tasks).
   partnerTasks        PartnerTask[]
+  // W2b-4 substances.prisma (wave 31/33): the declarations asked of it as a supplier; as a brand, the rules of its RSL.
+  supplierDeclarationRequests SupplierDeclarationRequest[]
+  substanceRules              SubstanceRule[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]
