@@ -165,13 +165,13 @@ describe('a style revised, compared and released (PRD-166, PRD-168, PRD-085, VS1
     expect(compare.sections.map((entry: Json) => entry.id)).toEqual(['revision', 'bom', 'routing', 'measurements', 'protectors', 'pieces'])
     // VersionCompare's input as it is: fields with their words, lines matched across, sizes, totals.
     const bom = section(compare, 'bom')
-    // The leather's size 52 moved; W1's copy did not carry the made-to-measure scaling of the leather and the lining (B-W2b-210's
-    // columns; the copy of the W2b-4 BOM columns is B-W2b-223's): the compare shows it.
-    expect(bom.summary).toMatchObject({ added: 0, removed: 0, changed: 2 })
+    // The leather's size 52 moved. Since B-W2b-223 the copy carries the W2b-4 BOM columns (the made-to-measure scaling of the
+    // leather and the lining included), so that is the one BOM change.
+    expect(bom.summary).toMatchObject({ added: 0, removed: 0, changed: 1 })
     const leather = bom.lines.find((line: Json) => line.before && line.after && line.before.sizes?.['52'] !== line.after.sizes?.['52'])
     expect(leather.label).toMatch(/^10 · /)
     expect(leather.before.fields.mtm).toMatch(/ × 1$/)
-    expect(leather.after.fields.mtm).toBeNull()
+    expect(leather.after.fields.mtm).toBe(leather.before.fields.mtm)
     expect(bom.fields.find((field: Json) => field.id === 'qty')).toEqual({ id: 'qty', label: 'Quantity' })
     const routing = section(compare, 'routing')
     expect(routing.summary.changed).toBe(1)
@@ -188,7 +188,7 @@ describe('a style revised, compared and released (PRD-166, PRD-168, PRD-085, VS1
     expect(section(compare, 'measurements').lines.length).toBeGreaterThan(0)
     expect(section(compare, 'protectors').lines.length).toBeGreaterThan(0)
     expect(compare.differs.map((entry: Json) => entry.section)).toEqual(expect.arrayContaining(['bom', 'routing', 'pieces']))
-    expect(compare.words).toContain('BOM: 2 changed')
+    expect(compare.words).toContain('BOM: 1 changed')
     // The cost grain: both revisions priced with today's inputs, one line per colourway, the cost per garment per size.
     expect(compare.cost).toMatchObject({ id: 'cost', currency: expect.any(String), complete: { before: expect.any(Boolean), after: expect.any(Boolean) } })
     expect(compare.cost.lines.length).toBeGreaterThan(0)
