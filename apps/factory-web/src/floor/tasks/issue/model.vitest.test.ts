@@ -206,6 +206,8 @@ describe('Return unused (B-W2a-75; design floor.pick sec "return"; SCM-216)', ()
     expect(tagPrinterOf([], null)).toEqual({ kind: 'none' })
     const [hideRow] = returnRows(withHeld)
     expect(remnantLabel(hideRow!, '18,6 ft²', 'it')).toEqual({ kind: 'HIDE', language: 'it', scanId: HIDE, title: 'LEATHER · leather', fields: { article: 'LEATHER', colour: null, area: '18,6 ft²', lot: 'LOT-7' } })
+    // B-W2b-219: with the piece's own RM tag, the REMNANT label names it and the hide it is cut from.
+    expect(remnantLabel(hideRow!, '18,6 ft²', 'it', 'RM-7K-000001-X')).toEqual({ kind: 'REMNANT', language: 'it', scanId: 'RM-7K-000001-X', title: 'LEATHER · leather', fields: { article: 'LEATHER', colour: null, area: '18,6 ft²', hide: HIDE, lot: 'LOT-7' } })
   })
 })
 

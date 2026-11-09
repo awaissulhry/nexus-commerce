@@ -28,6 +28,9 @@ import { actorOf } from '../../../core/context'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 // B-W2b-103: the hide check per work order (./checks.ts).
 import { evaluateChecks, readCheckFacts } from './checks'
+// B-W2b-219: the photo before cutting, where the site asks it; the site's smallest remnant.
+import { photoCheck } from './photo'
+import { minimumRemnantAt } from '../../inventory/remnants/size'
 import { cuttingWorkOrder, entryView, mayCut } from './cut'
 import {
   CUT_HEADER,
@@ -254,7 +257,7 @@ export async function scanHide(caller: CommandCaller, query: { readonly code: st
       let checks = null
       if (refusal === null) {
         const result = evaluateChecks(await readCheckFacts(db, { workOrder, hide, lot, item }), null)
-        checks = { warnings: result.warnings, standing: result.standing, passed: [...result.passed], shade: result.shade, thickness: result.thickness, grade: result.grade, reserved: result.reserved, photo: { required: false } }
+        checks = { warnings: result.warnings, standing: result.standing, passed: [...result.passed], shade: result.shade, thickness: result.thickness, grade: result.grade, reserved: result.reserved, photo: await photoCheck(db, workOrder.siteId, hide.id) }
       }
       workOrders.push({
         id: workOrder.id,
@@ -289,6 +292,8 @@ export async function scanHide(caller: CommandCaller, query: { readonly code: st
         areaUom: hide.areaUom,
         baseArea: text(hide.baseArea),
         baseUom: item.baseUom,
+        // B-W2b-219: the site's smallest remnant in the leather's base unit (a smaller leftover is waste).
+        remnantMinimum: await minimumRemnantAt(db, hide.siteId, item.baseUom),
         grade: hide.grade,
         shade: hide.shade,
         thicknessMm: hide.thicknessMm ? hide.thicknessMm.toFixed(2) : null,

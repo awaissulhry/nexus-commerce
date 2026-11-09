@@ -3,6 +3,7 @@ import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { isAreaUom, withOtherUnit, type AreaUom } from '@nexus/factory-domain/inventory/hides/area'
 import { AREA_TOLERANCE_PERCENT } from '@nexus/factory-domain/inventory/hides/measure'
+import { maySeeSettings, toleranceSettingIn, type ToleranceSetting, type ToleranceSettingSource } from './tolerance'
 import type { GradeFacts, RuleFacts } from '@nexus/factory-domain/inventory/hides/usable'
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
@@ -134,16 +135,24 @@ export async function cutEntriesOf(db: Pick<CommandTx, 'cutLog'>, hideId: string
 export interface Tolerance {
   /** Percent either way, two decimals. */
   readonly percent: string
-  /** ORDER_LINE: the area tolerance of the purchase order line the lot was received on; DEFAULT: no line says one. */
+  /** ORDER_LINE: the area tolerance of the purchase order line the lot was received on; DEFAULT: no line says one (the setting). */
   readonly from: 'ORDER_LINE' | 'DEFAULT'
+  /** B-W2b-219: for DEFAULT, the setting it came from: the company's, every company's, or none (2 %). */
+  readonly setting?: ToleranceSettingSource | undefined
 }
 
 /**
  * The tolerance a lot's area is checked with: its purchase order line's (PurchaseOrderLine.areaTolerancePct, "how far the
- * delivered area may differ", agreed with the tannery), else the default until a setting keeps one (a schema need).
+ * delivered area may differ", agreed with the tannery), else the company's leather area tolerance (B-W2b-219:
+ * PurchasingSettings, the company's row, else every company's, else 2 %: ./tolerance.ts). `setting`: the setting already
+ * read for the lot's company (a floor request reads it through the tenant's system scope: leatherToleranceFor); without it
+ * the setting is read here when the session may (the office's), else the 2 % default answers (a floor transaction never
+ * reads PurchasingSettings).
  */
-export async function toleranceOfLot(db: Pick<CommandTx, 'lot'>, lotId: string): Promise<Tolerance> {
-  const lot = await db.lot.findUnique({ where: { id: lotId }, select: { receiptLine: { select: { purchaseOrderLine: { select: { areaTolerancePct: true } } } } } })
+export async function toleranceOfLot(db: Pick<CommandTx, 'lot' | 'purchasingSettings' | '$queryRaw'>, lotId: string, setting?: ToleranceSetting): Promise<Tolerance> {
+  const lot = await db.lot.findUnique({ where: { id: lotId }, select: { tenantId: true, companyId: true, receiptLine: { select: { purchaseOrderLine: { select: { areaTolerancePct: true } } } } } })
   const pct = lot?.receiptLine?.purchaseOrderLine?.areaTolerancePct
-  return pct === null || pct === undefined ? { percent: AREA_TOLERANCE_PERCENT, from: 'DEFAULT' } : { percent: new Dec(pct.toString()).toFixed(2), from: 'ORDER_LINE' }
+  if (pct !== null && pct !== undefined) return { percent: new Dec(pct.toString()).toFixed(2), from: 'ORDER_LINE' }
+  const found = setting ?? (lot && (await maySeeSettings(db)) ? await toleranceSettingIn(db, lot.tenantId, lot.companyId) : { percent: AREA_TOLERANCE_PERCENT, from: 'DEFAULT' as const })
+  return { percent: found.percent, from: 'DEFAULT', setting: found.from }
 }

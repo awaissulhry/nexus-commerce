@@ -15,6 +15,7 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { remnantSizeRefusalAt } from './size'
 
 /**
  * Remnants and finding hides (B-W2b-100; SCM-254 remnant stock, SCM-206 one shade lot per order, SCM-214 choose hides at the
@@ -57,6 +58,9 @@ const SESSIONS: Record<string, SessionContext> = {
   warehouse: office([grant(STOCK)]),
   manager: office([grant([...STOCK, 'inventory.shade.override'])]),
   viewer: office([grant(['inventory.stock.view'])]),
+  // B-W2b-219: prints a remnant's tag (office and the cutting tablet).
+  printer: office([grant(['inventory.stock.view', 'print.view', 'print.labels'])]),
+  floorPrint: { audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1, deviceId: A.deviceA1, grants: [{ permissions: ['floor.work', 'print.view', 'print.labels'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
   floor: { audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1, deviceId: A.deviceA1, grants: [{ permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
 }
 
@@ -272,12 +276,13 @@ describe('remnant stock (SCM-254): a part of a hide comes back with its own tag 
     expect(list.rows.find((entry: Json) => entry.code === row!.code)).toMatchObject({ state: 'IN_STOCK', area: { uom: 'FT2', quantity: '8.0000' }, hide: { code: hides.S1B!.code, state: 'REMNANT' }, lot: { code: lots.BLK!.code }, shade: '1', location: { id: A.bin }, move: { reason: 'REMNANT', workOrderNumber: WO.rem.number } })
     expect(list.totals[0]).toMatchObject({ uom: 'FT2', pieces: 1, area: '8.0000' })
     expect(list.totals[0].words.en).toBe('1 piece · 8.00 ft² (0.7 m²)')
-    expect(list.minimum).toEqual({ area: '10', uom: 'DM2', setting: false })
+    // B-W2b-219: the site's own (its floor rules row, on the default 10 dm²).
+    expect(list.minimum).toEqual({ area: '10.0000', uom: 'DM2', setting: true })
     const looked = await ok('floor', 'GET', `/inventory/remnants/lookup?code=${encodeURIComponent(row!.code.toLowerCase())}`)
     expect(looked.remnant).toMatchObject({ id: row!.id, hide: { id: hides.S1B!.id } })
     const record = await ok('viewer', 'GET', `/inventory/remnants/${row!.id}`)
     expect(record.history).toEqual([expect.objectContaining({ action: 'TAGGED', cause: 'RETURN', by: null, audience: 'FLOOR' })])
-    expect(record.minimum).toEqual({ baseArea: '1.0764', setting: false })
+    expect(record.minimum).toEqual({ baseArea: '1.0764', setting: true })
     // The floor reads no list or record; an unknown tag is not found.
     await refused('floor', 'GET', '/inventory/remnants', undefined, 403)
     await refused('floor', 'GET', '/inventory/remnants/lookup?code=RM-NOPE-00', undefined, 404)
@@ -393,5 +398,41 @@ describe('find hides for a job (SCM-257) and reserving one shade lot (SCM-206)',
     const through = await ok('manager', 'POST', '/inventory/reservations', { siteId: A.siteA1, workOrderId: WO.find.id, shadeOverrideReason: 'Customer accepts the second shade', lines: [{ hideId: otherHide }] }, 201)
     const [audit] = await admin(`SELECT after, reason FROM "AuditLog" WHERE "recordType" = 'Reservation' AND "recordId" = $1`, [through.reservations[0].id])
     expect(audit).toMatchObject({ after: expect.objectContaining({ shadeOverride: true }), reason: 'Shade rule overridden: Customer accepts the second shade' })
+  })
+})
+
+describe("B-W2b-219: the site's smallest remnant and the remnant's own tag", () => {
+  const setMinimum = (area: string, uom: string) => admin(`UPDATE "ProductionSettings" SET "minimumRemnantArea" = $2, "minimumRemnantUom" = $3::"Uom" WHERE id = $1`, [A.siteA1, area, uom])
+
+  it("reads the site's minimum: the office's list, and the floor's refusal of a smaller piece", async () => {
+    await setMinimum('9', 'FT2')
+    try {
+      expect((await ok('viewer', 'GET', `/inventory/remnants?siteId=${A.siteA1}`)).minimum).toEqual({ area: '9.0000', uom: 'FT2', setting: true })
+      // No site named: the default every site starts from.
+      expect((await ok('viewer', 'GET', '/inventory/remnants')).minimum).toEqual({ area: '10', uom: 'DM2', setting: false })
+      // The floor reads the column of its own site's row (the pick's return and the table's Hide done ask it).
+      const floorRefusal = await database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1 }, (client) => remnantSizeRefusalAt(client, A.siteA1, { hideCode: 'HD-X', baseArea: '8', baseUom: 'FT2' }))
+      expect(floorRefusal).toMatchObject({ code: 'REMNANT_TOO_SMALL', message: expect.stringContaining('smaller than the smallest remnant kept, 9.00 ft² (0.84 m²)') })
+    } finally {
+      await setMinimum('10', 'DM2')
+    }
+    expect(await database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1 }, (client) => remnantSizeRefusalAt(client, A.siteA1, { hideCode: 'HD-X', baseArea: '8', baseUom: 'FT2' }))).toBeNull()
+  })
+
+  it('prints the REMNANT tag from the record (its RM code, the hide it is cut from) on a label printer of the site', async () => {
+    const printerId = newId()
+    await admin(
+      `INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-RM', 'Made-up label printer', 'LABEL_ZPL', 'FAKE', 'made-up:9100', 203, 100, 50)`,
+      [printerId, A.tenant, A.companyA, A.siteA1],
+    )
+    const [piece] = await remnantsOf(hides.S1B!.id)
+    const job = (await ok('printer', 'POST', `/print/jobs/remnant-tag/${piece!.id}`, { printerId, language: 'en' }, 201)).job
+    expect(job).toMatchObject({ labelKind: 'REMNANT', scanId: piece!.code, recordType: 'Remnant', recordId: piece!.id, status: 'QUEUED' })
+    const [stored] = await admin<{ zpl: string }>(`SELECT zpl FROM "PrintJob" WHERE id = $1`, [job.id])
+    expect(stored!.zpl).toContain('Remnant')
+    expect(stored!.zpl).toContain(hides.S1B!.code)
+    // The cutting tablet prints its own site's piece; a person without stock view is not shown it.
+    expect((await ok('floorPrint', 'POST', `/print/jobs/remnant-tag/${piece!.id}`, { printerId, language: 'it' }, 201)).job).toMatchObject({ labelKind: 'REMNANT' })
+    await refused('planner', 'POST', `/print/jobs/remnant-tag/${piece!.id}`, { printerId }, 403)
   })
 })

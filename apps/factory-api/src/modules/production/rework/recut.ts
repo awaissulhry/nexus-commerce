@@ -35,6 +35,9 @@ import { emitRecut } from '../cutissue/emit'
 import { cellCutFacts, cellText, findBundle, liveOf, readBundles, readCells, readLot, readLots, readOrder, readOrders, readStyles, shadeLotsOf, type OrderRow, type Reader } from '../cutissue/store'
 import { jobKey, labelTarget, queueLabel } from '../cutorders/printing'
 import { lockReplacement, readReplacement } from '../scrap/store'
+// B-W2b-219: a DONE recut ticket closes its request; a VOID one may be replaced.
+import { closeRecutRequest, liveRecutTicketId, takesTicket } from './recut-close'
+import { inWords } from '../settings/cutting-rules'
 
 /**
  * Recut tickets (B-W2b-117; MES-044; design floor.fabriccut "Recut tickets", the scrap page's "Ask for recut"): replacement panels
@@ -248,7 +251,7 @@ export async function recutOptions(caller: CommandCaller, query: { readonly code
     const found = await bundleFacts(db, bundle!)
     const replacements =
       context.audience === 'office'
-        ? await db.replacementRequest.findMany({ where: { workOrderSizeId: found.cell.id, kind: 'RECUT', status: 'OPEN', recutTicketId: null }, select: { id: true, quantity: true, part: true, reason: true, createdAt: true }, orderBy: { createdAt: 'asc' }, take: 50 })
+        ? await db.replacementRequest.findMany({ where: { workOrderSizeId: found.cell.id, kind: 'RECUT', status: 'OPEN', ...takesTicket }, select: { id: true, quantity: true, part: true, reason: true, createdAt: true }, orderBy: { createdAt: 'asc' }, take: 50 })
         : []
     const refusal =
       recutMakeRefusal({ workOrder: found.order, bundle: { code: bundle!.code, status: bundle!.status, workOrderSizeId: bundle!.workOrderSizeId, live: found.live }, cell: { id: found.cell.id, label: cellText(found.cell), parts: found.parts }, part: null, quantity: 1, lot: null, endBits: true, materials: found.materials, shadeLots: found.shadeLots, replacement: null }) ?? null
@@ -316,7 +319,7 @@ async function makeInCommand(tools: CommandTools, body: MakeBody, asker: { reado
     endBits: body.endBits ?? false,
     materials: cut.materials,
     shadeLots,
-    replacement: replacement ? { kind: replacement.kind, status: replacement.status, quantity: replacement.quantity, part: replacement.part, workOrderSizeId: replacement.workOrderSizeId, recutTicketId: (await tx.replacementRequest.findUnique({ where: { id: replacement.id }, select: { recutTicketId: true } }))!.recutTicketId } : null,
+    replacement: replacement ? { kind: replacement.kind, status: replacement.status, quantity: replacement.quantity, part: replacement.part, workOrderSizeId: replacement.workOrderSizeId, recutTicketId: await liveRecutTicketId(tx, replacement.id) } : null,
   }
   const refusal = recutMakeRefusal(ruleFacts)
   if (refusal) refuse(refusal)
@@ -372,7 +375,7 @@ export async function makeRecut(caller: CommandCaller, body: MakeBody, idempoten
     seen(context, PRODUCTION_RECUTS, order, 'Bundle')
     await assertFloorReady(caller, context, context.siteId)
     const system = asTenantSystem(caller, context)
-    const { result, replayed } = await command(system, { name: 'production.makeRecutTicket', idempotencyKey: `${context.deviceId}.${idempotencyKey}`.slice(0, 128), input: { ...body, deviceId: context.deviceId } }, async (tools) => makeInCommand(tools, body, { floor: context }))
+    const { result, replayed } = await inWords(() => command(system, { name: 'production.makeRecutTicket', idempotencyKey: `${context.deviceId}.${idempotencyKey}`.slice(0, 128), input: { ...body, deviceId: context.deviceId } }, async (tools) => makeInCommand(tools, body, { floor: context })))
     // The answer is the tablet's view (no replacement: the floor reads none).
     return { ...result, ticket: { ...result.ticket, replacement: null }, replayed }
   }
@@ -388,7 +391,7 @@ export async function makeRecut(caller: CommandCaller, body: MakeBody, idempoten
     if (!body.code && !body.bundleId) throw new ValidationError('Scan or name the bundle the new panels join.', [{ path: 'body/code', message: 'Scan the bundle’s ticket.' }])
     seen(office, PRODUCTION_RECUTS, order, 'Bundle')
   }
-  const { result, replayed } = await command(caller, { name: 'production.makeRecutTicket', idempotencyKey, input: body }, async (tools) => makeInCommand(tools, body, { floor: null }))
+  const { result, replayed } = await inWords(() => command(caller, { name: 'production.makeRecutTicket', idempotencyKey, input: body }, async (tools) => makeInCommand(tools, body, { floor: null })))
   return { ...result, replayed }
 }
 
@@ -509,6 +512,8 @@ export async function finishRecut(caller: CommandCaller, body: { readonly code: 
     emitRecut(tools, current, { ...row, workOrderId: row.workOrderId!, workOrderSizeId: row.workOrderSizeId!, quantity: row.quantity! }, order.number, 'DONE')
     return cardOf(tx, row, false)
   })
+  // B-W2b-219: the recut's request (an office ReplacementRequest naming this ticket) is DONE with it, as the tenant's system.
+  await closeRecutRequest(caller, floorOf(caller), { id: ticket.id, number: ticket.number }, idempotencyKey)
   return { ...result, replayed }
 }
 

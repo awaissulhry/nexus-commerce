@@ -15,6 +15,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import type { StyleRow } from '../../api'
 import { PpeFields, RangeFields, settlePpe } from '../../forms'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
+import { CommerceImport, CommerceImportButton } from '../../import/commerce/view/CommerceImport'
 import { completenessOf, decimalText, moneyText, rangeWords, revisionChips, STATUS_TONE, STYLE_TILES, STYLE_VIEWS } from '../../model'
 import { extraFilterCount, NO_FILTERS, START_FROM, type NewStyleModel, type StylesListActions, type StylesListViewModel } from '../list-model'
 import { usePhoneList } from '../use-phone'
@@ -308,9 +309,13 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           {(showPrice || showMargin) && prices.state === 'none' && <span className="fw-st-hint">{t('list.price.noList')}</span>}
           {(showPrice || showMargin) && prices.state === 'error' && <span className="fw-st-hint">{t('list.price.failed')}</span>}
         </div>
-        <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewStyle?.(true)} aria-keyshortcuts="c">
-          <Plus size={14} aria-hidden /> {t('list.new')}
-        </Button>
+        <span className="fw-cmi-head-actions">
+          {/* W2b (B-W2b-209): Import from a Nexus Commerce export (or a sheet in its columns). */}
+          <CommerceImportButton held={model.importHeld ?? null} onImport={() => actions?.onImport?.()} />
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewStyle?.(true)} aria-keyshortcuts="c">
+            <Plus size={14} aria-hidden /> {t('list.new')}
+          </Button>
+        </span>
       </div>
 
       {model.notice && (
@@ -415,6 +420,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
 
       {model.newStyle && <NewStyleDialog model={model.newStyle} actions={actions} />}
       {model.duplicate && <DuplicateDialog model={model.duplicate} can={model.can} prefix={model.prefix} actions={actions?.duplicate} />}
+      {model.commerce && <CommerceImport model={model.commerce.model} sheet={model.commerce.sheet} prefix={model.prefix} actions={actions?.commerce} sheetActions={actions?.commerceSheet} />}
       {dialog === 'filters' && (
         <Modal
           open
@@ -553,16 +559,17 @@ function NewStyleDialog({ model, actions }: { model: NewStyleModel; actions?: St
               value={from}
               checked={from === 'blank'}
               selected={from === 'blank'}
-              disabled={from === 'template' || from === 'commerce'}
+              disabled={from === 'template'}
               title={
                 <span className="fw-st-inline">
                   {t(`newStyle.from.${from}`)}
-                  {(from === 'template' || from === 'commerce') && <Tag tone="neutral">{t(`newStyle.fromWhen.${from}`)}</Tag>}
+                  {from === 'template' && <Tag tone="neutral">{t(`newStyle.fromWhen.${from}`)}</Tag>}
                 </span>
               }
               description={t(`newStyle.fromHint.${from}`)}
               onChange={() => {
-                if (from === 'copy') actions?.onStartFrom?.('copy')
+                // W2a: a copy opens Duplicate; W2b (B-W2b-209): a Nexus Commerce product opens the import's source step.
+                if (from === 'copy' || from === 'commerce') actions?.onStartFrom?.(from)
               }}
             />
           ))}

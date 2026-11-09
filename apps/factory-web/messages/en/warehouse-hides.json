@@ -232,7 +232,7 @@
     "empty": "No remnant pieces in stock",
     "emptyBody": "A part of a hide that comes back from a cut gets an RM tag and shows here.",
     "minimum": "smallest piece kept: {area}",
-    "minimumFixed": "smallest piece kept: {area} (the same at every site until it becomes a setting)",
+    "minimumFixed": "smallest piece kept: {area} (the default; each site sets its own under Floor rules & codes › Cutting)",
     "outOfShade": "Out of shade",
     "byFloor": "on the floor",
     "bySystem": "by the system",
