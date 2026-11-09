@@ -12,9 +12,38 @@ const at = (day: number, hour = 9, minute = 0): string => new Date(Date.UTC(2026
  */
 
 export const SEVERITY: Severity = {
-  classes: SEVERITY_CLASSES.map((entry, index) => ({ class: entry.class, rank: entry.rank, words: entry.words, meaning: entry.meaning, acceptanceNumber: entry.acceptanceNumber, locked: entry.locked, law: entry.law, defects: [4, 11, 6][index] ?? 0 })),
+  classes: SEVERITY_CLASSES.map((entry, index) => ({
+    class: entry.class,
+    rank: entry.rank,
+    words: entry.words,
+    meaning: entry.meaning,
+    acceptanceNumber: entry.acceptanceNumber,
+    locked: entry.locked,
+    law: entry.law,
+    defects: [4, 11, 6][index] ?? 0,
+    // B-W2b-213: what the tenant wrote (none: the standard words) and the standard words.
+    own: { words: {}, meaning: {} },
+    standard: { words: entry.words, meaning: entry.meaning },
+  })),
   safetyRule: { it: SAFETY_RULE.it, en: SAFETY_RULE.en, law: SAFETY_LAW },
-  editable: false,
+  editable: true,
+  languages: ['it', 'en', 'ro'],
+  canManage: true,
+  version: 1,
+  updatedAt: null,
+}
+
+/** B-W2b-213: a tenant's own words (made up): major renamed in three languages, critical called otherwise in English. */
+export const SEVERITY_OWN: Severity = {
+  ...SEVERITY,
+  classes: SEVERITY.classes.map((row) =>
+    row.class === 'MAJOR'
+      ? { ...row, words: { it: 'Grave (demo)', en: 'Serious (demo)' }, meaning: { it: row.meaning.it, en: 'Likely to make the garment fail in use (demo words).' }, own: { words: { it: 'Grave (demo)', en: 'Serious (demo)', ro: 'Grav (demo)' }, meaning: { en: 'Likely to make the garment fail in use (demo words).' } } }
+      : row.class === 'CRITICAL'
+        ? { ...row, words: { it: row.words.it, en: 'Safety (demo)' }, own: { words: { en: 'Safety (demo)' }, meaning: {} } }
+        : row,
+  ),
+  version: 2,
 }
 
 let n = 0

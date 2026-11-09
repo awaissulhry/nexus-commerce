@@ -284,3 +284,19 @@ export function dueProblem(dueAt: Date | null, now: Date): { readonly path: stri
 /** An OPEN inspection past its due time. */
 export const inspectionOverdue = (inspection: { readonly status: string; readonly dueAt: Date | null }, now: Date): boolean =>
   inspection.status === 'OPEN' && inspection.dueAt !== null && inspection.dueAt.getTime() < now.getTime()
+
+// ---- B-W2b-213: a final inspection a rule opened ---------------------------------------------------------------------------
+
+/**
+ * An inspection a rule opened at packing that nobody took yet: no inspector and not assigned (the database lets an OPEN
+ * or CANCELLED one wait so, when a rule opened it). The first inspector who records it (office or bench, with
+ * quality.inspections.record, who made none of its garments) is written as its inspector by that write; deciding needs one.
+ */
+export function untaken(row: {
+  readonly inspectorWorkerId: string | null
+  readonly inspectorUserId: string | null
+  readonly assignedInspectorId?: string | null | undefined
+  readonly assignedInspectorWorkerId?: string | null | undefined
+}): boolean {
+  return row.inspectorWorkerId === null && row.inspectorUserId === null && !row.assignedInspectorId && !row.assignedInspectorWorkerId
+}

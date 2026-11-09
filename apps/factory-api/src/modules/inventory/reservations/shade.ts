@@ -2,6 +2,7 @@ import { ForbiddenError, ValidationError } from '@nexus/factory-domain/core/erro
 import { can } from '@nexus/factory-domain/core/permissions'
 import { INVENTORY_SHADE_OVERRIDE } from '@nexus/factory-domain/inventory/reservations/permissions'
 import { DEFAULT_SHADE_RULE, shadeReasonProblem, type ShadeFacts, type ShadeRule } from '@nexus/factory-domain/inventory/reservations/shade'
+import { isShadeRule } from '@nexus/factory-domain/production/settings/cutting-rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
@@ -12,13 +13,15 @@ import { readAtWorkOrder, type Reader } from '../issue/store'
  * a site, the shade facts of hides (lot code, shade group label or W1 text, out of shade), the hides an order holds (issued
  * less returned above 0) or has reserved (ACTIVE HIDE reservations), and who may let a refused hide through.
  *
- * The rule has no column yet (schema need: a site's or company's setting, e.g. ProductionSettings.shadeRule): shadeRuleFor
- * answers DEFAULT_SHADE_RULE for every site. It is the one place to read it, so the setting step changes only this.
+ * The rule is the site's (B-W2b-219: ProductionSettings.shadeRule, set on Production › Floor rules & codes, the Cutting card;
+ * B-W2b-204's column): shadeRuleFor is the one place to read it, in the office's or the floor's scope (the floor role reads
+ * that column of its own site's row). A site without floor rules runs on DEFAULT_SHADE_RULE (ORDER).
  */
 
-/** The shade rule of a site (no setting column yet: the default, ORDER). */
-export async function shadeRuleFor(_db: Reader, _siteId: string): Promise<ShadeRule> {
-  return DEFAULT_SHADE_RULE
+/** The shade rule of a site: ORDER, GARMENT or OFF (its row's; no row: the default, ORDER). */
+export async function shadeRuleFor(db: Reader, siteId: string): Promise<ShadeRule> {
+  const row = await db.productionSettings.findUnique({ where: { id: siteId }, select: { shadeRule: true } })
+  return row && isShadeRule(row.shadeRule) ? row.shadeRule : DEFAULT_SHADE_RULE
 }
 
 /** The shade facts of these hides (their lot's code, their group's label and out-of-shade flag, else the W1 text). */

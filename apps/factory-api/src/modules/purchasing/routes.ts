@@ -184,6 +184,8 @@ import { reviewAnswer, supplierQuestionnaire } from './questionnaire/review'
 import { sendQuestionnaireLink } from './questionnaire/send'
 import { createVersion, listVersions, publishVersion, updateVersion } from './questionnaire/versions'
 import { registerLinkRenewer } from '../../platform/links/renew'
+// B-W2b-219: the leather area tolerance where a PO line names none (PurchasingSettings.leatherAreaTolerancePct).
+import { getLeatherTolerance, getLeatherToleranceContract, putLeatherTolerance, putLeatherToleranceContract } from '../inventory/hides/tolerance'
 
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
@@ -417,6 +419,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   // B-W2b-14 (Z1:09): the Owner's per-company switch for automatic PO confirmation reminders (OFF by default; ON asks step-up).
   app.get('/purchasing/reminders/settings', { schema: reminderSettingsContract }, async (request) => getReminderSettings(request, request.query))
   app.put('/purchasing/reminders/settings/switch', { schema: reminderSwitchContract }, async (request) => putReminderSwitch(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
+
+  // B-W2b-219: the leather area tolerance where a PO line names none (the incoming area check and the re-measure read it).
+  app.get('/purchasing/settings/leather-tolerance', { schema: getLeatherToleranceContract }, async (request) => getLeatherTolerance(request, request.query))
+  app.put('/purchasing/settings/leather-tolerance', { schema: putLeatherToleranceContract }, async (request) => putLeatherTolerance(request, request.body, idempotencyKeyFrom(request)))
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

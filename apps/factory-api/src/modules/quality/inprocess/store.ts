@@ -26,6 +26,12 @@ export const CHECK_COLUMNS = {
   planVersionId: true,
   aqlProfileId: true,
   codeLetter: true,
+  // B-W2b-213 (W2b schema wave 24/33): the AQL sample frozen at opening, the units of it counted, by when it is due, the
+  // rule that opened it.
+  sampleSize: true,
+  inspectedCount: true,
+  dueAt: true,
+  openedByTriggerId: true,
   pieces: true,
   defectivePieces: true,
   defects: true,

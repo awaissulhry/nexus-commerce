@@ -311,7 +311,7 @@ export function FloorPick() {
     const tagState = done.tag
     setRet({ ...ret!, done: { ...done, tag: { ...tagState, busy: true, problem: null } } })
     const area = `${formatNumber(done.quantity, locale, { maximumFractionDigits: 2 })} ${unitWord(t, done.row.uom)}`
-    const answer = await printRemnantTag(api, { printerId, hideId: done.row.stock.hideId, label: remnantLabel(done.row, area, locale === 'en' ? 'en' : 'it') }, done.tagKey)
+    const answer = await printRemnantTag(api, { printerId, hideId: done.row.stock.hideId, label: remnantLabel(done.row, area, locale === 'en' ? 'en' : 'it', done.remnantCode) }, done.tagKey)
     if (!answer.ok) {
       if (answer.problem.kind === 'signedOut') return void sessionEnded()
       feedback('error')

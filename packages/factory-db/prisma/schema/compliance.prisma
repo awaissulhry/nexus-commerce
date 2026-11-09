@@ -68,6 +68,8 @@ model Certificate {
   typeChangeReviews   TypeChangeReview[]
   // W2b inspection-plans.prisma (wave 10/16): the incoming component checks made against it.
   incomingComponentResults IncomingComponentResult[]
+  // W2b-4 samples.prisma (wave 29/33): the certification sample rounds that led to it.
+  sampleRounds        SampleRound[]
   // W2b (schema wave 2/7): its renewals' application log, and the renewals it is the new certificate of.
   renewalLog          CertificateRenewal[]  @relation("CertificateRenewalOf")
   renewalLogAsNew     CertificateRenewal[]  @relation("CertificateRenewalNew")

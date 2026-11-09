@@ -137,20 +137,22 @@ export type RemnantProblem = 'empty' | 'tooLarge' | 'tooSmall' | null
  * The remnant against what is left of the hide for the work order (both in the same unit): at most what is left, and
  * less than it when the draft logs pieces (they used some of it). Zero is "No remnant · done". With the hide's unit
  * (`uom`), a piece under the smallest remnant kept is waste (B-W2b-100 MINIMUM_REMNANT, 10 dm²: the office refuses it).
+ * B-W2b-219: `minimum` is the site's own, in the hide's unit, as the hide's answer says it (`hide.remnantMinimum`); without
+ * it the default.
  */
-export function remnantProblem(left: string, remnant: number | null, hasPieces: boolean, uom?: string): RemnantProblem {
+export function remnantProblem(left: string, remnant: number | null, hasPieces: boolean, uom?: string, minimum?: string | null): RemnantProblem {
   if (remnant === null || !(remnant > 0)) return 'empty'
   const value = new Dec(String(remnant))
   const rest = new Dec(left)
   if (value.gt(rest) || (hasPieces && value.gte(rest))) return 'tooLarge'
-  const least = uom ? minimumRemnantIn(uom) : null
+  const least = minimum ? new Dec(minimum) : uom ? minimumRemnantIn(uom) : null
   if (least && value.lt(least)) return 'tooSmall'
   return null
 }
 
-/** The smallest remnant kept, in the hide's unit (two places, rounded up so the words never say less than the rule). */
-export function remnantMinimum(uom: string): string | null {
-  const least = minimumRemnantIn(uom)
+/** The smallest remnant kept, in the hide's unit (two places, rounded up so the words never say less than the rule): the site's (`minimum`), else the default. */
+export function remnantMinimum(uom: string, minimum?: string | null): string | null {
+  const least = minimum ? new Dec(minimum) : minimumRemnantIn(uom)
   return least ? least.toDecimalPlaces(2, Dec.ROUND_UP).toFixed(2) : null
 }
 

@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { Chip, Frequency } from '@nexus/factory-domain/quality/plans/rules'
-import { decide, inOrder, previewWords, recordKindOf, ruleProblems, SCAN_KINDS, selects, TRIGGER_LIMITS, type PreviewCounts, type RuleFacts, type TriggerEvent } from '@nexus/factory-domain/quality/triggers/rules'
+import { decide, inOrder, PACKING_WORK_CENTRE, previewWords, recordKindOf, ruleProblems, SCAN_KINDS, selects, TRIGGER_LIMITS, type PreviewCounts, type RuleFacts, type TriggerEvent } from '@nexus/factory-domain/quality/triggers/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { bundleSubjectsBetween, receiptSubjectsBetween, type Subject } from './facts'
@@ -32,6 +32,8 @@ export interface PreviewBody {
   readonly appliesTo?: readonly Chip[] | undefined
   readonly frequency: Frequency
   readonly frequencyValue?: number | null | undefined
+  /** B-W2b-213: carried with the draft; the preview counts what opens, not when it is due. */
+  readonly dueHours?: number | null | undefined
   readonly position?: number | undefined
 }
 
@@ -68,7 +70,8 @@ export async function previewRule(caller: CommandCaller, body: PreviewBody) {
       body.event === 'GOODS_RECEIPT'
         ? await receiptSubjectsBetween(db, body.companyId, from, now, TRIGGER_LIMITS.previewLots)
         : await bundleSubjectsBetween(db, body.companyId, from, now, SCAN_KINDS[body.event] ?? [], TRIGGER_LIMITS.previewScans)
-    const subjects: Subject[] = read.subjects
+    // B-W2b-213: packing = the reports at an operation of a PACKING work centre.
+    const subjects: Subject[] = body.event === 'PACKING' ? read.subjects.filter((subject) => subject.type === 'BUNDLE' && subject.workCentreKind === PACKING_WORK_CENTRE) : read.subjects
     let fits = 0
     let earlier = 0
     let opened = 0

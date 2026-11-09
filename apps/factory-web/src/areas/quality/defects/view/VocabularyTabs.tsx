@@ -2,24 +2,22 @@
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Download, Lock, MoreHorizontal, RotateCcw, Sparkles, XCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { LawRef } from '@nexus/ui/components/LawRef/index'
+import { Download, MoreHorizontal, RotateCcw, Sparkles, XCircle } from 'lucide-react'
+import { Banner, EmptyState, Field, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Kbd, Pill, Select, Skeleton, TagGlyph, Toggle } from '@nexus/ui/primitives'
-import { CellSaveMark, Modal, useDsWords } from '../../../../lib/i18n/ds-parts'
+import { Button, Input, Kbd, Pill, Select, TagGlyph, Toggle } from '@nexus/ui/primitives'
+import { CellSaveMark, Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
-import type { Cause, Causes, Grade, Grades, HideDefect, Severity } from '../api'
+import type { Cause, Causes, Grade, Grades, HideDefect } from '../api'
 import { markKey, type Mark, type ReadOf } from '../model'
 import { deleteCauseHeld, PROCESSES, typedGradeCode, type NewCauseDraft, type NewGradeDraft, type VocabularyField } from '../vocabulary'
 import { typedCode } from '../model'
 
 /**
- * B-W2b-118: the three W2b tabs of Defects & dispositions (design quality.defects df-severity, df-causes, df-grades) on
- * B-W2b-90's routes. Severity: the three classes with what each means and allows; the critical class locked with its law
- * (the texts are fixed: no place keeps a factory's own yet). Causes: the cause codes in the ONE list frame, words autosaved
+ * B-W2b-118: the W2b tabs of Defects & dispositions (design quality.defects df-causes, df-grades) on B-W2b-90's routes
+ * (Severity, df-severity, is ../severity/view/SeverityWordsView.tsx since B-W2b-213: the tenant's words). Causes: the cause codes in the ONE list frame, words autosaved
  * per cell (Italian, English and every other floor language of the sites), the process fixed, retire / restore N, delete an
  * unused code, the starter set. Leather grades: the grades with their usable share (autosaved), retire / restore N, the
  * starter A–D; then the hide defects (the defect library's LEATHER codes for incoming and cutting), edited in the Defects
@@ -63,43 +61,6 @@ function ReadFailed({ problem, onRetry }: { problem: string; onRetry?: () => voi
         ) : undefined
       }
     />
-  )
-}
-
-// ---- Severity -----------------------------------------------------------------------------------------------------------
-
-export function SeverityTab({ read, onRetry }: { read: ReadOf<Severity>; onRetry?: () => void }) {
-  const t = useT(VOCAB_NAMESPACE)
-  const locale = useLocale()
-  const ds = useDsWords()
-  if (read.problem) return <ReadFailed problem={read.problem} onRetry={onRetry} />
-  if (!read.value) return <Skeleton height={220} />
-  const value = read.value
-  const words = (entry: { it: string; en: string }) => (locale === 'it' ? entry.it : entry.en)
-  return (
-    <div className="fw-df-vocab">
-      <div className="fw-df-severity">
-        {value.classes.map((entry) => (
-          <Card key={entry.class} header={words(entry.words)} headingLevel={3} headerAction={entry.locked ? <Pill tone="danger">{t('severity.locked')}</Pill> : undefined} className="fw-df-severity-card">
-            <div className="fw-df-vocab-stack">
-              <p>{words(entry.meaning)}</p>
-              <p className="fw-df-sub">{entry.acceptanceNumber === null ? t('severity.aql') : t('severity.acceptance', { count: entry.acceptanceNumber })}</p>
-              <p className="fw-df-sub">{t('severity.defects', { count: entry.defects })}</p>
-              {entry.law && (
-                <span className="fw-df-row">
-                  <Lock size={13} aria-hidden />
-                  <LawRef law={entry.law} plain={words(value.safetyRule)} labels={ds.lawRef} />
-                </span>
-              )}
-            </div>
-          </Card>
-        ))}
-      </div>
-      <Banner tone="info" title={words(value.safetyRule)}>
-        {t('severity.rule')}
-      </Banner>
-      {!value.editable && <p className="fw-df-sub">{t('severity.fixed')}</p>}
-    </div>
   )
 }
 

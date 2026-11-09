@@ -15,6 +15,8 @@ import { FloorRulesView, type FloorRulesModel } from './view/FloorRulesView'
 import { OffStandardEditor } from './OffStandardEditor'
 import { RoutingEditor } from './RoutingEditor'
 import { addFullLists, changeBundleRules, changeFloorRules, getBundleRules, getFloorRules, getFullLists } from './w2b-api'
+// B-W2b-219: the Cutting card (the site's cutting rules, the leather area tolerance).
+import { CuttingRules } from './cutting/CuttingRules'
 import { checksChange, couponsChange, fullMissing, w2bProblem } from './w2b-model'
 
 const TIME_ZONE = 'Europe/Rome'
@@ -71,6 +73,8 @@ function Container() {
   const [coupons, setCoupons] = useState<NonNullable<FloorRulesModel['coupons']>>(LOADING)
   const [full, setFull] = useState<NonNullable<FloorRulesModel['full']>>(LOADING)
   const [codesKey, setCodesKey] = useState(0)
+  // B-W2b-219: Reload reads the Cutting card again too.
+  const [cuttingKey, setCuttingKey] = useState(0)
   const waiting = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null)
   const ownChangeUntil = useRef(0)
   // One key per attempt of the same body: a lost answer sent again is answered from its receipt.
@@ -155,7 +159,7 @@ function Container() {
 
   useLive(
     (change) => {
-      const watched = change.type === 'production.monitoring_changed' || change.type === 'production.floor_rules_changed' || change.type === 'production.bundle_rules_changed'
+      const watched = change.type === 'production.monitoring_changed' || change.type === 'production.floor_rules_changed' || change.type === 'production.bundle_rules_changed' || change.type === 'production.cutting_rules_changed'
       if (!watched || change.fields.siteId !== siteId) return
       if (Date.now() < ownChangeUntil.current) return
       setChangedElsewhere(true)
@@ -234,6 +238,19 @@ function Container() {
       model={model}
       codes={codes}
       offstd={tab === 'offstd' && can.offstd ? <OffStandardEditor companyId={site?.site.companyId ?? companyId} /> : null}
+      cutting={
+        tab === 'rules' && site ? (
+          <CuttingRules
+            siteId={site.site.id}
+            companyId={site.site.companyId}
+            version={versionOf()}
+            onVersion={tookVersion}
+            onConflict={() => setChangedElsewhere(true)}
+            timeZone={TIME_ZONE}
+            reloadKey={cuttingKey}
+          />
+        ) : null
+      }
       routing={tab === 'calls' && can.calls ? <RoutingEditor key={siteId ?? 'none'} site={site ? site.site : null} companyId={site?.site.companyId ?? companyId} people={can.people} offstd={can.offstd} /> : null}
       actions={{
         onSite: (next) => {
@@ -346,6 +363,7 @@ function Container() {
         },
         onReload: () => {
           setNotice(null)
+          setCuttingKey((current) => current + 1)
           void loadSites().then(() => {
             if (siteId) void loadSite(siteId)
           })

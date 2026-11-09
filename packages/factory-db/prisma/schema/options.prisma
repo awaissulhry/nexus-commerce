@@ -1,0 +1,329 @@
+// BOM depth and the option library (W2b-4, schema wave 28/33, B-W2b-211; features PRD-077, PRD-078, PRD-081, PRD-083,
+// PRD-084, PRD-088, PRD-099, PRD-106, PRD-108, PRD-206, PRD-207, PRD-208, PRD-211): the sections a BOM line is filed under,
+// a line's approved alternates, and the option library: option groups with their values, the rules between values, what a
+// value does to the garment (BOM, operations, minutes, price, the certificate) and the styles that offer a group. The
+// columns this wave adds to W1's tables are in product.prisma: BomLine (section, group row, sub-assembly, customer-supplied,
+// the workshop's kit, the rule that made it, the option it is for) and StyleRevision (its output quantity).
+// apps/factory-api's modules/product writes them through command() (B-W2b-223 structure, B-W2b-228 lines in depth,
+// B-W2b-229 options); the hand-written …_bom_options_w2b_guards migration holds their rules for every login: no circle of
+// group rows or sub-assemblies, no draft sub-assembly in a released revision, a line's alternates frozen with it.
+// A choice of options on a quote or an order line is W2b-5's configurator: it reads this library and calls B-W2b-229's
+// one check of the rules.
+//
+// Who sees what (ownership/options.json): the office reads and writes; the floor reads a line's alternates (a substitute at
+// the station, MES-139) and the option groups and values (the names of what a work order's garment is made with); never a
+// rule, an effect (an effect may carry a price) or which styles offer a group. Portal and link sessions read none of it
+// (W2b-5's configurator reads it through the API). The only money column is an effect's price delta (@grain price).
+
+/// The section of a style's BOM a line is filed under (PRD-077): readable BOMs and section reports.
+enum BomSection {
+  /// The outer shell: leather, textile panels.
+  SHELL
+  LINING
+  /// Thermal layers, wadding, removable liners.
+  INSULATION
+  /// Impact protectors and their pockets.
+  PROTECTION
+  /// Zips, snaps, buckles, reflective trims.
+  TRIMS
+  THREAD
+  /// The CE, composition, care and brand labels.
+  LABELS
+  /// Hangtags, polybags, cartons, the user information leaflet.
+  PACKAGING
+  OTHER
+}
+
+/// When an alternate may be taken in place of its line's own material (PRD-083).
+enum BomAlternateUse {
+  /// Like the line's own material: planning and the floor may take it.
+  ALWAYS
+  /// Only when the line's own material is short (no stock, or late for the work order).
+  WHEN_SHORT
+  /// Each use is a person's decision (the floor's "Use a substitute" asks for it, MES-139).
+  WITH_APPROVAL
+}
+
+/// An approved alternate of a BOM line's material (PRD-083): another material (in a colour) taken in its place, first
+/// choice first. A part of the revision (W1's rule: written only while the revision is DRAFT, frozen once released) and of
+/// its line: removed with it. Using one on a work order is logged there (B-W2b-228). An alternate of a PPE component, or one
+/// that is one, needs a certificate check before it is used (the notified body may have to agree, PRD-083).
+model BomLineAlternate {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  revisionId       String          @db.Uuid
+  bomLineId        String          @db.Uuid
+  /// 1 = the first choice after the line's own material, then 2, 3 …; unique per line.
+  priority         Int
+  /// The alternate material: never the line's own, never a BLOCKED one (newly named).
+  itemId           String          @db.Uuid
+  /// Its colour, when the material comes in colours; null: the colour the line's own resolves to.
+  itemColourId     String?         @db.Uuid
+  /// Per output unit of the revision, in the line's unit, when it differs from the line's (another width of fabric);
+  /// above 0. null: the line's quantity.
+  qty              Decimal?        @db.Decimal(18, 4)
+  allowedWhen      BomAlternateUse @default(WITH_APPROVAL)
+  /// A certificate check is needed before it is used: always when the line's material or the alternate is a PPE component
+  /// (Item.isPpeComponent: the …_bom_options_w2b_guards trigger), else the office's choice.
+  certificateCheck Boolean         @default(false)
+  /// Why it is approved, or what to watch (up to 500 characters).
+  note             String?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  // product.prisma: its line (of the same revision; removed with it), the material and its colour.
+  bomLine    BomLine     @relation(fields: [tenantId, revisionId, bomLineId], references: [tenantId, revisionId, id], onDelete: Cascade, onUpdate: Restrict)
+  item       Item        @relation("BomLineAlternateItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour? @relation("BomLineAlternateItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, bomLineId, priority])
+  @@index([tenantId, itemId])
+}
+
+/// How many values of a group a garment takes (PRD-206, PRD-211).
+enum OptionGroupKind {
+  /// One value at most (perforation: front or full).
+  SINGLE
+  /// Several values (logos on the chest, the sleeve and the back).
+  MULTI
+  /// A value the customer types (a name to embroider, a race number): every value of the group takes a free text.
+  FREE_TEXT
+}
+
+/// A group of choices a style may offer (PRD-206): colour panels, perforation, a hump, logos, name embroidery, a liner.
+/// Master data of the library, tenant-wide or of one company; archived (status ARCHIVED), never deleted, since styles,
+/// quotes and orders name its values.
+model OptionGroup {
+  id          String          @id @db.Uuid
+  tenantId    String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1). Never changes. A company's group is offered on that
+  /// company's styles only, and its rules and effects name the company's or tenant-wide values, materials and operations.
+  companyId   String?         @db.Uuid
+  /// Our code, unique in the tenant ("PERFORATION"; 1 to 60 characters without spaces).
+  code        String
+  /// 1 to 200 characters.
+  name        String
+  /// The name per language: { "it": "Perforazione", "en": "Perforation" }.
+  nameI18n    Json?
+  /// What it is for, for the office (up to 2000 characters).
+  description String?
+  kind        OptionGroupKind
+  /// How many of its values a garment takes, at least and at most (PRD-206): 0 to 100, and a maximum of 1 to 100 not below
+  /// the minimum (null: no maximum); a SINGLE group has maximum 1 (and minimum 0 or 1). A style may narrow them
+  /// (StyleOptionGroup).
+  minPicks    Int             @default(0)
+  maxPicks    Int?
+  status      MasterStatus    @default(ACTIVE)
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?         @db.Uuid
+
+  company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  values  OptionValue[]
+  rules   OptionRule[]
+  styles  StyleOptionGroup[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from its values, rules and the styles that offer it.
+  @@unique([tenantId, id])
+}
+
+/// One choice of a group (PRD-206): "front panels perforated", "removable thermal liner". With freeText the customer types
+/// a value with it (PRD-211: a name to embroider), at most freeTextMaxLength characters and, when a pattern is set,
+/// matching it. Archived (status ARCHIVED), never deleted: quotes and orders name it.
+model OptionValue {
+  id                String       @id @db.Uuid
+  tenantId          String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Its group; never changes.
+  groupId           String       @db.Uuid
+  /// Unique in its group ("FRONT"; 1 to 60 characters without spaces).
+  code              String
+  /// 1 to 200 characters.
+  name              String
+  /// The name per language: { "it": "Pannelli anteriori forati", "en": "Front panels perforated" }.
+  nameI18n          Json?
+  /// Its place in the group's list, 0 or more.
+  seq               Int          @default(0)
+  /// The customer types a text with it (PRD-211); always in a FREE_TEXT group. Then freeTextMaxLength (1 to 500) is set
+  /// and freeTextPattern (a regular expression the text must match, up to 200 characters) may be; neither without it.
+  freeText          Boolean      @default(false)
+  freeTextMaxLength Int?
+  freeTextPattern   String?
+  status            MasterStatus @default(ACTIVE)
+  version           Int          @default(1)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?      @db.Uuid
+
+  group         OptionGroup        @relation(fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The rules about it, and the rules that name it as the other value.
+  rules         OptionRule[]       @relation("OptionRuleValue")
+  otherRules    OptionRule[]       @relation("OptionRuleOtherValue")
+  effects       OptionEffect[]
+  // The styles that take it when nothing is chosen.
+  styleDefaults StyleOptionGroup[]
+  // product.prisma: the BOM lines only for it.
+  bomLines      BomLine[]
+
+  @@unique([tenantId, groupId, code])
+  // The targets of the tenant-safe references: a value of a given group (a rule's subject, a style's default), any value.
+  @@unique([tenantId, groupId, id])
+  @@unique([tenantId, id])
+}
+
+/// What a rule between values says (PRD-207).
+enum OptionRuleKind {
+  /// Choosing the subject needs the other value chosen too.
+  REQUIRES
+  /// The subject and the other value are never chosen together.
+  EXCLUDES
+}
+
+/// What a broken rule does (PRD-207).
+enum OptionRuleSeverity {
+  /// The configuration is refused, with the message.
+  BLOCK
+  /// The configuration goes ahead once the person has read the message.
+  WARN
+}
+
+/// A rule between option values (PRD-207): "Full perforation excludes the thermal liner — block". Its subject is one value
+/// of its group, or the group as a whole (any value of it chosen, valueId null); the other value is of another group, or of
+/// the same group when the subject is one value (not itself). B-W2b-229's one check function reads the ACTIVE rules; the
+/// configurator of W2b-5 calls it. Kept in the group's record; removed (deleted) or archived by the office.
+model OptionRule {
+  id           String             @id @db.Uuid
+  tenantId     String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The group it belongs to; never changes.
+  groupId      String             @db.Uuid
+  /// The value it is about; null: any value of the group.
+  valueId      String?            @db.Uuid
+  kind         OptionRuleKind
+  /// The value it requires or excludes: of the group's company or tenant-wide (a tenant-wide group's: tenant-wide).
+  otherValueId String             @db.Uuid
+  severity     OptionRuleSeverity
+  /// What the person reads when it is broken, per language: { "it": "…", "en": "…" }; null: the words the API makes from
+  /// the rule ("Full perforation excludes Thermal liner").
+  messageI18n  Json?
+  status       MasterStatus       @default(ACTIVE)
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?            @db.Uuid
+
+  group      OptionGroup  @relation(fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A value of its own group (Restrict, not Prisma's SetNull default: that would also clear tenantId and groupId).
+  value      OptionValue? @relation("OptionRuleValue", fields: [tenantId, groupId, valueId], references: [tenantId, groupId, id], onDelete: Restrict, onUpdate: Restrict)
+  otherValue OptionValue  @relation("OptionRuleOtherValue", fields: [tenantId, otherValueId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, groupId])
+  @@index([tenantId, otherValueId])
+}
+
+/// What an option value does to the garment (PRD-208, PRD-081).
+enum OptionEffectKind {
+  /// A material added: itemId, its quantity per garment in uom (or per size), its section.
+  BOM_ADD
+  /// The style's lines of one material (targetItemId) take another (itemId), with their own quantity or a new one.
+  BOM_REPLACE
+  /// The style's lines of one material (targetItemId) are left out (removing the armour).
+  BOM_REMOVE
+  /// A library operation added to the routing (operationId), with its standard minutes or the given ones.
+  OPERATION_ADD
+  /// Minutes added (or taken away) at one library operation of the routing, or on the garment as a whole.
+  MINUTES
+  /// The price per garment moves: by an amount in a currency, or by a percent of the price (percents never compound:
+  /// the configurator's rule).
+  PRICE
+  /// The garment is no longer the one its certificate covers (removing armour, a full perforation): the quote warns before
+  /// it is sold, and no DoC is issued for it as certified (note: why).
+  CERTIFICATE
+}
+
+/// One effect of an option value (PRD-208): the library's rule for every style that offers the value's group. A style's own
+/// lines for the value are its BOM lines with optionValueId (PRD-081); the configurator applies both. Each kind fills its own
+/// columns and no other (the …_bom_options_w2b_guards trigger). The cost delta of an option is W2b-6's (FIN-018).
+model OptionEffect {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Its value; never changes.
+  valueId        String           @db.Uuid
+  kind           OptionEffectKind
+  /// BOM_ADD: the material added; BOM_REPLACE: the material put in. Never a BLOCKED one (newly named).
+  itemId         String?          @db.Uuid
+  /// BOM_ADD, BOM_REPLACE: its colour; null: the colourway's or the replaced line's.
+  itemColourId   String?          @db.Uuid
+  /// BOM_REPLACE, BOM_REMOVE: the material of the style's lines it replaces or leaves out.
+  targetItemId   String?          @db.Uuid
+  /// BOM_ADD (required unless sizeQuantities), BOM_REPLACE (null: the replaced line's quantity): per garment, in uom, above 0.
+  qty            Decimal?         @db.Decimal(18, 4)
+  /// BOM_ADD, BOM_REPLACE: the unit of qty and sizeQuantities (with them, and only with them).
+  uom            Uom?
+  /// BOM_ADD: the quantity per size, in uom: { "50": "1.2000", "52": "1.3000" } (size codes, decimal strings above 0); a
+  /// size without one takes qty. null: qty for every size.
+  sizeQuantities Json?
+  /// BOM_ADD: the section the added line is filed under; null: by its material's kind.
+  section        BomSection?
+  /// OPERATION_ADD: the operation added; MINUTES: the operation the minutes go to (null: the garment as a whole).
+  operationId    String?          @db.Uuid
+  /// OPERATION_ADD: its minutes per garment, above 0 (null: the operation's standard minutes); MINUTES: the minutes per
+  /// garment added (above 0) or taken away (below 0), never 0.
+  minutes        Decimal?         @db.Decimal(10, 3)
+  /// PRICE: the amount per garment added (above 0) or taken away (below 0), never 0, in currency (ISO 4217); or
+  /// pricePct, a percent of the price (-100 to 1000, never 0): exactly one of the two.
+  /// @grain price
+  priceDelta     Decimal?         @db.Decimal(18, 6)
+  currency       String?
+  /// @grain price
+  pricePct       Decimal?         @db.Decimal(7, 4)
+  /// Why, in words (up to 1000 characters); required for CERTIFICATE (what the certificate no longer covers).
+  note           String?
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  value      OptionValue @relation(fields: [tenantId, valueId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma (Restrict, not Prisma's SetNull default: that would also clear tenantId).
+  item       Item?       @relation("OptionEffectItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour? @relation("OptionEffectItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  targetItem Item?       @relation("OptionEffectTargetItem", fields: [tenantId, targetItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation  Operation?  @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, valueId])
+}
+
+/// A style offering an option group (PRD-206), with its own minimum and maximum (null: the group's) and the value it takes
+/// when nothing is chosen. One ACTIVE offer per style and group (a partial unique index); an offer is archived when the
+/// style stops offering it, and removed only while no BOM line or routing step of the style is for one of its values.
+model StyleOptionGroup {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The style and the group; never change. A company's group only on that company's styles.
+  styleId        String       @db.Uuid
+  groupId        String       @db.Uuid
+  /// The group's place on the style's configurator, 0 or more.
+  seq            Int          @default(0)
+  /// The style's own minimum (0 or more) and maximum (1 or more, not below the minimum; at most 1 for a SINGLE group);
+  /// null: the group's.
+  minPicks       Int?
+  maxPicks       Int?
+  /// The value it takes when nothing is chosen: an ACTIVE value of the group (when newly named); null: none.
+  defaultValueId String?      @db.Uuid
+  status         MasterStatus @default(ACTIVE)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  style        Style        @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  group        OptionGroup  @relation(fields: [tenantId, groupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A value of the group (Restrict, not Prisma's SetNull default: that would also clear tenantId and groupId).
+  defaultValue OptionValue? @relation(fields: [tenantId, groupId, defaultValueId], references: [tenantId, groupId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, styleId])
+  @@index([tenantId, groupId])
+}

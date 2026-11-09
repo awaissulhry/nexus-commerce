@@ -1,6 +1,7 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { samplingPlan } from '@nexus/factory-domain/quality/aql/sampling'
+import { countWords } from '@nexus/factory-domain/quality/final/plan'
 import { levelOf } from '@nexus/factory-domain/quality/aql/sampling'
 import { QUALITY_INPROCESS_VIEW } from '@nexus/factory-domain/quality/inprocess/permissions'
 import { dhuOf, firstPieceHold, KIND_WORDS, OUTCOME_WORDS, rovingColourOf, STATUS_WORDS } from '@nexus/factory-domain/quality/inprocess/rules'
@@ -60,6 +61,13 @@ export function checkRowOf(row: CheckRow, look: Lookups) {
     dhu: row.status === 'DECIDED' ? dhuOf(row.defects, row.pieces) : null,
     defect: defect ? { id: defect.id, code: defect.code, labelIt: defect.labelIt, labelEn: defect.labelEn, critical: defect.severity === 'CRITICAL' } : null,
     hasPlan: row.planVersionId !== null,
+    // B-W2b-213: the AQL sample frozen when it opened and the units of it counted ("3 of 5"), by when it is due, and whether
+    // a rule opened it.
+    sampleSize: row.sampleSize,
+    inspected: row.sampleSize !== null ? (row.inspectedCount ?? 0) : null,
+    dueAt: row.dueAt ? toUtcIso(row.dueAt) : null,
+    overdue: row.status === 'OPEN' && row.dueAt !== null && row.dueAt.getTime() < Date.now(),
+    openedByRule: row.openedByTriggerId !== null,
     decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
     createdAt: toUtcIso(row.createdAt),
     version: row.version,
@@ -103,7 +111,10 @@ export async function checkViewOf(caller: CommandCaller, checkId: string) {
       results: results.map((result) => ({ id: result.id, code: codeOf.get(result.planCheckId)?.code ?? '?', sampleIndex: result.sampleIndex, outcome: result.outcome as 'PASS' | 'FAIL' | 'NOT_APPLICABLE', value: result.value, note: result.note, recordedAt: toUtcIso(result.recordedAt) })),
       /** Mandatory checks still without a result (a passing outcome waits for them). */
       blockers: checks.filter((check) => check.mandatory && check.type !== 'INSTRUCTION' && !results.some((result) => result.planCheckId === check.id)).map((check) => check.code),
-      sample: profile ? { aqlProfileId: profile.id, profileCode: profile.code, codeLetter: row.codeLetter, sampleSize: plan?.sampleSize ?? null, words: plan?.words ?? null } : null,
+      // B-W2b-213: the sample frozen on the check when it opened (before the column: worked out from the profile on read).
+      sample: profile ? { aqlProfileId: profile.id, profileCode: profile.code, codeLetter: row.codeLetter, sampleSize: row.sampleSize ?? plan?.sampleSize ?? null, words: plan?.words ?? null } : null,
+      /** B-W2b-213: "3 of 5 inspected" (null: no sample to count). */
+      progress: row.sampleSize !== null ? { inspected: row.inspectedCount ?? 0, sampleSize: row.sampleSize, words: countWords(row.inspectedCount ?? 0, row.sampleSize) } : null,
       /** A roving check: the traffic light the counts give (the inspector says the colour). */
       suggested: row.kind === 'ROVING' && row.status === 'DECIDED' ? rovingColourOf({ defectivePieces: row.defectivePieces, critical: base.defect?.critical ?? false }) : null,
       /** A first piece: whether its run waits now. */

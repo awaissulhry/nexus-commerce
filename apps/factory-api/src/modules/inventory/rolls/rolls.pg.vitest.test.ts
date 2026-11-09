@@ -88,6 +88,9 @@ const SESSIONS: Record<string, SessionContext> = {
   keeper: office(A.tenant, [grant(KEEP)]),
   viewer: office(A.tenant, [grant(['inventory.stock.view', 'workorders.view', 'quality.lots.view', 'product.materials.view'])]),
   keeperB: office(tenantB, [grant(KEEP)]),
+  // B-W2b-219: prints a roll's tag (the receiving bench's tablet; the office).
+  printer: office(A.tenant, [grant(['inventory.stock.view', 'print.view', 'print.labels'])]),
+  floorPrint: { audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1, deviceId: A.device, grants: [grant(['floor.work', 'inventory.receive', 'print.view', 'print.labels'], { companies: [A.companyA], sites: [A.siteA1] })] },
   floor: {
     audience: 'floor',
     tenantId: A.tenant,
@@ -290,6 +293,24 @@ describe('fabric rolls (SCM-260)', () => {
       ['TAGGED', 'FULL', 'FLOOR', null],
     ])
     expect(record.history.every((entry: Json) => entry.audience !== 'FLOOR' || entry.by === null)).toBe(true)
+  })
+
+  it('B-W2b-219: prints the ROLL tag from the record (its RL code, length left, width, shade, lot) on a label printer of the site', async () => {
+    const roll = made.a!
+    const printerId = newId()
+    await admin(
+      `INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-RL', 'Made-up label printer', 'LABEL_ZPL', 'FAKE', 'made-up:9100', 203, 100, 50)`,
+      [printerId, A.tenant, A.companyA, A.siteA1],
+    )
+    const job = (await ok('floorPrint', 'POST', `/print/jobs/roll-tag/${roll.id}`, { printerId, language: 'it' }, 201)).job
+    expect(job).toMatchObject({ labelKind: 'ROLL', scanId: roll.code, recordType: 'FabricRoll', recordId: roll.id, status: 'QUEUED' })
+    const [stored] = await admin<{ zpl: string }>(`SELECT zpl FROM "PrintJob" WHERE id = $1`, [job.id])
+    expect(stored!.zpl).toContain('Rotolo')
+    expect(stored!.zpl).toContain('Lunghezza')
+    expect((await ok('printer', 'POST', `/print/jobs/roll-tag/${roll.id}`, { printerId, copies: 2, language: 'en' }, 201)).job).toMatchObject({ labelKind: 'ROLL', copies: 2 })
+    // Another tenant's office is not shown the roll; the viewer may not print.
+    await refused('keeperB', 'POST', `/print/jobs/roll-tag/${roll.id}`, { printerId }, 403)
+    await refused('viewer', 'POST', `/print/jobs/roll-tag/${roll.id}`, { printerId }, 403)
   })
 })
 

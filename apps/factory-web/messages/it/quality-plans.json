@@ -148,7 +148,8 @@
     "CUTTING": "un controllo al taglio",
     "FIRST_PIECE": "un controllo del primo capo",
     "ROVING": "un controllo itinerante",
-    "END_OF_LINE": "un controllo di fine linea"
+    "END_OF_LINE": "un controllo di fine linea",
+    "FINAL": "un'ispezione finale"
   },
   "recordKindOf": {
     "FINAL": "Ispezione finale",
@@ -435,7 +436,11 @@
     "noApproved": "Il piano non ha una versione approvata: approvane una, o lascia spenta la regola.",
     "frequency": "Questo evento non accetta quella frequenza.",
     "firstPieceInLine": "Il primo capo vale solo per i piani in linea.",
-    "chipKind": "Questo evento non conosce mai quel tipo: il filtro non corrisponderebbe mai."
+    "chipKind": "Questo evento non conosce mai quel tipo: il filtro non corrisponderebbe mai.",
+    "dueHours": "Da fare entro (ore)",
+    "dueHoursHint": "Ciò che la regola apre va fatto entro queste ore dall'apertura; vuoto: nessuna scadenza. Le mie ispezioni mostrano prima le più vicine.",
+    "dueWithin": "da fare entro {hours} h",
+    "dueHoursRange": "Da 1 a {max} ore, oppure lascia vuoto."
   },
   "calc": {
     "title": "Calcolatore AQL",

@@ -77,6 +77,9 @@ export const FLOOR_SYNC_KINDS = [
   'production.trolley.unload',
   'production.trolley.send',
   'production.trolley.receive',
+  // B-W2b-214: Seen of a work instruction's version (MES-119; design floor.instructions "Works offline": Seen is queued), once
+  // per worker and version.
+  'production.instruction.ack',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -143,6 +146,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.trolley.unload': { kind: 'production.trolley.unload', permission: 'production.trolleys', numbers: null, what: 'Take a bundle off a trolley' },
   'production.trolley.send': { kind: 'production.trolley.send', permission: 'production.trolleys', numbers: null, what: 'Send a trolley to a sewing line' },
   'production.trolley.receive': { kind: 'production.trolley.receive', permission: 'production.trolleys', numbers: null, what: 'Confirm a trolley at the line' },
+  // B-W2b-214: the scans' right (the instruction of the operation in hand); the module checks again the version and the worker.
+  'production.instruction.ack': { kind: 'production.instruction.ack', permission: 'production.scan', numbers: null, what: 'Say a work instruction was seen' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

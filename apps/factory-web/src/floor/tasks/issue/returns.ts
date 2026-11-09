@@ -115,15 +115,15 @@ export function tagPrinterOf(printers: readonly { readonly id: string; readonly 
   return printers.length > 1 ? { kind: 'choose', printers } : { kind: 'none' }
 }
 
-/** The HIDE label of a remnant (factory-domain labels: article, colour, area, lot; the area in the label's words). */
-export function remnantLabel(row: Pick<ReturnRow, 'code' | 'itemCode' | 'itemName' | 'colour' | 'lotCode'>, area: string, language: 'it' | 'en') {
-  return {
-    kind: 'HIDE' as const,
-    language,
-    scanId: row.code,
-    title: `${row.itemCode} · ${row.itemName}`.slice(0, 200),
-    fields: { article: row.itemCode, colour: row.colour, area, lot: row.lotCode },
-  }
+/**
+ * The label of a remnant (factory-domain labels: article, colour, area, lot; the area in the label's words). B-W2b-219: the
+ * REMNANT label with the piece's own RM tag (`remnantCode`, the return's answer) and the hide it is cut from; a return that
+ * answered no tag prints the hide's HIDE label as before.
+ */
+export function remnantLabel(row: Pick<ReturnRow, 'code' | 'itemCode' | 'itemName' | 'colour' | 'lotCode'>, area: string, language: 'it' | 'en', remnantCode?: string | null): { kind: 'HIDE' | 'REMNANT'; language: 'it' | 'en'; scanId: string; title: string; fields: Record<string, string | null> } {
+  const title = `${row.itemCode} · ${row.itemName}`.slice(0, 200)
+  if (remnantCode) return { kind: 'REMNANT' as const, language, scanId: remnantCode, title, fields: { article: row.itemCode, colour: row.colour, area, hide: row.code, lot: row.lotCode } }
+  return { kind: 'HIDE' as const, language, scanId: row.code, title, fields: { article: row.itemCode, colour: row.colour, area, lot: row.lotCode } }
 }
 
 /** The lines the return changed are read again; until then the row's line keeps its numbers (the pick list re-reads). */

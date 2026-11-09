@@ -56,7 +56,7 @@ export const listRemnantsContract = defineContract({
       nextCursor: id().nullable(),
       /** Pieces beside area per unit of entry, for the whole selection (all pages): counts and areas, not money. */
       totals: notMoney(z.array(output({ uom: areaUom, pieces: z.number().int(), area: z.string(), words }))),
-      /** The smallest piece kept as stock (MINIMUM_REMNANT; `setting` false: no setting column yet, every site uses it). */
+      /** The smallest piece kept as stock: the listed site's (B-W2b-219; `setting` true: its own), else MINIMUM_REMNANT (`setting` false). */
       minimum: output({ area: z.string(), uom: areaUom, setting: z.boolean() }),
     }),
   },

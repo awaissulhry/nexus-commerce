@@ -36,7 +36,9 @@ import { workerGateFor } from '../../people/privacy/worker-gate'
 import { stationBlock } from '../../plant/checks'
 import { holdOnCut } from '../../quality/holds/checks'
 // B-W2b-100 (SCM-254): Hide done's remnant is a REMNANT move with its own tag; the hide's tagged pieces follow the cut.
-import { remnantSizeRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
+// B-W2b-219: the site's smallest remnant (ProductionSettings).
+import { remnantSizeRefusalAt } from '../../inventory/remnants/size'
+import { photoRefusal } from './photo'
 import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnMoveReversed, remnantsOnReopen, RemnantRefusedError, tagRemnantInCommand } from '../../inventory/remnants/lifecycle'
 import { floorRecordSubjectFor } from '../settings/subject'
 // B-W2b-103 (MES-053, MES-055, MES-060, MES-063, MES-064): the table's leather checks, "Cut anyway" and the hide's photo.
@@ -366,8 +368,14 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   if (!decision.ok) return refused(decision.refusal)
   // B-W2b-100: a piece under the minimum remnant is waste, not stock (refused in words, before anything is written).
   if (remnantIn && new Dec(decision.remnant).gt(0)) {
-    const small = remnantSizeRefusal({ hideCode: hide.code, baseArea: decision.remnant, baseUom: item.baseUom })
+    const small = await remnantSizeRefusalAt(tx, workOrder.siteId, { hideCode: hide.code, baseArea: decision.remnant, baseUom: item.baseUom })
     if (small) throw new RemnantRefusedError(small.code, small.message)
+  }
+
+  // B-W2b-219: the photo of the hide before its first cut, where the site asks it (ProductionSettings.hidePhotoRequired).
+  if (decision.entry && decision.entry.pieces.length > 0) {
+    const photo = await photoRefusal(tx, { siteId: workOrder.siteId, hideId: hide.id, hideCode: hide.code, photoFileId: body.photoFileId })
+    if (photo) refused(photo)
   }
 
   // B-W2b-103: the table's checks of the pieces this entry cuts (Hide done that cuts nothing more is not checked: nothing is

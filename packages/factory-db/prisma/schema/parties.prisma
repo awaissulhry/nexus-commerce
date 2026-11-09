@@ -82,6 +82,13 @@ model Party {
   agencyEmployees     Employee[]           @relation("EmployeeAgency")
   // W2b people.prisma: the companies whose labour consultant it is.
   consultantSettings  PeopleSettings[]     @relation("PeopleSettingsConsultant")
+  // W2b-4 changes.prisma and samples.prisma (wave 29/33): the change requests it asked, the sample rounds made for it, the
+  // swatches and sample shipments sent to it, the gates of its orders.
+  styleChangeRequests ChangeRequest[]
+  sampleRounds        SampleRound[]
+  sampleSwatches      SampleSwatch[]
+  sampleShipments     SampleShipment[]
+  orderGates          OrderGate[]
   // W2b auth.prisma, portal-auth.prisma, privacy.prisma (wave 17/22): its partner users, their portal sessions and the
   // office previews of its portal, their invitations, its portal settings, its people's acknowledgements of the terms.
   portalUsers         User[]               @relation("UserParty")
@@ -93,6 +100,8 @@ model Party {
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]
+  // W2b-4 options.prisma (wave 28/33): the BOM lines whose material it sends us (customer-supplied).
+  customerSuppliedBomLines BomLine[] @relation("BomLineCustomerSupplied")
   bomLines            BomLine[]
   // W2b-4 styles-depth.prisma (wave 26/33): as a private-label brand, its branding sets.
   brandingSets        BrandingSet[]
@@ -285,6 +294,8 @@ model PartyAddress {
   quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
   // shipping.prisma: the shipments sent to it.
   shipments           Shipment[]
+  // W2b-4 samples.prisma (wave 29/33): the sample shipments sent to it.
+  sampleShipments     SampleShipment[]
   // W2b portal-sales.prisma (wave 21/22): the portal order requests and the change requests that ask to deliver there.
   portalOrderRequestsShipTo PortalOrderRequest[] @relation("PortalOrderRequestShipTo")
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")

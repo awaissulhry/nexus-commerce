@@ -17,7 +17,7 @@ import { addStandardDispositions, createDisposition, editDisposition, readDispos
 import { addStarterCauses, createCause, deleteCause, editCause, readCauses } from './causes'
 import { addStarterGrades, createGrade, editGrade, readGrades } from './grades'
 import { manifest } from './manifest'
-import { readSeverity } from './severity'
+import { readSeverityWords, saveSeverityWords } from './severity-words'
 import { readCoverage, readVocabulary } from './vocabulary'
 import {
   causesContract,
@@ -28,6 +28,7 @@ import {
   editCauseContract,
   editGradeContract,
   gradesContract,
+  saveSeverityContract,
   severityContract,
   starterCausesContract,
   starterGradesContract,
@@ -37,7 +38,7 @@ import {
 /**
  * The defect library (./defects.ts) and the disposition codes (./dispositions.ts) of B-W2a-26 (QHS-001, QHS-005); the
  * stock move a disposition posts is ./stock.ts (postDispositionInCommand, called by the NCR's decisions). B-W2b-90's
- * defect vocabulary: the severity classes (./severity.ts), the cause codes (./causes.ts), the leather grades and hide
+ * defect vocabulary: the severity classes (./severity-words.ts; B-W2b-213: the tenant's words per class and language), the cause codes (./causes.ts), the leather grades and hide
  * defects (./grades.ts) and the vocabulary in the person's language (./vocabulary.ts).
  */
 export default defineRoutes('quality.defects', manifest, async (app) => {
@@ -62,7 +63,10 @@ export default defineRoutes('quality.defects', manifest, async (app) => {
   app.post('/quality/dispositions/standard', { schema: standardDispositionsContract }, async (request) => addStandardDispositions(request, idempotencyKeyFrom(request)))
 
   // ---- B-W2b-90: the defect vocabulary ------------------------------------------------------------------------------
-  app.get('/quality/severity', { schema: severityContract }, async (request) => readSeverity(request))
+  app.get('/quality/severity', { schema: severityContract }, async (request) => readSeverityWords(request))
+
+  // B-W2b-213: the tenant's severity words (QualitySettings.severityTexts).
+  app.put('/quality/severity', { schema: saveSeverityContract }, async (request) => saveSeverityWords(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/quality/causes', { schema: causesContract }, async (request) => readCauses(request, request.query))
 
