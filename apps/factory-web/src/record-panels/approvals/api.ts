@@ -12,19 +12,19 @@ import type { RecordKey } from '../api'
  * permission (the API checks both). No money here: only a revised order's link page shows the party its own prices.
  */
 
+const words = z.object({ it: z.string(), en: z.string() })
+
 export const officeRequestSchema = z.object({
   id: z.string(),
   companyId: z.string(),
   kind: z.enum(APPROVAL_KINDS),
-  kindName: z.string(),
-  record: z.object({ type: z.string(), id: z.string(), label: z.string() }),
+  /** B-W2b-F16: the record's label in both languages; the kind, state and due are shown in our words from the codes. */
+  record: z.object({ type: z.string(), id: z.string(), words }),
   party: z.object({ id: z.string(), name: z.string() }),
   contactId: z.string().nullable(),
   question: z.string(),
   dueAt: z.string(),
-  dueWords: z.string(),
   status: z.enum(APPROVAL_STATUSES),
-  stateWords: z.string(),
   answer: z
     .object({
       at: z.string(),
@@ -46,7 +46,7 @@ export const officeRequestSchema = z.object({
 export type OfficeRequest = z.infer<typeof officeRequestSchema>
 
 export const recordRequestsSchema = z.object({
-  record: z.object({ type: z.string(), id: z.string(), label: z.string() }),
+  record: z.object({ type: z.string(), id: z.string(), words }),
   kinds: z.array(z.enum(APPROVAL_KINDS)),
   held: z.string().nullable(),
   requests: z.array(officeRequestSchema),

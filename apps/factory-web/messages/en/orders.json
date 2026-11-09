@@ -249,7 +249,8 @@
     "closeLines": "Close remaining lines…",
     "reopenLines": "Reopen lines…",
     "copyAsQuote": "Copy as new quote…",
-    "cancel": "Cancel order…"
+    "cancel": "Cancel order…",
+    "portal": "See it in the customer's portal"
   },
   "record": {
     "back": "Orders",
@@ -319,7 +320,9 @@
     "closeLinesOnly": "Nothing has shipped and this is the only open line: cancel the order instead",
     "reopenState": "A closed or cancelled order keeps its closed lines",
     "reopenNone": "No line is closed short",
-    "noQuotes": "Making quotes needs the sales right to manage quotes"
+    "noQuotes": "Making quotes needs the sales right to manage quotes",
+    "portalRight": "Needs the right to preview a partner's portal.",
+    "portalOpening": "Opening the customer's portal…"
   },
   "summary": {
     "label": "The order at a glance",
@@ -1178,5 +1181,10 @@
     "problem": {
       "past": "A date is today or later."
     }
+  },
+  "portal": {
+    "forbidden": "You may not preview this customer's portal.",
+    "noKind": "This customer has no portal: it is neither a customer nor a brand in its roles.",
+    "failed": "The customer's portal could not open. Try again."
   }
 }

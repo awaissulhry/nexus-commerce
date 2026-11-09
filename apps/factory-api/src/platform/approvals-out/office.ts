@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import { APPROVAL_MAIL_TEMPLATES, requestMail } from '@nexus/factory-domain/approvals-out/mail'
 import { KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
 import { PARTNERS_APPROVALS_ASK, PARTNERS_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
-import { askProblems, dueAtFor, dueWords, reasonProblems, stateWords, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
+import { askProblems, dueAtFor, reasonProblems, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
@@ -20,6 +20,7 @@ import { assertNoPayByLink, LinkRefusedError } from '../links/pay'
 import { openTaskInCommand, closeTasksInCommand } from '../portal/tasks/store'
 import type { RecordAdapter } from './adapter'
 import { deliverMail, queueMail } from './mail'
+import { sameWords } from './adapter'
 import { adapterFor, adapterOf } from './records'
 import { filesOf, localeOf, lockRequest, OFFICE_COLUMNS, RECORD, readOfficeRow, revokeLinksInCommand, sourceKeyOf, type OfficeRow } from './store'
 
@@ -59,7 +60,9 @@ function needs(actor: Actor, adapter: RecordAdapter, scope: ReturnType<typeof sc
 
 // ---- what the office reads ----------------------------------------------------------------------------------------------
 
-async function officeView(client: Client, row: OfficeRow, locale: ApprovalLocale = 'en') {
+// B-W2b-F16: codes (kind, status, dueAt) and the record's label in both languages (`words`); the screens say the rest in
+// their own words. No kindName, stateWords or dueWords any more (they were English only).
+async function officeView(client: Client, row: OfficeRow) {
   const kind = row.kind as ApprovalKind
   const adapter = adapterOf(kind, row.recordType)
   const record = adapter ? await adapter.read(client, row.recordId, kind, { partyId: row.partyId, now: new Date() }) : null
@@ -73,15 +76,12 @@ async function officeView(client: Client, row: OfficeRow, locale: ApprovalLocale
     id: row.id,
     companyId: row.companyId,
     kind,
-    kindName: KIND_RULES[kind].name[locale],
-    record: { type: row.recordType, id: row.recordId, label: record?.label ?? row.recordId },
+    record: { type: row.recordType, id: row.recordId, words: record?.label ?? sameWords(row.recordId) },
     party: { id: row.partyId, name: party?.legalName ?? '' },
     contactId: row.contactId,
     question: row.question,
     dueAt: toUtcIso(row.dueAt),
-    dueWords: dueWords(row.dueAt, locale),
     status,
-    stateWords: stateWords(status, locale),
     answer:
       row.answeredAt === null
         ? null
@@ -124,7 +124,7 @@ export async function recordRequests(request: FastifyRequest, recordType: string
   const rows = await request.withClient((client) => client.approvalRequest.findMany({ where: { recordType, recordId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100, select: OFFICE_COLUMNS }))
   const views = []
   for (const row of rows) views.push(await request.withClient((client) => officeView(client, row)))
-  return { record: { type: recordType, id: recordId, label: record.label }, kinds: [...adapter.kinds], held: record.held, requests: views }
+  return { record: { type: recordType, id: recordId, words: record.label }, kinds: [...adapter.kinds], held: record.held, requests: views }
 }
 
 // ---- ask ---------------------------------------------------------------------------------------------------------------------
@@ -196,7 +196,7 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
   }
   const token = mintLinkToken({ tenantId: context.tenantId, partyId, linkId })
   const companyName = facts.company?.tradeName ?? facts.company?.legalName ?? ''
-  const mailFacts = { companyName, kind: body.kind, label: record.label, question: body.question.trim(), dueAt: dueAt! }
+  const mailFacts = { companyName, kind: body.kind, label: record.label[locale], question: body.question.trim(), dueAt: dueAt! }
   const sender = facts.user ? { userId: context.actorId, name: facts.user.displayName, email: facts.user.email } : null
 
   const { result, replayed } = await command(
@@ -226,7 +226,7 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
         companyId: record.companyId,
         partyId,
         kind: KIND_RULES[body.kind].task,
-        record: { type: RECORD, id: requestId, label: `${KIND_RULES[body.kind].name[locale]} · ${record.label}` },
+        record: { type: RECORD, id: requestId, label: `${KIND_RULES[body.kind].name[locale]} · ${record.label[locale]}` },
         sourceKey: sourceKeyOf(requestId),
         dueAt: dueAt!,
         askedBy: sender ? { id: sender.userId, name: sender.name } : null,
@@ -238,7 +238,7 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
     },
   )
   const row = (await request.withClient((client) => readOfficeRow(client, result.requestId)))!
-  const view = await request.withClient((client) => officeView(client, row, locale))
+  const view = await request.withClient((client) => officeView(client, row))
   if (replayed) return { request: view, url: null, delivery: null }
   const url = auth.link('/l', token.value)
   if (!result.outboundId) return { request: view, url, delivery: null }

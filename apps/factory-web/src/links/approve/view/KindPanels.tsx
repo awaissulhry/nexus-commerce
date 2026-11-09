@@ -54,7 +54,7 @@ function FilesPanel({ page, model, actions, title, hint, inlinePdf = false, side
   const tiles = pdf ? files.filter((file) => file.id !== pdf.id) : files
   return (
     <Card padded className="fw-ap-card">
-      <h2 className="fw-ap-h2">{t(title, { kind: page.request.kindName })}</h2>
+      <h2 className="fw-ap-h2">{t(title, { kind: t(`kind.${page.request.kind}`) })}</h2>
       <p className="fw-ap-hint">{t(hint, { company: page.request.from.companyName })}</p>
       <Facts page={page} />
       {pdf && (

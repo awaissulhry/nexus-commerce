@@ -53,14 +53,12 @@ export const approvalPageSchema = z.object({
   request: z.object({
     id: z.string(),
     kind: z.enum(APPROVAL_KINDS),
-    kindName: z.string(),
-    label: z.string(),
+    /** B-W2b-F16: the record's label in both languages; the kind, state and due are said in our words from the codes. */
+    words: z.object({ it: z.string(), en: z.string() }),
     question: z.string(),
     from: z.object({ companyName: z.string() }),
     dueAt: z.string(),
-    dueWords: z.string(),
     status: z.enum(APPROVAL_STATUSES),
-    stateWords: z.string(),
     decided: z.string().nullable(),
     answer: z.object({ at: z.string(), typedName: z.string(), words: z.string().nullable(), markupFileId: z.string().nullable() }).nullable(),
     version: z.number(),

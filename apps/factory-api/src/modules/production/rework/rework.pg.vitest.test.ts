@@ -112,13 +112,16 @@ const asOffice = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => data
 
 const hides: Record<string, { id: string; code: string }> = {}
 
-async function addHides(count: number, from = 1, lotKey = 'BIG') {
-  const lotId = newId()
-  await admin(
-    `INSERT INTO "Lot" (id, "tenantId", "companyId", "siteId", "itemId", "itemColourId", code, "dyeBatch", "qualityStatus", "qualityDecidedAt", "requiresCrViTest", "crViLimitMgKg", "crViStatus", "crViMgKg", "crViEvidence", "crViTestedAt", "receivedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, '7731', 'RELEASED', now(), true, '3.000', 'PASS', '1.100', 'LOT_REPORT', '2026-10-01', '2026-10-05T08:00:00Z')`,
-    [lotId, A.tenant, A.companyA, A.siteA1, A.leather, A.leatherBLK, `T-${run}-${lotKey}`],
-  )
+/** Made-up hides H<from>… at A1's store: of a new lot, or of `existingLotId` (one shade lot per order: B-W2b-100). */
+async function addHides(count: number, from = 1, existingLotId?: string) {
+  const lotId = existingLotId ?? newId()
+  if (!existingLotId) {
+    await admin(
+      `INSERT INTO "Lot" (id, "tenantId", "companyId", "siteId", "itemId", "itemColourId", code, "dyeBatch", "qualityStatus", "qualityDecidedAt", "requiresCrViTest", "crViLimitMgKg", "crViStatus", "crViMgKg", "crViEvidence", "crViTestedAt", "receivedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, '7731', 'RELEASED', now(), true, '3.000', 'PASS', '1.100', 'LOT_REPORT', '2026-10-01', '2026-10-05T08:00:00Z')`,
+      [lotId, A.tenant, A.companyA, A.siteA1, A.leather, A.leatherBLK, `T-${run}-BIG`],
+    )
+  }
   for (let index = from; index < from + count; index++) {
     const key = `H${String(index).padStart(2, '0')}`
     const hideId = newId()
@@ -238,8 +241,10 @@ beforeAll(async () => {
     await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: A.style, sizes: ['50', '52'] }, select: { id: true } })
   })
   bigLot = await addHides(3)
-  // Two hides of their own lot for the stock scrap (the reservation and the refusal).
-  await addHides(2, 8, 'SCRAP')
+  // Two more hides for the stock scrap (the reservation and the refusal), of the same lot: the work orders were cut from
+  // that lot, and one shade lot per order (B-W2b-100, SCM-206) refuses a hide of another lot for them. Uncut, they add
+  // nothing to the lot's yield.
+  await addHides(2, 8, bigLot)
   for (const [deviceId, stationId, name] of [
     [A.sew1, A.sew1Station, 'Sewing tablet 1'],
     [A.qc, A.qcStation, 'Inspection tablet'],

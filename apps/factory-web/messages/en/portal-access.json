@@ -1,0 +1,464 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "saving": "Saving…",
+    "sending": "Sending…"
+  },
+  "form": {
+    "required": "Fill this in.",
+    "email": "Type an e-mail address, like name@example.com."
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "kind": {
+    "CUSTOMER": "Customer portal",
+    "SUPPLIER": "Supplier portal",
+    "SUBCONTRACTOR": "Workshop portal",
+    "GUEST": "Adviser access"
+  },
+  "status": {
+    "INVITED": "Invited",
+    "ACTIVE": "Active",
+    "SUSPENDED": "Suspended",
+    "DEACTIVATED": "Deactivated"
+  },
+  "role": {
+    "customer-buyer": "Buyer",
+    "customer-finance": "Finance",
+    "customer-quality": "Quality",
+    "customer-designer": "Designer",
+    "customer-viewer": "Viewer",
+    "customer-admin": "Admin",
+    "supplier-orders": "Orders",
+    "supplier-invoices": "Invoices",
+    "supplier-quality": "Quality",
+    "supplier-admin": "Admin",
+    "subcontractor-jobs": "Jobs",
+    "subcontractor-admin": "Admin",
+    "guest-accountant": "Accountant",
+    "partner-comment": "Can comment",
+    "partner-upload": "Can send files",
+    "partner-approve": "Can approve"
+  },
+  "roleLine": {
+    "customer-buyer": "Orders and reorders, quotes, deliveries and documents.",
+    "customer-finance": "Invoices, statements and payments.",
+    "customer-quality": "Certificates, test reports, complaints and returns.",
+    "customer-designer": "Samples, artwork and approvals of designs.",
+    "customer-viewer": "Reads orders and deliveries; changes nothing.",
+    "customer-admin": "Everything of the customer portal, and their colleagues' access.",
+    "supplier-orders": "Purchase orders to confirm, ship notices and deliveries.",
+    "supplier-invoices": "Their invoices and our payments, without prices on orders.",
+    "supplier-quality": "Certificates, test reports and claims.",
+    "supplier-admin": "Everything of the supplier portal, and their colleagues' access.",
+    "subcontractor-jobs": "Jobs to accept, kits received, progress and send-backs.",
+    "subcontractor-admin": "Everything of the workshop portal, and their colleagues' access.",
+    "guest-accountant": "The accounting exports, for a limited time.",
+    "partner-comment": "Writes messages on what they can see.",
+    "partner-upload": "Sends files on what they can see.",
+    "partner-approve": "Approves, accepts or signs what we ask."
+  },
+  "capability": {
+    "comment": "Messages",
+    "upload": "Files",
+    "approve": "Approvals"
+  },
+  "capabilityLine": {
+    "comment": "May write messages to us.",
+    "upload": "May send us files.",
+    "approve": "May approve, accept or sign what we ask."
+  },
+  "right": {
+    "view": "See a partner's portal access",
+    "invite": "Invite partner people",
+    "manage": "Change partner people's access and the portal's switches",
+    "preview": "Preview a partner's portal",
+    "requests": "Ask partners for something"
+  },
+  "held": {
+    "needs": "Needs the right: {right}.",
+    "noKind": "This organisation has no portal: in its roles it is neither a customer, a brand, a supplier, a workshop nor an adviser.",
+    "blocked": "This organisation is blocked or archived: unblock it before its people get access.",
+    "noTerms": "The portal terms of this company are not published yet: nobody is invited before (the privacy gate).",
+    "seatsFull": "Every seat of this portal is taken: deactivate someone or raise the people at most.",
+    "left": "This person left: they were deactivated.",
+    "nobody": "None of the chosen people can take this action.",
+    "suspendNone": "Only an active person is suspended.",
+    "reactivateNone": "Only a suspended person is reactivated.",
+    "deactivateNone": "Only an active or suspended person is deactivated (an invited one: revoke the invitation).",
+    "resendNone": "Only an invited person gets the invitation again.",
+    "revokeNone": "Only an invited person with an open invitation."
+  },
+  "problem": {
+    "signedOut": "You were signed out. Sign in again.",
+    "forbidden": "You may not do this for this organisation.",
+    "stepUp": "This change needs a fresh code.",
+    "notFound": "This organisation or person was not found.",
+    "conflict": "Someone else changed this just now. It was read again: check and try once more.",
+    "invalid": "Some of what was typed is not valid. Check it and try again.",
+    "rateLimited": "Too many tries. Wait a minute, then try again.",
+    "unavailable": "The server did not answer. Try again in a moment.",
+    "contract": "The answer could not be read. Try again; if it stays, tell an administrator.",
+    "internal": "Something went wrong. Try again.",
+    "blocked": "This organisation is blocked or archived: unblock it before its people get access.",
+    "officeAddress": "This address belongs to a person of the office. A portal account needs another address.",
+    "otherOrganisation": "This address belongs to a person of another organisation: one address is one account.",
+    "alreadyIn": "This person already has access (or is suspended): change their role instead.",
+    "rolesNotReady": "The portal roles are not set up yet: an administrator brings the role templates up to date (Admin › Roles & permissions).",
+    "noKind": "This organisation has no portal: in its roles it is neither a customer, a brand, a supplier, a workshop nor an adviser.",
+    "notInvited": "This person has no open invitation.",
+    "stillInvited": "This person has not signed in yet: send the invitation again instead.",
+    "noPortalCompany": "Say which company this portal is for: the organisation works with every company.",
+    "progressOnlyCustomers": "Production progress shows only to a customer or a brand.",
+    "seatsFull": "Every seat of this portal is taken: deactivate someone or raise the people at most.",
+    "roleNotOffered": "This organisation's portal does not offer that role.",
+    "accessUntil": "The end of access must be a day after today (an adviser's access always ends).",
+    "capability": "That role does not allow what was ticked.",
+    "email": "Check the e-mail address.",
+    "noTerms": "The portal terms of this company are not published yet (Admin › Privacy & notices): nobody can be invited before."
+  },
+  "stepUp": {
+    "title": "Confirm with a fresh code",
+    "confirm": "Confirm",
+    "sentence": {
+      "default": "Type the 6-digit code from your authenticator app to make this change.",
+      "invite": "Inviting partner people (or stopping an invitation) needs a fresh code from your authenticator app.",
+      "settings": "Changing a partner's portal needs a fresh code from your authenticator app.",
+      "person": "Changing a partner person's access needs a fresh code from your authenticator app.",
+      "status": "Suspending, reactivating or deactivating partner people needs a fresh code from your authenticator app."
+    },
+    "problem": {
+      "wrong": "That code is wrong or was already used. Type the next one.",
+      "locked": "Too many wrong codes. Wait a few minutes, then try again.",
+      "noAuthenticator": "Set up your authenticator app in My profile first.",
+      "tooMany": "Too many tries. Wait a minute, then try again.",
+      "failed": "The code could not be checked. Try again."
+    }
+  },
+  "noAccess": {
+    "title": "Portal access is not yours to see"
+  },
+  "failed": {
+    "title": "Couldn't load the portal access"
+  },
+  "terms": {
+    "missing": "The portal terms of this company are not published yet: nobody can be invited before (the privacy gate)."
+  },
+  "live": {
+    "on": "Live",
+    "offline": "Offline: changes show when the connection is back",
+    "connecting": "Connecting…",
+    "asOf": "Read at {time}",
+    "signedIn": "{name} signed in at {time}",
+    "firstSignIn": "{name} signed in for the first time at {time}"
+  },
+  "settings": {
+    "title": "Portal",
+    "intro": {
+      "customers": "Whether {name} has a customer portal, how many people it holds and which roles it offers.",
+      "suppliers": "Whether {name} has a supplier portal, how many people it holds and which roles it offers. Links sent for one order work without it."
+    },
+    "on": "On",
+    "off": "Off",
+    "portalOn": "Portal on",
+    "portalOnHint": "Their people can sign in, see what is theirs and get our e-mails.",
+    "portalOffHint": "Off: nobody of theirs signs in and nothing reaches them from the portal; links still work.",
+    "progress": "Production progress",
+    "progressHint": "Shows each order's production steps in their portal. Off by default.",
+    "maxUsers": "People at most",
+    "maxUsersHint": "Empty: no limit. {taken} invited or active now.",
+    "noLimit": "No limit",
+    "maxRange": "A number from 1 to 1000, or empty for no limit.",
+    "maxBelowTaken": "{taken} people are invited or active: deactivate some first, or give a number of at least {taken}.",
+    "roles": "Roles offered",
+    "rolesAll": "Every role of the portal is offered. Untick the ones they may not give.",
+    "rolesSome": "Only the ticked roles are offered to new people; people keep a role taken off the list.",
+    "unsaved_one": "1 change to the portal not saved",
+    "unsaved_other": "{count} changes to the portal not saved",
+    "save": "Save",
+    "fixFirst": "Fix what is marked first."
+  },
+  "preview": {
+    "title": "What they see",
+    "intro": {
+      "customers": "Open the portal exactly as {name} sees it, without signing in as them.",
+      "suppliers": "Open the portal exactly as {name} sees it, without signing in as them."
+    },
+    "readOnly": "Read-only: nothing can be sent, approved or changed from it, and no price shows.",
+    "hour": "It opens in a new tab and ends after an hour.",
+    "recorded": "Every preview is recorded in the audit log.",
+    "whileOff": "Their portal is off: you see what they would see once it is on.",
+    "open": "Open preview",
+    "opening": "Opening the portal…"
+  },
+  "people": {
+    "title": "People with access",
+    "intro": {
+      "customers": "Who at this customer may sign in to the portal, with which role, until when.",
+      "suppliers": "Supplier contacts invited to the portal, with which role, until when."
+    },
+    "noPricesLine": "Supplier and workshop roles never see a price.",
+    "invite": "Invite",
+    "admin": "Admin",
+    "noRole": "No portal role",
+    "noEnd": "No end",
+    "ended": "Ended",
+    "endsSoon": "Ends soon",
+    "never": "Never",
+    "invitationEnds": "invitation until {date}",
+    "invitationExpired": "invitation expired",
+    "prices": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "col": {
+      "name": "Name",
+      "email": "E-mail",
+      "role": "Portal role",
+      "prices": "Sees prices",
+      "until": "Access ends",
+      "lastSignIn": "Last sign-in",
+      "status": "Status",
+      "more": "More"
+    },
+    "count_one": "1 person",
+    "count_other": "{count} people",
+    "seats": "{taken} of {max} seats",
+    "seatsOpen_one": "1 seat taken",
+    "seatsOpen_other": "{count} seats taken",
+    "full": "full",
+    "showLeft": "Show people who left",
+    "tableLabel": "People with portal access",
+    "rowMenu": "Actions for {name}",
+    "empty": {
+      "customers": "Nobody from this customer uses the portal",
+      "suppliers": "Nobody has portal access"
+    },
+    "emptyHint": {
+      "customers": "Invite the first person: they get an e-mail and sign in with a code.",
+      "suppliers": "Links still work without an account. Invite a contact to give them the portal."
+    }
+  },
+  "row": {
+    "change": "Change access…",
+    "resend": "Send the invitation again",
+    "revoke": "Revoke the invitation",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "deactivate": "Deactivate"
+  },
+  "bulk": {
+    "resend_one": "Send again to 1",
+    "resend_other": "Send again to {count}",
+    "revoke_one": "Revoke 1 invitation",
+    "revoke_other": "Revoke {count} invitations",
+    "suspend_one": "Suspend 1",
+    "suspend_other": "Suspend {count}",
+    "reactivate_one": "Reactivate 1",
+    "reactivate_other": "Reactivate {count}",
+    "deactivate_one": "Deactivate 1",
+    "deactivate_other": "Deactivate {count}"
+  },
+  "confirm": {
+    "resend": {
+      "title_one": "Send the invitation to {name} again?",
+      "title_other": "Send the invitation to {count} people again?",
+      "body": "A new invitation e-mail goes out, valid for 7 days, with the same role and end of access; the old link stops."
+    },
+    "revoke": {
+      "title_one": "Revoke the invitation of {name}?",
+      "title_other": "Revoke {count} invitations?",
+      "body": "The invitation link stops working at once and the person is deactivated. Invite them again to give access."
+    },
+    "suspend": {
+      "title_one": "Suspend {name}?",
+      "title_other": "Suspend {count} people?",
+      "body": "Their sessions end now and they cannot sign in until reactivated. Their role and end of access stay."
+    },
+    "reactivate": {
+      "title_one": "Reactivate {name}?",
+      "title_other": "Reactivate {count} people?",
+      "body": "They can sign in again with the role they had."
+    },
+    "deactivate": {
+      "title_one": "Deactivate {name}?",
+      "title_other": "Deactivate {count} people?",
+      "body": "Their sessions end now, their roles end and they cannot sign in again. Their name stays on what they did."
+    },
+    "andMore_one": "and 1 more",
+    "andMore_other": "and {count} more",
+    "skipped_one": "1 chosen person is left out: the action does not apply to them.",
+    "skipped_other": "{count} chosen people are left out: the action does not apply to them.",
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept in the audit log."
+  },
+  "done": {
+    "settings": "The portal is saved.",
+    "invited": "Invitation sent to {name} ({email}).",
+    "changed": "The access of {name} is saved.",
+    "until": "The end of access of {name} is saved.",
+    "removed": "{name} was removed from the organisation.",
+    "preview": "The portal of {name} opened in a new tab, read-only, for an hour.",
+    "asked": "The request was sent to {name}.",
+    "cancelled_one": "1 request cancelled",
+    "cancelled_other": "{count} requests cancelled",
+    "resend_one": "1 invitation sent again",
+    "resend_other": "{count} invitations sent again",
+    "revoke_one": "1 invitation revoked",
+    "revoke_other": "{count} invitations revoked",
+    "suspend_one": "1 person suspended",
+    "suspend_other": "{count} people suspended",
+    "reactivate_one": "1 person reactivated",
+    "reactivate_other": "{count} people reactivated",
+    "deactivate_one": "1 person deactivated",
+    "deactivate_other": "{count} people deactivated"
+  },
+  "notice": {
+    "refused_one": "1 refused",
+    "refused_other": "{count} refused"
+  },
+  "invite": {
+    "title": "Invite someone from {name}",
+    "hint": "They get an e-mail and sign in with a code; no password.",
+    "valid": "The invite works for 7 days.",
+    "go": "Send invitation",
+    "name": "Name",
+    "email": "E-mail",
+    "kind": "Which portal",
+    "kindPick": "Choose the portal",
+    "kindNeeded": "Choose which portal the person is for.",
+    "role": "Their role",
+    "noRoles": "This portal offers no role: tick one under Roles offered first.",
+    "seesPrices": "Sees prices.",
+    "noPrices": "Sees no price.",
+    "also": "What they may also do",
+    "until": "Access until (optional)",
+    "untilHint": "Their access ends at the end of that day. Empty: no end.",
+    "untilGuest": "An adviser's access always ends: give the day.",
+    "untilClear": "No end",
+    "untilFuture": "Choose a day after today.",
+    "guestNeedsEnd": "An adviser's access always ends: give the day.",
+    "language": "Language of the invitation and the portal",
+    "exists": "This address already has access to this portal.",
+    "roleNeeded": "Choose a role.",
+    "roleNotOffered": "This portal does not offer that role."
+  },
+  "person": {
+    "title": "Access of {name}",
+    "save": "Save",
+    "nothing": "Nothing changed yet.",
+    "fixFirst": "Fix what is marked first.",
+    "untilHint": "Their access ends at the end of that day. Empty: no end.",
+    "invitedNote": "Not signed in yet: the change applies to their open invitation."
+  },
+  "requests": {
+    "title": "Requests waiting for them",
+    "intro": "What we asked of them through the portal and still waits for their answer.",
+    "ask": "Ask for something",
+    "tableLabel": "Requests waiting for this organisation",
+    "count_one": "1 request",
+    "count_other": "{count} requests",
+    "col": {
+      "what": "Request",
+      "record": "On",
+      "due": "By",
+      "askedBy": "Asked by"
+    },
+    "noDue": "No date",
+    "overdue": "Overdue",
+    "today": "Today",
+    "system": "Automatic",
+    "rowMenu": "Actions for {what}",
+    "cancel": "Cancel the request",
+    "cancelN_one": "Cancel 1 request",
+    "cancelN_other": "Cancel {count} requests",
+    "cancelTitle_one": "Cancel this request?",
+    "cancelTitle_other": "Cancel {count} requests?",
+    "cancelBody": "It leaves their list and stops the reminders. Asking again makes a new request.",
+    "keep": "Keep",
+    "dueOn": "by {date}",
+    "empty": "Nothing waits for them",
+    "emptyHint": "Requests from orders, purchase orders and documents show here, and the ones you ask for.",
+    "failed": "Couldn't load the requests"
+  },
+  "ask": {
+    "title": "Ask {name} for something",
+    "hint": "The request shows in their portal with a reminder before the date. Say the details in the organisation's messages.",
+    "what": "What they should do",
+    "kind": {
+      "UPLOAD_DOCUMENT": "Upload a document",
+      "ANSWER_MESSAGE": "Answer our message",
+      "SEND_MEASUREMENTS": "Send measurements",
+      "REPORT_PROGRESS": "Report progress"
+    },
+    "kindLine": {
+      "UPLOAD_DOCUMENT": "A certificate, a declaration or a file we need from them.",
+      "ANSWER_MESSAGE": "A question we wrote them in the messages.",
+      "SEND_MEASUREMENTS": "Body measurements for a made-to-measure order.",
+      "REPORT_PROGRESS": "Where their work stands."
+    },
+    "due": "By",
+    "dueHint": "Empty: no date (no reminder).",
+    "noDue": "No date",
+    "go": "Send the request"
+  },
+  "partners": {
+    "tableLabel": "People of the partner organisations",
+    "count": "{shown} of {total}",
+    "more_one": "Show 1 more",
+    "more_other": "Show {count} more",
+    "col": {
+      "organisation": "Organisation",
+      "language": "Language"
+    },
+    "orgHidden": "Not yours to see",
+    "roleOnAccept": "Given at their first sign-in",
+    "tile": {
+      "invited": "Invited, not joined",
+      "endsSoon": "Access ends soon",
+      "suspended": "Suspended",
+      "deactivated": "Deactivated"
+    },
+    "tileHint": {
+      "invited": "The invite works for 7 days",
+      "endsSoon": "Within 7 days; they were told by e-mail",
+      "suspended": "Cannot sign in until reactivated",
+      "deactivated": "Left; kept on history"
+    },
+    "filtered": "Showing: {tile}",
+    "clear": "Show everyone",
+    "noMatch": "Nobody matches",
+    "empty": "No partner uses a portal yet",
+    "emptyHint": "Invite customers and suppliers from their Portal access tab (Sales › Customers, Purchasing › Suppliers).",
+    "failed": "Couldn't load the partner people",
+    "inviteWhere": "A partner is invited from their organisation's Portal access tab: Sales › Customers or Purchasing › Suppliers."
+  },
+  "org": {
+    "title": "Organisation",
+    "intro": "Which customer or supplier this person belongs to, and their access there.",
+    "organisation": "Organisation",
+    "admin": "Their admin",
+    "noAdmin": "No admin yet",
+    "noAdminHint": "The factory manages their colleagues meanwhile.",
+    "userType": "User type",
+    "also": "May also",
+    "alsoNone": "Nothing more",
+    "until": "Access ends",
+    "lastSignIn": "Last sign-in",
+    "pricesAtMost": "Partners see prices at most; never costs or margins.",
+    "changeTitle": "Change access",
+    "changeHint": "A new end of access, or remove them from the organisation.",
+    "changeInvited": "Not signed in yet: the end applies to their open invitation; Remove revokes it.",
+    "saveUntil": "Save the end date",
+    "remove": "Remove from organisation",
+    "removeTitle": "Remove {name} from {organisation}?",
+    "removeBody": "Their sessions end now, their roles end and they cannot sign in again. Their name stays on what they did.",
+    "failed": "Couldn't load the organisation",
+    "notFound": "This person is not in the organisation any more",
+    "notFoundHint": "Read the page again; they may have been moved by someone else."
+  }
+}

@@ -1,0 +1,457 @@
+/*
+ * SCR-184 — the customer's Orders & tracking (B-W2b-191): layout only, semantic tokens only. The pages fill the portal's
+ * main area (no page max-width: Owner rule 2026-10-29), use the width on a wide screen and stack on a phone.
+ */
+
+.fw-pord,
+.fw-pord-tab,
+.fw-pord-stack,
+.fw-pord-section,
+.fw-pord-dialog {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pord,
+.fw-pord-tab {
+  gap: var(--nds-space-16);
+}
+
+.fw-pord-stack,
+.fw-pord-section,
+.fw-pord-dialog {
+  gap: var(--nds-space-8);
+}
+
+.fw-pord-dialog {
+  gap: var(--nds-space-16);
+}
+
+.fw-pord-chiprow {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* One chip row; on a phone it scrolls inside itself, never the page. */
+.fw-pord-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pord-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--nds-space-4);
+  }
+  .fw-pord-chiprow {
+    align-items: flex-start;
+  }
+}
+
+.fw-pord-chip-count,
+.fw-pord-h2-count {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pord-h2-count {
+  margin-left: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-pord-rowlink {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-pord-rowlink:hover,
+.fw-pord-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pord-cell {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+}
+
+.fw-pord-stack {
+  justify-content: center;
+  line-height: 1.3;
+}
+
+.fw-pord-sub,
+.fw-pord-hint,
+.fw-pord-quiet {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pord-hint,
+.fw-pord-quiet,
+.fw-pord-strong,
+.fw-pord-total-move,
+.fw-pord-answer,
+.fw-pord-held,
+.fw-pord-error {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.fw-pord-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pord-moved {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pord-held,
+.fw-pord-error {
+  color: var(--nds-danger-text);
+}
+
+.fw-pord-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pord-h2,
+.fw-pord-h3 {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pord-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-pord-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pord-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-danger-text);
+}
+
+.fw-pord-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pord-push {
+  margin-left: auto;
+}
+
+/* One line in a grid cell: the rest is cut with an ellipsis (the whole text is in the record). */
+.fw-pord-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A note box of a few lines, not a page (the DS field grows as the person types). */
+.fw-pord-note textarea {
+  min-height: 72px;
+  height: 88px;
+}
+
+/* ── On the way ── */
+.fw-pord-transit {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pord-transit-head,
+.fw-pord-transit-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ── the record ── */
+.fw-pord-tracker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, auto);
+  align-items: start;
+  gap: var(--nds-space-24);
+}
+
+@media (max-width: 899px) {
+  .fw-pord-tracker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pord-promise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pord-promise-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pord-promise-date {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pord-moved-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-warning-text);
+}
+
+.fw-pord-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 360px;
+  padding: var(--nds-space-4);
+}
+
+.fw-pord-history-list,
+.fw-pord-requests,
+.fw-pord-parcels,
+.fw-pord-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pord-history-list li,
+.fw-pord-events li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pord-request {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-pord-request:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.fw-pord-request-head,
+.fw-pord-parcel,
+.fw-pord-tracking,
+.fw-pord-docline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pord-tracking code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-pord-progress-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* Four stages side by side on a wide screen, two on a tablet, one on a phone. */
+.fw-pord-bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+@media (max-width: 1023px) {
+  .fw-pord-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 519px) {
+  .fw-pord-bars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pord-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pord-deposit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-pord-deposit > :first-child {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.fw-pord-address {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-pord-old {
+  opacity: 0.85;
+}
+
+.fw-pord-quote {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: 3px solid var(--nds-border-strong);
+  color: var(--nds-text);
+  white-space: pre-wrap;
+}
+
+/* ── pop-ups ── */
+.fw-pord-change-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-pord-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+@media (max-width: 719px) {
+  .fw-pord-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pord-lines-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-pord-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-pord-pick[data-held] {
+  color: var(--nds-text-2);
+}
+
+.fw-pord-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-pord-fake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ── tab:print ── */
+.fw-pord-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pord-print-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-pord-print-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 2px solid var(--nds-border-strong);
+}
+
+.fw-pord-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pord-print-meta {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* On paper only the sheet: the portal's frame and the toolbar are left out (only on the page that holds the sheet). */
+@media print {
+  body:has(.fw-pord-print) * {
+    visibility: hidden;
+  }
+
+  body:has(.fw-pord-print) .fw-pord-print,
+  body:has(.fw-pord-print) .fw-pord-print * {
+    visibility: visible;
+  }
+
+  .fw-pord-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .fw-pord-print-toolbar {
+    display: none;
+  }
+}

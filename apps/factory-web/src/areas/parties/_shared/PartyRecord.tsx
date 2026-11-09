@@ -69,16 +69,18 @@ import { PartyRecordView, type OverviewSlot } from './view/PartyRecordView'
 export type TermsSlot = (party: Party, reload: () => void) => ReactNode
 /** B-W2a-69: a supplier's Items & prices tab (Purchasing's Approved sources), drawn with the party read. */
 export type ItemsSlot = (party: Party, reload: () => void) => ReactNode
+/** B-W2b-180: the Portal access tab of both sides (areas/sales/customers/portal), drawn with the party read. */
+export type PortalSlot = (party: Party) => ReactNode
 
-export function PartyRecord({ side, partyId, terms, items, overview }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot }) {
+export function PartyRecord({ side, partyId, terms, items, overview, portal }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms, items, overview }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot }) {
+function PartyRecordContainer({ side, partyId, terms, items, overview, portal }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -95,6 +97,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview }: { side:
     price: held.has('money.price'),
     cost: held.has('money.cost'),
     threads: held.has('threads.read'),
+    partners: !!portal && held.has('partners.view'), // B-W2b-180
   }
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(config.tabs)
@@ -337,6 +340,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview }: { side:
       documents={documents}
       terms={party && terms ? terms(party, () => void load()) : null}
       items={party && items ? items(party, () => void load()) : null}
+      portal={party && portal && tab === 'portal' ? portal(party) : null}
       overview={overview}
       actions={{
         onRetry: () => {

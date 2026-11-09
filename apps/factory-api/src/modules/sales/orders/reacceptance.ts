@@ -56,7 +56,7 @@ export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
           : order.status === 'CLOSED' || order.status === 'CANCELLED'
             ? `${order.number} is ${order.status.toLowerCase()}.`
             : null
-    return { companyId: order.companyId, siteId: null, partyId: order.partyId, label: `${order.number} · revision ${row.revision}`, held, thread: { type: 'SalesOrder', id: order.id } }
+    return { companyId: order.companyId, siteId: null, partyId: order.partyId, label: { it: `${order.number} · revisione ${row.revision}`, en: `${order.number} · revision ${row.revision}` }, held, thread: { type: 'SalesOrder', id: order.id } }
   },
   async fileRecords(client, recordId) {
     const row = await client.salesOrderAmendment.findUnique({ where: { id: recordId }, select: { orderId: true } })

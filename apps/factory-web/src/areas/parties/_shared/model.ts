@@ -48,9 +48,10 @@ export type ListView = 'open' | 'active' | 'prospects' | 'brands' | 'invoice' | 
 
 export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 
-export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'activity'
+// B-W2b-180: 'portal' = Portal access (the slot is areas/sales/customers/portal's, on both sides).
+export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'portal' | 'activity'
 // B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
-export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'activity'
+export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'portal' | 'activity'
 export type RecordTab = CustomerTab | SupplierTab
 
 export interface SideConfig {
@@ -79,7 +80,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'ACTIVE',
     views: ['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'vies', 'invoice', 'blocked'],
-    tabs: ['overview', 'addresses', 'tax', 'orders', 'documents', 'activity'],
+    tabs: ['overview', 'addresses', 'tax', 'orders', 'documents', 'portal', 'activity'], // B-W2b-180: portal
     recordType: 'Party',
   },
   suppliers: {
@@ -90,7 +91,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'items', 'orders', 'activity'], // B-W2a-69: items
+    tabs: ['overview', 'contacts', 'items', 'orders', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal
     recordType: 'Party',
   },
 }
@@ -838,6 +839,8 @@ export interface RecordCan {
   price: boolean
   cost: boolean
   threads: boolean
+  /** B-W2b-180: partners.view — the Portal access tab. */
+  partners?: boolean
 }
 
 export type RecordDialog =
@@ -891,6 +894,7 @@ export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
   return config.tabs.filter((tab) => {
     if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
     if (tab === 'activity' || tab === 'documents') return can.threads
+    if (tab === 'portal') return can.partners === true // B-W2b-180
     return true
   })
 }

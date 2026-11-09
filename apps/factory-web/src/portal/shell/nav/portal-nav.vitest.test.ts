@@ -43,8 +43,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['deliveries', 'nav.deliveries', '/deliveries'],
     ])
     // B-W2b-196: the customer's Account.
-    // B-W2b-197: the customer's Returns & claims.
-    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'returns', 'account'])
+    // B-W2b-191: the customer's Orders & tracking; B-W2b-197: Returns & claims.
+    expect(ids('CUSTOMER', false).map(([id]) => id)).toEqual(['home', 'orders', 'returns', 'account'])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
@@ -104,8 +104,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
-    // B-W2b-197: a customer's return and complaint open their own pages.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['PurchaseOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'PartyAddress'])
+    // B-W2b-191: a customer's sales order opens its own page; B-W2b-197: a return and a complaint too.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'PartyAddress'])
     expect(recordPageOf(['CUSTOMER'], 'ReturnAuthorisation', 'r1')).toBe('/returns/r1')
     expect(recordPageOf(['CUSTOMER'], 'Complaint', 'c1')).toBe('/returns/complaints/c1')
     expect(recordPageOf(['SUPPLIER'], 'ReturnAuthorisation', 'r1')).toBeNull()
@@ -113,7 +113,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     expect(recordPageOf(['SUPPLIER'], 'ShipNotice', 'sn')).toBe('/deliveries/sn')
     expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')
     expect(recordPageOf(['SUPPLIER'], 'PartyAddress', 'a1')).toBeNull()
-    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBeNull()
+    expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x')).toBe('/orders/x')
+    expect(recordPageOf(['SUPPLIER'], 'SalesOrder', 'x')).toBeNull()
     // B-W2b-179: a supplier's purchase order opens its own page.
     expect(recordPageOf(['SUPPLIER'], 'PurchaseOrder', 'po')).toBe('/orders/po')
     const built = RECORD_PAGES.map((page) => ({ ...page, built: true }))
