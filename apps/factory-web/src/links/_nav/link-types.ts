@@ -16,6 +16,8 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   DOCUMENT_VIEW   PayrollExport    — the frame until the secure-file page (SCR-200, W2b-3); its API routes are B-W2b-54's
  *   APPROVAL        ApprovalRequest  approve                 links/approve (SCR-198; B-W2b-188)
  *   JOB_ACCEPT      SubcontractOrder job                     links/job (SCR-196; B-W2b-181)
+ *   CLAIM           Shipment         report-problem          links/claim (SCR-197; B-W2b-198)
+ *   CLAIM           SalesOrder       report-problem          links/claim (SCR-197; B-W2b-198)
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -29,6 +31,8 @@ export const LINK_TASKS = [
   'approve',
   // B-W2b-181: a subcontract job to accept (SCR-196).
   'job',
+  // B-W2b-198: report a problem with a shipment or an order (SCR-197).
+  'report-problem',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -48,6 +52,9 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   { purpose: 'APPROVAL', recordType: 'ApprovalRequest', task: 'approve' },
   // B-W2b-181: a job we offer a workshop (SCR-196).
   { purpose: 'JOB_ACCEPT', recordType: 'SubcontractOrder', task: 'job' },
+  // B-W2b-198: a claim link of a shipment that left us, or of an order (SCR-197).
+  { purpose: 'CLAIM', recordType: 'Shipment', task: 'report-problem' },
+  { purpose: 'CLAIM', recordType: 'SalesOrder', task: 'report-problem' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */
