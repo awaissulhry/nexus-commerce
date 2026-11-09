@@ -94,6 +94,8 @@ model Party {
   suppliedItems       Item[]
   brandStyles         Style[]
   bomLines            BomLine[]
+  // W2b-4 styles-depth.prisma (wave 26/33): as a private-label brand, its branding sets.
+  brandingSets        BrandingSet[]
   // compliance.prisma: as a brand, the certificates it holds and the labels and documents that name it as the maker.
   certificatesHeld    Certificate[]
   labelTemplates      LabelTemplate[]
