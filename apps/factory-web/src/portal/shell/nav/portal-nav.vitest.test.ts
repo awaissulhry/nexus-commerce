@@ -34,7 +34,12 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('never shows a door to a page not built: today only Home, which the frame draws', () => {
-    for (const kind of ['SUBCONTRACTOR', 'GUEST'] as const) expect(ids(kind, false).map(([id]) => id)).toEqual(['home'])
+    expect(ids('GUEST', false).map(([id]) => id)).toEqual(['home'])
+    // B-W2b-181: a workshop's Jobs (the area left with one page takes its name and address).
+    expect(ids('SUBCONTRACTOR', false)).toEqual([
+      ['home', 'nav.home', '/'],
+      ['work', 'nav.jobs', '/jobs'],
+    ])
     // B-W2b-179: a supplier's Purchase orders (the area left with one page takes its name and address).
     expect(ids('SUPPLIER', false)).toEqual([
       ['home', 'nav.home', '/'],
@@ -109,7 +114,9 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
     // B-W2b-191: a customer's sales order opens its own page.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'ShipNotice', 'PartyAddress'])
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'PartyAddress'])
+    // B-W2b-181: a workshop's job opens its own page.
+    expect(recordPageOf(['SUBCONTRACTOR'], 'SubcontractOrder', 'j')).toBe('/jobs/j')
     // B-W2b-186: a supplier's ship notice opens its own page.
     expect(recordPageOf(['SUPPLIER'], 'ShipNotice', 'sn')).toBe('/deliveries/sn')
     expect(recordPageOf(['CUSTOMER'], 'PartyAddress', 'a1')).toBe('/account?address=a1#addresses')
