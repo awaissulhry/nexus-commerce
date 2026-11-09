@@ -60,6 +60,11 @@ export const NUMBER_KINDS = [
   'PORTAL_REQUEST',
   // W2b-4 wave 25/33 (factory-db numbering.prisma): a work instruction (WI-…), an office document kind.
   'WORK_INSTRUCTION',
+  // W2b-4 wave 29/33 (factory-db numbering.prisma): a change request (CR-…), a change order (ECO-…), a sample round (SR-…),
+  // office document kinds.
+  'CHANGE_REQUEST',
+  'CHANGE_ORDER',
+  'SAMPLE_ROUND',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -217,6 +222,9 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   PAYROLL_EXPORT: 'PAY',
   PORTAL_REQUEST: 'RQ',
   WORK_INSTRUCTION: 'WI',
+  CHANGE_REQUEST: 'CR',
+  CHANGE_ORDER: 'ECO',
+  SAMPLE_ROUND: 'SR',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

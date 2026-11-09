@@ -191,6 +191,9 @@ model WorkOrder {
   /// moved into this one with its own due date; the same site, style and kind; set when it is made, never changed).
   rush            Boolean         @default(false)
   splitFromId     String?         @db.Uuid
+  /// W2b-4 (schema wave 29/33, B-W2b-212; MES-018): the sample round a SAMPLE work order makes, exactly for SAMPLE: a round
+  /// of the same style, made from its pinned revision; set when the work order is made, never changed.
+  sampleRoundId   String?         @db.Uuid
   version         Int             @default(1)
   createdAt       DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
@@ -217,6 +220,12 @@ model WorkOrder {
   splitFrom     WorkOrder?           @relation("WorkOrderSplit", fields: [tenantId, siteId, splitFromId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   splits        WorkOrder[]          @relation("WorkOrderSplit")
   helpCalls     HelpCall[]
+  // W2b-4 samples.prisma and changes.prisma (wave 29/33): the sample round it makes (Restrict, not Prisma's SetNull
+  // default: that would also clear tenantId and styleId); the change requests raised about it and the change order lines
+  // that say what happens to its work in progress.
+  sampleRound      SampleRound?      @relation(fields: [tenantId, styleId, sampleRoundId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  changeRequests   ChangeRequest[]
+  changeOrderItems ChangeOrderItem[]
   // W2a cost-ledger.prisma (wave 7/7): its cost ledger (material, labour, subcontract, overhead, completion).
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries   WorkOrderCostEntry[]
@@ -268,6 +277,10 @@ enum WorkOrderKind {
   /// lines they were sold on (of any kind; a made-to-measure garment keeps its profile, one unit), its operations are the
   /// routing steps the repair needs (at least one), not the whole routing.
   REPAIR
+  /// W2b-4 (schema wave 29/33, B-W2b-212; MES-018): a sample or prototype of a sample round (sampleRoundId): made like a
+  /// size grid (every routing step, cells without a measurement profile), released with the round's revision once it is
+  /// RELEASED; its cells name the SIZE_GRID lines of the order that charges the samples (a cell needs a sales order line).
+  SAMPLE
 }
 
 enum WorkOrderStatus {

@@ -599,6 +599,8 @@ model SalesOrder {
   replacementFor  ReturnAuthorisation[] @relation("ReturnReplacementOrder")
   // complaints.prisma: the complaints about it.
   complaints      Complaint[]
+  // W2b-4 samples.prisma (wave 29/33): the pre-production gates it waits on.
+  gates           OrderGate[]
   // W2b portal-sales.prisma (wave 21/22): the portal order requests it was made from, its change and cancel requests.
   portalOrderRequests PortalOrderRequest[] @relation("PortalOrderRequestOrder")
   changeRequests      OrderChangeRequest[] @relation("OrderChangeRequestOrder")

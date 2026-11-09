@@ -193,6 +193,8 @@ model Item {
   bomLineAlternates   BomLineAlternate[] @relation("BomLineAlternateItem")
   optionEffects       OptionEffect[]     @relation("OptionEffectItem")
   optionEffectTargets OptionEffect[]     @relation("OptionEffectTargetItem")
+  // W2b-4 samples.prisma (wave 29/33): the swatches of it sent to brands.
+  sampleSwatches  SampleSwatch[]
   // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut it, and the downgrades that keep garments as it (second quality).
   cutOrders       CutOrder[]
   secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")
@@ -342,6 +344,8 @@ model ItemColour {
   supplierItems        SupplierItem[]
   // W2b leather.prisma (wave 12/16): the shade groups of this colour.
   shadeGroups          ShadeGroup[]
+  // W2b-4 samples.prisma (wave 29/33): the swatches of this colour sent to brands.
+  sampleSwatches       SampleSwatch[]
   // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut the material in this colour.
   cutOrders            CutOrder[]
   // W2b-4 options.prisma (wave 28/33): the alternates and option effects in this colour.
@@ -541,6 +545,11 @@ model Style {
   complaints          Complaint[]
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
+  // W2b-4 changes.prisma and samples.prisma (wave 29/33): its change requests and orders, sample rounds and swatches.
+  changeRequests      ChangeRequest[]
+  changeOrders        ChangeOrder[]
+  sampleRounds        SampleRound[]
+  sampleSwatches      SampleSwatch[]
   // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
   clickingDies        ClickingDie[]
 
@@ -695,6 +704,14 @@ model StyleRevision {
   /// when or after a released revision goes OBSOLETE. Null on revisions released before W2b-4 (read releasedAt).
   effectiveFrom       DateTime?           @db.Date
   effectiveTo         DateTime?           @db.Date
+  /// W2b-4 (schema wave 29/33, B-W2b-212; PRD-191): what of the style it is released for: colourways of the style and sizes
+  /// of its range, each once; empty: every colourway (every size). Free while DRAFT; on a RELEASED revision they only widen
+  /// (more colourways or sizes, or empty for all; all never narrows again); fixed once OBSOLETE.
+  releasedColourwayIds String[]           @default([]) @db.Uuid
+  releasedSizes        String[]           @default([])
+  /// W2b-4 (B-W2b-212; PRD-232): the completeness score at release, 0 to 100 (B-W2b-231's gate); null while DRAFT and on
+  /// revisions released before W2b-4. Given at or after the release, once.
+  completenessPct      Decimal?           @db.Decimal(5, 2)
   version             Int                 @default(1)
   createdAt           DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -730,6 +747,12 @@ model StyleRevision {
   copies                    Style[]            @relation("StyleCopiedFromRevision")
   // W2b-4 instructions.prisma (wave 25/33): the work instructions written for this revision only.
   workInstructions          WorkInstruction[]
+  // W2b-4 changes.prisma and samples.prisma (wave 29/33): the change requests about it, the change orders from and to it,
+  // the sample rounds made from it.
+  changeRequests            ChangeRequest[]
+  changeOrdersFrom          ChangeOrder[]      @relation("ChangeOrderFromRevision")
+  changeOrdersTo            ChangeOrder[]      @relation("ChangeOrderToRevision")
+  sampleRounds              SampleRound[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.

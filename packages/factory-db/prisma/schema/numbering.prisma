@@ -143,6 +143,12 @@ enum NumberKind {
   /// W2b-4 wave 25/33: a work instruction's number (WI-…; instructions.prisma WorkInstruction.number). An office document
   /// kind, one series per company that never resets.
   WORK_INSTRUCTION
+  /// W2b-4 wave 29/33: a change request's (CR-…; changes.prisma ChangeRequest.number), a change order's (ECO-…;
+  /// ChangeOrder.number) and a sample round's number (SR-…; samples.prisma SampleRound.number). Office document kinds: a
+  /// floor change request is numbered after it is sent (the office, or the API in the tenant's system context).
+  CHANGE_REQUEST
+  CHANGE_ORDER
+  SAMPLE_ROUND
 }
 
 enum NumberReset {
