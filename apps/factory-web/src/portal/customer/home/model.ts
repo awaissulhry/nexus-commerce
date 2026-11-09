@@ -2,7 +2,11 @@ import type { ApprovalDecision, ApprovalKind, ApprovalStatus } from '@nexus/fact
 import { milestonesOf } from '@nexus/factory-domain/sales/portal-orders/status'
 import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import type { Locale } from '../../../lib/i18n/locales'
+import { isPreviewable, mainFileOf } from '../documents/preview/model'
 import type { ApprovalRead, Conversation, CustomerDocument, DocumentsRead, HomeRead, OpenItemsRead, OrderRow, OrdersRead } from './api'
+
+// The document pop-up's rules are the documents' own (lifted by B-W2b-195); Home reads them from there.
+export { isPdf, isPicture, neighbourOf } from '../documents/preview/model'
 
 /**
  * SCR-183 — the customer's Home (design portal.customer.home; SAL-063, SAL-084, SAL-086), pure: the five numbers at a glance
@@ -152,10 +156,6 @@ export interface DocumentRow {
   readonly sizeBytes: number | null
 }
 
-const PREVIEWABLE = /^(application\/pdf|image\/(png|jpe?g|webp|gif))\b/i
-
-export const mainFileOf = (document: Pick<CustomerDocument, 'files'>) => document.files.find((file) => file.format === 'PDF') ?? document.files[0] ?? null
-
 export function documentRowOf(document: CustomerDocument, locale: Locale): DocumentRow {
   const file = mainFileOf(document)
   const order = document.for?.order ?? null
@@ -168,26 +168,13 @@ export function documentRowOf(document: CustomerDocument, locale: Locale): Docum
     date: document.date,
     version: document.version,
     isNew: document.new,
-    previewable: file ? PREVIEWABLE.test(file.contentType) : false,
+    previewable: file ? isPreviewable(file.contentType) : false,
     fileName: file?.name ?? document.title[locale],
     sizeBytes: file?.sizeBytes ?? null,
   }
 }
 
 export const documentRows = (read: DocumentsRead | null, locale: Locale): DocumentRow[] => (read ? read.items.map((item) => documentRowOf(item, locale)) : [])
-
-/** The versions line of the document pop-up: "v3 replaced v2 on 12 Oct", newest first. */
-export function versionLines(versions: readonly Pick<CustomerDocument, 'id' | 'version' | 'date' | 'current'>[]): { id: string; version: number; previous: number | null; date: string; current: boolean }[] {
-  const sorted = [...versions].sort((a, b) => b.version - a.version)
-  return sorted.map((entry, index) => ({ id: entry.id, version: entry.version, previous: sorted[index + 1]?.version ?? null, date: entry.date, current: entry.current }))
-}
-
-/** The document after or before this one in the list (J / K in the pop-up), or null at an end. */
-export function neighbourOf(ids: readonly string[], id: string, step: 1 | -1): string | null {
-  const at = ids.indexOf(id)
-  if (at < 0) return null
-  return ids[at + step] ?? null
-}
 
 // ── our last messages ──────────────────────────────────────────────────────────────────────────────────────────────────
 /** Where "Reply" goes: the record's Messages with the composer (its own page once built, else the frame's record page). */
@@ -271,9 +258,6 @@ export function approvalTitle(page: Pick<ApprovalRead, 'request' | 'content'>, t
 
 /** The answer's tone on the end (an approval succeeds; a refusal is said plainly). */
 export const decidedTone = (status: ApprovalStatus): 'success' | 'warning' | 'neutral' => (status === 'REFUSED' ? 'warning' : status === 'APPROVED' || status === 'APPROVED_WITH_CHANGES' ? 'success' : 'neutral')
-
-export const isPicture = (contentType: string): boolean => /^image\/(png|jpe?g|webp|gif)$/i.test(contentType.split(';')[0]!.trim())
-export const isPdf = (contentType: string): boolean => contentType.split(';')[0]!.trim().toLowerCase() === 'application/pdf'
 
 // ── the first visit ────────────────────────────────────────────────────────────────────────────────────────────────────
 /**

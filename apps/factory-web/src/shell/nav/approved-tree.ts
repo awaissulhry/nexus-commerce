@@ -655,6 +655,10 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.po', title: 'Confirm a PO', scr: ['SCR-100'], task: 'po-confirm' },
   // W2b: B-W2b-188 Approve (an APPROVAL link's request).
   { id: 'links.approve', title: 'Approve', scr: ['SCR-198'], task: 'approve' },
+  // W2b: B-W2b-181 Accept a job (a JOB_ACCEPT link's job).
+  { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
+  // W2b: B-W2b-198 Report a problem (a CLAIM link of a shipment or an order).
+  { id: 'links.claim', title: 'Report a problem', scr: ['SCR-197'], task: 'report-problem' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

@@ -9,10 +9,11 @@ import type { PortalShellViewModel } from '../../shell/view/PortalShellView'
 import type { TasksViewModel } from '../../shell/view/TasksView'
 import type { ApprovalRead, Conversation, DocumentsRead, HomeRead, OpenItemsRead, OrdersRead } from './api'
 import { homeBandOf } from './band'
-import { documentRows, nextOrderRows, NS, orderCounts, tilesFor, tilesOf, versionLines, type BuiltPages } from './model'
+import { previewRowOf, versionLines } from '../documents/preview/model'
+import type { DocumentPreviewModel } from '../documents/preview/view/DocumentPreview'
+import { documentRows, nextOrderRows, NS, orderCounts, tilesFor, tilesOf, type BuiltPages } from './model'
 import type { ApproveDialogModel } from './view/ApproveDialog'
 import type { CustomerHomeViewModel } from './view/CustomerHomeView'
-import type { DocumentDialogModel } from './view/DocumentDialog'
 import { HomeCase, type HomeCaseBuilder } from './view/HomeCase'
 import { dayWriter, moneyWriter } from './words'
 
@@ -331,10 +332,9 @@ function samplePdf(text: string): Uint8Array {
 }
 const PDF = samplePdf('Dichiarazione di conformita - esempio')
 
-function documentDialog(locale: Locale, over: Partial<DocumentDialogModel> = {}): DocumentDialogModel {
-  const rows = documentRows(DOCUMENTS, locale)
+function documentDialog(locale: Locale, over: Partial<DocumentPreviewModel> = {}): DocumentPreviewModel {
   return {
-    row: { ...rows[0]!, isNew: false },
+    row: previewRowOf(DOCUMENTS.items[0]!, locale),
     state: 'ready',
     src: PDF,
     pdf: true,
@@ -347,6 +347,7 @@ function documentDialog(locale: Locale, over: Partial<DocumentDialogModel> = {})
     position: { index: 1, count: 2 },
     downloading: false,
     problem: null,
+    held: null,
     ...over,
   }
 }

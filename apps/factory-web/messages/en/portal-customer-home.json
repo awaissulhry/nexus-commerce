@@ -101,22 +101,7 @@
     "previewOf": "Preview {title}",
     "downloadOf": "Download {title}",
     "opening": "Preparing…",
-    "openFailed": "The document could not be opened. Try again.",
-    "withdrawn": "This version was withdrawn: {title} v{version} replaces it."
-  },
-  "doc": {
-    "loading": "Opening the document…",
-    "failed": "The document could not be opened.",
-    "noPreview": "This file cannot be shown here: download it.",
-    "versions": "Versions",
-    "replaced": "v{version} replaced v{previous} on {date}",
-    "first": "v{version} of {date}",
-    "current": "Current",
-    "previous": "Previous document",
-    "next": "Next document",
-    "of": "{index} of {count}",
-    "atFirst": "This is the first new document.",
-    "atLast": "This is the last new document."
+    "openFailed": "The document could not be opened. Try again."
   },
   "messages": {
     "title": "Recent messages from us",

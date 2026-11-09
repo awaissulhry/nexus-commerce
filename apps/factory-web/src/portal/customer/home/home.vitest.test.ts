@@ -25,7 +25,6 @@ import {
   requestHeld,
   tilesFor,
   tilesOf,
-  versionLines,
   withRecent,
 } from './model'
 
@@ -148,12 +147,7 @@ describe('new documents', () => {
     expect(invoice).toMatchObject({ title: 'Fattura', forWords: { key: 'documents.for', params: { label: 'FT-1' } }, previewable: false })
   })
 
-  it('versions newest first, each naming the one it replaced; J / K stop at the ends', () => {
-    expect(versionLines([{ id: 'a', version: 1, date: 'x', current: false }, { id: 'c', version: 3, date: 'z', current: true }, { id: 'b', version: 2, date: 'y', current: false }]).map((line) => [line.version, line.previous, line.current])).toEqual([
-      [3, 2, true],
-      [2, 1, false],
-      [1, null, false],
-    ])
+  it('J / K stop at the ends (the versions are the lifted pop-up’s: documents/preview)', () => {
     expect(neighbourOf(['a', 'b', 'c'], 'b', 1)).toBe('c')
     expect(neighbourOf(['a', 'b', 'c'], 'a', -1)).toBeNull()
     expect(neighbourOf(['a'], 'z', 1)).toBeNull()

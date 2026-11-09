@@ -1,0 +1,293 @@
+{
+  "title": "Segnala un problema — {record}",
+  "record": {
+    "Shipment": "spedizione {label}",
+    "SalesOrder": "ordine {label}",
+    "of": {
+      "Shipment": "questa spedizione",
+      "SalesOrder": "questo ordine"
+    }
+  },
+  "loading": {
+    "now": "Caricamento…",
+    "slow": "Ancora un momento…"
+  },
+  "retry": "Riprova",
+  "problem": {
+    "read": "Non siamo riusciti ad aprire il modulo di segnalazione.",
+    "readBody": "Controlla la connessione e riprova. Non è stato inviato nulla.",
+    "gone": "Questo link non funziona più.",
+    "goneBody": "Non è stato inviato nulla.",
+    "wrongPerson": "Questo link non è per te.",
+    "wrongPersonBody": "Non è stato inviato nulla.",
+    "invalid": "Alcune risposte vanno ricontrollate prima di poter ricevere la segnalazione.",
+    "invalidBody": "Ti abbiamo portato alla prima. Non è stato inviato nulla.",
+    "aboveSold": "Hai chiesto di rendere più di quanto puoi.",
+    "aboveSoldBody": "Abbiamo riletto cosa può ancora tornare: riduci i pezzi dove indicato. Non è stato inviato nulla.",
+    "changed": "Qualcosa è cambiato mentre scrivevi.",
+    "changedBody": "Abbiamo ricaricato la pagina. Controlla le risposte e invia di nuovo. Non è stato inviato nulla.",
+    "rateLimited": "Troppi tentativi in poco tempo.",
+    "rateLimitedBody": "Aspetta un minuto e riprova. Le tue risposte sono ancora qui.",
+    "unavailable": "Non siamo riusciti a raggiungere il server.",
+    "unavailableBody": "Le tue risposte sono ancora qui. Riprova: la segnalazione parte una volta sola.",
+    "internal": "Qualcosa è andato storto da parte nostra.",
+    "internalBody": "Le tue risposte sono ancora qui. Riprova: la segnalazione parte una volta sola."
+  },
+  "step": {
+    "count": "Passo {at} di {of}",
+    "type": {
+      "short": "Cosa ti serve",
+      "title": "Cosa ti serve?",
+      "lead": "Scegli una voce. Ognuna fa solo le sue domande."
+    },
+    "item": {
+      "short": "Quale articolo",
+      "title": "Quale articolo?",
+      "lead": "Sceglilo tra quelli che {sender} ti ha mandato."
+    },
+    "details": {
+      "short": "Raccontaci",
+      "title": "Raccontaci di più",
+      "lead": "Qualche domanda per capire cosa è successo."
+    },
+    "photos": {
+      "short": "Foto",
+      "title": "Foto",
+      "lead": "Mostraci il problema. Puoi cerchiarlo sulla foto."
+    },
+    "review": {
+      "short": "Controlla e invia",
+      "title": "Controlla e invia",
+      "lead": "Ecco cosa riceve {sender}. Cambia quello che vuoi prima di inviare."
+    }
+  },
+  "nav": {
+    "back": "Indietro",
+    "next": "Continua: {step}",
+    "keys": "← → passano da un passo all'altro quando nessun campo è in uso."
+  },
+  "type": {
+    "later": "Per una riparazione o modifica, un rifacimento su misura o un incidente di sicurezza, per ora scrivi direttamente a {sender}.",
+    "RETURN": {
+      "title": "Rendere qualcosa",
+      "short": "Reso",
+      "body": "Taglia sbagliata, articolo sbagliato o qualcosa di danneggiato: chiedi di renderlo e dicci cosa vorresti al suo posto.",
+      "none": "Niente di questa consegna può essere reso adesso. Puoi comunque segnalare un problema di qualità."
+    },
+    "COMPLAINT": {
+      "title": "Segnalare un problema di qualità",
+      "short": "Reclamo qualità",
+      "body": "Qualcosa non va in come è fatto: dicci cosa, il nostro controllo qualità lo esamina e ti risponde."
+    }
+  },
+  "item": {
+    "legend": {
+      "RETURN": "Gli articoli da rendere",
+      "COMPLAINT": "L'articolo con il problema"
+    },
+    "nothingBack": "Niente di {record} può essere reso adesso.",
+    "nothingBackBody": "Forse è già in viaggio di ritorno, o non è ancora stato consegnato. Per un problema di qualità puoi comunque scriverci qui; per altro, chiedi a {sender}.",
+    "toComplaint": "Segnala invece un problema di qualità",
+    "noneLeft": "Niente da rendere",
+    "canReturn_one": "{count} di {received} può essere reso",
+    "canReturn_other": "{count} di {received} possono essere resi",
+    "late": "Oltre il periodo di reso abituale: puoi comunque chiedere, decidiamo noi.",
+    "pieces": "Pezzi da rendere",
+    "piecesHint": "Al massimo {max}.",
+    "less": "Un pezzo in meno",
+    "more": "Un pezzo in più",
+    "serial": "Numero di serie",
+    "serialHint": "Sull'etichetta interna del capo, se c'è. Scansionalo o scrivilo.",
+    "scan": "Scansiona l'etichetta",
+    "batch": "Numero di lotto",
+    "batchHint": "Sull'etichetta, se non c'è un numero di serie.",
+    "whole": "Non un articolo: tutta la consegna",
+    "wholeBody": "Il problema riguarda la consegna nel suo insieme, o qualcosa che non è nell'elenco.",
+    "size": "taglia {size}",
+    "order": "ordine {number}",
+    "delivered": "consegnato il {day}",
+    "unknown": "Un articolo non più nell'elenco"
+  },
+  "details": {
+    "reason": "Perché lo rendi?",
+    "reasonChoose": "Scegli un motivo",
+    "reasonNote": "Cosa non va (facoltativo)",
+    "reasonNoteNeeded": "Cosa non va",
+    "reasonNoteHint": "In che punto del capo, e da quando.",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "outcome": "Cosa vorresti?",
+    "outcomeHint": "Decidiamo dopo averlo visto; la tua preferenza ci aiuta.",
+    "yourRef": "Il tuo riferimento (facoltativo)",
+    "yourRefHint": "Il tuo numero per questa pratica, se ne hai uno: lo citiamo quando ti scriviamo.",
+    "note": "Altro da dirci (facoltativo)",
+    "noteHint": "Ad esempio quando puoi rispedire la merce.",
+    "description": "Cosa è successo?",
+    "descriptionHint": "Cosa non va, in che punto del capo, quando te ne sei accorto e come è stato indossato o usato."
+  },
+  "outcome": {
+    "REPLACE": "Una sostituzione",
+    "REPAIR": "Una riparazione",
+    "CREDIT": "Una nota di credito",
+    "none": "Nessuna preferenza: decidete voi"
+  },
+  "photos": {
+    "intro": "Le foto ci aiutano a decidere prima. Scattale con una buona luce; niente volti nell'inquadratura.",
+    "after": "Le foto partono con la segnalazione quando la invii. Fino ad allora restano in questa pagina.",
+    "case": "Il problema",
+    "needed": "Almeno {needed} foto del danno: {count} aggiunte.",
+    "optional_one": "Facoltative: {count} aggiunta.",
+    "optional_other": "Facoltative: {count} aggiunte.",
+    "alt": "Foto {n} di {title}",
+    "label": "Foto {n}",
+    "labelMarks_one": "Foto {n} · {count} segno",
+    "labelMarks_other": "Foto {n} · {count} segni",
+    "remove": "Togli",
+    "removeOne": "Togli la foto {n} di {title}",
+    "add": "Aggiungi una foto",
+    "held": {
+      "max": "Al massimo {max} foto qui."
+    },
+    "dialogTitle": "Una foto di {title}",
+    "dialogIntro": "Scatta la foto o scegline una dal dispositivo, poi indica il problema con una freccia o un cerchio.",
+    "surface": "Foto di {title}",
+    "cancel": "Chiudi"
+  },
+  "review": {
+    "what": "Cosa ti serve",
+    "items": "Gli articoli",
+    "item": "L'articolo",
+    "details": "Cosa ci hai detto",
+    "photos": "Foto",
+    "pieces": "Pezzi",
+    "none": "—",
+    "change": "Modifica",
+    "changeOf": "Modifica: {what}",
+    "photoCount_one": "{count} foto",
+    "photoCount_other": "{count} foto",
+    "name": "Il tuo nome (facoltativo)",
+    "nameHint": "Così sappiamo a chi rispondere.",
+    "uses_one": "Questo link accetta ancora {count} segnalazione.",
+    "uses_other": "Questo link accetta ancora {count} segnalazioni."
+  },
+  "send": {
+    "button": {
+      "RETURN": "Invia la richiesta di reso",
+      "COMPLAINT": "Invia il reclamo"
+    },
+    "busy": "Invio in corso…",
+    "held": {
+      "expired": "Questo link è scaduto: chiedine uno nuovo a {sender}.",
+      "used": "Questo link non accetta altre segnalazioni: chiedine uno nuovo a {sender}."
+    }
+  },
+  "later": {
+    "button": "Finisci dopo",
+    "held": "Ancora niente da conservare: scegli prima cosa ti serve.",
+    "saved": "Conservato da noi.",
+    "savedBody": "Riapri questo stesso link per finire, entro il {day}. Le foto non vengono conservate: aggiungile di nuovo allora."
+  },
+  "draft": {
+    "restored": "Abbiamo conservato quello che hai scritto il {day} alle {time}.",
+    "restoredBody": "Riprendi da dove eri rimasto. Le foto non vengono conservate: aggiungile di nuovo.",
+    "keep": "Continua",
+    "startAgain": "Ricomincia"
+  },
+  "check": {
+    "type": "Scegli cosa ti serve.",
+    "items": "Scegli almeno un articolo da rendere.",
+    "nothingBack": "Niente può essere reso adesso: segnala invece un problema di qualità.",
+    "manyItems": "Al massimo {max} articoli in una richiesta.",
+    "itemGone": "Questo articolo non può più essere reso: toglilo.",
+    "quantityMin": "Almeno un pezzo.",
+    "quantityMax": "Al massimo {max}.",
+    "long": "Al massimo {max} caratteri.",
+    "reason": "Scegli perché lo rendi.",
+    "reasonNote": "Di' cosa non va.",
+    "complaintItem": "Scegli l'articolo, oppure «tutta la consegna».",
+    "description": "Raccontaci cosa è successo.",
+    "photos_one": "Aggiungi ancora {count} foto: per un danno ne servono almeno {needed}.",
+    "photos_other": "Aggiungi ancora {count} foto: per un danno ne servono almeno {needed}."
+  },
+  "refusal": {
+    "field": "Controlla questa risposta.",
+    "quantity": "Più di quanto può ancora tornare: riducilo."
+  },
+  "done": {
+    "title": {
+      "RETURN": "Richiesta di reso {number} inviata",
+      "COMPLAINT": "Reclamo {number} inviato"
+    },
+    "answerBy": "Rispondiamo entro il {day}.",
+    "answerWithin": "Rispondiamo entro {days} giorni lavorativi.",
+    "next": {
+      "RETURN": "Esaminiamo la richiesta e ti diciamo se rispedire la merce, con le istruzioni di reso da stampare.",
+      "COMPLAINT": "Il nostro controllo qualità lo esamina e ti risponde."
+    },
+    "again": "Riapri questo stesso link entro il {day} per vedere a che punto è.",
+    "noMore": "Questo link non accetta altre segnalazioni: per notizie, chiedi a {sender}.",
+    "fact": {
+      "type": "Cosa hai chiesto",
+      "items": "Articoli",
+      "item": "Articolo",
+      "yourRef": "Il tuo riferimento",
+      "by": "Inviato da"
+    },
+    "itemLine": "{item} × {pieces}",
+    "reference": "Numero della pratica",
+    "another": "Segnala un altro problema",
+    "contact": "Domande su questa segnalazione",
+    "photos": {
+      "busy": "Invio delle foto: {sent} di {total}…",
+      "failed_one": "{count} foto non è partita: riprova qui sotto.",
+      "failed_other": "{count} foto non sono partite: riprova qui sotto.",
+      "sent_one": "La tua foto è con la segnalazione.",
+      "sent_other": "Le tue {count} foto sono con la segnalazione.",
+      "failedTitle_one": "{count} foto non è partita.",
+      "failedTitle_other": "{count} foto non sono partite.",
+      "failedBody": "La segnalazione è stata inviata. Riprova; le foto già inviate restano."
+    }
+  },
+  "cases": {
+    "title_one": "Segnalato con questo link ({count})",
+    "title_other": "Segnalati con questo link ({count})",
+    "hint": "A che punto sono le segnalazioni precedenti. Per una nuova, continua qui sotto.",
+    "yourMove": "Tocca a te:",
+    "opened": "aperta il {day}",
+    "yourRef": "tuo riferimento {ref}",
+    "instructions": "Stampa le istruzioni di reso",
+    "opening": "Apertura…",
+    "openFailed": "Non si è aperto: riprova.",
+    "document": {
+      "ANSWER_LETTER": "La nostra risposta (versione {version})",
+      "EIGHT_D": "Rapporto 8D (versione {version})"
+    }
+  },
+  "case": {
+    "state": {
+      "REQUESTED": "Richiesto",
+      "SEND_IT_BACK": "Approvato: rispediscilo",
+      "BACK_WITH_US": "Rientrato da noi",
+      "INSPECTED": "Controllato",
+      "DONE": "Concluso",
+      "NOT_ACCEPTED": "Non accettato",
+      "CANCELLED": "Annullato",
+      "RECEIVED": "Ricevuto",
+      "INVESTIGATING": "In esame",
+      "ANSWERED": "Risposto",
+      "CLOSED": "Chiuso"
+    }
+  },
+  "scan": {
+    "title": "Scansiona l'etichetta",
+    "intro": "Inquadra il codice dell'etichetta. Il numero di serie si compila da solo.",
+    "video": "L'immagine della fotocamera",
+    "cancel": "Chiudi",
+    "state": {
+      "starting": "Avvio della fotocamera…",
+      "on": "Cerco il codice…",
+      "failed": "La fotocamera non si è avviata (manca o non è consentita). Chiudi e scrivi il numero di serie.",
+      "none": "Nessuna fotocamera qui. Chiudi e scrivi il numero di serie."
+    }
+  }
+}

@@ -1,0 +1,336 @@
+/*
+ * The report-a-problem link page (SCR-197) LAYOUT inside the link frame (comfortable density, phone first: the link
+ * column is centred and at most 680 px wide, archetype §2.9). Controls are the design system's; semantic tokens only.
+ */
+.fw-cl-stack,
+.fw-cl-card,
+.fw-cl-group,
+.fw-cl-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cl-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-cl-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-cl-h2,
+.fw-cl-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-cl-h2 {
+  font-size: var(--nds-font-size-lg);
+  outline: none;
+}
+
+.fw-cl-h2.fw-cl-small,
+.fw-cl-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+}
+
+.fw-cl-count,
+.fw-cl-hint,
+.fw-cl-sub,
+.fw-cl-keys {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-cl-count,
+.fw-cl-sub,
+.fw-cl-keys {
+  font-size: var(--nds-font-size-sm);
+}
+
+p.fw-cl-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-cl-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The band: where you are, and how the draft kept with us stands. */
+.fw-cl-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-stepper {
+  overflow-x: auto;
+}
+
+.fw-cl-save,
+.fw-cl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-save {
+  justify-content: flex-end;
+}
+
+/* Choices: big cards side by side where there is room, one under the other on a phone. */
+.fw-cl-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-cl-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-choice-icon {
+  display: inline-flex;
+  color: var(--nds-primary, var(--nds-text-strong));
+}
+
+.fw-cl-items,
+.fw-cl-rows,
+.fw-cl-cases,
+.fw-cl-review-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+}
+
+.fw-cl-warn {
+  color: var(--nds-warning-text, var(--nds-text-strong));
+}
+
+/* An item nothing of which can come back: shown, with why, never picked. */
+.fw-cl-held {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+/* A picked item's pieces and serial, under its card. */
+.fw-cl-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  margin-left: var(--nds-space-16);
+  border-left: 3px solid var(--nds-border);
+}
+
+.fw-cl-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-cl-serial {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-cl-serial > :first-child {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.fw-cl-group {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+  outline: none;
+}
+
+.fw-cl-error {
+  margin: 0;
+  color: var(--nds-danger);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Photos taken on this page: tiles with their marks, Remove under each. */
+.fw-cl-photos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-cl-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cl-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+/* Check and send: one part per step, each with Change. */
+.fw-cl-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-cl-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-value {
+  margin: 0;
+  color: var(--nds-text-strong);
+}
+
+.fw-cl-review-items > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cl-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Back on the left, the way on at the right; one under the other on a narrow phone. */
+.fw-cl-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+}
+
+/* This link's reports. */
+.fw-cl-case {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-cl-case-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-cl-number {
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The camera that reads a label. */
+.fw-cl-video {
+  overflow: hidden;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  aspect-ratio: 4 / 3;
+}
+
+.fw-cl-video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* On a phone the five step names do not fit: the badges stay, the names are read by a screen reader only (the card's
+   head says "Step 2 of 5" and the step's name). */
+@media (max-width: 559px) {
+  .fw-cl-stepper .nds-step-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

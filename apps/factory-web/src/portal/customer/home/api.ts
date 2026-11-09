@@ -4,6 +4,7 @@ import { CUSTOMER_ORDER_STATUSES } from '@nexus/factory-domain/sales/portal-orde
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { previewLink } from '../../../record-panels/files/api'
 import { readFromStore } from '../../../record-panels/store'
+import { documentSchema } from '../documents/preview/api'
 
 /**
  * What the customer's Home reads besides the frame's one task list (B-W2b-187; design portal.customer.home, SAL-063): the
@@ -68,27 +69,8 @@ export const fetchPromiseHistory = (api: ApiClient, orderId: string, signal?: Ab
   api.get(`/portal/sales-orders/${encodeURIComponent(orderId)}`, { schema: promiseHistorySchema, signal }).then((read) => read.promiseHistory)
 
 // ── the new documents ──────────────────────────────────────────────────────────────────────────────────────────────────
-const replacementSchema = z.object({ id: z.string().nullable(), title: words, version: z.number() })
-
-export const documentSchema = z.object({
-  id: z.string(),
-  kind: z.string(),
-  kindWords: words,
-  group: z.string(),
-  title: words,
-  for: z
-    .object({ type: z.string(), id: z.string(), label: z.string().nullable(), order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() }).nullable() })
-    .nullable(),
-  date: z.string(),
-  version: z.number(),
-  fingerprint: z.string(),
-  language: z.string().nullable(),
-  current: z.boolean(),
-  replacedBy: replacementSchema.nullable(),
-  new: z.boolean(),
-  files: z.array(z.object({ fileId: z.string(), format: z.enum(['PDF', 'XML', 'FILE']).catch('FILE'), name: z.string(), contentType: z.string(), sizeBytes: z.number() })),
-})
-export type CustomerDocument = z.infer<typeof documentSchema>
+// One document and how it opens are the documents' own (lifted by B-W2b-195: documents/preview/api.ts).
+export type { CustomerDocument } from '../documents/preview/api'
 
 export const documentsSchema = z.object({ asOf: z.string(), count: z.number(), newCount: z.number(), lastVisitAt: z.string().nullable(), items: z.array(documentSchema), live })
 export type DocumentsRead = z.infer<typeof documentsSchema>
@@ -96,30 +78,6 @@ export type DocumentsRead = z.infer<typeof documentsSchema>
 /** The documents issued since the last visit and not opened yet (SAL-086), newest first. */
 export const fetchNewDocuments = (api: ApiClient, signal?: AbortSignal): Promise<DocumentsRead> =>
   api.get('/portal/customer-documents', { query: { new: 'true', limit: 5 }, schema: documentsSchema, signal })
-
-export const oneDocumentSchema = z.object({
-  document: documentSchema.nullable(),
-  withdrawn: z.object({ title: words, version: z.number(), replacedBy: replacementSchema.nullable() }).nullable(),
-  versions: z.array(documentSchema),
-})
-export type OneDocument = z.infer<typeof oneDocumentSchema>
-export const fetchDocument = (api: ApiClient, fileId: string, signal?: AbortSignal): Promise<OneDocument> =>
-  api.get(`/portal/customer-documents/${encodeURIComponent(fileId)}`, { schema: oneDocumentSchema, signal })
-
-const downloadSchema = z.object({
-  document: z.object({ id: z.string(), title: words, version: z.number(), format: z.enum(['PDF', 'XML', 'FILE']).catch('FILE'), name: z.string() }),
-  download: z.object({ mode: z.enum(['inline', 'download']), method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }),
-})
-
-/**
- * A document's bytes (ONE logged open: POST …/download, the API writes the audit row, then the 60-second address is read
- * at once). `preview` opens in place; `download` is saved. The open clears NEW for this person.
- */
-export async function documentBytes(api: ApiClient, fileId: string, mode: 'preview' | 'download'): Promise<{ name: string; bytes: Uint8Array }> {
-  const answer = await api.post(`/portal/customer-documents/${encodeURIComponent(fileId)}/download`, { body: { mode }, schema: downloadSchema, idempotencyKey: newIdempotencyKey() })
-  const bytes = await readFromStore({ method: 'GET', url: answer.download.url, headers: answer.download.headers, expiresAt: answer.download.expiresAt })
-  return { name: answer.document.name, bytes }
-}
 
 // ── our last messages ──────────────────────────────────────────────────────────────────────────────────────────────────
 export const conversationSchema = z.object({

@@ -16,9 +16,7 @@ import type { SearchGroupRow } from '../../shell/view/SearchView'
 import {
   answerApproval,
   approvalFileBytes,
-  documentBytes,
   fetchApproval,
-  fetchDocument,
   fetchHome,
   fetchNewDocuments,
   fetchNextOrders,
@@ -42,7 +40,6 @@ import {
   isFirstVisit,
   isPdf,
   isPicture,
-  mainFileOf,
   neighbourOf,
   nextOrderRows,
   NS,
@@ -53,13 +50,12 @@ import {
   requestHeld,
   tilesFor,
   tilesOf,
-  versionLines,
   withRecent,
 } from './model'
 import { homeBandOf } from './band'
 import { CustomerHomeView, type HomeSearchModel, type PromiseWhy } from './view/CustomerHomeView'
 import type { ApproveDialogModel } from './view/ApproveDialog'
-import type { DocumentDialogModel } from './view/DocumentDialog'
+import { useDocumentPreview } from '../documents/preview/usePreview'
 import { useHomeWords } from './words'
 
 /**
@@ -99,18 +95,6 @@ function useOffline(live: string): boolean {
   return !online || live === 'offline'
 }
 
-/** Saves bytes as a file on this device (a document the person chose to download). */
-function saveBytes(name: string, bytes: Uint8Array, type: string): void {
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 function HomeContainer() {
   const frame = usePortalFrame()
   const api = usePortalApi()
@@ -136,9 +120,6 @@ function HomeContainer() {
   const [messages, setMessages] = useState<Async<Conversation[]>>(LOADING)
   const [openItems, setOpenItems] = useState<OpenItemsRead | null>(null)
   const [why, setWhy] = useState<Record<string, PromiseWhy>>({})
-  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set())
-  const [docBusy, setDocBusy] = useState<string | null>(null)
-  const [docProblem, setDocProblem] = useState<string | null>(null)
   const [slow, setSlow] = useState(false)
 
   const keep = <T,>(set: (update: (current: Async<T>) => Async<T>) => void) => () => set((current) => ({ state: current.value ? 'ready' : 'error', value: current.value }))
@@ -292,75 +273,21 @@ function HomeContainer() {
       .catch(() => setWhy((current) => ({ ...current, [orderId]: { state: 'error', words: null } })))
   }
 
-  // ── documents: preview (the pop-up) and download, each open logged by the API ──
-  const docs = useMemo(() => (documents.value?.items ?? []).map((item) => ({ item, row: { ...documentRowOf(item, locale), isNew: item.new && !opened.has(item.id) } })), [documents.value, locale, opened])
+  // ── documents: preview (the lifted pop-up) and download, each open logged by the API ──
   const docHeld = preview ? t('held.preview') : offline ? t('held.offline') : null
-  const [docDialog, setDocDialog] = useState<(Omit<DocumentDialogModel, 'position'> & { ids: string[] }) | null>(null)
-  const pictureUrl = useRef<string | null>(null)
-  const dropPicture = () => {
-    if (pictureUrl.current) URL.revokeObjectURL(pictureUrl.current)
-    pictureUrl.current = null
-  }
-  const openDocument = (id: string, ids: string[]) => {
-    const found = docs.find((entry) => entry.item.id === id)
-    if (!found) return
-    const file = mainFileOf(found.item)
-    const pdf = file ? isPdf(file.contentType) : false
-    dropPicture()
-    setDocDialog({ row: found.row, state: 'loading', src: null, pdf, versions: [], withdrawn: null, downloading: false, problem: null, ids })
-    documentBytes(api, id, 'preview')
-      .then(({ bytes }) => {
-        let src: Uint8Array | string = bytes
-        if (!pdf && file && isPicture(file.contentType)) {
-          src = URL.createObjectURL(new Blob([bytes as BlobPart], { type: file.contentType }))
-          pictureUrl.current = src
-        }
-        setOpened((current) => new Set(current).add(id))
-        setDocDialog((current) => (current?.row.id === id ? { ...current, state: 'ready', src: pdf || typeof src === 'string' ? src : null } : current))
-      })
-      .catch(() => setDocDialog((current) => (current?.row.id === id ? { ...current, state: 'error' } : current)))
-    fetchDocument(api, id)
-      .then((one) =>
-        setDocDialog((current) =>
-          current?.row.id === id
-            ? {
-                ...current,
-                versions: one.versions.length > 1 ? versionLines(one.versions) : [],
-                withdrawn: one.withdrawn?.replacedBy ? { title: one.withdrawn.replacedBy.title[locale], version: one.withdrawn.replacedBy.version } : null,
-              }
-            : current,
-        ),
-      )
-      .catch(() => undefined)
-  }
-  const download = (id: string, inDialog: boolean) => {
-    if (docHeld) return
-    const found = docs.find((entry) => entry.item.id === id)
-    const file = found ? mainFileOf(found.item) : null
-    setDocProblem(null)
-    if (inDialog) setDocDialog((current) => (current ? { ...current, downloading: true, problem: null } : current))
-    else setDocBusy(id)
-    documentBytes(api, id, 'download')
-      .then(({ name, bytes }) => {
-        saveBytes(name, bytes, file?.contentType ?? 'application/octet-stream')
-        setOpened((current) => new Set(current).add(id))
-      })
-      .catch(() => {
-        if (inDialog) setDocDialog((current) => (current ? { ...current, problem: t('documents.openFailed') } : current))
-        else setDocProblem(t('documents.openFailed'))
-      })
-      .finally(() => {
-        if (inDialog) setDocDialog((current) => (current ? { ...current, downloading: false } : current))
-        else setDocBusy(null)
-      })
-  }
-  const closeDocument = () => {
-    dropPicture()
-    setDocDialog(null)
+  const viewer = useDocumentPreview({
+    api,
+    locale,
+    held: docHeld,
+    find: (id) => documents.value?.items.find((item) => item.id === id),
     // Opened documents are no longer new: the list and the count follow.
-    readDocuments()
-    readHome()
-  }
+    onClosed: () => {
+      readDocuments()
+      readHome()
+    },
+  })
+  const docs = useMemo(() => (documents.value?.items ?? []).map((item) => ({ item, row: { ...documentRowOf(item, locale), isNew: item.new && !viewer.opened.has(item.id) } })), [documents.value, locale, viewer.opened])
+  const docIds = docs.map((entry) => entry.item.id)
 
   // ── the Approve pop-up ──
   const [approve, setApprove] = useState<(Omit<ApproveDialogModel, 'held' | 'position'> & { queue: string[] }) | null>(null)
@@ -437,10 +364,7 @@ function HomeContainer() {
     dropFile()
     setApprove(null)
   }
-  useEffect(() => () => {
-    dropFile()
-    dropPicture()
-  }, [])
+  useEffect(() => () => dropFile(), [])
 
   // ── the band ──
   const asOf = home.value?.asOf ?? null
@@ -491,7 +415,7 @@ function HomeContainer() {
               why,
             }
           : null,
-        documents: seesDocuments ? { state: documents.state, items: docs.map((entry) => entry.row), seeAllHref: built.documents ? `${prefix}/documents` : null, busy: docBusy, problem: docProblem, held: docHeld } : null,
+        documents: seesDocuments ? { state: documents.state, items: docs.map((entry) => entry.row), seeAllHref: built.documents ? `${prefix}/documents` : null, busy: viewer.busy, problem: viewer.problem ? t('documents.openFailed') : null, held: docHeld } : null,
         messages: seesMessages ? { state: messages.state, items: (messages.value ?? []).map((conversation) => ({ ...conversation, href: replyHref(prefix, conversation, (type, id) => recordPageOf(frame.kinds, type, id)) })) } : null,
         slow,
         approve: approve
@@ -501,14 +425,7 @@ function HomeContainer() {
               position: approve.queue.length > 1 && approve.queue.includes(approve.requestId) ? { index: approve.queue.indexOf(approve.requestId) + 1, count: approve.queue.length } : null,
             }
           : null,
-        document: docDialog
-          ? {
-              ...docDialog,
-              row: { ...docDialog.row, isNew: false },
-              problem: docDialog.problem ?? (docHeld && docDialog.downloading ? docHeld : null),
-              position: docDialog.ids.length > 1 ? { index: docDialog.ids.indexOf(docDialog.row.id) + 1, count: docDialog.ids.length } : null,
-            }
-          : null,
+        document: viewer.dialog,
       }}
       actions={{
         search: searchActions,
@@ -529,8 +446,14 @@ function HomeContainer() {
           readMessages()
         },
         onWhy,
-        onPreview: (id) => openDocument(id, docs.map((entry) => entry.item.id)),
-        onDownload: (id) => download(id, false),
+        onPreview: (id) => {
+          const found = docs.find((entry) => entry.item.id === id)
+          if (found) viewer.open(found.item, docIds)
+        },
+        onDownload: (id) => {
+          const found = docs.find((entry) => entry.item.id === id)
+          if (found) void viewer.download(found.item)
+        },
         onAsk: () => frame.ask(null),
         approve: {
           onClose: closeApproval,
@@ -541,16 +464,7 @@ function HomeContainer() {
           onStep: stepApproval,
           onOpenFile: openFile,
         },
-        document: {
-          onClose: closeDocument,
-          onRetry: () => docDialog && openDocument(docDialog.row.id, docDialog.ids),
-          onDownload: () => docDialog && download(docDialog.row.id, true),
-          onStep: (step) => {
-            if (!docDialog) return
-            const next = neighbourOf(docDialog.ids, docDialog.row.id, step)
-            if (next) openDocument(next, docDialog.ids)
-          },
-        },
+        document: viewer.actions,
       }}
       tasks={
         <TasksView

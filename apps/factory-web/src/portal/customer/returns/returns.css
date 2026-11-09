@@ -1,0 +1,365 @@
+/*
+ * SCR-187 — the customer's Returns & claims (B-W2b-197): layout only, semantic tokens only. The pages fill the portal's
+ * main area (no page max-width: Owner rule 2026-10-29), use the width on a wide screen and stack on a phone.
+ */
+
+.fw-pret,
+.fw-pret-tab,
+.fw-pret-stack,
+.fw-pret-section,
+.fw-pret-dialog,
+.fw-pret-photos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pret,
+.fw-pret-tab,
+.fw-pret-dialog {
+  gap: var(--nds-space-16);
+}
+
+.fw-pret-section,
+.fw-pret-photos {
+  gap: var(--nds-space-8);
+}
+
+.fw-pret-stack {
+  justify-content: center;
+  line-height: 1.3;
+}
+
+.fw-pret-chiprow {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* One chip row; on a phone it scrolls inside itself, never the page. */
+.fw-pret-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pret-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--nds-space-4);
+  }
+  .fw-pret-chiprow {
+    align-items: flex-start;
+  }
+}
+
+.fw-pret-chip-count,
+.fw-pret-h2-count {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pret-h2-count {
+  margin-left: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-pret-rowlink {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-pret-rowlink:hover,
+.fw-pret-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pret-sub,
+.fw-pret-hint,
+.fw-pret-quiet {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pret-hint,
+.fw-pret-quiet,
+.fw-pret-strong,
+.fw-pret-error,
+.fw-pret-warn,
+.fw-pret-decision,
+.fw-pret-replacement,
+.fw-pret-pre {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.fw-pret-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pret-error {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pret-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pret-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-pret-h2,
+.fw-pret-h3,
+.fw-pret-h4 {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pret-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-pret-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pret-h4 {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* One line in a grid cell: the rest is cut with an ellipsis (the whole text is in the record). */
+.fw-pret-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pret-next.is-yours {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pret-yours {
+  color: var(--nds-warning-text);
+}
+
+.fw-pret-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-danger-text);
+}
+
+.fw-pret-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ── the complaints ── */
+.fw-pret-complaints {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pret-complaint-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+/* Subject · opened · the step reached with its bar · the answer: the same columns on every row; stacked on a phone. */
+.fw-pret-complaint-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 0.7fr) minmax(180px, 1fr) minmax(150px, 0.8fr);
+  align-items: start;
+  gap: var(--nds-space-4) var(--nds-space-16);
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-pret-complaint-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pret-subject {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pret-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* ── the record ── */
+.fw-pret-where,
+.fw-pret-labelcard,
+.fw-pret-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pret-nextbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: 3px solid var(--nds-border-strong);
+}
+
+.fw-pret-nextbox.is-yours {
+  border-left-color: var(--nds-warning-border, var(--nds-border-strong));
+}
+
+.fw-pret-nextlabel {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pret-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-pret-filelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pret-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+/* ── pop-ups ── */
+.fw-pret-choices,
+.fw-pret-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-pret-choices legend,
+.fw-pret-items legend {
+  margin-bottom: var(--nds-space-8);
+}
+
+.fw-pret-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-pret-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.fw-pret-item[data-held] {
+  color: var(--nds-text-2);
+}
+
+.fw-pret-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+@media (max-width: 719px) {
+  .fw-pret-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A note box of a few lines, not a page (the DS field grows as the person types). */
+.fw-pret-note textarea,
+textarea.fw-pret-note {
+  min-height: 72px;
+  height: 96px;
+}
+
+.fw-pret-facts {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
+  gap: var(--nds-space-4) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-pret-facts dt {
+  color: var(--nds-text-2);
+}
+
+.fw-pret-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 519px) {
+  .fw-pret-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fw-pret-facts dd {
+    margin-bottom: var(--nds-space-8);
+  }
+}
+
+.fw-pret-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.fw-pret-viewer-img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.fw-pret-viewer-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-2);
+}
