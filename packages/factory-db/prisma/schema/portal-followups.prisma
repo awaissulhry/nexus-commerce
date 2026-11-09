@@ -90,7 +90,11 @@ model SupplierDocumentUpload {
   documentFile StoredFile?  @relation("SupplierDocumentUploadDocument", fields: [tenantId, documentFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   task         PartnerTask? @relation(fields: [tenantId, partyId, taskId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   uploadedBy   User         @relation(fields: [tenantId, uploadedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 substances.prisma (wave 31/33): the declaration requests it answers.
+  supplierDeclarationRequests SupplierDeclarationRequest[]
 
+  // W2b-4 (wave 31/33): the target of a declaration request's reference: the upload that answers it is of its own party.
+  @@unique([tenantId, partyId, id])
   // A party's uploads by state ("Your documents", the open ones).
   @@index([tenantId, partyId, status])
   // The office's list and Today: what waits, oldest first.
