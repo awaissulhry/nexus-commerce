@@ -25,6 +25,8 @@
 // Prisma cannot express): a release obsoletes the previous revision first, then releases the new one, in one command.
 // W2b-4 (wave 25/33, instructions.prisma): a routing step's extra minutes per size and machine settings are parts of the
 // revision under the same rule; a revision's effective days (effectiveFrom, effectiveTo) are fixed once released.
+// W2b-4 (wave 27/33, sizes-depth.prisma): a revision's measurement spec with its values and its protector placement are
+// parts of the revision under the same rule.
 //
 // Who sees what (ownership/product.json): the office reads and writes; the floor reads the styles, materials (never a
 // cost), BOMs and routings it works from; portal and link sessions read none of it. Master data in use is archived
@@ -181,6 +183,8 @@ model Item {
   bomLines        BomLine[]
   // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
   coverage        CertificateCoverage[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): the pockets of style revisions it goes in (a PROTECTOR).
+  protectorPlacements ProtectorPlacement[]
   // W2b leather.prisma (wave 12/16): what each grade means for it, and its shade groups.
   gradeRules      ItemGradeRule[]
   shadeGroups     ShadeGroup[]
@@ -359,6 +363,9 @@ model SizeScale {
   companyId   String?      @db.Uuid
   code        String
   name        String
+  /// W2b-4 (B-W2b-210; PRD-049): 1, or 2 for size and fit ("52 Long"): then every size of the scale is one size in one
+  /// fit (code "52L", fitCode "L"), so a size is still one code everywhere. Changes only while the scale has no size.
+  dimensions  Int          @default(1)
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -367,6 +374,9 @@ model SizeScale {
 
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   sizes   Size[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): its grade rules and prepacks.
+  gradeRules GradeRule[]
+  prepacks   Prepack[]
   styles  Style[]
   // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default scale it is.
   productTypeProfiles ProductTypeProfile[]
@@ -391,6 +401,9 @@ model Size {
   /// made-to-measure rider's measures are checked (PRD-288); keys are measurement point codes, values decimal strings:
   /// { "chest": { "min": "100", "max": "104", "unit": "cm" }, "height": { "min": "176", "max": "182", "unit": "cm" } }.
   bodyMeasures Json?
+  /// W2b-4 (B-W2b-210; PRD-049): the fit of the size on a two-dimension scale ("S", "R", "L": 1-10 letters or digits),
+  /// set exactly when its scale has two dimensions.
+  fitCode      String?
   status       MasterStatus @default(ACTIVE)
   version      Int          @default(1)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)
@@ -500,6 +513,8 @@ model Style {
   images              StyleImage[]
   colourways          Colourway[]
   revisions           StyleRevision[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): its own prepacks.
+  prepacks            Prepack[]
   // compliance.prisma: what covers and documents it.
   coverage            CertificateCoverage[]
   labelTemplates      LabelTemplate[]
@@ -596,6 +611,8 @@ model Colourway {
   bomLineColours BomLineColour[]
   // W2b-4 styles-depth.prisma (wave 26/33): its pictures.
   images         StyleImage[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): the prepack lines of this colourway.
+  prepackLines   PrepackLine[]
   // sales.prisma: its quote and sales order lines.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
@@ -694,6 +711,9 @@ model StyleRevision {
   // W2b-4 styles-depth.prisma (wave 26/33): its pictures and its pattern, marker and CAD files.
   images         StyleImage[]
   files          StyleRevisionFile[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): its measurement specs and protector placement (parts of the revision).
+  measurementSpecs    MeasurementSpec[]
+  protectorPlacements ProtectorPlacement[]
   // sales.prisma: the quote lines costed from it and the sales order lines made to it.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
@@ -777,6 +797,12 @@ model BomLine {
   /// W2b-2 (B-W2b-74): the routing step of the same revision that uses the line (RoutingOperation.seq), so a material flag
   /// and a scan's components can be per operation (B-W2b-88); null: not tied to one step (what every line was before).
   routingSeq      Int?
+  /// W2b-4 (B-W2b-210; PRD-204): a made-to-measure unit's quantity follows one of its measures: a point of the style's
+  /// measurement template and the share of the quantity that follows it (above 0, at most 10): the unit's quantity = the
+  /// base size's × (1 + mtmScaleFactor × (the unit's measure ÷ the base size's measure − 1)). Both or neither; null: the
+  /// unit takes its nearest size's quantity.
+  mtmScalePointId String?  @db.Uuid
+  mtmScaleFactor  Decimal? @db.Decimal(7, 4)
   note            String?
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
@@ -801,6 +827,9 @@ model BomLine {
   alternates          BomLineAlternate[]
   sizes      BomLineSize[]
   colours    BomLineColour[]
+  // W2b-4: the made-to-measure point its quantity follows (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId).
+  mtmScalePoint MeasurementPoint? @relation(fields: [tenantId, mtmScalePointId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // production.prisma: the work orders' planned materials of the line.
   workOrderMaterials WorkOrderMaterial[]
   // W2b-2 cutting.prisma (wave 13/16): the pattern pieces cut from the line.
@@ -1011,6 +1040,13 @@ model MeasurementTemplate {
   productType  ProductType
   /// How to measure, before the points.
   instructions String?
+  /// W2b-4 (B-W2b-210; PRD-202): which measures pick a rider's base size from the style's size scale (each size's body
+  /// measures): {"points": ["chest", "height"], "tie": "LARGER"}: 1 to 10 codes of this template's points, in priority
+  /// order, and between two sizes the larger (default) or the smaller. Null: no base size is suggested.
+  baseSizeRule Json?
+  /// W2b-4 (B-W2b-210; Owner 11-09, GATE-MTM): the made-to-measure rules of the template (its MeasurementRule rows, the
+  /// base size rule, its points' alteration limits) are checked only while on. Built off.
+  rulesOn      Boolean      @default(false)
   status       MasterStatus @default(ACTIVE)
   version      Int          @default(1)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)
@@ -1019,6 +1055,8 @@ model MeasurementTemplate {
 
   company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   points  MeasurementPoint[]
+  // W2b-4 sizes-depth.prisma (wave 27/33): its plausibility rules.
+  rules   MeasurementRule[]
   styles  Style[]
   // W2b-4 styles-depth.prisma (wave 26/33): the product types whose default template it is.
   productTypeProfiles ProductTypeProfile[]
@@ -1045,6 +1083,15 @@ model MeasurementPoint {
   required    Boolean      @default(true)
   /// How to measure it.
   howTo       String?
+  /// W2b-4 (B-W2b-210; PRD-069, B-W2b-171): the library's BODY point of measure it is (of its unit): its body zone, picture
+  /// and words; null: a point of this template only.
+  pointOfMeasureId String?  @db.Uuid
+  /// W2b-4 (B-W2b-97, PRD-203): the tolerance, plus and minus, a made-to-measure garment is inspected with at this point;
+  /// and how far a rider's measure may be under or over the base size's before a pattern maker must review the unit
+  /// (outside the certified range). In its unit, 0 or more; null: not set.
+  tolerance        Decimal? @db.Decimal(8, 2)
+  alterationMinus  Decimal? @db.Decimal(8, 2)
+  alterationPlus   Decimal? @db.Decimal(8, 2)
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -1052,6 +1099,15 @@ model MeasurementPoint {
   createdById String?      @db.Uuid
 
   template MeasurementTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 sizes-depth.prisma (wave 27/33): its library point (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId), the rules that check it or compare with it, the BOM lines whose made-to-measure quantity follows it.
+  pointOfMeasure  PointOfMeasure?   @relation(fields: [tenantId, pointOfMeasureId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  rules           MeasurementRule[] @relation("MeasurementRulePoint")
+  comparedInRules MeasurementRule[] @relation("MeasurementRuleOtherPoint")
+  scaledBomLines  BomLine[]
 
   @@unique([tenantId, templateId, code])
+  // W2b-4: the targets of the rules' references (a point of the same template) and of the BOM lines' reference.
+  @@unique([tenantId, templateId, id])
+  @@unique([tenantId, id])
 }
