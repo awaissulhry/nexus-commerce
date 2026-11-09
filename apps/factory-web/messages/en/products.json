@@ -716,14 +716,13 @@
       "commerce": "Nexus Commerce product"
     },
     "fromWhen": {
-      "template": "Later",
-      "commerce": "W2b"
+      "template": "Later"
     },
     "fromHint": {
       "blank": "Type the style here; colourways, BOM and routing follow in its studio.",
       "copy": "Pick a style and the parts to copy: BOM, measurements, routing, label.",
       "template": "Style templates come later.",
-      "commerce": "Starting from a Nexus Commerce product comes in W2b."
+      "commerce": "Upload a Nexus Commerce export: each product family becomes a draft style with its colours, sizes and SKUs."
     }
   },
   "compliance": {

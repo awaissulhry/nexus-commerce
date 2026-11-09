@@ -7,6 +7,7 @@ import { ApiError } from '../../../core/errors'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
 import type { ImportAdapter } from '../../../platform/imports/registry'
 import { mayWrite } from '../materials/store'
+import { typedSmvRefusalOf } from '../minutes/governance'
 import { clearNames, fieldsOf, OPERATION_COLUMNS } from './store'
 
 /**
@@ -78,6 +79,9 @@ export const operationsImportAdapter = Object.freeze({
     const change = changeOperation(before, patchOf(row.values, before.nameI18n), used)
     if (!change.ok) throw new ImportRowRefused(code, change.issues.map((issue) => issue.message).join(' '))
     const { operation: next, changed } = change
+    // B-W2b-215: a governed SMV is not imported (an SMV change is a proposal a second person approves).
+    const governed = changed.includes('standardMinutes') ? await typedSmvRefusalOf(tx, recordId) : null
+    if (governed) throw new ImportRowRefused(code, governed)
     if (changed.length > 0) {
       const data = Object.fromEntries(changed.filter((field) => !(field === 'nameI18n' && next.nameI18n === null)).map((field) => [field, next[field]])) as Prisma.OperationUncheckedUpdateInput
       // command() bumps only the record it guards (the import job): the operation's version moves here, so an open

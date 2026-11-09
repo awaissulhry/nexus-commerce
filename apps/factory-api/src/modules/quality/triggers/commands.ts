@@ -14,6 +14,7 @@ import {
   officeOf,
   plansOf,
   readRule,
+  recordsOpenedBy,
   TRIGGER_COLUMNS,
   TRIGGER_RECORD,
   TriggerRefusedError,
@@ -29,7 +30,9 @@ import {
  *   POST   /quality/inspection-triggers                    a rule: when, for what, which plan, how often; at the end of the
  *                                                          list or at `position` (the rules after it move down)
  *   PATCH  /quality/inspection-triggers/:triggerId         its event, chips, plan, frequency; switched off or on
- *   DELETE /quality/inspection-triggers/:triggerId?version a rule (the records it opened keep their plan version)
+ *   DELETE /quality/inspection-triggers/:triggerId?version a rule that opened nothing (B-W2b-213: one that opened records
+ *                                                          names them as the rule that opened them: it is switched off
+ *                                                          instead, 409 refusal/OPENED_RECORDS in words)
  *   POST   /quality/inspection-triggers/order              the company's rules in a new order (the whole list)
  *
  * A rule names a plan of its company with an APPROVED version (the version records open on) and of a stage its event
@@ -47,13 +50,14 @@ const refuse = (problems: readonly Issue[], words: string): never => {
 const changed = (tools: Tools, rule: Pick<TriggerRow, 'id' | 'companyId' | 'event'> | null, companyId: string, change: TriggerChange) =>
   tools.emit({ type: 'inspection_trigger.changed', subject: rule?.id ?? companyId, companyId, siteId: null, payload: { companyId, triggerId: rule?.id ?? null, change, event: (rule?.event as TriggerEvent | undefined) ?? null } })
 
-const audited = (row: Pick<TriggerRow, 'event' | 'appliesTo' | 'planId' | 'frequency' | 'frequencyValue' | 'active' | 'sortOrder'>, plan?: Pick<PlanFacts, 'code'>) => ({
+const audited = (row: Pick<TriggerRow, 'event' | 'appliesTo' | 'planId' | 'frequency' | 'frequencyValue' | 'dueHours' | 'active' | 'sortOrder'>, plan?: Pick<PlanFacts, 'code'>) => ({
   event: row.event,
   appliesTo: row.appliesTo,
   planId: row.planId,
   ...(plan ? { planCode: plan.code } : {}),
   frequency: row.frequency,
   frequencyValue: row.frequencyValue,
+  dueHours: row.dueHours,
   active: row.active,
   sortOrder: row.sortOrder,
 })
@@ -99,6 +103,7 @@ export interface CreateBody {
   readonly appliesTo?: readonly Chip[] | undefined
   readonly frequency?: Frequency | undefined
   readonly frequencyValue?: number | null | undefined
+  readonly dueHours?: number | null | undefined
   readonly active?: boolean | undefined
   readonly position?: number | undefined
 }
@@ -121,7 +126,7 @@ export async function createRule(caller: CommandCaller, body: CreateBody, idempo
     const db = client as unknown as Db
     const plan = await planFor(db, body.companyId, body.planId)
     const frequency = frequencyFor(body, plan)
-    const problems = [...ruleProblems({ event: body.event, stage: plan.stage, appliesTo, ...frequency }), ...(await chipRefsProblems(db, body.companyId, appliesTo))]
+    const problems = [...ruleProblems({ event: body.event, stage: plan.stage, appliesTo, ...frequency, dueHours: body.dueHours ?? null }), ...(await chipRefsProblems(db, body.companyId, appliesTo))]
     if (problems.length > 0) refuse(problems, 'The rule is not valid.')
     return { plan, frequency }
   })
@@ -135,7 +140,7 @@ export async function createRule(caller: CommandCaller, body: CreateBody, idempo
     const id = newId()
     const at = Math.min(body.position ?? existing.length + 1, existing.length + 1) - 1
     const row = await tx.inspectionTrigger.create({
-      data: { id, companyId: body.companyId, sortOrder: (existing.length + 1) * 10, event: body.event, appliesTo: appliesTo.map((chip) => ({ kind: chip.kind, value: chip.value })), planId: plan.id, ...frequency, active, createdAt: now, updatedAt: now, createdById: context.actorId },
+      data: { id, companyId: body.companyId, sortOrder: (existing.length + 1) * 10, event: body.event, appliesTo: appliesTo.map((chip) => ({ kind: chip.kind, value: chip.value })), planId: plan.id, ...frequency, dueHours: body.dueHours ?? null, active, createdAt: now, updatedAt: now, createdById: context.actorId },
       select: TRIGGER_COLUMNS,
     })
     const ordered = [...existing]
@@ -161,6 +166,7 @@ export interface EditBody {
   readonly appliesTo?: readonly Chip[] | undefined
   readonly frequency?: Frequency | undefined
   readonly frequencyValue?: number | null | undefined
+  readonly dueHours?: number | null | undefined
   readonly active?: boolean | undefined
 }
 
@@ -176,12 +182,13 @@ export async function editRule(caller: CommandCaller, triggerId: string, body: E
     frequency: body.frequency ?? (before.frequency as Frequency),
     // A new frequency takes the number sent with it (none: none); the same frequency keeps its number unless one is sent.
     frequencyValue: body.frequencyValue !== undefined ? body.frequencyValue : body.frequency && body.frequency !== before.frequency ? null : before.frequencyValue,
+    dueHours: body.dueHours !== undefined ? body.dueHours : before.dueHours,
     active: body.active ?? before.active,
   }
   const plan = await caller.withClient(async (client) => {
     const db = client as unknown as Db
     const plan = await planFor(db, before.companyId, next.planId)
-    const problems = [...ruleProblems({ event: next.event, stage: plan.stage, appliesTo: next.appliesTo, frequency: next.frequency, frequencyValue: next.frequencyValue }), ...(body.appliesTo ? await chipRefsProblems(db, before.companyId, body.appliesTo) : [])]
+    const problems = [...ruleProblems({ event: next.event, stage: plan.stage, appliesTo: next.appliesTo, frequency: next.frequency, frequencyValue: next.frequencyValue, dueHours: next.dueHours }), ...(body.appliesTo ? await chipRefsProblems(db, before.companyId, body.appliesTo) : [])]
     if (problems.length > 0) refuse(problems, 'The change is not valid.')
     return plan
   })
@@ -196,6 +203,7 @@ export async function editRule(caller: CommandCaller, triggerId: string, body: E
       appliesTo: next.appliesTo.map((chip) => ({ kind: chip.kind, value: chip.value })),
       frequency: next.frequency,
       frequencyValue: next.frequencyValue ?? null,
+      dueHours: next.dueHours ?? null,
       active: next.active,
       updatedAt: now,
     }
@@ -224,6 +232,14 @@ export async function deleteRule(caller: CommandCaller, triggerId: string, query
     await lockCompanyRules(tx, before.companyId)
     const current = await tx.inspectionTrigger.findUnique({ where: { id: before.id }, select: TRIGGER_COLUMNS })
     if (!current) throw new NotFoundError('Inspection rule not found.')
+    // B-W2b-213: the records a rule opened name it (a foreign key with Restrict): it is switched off, never deleted then.
+    const opened = await recordsOpenedBy(tx, current.id)
+    if (opened > 0) {
+      throw new TriggerRefusedError(
+        'OPENED_RECORDS',
+        `This rule opened ${opened} ${opened === 1 ? 'inspection' : 'inspections'}: each keeps it as the rule that opened it, so it is not deleted. Switch it off instead: it opens nothing more.`,
+      )
+    }
     await tx.inspectionTrigger.delete({ where: { id: current.id }, select: { id: true } })
     const rest = inOrder(await tx.inspectionTrigger.findMany({ where: { companyId: current.companyId }, select: { id: true, sortOrder: true } }))
     const moved = await renumber(tx, rest, now)

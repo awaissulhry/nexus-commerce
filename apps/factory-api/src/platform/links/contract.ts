@@ -4,6 +4,7 @@ import { EMAIL_CHECKS } from '@nexus/factory-domain/links/evidence'
 import { LINK_FILES_MAX } from '@nexus/factory-domain/links/files'
 import { LINK_PASSWORD } from '@nexus/factory-domain/links/password'
 import { EVIDENCE_ACTIONS, FILE_SET_PURPOSES, LINK_ACTIONS, LINK_PURPOSES, LINK_STATES } from '@nexus/factory-domain/links/purposes'
+import { LINK_RENEW_NOTE_MAX } from '@nexus/factory-domain/links/renew'
 import { presignedView } from '../files/contract'
 import { proofBody } from '../abuse/contract'
 
@@ -242,6 +243,10 @@ export const saveLinkDraftContract = defineContract({
 })
 
 export const renewLinkContract = defineContract({
-  body: input({ proof: proofBody.optional() }).optional(),
+  body: input({
+    proof: proofBody.optional(),
+    /** B-W2b-F17: the reader's own words to the person who made the link (passed on only where no renewer makes a new one). */
+    note: z.string().trim().min(1).max(LINK_RENEW_NOTE_MAX).optional(),
+  }).optional(),
   response: { 202: output({ status: z.literal('requested'), message: z.string() }) },
 })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { PARTNER_ROLE_TEMPLATES, ROLE_TEMPLATES } from '../../auth/roles/templates'
 import type { Actor, Grant } from '../../core/permissions'
-import { KIND_RULES, PARTNER_TASK_KINDS, taskWords } from './kinds'
+import { AREA_FOR_PARTNER, KIND_RULES, PARTNER_TASK_KINDS, PORTAL_AREAS, taskArea, taskWords } from './kinds'
 import { PARTNERS_TASKS_MANAGE, PORTAL_HOME_VIEW } from './permissions'
 import { askProblems, badgesOf, byDue, DAY_MS, dueStateOf, isTaskFor, reminderDue, undoProblem, UNDO_WINDOW_MS } from './rules'
 
@@ -70,6 +70,17 @@ describe('the one task list (B-W2b-167, COL-043)', () => {
       { area: 'orders', count: 3, kinds: { CONFIRM_PO: 2, RECONFIRM_ORDER: 1 } },
       { area: 'documents', count: 1, kinds: { UPLOAD_DOCUMENT: 1 } },
     ])
+  })
+
+  it('B-W2b-F17: an approval counts where the partner kind can see it — Quotes & samples for a customer, Home for the others', () => {
+    const approvals = [task('APPROVE'), task('APPROVE'), task('CONFIRM_PO')]
+    expect(badgesOf(approvals, 'CUSTOMER')).toEqual([{ area: 'quotes', count: 2, kinds: { APPROVE: 2 } }, { area: 'orders', count: 1, kinds: { CONFIRM_PO: 1 } }])
+    expect(badgesOf(approvals, 'SUPPLIER')).toEqual([{ area: 'home', count: 2, kinds: { APPROVE: 2 } }, { area: 'orders', count: 1, kinds: { CONFIRM_PO: 1 } }])
+    expect(badgesOf([task('APPROVE')], 'SUBCONTRACTOR')).toEqual([{ area: 'home', count: 1, kinds: { APPROVE: 1 } }])
+    expect(badgesOf([task('APPROVE')], 'GUEST')).toEqual([{ area: 'home', count: 1, kinds: { APPROVE: 1 } }])
+    // No kind known (the office's view): the kind's own area.
+    expect([taskArea('APPROVE', null), taskArea('APPROVE', 'SOMETHING'), taskArea('CONFIRM_PO', 'SUPPLIER')]).toEqual(['quotes', 'quotes', 'orders'])
+    for (const [kind, byPartner] of Object.entries(AREA_FOR_PARTNER)) for (const area of Object.values(byPartner ?? {})) expect(PORTAL_AREAS, kind).toContain(area)
   })
 
   it('the office asks by hand for a document, an answer, measurements or progress, due in the future within 180 days', () => {

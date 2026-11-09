@@ -13,7 +13,8 @@ const outcome = z.enum(CHECKLIST_OUTCOMES)
 const operationRef = output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() })
 
 const checklist = {
-  steps: z.array(output({ code: z.string(), words: z.string(), required: z.boolean(), tick: output({ outcome, at: instant(), mine: z.boolean(), by: z.string().nullable() }).nullable() })),
+  /** B-W2b-214: `icon` (the steps panel's picture, factory-domain instructions INSTRUCTION_ICONS) and `critical` come from a work instruction's step; typed lines have neither. */
+  steps: z.array(output({ code: z.string(), words: z.string(), required: z.boolean(), icon: z.string().nullable(), critical: z.boolean(), tick: output({ outcome, at: instant(), mine: z.boolean(), by: z.string().nullable() }).nullable() })),
   /** The required steps with no tick: Finish is held until 0. */
   open: z.number().int(),
 }

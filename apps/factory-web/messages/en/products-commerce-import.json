@@ -1,0 +1,91 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "retry": "Try again"
+  },
+  "header": {
+    "import": "Import",
+    "importHint": "Start styles from a Nexus Commerce export file, or a sheet in its columns"
+  },
+  "importer": {
+    "name": "Styles from a Nexus Commerce export",
+    "fills": "One row per SKU, as Nexus Commerce exports a product family: each family becomes a draft style with its colours, sizes, SKU codes and barcodes. Nothing is sent to Nexus Commerce."
+  },
+  "source": {
+    "title": "Start from a Nexus Commerce product",
+    "subtitle": "Draft styles from the product families of an export file",
+    "label": "Where the styles come from",
+    "continue": "Choose the file",
+    "file": {
+      "title": "Export file from Nexus Commerce",
+      "hint": "CSV or Excel, one row per SKU, up to {max} rows. A bigger export goes in parts, a whole family in each part."
+    },
+    "live": {
+      "title": "Read live from Nexus Commerce",
+      "off": "Off",
+      "on": "On",
+      "reason": {
+        "OWNER_WORD": "Waits for the Owner's word: for now the factory reads an export file only, and has no link to Nexus Commerce."
+      }
+    }
+  },
+  "makes": {
+    "title": "What the import makes",
+    "family": "Each product family becomes a draft style in Concept, with revision 1 as a draft.",
+    "colours": "Its colours become colourways and its sizes the range, on the size scale that holds them.",
+    "skus": "The SKU codes and EAN barcodes stay as they are in Nexus Commerce.",
+    "again": "You see every row in a dry run first; the same file again changes nothing.",
+    "nothingBack": "Nothing is written to Nexus Commerce."
+  },
+  "how": {
+    "title": "How to get the file",
+    "export": "In Nexus Commerce, export the products with their variants: SKU, Parent SKU, name, colour, size and EAN, with the category and season if you have them.",
+    "columns": "Or download the template in the next step and fill it in the same columns."
+  },
+  "hold": {
+    "noManage": "Your role can view styles, not start them.",
+    "noImport": "Importing a file needs the right to run imports (imports.run) and to upload files.",
+    "reading": "Reading where the styles can come from…",
+    "unread": "Where the styles can come from could not be read: try again."
+  },
+  "fault": {
+    "signed_out": "You are signed out: sign in again.",
+    "forbidden": "Your role cannot see this.",
+    "not_found": "This import was not found, or your role cannot see it.",
+    "unavailable": "The factory cannot be reached just now: try again in a moment.",
+    "rate_limited": "Too many requests at once: try again in a moment.",
+    "internal": "Something went wrong on our side: try again."
+  },
+  "done": {
+    "title": "Styles from the Nexus Commerce file",
+    "subtitle": "What the import wrote",
+    "summary": "New draft styles: {started} · Styles that took new colours or sizes: {added}",
+    "listLabel": "The styles of the import",
+    "started": "New draft",
+    "added": "Colours or sizes added",
+    "skus_one": "{count} SKU",
+    "skus_other": "{count} SKUs",
+    "open": "Open {code}",
+    "openLabel": "Open style {code}",
+    "hidden_one": "{count} more style is outside your companies.",
+    "hidden_other": "{count} more styles are outside your companies.",
+    "onlyHidden_one": "The import wrote {count} style outside your companies.",
+    "onlyHidden_other": "The import wrote {count} styles outside your companies.",
+    "none": {
+      "title": "No style was written",
+      "body": "Every row was already in the factory, or refused: Admin › Import & export keeps the import with its rows."
+    },
+    "unreadHint": "The import is done: the styles are in the list.",
+    "next": "Each new style is a draft: set its PPE category, base size, BOM and routing on the style."
+  },
+  "lifecycle": {
+    "CONCEPT": "Concept",
+    "DEVELOPMENT": "Development",
+    "SAMPLING": "Sampling",
+    "APPROVED": "Approved",
+    "IN_PRODUCTION": "In production",
+    "PHASE_OUT": "Phase out",
+    "DISCONTINUED": "Discontinued"
+  }
+}

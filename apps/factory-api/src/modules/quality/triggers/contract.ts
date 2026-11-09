@@ -45,6 +45,9 @@ export const ruleView = output({
   /** What it opens (an incoming inspection, a cutting check, a first piece, a roving check, an end-of-line check). */
   recordKind: z.enum(RECORD_KINDS).nullable(),
   recordKindWords: itEn().nullable(),
+  /** B-W2b-213: within how many hours what it opens is due (its dueAt = the opening + these hours); null: no due time. */
+  dueHours: z.number().int().nullable(),
+  dueWords: itEn().nullable(),
   active: z.boolean(),
   /** What it really did in the last 30 days: the records it opened, and the times it opened nothing (with why, the latest). */
   opened: output({ last30Days: z.number().int(), lastAt: instant().nullable() }),
@@ -92,6 +95,8 @@ export const createContract = defineContract({
     /** Left out: the plan's approved version's frequency, when this event takes it; else every lot. */
     frequency: frequency.optional(),
     frequencyValue: z.number().int().nullable().optional(),
+    /** B-W2b-213: within how many hours what it opens is due (1 to 720; null or left out: no due time). */
+    dueHours: z.number().int().nullable().optional(),
     active: z.boolean().optional(),
     /** 1, 2, 3 … where to put it in the list; left out: at the end. */
     position: z.number().int().min(1).max(10_000).optional(),
@@ -108,6 +113,8 @@ export const editContract = defineContract({
     appliesTo: chipsIn.optional(),
     frequency: frequency.optional(),
     frequencyValue: z.number().int().nullable().optional(),
+    /** B-W2b-213: null clears the due time; left out: kept. */
+    dueHours: z.number().int().nullable().optional(),
     active: z.boolean().optional(),
   }),
   response: { 200: output({ rule: ruleView }) },
@@ -136,6 +143,8 @@ export const previewContract = defineContract({
     appliesTo: chipsIn.optional(),
     frequency,
     frequencyValue: z.number().int().nullable().optional(),
+    /** B-W2b-213: the draft's due hours (the preview counts what it opens, not when it is due). */
+    dueHours: z.number().int().nullable().optional(),
     /** Where the draft would stand (left out: a changed rule keeps its place, a new one goes last). */
     position: z.number().int().min(1).max(10_000).optional(),
   }),

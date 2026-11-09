@@ -256,6 +256,7 @@ const rule = (n: number, over: Partial<Rule> & Pick<Rule, 'event' | 'plan' | 'fr
   appliesTo: [],
   frequencyValue: null,
   recordKind: null,
+  dueHours: null,
   active: true,
   opened: { last30Days: 0, lastAt: null },
   skipped: { last30Days: 0, lastAt: null, lastWords: null },
@@ -272,6 +273,8 @@ export const RULES: Rule[] = [
   rule(1, { event: 'GOODS_RECEIPT', plan: planRef(0), frequency: 'EVERY_LOT', recordKind: 'INCOMING', appliesTo: [{ kind: 'CATEGORY', value: 'LEATHER', label: 'Leather' }], opened: { last30Days: 12, lastAt: at(28, 8) } }),
   rule(2, { event: 'BUNDLE_SCAN', plan: planRef(2), frequency: 'FIRST_PIECE', recordKind: 'FIRST_PIECE', opened: { last30Days: 9, lastAt: at(28, 7) }, skipped: { last30Days: 3, lastAt: at(27), lastWords: { it: 'DEMO-WO-0042: un primo capo è già aperto a questa operazione.', en: 'DEMO-WO-0042: a first piece is open at this operation already.' } } }),
   rule(3, { event: 'OPERATION_FINISHED', plan: planRef(3), frequency: 'PERCENT_OF_OPERATIONS', frequencyValue: 10, recordKind: 'END_OF_LINE', active: false }),
+  // B-W2b-213: a packing rule whose final inspections are due 8 hours after they open.
+  rule(4, { event: 'PACKING', plan: planRef(4), frequency: 'EVERY_LOT', recordKind: 'FINAL', dueHours: 8, opened: { last30Days: 4, lastAt: at(28, 9) } }),
 ]
 
 const inProcess = { stages: ['CUTTING', 'IN_LINE', 'END_OF_LINE'] as RulesAnswer['events'][number]['stages'], frequencies: [{ frequency: 'EVERY_LOT' as const, takesValue: false }, { frequency: 'PERCENT_OF_OPERATIONS' as const, takesValue: true }, { frequency: 'FIRST_PIECE' as const, takesValue: false }, { frequency: 'EVERY_NTH_BUNDLE' as const, takesValue: true }], chipKinds: ['STYLE', 'CATEGORY', 'OPERATION', 'CUSTOMER'] as RulesAnswer['events'][number]['chipKinds'] }
@@ -282,14 +285,8 @@ export const RULES_ANSWER: RulesAnswer = {
     { event: 'GOODS_RECEIPT', available: true, held: null, stages: ['INCOMING'], frequencies: [{ frequency: 'EVERY_LOT', takesValue: false }], chipKinds: ['STYLE', 'CATEGORY', 'MATERIAL', 'SUPPLIER', 'OPERATION', 'CUSTOMER'] },
     { event: 'OPERATION_FINISHED', available: true, held: null, ...inProcess },
     { event: 'BUNDLE_SCAN', available: true, held: null, ...inProcess },
-    {
-      event: 'PACKING',
-      available: false,
-      held: { it: "Non ancora: un'ispezione finale nomina il suo ispettore quando si apre, quindi una regola non può aprirla da sola.", en: 'Not yet: a final inspection names its inspector when it opens, so a rule cannot open one by itself.' },
-      stages: [],
-      frequencies: [],
-      chipKinds: [],
-    },
+    // B-W2b-213: packing opens a final inspection (no inspector yet; the first who records it takes it).
+    { event: 'PACKING', available: true, held: null, stages: ['FINAL'], frequencies: [{ frequency: 'EVERY_LOT', takesValue: false }, { frequency: 'PERCENT_OF_OPERATIONS', takesValue: true }, { frequency: 'EVERY_NTH_BUNDLE', takesValue: true }], chipKinds: ['STYLE', 'CATEGORY', 'OPERATION', 'CUSTOMER'] },
     { event: 'RETURN_RECEIVED', available: false, held: { it: "Non ancora: un reso non ha un record d'ispezione.", en: 'Not yet: a return has no inspection record.' }, stages: [], frequencies: [], chipKinds: [] },
   ],
   canManage: true,

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
+import { PPE_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedPricing } from '../../../../../../packages/factory-db/seed/pricing'
@@ -145,6 +146,10 @@ describe('the catalogue (SAL-071)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // SEED-JKT-01 is still a DRAFT style: not sold. SEED-JKT-02 (P1's own label) is priced by the base list P1's list falls back to.
     expect(first.styles.map((style: Json) => style.code)).toEqual(['SEED-JKT-02'])
     expect(first.styles[0]).toMatchObject({ ownLabel: true, priceFrom: '410.00', range: '50–54' })
+    // B-W2b-F17: the PPE category in words from the stored code (it was the raw code), for every code the database stores.
+    expect(first.styles[0].ppe).toMatchObject({ category: 'CATEGORY_II', words: { it: 'DPI categoria II', en: 'PPE category II' } })
+    const [stored] = await admin<{ codes: string }>(`SELECT enum_range(NULL::"PpeCategory")::text AS codes`)
+    expect(stored!.codes.replace(/[{}]/g, '').split(',').filter((code) => !Object.hasOwn(PPE_WORDS, code))).toEqual([])
     // The office makes SEED-JKT-01 active: it is sold at P1's own list price (its red at its own price).
     await admin(`UPDATE "Style" SET status = 'ACTIVE', version = version + 1 WHERE id = $1`, [jkt01])
     const list = await ok(browsers.buyer, 'GET', '/portal/catalogue')

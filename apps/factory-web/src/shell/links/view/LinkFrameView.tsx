@@ -18,8 +18,8 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { linkStateLook, type LinkState } from '../link-state'
 import { useLinkRenew } from '../renew/context'
 import { ASKS_FOR_NEW_LINK, renewEnd, type LinkRenew } from '../renew/model'
-// B-W2b-203: a purpose without a new link (RECORD_INVITE) draws its dead end without the button.
-import { offersNewLink } from '../../../links/_nav/link-types'
+// B-W2b-F17: the reader's optional note to the sender, with the ask.
+import { RenewNote } from '../renew/RenewNote'
 import '../links.css'
 
 /**
@@ -217,7 +217,7 @@ function LinkBody({ body, senderName, timeZone, renew, children }: { body: Extra
   // B-W2b-169: one EndState for every end; a used, expired or unavailable link offers "Ask for a new link".
   return (
     <WithMessages namespaces={['link-frame', 'ds-words']}>
-      <DeadLink state={body.state} senderName={senderName} timeZone={timeZone} renew={offersNewLink(body.purpose) ? renew : null} />
+      <DeadLink state={body.state} senderName={senderName} timeZone={timeZone} renew={renew} />
     </WithMessages>
   )
 }
@@ -231,13 +231,19 @@ function DeadLink({ state, senderName, timeZone, renew: given }: { state: LinkSt
   const look = linkStateLook(state)
   const provided = useLinkRenew(given)
   const renew = ASKS_FOR_NEW_LINK.has(state) ? provided : null
-  const end = renew ? renewEnd(renew, (key) => f(key, { time: renew.waitUntil ? formatTime(renew.waitUntil, { locale, timeZone }) : '' })) : null
+  const end = renew ? renewEnd(renew, (key) => f(key, { time: renew.waitUntil ? formatTime(renew.waitUntil, { locale, timeZone }) : '', sender: senderName ?? '' }), senderName) : null
+  const words = senderName ? t(`links.state.${state}.body`, { sender: senderName }) : t(`links.state.${state}.bodyAnonymous`)
   return (
     <EndState
       tone={look.tone}
       icon={STATE_ICON[state]}
       title={t(`links.state.${state}.title`)}
-      body={senderName ? t(`links.state.${state}.body`, { sender: senderName }) : t(`links.state.${state}.bodyAnonymous`)}
+      body={
+        <>
+          {words}
+          <RenewNote renew={renew} />
+        </>
+      }
       next={end?.next}
       actions={end ? [end.action] : undefined}
       labels={ds.endState}

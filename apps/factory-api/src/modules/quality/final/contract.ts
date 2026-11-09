@@ -90,6 +90,12 @@ export const inspectionOut = output({
   aqlProfileId: id().nullable(),
   codeLetter: z.string().nullable(),
   inspected: z.number().int().nullable(),
+  /**
+   * B-W2b-213: a rule opened it (a PACKING rule); `taken` false while nobody recorded it yet (no inspector, not assigned):
+   * the first inspector who records it is written as its inspector then.
+   */
+  openedByRule: z.boolean(),
+  taken: z.boolean(),
 })
 
 const makerOut = output({ made: z.boolean(), words: z.string() })

@@ -71,6 +71,9 @@ import { addRoll, countLay, undoRoll } from '../../modules/production/lays/sprea
 import { CutIssueRefusedError } from '../../modules/production/cutissue/access'
 import { loadTrolleyBody, receiveTrolleyBody, sendTrolleyBody, unloadTrolleyBody } from '../../modules/production/cutissue/contract'
 import { loadTrolley, receiveTrolley, sendTrolley, unloadTrolley } from '../../modules/production/cutissue/trolleys'
+// B-W2b-214: Seen of a work instruction's version from the floor's queue.
+import { acknowledge } from '../../modules/production/instructions/acks'
+import { seenBody } from '../../modules/production/instructions/contract'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -124,6 +127,9 @@ import { loadTrolley, receiveTrolley, sendTrolley, unloadTrolley } from '../../m
  *                                         modules/production/cutissue loadTrolley, unloadTrolley, sendTrolley, receiveTrolley
  *                                         (B-W2b-117: by the trolley's label; applied as the trolley and the bundle stand
  *                                         when it arrives — a bundle voided or given a process since is refused in words)
+ *   production.instruction.ack            modules/production/instructions acknowledge (B-W2b-214: Seen of a work instruction's
+ *                                         version, the tablet's time kept; once per worker and version: a second Seen
+ *                                         answers the first as a duplicate)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -405,6 +411,14 @@ async function applyTrolley(caller: CommandCaller, event: QueuedEvent, key: stri
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'CutIssue', id: result.trolley.id } }
 }
 
+/** B-W2b-214: a queued Seen, through the instructions' own command (its key: `<device>.<client event id>`). */
+async function applyInstructionAck(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const body = parsed(seenBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await acknowledge(caller, body.value)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'InstructionAcknowledgement', id: result.acknowledgement.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -468,6 +482,9 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.trolley.send':
       case 'production.trolley.receive':
         return await applyTrolley(caller, event, context.key)
+      // B-W2b-214
+      case 'production.instruction.ack':
+        return await applyInstructionAck(caller, event)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

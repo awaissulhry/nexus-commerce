@@ -1670,6 +1670,7 @@
     "compliance_labels_manage": "Build and activate garment label templates",
     "compliance_register_view": "See the PPE register",
     "compliance_register_manage": "Record complaints, non-conformities and recalls",
+    "compliance_textileRules_manage": "Switch the textile, care and Made in Italy checks on or off",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",
@@ -1681,6 +1682,8 @@
     "product_routing_view": "See routings and standard minutes",
     "product_routing_manage": "Edit a draft routing",
     "product_operations_manage": "Keep the operation library",
+    "product_smv_propose": "Propose a change of an operation's standard minutes (SMV)",
+    "product_smv_approve": "Approve or reject someone else's SMV change",
     "inventory_locations_view": "See a site's locations",
     "inventory_locations_manage": "Create, move and archive locations",
     "inventory_stock_view": "See the stock and its moves",
@@ -2025,6 +2028,10 @@
     "portal_approvals_view": "See what we ask your organisation to approve (samples, colours, leathers, artworks, design proofs, concessions, revised orders) and the answers given; answering takes the right to approve",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
     "sales_measurements_view": "See measurements sent by link and open the body photos (each opening recorded)",
-    "sales_measurements_manage": "Send riders a measurement link and set when their body photos are deleted"
+    "sales_measurements_manage": "Send riders a measurement link and set when their body photos are deleted",
+    "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
+    "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
+    "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
+    "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement"
   }
 }

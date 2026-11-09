@@ -35,6 +35,7 @@ import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
+import { seed as seedOptions } from '../seed/options'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
@@ -63,6 +64,7 @@ import { seed as seedSales } from '../seed/sales'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
+import { seed as seedSizesDepth } from '../seed/sizes-depth'
 import { seed as seedSkills } from '../seed/skills'
 import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedStylesDepth } from '../seed/styles-depth'
@@ -324,6 +326,14 @@ beforeAll(async () => {
   // sets, product settings; its first picture, revision file, branding set and SKU are the plain ones a copy may repeat.
   await seedStylesDepth({ db: factory, namespace: 'iso-a' })
   await seedStylesDepth({ db: factory, namespace: 'iso-b' })
+  // W2b-4 sizes, measurements and made-to-measure rules (schema wave 27/33): a fit scale, points of measure, specs, grade
+  // rules, prepacks, protector placement, template rules and limits.
+  await seedSizesDepth({ db: factory, namespace: 'iso-a' })
+  await seedSizesDepth({ db: factory, namespace: 'iso-b' })
+  // The BOM depth and option library schema of W2b-4 (wave 28/33): a sub-assembly, alternates, option groups, values, rules,
+  // effects and a style's offers; its first group, value, rule, effect, offer (archived) and alternate are the ones a copy may repeat.
+  await seedOptions({ db: factory, namespace: 'iso-a' })
+  await seedOptions({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -353,6 +363,7 @@ it('covers every classified table and every runtime role', () => {
     'AuditLog',
     'Badge',
     'BomLine',
+    'BomLineAlternate',
     'BomLineColour',
     'BomLineSize',
     'BrandingSet',
@@ -420,6 +431,8 @@ it('covers every classified table and every runtime role', () => {
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
+    'GradeRule',
+    'GradeRuleStep',
     'GtinRange',
     'HandoverNote',
     'HealthPlan',
@@ -500,6 +513,9 @@ it('covers every classified table and every runtime role', () => {
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
+    'MeasurementRule',
+    'MeasurementSpec',
+    'MeasurementSpecValue',
     'MeasurementTemplate',
     'Message',
     'MessageMention',
@@ -525,6 +541,10 @@ it('covers every classified table and every runtime role', () => {
     'OperationScanDefect',
     'OperationScanMember',
     'OperationTimeVersion',
+    'OptionEffect',
+    'OptionGroup',
+    'OptionRule',
+    'OptionValue',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
     'OrgArea',
@@ -568,6 +588,7 @@ it('covers every classified table and every runtime role', () => {
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PointOfMeasure',
     'PortalOrderRequest',
     'PortalOrderRequestLine',
     'PortalOrderRequestSize',
@@ -577,6 +598,8 @@ it('covers every classified table and every runtime role', () => {
     'PpeItem',
     'PpeKitLine',
     'PpeRegisterEntry',
+    'Prepack',
+    'PrepackLine',
     'PriceList',
     'PriceListEntry',
     'PriceListVersion',
@@ -590,6 +613,7 @@ it('covers every classified table and every runtime role', () => {
     'ProductTypeProfile',
     'ProductionSettings',
     'ProtectedView',
+    'ProtectorPlacement',
     'PurchaseOrder',
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
@@ -688,6 +712,7 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleImage',
+    'StyleOptionGroup',
     'StyleRevision',
     'StyleRevisionFile',
     'StyleText',

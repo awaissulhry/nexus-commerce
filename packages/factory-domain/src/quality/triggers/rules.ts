@@ -25,8 +25,13 @@ import { CHIP_KIND_WORDS, chipsMatch, chipsProblems, FREQUENCIES, PLAN_LIMITS, t
  *                 (the Nth, 2Nth … bundle at the operation of the work order).
  *
  * What each event can open now: goods received → an incoming inspection (a supplier's lot, or a workshop's receipt);
- * operation finished and bundle scanned → an in-process check (cutting, in-line, end of line). Packing (a final
- * inspection) and return received (no record yet) are held, in words: see EVENT_RULES.
+ * operation finished and bundle scanned → an in-process check (cutting, in-line, end of line); packing → a final
+ * inspection (B-W2b-213: a bundle reported at an operation of a PACKING work centre opens the final inspection of the
+ * garments that wait, with no inspector yet: the first inspector who takes it is written then). Return received (no
+ * record yet) stays held, in words: see EVENT_RULES.
+ *
+ * Due (B-W2b-213; InspectionTrigger.dueHours): a rule may say within how many hours what it opens is due (1 to 720); the
+ * record's dueAt is its opening time plus those hours, the office moves it later; My inspections sorts by it.
  */
 
 type Words = Readonly<{ it: string; en: string }>
@@ -45,7 +50,7 @@ export const EVENT_WORDS: Readonly<Record<TriggerEvent, Words>> = Object.freeze(
 })
 
 /** The kinds of record a rule opens: one decision per kind (see the order above). */
-export const RECORD_KINDS = ['INCOMING', 'CUTTING', 'FIRST_PIECE', 'ROVING', 'END_OF_LINE'] as const
+export const RECORD_KINDS = ['INCOMING', 'CUTTING', 'FIRST_PIECE', 'ROVING', 'END_OF_LINE', 'FINAL'] as const
 export type RecordKind = (typeof RECORD_KINDS)[number]
 
 export const RECORD_KIND_WORDS: Readonly<Record<RecordKind, Words>> = Object.freeze({
@@ -54,6 +59,7 @@ export const RECORD_KIND_WORDS: Readonly<Record<RecordKind, Words>> = Object.fre
   FIRST_PIECE: w('Primo capo', 'First piece'),
   ROVING: w('Controllo itinerante', 'Roving check'),
   END_OF_LINE: w('Controllo fine linea', 'End-of-line check'),
+  FINAL: w('Ispezione finale', 'Final inspection'),
 })
 
 /** The record a rule of this plan stage and frequency opens; null: the stage has no record a rule may open. */
@@ -67,6 +73,8 @@ export function recordKindOf(stage: PlanStage, frequency: Frequency): RecordKind
       return 'END_OF_LINE'
     case 'IN_LINE':
       return frequency === 'FIRST_PIECE' ? 'FIRST_PIECE' : 'ROVING'
+    case 'FINAL':
+      return 'FINAL'
     default:
       return null
   }
@@ -103,15 +111,14 @@ export const EVENT_RULES: Readonly<Record<TriggerEvent, EventRule>> = Object.fre
   },
   OPERATION_FINISHED: { ...IN_PROCESS, counts: w('operazioni finite su un pacco', 'operations finished on a bundle') },
   BUNDLE_SCAN: { ...IN_PROCESS, counts: w("pacchi scansionati a un'operazione", 'bundles scanned at an operation') },
+  // B-W2b-213: a bundle reported at an operation of a PACKING work centre opens a final inspection of the garments that
+  // wait (finished, neither released nor in an open inspection), with no inspector: the first who takes it is written then.
   PACKING: {
-    stages: [],
-    frequencies: [],
-    chipKinds: [],
-    held: w(
-      "Non ancora: un'ispezione finale nomina il suo ispettore quando si apre, quindi una regola non può aprirla da sola. L'ispettore la apre al banco.",
-      'Not yet: a final inspection names its inspector when it opens, so a rule cannot open one by itself. The inspector opens it at the bench.',
-    ),
-    counts: w('spedizioni imballate', 'shipments packed'),
+    stages: ['FINAL'],
+    frequencies: ['EVERY_LOT', 'PERCENT_OF_OPERATIONS', 'EVERY_NTH_BUNDLE'],
+    chipKinds: ['STYLE', 'CATEGORY', 'OPERATION', 'CUSTOMER'],
+    held: null,
+    counts: w("pacchi riportati all'imballo", 'bundles reported at packing'),
   },
   RETURN_RECEIVED: {
     stages: [],
@@ -130,15 +137,20 @@ export const SOURCE_EVENTS: Readonly<Record<TriggerEvent, readonly string[]>> = 
   GOODS_RECEIPT: ['inventory.receipt_posted', 'subcontract_order.received'],
   OPERATION_FINISHED: ['production.scan_recorded'],
   BUNDLE_SCAN: ['production.scan_recorded', 'production.operation_timed'],
-  PACKING: [],
+  PACKING: ['production.scan_recorded'],
   RETURN_RECEIVED: [],
 })
 export const SCAN_KINDS: Readonly<Partial<Record<TriggerEvent, readonly string[]>>> = Object.freeze({
   OPERATION_FINISHED: ['REPORT'],
   BUNDLE_SCAN: ['START', 'REPORT'],
+  // B-W2b-213: only at an operation of a PACKING work centre (the handler reads the operation's work centre).
+  PACKING: ['REPORT'],
 })
 
-export const TRIGGER_LIMITS = Object.freeze({ rulesPerCompany: 200, everyNth: PLAN_LIMITS.everyNth, previewScans: 20_000, previewLots: 5_000 })
+/** The work centre kind whose operations a PACKING rule follows (factory-db WorkCentreKind). */
+export const PACKING_WORK_CENTRE = 'PACKING' as const
+
+export const TRIGGER_LIMITS = Object.freeze({ rulesPerCompany: 200, everyNth: PLAN_LIMITS.everyNth, previewScans: 20_000, previewLots: 5_000, dueHoursMin: 1, dueHoursMax: 720 })
 
 // ---- a rule -------------------------------------------------------------------------------------------------------------
 
@@ -149,6 +161,35 @@ export interface RuleDraft {
   readonly appliesTo: readonly Chip[]
   readonly frequency: Frequency
   readonly frequencyValue?: number | null | undefined
+  /** B-W2b-213: within how many hours what the rule opens is due (null or left out: no due time). */
+  readonly dueHours?: number | null | undefined
+}
+
+// ---- due (B-W2b-213; InspectionTrigger.dueHours) ----------------------------------------------------------------------
+
+/** Within how many hours what a rule opens is due: a whole number from 1 to 720 (30 days), or none (path `dueHours`). */
+export function dueHoursProblem(value: number | null | undefined): Issue | null {
+  if (value === null || value === undefined) return null
+  if (!Number.isInteger(value) || value < TRIGGER_LIMITS.dueHoursMin || value > TRIGGER_LIMITS.dueHoursMax) {
+    return { path: 'dueHours', message: `Due within ${TRIGGER_LIMITS.dueHoursMin} to ${TRIGGER_LIMITS.dueHoursMax} hours (30 days), or no due time.` }
+  }
+  return null
+}
+
+/** By when a record a rule opened at `openedAt` is due: that time plus the rule's hours; null: the rule sets none. */
+export function dueAtOf(openedAt: Date, dueHours: number | null | undefined): Date | null {
+  if (dueHours === null || dueHours === undefined || dueHoursProblem(dueHours)) return null
+  return new Date(openedAt.getTime() + dueHours * 3_600_000)
+}
+
+/** "Due within 8 h" / "Da fare entro 8 h"; days when whole ("Due within 2 days"); null: no due time. */
+export function dueWords(dueHours: number | null | undefined): Words | null {
+  if (dueHours === null || dueHours === undefined) return null
+  if (dueHours % 24 === 0) {
+    const days = dueHours / 24
+    return w(`Da fare entro ${days} ${days === 1 ? 'giorno' : 'giorni'}`, `Due within ${days} ${days === 1 ? 'day' : 'days'}`)
+  }
+  return w(`Da fare entro ${dueHours} h`, `Due within ${dueHours} h`)
 }
 
 /** The frequency's number: a percent 1 to 100, an N from 1, or none (paths `frequencyValue`). */
@@ -162,19 +203,37 @@ export function frequencyValueProblems(frequency: Frequency, value: number | nul
 /** Every problem of a rule at once: the event can open something, the plan's stage fits it, chips, frequency. */
 export function ruleProblems(draft: RuleDraft): Issue[] {
   const problems: Issue[] = []
-  if (!(TRIGGER_EVENTS as readonly string[]).includes(draft.event)) return [{ path: 'event', message: 'Pick when the rule acts: goods received, operation finished or bundle scanned.' }]
+  if (!(TRIGGER_EVENTS as readonly string[]).includes(draft.event)) return [{ path: 'event', message: 'Pick when the rule acts: goods received, operation finished, bundle scanned or packing.' }]
   const rule = EVENT_RULES[draft.event]
   if (rule.held) return [{ path: 'event', message: rule.held.en }]
   if (draft.stage !== null && !rule.stages.includes(draft.stage)) {
-    problems.push({ path: 'planId', message: draft.event === 'GOODS_RECEIPT' ? 'Goods received open an incoming inspection: pick an incoming plan.' : 'An operation or a bundle opens an in-process check: pick a cutting, in-line or end-of-line plan.' })
+    problems.push({
+      path: 'planId',
+      message:
+        draft.event === 'GOODS_RECEIPT'
+          ? 'Goods received open an incoming inspection: pick an incoming plan.'
+          : draft.event === 'PACKING'
+            ? 'Packing opens a final inspection: pick a final plan.'
+            : 'An operation or a bundle opens an in-process check: pick a cutting, in-line or end-of-line plan.',
+    })
   }
   if (!(FREQUENCIES as readonly string[]).includes(draft.frequency) || !rule.frequencies.includes(draft.frequency)) {
-    problems.push({ path: 'frequency', message: draft.event === 'GOODS_RECEIPT' ? 'Goods received are inspected lot by lot: every lot.' : 'Pick how often: every lot, a share of the operations, the first piece or every Nth bundle.' })
+    problems.push({
+      path: 'frequency',
+      message:
+        draft.event === 'GOODS_RECEIPT'
+          ? 'Goods received are inspected lot by lot: every lot.'
+          : draft.event === 'PACKING'
+            ? 'Pick how often at packing: every lot (the first bundle of the work order), a share of the bundles or every Nth bundle.'
+            : 'Pick how often: every lot, a share of the operations, the first piece or every Nth bundle.',
+    })
   } else {
     if (draft.frequency === 'FIRST_PIECE' && draft.stage !== null && draft.stage !== 'IN_LINE') problems.push({ path: 'frequency', message: 'The first piece is an in-line check: pick an in-line plan, or another frequency.' })
     problems.push(...frequencyValueProblems(draft.frequency, draft.frequencyValue))
   }
   problems.push(...chipsProblems(draft.appliesTo))
+  const due = dueHoursProblem(draft.dueHours)
+  if (due) problems.push(due)
   draft.appliesTo.forEach((chip, index) => {
     if (rule.chipKinds.length > 0 && (CHIP_KIND_WORDS as Record<string, Words>)[chip.kind] && !rule.chipKinds.includes(chip.kind)) {
       problems.push({ path: `appliesTo/${index}/kind`, message: `${EVENT_WORDS[draft.event].en} does not know the ${CHIP_KIND_WORDS[chip.kind].en.toLowerCase()}: this chip would never fit.` })
@@ -347,7 +406,20 @@ export function occurrencesOf(scans: readonly ScanFact[], kinds: readonly string
 
 // ---- why a rule opened nothing (kept on the rule's audit trail) ----------------------------------------------------------
 
-export const SKIP_REASONS = ['ALREADY_OPEN', 'FIRST_PIECE_DONE', 'FIRST_PIECE_LATE', 'NO_APPROVED_VERSION', 'NO_SERIES', 'LOT_NOT_COUNTED', 'LOT_EMPTY'] as const
+export const SKIP_REASONS = [
+  'ALREADY_OPEN',
+  'FIRST_PIECE_DONE',
+  'FIRST_PIECE_LATE',
+  'NO_APPROVED_VERSION',
+  'NO_SERIES',
+  'LOT_NOT_COUNTED',
+  'LOT_EMPTY',
+  // B-W2b-213: a final inspection at packing.
+  'NOTHING_WAITING',
+  'NO_INSPECTION_SERIES',
+  'NO_PROFILE',
+  'WORK_ORDER_HELD',
+] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
 
 /** Why nothing was opened, in words (the subject's words come from the caller). */
@@ -373,6 +445,23 @@ export function skipWords(reason: SkipReason, facts: { readonly subject: string;
       )
     case 'LOT_EMPTY':
       return w(`${facts.subject} non ha quantità da ispezionare.`, `${facts.subject} has nothing to inspect.`)
+    case 'NOTHING_WAITING':
+      return w(
+        `${facts.subject}: nessun capo finito aspetta un'ispezione finale (tutti rilasciati o già in un'ispezione aperta).`,
+        `${facts.subject}: no finished garment waits for a final inspection (all released or in an open inspection already).`,
+      )
+    case 'NO_INSPECTION_SERIES':
+      return w(
+        `L'azienda non ha la serie dei numeri delle ispezioni finali: nessuna ispezione aperta per ${facts.subject}. Un amministratore la imposta in Numerazione.`,
+        `The company has no final inspection number series: no inspection opened for ${facts.subject}. An admin sets it up under numbering.`,
+      )
+    case 'NO_PROFILE':
+      return w(
+        `Nessun profilo AQL vale per ${facts.subject} (né il piano ${facts.plan ?? ''}, né lo stile, né il cliente, né un predefinito dell'azienda): nessuna ispezione aperta.`,
+        `No AQL profile applies to ${facts.subject} (not plan ${facts.plan ?? ''}, the style, the customer or a company default): no inspection opened.`,
+      )
+    case 'WORK_ORDER_HELD':
+      return w(`${facts.subject}: l'ordine di lavoro è fermo o non in produzione; nessuna ispezione aperta.`, `${facts.subject}: the work order is on hold or not in production; no inspection opened.`)
     default:
       return w(String(reason), String(reason))
   }

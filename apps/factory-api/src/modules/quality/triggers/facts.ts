@@ -17,7 +17,8 @@ import type { Db } from './store'
  *   a workshop receipt   STYLE and CATEGORY of the work order's style, SUPPLIER the workshop, OPERATION the operations it
  *                        did, CUSTOMER the work order's customers; its size: the pieces back, good and defective (PCS)
  *   a bundle             STYLE, CATEGORY, OPERATION (the work order operation's library operation), CUSTOMER; its place
- *                        among the bundles of its work order at the operation
+ *                        among the bundles of its work order at the operation; the kind of the operation's work centre
+ *                        (B-W2b-213: a PACKING rule follows the reports at a PACKING work centre only)
  */
 
 export type Subject = LotSubject | WorkshopSubject | BundleSubject
@@ -60,6 +61,8 @@ export interface BundleSubject extends SubjectBase {
   readonly bundleId: string
   readonly lineId: string | null
   readonly bundleQuantity: number
+  /** B-W2b-213: the kind of the operation's work centre (CUTTING … PACKING). */
+  readonly workCentreKind: string
   readonly occurrence: ScanOccurrence
   /** Other bundles with any scan at the operation now (a first piece held after them would stop work in hand). */
   readonly othersAtOperation: number
@@ -173,13 +176,13 @@ const factOf = (scan: ScanRow): ScanFact => ({ id: scan.id, workOrderId: scan.wo
 const NOT_WORK = new Set(['UNDO', 'CORRECTION'])
 
 interface BundleBits {
-  readonly operations: ReadonlyMap<string, { readonly code: string; readonly operationId: string | null }>
+  readonly operations: ReadonlyMap<string, { readonly code: string; readonly operationId: string | null; readonly workCentre: { readonly kind: string } }>
   readonly bundles: ReadonlyMap<string, { readonly code: string; readonly quantity: number }>
   readonly orders: ReadonlyMap<string, WorkOrderFacts>
 }
 
 async function bundleBits(db: Db, occurrences: readonly ScanOccurrence[]): Promise<BundleBits> {
-  const operations = new Map((await db.workOrderOperation.findMany({ where: { id: { in: [...new Set(occurrences.map((o) => o.workOrderOperationId))] } }, select: { id: true, code: true, operationId: true } })).map((row) => [row.id, row] as const))
+  const operations = new Map((await db.workOrderOperation.findMany({ where: { id: { in: [...new Set(occurrences.map((o) => o.workOrderOperationId))] } }, select: { id: true, code: true, operationId: true, workCentre: { select: { kind: true } } } })).map((row) => [row.id, row] as const))
   const bundles = new Map((await db.bundle.findMany({ where: { id: { in: [...new Set(occurrences.map((o) => o.bundleId))] } }, select: { id: true, code: true, quantity: true } })).map((row) => [row.id, row] as const))
   return { operations, bundles, orders: await workOrderFacts(db, occurrences.map((o) => o.workOrderId)) }
 }
@@ -200,6 +203,7 @@ function bundleSubjectOf(occurrence: ScanOccurrence, bits: BundleBits, others: n
     bundleId: occurrence.bundleId,
     lineId: work.lineId,
     bundleQuantity: bundle.quantity,
+    workCentreKind: operation.workCentre.kind,
     occurrence,
     othersAtOperation: others,
     styleId: work.styleId,

@@ -7,6 +7,7 @@ import { STAGE_WORDS, type Chip, type Frequency, type PlanStage } from '@nexus/f
 import { QUALITY_TRIGGERS_MANAGE, QUALITY_TRIGGERS_VIEW } from '@nexus/factory-domain/quality/triggers/permissions'
 import {
   becauseText,
+  dueWords,
   EVENT_RULES,
   EVENT_WORDS,
   FREQUENCY_FORM_WORDS,
@@ -40,6 +41,8 @@ export const TRIGGER_COLUMNS = {
   planId: true,
   frequency: true,
   frequencyValue: true,
+  // B-W2b-213: within how many hours what the rule opens is due (null: no due time).
+  dueHours: true,
   active: true,
   version: true,
   createdAt: true,
@@ -49,6 +52,15 @@ export const TRIGGER_COLUMNS = {
 export type TriggerRow = Prisma.InspectionTriggerGetPayload<{ select: typeof TRIGGER_COLUMNS }>
 
 export const TRIGGER_RECORD = 'InspectionTrigger'
+/**
+ * B-W2b-213: the records a rule opened (openedByTriggerId on the three records; a foreign key with Restrict): a rule that
+ * opened any is kept, switched off instead of deleted, so each record keeps the rule that opened it.
+ */
+export async function recordsOpenedBy(db: Pick<Db, 'inspection' | 'incomingInspection' | 'inProcessCheck'>, triggerId: string): Promise<number> {
+  const where = { openedByTriggerId: triggerId }
+  return (await db.inspection.count({ where })) + (await db.incomingInspection.count({ where })) + (await db.inProcessCheck.count({ where }))
+}
+
 /** The rule's own audit trail of what it did (read back as "opened" and "skipped"). */
 export const OPENED_ACTION = 'quality.inspectionOpenedByRule'
 export const SKIPPED_ACTION = 'quality.inspectionSkippedByRule'
@@ -218,6 +230,8 @@ export function ruleView(row: TriggerRow, position: number, plan: PlanFacts | un
     frequencyWords: both((l) => frequencyText(frequency, row.frequencyValue, l)),
     recordKind: kind,
     recordKindWords: kind ? { ...RECORD_KIND_WORDS[kind] } : null,
+    dueHours: row.dueHours,
+    dueWords: dueWords(row.dueHours),
     active: row.active,
     opened: { last30Days: done.opened, lastAt: done.openedAt ? toUtcIso(done.openedAt) : null },
     skipped: { last30Days: done.skipped, lastAt: done.skippedAt ? toUtcIso(done.skippedAt) : null, lastWords: done.skippedWords },

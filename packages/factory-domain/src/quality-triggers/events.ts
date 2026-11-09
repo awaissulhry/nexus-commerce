@@ -37,14 +37,15 @@ export const events = [
   defineEvent({
     type: 'inspection_trigger.inspection_opened',
     context: 'quality-triggers',
-    description: 'A rule opened an inspection by itself: an incoming inspection of a lot or of a workshop\'s receipt, or an in-process check of a bundle at an operation.',
+    description: 'A rule opened an inspection by itself: an incoming inspection of a lot or of a workshop\'s receipt, an in-process check of a bundle at an operation, or a final inspection at packing.',
     payload: z.strictObject({
       triggerId: z.uuid(),
       event: z.enum(TRIGGER_EVENTS),
-      recordType: z.enum(['IncomingInspection', 'InProcessCheck']),
+      // B-W2b-213: a PACKING rule opens a final inspection (Inspection) with no inspector yet.
+      recordType: z.enum(['IncomingInspection', 'InProcessCheck', 'Inspection']),
       recordId: z.uuid(),
       kind: z.enum(RECORD_KINDS),
-      /** The incoming inspection's number; an in-process check has none. */
+      /** The incoming or final inspection's number; an in-process check has none. */
       inspectionNumber: z.string().nullable(),
       planId: z.uuid(),
       planVersionId: z.uuid(),

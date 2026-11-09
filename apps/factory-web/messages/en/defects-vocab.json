@@ -19,8 +19,7 @@
     "acceptance_other": "Acceptance number {count} in every plan.",
     "defects_one": "{count} active defect of the library has this class.",
     "defects_other": "{count} active defects of the library have this class.",
-    "rule": "A critical defect of the library is always recorded critical, never milder, and is never accepted: no use as is, no regrade, no concession.",
-    "fixed": "The texts are the factory's fixed words for now: no place keeps a company's own yet."
+    "rule": "A critical defect of the library is always recorded critical, never milder, and is never accepted: no use as is, no regrade, no concession."
   },
   "words": {
     "missing": "No words yet",

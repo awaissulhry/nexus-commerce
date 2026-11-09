@@ -123,6 +123,8 @@ import { events as approvalsOut } from '../approvals-out/events'
 import { events as shares } from '../shares/events'
 // B-W2b-136 (QHS-173): clicking dies (a die registered, changed or retired).
 import { events as plantDies } from '../plant-dies/events'
+// B-W2b-208: the textile, leather and origin checks (a check switched on or off).
+import { events as textileRules } from '../textile-rules/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -133,6 +135,10 @@ import { events as productionCutissue } from '../production-cutissue/events'
 import { events as measureLink } from '../measure-link/events'
 // B-W2b-172: the supplier questionnaire (a version published, a link sent, an answer sent, an answer reviewed).
 import { events as supplierQuestionnaire } from '../supplier-questionnaire/events'
+// B-W2b-214: work instructions (an instruction changed, a version published, a version seen).
+import { events as productionInstructions } from '../production-instructions/events'
+// B-W2b-215: SMV versions and an operation's SMV taking an approved version.
+import { events as productMinutes } from '../product-minutes/events'
 // B-W2b-219: the cutting follow-ups' settings (a site's cutting rules, the leather area tolerance).
 import { events as productionCuttingRules } from '../production-cutting-rules/events'
 import type { EventDefinition } from './define'
@@ -335,6 +341,12 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...measureLink,
   // B-W2b-172
   ...supplierQuestionnaire,
+  // B-W2b-208
+  ...textileRules,
+  // B-W2b-214
+  ...productionInstructions,
+  // B-W2b-215
+  ...productMinutes,
   // B-W2b-219
   ...productionCuttingRules] as const satisfies readonly EventDefinition[]
 

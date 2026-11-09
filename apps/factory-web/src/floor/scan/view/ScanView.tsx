@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Boxes, CircleAlert, CircleSlash, House, Layers, Lock, MapPin, OctagonX, Package, ScanLine, ScanSearch, Scissors, Tag, WifiOff, Wrench } from 'lucide-react'
+import { Boxes, CircleAlert, CircleSlash, House, Layers, Lock, MapPin, OctagonX, Package, ScanLine, ScanSearch, Scissors, Tag, Truck, WifiOff, Wrench } from 'lucide-react'
 import { FloorActionBar, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorActions, type FloorTone } from '@nexus/ui/floor'
 import { formatDate, formatDateTime, formatNumber, formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
@@ -66,7 +66,7 @@ export const LABEL_ICON: Readonly<Record<LabelType, ReactNode>> = {
 }
 
 /** A card's icon: its label type's, or a machine's (B-W2a-73: a machine tag is a free code, no label type). */
-const CARD_ICON: Readonly<Record<CardType, ReactNode>> = { ...LABEL_ICON, machine: <Wrench />, cutTicket: <Scissors /> }
+const CARD_ICON: Readonly<Record<CardType, ReactNode>> = { ...LABEL_ICON, machine: <Wrench />, cutTicket: <Scissors />, trolley: <Truck /> }
 
 /** A status word from the API's value (`status.<group>.<VALUE>`), else the value as sent. */
 export function statusWord(t: Translate, group: string, value: string): string {
@@ -162,6 +162,13 @@ function ResultCard({ result, t, locale, timeZone }: { result: ScanResult; t: Tr
       // B-W2b-F16: a cut ticket's number scanned away from Fabric cutting (Home at another station, or here).
       return (
         <FloorState tone="info" icon={<Scissors />} title={t('scan.cutTicket.title')} text={t('scan.cutTicket.body')}>
+          <p className="fw-floor-card-code">{result.code}</p>
+        </FloorState>
+      )
+    case 'trolley':
+      // B-W2b-F17: a trolley's label scanned away from the sewing line (Home at another station, or here).
+      return (
+        <FloorState tone="info" icon={<Truck />} title={t('scan.trolley.title')} text={t('scan.trolley.body')}>
           <p className="fw-floor-card-code">{result.code}</p>
         </FloorState>
       )

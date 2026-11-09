@@ -13,6 +13,7 @@ import { isBadgeCode } from '../model'
  *                                                                                      tag holds the asset number)
  *   bundle, lot, batch, serial, carton                                                  named, "not on this tablet yet"
  *   cut ticket   (B-W2b-112's number: Fabric cutting opens it at the cutting table)      named, where it is used
+ *   trolley      (B-W2b-117's label "T-3": the line confirms receipt with it, B-W2b-F17)   named, where it is used
  *
  * A code that is no label code (an office number such as a work order's, a tag printed before label codes, a location
  * code, a machine's asset number) is looked up in that order by what it is: hide tag, work order number, location code,
@@ -50,9 +51,10 @@ export type ScanRead =
   | { readonly kind: 'badge'; readonly code: string }
   /**
    * Anything else: a tag, a number or a code as the office prints it. `cutTicket`: a cut ticket's number (B-W2b-112), which
-   * only Fabric cutting opens; every other screen takes it as the free code it is.
+   * only Fabric cutting opens; `trolley` (B-W2b-F17): a trolley's label (B-W2b-117), which the sewing line scans to confirm
+   * the trolley arrived. Every other screen takes either as the free code it is.
    */
-  | { readonly kind: 'free'; readonly code: string; readonly cutTicket?: true }
+  | { readonly kind: 'free'; readonly code: string; readonly cutTicket?: true; readonly trolley?: true }
 
 /**
  * A cut ticket's number (B-W2b-112: the CUT_TICKET series, whose number is the ticket's scan code): `CT-2026-00001` (the
@@ -66,11 +68,24 @@ const CUT_TICKET_NUMBER = /^CT[A-Z0-9]{0,4}-2\d{3}-\d{1,10}$/
 /** Is this code a cut ticket's number (any case, spaces around it dropped)? */
 export const isCutTicketNumber = (raw: string): boolean => CUT_TICKET_NUMBER.test(raw.trim().toUpperCase())
 
+/**
+ * B-W2b-F17: a trolley's label (B-W2b-117; design floor.fabriccut "Scan bundles into trolley T-3"; the seed's SEED-T-1): `T`,
+ * an optional hyphen and its number, with at most one word before it (a site's or a company's: `A1-T-12`). A label code
+ * never has this shape (four parts), nor a badge (26 symbols). A trolley labelled another way is not recognised here (it
+ * reads as a free code, as before); Fabric cutting's own trolley step reads every label the API takes.
+ */
+const TROLLEY_LABEL = /^(?:[A-Z0-9]{1,10}-)?T-?\d{1,4}$/
+
+/** Is this code a trolley's label (any case, spaces around it dropped)? */
+export const isTrolleyLabel = (raw: string): boolean => TROLLEY_LABEL.test(raw.trim().toUpperCase())
+
 /** What a scanned or typed code is, before anything is asked. */
 export function readScan(raw: string, scanTag: string | null): ScanRead {
   const code = raw.trim()
   // B-W2b-F16: a cut ticket's number shares the carton label's CT: read it first, or it reads as a misread carton.
   if (isCutTicketNumber(code)) return { kind: 'free', code: code.toUpperCase(), cutTicket: true }
+  // B-W2b-F17: a trolley's label is no label code either: named by its own shape.
+  if (isTrolleyLabel(code)) return { kind: 'free', code: code.toUpperCase(), trolley: true }
   const parsed = parseScanId(code, scanTag ? { tenantTag: scanTag } : {})
   if (parsed.ok) return { kind: 'label', type: TYPE_OF[parsed.type], code: parsed.text }
   if (parsed.problem === 'tenant') return { kind: 'otherFactory', code: code.toUpperCase() }
@@ -97,6 +112,8 @@ export type ScanPlan =
   | { readonly kind: 'noPermission'; readonly type: LabelType }
   /** A cut ticket's number: no lookup here; the card says where it is used (Fabric cutting, at the cutting table). */
   | { readonly kind: 'cutTicket' }
+  /** B-W2b-F17: a trolley's label: no lookup here; the card says where it is used (at the sewing line, and loading it). */
+  | { readonly kind: 'trolley' }
   | { readonly kind: 'unknown'; readonly reason: 'otherFactory' | 'typo' }
   | { readonly kind: 'badge' }
 
@@ -118,6 +135,7 @@ export function planScan(read: ScanRead, permissions: readonly string[]): ScanPl
     }
     case 'free': {
       if (read.cutTicket) return { kind: 'cutTicket' }
+      if (read.trolley) return { kind: 'trolley' }
       const all: Lookup[] = ['hide', 'workOrder', 'location', 'machine']
       return { kind: 'ask', lookups: all.filter(may), denied: all.filter((lookup) => !may(lookup)) }
     }
@@ -194,6 +212,8 @@ export type ScanResult =
   | { readonly kind: 'noPermission'; readonly type: LabelType; readonly code: string }
   /** A cut ticket scanned away from Fabric cutting: what it is and where it is used. */
   | { readonly kind: 'cutTicket'; readonly code: string }
+  /** B-W2b-F17: a trolley's label scanned away from the sewing line: what it is and where it is used. */
+  | { readonly kind: 'trolley'; readonly code: string }
   /** Nothing of this factory answers to it (`badge`: a badge that does not open this tablet; its code is not shown). */
   | { readonly kind: 'unknown'; readonly code: string; readonly reason: 'otherFactory' | 'typo' | 'notFound' | 'badge' }
   /** The server did not answer. */
@@ -209,8 +229,8 @@ export function resultCode(result: ScanResult): string {
   }
 }
 
-/** What a card is: a label type, a machine (its tag is a free code, no label type) or a cut ticket (an office number). */
-export type CardType = LabelType | 'machine' | 'cutTicket'
+/** What a card is: a label type, a machine (its tag is a free code, no label type), a cut ticket (an office number) or a trolley. */
+export type CardType = LabelType | 'machine' | 'cutTicket' | 'trolley'
 
 /** The type a result stands for (the icon and the word in the recent list); null when nothing was found. */
 export function resultType(result: ScanResult): CardType | null {
@@ -220,6 +240,7 @@ export function resultType(result: ScanResult): CardType | null {
     case 'location':
     case 'machine':
     case 'cutTicket':
+    case 'trolley':
       return result.kind
     case 'notOnFloor':
     case 'noPermission':
