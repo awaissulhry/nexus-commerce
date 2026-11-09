@@ -8,6 +8,9 @@ import { generatePlan, isEmptyPlan, isOffered, skuClashes, skuMachine, type Matr
 import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
 import { parseGtin, skuProblem } from '@nexus/factory-domain/product/styles/sku'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+// B-W2b-227: the edit rule of a barcode change and the shipped SKU's GTIN in words.
+import { requireEditRule } from '../lifecycle/edit-rule'
+import { shippedCells, shippedGtinWords } from '../gtin/store'
 import {
   assertMayWrite,
   bumpVersion,
@@ -192,6 +195,11 @@ export async function updateSku(caller: CommandCaller, styleId: string, skuId: s
     if (gtin !== undefined && gtin !== null && gtin !== current.gtin) {
       const holder = await tx.variant.findFirst({ where: { gtin, id: { not: skuId } }, select: { sku: true } })
       if (holder) throw new ConflictError(`GTIN ${gtin} is on SKU ${holder.sku} already.`)
+    }
+    // B-W2b-227: a barcode is the style's DETAILS (its edit rule), and a shipped SKU's GTIN stays — in words before the database.
+    if (gtin !== undefined && gtin !== current.gtin) await requireEditRule(tx, styleId, 'DETAILS')
+    if (gtin !== undefined && gtin !== current.gtin && current.gtin !== null && (await shippedCells(tx, styleId)).has(`${current.colourwayId}|${current.size}`)) {
+      throw new ConflictError(shippedGtinWords(current.sku, current.gtin))
     }
     const data = { ...(gtin === undefined ? {} : { gtin }), ...(move ? { status: move } : {}) }
     const shape = (row: { gtin: string | null; status: string }) => ({ ...(gtin === undefined ? {} : { gtin: row.gtin }), ...(move ? { status: row.status } : {}) })

@@ -100,7 +100,7 @@ export async function measurePage(app: FastifyInstance, request: FastifyRequest,
     notice: facts.notice ? { id: facts.notice.id, label: facts.notice.label, publishedAt: facts.notice.publishedAt ? toUtcIso(facts.notice.publishedAt) : null } : null,
     noticeRead: facts.notice && facts.noticeAt ? { noticeId: facts.notice.id, at: toUtcIso(facts.noticeAt) } : null,
     photos: facts.terms.photos,
-    points: facts.template.points.map((point) => zoned({ code: point.code, name: wordsOf(point.name, point.nameI18n), seq: point.seq, required: point.required, minCm: point.minCm, maxCm: point.maxCm, howTo: point.howTo })),
+    points: facts.template.points.map((point) => zoned({ code: point.code, name: wordsOf(point.name, point.nameI18n), seq: point.seq, required: point.required, minCm: point.minCm, maxCm: point.maxCm, howTo: point.howTo, zone: point.zone })),
     link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses), live: link.expiresAt.getTime() > now.getTime() },
     locale: language ?? localeOf(facts.party?.language),
   }

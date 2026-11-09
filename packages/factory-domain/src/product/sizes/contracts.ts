@@ -29,6 +29,8 @@ export const sizeBody = input({
   /** How it is shown when not by its code ("52 (L)"). */
   label: text(40).nullish(),
   bodyMeasures: bodyMeasures().nullish(),
+  /** B-W2b-224 (PRD-049): its fit on a scale of two dimensions, size and fit ("R", "L"); none on a scale of one. */
+  fitCode: z.string().trim().max(10).nullish(),
 })
 export type SizeBody = z.output<typeof sizeBody>
 
@@ -37,6 +39,8 @@ export const createScaleBody = input({
   companyId: id().nullish(),
   code: scaleCode(),
   name: text(120),
+  /** B-W2b-224 (PRD-049): 1 (size) or 2 (size and fit: every size names its fit). Fixed once the scale has sizes. */
+  dimensions: z.union([z.literal(1), z.literal(2)]).default(1),
   /** From small to large. */
   sizes: z.array(sizeBody).min(1).max(MAX_SCALE_SIZES),
 })
@@ -61,6 +65,8 @@ export const updateSizeBody = input({
   label: text(40).nullish(),
   bodyMeasures: bodyMeasures().nullish(),
   status: z.enum(MASTER_STATUSES).optional(),
+  /** B-W2b-224: its fit on a two-dimension scale, only while nothing names the size (as its code). */
+  fitCode: z.string().trim().max(10).nullable().optional(),
 })
 export type UpdateSizeBody = z.output<typeof updateSizeBody>
 
@@ -88,6 +94,8 @@ export const sizeView = output({
   /** Its place in the scale, from 1. */
   seq: z.number().int(),
   bodyMeasures: z.record(z.string(), bodyMeasureView).nullable(),
+  /** B-W2b-224: its fit on a two-dimension scale ("R", "L"); null on a scale of one. Always sent (optional for older readers). */
+  fitCode: z.string().nullable().optional(),
   status: z.enum(MASTER_STATUSES),
   version: z.number().int(),
   /** A style, SKU, BOM, certificate or order line names it: its code never changes. */
@@ -100,6 +108,8 @@ const summary = {
   companyId: id().nullable(),
   code: z.string(),
   name: z.string(),
+  /** B-W2b-224 (PRD-049): 1 (size) or 2 (size and fit). Always sent (optional for older readers). */
+  dimensions: z.number().int().optional(),
   /** The active size codes, from small to large. */
   codes: z.array(z.string()),
   /** The styles that use it (any status): while there are none, its codes and order may change. */

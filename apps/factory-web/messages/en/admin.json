@@ -1678,6 +1678,7 @@
     "product_styles_manage": "Create and edit styles",
     "product_styles_lifecycle": "Move a style through its lifecycle",
     "product_settings_manage": "Keep product types, edit rules and the consumption tolerance",
+    "product_gtins_manage": "Keep the GS1 GTIN ranges and give SKUs GTINs from them",
     "product_changes_view": "See change requests and change orders",
     "product_changes_request": "Raise a change request",
     "product_changes_manage": "Triage change requests and write, submit and release change orders",

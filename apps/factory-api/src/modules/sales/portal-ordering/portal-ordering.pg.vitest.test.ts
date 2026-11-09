@@ -172,6 +172,17 @@ describe('the catalogue (SAL-071)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(other.styles.map((style: Json) => style.code)).not.toContain('SEED-JKT-01')
     expect((await call(browsers.other, 'GET', `/portal/catalogue/${jkt01}`)).status).toBe(404)
   })
+
+  // B-W2b-227 (PRD-019, PRD-010): the style's names per language on the card and in the search; another customer finds the
+  // brand's own style by none of them.
+  it("shows the style's names per language and finds it by any of them, for its brand only", async () => {
+    await admin(`INSERT INTO "StyleText" (id, "tenantId", "styleId", language, name, "longDescription") VALUES ($1, $2, $3, 'en', 'Seed racing jacket', 'Made-up long words'), ($4, $2, $3, 'de', 'Saat-Rennjacke', NULL)`, [newId(), T, jkt01, newId()])
+    const card = (await ok(browsers.buyer, 'GET', '/portal/catalogue')).styles.find((style: Json) => style.code === 'SEED-JKT-01')
+    expect(card.nameI18n.en).toBe('Seed racing jacket')
+    expect((await ok(browsers.buyer, 'GET', '/portal/catalogue?q=rennjacke')).styles.map((style: Json) => style.code)).toEqual(['SEED-JKT-01'])
+    expect((await ok(browsers.buyer, 'GET', `/portal/catalogue/${jkt01}`)).style.description).toBe('Made-up long words')
+    expect((await ok(browsers.other, 'GET', '/portal/catalogue?q=rennjacke')).styles).toEqual([])
+  })
 })
 
 let requestA: Json

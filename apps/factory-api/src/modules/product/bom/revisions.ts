@@ -21,6 +21,8 @@ import { effectivityAtReleaseInCommand, effectivityAtWithdrawalInCommand } from 
 // B-W2b-223: B-W2b-211's columns travel with the copy; the release reads the BOM check's structure blockers.
 import { assertStructureReleasable, structureBlockersInCommand } from '../bom-structure/check'
 import { copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
+// B-W2b-224: the measurement spec and the protector placement travel with a copied revision.
+import { copyMeasuresInCommand, emptyMeasuresCopy } from '../measures/copy'
 // B-W2b-226: a change order starts its draft revision with the copy and is released with the draft.
 import { changeOrderAtReleaseInCommand, linkDraftInCommand, releaseChangeOrderInCommand, type DraftFor } from '../changes/hooks'
 import {
@@ -169,6 +171,10 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     if (!emptyCopy(structure)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, structure } })
     // B-W2b-95: the pattern pieces travel with the BOM, AFTER it (a piece names its line); the range is the style's now.
     const pieces = await copyPiecesInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines), (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })).sizes)
+    // B-W2b-224: the spec (a DRAFT again, cells of the range now) and the protector placement, after the BOM.
+    const range = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true, sizeScaleId: true } })
+    const measures = await copyMeasuresInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, range.sizes, range.sizeScaleId)
+    if (!emptyMeasuresCopy(measures)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, measures } })
     const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
     tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, ...copied } })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id, revision, status: 'DRAFT', copiedFrom: source.revision } } })

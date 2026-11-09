@@ -245,9 +245,35 @@ export interface MeasureContext {
   readonly sizes: readonly string[]
   /** A made-to-measure unit: its base size and the profile's points; null: a size-grid work order. */
   readonly mtm: { readonly size: string; readonly points: readonly MtmPoint[] } | null
+  /**
+   * B-W2b-224 (SZ1:01): the approved measurement spec of the work order's revision, per point code and size (a size-grid
+   * work order); null or absent: none, the size chart is typed.
+   */
+  readonly spec?: GradedSpec | null
 }
 
-export type SpecSource = 'PLAN' | 'PROFILE' | 'TYPED'
+/** One cell of a revision's graded spec as the size check reads it: its band as one nominal ± one tolerance (3 decimals). */
+export interface GradedPoint {
+  readonly code: string
+  readonly name: string
+  readonly size: string
+  readonly nominal: string
+  readonly tolerance: string
+  readonly uom: Uom
+  /** "58 −1/+1.5 cm" as the spec writes it. */
+  readonly words: string
+}
+
+export interface GradedSpec {
+  readonly revision: number
+  readonly points: readonly GradedPoint[]
+}
+
+/** The spec's cell of a point code (whatever its letter case) and size, or undefined. */
+export const gradedPointOf = (spec: GradedSpec | null | undefined, pointCode: string, size: string): GradedPoint | undefined =>
+  spec?.points.find((point) => point.code.toUpperCase() === pointCode.toUpperCase() && point.size === size)
+
+export type SpecSource = 'PLAN' | 'PROFILE' | 'SPEC' | 'TYPED'
 
 export interface MeasuredValue {
   readonly measured: string
@@ -321,6 +347,13 @@ export function resolveMeasurements(rows: readonly MeasurementInput[], context: 
         }
         if (!decimalOk(row.tolerance)) problems.push(issue(`${at}/tolerance`, `Type the ± tolerance for ${point.name} (the profile gives the nominal, ${decimalWords(point.nominal)} ${unitWords(point.uom)}).`))
         else spec = { nominal: fixed3(point.nominal), tolerance: fixed3(row.tolerance), uom: point.uom, source: 'PROFILE' }
+      } else if (gradedPointOf(context.spec, pointCode, size)) {
+        // B-W2b-224 (SZ1:01): the graded spec of the work order's revision gives nominal ± tolerance of the point and size.
+        const graded = gradedPointOf(context.spec, pointCode, size)!
+        const typed = [row.nominal, row.tolerance].some((value) => typeof value === 'string' && value.trim() !== '')
+        const differs = (row.nominal && decimalOk(row.nominal) && fixed3(row.nominal) !== graded.nominal) || (row.tolerance && decimalOk(row.tolerance) && fixed3(row.tolerance) !== graded.tolerance) || (row.uom && row.uom !== graded.uom)
+        if (typed && differs) problems.push(issue(`${at}/nominal`, `The measurement spec of revision ${context.spec!.revision} sets ${graded.code} of size ${size} at ${graded.words}: nothing else is typed.`))
+        spec = { nominal: graded.nominal, tolerance: graded.tolerance, uom: graded.uom, source: 'SPEC' }
       } else {
         if (!decimalOk(row.nominal)) problems.push(issue(`${at}/nominal`, `Type the nominal of ${pointCode || 'the point'} from the size chart (no graded spec is kept for it).`))
         if (!decimalOk(row.tolerance)) problems.push(issue(`${at}/tolerance`, 'Type the ± tolerance from the size chart.'))

@@ -32,6 +32,8 @@ import { INSTRUCTIONS_ADDS } from '../../production/instructions/permissions'
 import { SMV_ADDS } from '../../product/minutes/permissions'
 // B-W2b-221: the style lifecycle and the product settings (the production manager).
 import { PRODUCT_LIFECYCLE_ADDS } from '../../product/lifecycle/permissions'
+// B-W2b-227: GTINs from the company's own GS1 range (the production manager).
+import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 // B-W2b-226: change requests and change orders (the production manager runs them; quality approves; sales, planner, buyer, floor supervisor raise).
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 
@@ -816,6 +818,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SMV_ADDS[key] ?? []) : []),
   // B-W2b-221
   ...(audience === 'office' ? (PRODUCT_LIFECYCLE_ADDS[key] ?? []) : []),
+  // B-W2b-227
+  ...(audience === 'office' ? (PRODUCT_GTINS_ADDS[key] ?? []) : []),
   // B-W2b-226
   ...(audience === 'office' ? (PRODUCT_CHANGES_ADDS[key] ?? []) : [])]
 /**

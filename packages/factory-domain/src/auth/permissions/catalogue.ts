@@ -133,6 +133,8 @@ import { TEXTILE_RULES_DEFINITIONS, TEXTILE_RULES_PERMISSIONS } from '../../comp
 import { PRODUCTION_INSTRUCTIONS_DEFINITIONS, PRODUCTION_INSTRUCTIONS_PERMISSIONS } from '../../production/instructions/permissions'
 // B-W2b-221: the style lifecycle and the product settings (product.styles.lifecycle, product.settings.manage).
 import { PRODUCT_LIFECYCLE_DEFINITIONS, PRODUCT_LIFECYCLE_PERMISSIONS } from '../../product/lifecycle/permissions'
+// B-W2b-227: GTINs from the company's own GS1 range (product.gtins.manage).
+import { PRODUCT_GTINS_DEFINITIONS, PRODUCT_GTINS_PERMISSIONS } from '../../product/gtin/permissions'
 // B-W2b-226: change requests and change orders (product.changes.view | request | manage | approve).
 import { PRODUCT_CHANGES_DEFINITIONS, PRODUCT_CHANGES_PERMISSIONS } from '../../product/changes/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -780,6 +782,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_SMV_DEFINITIONS,
   // B-W2b-221: the style lifecycle and the product settings (area `product`, declared above).
   PRODUCT_LIFECYCLE_DEFINITIONS,
+  // B-W2b-227: GTINs from the company's own GS1 range (area `product`, declared above).
+  PRODUCT_GTINS_DEFINITIONS,
   // B-W2b-226: change requests and change orders (area `product`, declared above).
   PRODUCT_CHANGES_DEFINITIONS,
 ])
@@ -1032,6 +1036,8 @@ for (const name of PRODUCTION_INSTRUCTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of PRODUCT_SMV_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-221: the style lifecycle and the product settings.
 for (const name of PRODUCT_LIFECYCLE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-227: GTINs from the company's own GS1 range.
+for (const name of PRODUCT_GTINS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-226: change requests and change orders.
 for (const name of PRODUCT_CHANGES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
