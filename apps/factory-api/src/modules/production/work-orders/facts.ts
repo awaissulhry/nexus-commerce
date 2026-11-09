@@ -12,7 +12,6 @@ import {
   materialLines,
   releaseChecklist,
   revisionCheck,
-  workCentreCheck,
   type CellGate,
   type DepositFacts,
   type DepositStatus,
@@ -33,6 +32,9 @@ import { gateRequestFor } from '../../compliance/certificates/gate'
 import { lotFactsOf, readLots, readStock } from '../../planning/store'
 import { readLines, readMaterials, type LineRecord, type MaterialFacts } from '../../product/bom/store'
 import { readSteps, type StepRecord } from '../../product/routing/read'
+// B-W2b-225 (PRD-128): a step only for some cells is copied when a cell needs it.
+import type { StepVariants } from '@nexus/factory-domain/product/routing-depth/rules'
+import { readStepVariants, stepsForWorkOrder, workCentresCheck } from './routing-copy'
 import {
   cellLabel,
   dayOf,
@@ -99,6 +101,8 @@ export interface SpecParts {
   readonly materials: Map<string, MaterialFacts>
   readonly itemColours: Map<string, { id: string; itemId: string; code: string; name: string }>
   readonly centres: WorkCentreRow[]
+  /** B-W2b-225: what each step is for, by step id (none read: every step for every cell). */
+  readonly variants?: ReadonlyMap<string, StepVariants>
 }
 
 export async function readSpecParts(db: Reader, revisionId: string | null, siteId: string, extraItemIds: readonly string[] = []): Promise<SpecParts> {
@@ -106,7 +110,8 @@ export async function readSpecParts(db: Reader, revisionId: string | null, siteI
   const lines = revisionId ? await readLines(db, revisionId) : []
   const { materials, colours } = await readMaterials(db, [...lines.map((line) => line.itemId), ...extraItemIds])
   const centres = await db.workCentre.findMany({ where: { siteId }, select: { id: true, code: true, name: true, kind: true, status: true }, orderBy: { code: 'asc' } })
-  return { steps, lines, materials, itemColours: colours, centres }
+  const variants = await readStepVariants(db, revisionId)
+  return { steps, lines, materials, itemColours: colours, centres, variants }
 }
 
 export const specCellsOf = (cells: readonly CellRow[]): SpecCell[] =>
@@ -121,7 +126,7 @@ export interface SpecPlan {
 }
 
 export function planSpec(parts: SpecParts, cells: readonly CellRow[]): SpecPlan {
-  const { operations, missing } = planOperations(parts.steps, parts.centres)
+  const { operations, missing } = planOperations(stepsForWorkOrder(parts.steps, parts.variants, cells).kept, parts.centres)
   const { materials, gaps } = planMaterials(
     parts.lines,
     specCellsOf(cells),
@@ -352,7 +357,7 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
     revisionCheck(style.id, revision, current),
     labelCheck(revision, revision?.labelTemplateId ? label : null),
     certificateCheck(facts.gates),
-    workCentreCheck(site.code, parts.steps.length, spec.missing),
+    workCentresCheck(site.code, parts.steps, parts.variants, cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size, label: cellLabel(cell) })), spec.missing),
     bomCheck(revision, spec.gaps),
     cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
     depositCheck(facts.deposits),
