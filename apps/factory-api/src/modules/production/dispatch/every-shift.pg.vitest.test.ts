@@ -137,6 +137,9 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Line" (id, "tenantId", "companyId", "siteId", code, name, status, "updatedAt") VALUES ($1, $2, $3, $4, 'L2', 'Made-up line two', 'ACTIVE', now())`, [lineL2, T, companyA, siteA1])
   await admin(`INSERT INTO "Station" (id, "tenantId", "companyId", "siteId", "lineId", "workCentreId", code, name, status, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, 'SEW-03', 'Made-up station', 'ACTIVE', now())`, [sew3, T, companyA, siteA1, lineL2, centre])
   const postBed = (await admin<{ id: string }>(`SELECT id FROM "MachineClass" WHERE "tenantId" = $1 AND code = 'POST_BED'`, [T]))[0]!.id
+  // The post-bed asks an authorisation, as the office says (B-W2b-139: MachineClass.authorisationRequired; the seed's
+  // authorisation of E1 on it no longer keeps the class at A1).
+  await admin(`UPDATE "MachineClass" SET "authorisationRequired" = true, version = version + 1, "updatedAt" = now() WHERE id = $1`, [postBed])
   await admin(`INSERT INTO "Machine" (id, "tenantId", "companyId", "siteId", "stationId", "classId", "assetNumber", status, "statusSince", "updatedAt") SELECT $1, "tenantId", "companyId", "siteId", $2, $3, 'MADE-UP-PB-01', 'RUNNING', now(), now() FROM "Station" WHERE id = $2`, [newId(), sew3, postBed])
   const operations = await admin<{ id: string; code: string; workOrderId: string }>(`SELECT o.id, o.code, o."workOrderId" FROM "WorkOrderOperation" o JOIN "WorkOrder" w ON w.id = o."workOrderId" WHERE o."tenantId" = $1 AND w.number = 'SEED-WO-0001' ORDER BY o.seq`, [T])
   sewing = operations.find((row) => row.code === 'SEED-SEW-ASM')!.id
@@ -226,7 +229,7 @@ describe('assigning (MES-023: the qualification check, Owner rule W1)', () => {
     expect(overridden).toBe(true)
     expect((await rowsOfDay()).find((entry) => entry.id === assignment.id)).toMatchObject({ overrideReason: 'Covering for the morning', overrideById: (SESSIONS.supervisor as { actorId: string }).actorId })
     expect((await audits('production.assignOperator')).at(-1)).toMatchObject({ reason: 'Covering for the morning' })
-    // A post-bed machine at SEW-03: the site keeps that class under authorisation, and the lead holds none.
+    // A post-bed machine at SEW-03: that class asks an authorisation, and the lead holds none.
     const held = await no('supervisor', 'POST', '/production/dispatch/assignments', { date: DAY, workerId: lead, stationId: sew3, overrideReason: 'Covering for the morning' }, 409)
     expect(paths(held)).toContain('refusal/NOT_AUTHORISED')
     expect((await assign({ workerId: operator, stationId: sew3 })).overridden).toBe(false)
