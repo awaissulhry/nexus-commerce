@@ -34,7 +34,8 @@ describe('the partner role templates (SAL-060, SCM-092, PLT-021)', () => {
     }
     expect(partnerTemplateOf('customer-admin')?.permissions).toContain('portal.colleagues.manage')
     expect(partnerTemplateOf('customer-buyer')?.permissions).not.toContain('portal.colleagues.manage')
-    expect(partnerTemplateOf('guest-accountant')?.permissions).toEqual(['files.read', 'portal.home.view', 'portal.search', 'threads.read'])
+    // B-W2b-201: + portal.accounting.view (the accountant's room).
+    expect(partnerTemplateOf('guest-accountant')?.permissions).toEqual(['files.read', 'portal.accounting.view', 'portal.home.view', 'portal.search', 'threads.read'])
     expect(partnerTemplateOf('partner-approve')?.permissions).toEqual(['portal.approve'])
   })
 
@@ -58,7 +59,8 @@ describe('the partner role templates (SAL-060, SCM-092, PLT-021)', () => {
     expect(systemTemplateOf('customer-buyer')?.audience).toBe('partner')
     expect(templateOf('customer-buyer')).toBeUndefined()
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.partner === true)).toBe(false)
-    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.purchaseOrders.view', 'portal.customerDocuments.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.catalogue.view', 'portal.orderRequests.manage', 'portal.addresses.view', 'portal.addresses.manage', 'portal.salesOrders.ask', 'portal.search', 'portal.payments.view', 'portal.payments.pay', 'portal.jobs.view', 'portal.shipNotices.view', 'portal.supplierDocuments.view', 'portal.supplierProfile.view', 'portal.supplierProfile.change', 'portal.returns.view', 'portal.returns.request', 'portal.complaints.view', 'portal.approvals.view'])
+    // B-W2b-201: + portal.accounting.view (last).
+    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.purchaseOrders.view', 'portal.customerDocuments.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.catalogue.view', 'portal.orderRequests.manage', 'portal.addresses.view', 'portal.addresses.manage', 'portal.salesOrders.ask', 'portal.search', 'portal.payments.view', 'portal.payments.pay', 'portal.jobs.view', 'portal.shipNotices.view', 'portal.supplierDocuments.view', 'portal.supplierProfile.view', 'portal.supplierProfile.change', 'portal.returns.view', 'portal.returns.request', 'portal.complaints.view', 'portal.approvals.view', 'portal.accounting.view'])
     expect(ROLE_TEMPLATES.some((template) => template.permissions.some((name) => name.startsWith('portal.')))).toBe(false)
     for (const key of ['admin', 'sales', 'buyer', 'owner']) expect(templateOf(key)?.permissions).toEqual(expect.arrayContaining(['partners.view', 'partners.invite', 'partners.manage', 'partners.preview']))
     expect(templateOf('read_only')?.permissions).toContain('partners.view')
@@ -111,7 +113,8 @@ describe('kinds, choices and limits (PLT-006, PLT-021, PLT-022)', () => {
   it('let an office preview read what the party\'s people could read, never a write', () => {
     // B-W2b-185: the customer's open items too (a preview holds no grain: no amount).
     expect(previewPermissions(['CUSTOMER'])).toEqual(['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.search', 'threads.read'])
-    expect(previewPermissions(['GUEST'])).toEqual(['files.read', 'portal.home.view', 'portal.search', 'threads.read'])
+    // B-W2b-201: an office preview of the accountant's firm reads the room (it never downloads: the API refuses a preview's).
+    expect(previewPermissions(['GUEST'])).toEqual(['files.read', 'portal.accounting.view', 'portal.home.view', 'portal.search', 'threads.read'])
     expect(previewPermissions([])).toEqual([])
   })
 })

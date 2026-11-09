@@ -292,6 +292,7 @@
       "portal_search": "Cercare i tuoi documenti con i tuoi riferimenti e i nostri",
       "portal_payments_view": "Vedere cosa deve pagare la tua organizzazione",
       "portal_payments_pay": "Pagare online fatture e acconti aperti",
+      "portal_accounting_view": "Vedere i periodi consegnati dall'amministrazione: esportazioni, fatture elettroniche e registri (solo file)",
       "portal_jobs_view": "Vedere le nostre lavorazioni per il tuo laboratorio",
       "portal_shipNotices_view": "Vedere e annunciare le tue consegne",
       "portal_supplierDocuments_view": "Vedere i documenti che chiediamo e inviarli",

@@ -292,6 +292,7 @@
       "portal_search": "Search your records by your references and ours",
       "portal_payments_view": "See what your organisation has to pay",
       "portal_payments_pay": "Pay open invoices and deposits online",
+      "portal_accounting_view": "See the periods finance handed over: exports, e-invoices and registers (files only)",
       "portal_jobs_view": "See our jobs for your workshop",
       "portal_shipNotices_view": "See and announce your deliveries",
       "portal_supplierDocuments_view": "See the documents we ask for and send them",

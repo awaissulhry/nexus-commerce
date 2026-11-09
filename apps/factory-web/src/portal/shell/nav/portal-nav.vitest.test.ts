@@ -34,7 +34,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('never shows a door to a page not built: today only Home, which the frame draws', () => {
-    expect(ids('GUEST', false).map(([id]) => id)).toEqual(['home'])
+    // B-W2b-201: the accountant's Accounting.
+    expect(ids('GUEST', false).map(([id]) => id)).toEqual(['home', 'accounting'])
     // B-W2b-181: a workshop's Jobs (the area left with one page takes its name and address).
     expect(ids('SUBCONTRACTOR', false)).toEqual([
       ['home', 'nav.home', '/'],

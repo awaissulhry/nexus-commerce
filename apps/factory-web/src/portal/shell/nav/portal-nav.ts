@@ -24,7 +24,8 @@ export type PortalKind = (typeof PORTAL_KINDS)[number]
 export const isPortalKind = (value: unknown): value is PortalKind => typeof value === 'string' && (PORTAL_KINDS as readonly string[]).includes(value)
 
 /** Permissions a page names before the step that builds it declares them: nobody holds them, so the page stays hidden. */
-export const PORTAL_PENDING_PERMISSIONS: ReadonlySet<string> = new Set(['portal.quotes.view', 'portal.accounting.view', 'portal.auditRoom.view'])
+// B-W2b-201 declared portal.accounting.view.
+export const PORTAL_PENDING_PERMISSIONS: ReadonlySet<string> = new Set(['portal.quotes.view', 'portal.auditRoom.view'])
 
 /** One page of the portal. */
 export interface PortalPageDef {
@@ -129,7 +130,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
   // B-W2b-193: a supplier's and a workshop's Documents (SCR-190) and Profile (SCR-191).
   { id: 'supplier-documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.supplierDocuments.view', kinds: SUPPLIERS, badge: 'documents', phone: 'tab', key: 'd', built: true },
   { id: 'profile', label: 'nav.profile', href: '/profile', icon: IdCard, permission: 'portal.supplierProfile.view', kinds: SUPPLIERS, badge: 'account', phone: 'more', built: true },
-  { id: 'accounting', label: 'nav.accounting', href: '/accounting', icon: Calculator, permission: 'portal.accounting.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', key: 'd', built: false },
+  // B-W2b-201: the accountant's room (SCR-268).
+  { id: 'accounting', label: 'nav.accounting', href: '/accounting', icon: Calculator, permission: 'portal.accounting.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', key: 'd', built: true },
   { id: 'audit-room', label: 'nav.auditRoom', href: '/audit-room', icon: Archive, permission: 'portal.auditRoom.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', built: false },
 ]
 
