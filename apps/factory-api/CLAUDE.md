@@ -460,6 +460,24 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   change the website (COMPANY change; Party.website, also in the parties contract). `parties.ts` moveParty calls
   `assertRequiredDocuments` for a move to ACTIVE. PG tests: `portal-profile.pg.vitest.test.ts`.
 
+## Supplier questionnaire (`src/modules/purchasing/questionnaire/`, B-W2b-172; SCM-023; Forced Labour Regulation (EU) 2024/3015)
+- Versions (factory-domain `purchasing/questionnaire`: questions as data, `STARTER_QUESTIONS`, `questionProblems`): `GET|POST
+  /purchasing/questionnaires` (the screen's company; `from` STARTER | LATEST or the questions), `PATCH …/:id`, `POST …/:id/publish`
+  (purchasing.questionnaire.view / .manage); one draft at a time; a published version is fixed (the DB holds it).
+- The link: `POST /purchasing/suppliers/:partyId/questionnaire-link` (.send; SUPPLIER_ONBOARD × Party, the company's newest
+  published version must exist; earlier open links of the supplier withdrawn in the same command; mailed, template
+  `purchasing.questionnaire_link`, or the URL once). Renewer registered for SUPPLIER_ONBOARD × Party.
+- Link session: `GET /link/supplier-questionnaire` (the version read in the system scope), `POST …/vat-check` (shape; EU outside
+  Italy via the VIES runtime, nothing kept), `POST …/documents` (+ `/:fileId/complete`; `assertOutsideUploadsOpen`; a CERTIFICATE
+  file of the Party, OFFICE+LINK, category QUESTIONNAIRE), `GET …/code-of-conduct` (the SIGN question's document as a PDF),
+  `POST /link/supplier-questionnaire` (checked whole with `answerProblems`, then ONE link command: useLink submit + the answer
+  INSERT with `linkId`; then the PDF put; then ONE system command: the PDF on the Party's files (audit
+  `purchasing.questionnaire.answerPdf` names it), the draft dropped, the review Task (id `reviewTaskId(responseId)`)).
+- Office: `GET /purchasing/suppliers/:partyId/questionnaire` (.view), `POST /purchasing/questionnaire-answers/:id/review`
+  (.review; once: ACCEPTED tags each document with its question's category + expiry and shares it PARTNER; QUESTIONS writes an
+  OUTBOUND message on the Party thread; the task done). Events `supplier_questionnaire.*` (factory-domain
+  `supplier-questionnaire/events.ts`). PG tests: `questionnaire/questionnaire.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

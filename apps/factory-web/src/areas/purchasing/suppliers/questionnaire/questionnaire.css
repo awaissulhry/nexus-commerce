@@ -1,0 +1,147 @@
+/*
+ * The supplier record's Questionnaire tab (B-W2b-172) LAYOUT: it fills the record's main area (no max-width); the answers
+ * and the links side by side on a wide screen, one under the other below. Controls are the design system's; semantic
+ * tokens only.
+ */
+.fw-qn-stack,
+.fw-qn-card,
+.fw-qn-head,
+.fw-qn-group,
+.fw-qn-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qn-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-qn-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-qn-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-qn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-qn-actions,
+.fw-qn-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-qn-copy > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.fw-qn-h2,
+.fw-qn-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-qn-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-qn-h3 {
+  font-size: var(--nds-font-size-sm);
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-qn-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-qn-strong {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.fw-qn-error {
+  margin: 0;
+  color: var(--nds-danger-text, var(--nds-text-strong));
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qn-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-qn-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-qn-link:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.fw-qn-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--nds-space-8);
+}
+
+.fw-qn-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-qn-choices,
+.fw-qn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-qn-section {
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
