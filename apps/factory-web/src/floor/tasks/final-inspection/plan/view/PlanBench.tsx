@@ -8,6 +8,7 @@ import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
 import { LimitMeter } from '@nexus/ui/components/LimitMeter/index'
 import { PhotoCapture, type CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { PHOTO_KIT_NAMESPACE, usePhotoWords } from '../../../../../lib/ds-words/photo-capture'
+import { verdictLine } from '../../count'
 import { useReasonWords } from '../../../../../lib/ds-words/reason-grid'
 import { useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { formatNumber, formatTime } from '../../../../../lib/i18n/format'
@@ -768,10 +769,15 @@ export function BenchSummary({ sheet }: { sheet: Sheet }) {
   const line = identityLine(sheet.identity)
   const answered = sheet.checks.filter((check) => check.takesResult && !check.onChart && check.results.length > 0).length
   const asked = sheet.checks.filter((check) => check.takesResult && !check.onChart).length
+  const verdict = verdictLine(sheet.counter)
   return (
     <ul className="fw-final-summary">
       <li>{t('head.plan', { code: sheet.plan.code, number: sheet.plan.number, name: sheet.plan.name })}</li>
       <li>{t('aql.of', { inspected: sheet.counter.inspected, sample: sheet.counter.sampleSize })}</li>
+      {/* B-W2b-213: the counter's verdict before the decision, in words (the count is the inspection's own column). */}
+      <li>
+        <strong>{t(verdict.key, { ...verdict.params, ...(verdict.key === 'verdict.reject' ? { klass: t(`class.${verdict.params.klass}`) } : {}) })}</strong>
+      </li>
       {asked > 0 ? <li>{t('sign.checks', { answered, asked })}</li> : null}
       <li>{sheet.counter.classes.map((entry) => t('sign.class', { klass: t(`class.${entry.defectClass}`), found: entry.found, accept: entry.accept })).join(' · ')}</li>
       {sheet.chart.points.length > 0 ? <li>{t('measure.summary', { out: sheet.chart.outOfTolerance, count: sheet.chart.values })}</li> : null}

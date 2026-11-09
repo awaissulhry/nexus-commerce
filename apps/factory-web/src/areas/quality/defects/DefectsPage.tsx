@@ -9,6 +9,7 @@ import { createScopedTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { useLocale } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
+import { useSeverityWords } from './severity/useSeverityWords'
 import { csvLine, downloadText, liveMatches, useLive } from '../_shared/hooks'
 import {
   addStandardDispositions,
@@ -135,6 +136,8 @@ export function DefectsPage() {
   const [causes, setCauses] = useState<ReadOf<Causes>>(reading())
   const [grades, setGrades] = useState<ReadOf<Grades>>(reading())
   const [coverage, setCoverage] = useState<Coverage | null>(null)
+  // B-W2b-213: the severity words editor (the answer of a save is the tab's new read).
+  const severityWords = useSeverityWords(api, severity.value, (value) => setSeverity(ready(value)))
 
   const writeAddress = useCallback(
     (change: Partial<Address>) => {
@@ -627,7 +630,7 @@ export function DefectsPage() {
     dialog,
     picture,
     thumbs,
-    vocab: { severity, causes, grades, coverage },
+    vocab: { severity, severityEdit: severityWords.edit, causes, grades, coverage },
   }
 
   return (
@@ -689,6 +692,7 @@ export function DefectsPage() {
         onDeleteCause: (id) => setDialog({ kind: 'delete-cause', id }),
         onConfirmDeleteCause: () => void confirmDeleteCause(),
         onRetryVocab: () => void loadVocab(),
+        severity: severityWords.actions,
       }}
     />
   )

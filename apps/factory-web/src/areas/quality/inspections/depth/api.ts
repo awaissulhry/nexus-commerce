@@ -467,6 +467,11 @@ const inlineRowFields = {
   dhu: z.string().nullable(),
   defect: z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string(), critical: z.boolean() }).nullable(),
   hasPlan: z.boolean(),
+  // B-W2b-213: the AQL sample frozen at opening and the units counted, by when it is due, a rule's.
+  sampleSize: z.number().nullable().optional().default(null),
+  inspected: z.number().nullable().optional().default(null),
+  dueAt: z.string().nullable().optional().default(null),
+  openedByRule: z.boolean().optional().default(false),
   decidedAt: z.string().nullable(),
   createdAt: z.string(),
   version: z.number(),

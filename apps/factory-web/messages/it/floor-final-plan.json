@@ -287,5 +287,11 @@
       "message": "Questo codice porta a più di un collaudo.",
       "fix": "Scegli quello che stai controllando."
     }
+  },
+  "verdict": {
+    "accept": "Esito prima della decisione: accettato ({inspected} di {sample} controllati, nessuna classe al numero di rifiuto).",
+    "reject": "Esito prima della decisione: rifiutato ({klass} {found}, si rifiuta a {reject}; {inspected} di {sample} controllati).",
+    "rejectCheck": "Esito prima della decisione: rifiutato (un controllo critico è fallito; {inspected} di {sample} controllati).",
+    "open": "Esito prima della decisione: in corso ({inspected} di {sample} controllati, ne mancano {remaining})."
   }
 }
