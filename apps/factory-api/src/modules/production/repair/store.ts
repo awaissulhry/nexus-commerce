@@ -98,6 +98,8 @@ export const DOWNGRADE_COLUMNS = {
   note: true,
   secondQualityItemId: true,
   variantId: true,
+  // B-W2b-219: the second-quality move (B-W2b-204's column; null on rows made before it: found by its key).
+  moveId: true,
   voidedAt: true,
   voidedById: true,
   voidReason: true,

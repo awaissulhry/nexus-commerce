@@ -75,6 +75,8 @@ export const CUT_REFUSALS = [
   'LEAD_IS_CUTTER',
   'NOT_A_LEAD',
   'LEAD_NOTE_MISSING',
+  // B-W2b-219: the site asks a photo of the hide on the table before its first cut (ProductionSettings.hidePhotoRequired).
+  'PHOTO_REQUIRED',
 ] as const
 export type CutRefusalCode = (typeof CUT_REFUSALS)[number]
 

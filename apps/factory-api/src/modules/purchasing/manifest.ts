@@ -153,6 +153,9 @@ export const manifest = defineManifest({
   // B-W2b-14 (Z1:09): where the Owner's reminder switch stands (purchasing.view) and the switch itself (the owner's, step-up).
   'GET /purchasing/reminders/settings': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'PUT /purchasing/reminders/settings/switch': { audiences: ['office'], permission: 'purchasing.reminders.switch', scope: 'record' },
+  // B-W2b-219: the leather area tolerance where a PO line names none.
+  'GET /purchasing/settings/leather-tolerance': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/settings/leather-tolerance': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   // B-W2b-174 (SCM-094, SCM-086): the supplier's purchase orders in the portal, the session's party (row-level security), no
   // grain. Answering also needs the person's capability portal.approve (checked in the handler; an office preview never).
   'GET /portal/purchase-orders': { audiences: ['partner'], permission: 'portal.purchaseOrders.view', scope: 'party' },

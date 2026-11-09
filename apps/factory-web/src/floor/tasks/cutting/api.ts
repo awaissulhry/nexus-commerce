@@ -90,6 +90,8 @@ export const hideAnswer = z.object({
     areaUom: z.string(),
     baseArea: decimal,
     baseUom: z.string(),
+    // B-W2b-219: the site's smallest remnant in the base unit (absent from an older API: the default).
+    remnantMinimum: z.string().nullable().default(null),
     grade: z.string().nullable(),
     shade: z.string().nullable(),
     thicknessMm: z.string().nullable(),

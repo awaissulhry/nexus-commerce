@@ -202,6 +202,8 @@ export const scanHideContract = defineContract({
         areaUom: z.string(),
         baseArea: decimal,
         baseUom: z.string(),
+        /** B-W2b-219: the site's smallest remnant in the base unit (four places); null for a unit that is not an area. */
+        remnantMinimum: z.string().nullable(),
         grade: z.string().nullable(),
         shade: z.string().nullable(),
         thicknessMm: z.string().nullable(),

@@ -233,7 +233,7 @@ const UNIT_WORD: Readonly<Record<string, string>> = { M2: 'm²', DM2: 'dm²', FT
 export const unitWord = (uom: string): string => UNIT_WORD[uom] ?? uom
 
 /** The cut refusal codes this screen has its own words for (else the API's sentence). B-W2b-110: the table's warnings and the lead's signature (B-W2b-103), a remnant under the minimum (B-W2b-100). */
-export const CUT_WORDS = ['WORK_ORDER_NOT_OPEN', 'NOT_AT_WORK_ORDER', 'NOTHING_LEFT', 'FLOOR_NOT_READY', 'CR_VI_PENDING', 'CR_VI_FAILED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED', 'CUT_WARNING', 'LEAD_PIN_WRONG', 'LEAD_IS_CUTTER', 'NOT_A_LEAD', 'LEAD_NOTE_MISSING', 'REMNANT_TOO_SMALL'] as const
+export const CUT_WORDS = ['WORK_ORDER_NOT_OPEN', 'NOT_AT_WORK_ORDER', 'NOTHING_LEFT', 'FLOOR_NOT_READY', 'CR_VI_PENDING', 'CR_VI_FAILED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED', 'CUT_WARNING', 'LEAD_PIN_WRONG', 'LEAD_IS_CUTTER', 'NOT_A_LEAD', 'LEAD_NOTE_MISSING', 'REMNANT_TOO_SMALL', 'PHOTO_REQUIRED'] as const
 
 export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
   const t = useT('floor-cutting')

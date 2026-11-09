@@ -324,6 +324,55 @@ describe('recut tickets (MES-044): replacement panels that join the original bun
   })
 })
 
+// ---- B-W2b-219: a fabric recut closes its request; a VOID recut ticket is replaced ------------------------------------------------
+
+describe('B-W2b-219: a DONE recut ticket closes its request, a VOID one may be replaced', { timeout: 60_000 }, () => {
+  const replacementRow = async (id: string) => (await admin(`SELECT status, "doneAt", "cutLogId", "recutTicketId" FROM "ReplacementRequest" WHERE id = $1`, [id]))[0]!
+
+  it('the office voids the ticket of a request: the request takes a new ticket, the old one stays named in the history', async () => {
+    const asked = (await ok('manager', 'POST', '/production/replacements', { kind: 'RECUT', quantity: 1, workOrderId: WO.id, workOrderSizeId: cell, reason: 'Sleeve torn at sewing' }, 201)).replacement
+    const first = (await ok('manager', 'POST', '/production/recut-tickets', { replacementId: asked.id, code: BN[2]!.code, endBits: true, reason: 'From the recut list' }, 201)).ticket
+    // While the named ticket is not VOID the request takes no other.
+    expect(refusalOf(await refused('manager', 'POST', '/production/recut-tickets', { replacementId: asked.id, code: BN[2]!.code, endBits: true, reason: 'Twice' }))).toBe('refusal/REPLACEMENT_HAS_TICKET')
+    expect((await ok('manager', 'GET', `/production/recut-tickets/options?code=${BN[2]!.code}`)).replacements.map((row: Json) => row.id)).not.toContain(asked.id)
+    await ok('manager', 'POST', `/production/recut-tickets/${first.id}/void`, { version: first.version, reason: 'Ticket lost' })
+    // VOID: the request is offered again, and takes a new ticket (the database lets it change only now).
+    expect((await ok('manager', 'GET', `/production/recut-tickets/options?code=${BN[2]!.code}`)).replacements.map((row: Json) => row.id)).toContain(asked.id)
+    const second = (await ok('manager', 'POST', '/production/recut-tickets', { replacementId: asked.id, code: BN[2]!.code, endBits: true, reason: 'Printed again' }, 201)).ticket
+    expect(second.replacement).toMatchObject({ id: asked.id, status: 'OPEN' })
+    expect((await replacementRow(asked.id)).recutTicketId).toBe(second.id)
+    // The cutting table cuts it: start and finish close the request (DONE by its ticket, no cut log entry).
+    await ok('cutter', 'POST', '/production/recut-tickets/start', { code: second.code })
+    const finishKey = freshKey()
+    await ok('cutter', 'POST', '/production/recut-tickets/finish', { code: second.code }, 200, finishKey)
+    expect(await replacementRow(asked.id)).toMatchObject({ status: 'DONE', cutLogId: null, recutTicketId: second.id })
+    expect((await replacementRow(asked.id)).doneAt).not.toBeNull()
+    const [audit] = await admin(`SELECT audience, after FROM "AuditLog" WHERE "recordType" = 'ReplacementRequest' AND "recordId" = $1 AND action = 'production.doneReplacement'`, [asked.id])
+    expect(audit).toMatchObject({ audience: 'SYSTEM', after: { status: 'DONE', recutTicketId: second.id } })
+    expect((await events('production.replacement_changed')).filter((event) => event.replacementId === asked.id)).toEqual([expect.objectContaining({ status: 'DONE', kind: 'RECUT', cutLogId: null })])
+    // The finish sent again (a lost answer) is answered from its receipt and closes nothing twice.
+    const again = await ok('cutter', 'POST', '/production/recut-tickets/finish', { code: second.code }, 200, finishKey)
+    expect(again.replayed).toBe(true)
+    expect(await admin(`SELECT id FROM "AuditLog" WHERE "recordType" = 'ReplacementRequest' AND "recordId" = $1 AND action = 'production.doneReplacement'`, [asked.id])).toHaveLength(1)
+  })
+
+  it('a request whose ticket was done before: the office marks it done by the ticket; an open ticket is refused in words', async () => {
+    // A request still OPEN that names a DONE ticket (as one finished before this step).
+    const ticket = (await ok('manager', 'POST', '/production/recut-tickets', { code: BN[2]!.code, quantity: 1, endBits: true, reason: 'Done before the rule' }, 201)).ticket
+    await ok('cutter', 'POST', '/production/recut-tickets/start', { code: ticket.code })
+    await ok('cutter', 'POST', '/production/recut-tickets/finish', { code: ticket.code })
+    const asked = (await ok('manager', 'POST', '/production/replacements', { kind: 'RECUT', quantity: 1, workOrderId: WO.id, workOrderSizeId: cell, reason: 'Recut before the rule' }, 201)).replacement
+    await admin(`UPDATE "ReplacementRequest" SET "recutTicketId" = $2, version = version + 1 WHERE id = $1`, [asked.id, ticket.id])
+    const open = (await ok('manager', 'POST', '/production/recut-tickets', { code: BN[2]!.code, quantity: 1, endBits: true, reason: 'Still open' }, 201)).ticket
+    const other = (await ok('manager', 'POST', '/production/replacements', { kind: 'RECUT', quantity: 1, workOrderId: WO.id, workOrderSizeId: cell, reason: 'Waits for its ticket' }, 201)).replacement
+    await admin(`UPDATE "ReplacementRequest" SET "recutTicketId" = $2, version = version + 1 WHERE id = $1`, [other.id, open.id])
+    const refusedDone = await refused('manager', 'POST', `/production/replacements/${other.id}/done`, { version: other.version + 1 })
+    expect(refusedDone.message).toContain(`Recut ticket ${open.number} is open`)
+    const done = await ok('manager', 'POST', `/production/replacements/${asked.id}/done`, { version: asked.version + 1 }, 201)
+    expect(done.replacement).toMatchObject({ id: asked.id, status: 'DONE', cutLogId: null })
+  })
+})
+
 // ---- secondary processes (MES-047) ----------------------------------------------------------------------------------------------
 
 describe('secondary processes after cutting (MES-047): a route step before sewing', { timeout: 60_000 }, () => {

@@ -198,8 +198,8 @@ export async function fetchLabelPrinters(api: ApiClient, siteId: string, station
 const jobSchema = z.object({ id: z.string(), status: z.enum(['QUEUED', 'SENT', 'PRINTED', 'FAILED']), lastError: z.string().nullable(), version: z.number() })
 export type TagJob = z.infer<typeof jobSchema>
 
-/** The remnant's new tag: one HIDE label job (platform/print POST /print/jobs/label; print.labels). */
-export function printRemnantTag(api: ApiClient, body: { printerId: string; hideId: string; label: { kind: 'HIDE'; language: 'it' | 'en'; scanId: string; title: string; fields: Record<string, string | null> } }, idempotencyKey: string): Promise<TaskOutcome<TagJob>> {
+/** The remnant's new tag: one REMNANT label job (B-W2b-219; HIDE when the return answered no tag) (platform/print POST /print/jobs/label; print.labels). */
+export function printRemnantTag(api: ApiClient, body: { printerId: string; hideId: string; label: { kind: 'HIDE' | 'REMNANT'; language: 'it' | 'en'; scanId: string; title: string; fields: Record<string, string | null> } }, idempotencyKey: string): Promise<TaskOutcome<TagJob>> {
   return floorWrite(api, 'POST', '/print/jobs/label', { body: { printerId: body.printerId, recordType: 'Hide', recordId: body.hideId, copies: 1, label: body.label }, schema: z.object({ job: jobSchema }), idempotencyKey }).then((outcome) =>
     outcome.ok ? { ok: true, value: outcome.value.job } : outcome,
   )

@@ -86,7 +86,8 @@ export const refuseReplacementContract = defineContract({
 
 export const doneReplacementContract = defineContract({
   params: replacementParams,
-  body: input({ version: z.number().int().min(1), cutLogId: id(), note: z.string().trim().min(1).max(500).optional() }),
+  // B-W2b-219: no cutLogId — a RECUT done by its DONE recut ticket (a fabric recut is cut on its ticket).
+  body: input({ version: z.number().int().min(1), cutLogId: id().optional(), note: z.string().trim().min(1).max(500).optional() }),
   response: { 200: replacementAnswer, 201: replacementAnswer },
 })
 

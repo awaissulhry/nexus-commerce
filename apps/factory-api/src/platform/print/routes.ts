@@ -18,6 +18,9 @@ import { getJob, listJobs, queueDocument, queueLabel, retryJob } from './jobs'
 import { labelPdf } from './labels'
 import { manifest } from './manifest'
 import { createPrinter, listPrinters, updatePrinter } from './printers'
+// B-W2b-219: the roll and remnant tags (factory-domain labels ROLL and REMNANT).
+import { printRemnantTag, printRemnantTagContract } from './layouts/remnant'
+import { printRollTag, printRollTagContract } from './layouts/roll'
 import { listStationPrinters, setStationPrinter } from './stations'
 
 /**
@@ -45,6 +48,15 @@ export default defineRoutes('print', manifest, async (app) => {
 
   app.post('/print/jobs/label', { schema: queueLabelContract }, async (request, reply) => {
     return reply.code(201).send({ job: await queueLabel(request, request.body, idempotencyKeyFrom(request)) })
+  })
+
+  // B-W2b-219: a fabric roll's tag and a remnant's tag, composed from the record.
+  app.post('/print/jobs/roll-tag/:rollId', { schema: printRollTagContract }, async (request, reply) => {
+    return reply.code(201).send({ job: await printRollTag(request, request.params.rollId, request.body, idempotencyKeyFrom(request)) })
+  })
+
+  app.post('/print/jobs/remnant-tag/:remnantId', { schema: printRemnantTagContract }, async (request, reply) => {
+    return reply.code(201).send({ job: await printRemnantTag(request, request.params.remnantId, request.body, idempotencyKeyFrom(request)) })
   })
 
   app.post('/print/jobs/document', { schema: queueDocumentContract }, async (request, reply) => {
