@@ -13,6 +13,7 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
 import { readOperations, readSteps } from '../routing/read'
 import { openTypeChangeReviewsInCommand } from '../../compliance/type-changes/detect'
+import { requireEditRule } from '../lifecycle/edit-rule'
 import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
 // B-W2b-225: the routing's depth travels with its steps; the release closes the old revision's effective days.
 import { auditedDepthCopy, copyStepDepthInCommand } from '../routing-depth/copy'
@@ -64,6 +65,8 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     const revisions = await tx.styleRevision.findMany({ where: { styleId }, select: { revision: true, status: true } })
     const refusal = newRevisionRefusal(locked.status, revisions)
     if (refusal) throw new ConflictError(refusal)
+    // B-W2b-221: a new revision under the edit rule of the style's lifecycle state.
+    await requireEditRule(tx, styleId, 'NEW_REVISION')
     const id = newId()
     const revision = nextRevisionNumber(revisions)
     const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
@@ -211,6 +214,8 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     const row = await findRevision(tx, styleId, revisionId)
     const refusal = releaseRefusal(row, locked.status)
     if (refusal) throw new InvalidStateError(refusal)
+    // B-W2b-221: a release under the edit rule of the style's lifecycle state.
+    await requireEditRule(tx, styleId, 'RELEASE')
     assertTransition(styleRevisionMachine, row.status, 'RELEASED')
     const version = await bumpRevision(tx, revisionId, body.version, now)
 

@@ -5,6 +5,7 @@ import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/perm
 import { newRevisionRefusal, nextRevisionNumber } from '@nexus/factory-domain/product/styles/revisions'
 import { command, type CommandCaller } from '../../../core/command'
 import { assertMayWrite, contextOf, isUniqueViolation, lockStyle, readStyle, REVISION_COLUMNS, revisionViewOf } from './store'
+import { requireEditRule } from '../lifecycle/edit-rule'
 
 /**
  * A style's revisions (plan A1 §2.5): the list, and the DRAFT shell of the next one (number and change note), which the
@@ -31,6 +32,8 @@ export async function createRevision(caller: CommandCaller, styleId: string, bod
     const revisions = await tx.styleRevision.findMany({ where: { styleId }, select: { revision: true, status: true } })
     const refusal = newRevisionRefusal(style.status, revisions)
     if (refusal) throw new ConflictError(refusal)
+    // B-W2b-221: a new revision under the edit rule of the style's lifecycle state.
+    await requireEditRule(tx, styleId, 'NEW_REVISION')
     const id = newId()
     const revision = nextRevisionNumber(revisions)
     const row = await tx.styleRevision.create({

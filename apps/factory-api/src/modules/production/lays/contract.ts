@@ -5,6 +5,8 @@ import { ALLOCATION_REFUSALS, ALLOCATION_WARNINGS } from '@nexus/factory-domain/
 import { CUT_ORDER_KINDS, CUT_ORDER_LIMITS, CUT_ORDER_STATUSES, CUT_TICKET_STATUSES, LAY_STATUSES } from '@nexus/factory-domain/production/cutorders/rules'
 import { CUT_VARIANCE_REASONS, RECONCILE_REFUSALS } from '@nexus/factory-domain/production/lays/reconcile'
 import { LAY_LIMITS, LAY_REFUSALS, LAY_WARNINGS } from '@nexus/factory-domain/production/lays/rules'
+// B-W2b-221 (PRD-105): the consumption tolerance's warning at the fabric used confirmation.
+import { CONSUMPTION_WARNINGS } from '@nexus/factory-domain/product/settings/rules'
 
 /**
  * Lays at the table and the reconciliation of a cut order (B-W2b-116; MES-038, MES-039, MES-045, MES-046): the contracts of
@@ -93,7 +95,7 @@ export const layView = output({
   /** Why the table may not spread or count it now. */
   refusal: output({ code: refusalCodes, message: z.string() }).nullable(),
   can: output({ spread: z.boolean(), count: z.boolean(), fabricUsed: z.boolean() }),
-  warnings: z.array(output({ code: z.enum([...ALLOCATION_WARNINGS, ...LAY_WARNINGS]), message: z.string() })),
+  warnings: z.array(output({ code: z.enum([...ALLOCATION_WARNINGS, ...LAY_WARNINGS, ...CONSUMPTION_WARNINGS]), message: z.string() })),
 })
 
 const written = { 200: layView.extend({ replayed: z.boolean() }) }
