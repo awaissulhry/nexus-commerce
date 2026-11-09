@@ -11,6 +11,8 @@ import { emitChange } from '../../inventory/rolls/write'
 import { may, notFound, workerOf } from '../cutorders/access'
 import { refuse } from './access'
 import { emitConsumption } from './emit'
+// B-W2b-221 (PRD-105): the company's consumption tolerance at the confirmation.
+import { checkConsumption } from './consumption-tolerance'
 import { tableCommand } from './spread'
 import { layFabricKey, readLayState, rollUom, rowUse, workOrderWeights, type LayState } from './store'
 import { fabricUsedOf, layView } from './views'
@@ -125,6 +127,8 @@ export async function confirmFabricUsed(caller: CommandCaller, layId: string, bo
     const figures = fabricUsedOf(state)!
     const confirmed: Decimal = body.confirmed !== undefined ? lengthIn(body.confirmed.trim(), body.uom ?? CONSUMPTION_UOM, CONSUMPTION_UOM) : new Dec(figures.confirmed ?? figures.recorded)
     const note = body.note === undefined ? (state.consumption?.note ?? null) : body.note?.trim() || null
+    // B-W2b-221 (PRD-105): must match (refused until a note explains it), may differ, or a warning above the percent.
+    const warnings = await checkConsumption(tx, context.tenantId, order, { estimated: new Dec(figures.estimated), confirmed, note, unit: 'm', what: 'fabric' })
     let moves: { moveIds: string[]; workOrderIds: string[] } = { moveIds: [], workOrderIds: [] }
     let consumptionId: string
     if (!state.consumption) {
@@ -163,6 +167,6 @@ export async function confirmFabricUsed(caller: CommandCaller, layId: string, bo
       after: { cutOrder: order.number, lay: lay.seq, uom: CONSUMPTION_UOM, estimated: figures.estimated, recorded: figures.recorded, confirmed: confirmed.toFixed(4), note, issued: state.consumption === null, moveIds: moves.moveIds, workOrderIds: moves.workOrderIds },
     })
     emitConsumption(tools, order, { id: consumptionId, layId: lay.id }, state.consumption ? 'CORRECTED' : 'CONFIRMED', moves.workOrderIds, moves.moveIds)
-    return { ...layView((await readLayState(tx, layId))!), warnings: [] }
+    return { ...layView((await readLayState(tx, layId))!), warnings }
   })
 }
