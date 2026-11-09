@@ -1,0 +1,237 @@
+{
+  "title": "Questionario fornitore — {company}",
+  "retry": "Riprova",
+  "loading": {
+    "now": "Carichiamo il questionario…",
+    "slow": "Ancora un momento…"
+  },
+  "problem": {
+    "read": "Non siamo riusciti a caricare il questionario",
+    "readBody": "Controllate la connessione e riprovate. Nulla di quanto scritto va perso: è conservato da noi.",
+    "gone": "Questo link non apre più il questionario",
+    "goneBody": "È stato già usato, ritirato o è scaduto. Chiedeteci un nuovo link.",
+    "changed": "Il questionario è cambiato poco fa",
+    "changedBody": "Abbiamo caricato la nuova versione; le risposte restano dove le domande sono le stesse. Controllatele e inviate di nuovo.",
+    "fields": "Alcune risposte vanno riviste",
+    "fieldsBody": "Vi abbiamo portato alla prima: ogni campo dice cosa correggere.",
+    "rateLimited": "Troppi tentativi in poco tempo",
+    "rateLimitedBody": "Aspettate un minuto, poi premete di nuovo Firma e invia.",
+    "server": "Non siamo riusciti a ricevere le risposte",
+    "serverBody": "Non è stato inviato nulla. Premete di nuovo Firma e invia tra un momento.",
+    "network": "La connessione si è interrotta",
+    "networkBody": "Non sappiamo se le risposte sono arrivate. Premete di nuovo Firma e invia: se sono arrivate, il link dirà che è già stato usato — allora le abbiamo ricevute."
+  },
+  "draft": {
+    "restored": "Abbiamo conservato le vostre risposte del {day} alle {time}",
+    "restoredBody": "Potete riprendere da dove vi eravate fermati.",
+    "keep": "Continua",
+    "startAgain": "Ricomincia"
+  },
+  "later": {
+    "button": "Finisci più tardi",
+    "held": "Rispondete prima a qualcosa: non c'è ancora nulla da conservare.",
+    "saved": "Le vostre risposte sono conservate da noi",
+    "savedBody": "Riaprite lo stesso link per continuare, fino al {day}."
+  },
+  "intro": {
+    "title": "Perché ve lo chiediamo",
+    "why": "{company} verifica che nella sua filiera non ci sia lavoro forzato o minorile, come chiede il Regolamento (UE) 2024/3015 sul lavoro forzato a chi vende nell'UE da dicembre 2027. Le vostre risposte e i vostri documenti fanno parte di questa due diligence.",
+    "time": "Servono circa 20 minuti. Tenete a portata di mano i certificati (PDF o foto) e le loro scadenze.",
+    "later": "Le risposte si salvano da noi mentre scrivete: potete chiudere la pagina e tornare dallo stesso link fino al {day}.",
+    "readerNamed": "{name} di {company} legge le vostre risposte e vi scrive se manca qualcosa.",
+    "reader": "L'ufficio acquisti di {company} legge le vostre risposte e vi scrive se manca qualcosa.",
+    "note": "Una nota di {company}"
+  },
+  "step": {
+    "count": "Passo {at} di {of}",
+    "empty": "Niente da compilare in questo passo.",
+    "company": {
+      "short": "Azienda",
+      "title": "1 · Azienda",
+      "lead": "Chi siete: come volete che {company} vi registri."
+    },
+    "contacts": {
+      "short": "Contatti",
+      "title": "2 · Contatti",
+      "lead": "Chi segue ordini, fatture e qualità."
+    },
+    "sites": {
+      "short": "Stabilimenti",
+      "title": "3 · Stabilimenti e subfornitori",
+      "lead": "Dove si lavora, compresi gli stabilimenti dei vostri subfornitori."
+    },
+    "certifications": {
+      "short": "Certificazioni",
+      "title": "4 · Certificazioni e prove",
+      "lead": "I vostri documenti con le date: li registriamo una volta e vi avvisiamo prima della scadenza."
+    },
+    "labour": {
+      "short": "Lavoro",
+      "title": "5 · Lavoro e aspetti sociali",
+      "lead": "Domande di due diligence. Rispondete come stanno le cose; dove una risposta lo richiede, spiegate meglio."
+    },
+    "sign": {
+      "short": "Riepilogo",
+      "title": "6 · Riepilogo e invio",
+      "lead": "Controllate ogni risposta, poi firmate la dichiarazione e inviatela a {company}."
+    }
+  },
+  "nav": {
+    "back": "Indietro",
+    "next": "Continua: {step}",
+    "keys": "Tastiera: ← → per passare da un passo all'altro quando nessun campo è selezionato."
+  },
+  "send": {
+    "busy": "Invio in corso…",
+    "used": "Questo link è già stato usato per inviare il questionario."
+  },
+  "field": {
+    "optional": "(facoltativo)"
+  },
+  "check": {
+    "required": "Obbligatorio.",
+    "tooLong": "Troppo lungo: accorciatelo.",
+    "url": "Scrivete un indirizzo web, per esempio www.esempio.it.",
+    "vat": "Questa partita IVA non sembra corretta: controllate il prefisso del paese e le cifre.",
+    "name": "Scrivete il nome della persona.",
+    "email": "Scrivete un indirizzo e-mail.",
+    "phone": "Scrivete un numero di telefono: cifre, spazi e + ( ) . -",
+    "file": "Caricate il documento (PDF, JPEG o PNG).",
+    "day": "Scegliete un giorno.",
+    "issuedFuture": "Il giorno di emissione è oggi o prima.",
+    "expired": "Questo documento è scaduto: caricate quello in vigore.",
+    "expiresBefore": "La scadenza viene dopo il giorno di emissione.",
+    "yesNo": "Rispondete Sì o No.",
+    "explain": "Spiegateci meglio questa risposta.",
+    "choice": "Sceglietene una.",
+    "sign": "Leggete il codice di condotta e firmatelo.",
+    "stray": "Questa risposta non fa più parte del questionario.",
+    "sites": "Aggiungete almeno uno stabilimento.",
+    "tooMany": "Al massimo 20 stabilimenti.",
+    "site": "Completate questo stabilimento.",
+    "siteName": "Scrivete il nome dello stabilimento.",
+    "country": "Scegliete il paese.",
+    "steps": "Scegliete di nuovo le fasi.",
+    "sameFile": "Ogni documento risponde a una domanda: caricatelo di nuovo dove serve.",
+    "signedName": "Scrivete nome e cognome.",
+    "signedRole": "Scrivete il vostro ruolo in azienda.",
+    "truthful": "Confermate che le risposte sono vere per quanto a vostra conoscenza."
+  },
+  "vat": {
+    "check": "Verifica in VIES",
+    "held": "Scrivete prima la partita IVA.",
+    "checking": "Verifica in VIES in corso…",
+    "failed": "Non siamo riusciti a verificarla ora: potete continuare, la verifichiamo dopo.",
+    "valid": "Valida in VIES",
+    "validName": "Valida — il nome corrisponde",
+    "validOtherName": "Valida — con un altro nome",
+    "otherNameHint": "In VIES questo numero ha un altro nome: controllate la ragione sociale sopra.",
+    "INVALID": "Non valida in VIES",
+    "ERROR": "VIES non ha risposto: potete continuare, la verifichiamo dopo.",
+    "NOT_CHECKED": "Formato corretto (VIES verifica i numeri UE fuori dall'Italia)",
+    "FORMAT": "Il formato non è corretto",
+    "onFile": "Per voi abbiamo {vat}: cambiatela solo se è sbagliata."
+  },
+  "contact": {
+    "name": "Nome e cognome",
+    "email": "E-mail",
+    "phone": "Telefono"
+  },
+  "upload": {
+    "done": "Documento caricato",
+    "checking": "In verifica",
+    "remove": "Togli",
+    "busy": "Caricamento di {name}…",
+    "hint": "PDF, JPEG o PNG, fino a 20 MB",
+    "failed": "{name} non è stato caricato: riprovate.",
+    "type": "{name} non è un PDF, JPEG o PNG.",
+    "size": "{name} supera i 20 MB.",
+    "closed": "Ora non possiamo ricevere documenti dai link: inviate il questionario senza, ve lo chiederemo."
+  },
+  "document": {
+    "issuer": "Rilasciato da",
+    "number": "Numero del certificato",
+    "issuedOn": "Rilasciato il",
+    "expiresOn": "Scade il",
+    "expiresHint": "Lasciate vuoto se non scade."
+  },
+  "answer": {
+    "yes": "Sì",
+    "no": "No",
+    "explainNeeded": "Spiegate meglio",
+    "explain": "Altro sulla vostra risposta",
+    "addWords": "Aggiungi un commento"
+  },
+  "code": {
+    "open": "Leggi il codice di condotta (si apre in una nuova scheda)",
+    "opening": "Apertura del codice di condotta…",
+    "failed": "Il codice di condotta non si è aperto: riprovate.",
+    "sign": "Abbiamo letto il codice di condotta e lo rispettiamo nel lavoro per {company}"
+  },
+  "sites": {
+    "none": "Nessuno stabilimento ancora.",
+    "noneSub": "Nessun subfornitore ancora: aggiungete quelli che lavorano a ciò che fate per noi.",
+    "site": "Stabilimento {n}",
+    "sub": "Subfornitore {n}",
+    "remove": "Togli",
+    "name": "Nome",
+    "country": "Paese",
+    "chooseCountry": "Scegliete il paese",
+    "town": "Località",
+    "steps": "Cosa vi si fa",
+    "full": "Al massimo 20 stabilimenti.",
+    "add": "Aggiungi uno stabilimento",
+    "addSub": "Aggiungi un subfornitore"
+  },
+  "siteStep": {
+    "BEAMHOUSE": "Riviera",
+    "TANNING": "Concia",
+    "RETANNING": "Riconcia",
+    "FINISHING": "Rifinizione",
+    "WEAVING": "Tessitura",
+    "DYEING": "Tintoria",
+    "MANUFACTURING": "Produzione"
+  },
+  "review": {
+    "change": "Modifica",
+    "toFix": "Da correggere",
+    "none": "—",
+    "signed": "Letto e firmato",
+    "file": "Documento",
+    "expires": "scade il {day}",
+    "fixFirst_one": "{count} risposta va rivista prima dell'invio",
+    "fixFirst_other": "{count} risposte vanno riviste prima dell'invio",
+    "fixFirstBody": "Usate Modifica sul passo segnato Da correggere."
+  },
+  "sign": {
+    "role": "Il vostro ruolo",
+    "roleHint": "Per esempio: titolare, responsabile qualità.",
+    "title": "Dichiarazione firmata",
+    "legal": "Scrivendo il vostro nome firmate questo questionario per la vostra azienda e lo inviate a {company}. Le risposte sono conservate con data e ora.",
+    "truthful": "Le risposte sono vere per quanto a mia conoscenza.",
+    "tickMissing": "Spuntate per confermare",
+    "name": "Nome e cognome",
+    "nameHint": "Come firmate le vostre lettere.",
+    "nameEmpty": "Scrivete nome e cognome",
+    "send": "Firma e invia"
+  },
+  "done": {
+    "titleBy": "Inviato — lo rivede {name}",
+    "title": "Inviato — lo rivede {company}",
+    "body": "Vi scriviamo se manca qualcosa.",
+    "next": {
+      "review": "{company} legge le vostre risposte e i vostri documenti.",
+      "questions": "Se abbiamo domande, vi scriviamo e vi mandiamo un nuovo link per rispondere.",
+      "documents_one": "Il vostro documento è registrato con la scadenza: vi avvisiamo prima che scada.",
+      "documents_other": "I vostri {count} documenti sono registrati con le scadenze: vi avvisiamo prima che scadano."
+    },
+    "fact": {
+      "questionnaire": "Questionario",
+      "version": "{title} · versione {revision}",
+      "sent": "Inviato",
+      "by": "Firmato da",
+      "documents": "Documenti"
+    },
+    "contact": "Domande? Rispondete all'e-mail che vi ha portato il link."
+  }
+}

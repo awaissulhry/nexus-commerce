@@ -51,7 +51,8 @@ export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 // B-W2b-180: 'portal' = Portal access (the slot is areas/sales/customers/portal's, on both sides).
 export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'portal' | 'activity'
 // B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
-export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'portal' | 'activity'
+// B-W2b-172: 'questionnaire' = the supplier questionnaire (the slot is Purchasing's, areas/purchasing/suppliers/questionnaire).
+export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'questionnaire' | 'portal' | 'activity'
 export type RecordTab = CustomerTab | SupplierTab
 
 export interface SideConfig {
@@ -91,7 +92,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'items', 'orders', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal
+    tabs: ['overview', 'contacts', 'items', 'orders', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire
     recordType: 'Party',
   },
 }
@@ -841,6 +842,8 @@ export interface RecordCan {
   threads: boolean
   /** B-W2b-180: partners.view — the Portal access tab. */
   partners?: boolean
+  /** B-W2b-172: purchasing.questionnaire.view — the Questionnaire tab. */
+  questionnaire?: boolean
 }
 
 export type RecordDialog =
@@ -895,6 +898,7 @@ export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
     if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
     if (tab === 'activity' || tab === 'documents') return can.threads
     if (tab === 'portal') return can.partners === true // B-W2b-180
+    if (tab === 'questionnaire') return can.questionnaire === true // B-W2b-172
     return true
   })
 }

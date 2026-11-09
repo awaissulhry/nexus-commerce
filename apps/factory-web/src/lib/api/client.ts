@@ -52,6 +52,8 @@ export interface RequestOptions<T> {
   /** For the API's idempotent writes. */
   idempotencyKey?: string
   signal?: AbortSignal
+  /** B-W2b-169: a call's own header (a link's unlock key, `x-factory-link-unlock`); never a cookie, token or CSRF header. */
+  headers?: Readonly<Record<string, string>>
 }
 
 export interface ApiClient {
@@ -82,8 +84,10 @@ export function apiUrl(baseUrl: string, path: string, query?: RequestOptions<unk
 }
 
 /** The headers of one call. Exported for the tests. */
-export function requestHeaders(options: ApiClientOptions, method: HttpMethod, request: Pick<RequestOptions<unknown>, 'body' | 'idempotencyKey'>): Headers {
+export function requestHeaders(options: ApiClientOptions, method: HttpMethod, request: Pick<RequestOptions<unknown>, 'body' | 'idempotencyKey' | 'headers'>): Headers {
   const headers = new Headers({ accept: 'application/json' })
+  // B-W2b-169: the call's own headers first, so the client's (company, link token, key, CSRF) always win.
+  for (const [name, value] of Object.entries(request.headers ?? {})) headers.set(name, value)
   if (request.body !== undefined) headers.set('content-type', 'application/json')
   if (options.company) headers.set(COMPANY_HEADER, options.company)
   if (options.linkToken) headers.set(LINK_HEADER, options.linkToken)

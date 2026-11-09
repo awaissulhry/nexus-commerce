@@ -22,6 +22,10 @@ import { stripPicturesHandler } from '../../../platform/files/thumbs/handler'
 // B-W2b-167: partner notifications (no reader while every seeded portal is off: nothing is made).
 import { partnerNotificationsHandler } from '../../../platform/portal/notifications/fan-out'
 import { onlinePaymentHandlers } from '../../../modules/payments/online/follow-up'
+// B-W2b-170
+import { trackingLinkHandler } from '../../../modules/shipping/tracking-link/handler'
+// B-W2b-200
+import { sharesNotifyHandler } from '../../../platform/shares/notify'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
 import { alertsRecheckHandler } from '../../../platform/alerts/engine'
@@ -62,6 +66,10 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_160_HANDLERS', ['stripPicturesHandler']],
   ['W2B_167_HANDLERS', ['partnerNotificationsHandler']],
   ['W2B_185_HANDLERS', ['onlinePaymentHandlers']],
+  // B-W2b-170: the tracking page's link mailed when the goods leave.
+  ['W2B_170_HANDLERS', ['trackingLinkHandler']],
+  // B-W2b-200: the "E-mail me" mails of a shared record's new messages.
+  ['W2B_200_HANDLERS', ['sharesNotifyHandler']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -71,7 +79,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

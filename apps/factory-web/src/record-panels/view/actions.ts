@@ -2,6 +2,8 @@ import type { ComposerDraft, FileAudience, FileKind, PanelTab, ThreadStatus, Tim
 import type { TaskDraft } from '../tasks/model'
 import type { FileDepthActions } from '../files/actions'
 import type { ApprovalsPanelActions } from '../approvals/model'
+// B-W2b-200
+import type { SharesPanelActions } from '../share/model'
 
 /**
  * What the record panels ask of their page (RecordPanels.tsx does each through the API). In the design index none is
@@ -36,4 +38,6 @@ export interface RecordPanelsActions {
   fileDepth?: FileDepthActions
   /** B-W2b-188: the Approvals tab (ask a partner to approve, withdraw, the link given once). */
   approvals?: ApprovalsPanelActions
+  /** B-W2b-200: the Partners tab (invite a partner to this record, change what they may do, revoke). */
+  shares?: SharesPanelActions
 }

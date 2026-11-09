@@ -1,0 +1,195 @@
+{
+  "retry": "Riprova",
+  "loading": {
+    "now": "Carichiamo il questionario…",
+    "slow": "Ancora un momento…"
+  },
+  "problem": {
+    "read": "Non siamo riusciti a caricare il questionario",
+    "readBody": "Controlla la connessione e riprova.",
+    "network": "La connessione si è interrotta: riprova.",
+    "suppressed": "Questo indirizzo ha rimbalzato o segnalato spam: correggilo prima.",
+    "changed": "Qualcuno l'ha cambiato nel frattempo: lo rileggiamo.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "gone": "Non c'è più: rileggiamo la scheda.",
+    "invalid": "Qualcosa non è valido: controlla i campi.",
+    "server": "Non è andato a buon fine: riprova tra un momento."
+  },
+  "notice": {
+    "close": "Chiudi",
+    "sent": "Il questionario è stato inviato a {email}.",
+    "mailFailed": "Il link è stato creato ma l'e-mail a {email} non è partita: invia di nuovo il questionario.",
+    "accepted_one": "Risposta accettata: il suo documento è in vigore con la scadenza.",
+    "accepted_other": "Risposta accettata: i suoi {count} documenti sono in vigore con le scadenze.",
+    "questions": "Le tue domande sono nella conversazione del fornitore. Manda un nuovo link quando deve rispondere di nuovo.",
+    "published": "La versione {revision} del questionario è pubblicata: da ora i link chiedono questa.",
+    "acceptedNone": "Risposta accettata."
+  },
+  "title": "Questionario fornitore",
+  "why": "Due diligence per il Regolamento (UE) 2024/3015 sul lavoro forzato (si applica da dicembre 2027): il fornitore risponde da un link, firma, e tu rivedi la risposta qui. Ogni risposta è conservata come PDF nei file del fornitore.",
+  "current": "{title} · versione {revision}, pubblicata il {day} · {count} domande",
+  "noVersion": "L'azienda non ha ancora un questionario pubblicato.",
+  "draftVersion": "La versione {revision} è una bozza.",
+  "publishStarter": "Pubblica il questionario di partenza",
+  "publishing": "Pubblicazione in corso…",
+  "held": {
+    "manage": "Il tuo ruolo non modifica il questionario (purchasing.questionnaire.manage).",
+    "draft": "La versione {revision} è una bozza: pubblicala prima.",
+    "send": "Il tuo ruolo non invia il questionario (purchasing.questionnaire.send).",
+    "noVersion": "Pubblica prima un questionario.",
+    "review": "Il tuo ruolo non rivede le risposte (purchasing.questionnaire.review).",
+    "reviewed": "Questa risposta è già stata rivista."
+  },
+  "send": {
+    "button": "Invia il questionario",
+    "title": "Invia il questionario a {name}",
+    "done": "Fatto",
+    "cancel": "Annulla",
+    "busy": "Invio in corso…",
+    "confirmMail": "Invia per e-mail",
+    "confirmLink": "Crea il link",
+    "linkReady": "Il link è pronto",
+    "linkOnce": "Copialo ora e passalo tu: viene mostrato solo questa volta.",
+    "linkLabel": "Il link del questionario",
+    "copy": "Copia",
+    "mailFailed": "L'e-mail non è partita",
+    "mailFailedBody": "Il link è stato creato ma non consegnato: invia di nuovo il questionario, o passa il link a mano.",
+    "mailed": "Inviato a {email}",
+    "mailedBody": "Il link vale fino al {day}. Ti avvisiamo quando arriva la risposta.",
+    "withdrawn_one": "Il link aperto precedente è stato ritirato.",
+    "withdrawn_other": "I {count} link aperti precedenti sono stati ritirati.",
+    "how": "Come inviarlo",
+    "byMail": "Per e-mail",
+    "byMailBody": "Mandiamo il link a un contatto del fornitore.",
+    "byLink": "Un link da passare",
+    "byLinkBody": "Ricevi il link una volta e lo mandi tu (WhatsApp, la tua e-mail).",
+    "to": "A",
+    "other": "Un altro indirizzo…",
+    "email": "Indirizzo e-mail",
+    "emailOptional": "Per chi è (facoltativo)",
+    "emailHint": "Resta con il link, così se ne può chiedere uno nuovo più avanti.",
+    "language": "Lingua della pagina e dell'e-mail",
+    "days": "Vale per (giorni)",
+    "daysHint": "Da 1 a {max} giorni.",
+    "note": "Una nota per il fornitore",
+    "noteHint": "Compare sulla pagina e nell'e-mail.",
+    "replaces": "Un link aperto a questo fornitore viene ritirato quando ne invii uno nuovo.",
+    "check": {
+      "to": "Scegli a chi va.",
+      "email": "Scrivi un indirizzo e-mail valido.",
+      "days": "Tra 1 e 60 giorni.",
+      "note": "La nota è troppo lunga."
+    }
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "answers": {
+    "title": "Risposte",
+    "waiting": "Ancora nessuna risposta: il link è aperto.",
+    "none": "Ancora nessuna risposta. Invia il questionario per chiederla."
+  },
+  "state": {
+    "WAITING": "Da rivedere",
+    "ACCEPTED": "Accettata",
+    "QUESTIONS": "Domande inviate"
+  },
+  "answer": {
+    "title": "Versione {revision} · inviata il {day}",
+    "byLink": "Firmata da {name} ({role}) dal link",
+    "byPortal": "Firmata da {name} ({role}) nel portale",
+    "open": "Leggi le risposte",
+    "pdf": "PDF",
+    "review": "Rivedi",
+    "sites": "Stabilimenti",
+    "siteCount": "{own} propri · {sub} subfornitori",
+    "documents": "Documenti",
+    "none": "—",
+    "reviewed": "Rivista",
+    "reviewedBy": "{name}, {day}",
+    "note": "Nota dell'ufficio",
+    "task": "Attività di revisione",
+    "taskOpen": "{name} · entro il {day}",
+    "nobody": "ancora nessuno",
+    "dialogTitle": "{name} · questionario versione {revision}",
+    "dialogSub": "Firmato da {name} ({role}) il {day}",
+    "close": "Chiudi",
+    "yes": "Sì",
+    "no": "No",
+    "signed": "Letto e firmato",
+    "document": "Documento"
+  },
+  "file": {
+    "opening": "Apertura…",
+    "failed": "Il file non si è aperto: riprova."
+  },
+  "links": {
+    "title": "Link inviati",
+    "none": "Ancora nessun link inviato.",
+    "handed": "Dato da passare",
+    "sent": "Inviato il {day} da {name}",
+    "until": "aperto fino al {day}"
+  },
+  "linkState": {
+    "OPEN": "Aperto",
+    "ANSWERED": "Risposto",
+    "EXPIRED": "Scaduto",
+    "WITHDRAWN": "Ritirato"
+  },
+  "section": {
+    "company": "1 · Azienda",
+    "contacts": "2 · Contatti",
+    "sites": "3 · Stabilimenti e subfornitori",
+    "certifications": "4 · Certificazioni e prove",
+    "labour": "5 · Lavoro e aspetti sociali"
+  },
+  "siteStep": {
+    "BEAMHOUSE": "Riviera",
+    "TANNING": "Concia",
+    "RETANNING": "Riconcia",
+    "FINISHING": "Rifinizione",
+    "WEAVING": "Tessitura",
+    "DYEING": "Tintoria",
+    "MANUFACTURING": "Produzione"
+  },
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Certificato",
+    "TEST_REPORT": "Rapporto di prova",
+    "DECLARATION": "Dichiarazione"
+  },
+  "documents": {
+    "title": "Documenti",
+    "inForce": "In vigore",
+    "waiting": "In attesa della revisione",
+    "held": "In verifica",
+    "issued": "rilasciato il {day}",
+    "expires": "scade il {day}",
+    "noExpiry": "senza scadenza",
+    "open": "Apri",
+    "notReady": "Il file non è arrivato o è in verifica."
+  },
+  "review": {
+    "title": "Rivedi {name} · versione {revision}",
+    "cancel": "Annulla",
+    "busy": "Salvataggio…",
+    "confirmAccept": "Accetta la risposta",
+    "confirmQuestions": "Invia le domande",
+    "what": "La tua revisione",
+    "accept": "Accettata",
+    "acceptBody_one": "La risposta è completa. Il suo documento entra in vigore con la scadenza.",
+    "acceptBody_other": "La risposta è completa. I suoi {count} documenti entrano in vigore con le scadenze.",
+    "questions": "Domande al fornitore",
+    "questionsBody": "Manca qualcosa o non è chiaro: le domande vanno nella conversazione del fornitore, che risponde di nuovo con un nuovo link.",
+    "questionsLabel": "Domande per il fornitore",
+    "questionsHint": "Il fornitore legge queste parole nella sua conversazione.",
+    "note": "Nota dell'ufficio",
+    "noteHint": "Solo per i colleghi: il fornitore non la vede mai.",
+    "check": {
+      "decision": "Scegli Accettata o Domande al fornitore.",
+      "questions": "Scrivi le domande che il fornitore leggerà.",
+      "long": "Questo testo è troppo lungo."
+    },
+    "acceptBodyNone": "La risposta è completa."
+  }
+}

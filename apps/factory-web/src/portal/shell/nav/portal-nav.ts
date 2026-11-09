@@ -127,8 +127,9 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
   },
   // B-W2b-186: the supplier's Ship notices (SCR-227).
   { id: 'deliveries', label: 'nav.deliveries', href: '/deliveries', icon: Truck, permission: 'portal.shipNotices.view', kinds: ['SUPPLIER'], badge: 'deliveries', phone: 'tab', built: true },
-  { id: 'supplier-documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.supplierDocuments.view', kinds: SUPPLIERS, badge: 'documents', phone: 'tab', key: 'd', built: false },
-  { id: 'profile', label: 'nav.profile', href: '/profile', icon: IdCard, permission: 'portal.supplierProfile.view', kinds: SUPPLIERS, badge: 'account', phone: 'more', built: false },
+  // B-W2b-193: a supplier's and a workshop's Documents (SCR-190) and Profile (SCR-191).
+  { id: 'supplier-documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.supplierDocuments.view', kinds: SUPPLIERS, badge: 'documents', phone: 'tab', key: 'd', built: true },
+  { id: 'profile', label: 'nav.profile', href: '/profile', icon: IdCard, permission: 'portal.supplierProfile.view', kinds: SUPPLIERS, badge: 'account', phone: 'more', built: true },
   // B-W2b-201: the accountant's room (SCR-268).
   { id: 'accounting', label: 'nav.accounting', href: '/accounting', icon: Calculator, permission: 'portal.accounting.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', key: 'd', built: true },
   { id: 'audit-room', label: 'nav.auditRoom', href: '/audit-room', icon: Archive, permission: 'portal.auditRoom.view', kinds: ['GUEST'], badge: 'documents', phone: 'tab', built: false },

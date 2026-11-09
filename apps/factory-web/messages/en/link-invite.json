@@ -1,0 +1,180 @@
+{
+  "title": "{type} {reference}",
+  "recordName": "{type} {reference}",
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "loading": {
+    "now": "Loading the record…",
+    "slow": "Still loading…"
+  },
+  "problem": {
+    "read": "The record could not be read.",
+    "readBody": "Check your connection and try again. Nothing was changed.",
+    "internal": "Something went wrong on our side. Try again in a moment.",
+    "gone": "This invitation has ended or was withdrawn.",
+    "changed": "Your invitation changed a moment ago: the page shows it as it is now.",
+    "invalid": "That could not be sent as it is. Check it and try again.",
+    "rateLimited": "Too many tries in a short time. Wait a minute and try again."
+  },
+  "type": {
+    "Style": "Style",
+    "Quote": "Quote",
+    "SalesOrder": "Order",
+    "PurchaseOrder": "Purchase order",
+    "SubcontractOrder": "Subcontract job",
+    "Shipment": "Shipment",
+    "Complaint": "Complaint",
+    "ReturnAuthorisation": "Return",
+    "SupplierClaim": "Claim"
+  },
+  "may": {
+    "VIEW": "read",
+    "COMMENT": "write messages",
+    "UPLOAD": "upload files"
+  },
+  "why": {
+    "title": "Why you are here",
+    "by": "{name} of {company} added you to {record}.",
+    "byCompany": "{company} added you to {record}.",
+    "may": "What you can do",
+    "until": "Until",
+    "lastDay": "last day",
+    "daysLeft_one": "{count} day left",
+    "daysLeft_other": "{count} days left",
+    "invitedOn": "Invited on",
+    "only": "What you see",
+    "onlyBody": "Only what we share with you on this record. No account is needed: this link is your key, please keep it to yourself."
+  },
+  "summary": {
+    "title": "The record",
+    "empty": "Nothing more is shared about this record yet."
+  },
+  "field": {
+    "code": "Code",
+    "name": "Name",
+    "season": "Season",
+    "productType": "Type",
+    "status": "Status",
+    "number": "Our number",
+    "theirRef": "Your reference",
+    "revision": "Revision",
+    "orderDate": "Order date",
+    "requestedDate": "Requested for",
+    "promiseDate": "Promised for",
+    "expectedBackDate": "Expected back",
+    "carrier": "Carrier",
+    "shippedAt": "Shipped",
+    "expectedDeliveryAt": "Expected delivery",
+    "deliveredAt": "Delivered",
+    "category": "Category",
+    "receivedAt": "Received",
+    "answerDueOn": "Answer due",
+    "requestedAt": "Requested",
+    "goodsDueBy": "Goods due by",
+    "kind": "Kind",
+    "remedy": "Remedy asked",
+    "sentAt": "Sent"
+  },
+  "code": {
+    "status": {
+      "DRAFT": "Draft",
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived",
+      "PENDING_APPROVAL": "Waiting for approval",
+      "APPROVED": "Approved",
+      "SENT": "Sent",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "EXPIRED": "Expired",
+      "CANCELLED": "Cancelled",
+      "CONFIRMED": "Confirmed",
+      "IN_PRODUCTION": "In production",
+      "READY": "Ready",
+      "PARTLY_SHIPPED": "Partly shipped",
+      "SHIPPED": "Shipped",
+      "CLOSED": "Closed",
+      "CHANGES_PROPOSED": "Changes proposed",
+      "PARTLY_RECEIVED": "Partly received",
+      "RECEIVED": "Received",
+      "ISSUED": "Issued",
+      "AT_WORKSHOP": "At the workshop",
+      "PACKED": "Packed",
+      "DELIVERED": "Delivered",
+      "RETURNED": "Returned",
+      "NEW": "New",
+      "TRIAGED": "Being looked at",
+      "INVESTIGATING": "Under investigation",
+      "ANSWERED": "Answered",
+      "REQUESTED": "Requested",
+      "AUTHORISED": "Authorised",
+      "INSPECTED": "Inspected",
+      "REJECTED": "Rejected"
+    },
+    "productType": {
+      "JACKET": "Jacket",
+      "TROUSERS": "Trousers",
+      "SUIT": "Suit",
+      "GLOVES": "Gloves",
+      "VEST": "Vest",
+      "OTHER": "Other"
+    },
+    "category": {
+      "SAFETY": "Safety",
+      "FUNCTION": "Function",
+      "COSMETIC": "Look and finish",
+      "FIT": "Fit"
+    },
+    "kind": {
+      "RETURN": "Goods returned",
+      "CLAIM": "Claim"
+    },
+    "remedy": {
+      "CREDIT": "Credit note",
+      "REPLACEMENT": "Replacement"
+    }
+  },
+  "files": {
+    "title": "Shared files",
+    "empty": "No files shared yet.",
+    "emptyBody": "Files we share with you on this record will show here.",
+    "open": "Open",
+    "openNamed": "Open {name} in a new tab",
+    "yours": "Added by you · {at}",
+    "held": {
+      "opening": "Another file is opening."
+    },
+    "upload": "Add files",
+    "uploadHint": "PDF, pictures, office documents, CSV or text, up to {mb} MB each.",
+    "uploading": "Uploading {name}…",
+    "uploaded": "{name} was added. We see it now too.",
+    "checking": "{name} arrived and is being checked; it shows here once it passes.",
+    "problem": {
+      "size": "This file is too large: up to {mb} MB each.",
+      "sizeAny": "This file is too large.",
+      "type": "This kind of file cannot be added here: a PDF, a picture, an office document, a CSV or a text file.",
+      "empty": "This file is empty.",
+      "closed": "Uploads are closed for now. Please send the file to your contact by e-mail.",
+      "open": "The file could not be opened. Try again."
+    }
+  },
+  "thread": {
+    "title": "Messages",
+    "empty": "No messages yet. Write the first one below.",
+    "replyByEmail": "You can also answer our e-mails: your reply lands here."
+  },
+  "held": {
+    "NO_COMMENT": "Your invitation lets you read this record, not write on it. Ask the person who invited you.",
+    "NO_UPLOAD": "Your invitation does not let you add files. Ask the person who invited you.",
+    "CLOSED": "This conversation was closed: no new message can be added.",
+    "OTHER_PARTY": "This record has no conversation you can take part in.",
+    "REVOKED": "This invitation was withdrawn.",
+    "EXPIRED": "This invitation has ended."
+  },
+  "notify": {
+    "title": "E-mail me",
+    "label": "E-mail me new messages on this record",
+    "on": "On: new messages on this record come by e-mail",
+    "off": "Off: you see new messages only on this page",
+    "hint": "The e-mail says who wrote and the first lines. To answer, come back to this page."
+  }
+}

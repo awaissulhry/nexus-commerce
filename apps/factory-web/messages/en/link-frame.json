@@ -1,0 +1,32 @@
+{
+  "ask": {
+    "label": "Ask for a new link",
+    "again": "Ask again",
+    "checking": "Checking the connection first…",
+    "checkingBody": "Many requests came from your network: we check this one before passing it on. It takes a few seconds.",
+    "done": "Asked — we passed it on",
+    "answer": "We passed this on. If the link was ours, the sender will write to the address it was sent to.",
+    "onFile": "A new link only ever goes to the address this one was sent to, never to one typed here.",
+    "wait": "You asked several times already. You can ask again at {time}.",
+    "waitHeld": "You can ask again at {time}.",
+    "failed": "Your request did not reach us. Check the connection and ask again."
+  },
+  "drafts": {
+    "later": "Finish later",
+    "until": "Finish later from the same link until {day}. Nothing is kept on this device.",
+    "laterTitle": "Saved — you can close this page",
+    "laterBody": "Open the same link again before {day} to finish where you left off.",
+    "restored": "We kept what you filled in on {day} at {time}",
+    "restoredBody": "Go on where you left off, or start again.",
+    "keep": "Go on",
+    "startAgain": "Start again",
+    "deadTitle": "This link no longer keeps your draft",
+    "deadBody": "It was used, expired or withdrawn meanwhile. What you typed is still on this page until you close it.",
+    "held": {
+      "empty": "Fill in something first: there is nothing to keep yet.",
+      "saving": "Saving…",
+      "tooBig": "This form is too large to keep as a draft: send it as it is, or shorten your notes.",
+      "dead": "This link no longer keeps drafts."
+    }
+  }
+}

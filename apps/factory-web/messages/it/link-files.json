@@ -1,0 +1,172 @@
+{
+  "title": {
+    "secure": "File da {sender}",
+    "shared": "Documenti da {sender}",
+    "payroll": "File paghe · {month}"
+  },
+  "loading": {
+    "now": "Leggiamo quanto è stato inviato…",
+    "slow": "Ancora un momento…"
+  },
+  "error": {
+    "title": "Qualcosa non ha funzionato da parte nostra",
+    "body": "Non siamo riusciti a leggere i file. Riprova."
+  },
+  "retry": "Riprova",
+  "status": {
+    "works": "Valido fino al {date}",
+    "downloadsLeft_one": "{count} download rimasto",
+    "downloadsLeft_other": "{count} download rimasti",
+    "opensLeft_one": "{count} apertura rimasta",
+    "opensLeft_other": "{count} aperture rimaste"
+  },
+  "lead": {
+    "secure_one": "{sender} ti ha inviato {count} file. Non viene mai mostrato nel browser: scaricalo per aprirlo.",
+    "secure_other": "{sender} ti ha inviato {count} file. Non vengono mai mostrati nel browser: scaricali per aprirli.",
+    "shared_one": "{sender} ha condiviso con te {count} documento: leggilo qui o scaricalo.",
+    "shared_other": "{sender} ha condiviso con te {count} documenti: leggili qui o scaricali.",
+    "payroll": "{sender} ti ha inviato il file paghe di {month}: le ore del mese per il tuo programma paghe e il riepilogo. Nessun importo di paga viaggia via link."
+  },
+  "logged": {
+    "secure": "Ogni download viene registrato per {sender} e usa uno dei download rimasti.",
+    "shared": "L’apertura di questo link e ogni download vengono registrati per {sender}.",
+    "payroll": "Ogni download viene registrato per {sender} e usa uno dei download rimasti."
+  },
+  "payroll": {
+    "month": "Mese",
+    "number": "Numero",
+    "revision": "Versione",
+    "first": "Prima versione",
+    "corrected": "Correzione {revision}",
+    "what": "Contenuto",
+    "hoursOnly": "Solo ore e assenze, senza importi di paga",
+    "kind": {
+      "DATA": "File dati per il tuo programma paghe",
+      "SUMMARY": "Riepilogo da leggere (PDF)"
+    }
+  },
+  "password": {
+    "title": "Password",
+    "lead_one": "{count} file ti aspetta. Scrivi la password che ti ha dato {sender}: ti è arrivata a parte, mai nella e-mail.",
+    "lead_other": "{count} file ti aspettano. Scrivi la password che ti ha dato {sender}: ti è arrivata a parte, mai nella e-mail.",
+    "label": "Password",
+    "hint": "Dopo 5 password sbagliate il link resta bloccato per 15 minuti.",
+    "lastTry": "Resta un tentativo: dopo il link resta bloccato per 15 minuti.",
+    "show": "Mostra",
+    "hide": "Nascondi",
+    "open": "Apri i file",
+    "wrong_one": "La password non corrisponde. Resta {count} tentativo.",
+    "wrong_other": "La password non corrisponde. Restano {count} tentativi.",
+    "wrongPlain": "La password non corrisponde.",
+    "empty": "Scrivi prima la password.",
+    "failed": "La password non ci è arrivata. Controlla la connessione e riprova.",
+    "relock": "I file sono rimasti aperti per 30 minuti: scrivi di nuovo la password per continuare.",
+    "heldTitle": "Troppe password sbagliate",
+    "heldBody": "Il link resta bloccato fino alle {time}. Riprova allora, oppure chiedi a {sender}.",
+    "held": {
+      "busy": "Controlliamo la password…",
+      "wait": "Bloccato fino alle {time}: troppe password sbagliate.",
+      "empty": "Scrivi prima la password."
+    }
+  },
+  "files": {
+    "title": {
+      "secure_one": "{count} file",
+      "secure_other": "{count} file",
+      "shared_one": "{count} documento",
+      "shared_other": "{count} documenti",
+      "payroll_one": "{count} file",
+      "payroll_other": "{count} file"
+    },
+    "none": {
+      "title": "Non c’è più nulla da scaricare",
+      "body": "I file di questo link non sono più disponibili. Chiedili a {sender}."
+    }
+  },
+  "all": {
+    "label_one": "Scarica il file",
+    "label_other": "Scarica tutti e {count}",
+    "uses_one": "Scaricarlo usa {count} dei {left} download rimasti.",
+    "uses_other": "Scaricarli tutti usa {count} dei {left} download rimasti: uno per file.",
+    "busy": "Download {done} di {of}…",
+    "partial": "Scaricati {done} di {of}. Riprova gli altri uno per uno.",
+    "done_one": "{count} file scaricato.",
+    "done_other": "{count} file scaricati.",
+    "held": {
+      "busy": "Download {done} di {of}…",
+      "uses": "Per tutti e {count} servono {count} download e ne restano {left}: scarica uno per uno i file che ti servono."
+    },
+    "closesTitle_one": "Scaricarli tutti usa gli ultimi {count} download",
+    "closesTitle_other": "Scaricarli tutti usa gli ultimi {count} download",
+    "closesBody": "Dopo il link si chiude."
+  },
+  "download": {
+    "held": {
+      "all": "Stiamo scaricando tutti i file…",
+      "busy": "Download in corso…",
+      "none": "Non restano download."
+    }
+  },
+  "last": {
+    "title": "Il prossimo download è l’ultimo",
+    "body": "Dopo il link si chiude. Scarica il file che ti serve di più.",
+    "bodyReceipt": "Dopo il link si chiude e non potrai più confermare di aver ricevuto i file: se {sender} te l’ha chiesto, confermalo prima."
+  },
+  "file": {
+    "checksum": "Impronta {sum}…",
+    "checksumFull": "SHA-256: {sum}",
+    "download": "Scarica",
+    "downloadOf": "Scarica {name}",
+    "again": "Riprova",
+    "read": "Leggilo qui",
+    "readOf": "Leggi {name} qui",
+    "busy": "Download in corso…",
+    "done": "Scaricato",
+    "failed": "Non scaricato: riprova.",
+    "gone": "Non più disponibile. Chiedilo a {sender}.",
+    "replaced": "Sostituito",
+    "replacedBy": "Sostituito dalla versione {version}"
+  },
+  "newer": {
+    "title": "La versione {version} ha sostituito questa il {date}",
+    "titleNoNumber": "Una versione più recente ha sostituito questa il {date}",
+    "onLink": "La nuova versione è anche in questo link: {name}.",
+    "ask": "Chiedi a {sender} la nuova versione prima di usare questa.",
+    "go": "Vai alla versione {version}",
+    "goNoNumber": "Vai alla nuova versione"
+  },
+  "preview": {
+    "of": "{name}, letto nella pagina",
+    "close": "Chiudi",
+    "loading": "Apriamo il documento…",
+    "failed": {
+      "title": "Non siamo riusciti a mostrare il documento",
+      "body": "Qualcosa non ha funzionato durante la lettura. Riprova, oppure scaricalo."
+    }
+  },
+  "receipt": {
+    "title": "Conferma di averli ricevuti",
+    "lead": "Facoltativo: così {sender} vede che i file ti sono arrivati, e quando.",
+    "name": "Il tuo nome (facoltativo)",
+    "nameHint": "Così {sender} sa chi li ha ricevuti.",
+    "send": "Ho ricevuto questi file",
+    "failed": "La tua conferma non ci è arrivata. Riprova.",
+    "held": {
+      "busy": "Invio in corso…",
+      "locked": "Scrivi prima la password.",
+      "long": "Un nome ha al massimo {max} caratteri."
+    },
+    "done": {
+      "title": "Hai confermato di aver ricevuto i file",
+      "body": "{sender} lo vede. Puoi ancora scaricare i file finché il link è valido.",
+      "at": "Confermato",
+      "name": "Da"
+    }
+  },
+  "used": {
+    "title": "Tutti i download usati",
+    "body": "Hai usato l’ultimo download di questo link: non si apre più. {sender} vede cosa è stato scaricato.",
+    "downloaded_one": "Scaricato qui ({count})",
+    "downloaded_other": "Scaricati qui ({count})"
+  }
+}

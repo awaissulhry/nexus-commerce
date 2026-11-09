@@ -1,0 +1,143 @@
+{
+  "tab": "Partners",
+  "intro": "People of {partner} invited to this record by link: they see only its shared details, files and messages.",
+  "introNoParty": "People outside invited to this record by link.",
+  "listLabel": "Partners invited to {title}",
+  "loading": "Reading the invitations…",
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "problem": {
+    "read": "The invitations could not be read.",
+    "forbidden": "You may not see the invitations of this record.",
+    "notFound": "This record was not found.",
+    "unavailable": "The server is not answering. Try again in a moment."
+  },
+  "empty": {
+    "title": "Nobody outside is invited yet",
+    "body": "Share with a partner brings one of their people into this record: no portal account needed."
+  },
+  "state": {
+    "LIVE": "Active",
+    "EXPIRED": "Ended",
+    "REVOKED": "Revoked"
+  },
+  "may": {
+    "VIEW": "Read",
+    "COMMENT": "Write messages",
+    "UPLOAD": "Upload files"
+  },
+  "row": {
+    "may": "May",
+    "until": "Until",
+    "ended": "Ended on",
+    "invited": "Invited",
+    "invitedBy": "{name}, {at}",
+    "opened": "Last opened",
+    "notOpened": "Not opened yet",
+    "mail": "New messages by e-mail",
+    "mailOn": "On (their choice)",
+    "mailOff": "Off (their choice)",
+    "revoked": "Revoked",
+    "revokedBy": "{name}, {at}",
+    "someone": "someone"
+  },
+  "held": {
+    "noRight": "Only people with the right to invite partners can do this.",
+    "noRecordRight": "Inviting to this record also takes the right to change it.",
+    "reading": "Wait until the invitations are read.",
+    "busy": "Wait a moment: the last change is being saved.",
+    "ALL_COMPANIES": "This record is shared by every company: invite the partner on its quote or order instead.",
+    "NO_PARTY": "This record has no customer, supplier, workshop or brand: there is nobody outside to invite.",
+    "revoked": "This invitation was revoked.",
+    "ended": "This invitation has ended: invite them again for a new period."
+  },
+  "invite": {
+    "open": "Share with a partner",
+    "title": "Share with a partner",
+    "to": "{reference} · {partner}",
+    "intro": "They get a link to this record only: its shared details, files and messages. No portal account, no prices.",
+    "who": "Whom",
+    "toContact": "A contact on file",
+    "toContactBody": "One of the partner's people we already know.",
+    "noContacts": "No contact with an e-mail on file yet.",
+    "toEmail": "Another address of theirs",
+    "toEmailBody": "An agent, a designer, a lab working with this partner.",
+    "contact": "Contact",
+    "contactPick": "Choose a contact",
+    "email": "E-mail address",
+    "emailHint": "Someone working with {partner}.",
+    "may": "What they may do",
+    "viewAlways": "Reading is always part of an invitation.",
+    "until": "Until",
+    "untilHint": "The link ends at 23:59 of that day. At most 180 days; a new period is a new invitation.",
+    "note": "A few words for them (optional)",
+    "noteHint": "They read it in the invitation e-mail.",
+    "how": "How it reaches them",
+    "mail": "By e-mail",
+    "mailBody": "We send the link to the address now.",
+    "link": "A link to pass on",
+    "linkBody": "You get the link once and send it yourself.",
+    "language": "Their language",
+    "languageHint": "The invitation and the page.",
+    "languageParty": "As on file",
+    "cancel": "Cancel",
+    "goMail": "Invite and send",
+    "goLink": "Invite and get the link",
+    "problem": {
+      "contact": "Choose a contact with an e-mail.",
+      "email": "Write a complete e-mail address.",
+      "until": "Choose the last day.",
+      "untilSoon": "The invitation must last at least an hour from now.",
+      "untilLate": "An invitation lasts at most 180 days.",
+      "untilRefused": "The server did not take this day: choose another within 180 days.",
+      "note": "At most {max} characters.",
+      "suppressed": "Mail to this address bounced or was refused: correct it first.",
+      "already": "This address is invited to this record already: change what they may do, or revoke it first.",
+      "forbidden": "You may not invite partners to this record.",
+      "notFound": "This record was not found.",
+      "invalid": "The invitation could not be made as it is.",
+      "rateLimited": "Too many tries in a short time. Wait a minute.",
+      "unavailable": "The server is not answering. Try again in a moment.",
+      "failed": "The invitation could not be made. Try again."
+    }
+  },
+  "change": {
+    "open": "Change",
+    "title": "What they may do",
+    "body": "It applies from their next click: what they are writing now is checked again when they send it.",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "revoke": {
+    "open": "Revoke",
+    "title": "Revoke this invitation?",
+    "body": "{email} can no longer open this record: the link stops now. What they wrote and uploaded stays on the record.",
+    "keep": "Keep it",
+    "go": "Revoke"
+  },
+  "action": {
+    "problem": {
+      "changed": "Someone changed this invitation a moment ago: it is shown as it is now.",
+      "ended": "This invitation ended or was revoked meanwhile.",
+      "forbidden": "You may not change this invitation.",
+      "notFound": "This invitation was not found.",
+      "failed": "That did not work. Try again."
+    }
+  },
+  "link": {
+    "title": "The link for {email}",
+    "copy": "Copy link",
+    "dismiss": "Done",
+    "once": "Shown once only: copy it now and send it yourself."
+  },
+  "note": {
+    "mailed": "Invitation sent to {email}.",
+    "mailFailed": "The invitation was made but the e-mail to {email} failed: revoke it and invite again, or pass on a link.",
+    "queued": "The invitation to {email} is on its way.",
+    "linkOnce": "The invitation is ready: copy the link below.",
+    "changed": "What {email} may do was changed.",
+    "revoked": "{email} can no longer open this record.",
+    "copied": "Link copied.",
+    "copyFailed": "The link could not be copied: select it and copy it by hand."
+  }
+}
