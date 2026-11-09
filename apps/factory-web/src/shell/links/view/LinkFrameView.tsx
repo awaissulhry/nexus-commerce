@@ -3,16 +3,21 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import { Clock3, Link2Off, Loader2, MailQuestion, ShieldAlert, UserX } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
+import { EndState } from '@nexus/ui/components/EndState/index'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { SegmentedControl } from '@nexus/ui/primitives'
 import { brandingAttrs, checkBranding, type BrandingTokens } from '@nexus/ui/tokens/branding'
 import { densityAttrs } from '@nexus/ui/tokens/density'
 import '@nexus/ui/styles/branding.css'
-import { formatDateTime } from '../../../lib/i18n/format'
+import { useDsLabels } from '../../../lib/i18n/ds-labels'
+import { formatDateTime, formatTime } from '../../../lib/i18n/format'
 import { LOCALES, LOCALE_NAMES, isLocale } from '../../../lib/i18n/locales'
 import { useLocale, useLocaleSwitch, useT } from '../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../lib/pdf/labels'
+import { WithMessages } from '../../../record-panels/i18n'
 import { linkStateLook, type LinkState } from '../link-state'
+import { useLinkRenew } from '../renew/context'
+import { ASKS_FOR_NEW_LINK, renewEnd, type LinkRenew } from '../renew/model'
 import '../links.css'
 
 /**
@@ -75,6 +80,11 @@ export interface LinkFrameViewModel {
   body: LinkFrameBody
   /** The site's time zone, for the expiry. */
   timeZone?: string
+  /**
+   * B-W2b-169: "Ask for a new link" on a used, expired or unavailable link — a design case gives it (null: none);
+   * the live page leaves it out and the landing's provider gives it (renew/LinkRenew.tsx).
+   */
+  renew?: LinkRenew | null
 }
 
 export interface LinkFrameViewProps {
@@ -135,7 +145,7 @@ export function LinkFrameView({ model, children }: LinkFrameViewProps) {
         ) : model.body.kind === 'task' ? (
           <div className="fw-link-body">{children}</div>
         ) : (
-          <LinkBody body={model.body} senderName={senderName} timeZone={model.timeZone}>
+          <LinkBody body={model.body} senderName={senderName} timeZone={model.timeZone} renew={model.renew}>
             {children}
           </LinkBody>
         )}
@@ -163,7 +173,7 @@ export function LinkFrameView({ model, children }: LinkFrameViewProps) {
   )
 }
 
-function LinkBody({ body, senderName, timeZone, children }: { body: Extract<LinkFrameBody, { kind: 'link' }>; senderName: string | null; timeZone?: string; children?: ReactNode }) {
+function LinkBody({ body, senderName, timeZone, renew, children }: { body: Extract<LinkFrameBody, { kind: 'link' }>; senderName: string | null; timeZone?: string; renew?: LinkRenew | null; children?: ReactNode }) {
   const t = useT('shell')
   const locale = useLocale()
   const look = linkStateLook(body.state)
@@ -190,14 +200,46 @@ function LinkBody({ body, senderName, timeZone, children }: { body: Extract<Link
     )
   }
 
+  if (body.state === 'loading') {
+    return (
+      <Card padded className={`fw-link-state tone-${look.tone}`} role="status" aria-live="polite">
+        <EmptyState
+          icon={STATE_ICON[body.state]}
+          title={t(`links.state.${body.state}.title`)}
+          description={senderName ? t(`links.state.${body.state}.body`, { sender: senderName }) : t(`links.state.${body.state}.bodyAnonymous`)}
+        />
+      </Card>
+    )
+  }
+
+  // B-W2b-169: one EndState for every end; a used, expired or unavailable link offers "Ask for a new link".
   return (
-    <Card padded className={`fw-link-state tone-${look.tone}`} role={body.state === 'loading' ? 'status' : undefined} aria-live={body.state === 'loading' ? 'polite' : undefined}>
-      <EmptyState
-        icon={STATE_ICON[body.state]}
-        title={t(`links.state.${body.state}.title`)}
-        description={senderName ? t(`links.state.${body.state}.body`, { sender: senderName }) : t(`links.state.${body.state}.bodyAnonymous`)}
-      />
-    </Card>
+    <WithMessages namespaces={['link-frame', 'ds-words']}>
+      <DeadLink state={body.state} senderName={senderName} timeZone={timeZone} renew={renew} />
+    </WithMessages>
+  )
+}
+
+/** B-W2b-169: a link that opens nothing (used, expired, withdrawn, wrong person, missing, error) as the DS EndState. */
+function DeadLink({ state, senderName, timeZone, renew: given }: { state: LinkState; senderName: string | null; timeZone?: string; renew?: LinkRenew | null }) {
+  const t = useT('shell')
+  const f = useT('link-frame')
+  const locale = useLocale()
+  const ds = useDsLabels(timeZone)
+  const look = linkStateLook(state)
+  const provided = useLinkRenew(given)
+  const renew = ASKS_FOR_NEW_LINK.has(state) ? provided : null
+  const end = renew ? renewEnd(renew, (key) => f(key, { time: renew.waitUntil ? formatTime(renew.waitUntil, { locale, timeZone }) : '' })) : null
+  return (
+    <EndState
+      tone={look.tone}
+      icon={STATE_ICON[state]}
+      title={t(`links.state.${state}.title`)}
+      body={senderName ? t(`links.state.${state}.body`, { sender: senderName }) : t(`links.state.${state}.bodyAnonymous`)}
+      next={end?.next}
+      actions={end ? [end.action] : undefined}
+      labels={ds.endState}
+    />
   )
 }
 

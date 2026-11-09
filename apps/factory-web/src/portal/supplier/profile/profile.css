@@ -1,0 +1,193 @@
+/*
+ * SCR-191 — the supplier's Profile (B-W2b-193). Layout only, semantic --nds-* tokens (no raw colours). The page takes the
+ * shared account grid (../../shared/account/account.css: two cards side by side from 1100 px, the lists across the whole
+ * width, one column on a phone; no max-width of its own); these are the company, contacts and changes parts.
+ */
+
+.fw-psprof-strong {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psprof-muted {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-psprof-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-psprof-value {
+  overflow-wrap: anywhere;
+}
+
+.fw-psprof-company {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-psprof-company .nds-field {
+  max-width: 480px;
+}
+
+.fw-psprof-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-psprof-h3 {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-psprof-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* ── the lists' cells ────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-psprof-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-psprof-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-6) 0;
+  line-height: 1.35;
+  white-space: normal;
+  min-width: 0;
+}
+
+.fw-psprof-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-6) 0;
+}
+
+/* ── changes waiting for our check ───────────────────────────────────────────────────────────────────────────────── */
+.fw-psprof-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-psprof-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: var(--nds-space-4) 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-psprof-changes li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-psprof-field {
+  overflow-wrap: anywhere;
+}
+
+.fw-psprof-answers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-psprof-answer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-psprof-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-psprof-answer:last-child {
+  border-bottom: 0;
+}
+
+.fw-psprof-send {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ── pop-ups ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-psprof-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-psprof-pair,
+.fw-psprof-choices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+.fw-psprof-choices {
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-psprof-choices legend {
+  margin-bottom: var(--nds-space-6);
+}
+
+.fw-psprof-grid4 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (min-width: 720px) {
+  .fw-psprof-pair,
+  .fw-psprof-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-psprof-roles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fw-psprof-grid4 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

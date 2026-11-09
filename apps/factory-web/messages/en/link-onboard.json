@@ -1,0 +1,237 @@
+{
+  "title": "Supplier questionnaire — {company}",
+  "retry": "Try again",
+  "loading": {
+    "now": "Loading the questionnaire…",
+    "slow": "Still loading…"
+  },
+  "problem": {
+    "read": "We could not load the questionnaire",
+    "readBody": "Check your connection and try again. Nothing you typed is lost: it is kept with us.",
+    "gone": "This link no longer opens the questionnaire",
+    "goneBody": "It was answered, withdrawn or it expired. Ask us for a new link.",
+    "changed": "The questionnaire changed a moment ago",
+    "changedBody": "We loaded the new version; your answers are kept where the questions are the same. Check them and send again.",
+    "fields": "Some answers need a look",
+    "fieldsBody": "We moved you to the first one: each field says what to fix.",
+    "rateLimited": "Too many tries in a short time",
+    "rateLimitedBody": "Wait a minute, then press Sign and send again.",
+    "server": "We could not take your answers just now",
+    "serverBody": "Nothing was sent. Press Sign and send again in a moment.",
+    "network": "The connection dropped",
+    "networkBody": "We do not know whether your answers arrived. Press Sign and send again: if they did arrive, the link says it has been used — then we have them."
+  },
+  "draft": {
+    "restored": "We kept your answers from {day} at {time}",
+    "restoredBody": "You can go on from where you stopped.",
+    "keep": "Go on",
+    "startAgain": "Start again"
+  },
+  "later": {
+    "button": "Finish later",
+    "held": "Answer something first: there is nothing to keep yet.",
+    "saved": "Your answers are kept with us",
+    "savedBody": "Open the same link again to go on, until {day}."
+  },
+  "intro": {
+    "title": "Why we ask",
+    "why": "{company} checks its supply chain for forced and child labour, as the EU Forced Labour Regulation (EU) 2024/3015 asks of everyone who sells in the EU from December 2027. Your answers and documents are part of that due diligence.",
+    "time": "It takes about 20 minutes. Keep your certificates (PDF or photo) and their expiry dates at hand.",
+    "later": "Your answers are saved with us as you type: close the page and come back from the same link until {day}.",
+    "readerNamed": "{name} of {company} reads your answers and writes to you if anything is missing.",
+    "reader": "The purchasing team of {company} reads your answers and writes to you if anything is missing.",
+    "note": "A note from {company}"
+  },
+  "step": {
+    "count": "Step {at} of {of}",
+    "empty": "Nothing to answer in this step.",
+    "company": {
+      "short": "Company",
+      "title": "1 · Company",
+      "lead": "Who you are: as you want {company} to hold it."
+    },
+    "contacts": {
+      "short": "Contacts",
+      "title": "2 · Contacts",
+      "lead": "Who handles orders, invoices and quality."
+    },
+    "sites": {
+      "short": "Sites",
+      "title": "3 · Sites and sub-suppliers",
+      "lead": "Where the work is done, including your sub-suppliers' sites."
+    },
+    "certifications": {
+      "short": "Certifications",
+      "title": "4 · Certifications and tests",
+      "lead": "Your documents with their dates: we capture them once and remind you before they expire."
+    },
+    "labour": {
+      "short": "Labour",
+      "title": "5 · Labour and social",
+      "lead": "Due-diligence questions. Answer as things are; where an answer needs it, tell us more."
+    },
+    "sign": {
+      "short": "Review",
+      "title": "6 · Review and send",
+      "lead": "Check every answer, then sign the statement and send it to {company}."
+    }
+  },
+  "nav": {
+    "back": "Back",
+    "next": "Continue: {step}",
+    "keys": "Keyboard: ← → move between steps when no field is selected."
+  },
+  "send": {
+    "busy": "Sending…",
+    "used": "This link has already been used to send the questionnaire."
+  },
+  "field": {
+    "optional": "(optional)"
+  },
+  "check": {
+    "required": "Required.",
+    "tooLong": "Too long: shorten it.",
+    "url": "Write a web address, for example www.example.com.",
+    "vat": "This VAT number does not look right: check its country prefix and digits.",
+    "name": "Write the person's name.",
+    "email": "Write an e-mail address.",
+    "phone": "Write a phone number: digits, spaces and + ( ) . -",
+    "file": "Upload the document (PDF, JPEG or PNG).",
+    "day": "Choose a day.",
+    "issuedFuture": "The day it was issued is today or before.",
+    "expired": "This document has expired: upload the one in force.",
+    "expiresBefore": "It expires after the day it was issued.",
+    "yesNo": "Answer Yes or No.",
+    "explain": "Tell us more about this answer.",
+    "choice": "Choose one.",
+    "sign": "Read the code of conduct and sign it.",
+    "stray": "This answer is not part of the questionnaire any more.",
+    "sites": "Add at least one site.",
+    "tooMany": "At most 20 sites.",
+    "site": "Complete this site.",
+    "siteName": "Write the site's name.",
+    "country": "Choose the country.",
+    "steps": "Choose the steps again.",
+    "sameFile": "Each document answers one question: upload it again where it belongs.",
+    "signedName": "Write your full name.",
+    "signedRole": "Write your role in the company.",
+    "truthful": "Confirm the answers are true to the best of your knowledge."
+  },
+  "vat": {
+    "check": "Check in VIES",
+    "held": "Write the VAT number first.",
+    "checking": "Checking in VIES…",
+    "failed": "We could not check it just now: you can go on, we check it later.",
+    "valid": "Valid in VIES",
+    "validName": "Valid — name matches",
+    "validOtherName": "Valid — under another name",
+    "otherNameHint": "VIES holds this number under another name: check the legal name above.",
+    "INVALID": "Not valid in VIES",
+    "ERROR": "VIES did not answer: you can go on, we check it later.",
+    "NOT_CHECKED": "Format correct (VIES checks EU numbers outside Italy)",
+    "FORMAT": "The format is not right",
+    "onFile": "We hold {vat} for you: change it only if it is wrong."
+  },
+  "contact": {
+    "name": "Name and surname",
+    "email": "E-mail",
+    "phone": "Phone"
+  },
+  "upload": {
+    "done": "Document uploaded",
+    "checking": "Being checked",
+    "remove": "Remove",
+    "busy": "Uploading {name}…",
+    "hint": "PDF, JPEG or PNG, up to 20 MB",
+    "failed": "{name} did not upload: try again.",
+    "type": "{name} is not a PDF, JPEG or PNG.",
+    "size": "{name} is larger than 20 MB.",
+    "closed": "We cannot take documents from links right now: send the questionnaire without it, and we will ask for it."
+  },
+  "document": {
+    "issuer": "Issued by",
+    "number": "Certificate number",
+    "issuedOn": "Issued on",
+    "expiresOn": "Expires on",
+    "expiresHint": "Leave it empty if it does not expire."
+  },
+  "answer": {
+    "yes": "Yes",
+    "no": "No",
+    "explainNeeded": "Tell us more",
+    "explain": "More about your answer",
+    "addWords": "Add a comment"
+  },
+  "code": {
+    "open": "Read the code of conduct (opens a new tab)",
+    "opening": "Opening the code of conduct…",
+    "failed": "The code of conduct did not open: try again.",
+    "sign": "I have read the code of conduct and we follow it in our work for {company}"
+  },
+  "sites": {
+    "none": "No site yet.",
+    "noneSub": "No sub-supplier yet: add those that work on what you make for us.",
+    "site": "Site {n}",
+    "sub": "Sub-supplier {n}",
+    "remove": "Remove",
+    "name": "Name",
+    "country": "Country",
+    "chooseCountry": "Choose the country",
+    "town": "Town",
+    "steps": "What is done there",
+    "full": "At most 20 sites.",
+    "add": "Add a site",
+    "addSub": "Add a sub-supplier"
+  },
+  "siteStep": {
+    "BEAMHOUSE": "Beamhouse",
+    "TANNING": "Tanning",
+    "RETANNING": "Retanning",
+    "FINISHING": "Finishing",
+    "WEAVING": "Weaving",
+    "DYEING": "Dyeing",
+    "MANUFACTURING": "Manufacturing"
+  },
+  "review": {
+    "change": "Change",
+    "toFix": "To fix",
+    "none": "—",
+    "signed": "Read and signed",
+    "file": "Document",
+    "expires": "expires {day}",
+    "fixFirst_one": "{count} answer needs a look before you send",
+    "fixFirst_other": "{count} answers need a look before you send",
+    "fixFirstBody": "Use Change on the step marked To fix."
+  },
+  "sign": {
+    "role": "Your role",
+    "roleHint": "For example: owner, quality manager.",
+    "title": "Signed statement",
+    "legal": "By typing your name you sign this questionnaire for your company and send it to {company}. Your answers are kept with the date and time.",
+    "truthful": "The answers are true to the best of my knowledge.",
+    "tickMissing": "Tick to confirm",
+    "name": "Name and surname",
+    "nameHint": "As you sign your letters.",
+    "nameEmpty": "Write your name and surname",
+    "send": "Sign and send"
+  },
+  "done": {
+    "titleBy": "Sent — {name} reviews it",
+    "title": "Sent — {company} reviews it",
+    "body": "We write to you if anything is missing.",
+    "next": {
+      "review": "{company} reads your answers and your documents.",
+      "questions": "If we have questions, we write to you and send a new link to answer them.",
+      "documents_one": "Your document is kept with its expiry date: we remind you before it expires.",
+      "documents_other": "Your {count} documents are kept with their expiry dates: we remind you before they expire."
+    },
+    "fact": {
+      "questionnaire": "Questionnaire",
+      "version": "{title} · version {revision}",
+      "sent": "Sent",
+      "by": "Signed by",
+      "documents": "Documents"
+    },
+    "contact": "Questions? Reply to the e-mail that brought you the link."
+  }
+}

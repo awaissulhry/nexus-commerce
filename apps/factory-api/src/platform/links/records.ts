@@ -46,3 +46,31 @@ export function registerLinkRecordSource(recordType: string, source: LinkRecordS
 export function linkRecordSource(recordType: string): LinkRecordSource | undefined {
   return sources.get(recordType)
 }
+
+// ---- B-W2b-200: a purpose whose link opens only while something else lives (the share of a RECORD_INVITE link) ----------
+
+/**
+ * A purpose may ask the authenticator to check, on EVERY request of its links, that what the link stands for still lives:
+ * a RECORD_INVITE link opens only while its RecordShare does (not revoked, before its end), so a share the office revoked or
+ * that ended opens nothing, whatever route the link calls (its page, its posts, the generic files routes). The check reads
+ * in the link's own partner scope; false (or a throw) is the link's one 404. A purpose listed here with no check registered
+ * opens nothing (fail closed): the module registers its check when its routes load.
+ */
+export type LinkLiveCheck = (client: FactoryClient, link: { readonly id: string; readonly partyId: string; readonly recordType: string; readonly recordId: string }, now: Date) => Promise<boolean>
+
+const LIVE_CHECKED: ReadonlySet<string> = new Set(['RECORD_INVITE'])
+const liveChecks = new Map<string, LinkLiveCheck>()
+
+export function registerLinkLiveCheck(purpose: string, check: LinkLiveCheck): () => void {
+  if (!LIVE_CHECKED.has(purpose)) throw new Error(`No live check is asked for ${purpose} links.`)
+  liveChecks.set(purpose, check)
+  return () => {
+    if (liveChecks.get(purpose) === check) liveChecks.delete(purpose)
+  }
+}
+
+/** The check of a purpose's links: null when the purpose needs none; a check that refuses when it needs one and has none. */
+export function linkLiveCheck(purpose: string): LinkLiveCheck | null {
+  if (!LIVE_CHECKED.has(purpose)) return null
+  return liveChecks.get(purpose) ?? (async () => false)
+}

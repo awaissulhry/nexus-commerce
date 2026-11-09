@@ -66,6 +66,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-165 (SAL-199): a quote version's proofs (modules/sales/quote-proofs): every kind; added, given a new version and
   // removed only while the version is unsent, shared with the customer and kept by the send.
   QuoteVersion: { route: 'POST /sales/quotes/:quoteId/proofs (or …/proofs/:fileId/versions), then POST …/proofs/:fileId/complete' },
+  // B-W2b-171 (SAL-286): a rider's body photos (front, side, back) sent with measurements by link (modules/sales/measure-link):
+  // PHOTO files only, after the privacy notice, kept until their retention ends (GDPR: body photos are personal data).
+  MeasurementProfile: { kinds: ['PHOTO'], route: 'POST /link/measure/photos, then POST /link/measure/photos/:fileId/complete (the rider\'s MEASUREMENTS link)' },
 })
 
 /**
@@ -87,6 +90,8 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   // B-W2b-135: a judgement's copy (safety.health.view, each opening a COPY view in the protected view log); files.read never reaches it.
   FitnessJudgement: 'POST /safety/health/judgements/:judgementId/copy/:fileId/open',
   HealthVisit: 'none: a visit keeps no file',
+  // B-W2b-171: a rider's body photos (sales.measurements.view, each opening recorded); files.read never reaches them.
+  MeasurementProfile: 'POST /sales/measurement-profiles/:profileId/photos/:fileId/open',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

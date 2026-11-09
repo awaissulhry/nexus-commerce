@@ -14,10 +14,16 @@ import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sal
 import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
 // B-W2b-184: approval requests to partners (the office's asks, the partner's page).
 import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approvals-out/permissions'
+// B-W2b-200: inviting a partner to one record (the office's invitations).
+import { PARTNERS_SHARES_ADDS } from '../../shares/permissions'
 // B-W2b-112: cut orders and cut tickets (the production manager and the planner plan them).
 import { CUT_ORDERS_ADDS } from '../../production/cutorders/permissions'
 // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (office and floor templates).
 import { CUTISSUE_ADDS, CUTISSUE_FLOOR_ADDS } from '../../production/cutissue/permissions'
+// B-W2b-171: measurements by link (sales and the administrator send and read them; the production manager reads them).
+import { MEASURE_LINK_ADDS } from '../../sales/measure-link/permissions'
+// B-W2b-172: the supplier questionnaire (the administrator and the buyer send, review and keep it; quality reads it).
+import { QUESTIONNAIRE_ADDS } from '../../purchasing/questionnaire/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -653,6 +659,15 @@ const PARTNER_TASKS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   buyer: ['partners.tasks.manage'],
 })
 /**
+ * B-W2b-201 (FIN-158; design finance.accounting "Portal › Accountant"): finance gives the company's accountant the guest
+ * portal from Finance › Close (the firm's portal switched on, the person invited with an end date), changes when it ends and
+ * ends it (step-up); it does not hold partners.* (the customers' and suppliers' portals stay sales', the buyer's and the
+ * administrator's). The owner from every().
+ */
+const ACCOUNTANTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['accounting.accountants.manage'],
+})
+/**
  * B-W2b-177 (COL-048; design admin.documents › Required documents): the administrator keeps the rules of every record type;
  * the buyer keeps those of what suppliers send (certificates, test reports, declarations before a PO is confirmed).
  */
@@ -765,16 +780,24 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : []),
   // B-W2b-167
   ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
+  // B-W2b-201
+  ...(audience === 'office' ? (ACCOUNTANTS_ADDS[key] ?? []) : []),
   // B-W2b-177
   ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-189
   ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : []),
   // B-W2b-184
   ...(audience === 'office' ? (PARTNERS_APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-200
+  ...(audience === 'office' ? (PARTNERS_SHARES_ADDS[key] ?? []) : []),
   // B-W2b-112
   ...(audience === 'office' ? (CUT_ORDERS_ADDS[key] ?? []) : []),
   // B-W2b-117
-  ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-171
+  ...(audience === 'office' ? (MEASURE_LINK_ADDS[key] ?? []) : []),
+  // B-W2b-172
+  ...(audience === 'office' ? (QUESTIONNAIRE_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1418,6 +1441,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PORTAL_RETURNS_ADDS,
   // B-W2b-184: what we ask the organisation to approve, to every main role that works with us but the invoices-only ones (answering takes portal.approve).
   PORTAL_APPROVALS_READERS,
+  // B-W2b-201: the accountant's room (FIN-158): the handed-over months' exports, e-invoices and registers, files only.
+  { 'guest-accountant': ['portal.accounting.view' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

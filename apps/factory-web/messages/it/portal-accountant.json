@@ -1,0 +1,314 @@
+{
+  "title": "File contabili",
+  "readOnly": "Sola lettura",
+  "band": {
+    "zip": "Scarica il periodo (zip)",
+    "status": "Sola lettura · fino al {date}"
+  },
+  "notice": {
+    "hide": "Nascondi"
+  },
+  "access": {
+    "title": "Il tuo accesso",
+    "body": "Accesso in sola lettura per {firm} alla contabilità di {company}, dato da {name}. Termina il {date}. Ogni download viene registrato.",
+    "bodyNoName": "Accesso in sola lettura per {firm} alla contabilità di {company}. Termina il {date}. Ogni download viene registrato.",
+    "preview": "Stai guardando lo spazio di {firm} come ufficio: mostra i file di {company} come li vede il commercialista e da un'anteprima non si scarica nulla.",
+    "endsSoon": "Il tuo accesso termina presto:"
+  },
+  "period": {
+    "title": "Periodo",
+    "hint": "Scegli un mese, un trimestre o un anno. Il resto della pagina segue il periodo; vedi i mesi che l'amministrazione ha consegnato.",
+    "kindLabel": "Mostra per",
+    "kind": {
+      "MONTH": "Mese",
+      "QUARTER": "Trimestre",
+      "YEAR": "Anno"
+    },
+    "choose": "Periodo",
+    "months": "I mesi di questo periodo",
+    "shared": "Consegnato",
+    "notShared": "Non ancora consegnato",
+    "locked": {
+      "SOFT": "Bloccato il {date}",
+      "HARD": "Chiuso definitivamente il {date}"
+    },
+    "someMissing_one": "{count} mese di questo periodo non è ancora consegnato: chiedi all'amministrazione.",
+    "someMissing_other": "{count} mesi di questo periodo non sono ancora consegnati: chiedi all'amministrazione.",
+    "noneYet": "L'amministrazione non ha ancora consegnato nessun periodo",
+    "noneYetBody": "Un mese compare qui quando l'amministrazione ne ha fatto l'esportazione contabile. Scrivi all'amministrazione qui sotto.",
+    "refusedTitle": "Non ancora consegnato"
+  },
+  "exports": {
+    "title": "Esportazioni contabili",
+    "hint": "Le esportazioni numerate che l'amministrazione ha preparato per te. Una riesportazione contiene solo ciò che è cambiato rispetto a quella che modifica.",
+    "empty": "Nessuna esportazione per questo periodo",
+    "emptyBody": "Chiedi all'amministrazione."
+  },
+  "einvoices": {
+    "title": "Fatture elettroniche",
+    "hint": "Tutte le fatture di vendita e di acquisto del periodo: l'XML FatturaPA e la copia PDF, quando c'è.",
+    "empty": "Nessuna fattura in questo periodo",
+    "emptyBody": "Nei mesi consegnati non è stata emessa né ricevuta nessuna fattura.",
+    "allXml": "Tutti gli XML del periodo ({count})",
+    "noFile": "Per questa fattura non è conservato nessun file."
+  },
+  "registers": {
+    "title": "IVA e registri",
+    "hint": "Ciò che le esportazioni contengono oltre ai registri: il file Intrastat e l'inventario di fine anno. Un'esportazione successiva sostituisce l'intero file.",
+    "empty": "Nessun file di registro in questo periodo",
+    "emptyBody": "Il file Intrastat arriva con l'esportazione del mese, l'inventario con la chiusura dell'anno.",
+    "current": "In vigore",
+    "replacedBy": "Sostituito da {number}",
+    "later": "{items} non sono ancora prodotti dal sistema: chiedili all'amministrazione.",
+    "laterItem": {
+      "VAT_REGISTERS": "I registri IVA",
+      "VAT_SUMMARY": "il prospetto della liquidazione IVA"
+    },
+    "join": " e "
+  },
+  "ask": {
+    "title": "Chiedi all'amministrazione"
+  },
+  "col": {
+    "export": "N. esportazione",
+    "journal": "Registro",
+    "period": "Periodo",
+    "created": "Creata il",
+    "standing": "Stato",
+    "file": "File",
+    "actions": "Azioni",
+    "number": "Numero",
+    "date": "Data",
+    "party": "Controparte",
+    "kind": "Tipo",
+    "state": "SdI",
+    "files": "File",
+    "register": "Registro"
+  },
+  "standing": {
+    "final": "Definitiva",
+    "amendedBy": "Modificata da {number}",
+    "amends": "Modifiche a {number}"
+  },
+  "row": {
+    "download": "Scarica",
+    "downloadOf": "Scarica {name}",
+    "downloading": "Download in corso…",
+    "fileFacts": "{format} · {size} · {rows} righe",
+    "fileSize": "{format} · {size}",
+    "xmlOf": "Scarica l'XML di {number}",
+    "pdfOf": "Scarica il PDF di {number}"
+  },
+  "file": {
+    "xml": "XML",
+    "pdf": "PDF",
+    "no": {
+      "xml": "Per questa fattura non è conservato l'XML.",
+      "pdf": "Per questa fattura non è conservata la copia PDF."
+    },
+    "none": {
+      "xml": "nessun XML",
+      "pdf": "nessun PDF"
+    }
+  },
+  "package": {
+    "SALES_JOURNAL": "Registro vendite",
+    "PURCHASES_JOURNAL": "Registro acquisti",
+    "PAYMENTS": "Incassi e rimborsi",
+    "COST_OF_SALES": "Costo del venduto e scostamenti",
+    "VAT_REGISTERS": "Registri IVA",
+    "INTRASTAT": "Intrastat (cessioni UE)",
+    "YEAR_END_STOCK": "Inventario di fine anno"
+  },
+  "state": {
+    "ISSUED": "Emessa",
+    "SENT": "Inviata allo SdI",
+    "DELIVERED": "Consegnata",
+    "NOT_DELIVERABLE": "Impossibilità di recapito (nell'area riservata del cliente)",
+    "REJECTED": "Scartata dallo SdI",
+    "ERROR": "Invio non riuscito",
+    "SDI": "Ricevuta dallo SdI",
+    "EMAIL": "Ricevuta per e-mail",
+    "MANUAL": "Registrata a mano",
+    "loading": "Caricamento…",
+    "slow": "Ancora in caricamento…",
+    "failed": "Non siamo riusciti a leggere i tuoi file contabili",
+    "failedBody": "Non si è perso nulla. Riprova tra poco.",
+    "retry": "Riprova",
+    "listFailed": "Non siamo riusciti a leggere questo periodo",
+    "listFailedBody": "Non si è perso nulla. Riprova tra poco."
+  },
+  "kind": {
+    "INVOICE": "Fattura",
+    "DEPOSIT": "Fattura d'acconto",
+    "CREDIT_NOTE": "Nota di credito"
+  },
+  "side": {
+    "SALES": "Vendita",
+    "PURCHASE": "Acquisto"
+  },
+  "count": {
+    "files_one": "{count} file",
+    "files_other": "{count} file",
+    "invoices_one": "{count} fattura",
+    "invoices_other": "{count} fatture"
+  },
+  "bulk": {
+    "download_one": "Scarica {count} (zip)",
+    "download_other": "Scarica {count} (zip)"
+  },
+  "keys": {
+    "download": "Scarica il file selezionato",
+    "downloadInvoice": "Scarica l'XML della fattura selezionata",
+    "select": "Scegli il file selezionato (zip di più file)"
+  },
+  "held": {
+    "preview": "Questa è l'anteprima dell'ufficio: da qui non si scarica nulla.",
+    "offline": "Nessuna connessione: i download aspettano che tu sia di nuovo online.",
+    "busy": "Un download è in corso.",
+    "choose": "Scegli prima i file.",
+    "noXml": "Nessun XML in questo periodo.",
+    "reading": "Il periodo è ancora in lettura.",
+    "nothing": "In questo periodo non c'è nessun file."
+  },
+  "refusal": {
+    "NOT_ACCOUNTANT": "Questa pagina è del commercialista: il tuo accesso non la apre.",
+    "PERIOD_NOT_SHARED": "L'amministrazione non ha ancora consegnato questo periodo: non ha un'esportazione contabile. Chiedi all'amministrazione.",
+    "FILE_NOT_IN_PERIOD": "Questo file non è tra quelli del periodo: il periodo è stato letto di nuovo.",
+    "TOO_MANY_FILES": "Uno zip contiene al massimo 400 file: scegli un periodo più breve o meno file.",
+    "TOO_LARGE": "Uno zip contiene al massimo 100 MB: scegli un periodo più breve o meno file.",
+    "NOTHING_TO_ZIP": "Non c'è nessun file da mettere nello zip.",
+    "FILE_UNAVAILABLE": "Ora questi file non si possono scaricare. Riprova più tardi o chiedi all'amministrazione.",
+    "generic": "Il download non è riuscito. Riprova.",
+    "network": "La fabbrica non risponde. Riprova tra poco."
+  },
+  "done": {
+    "file": "Download di {name} in corso.",
+    "zip": "{name} è salvato su questo dispositivo."
+  },
+  "noAccess": {
+    "title": "Non fa parte del tuo accesso",
+    "body": "Questa pagina è lo spazio del commercialista per la contabilità dell'azienda.",
+    "home": "Vai alla Home"
+  },
+  "office": {
+    "title": "Accesso del commercialista",
+    "hint": "Lo studio legge i lotti nel proprio portale: i mesi che hai esportato, le loro fatture elettroniche e i registri di {company}, solo file, fino al giorno che scegli. Ogni download è registrato qui sotto.",
+    "give": "Dai accesso…",
+    "listLabel": "Commercialisti con accesso",
+    "count_one": "{count} persona",
+    "count_other": "{count} persone",
+    "showLeft": "Mostra gli accessi terminati",
+    "bulkEnd_one": "Termina l'accesso ({count})",
+    "bulkEnd_other": "Termina l'accesso ({count})",
+    "empty": "Nessuno ha l'accesso del commercialista",
+    "emptyBody": "Dai al tuo studio contabile l'accesso in sola lettura a esportazioni, fatture elettroniche e registri.",
+    "noFirm": "Prima aggiungi lo studio contabile come organizzazione e dagli il ruolo Consulente nella sua scheda.",
+    "failed": "Non siamo riusciti a leggere chi ha accesso",
+    "failedBody": "Non è cambiato nulla. Riprova.",
+    "stepUp": "Dare, cambiare o terminare l'accesso del commercialista apre o chiude la contabilità dell'azienda a uno studio esterno: inserisci il codice dell'app di autenticazione.",
+    "status": {
+      "INVITED": "Invitato",
+      "ACTIVE": "Attivo",
+      "SUSPENDED": "Sospeso",
+      "DEACTIVATED": "Terminato"
+    },
+    "col": {
+      "person": "Persona",
+      "firm": "Studio",
+      "status": "Stato",
+      "ends": "Fine accesso",
+      "lastSignIn": "Ultimo accesso",
+      "actions": "Azioni"
+    },
+    "row": {
+      "invitedUntil": "invito valido fino al {date}",
+      "ended": "Terminato",
+      "endsSoon": "Termina presto",
+      "never": "Non ancora",
+      "change": "Cambia la fine…",
+      "end": "Termina l'accesso…",
+      "menu": "Azioni per {name}"
+    },
+    "keys": {
+      "change": "Cambia la fine dell'accesso"
+    },
+    "held": {
+      "reading": "Gli accessi sono ancora in lettura.",
+      "noManage": "Solo l'amministrazione dà, cambia o termina l'accesso del commercialista.",
+      "noFirm": "Prima aggiungi lo studio contabile con il ruolo Consulente.",
+      "left": "Questo accesso è già terminato.",
+      "expired": "L'invito è scaduto: dai di nuovo l'accesso.",
+      "choose": "Scegli prima le persone.",
+      "someLeft": "Alcune delle persone scelte non hanno più accesso.",
+      "busy": "Attendi: una modifica è in corso."
+    },
+    "invite": {
+      "title": "Dai accesso al commercialista",
+      "body": "La persona riceve un'e-mail con la pagina di accesso al portale. Entra con un codice che le inviamo per e-mail; nessuna password.",
+      "firm": "Studio contabile",
+      "chooseFirm": "Scegli lo studio",
+      "everyCompany": "{firm} lavora per tutte le aziende del gruppo: la persona può aprire i file di ogni azienda nel cui portale entra.",
+      "name": "Nome",
+      "email": "E-mail",
+      "language": "Lingua delle e-mail",
+      "it": "Italiano",
+      "en": "Inglese",
+      "until": "Accesso fino al (giorno intero)",
+      "datePlaceholder": "gg/mm/aaaa",
+      "dateClear": "Cancella la data",
+      "what": "Vede solo i mesi che hai esportato: le esportazioni, le fatture elettroniche (XML e PDF) e i registri; in sola lettura, mai un documento interno né la paga di qualcuno.",
+      "go": "Dai accesso",
+      "problem": {
+        "firm": "Scegli lo studio contabile.",
+        "name": "Scrivi il nome della persona.",
+        "email": "Scrivi un indirizzo e-mail valido.",
+        "until": "Scegli l'ultimo giorno di accesso.",
+        "past": "L'ultimo giorno di accesso non può essere nel passato."
+      }
+    },
+    "change": {
+      "title": "Cambia la fine dell'accesso di {name}",
+      "body": "L'accesso dura fino alla fine del giorno che scegli, poi termina da solo.",
+      "go": "Salva la data"
+    },
+    "end": {
+      "title_one": "Terminare l'accesso di {name}?",
+      "title_other": "Terminare l'accesso di {count} persone?",
+      "body": "Le sessioni terminano subito e l'invito aperto si ferma. Potrai dare di nuovo l'accesso più avanti.",
+      "reason": "Perché (facoltativo)",
+      "go_one": "Termina l'accesso",
+      "go_other": "Termina l'accesso ({count})"
+    },
+    "done": {
+      "invited": "{name} è stato invitato: la pagina di accesso è stata inviata a {email}.",
+      "invitedOn": "Il portale dello studio è attivo e {name} è stato invitato: la pagina di accesso è stata inviata a {email}.",
+      "changed": "La fine dell'accesso di {name} è salvata.",
+      "ended_one": "L'accesso di {name} è terminato.",
+      "ended_other": "L'accesso di {count} persone è terminato."
+    },
+    "problem": {
+      "firm": "Questa organizzazione non può avere l'accesso del commercialista: serve il ruolo Consulente e che sia di questa azienda.",
+      "email": "Questo indirizzo appartiene a qualcun altro (una persona dell'ufficio o un'altra organizzazione) o ha già accesso.",
+      "until": "La fine dell'accesso non è valida: scegli un giorno nel futuro.",
+      "conflict": "Qualcuno l'ha cambiato nel frattempo: l'elenco è stato riletto. Riprova.",
+      "forbidden": "Il tuo ruolo non ti permette di cambiare questo accesso.",
+      "invalid": "Qualcosa nel modulo non è valido: controlla i campi.",
+      "unavailable": "La fabbrica non risponde. Riprova tra poco.",
+      "generic": "La modifica non è andata a buon fine. Riprova."
+    },
+    "downloads": {
+      "title": "Download",
+      "hint": "Gli ultimi download dei commercialisti dell'azienda: chi, quando e cosa.",
+      "at": "Quando",
+      "who": "Chi",
+      "what": "Cosa",
+      "period": "Periodo",
+      "zip_one": "Uno zip di {count} file: {name}",
+      "zip_other": "Uno zip di {count} file: {name}",
+      "count_one": "{count} download",
+      "count_other": "{count} download",
+      "empty": "Ancora nessun download"
+    }
+  }
+}

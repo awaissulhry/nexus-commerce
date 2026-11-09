@@ -22,4 +22,14 @@ export const manifest = defineManifest({
   'GET /accounting/locks': view,
   'POST /accounting/locks': { audiences: ['office'], permission: 'accounting.lock', scope: 'record' },
   'POST /accounting/locks/:lockId/lift': { audiences: ['office'], permission: 'accounting.lock', scope: 'record' },
+  // B-W2b-201: accountant access — the guest portal's room (partner, the session's party; files only, read in the system scope
+  // after the guest grant names the company and the period: guest/access.ts) and its office half on Finance › Close.
+  'GET /portal/accounting': { audiences: ['partner'], permission: 'portal.accounting.view', scope: 'party' },
+  'GET /portal/accounting/periods/:period': { audiences: ['partner'], permission: 'portal.accounting.view', scope: 'party' },
+  'POST /portal/accounting/files/:fileId/download': { audiences: ['partner'], permission: 'portal.accounting.view', scope: 'party' },
+  'POST /portal/accounting/zip': { audiences: ['partner'], permission: 'portal.accounting.view', scope: 'party' },
+  'GET /accounting/accountants': view,
+  'POST /accounting/accountants': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
+  'PATCH /accounting/accountants/:userId': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
+  'POST /accounting/accountants/:userId/end': { audiences: ['office'], permission: 'accounting.accountants.manage', scope: 'record' },
 })

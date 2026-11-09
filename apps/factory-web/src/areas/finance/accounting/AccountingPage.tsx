@@ -58,6 +58,8 @@ import {
   type WizardStep,
 } from './model'
 import { AccountingView } from './view/AccountingView'
+// B-W2b-201: Accountant access (the accountant's guest portal, given from here).
+import { AccountantAccess } from './guest/AccountantAccess'
 import type { AccountingActions, AccountingModel, CancelDialogModel, ExportingState, LockActions, LockDialogModel, LockPanelModel, Part } from './view-model'
 
 const SLOW_MS = 1000
@@ -498,5 +500,11 @@ export function AccountingPage() {
     stepUp: stepUpApi.stepUp,
     notice,
   }
-  return <AccountingView model={model} actions={actions} />
+  return (
+    <>
+      <AccountingView model={model} actions={actions} />
+      {/* B-W2b-201: Accountant access, under the exports (the finance.accounting connection "Portal › Accountant"). */}
+      {!address.wizard && can.view ? <AccountantAccess /> : null}
+    </>
+  )
 }

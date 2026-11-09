@@ -1,0 +1,350 @@
+/*
+ * The send-measurements link page (SCR-195) LAYOUT inside the link frame (comfortable density, phone first: the link column is
+ * centred, archetype §2.9). Controls are the design system's; semantic tokens only; the body figure is the app's own drawing.
+ */
+.fw-ms-stack,
+.fw-ms-card,
+.fw-ms-head,
+.fw-ms-section,
+.fw-ms-zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ms-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-ms-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-ms-h2,
+.fw-ms-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-ms-h2 {
+  font-size: var(--nds-font-size-lg);
+  outline: none;
+}
+
+.fw-ms-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+}
+
+.fw-ms-text,
+.fw-ms-hint,
+.fw-ms-count,
+.fw-ms-check,
+.fw-ms-error {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-ms-text {
+  color: var(--nds-text);
+}
+
+.fw-ms-hint,
+.fw-ms-count {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ms-error {
+  color: var(--nds-danger);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A plausibility hint: said, never a refusal. */
+.fw-ms-check {
+  color: var(--nds-warning-text, var(--nds-text-strong));
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ms-list {
+  margin: 0;
+  padding-left: var(--nds-space-20, 20px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.fw-ms-link {
+  color: var(--nds-primary, var(--nds-text-strong));
+  text-decoration: underline;
+}
+
+.fw-ms-label {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+/* The notice's tick: the first thing to do. */
+.fw-ms-tick {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+  outline: none;
+}
+
+.fw-ms-tick:focus-visible {
+  box-shadow: var(--nds-focus-ring, 0 0 0 2px var(--nds-primary));
+}
+
+/* The band: where you are, and how the draft kept with us stands. */
+.fw-ms-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ms-stepper {
+  overflow-x: auto;
+}
+
+.fw-ms-save,
+.fw-ms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ms-save {
+  justify-content: flex-end;
+}
+
+.fw-ms-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-8);
+}
+
+/* About you: the units, then three fields side by side where there is room. */
+.fw-ms-units {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-ms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+/* Measurements: the progress, then each zone's points with their picture. */
+.fw-ms-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ms-zone {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+}
+
+.fw-ms-point {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+
+.fw-ms-point-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ms-point-field > * {
+  max-width: 100%;
+}
+
+.fw-ms-point-field > :first-child {
+  width: 100%;
+}
+
+/* The body figure: a plain front view, the tape in the accent colour. */
+.fw-ms-figure {
+  display: block;
+  width: 64px;
+  height: auto;
+}
+
+.fw-ms-figure[data-size='lg'] {
+  width: min(100%, 180px);
+  margin: 0 auto;
+}
+
+.fw-ms-figure-body {
+  fill: var(--nds-surface-2, var(--nds-border-subtle, #ddd));
+  stroke: var(--nds-border, #bbb);
+  stroke-width: 1;
+}
+
+.fw-ms-figure-body path:nth-of-type(n + 2) {
+  fill: none;
+  stroke: var(--nds-surface-2, var(--nds-border-subtle, #ddd));
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.fw-ms-figure-tape,
+.fw-ms-figure-tape line {
+  fill: none;
+  stroke: var(--nds-primary, var(--nds-text-strong));
+  stroke-width: 2.5;
+}
+
+g.fw-ms-figure-tape circle {
+  fill: var(--nds-primary, var(--nds-text-strong));
+  stroke: none;
+}
+
+.fw-ms-figure-zone {
+  fill: var(--nds-primary-subtle, transparent);
+  stroke: var(--nds-primary, var(--nds-text-strong));
+  stroke-dasharray: 4 3;
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+/* How you like it. */
+.fw-ms-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ms-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-8);
+}
+
+/* Photos: front, side, back side by side where there is room. */
+.fw-ms-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ms-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+  min-width: 0;
+  outline: none;
+}
+
+.fw-ms-tile:focus-visible {
+  box-shadow: var(--nds-focus-ring, 0 0 0 2px var(--nds-primary));
+}
+
+.fw-ms-tile-title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  align-items: baseline;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ms-needed,
+.fw-ms-optional {
+  font-weight: var(--nds-font-weight-regular, 400);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-ms-tile-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  background: var(--nds-surface-2, var(--nds-border-subtle));
+  border-radius: var(--nds-radius-sm, 6px);
+  overflow: hidden;
+}
+
+.fw-ms-tile-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-ms-tile-frame .fw-ms-figure {
+  width: 45%;
+  opacity: 0.7;
+}
+
+.fw-ms-tile-state {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-6);
+  background: var(--nds-surface, #fff);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The guide pop-up: the picture large, the steps beside it where there is room. */
+.fw-ms-guide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-ms-steps {
+  list-style: decimal;
+}
+
+/* On a phone the six step names do not fit: the badges stay, the names are read by a screen reader only (the card's head
+   says "Step 3 of 6" and the step's name). */
+@media (max-width: 559px) {
+  .fw-ms-stepper .nds-step-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "title": "{type} {reference}",
+  "recordName": "{type} {reference}",
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "loading": {
+    "now": "Carichiamo il record…",
+    "slow": "Ancora un momento…"
+  },
+  "problem": {
+    "read": "Non siamo riusciti a leggere il record.",
+    "readBody": "Controlla la connessione e riprova. Non è stato cambiato nulla.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. Riprova tra poco.",
+    "gone": "Questo invito è scaduto o è stato ritirato.",
+    "changed": "Il tuo invito è cambiato poco fa: la pagina lo mostra com'è ora.",
+    "invalid": "Non è stato possibile inviarlo così. Controlla e riprova.",
+    "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova."
+  },
+  "type": {
+    "Style": "Modello",
+    "Quote": "Offerta",
+    "SalesOrder": "Ordine",
+    "PurchaseOrder": "Ordine d'acquisto",
+    "SubcontractOrder": "Lavorazione esterna",
+    "Shipment": "Spedizione",
+    "Complaint": "Reclamo",
+    "ReturnAuthorisation": "Reso",
+    "SupplierClaim": "Contestazione"
+  },
+  "may": {
+    "VIEW": "leggere",
+    "COMMENT": "scrivere messaggi",
+    "UPLOAD": "caricare file"
+  },
+  "why": {
+    "title": "Perché sei qui",
+    "by": "{name} di {company} ti ha aggiunto a {record}.",
+    "byCompany": "{company} ti ha aggiunto a {record}.",
+    "may": "Cosa puoi fare",
+    "until": "Fino al",
+    "lastDay": "ultimo giorno",
+    "daysLeft_one": "manca {count} giorno",
+    "daysLeft_other": "mancano {count} giorni",
+    "invitedOn": "Invitato il",
+    "only": "Cosa vedi",
+    "onlyBody": "Solo quello che condividiamo con te su questo record. Non serve un account: questo link è la tua chiave, tienilo per te."
+  },
+  "summary": {
+    "title": "Il record",
+    "empty": "Per ora non condividiamo altro su questo record."
+  },
+  "field": {
+    "code": "Codice",
+    "name": "Nome",
+    "season": "Stagione",
+    "productType": "Tipo",
+    "status": "Stato",
+    "number": "Nostro numero",
+    "theirRef": "Tuo riferimento",
+    "revision": "Revisione",
+    "orderDate": "Data ordine",
+    "requestedDate": "Richiesto per",
+    "promiseDate": "Promesso per",
+    "expectedBackDate": "Rientro previsto",
+    "carrier": "Corriere",
+    "shippedAt": "Spedito",
+    "expectedDeliveryAt": "Consegna prevista",
+    "deliveredAt": "Consegnato",
+    "category": "Categoria",
+    "receivedAt": "Ricevuto",
+    "answerDueOn": "Risposta entro",
+    "requestedAt": "Richiesto",
+    "goodsDueBy": "Merce entro",
+    "kind": "Tipo",
+    "remedy": "Rimedio chiesto",
+    "sentAt": "Inviata"
+  },
+  "code": {
+    "status": {
+      "DRAFT": "Bozza",
+      "ACTIVE": "Attivo",
+      "ARCHIVED": "Archiviato",
+      "PENDING_APPROVAL": "In attesa di approvazione",
+      "APPROVED": "Approvato",
+      "SENT": "Inviato",
+      "ACCEPTED": "Accettato",
+      "DECLINED": "Rifiutato",
+      "EXPIRED": "Scaduto",
+      "CANCELLED": "Annullato",
+      "CONFIRMED": "Confermato",
+      "IN_PRODUCTION": "In produzione",
+      "READY": "Pronto",
+      "PARTLY_SHIPPED": "Spedito in parte",
+      "SHIPPED": "Spedito",
+      "CLOSED": "Chiuso",
+      "CHANGES_PROPOSED": "Modifiche proposte",
+      "PARTLY_RECEIVED": "Ricevuto in parte",
+      "RECEIVED": "Ricevuto",
+      "ISSUED": "Emesso",
+      "AT_WORKSHOP": "In laboratorio",
+      "PACKED": "Imballato",
+      "DELIVERED": "Consegnato",
+      "RETURNED": "Reso",
+      "NEW": "Nuovo",
+      "TRIAGED": "In esame",
+      "INVESTIGATING": "In analisi",
+      "ANSWERED": "Risposto",
+      "REQUESTED": "Richiesto",
+      "AUTHORISED": "Autorizzato",
+      "INSPECTED": "Controllato",
+      "REJECTED": "Respinto"
+    },
+    "productType": {
+      "JACKET": "Giacca",
+      "TROUSERS": "Pantaloni",
+      "SUIT": "Tuta",
+      "GLOVES": "Guanti",
+      "VEST": "Gilet",
+      "OTHER": "Altro"
+    },
+    "category": {
+      "SAFETY": "Sicurezza",
+      "FUNCTION": "Funzionamento",
+      "COSMETIC": "Aspetto e finiture",
+      "FIT": "Vestibilità"
+    },
+    "kind": {
+      "RETURN": "Merce resa",
+      "CLAIM": "Contestazione"
+    },
+    "remedy": {
+      "CREDIT": "Nota di credito",
+      "REPLACEMENT": "Sostituzione"
+    }
+  },
+  "files": {
+    "title": "File condivisi",
+    "empty": "Nessun file condiviso per ora.",
+    "emptyBody": "Qui compaiono i file che condividiamo con te su questo record.",
+    "open": "Apri",
+    "openNamed": "Apri {name} in una nuova scheda",
+    "yours": "Aggiunto da te · {at}",
+    "held": {
+      "opening": "Si sta aprendo un altro file."
+    },
+    "upload": "Aggiungi file",
+    "uploadHint": "PDF, immagini, documenti Office, CSV o testo, fino a {mb} MB ciascuno.",
+    "uploading": "Carichiamo {name}…",
+    "uploaded": "{name} è stato aggiunto. Ora lo vediamo anche noi.",
+    "checking": "{name} è arrivato ed è in controllo; compare qui appena supera il controllo.",
+    "problem": {
+      "size": "Il file è troppo grande: fino a {mb} MB ciascuno.",
+      "sizeAny": "Il file è troppo grande.",
+      "type": "Questo tipo di file non si può aggiungere qui: un PDF, un'immagine, un documento Office, un CSV o un file di testo.",
+      "empty": "Il file è vuoto.",
+      "closed": "Per ora non si possono caricare file. Mandalo per e-mail al tuo contatto.",
+      "open": "Non siamo riusciti ad aprire il file. Riprova."
+    }
+  },
+  "thread": {
+    "title": "Messaggi",
+    "empty": "Nessun messaggio per ora. Scrivi il primo qui sotto.",
+    "replyByEmail": "Puoi anche rispondere alle nostre e-mail: la risposta arriva qui."
+  },
+  "held": {
+    "NO_COMMENT": "Il tuo invito permette di leggere questo record, non di scrivere. Chiedi a chi ti ha invitato.",
+    "NO_UPLOAD": "Il tuo invito non permette di aggiungere file. Chiedi a chi ti ha invitato.",
+    "CLOSED": "Questa conversazione è stata chiusa: non si possono aggiungere messaggi.",
+    "OTHER_PARTY": "Questo record non ha una conversazione a cui puoi partecipare.",
+    "REVOKED": "Questo invito è stato ritirato.",
+    "EXPIRED": "Questo invito è scaduto."
+  },
+  "notify": {
+    "title": "Avvisami per e-mail",
+    "label": "Avvisami per e-mail dei nuovi messaggi su questo record",
+    "on": "Attivo: i nuovi messaggi su questo record arrivano per e-mail",
+    "off": "Spento: vedi i nuovi messaggi solo in questa pagina",
+    "hint": "L'e-mail dice chi ha scritto e le prime righe. Per rispondere torna su questa pagina."
+  }
+}

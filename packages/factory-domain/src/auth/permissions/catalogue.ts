@@ -115,14 +115,22 @@ import { PORTAL_JOBS_DEFINITIONS, PORTAL_JOBS_PERMISSIONS } from '../../purchasi
 import { PORTAL_RETURNS_DEFINITIONS, PORTAL_RETURNS_PERMISSIONS } from '../../sales/portal-returns/permissions'
 // B-W2b-184: approval requests to partners (partners.approvals.*, the office's; portal.approvals.view, partner roles only).
 import { PARTNERS_APPROVALS_DEFINITIONS, PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_DEFINITIONS, PORTAL_APPROVALS_PERMISSIONS } from '../../approvals-out/permissions'
+// B-W2b-171: measurements by link (sales.measurements.view | manage).
+import { SALES_MEASUREMENTS_DEFINITIONS, SALES_MEASUREMENTS_PERMISSIONS } from '../../sales/measure-link/permissions'
+// B-W2b-200: inviting a partner to one record (partners.shares.view | manage, the office's).
+import { PARTNERS_SHARES_DEFINITIONS, PARTNERS_SHARES_PERMISSIONS } from '../../shares/permissions'
 // B-W2b-112: cut orders and cut tickets (production.cutorders.manage; reading is production.cutting.view, the table's scans production.cut).
 import { PRODUCTION_CUTORDERS_DEFINITIONS, PRODUCTION_CUTORDERS_PERMISSIONS } from '../../production/cutorders/permissions'
 // B-W2b-117: after the cut (production.recuts, production.secondary, production.trolleys; shared with the floor).
 import { PRODUCTION_CUTISSUE_DEFINITIONS, PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS, PRODUCTION_CUTISSUE_PERMISSIONS } from '../../production/cutissue/permissions'
+// B-W2b-172: the supplier questionnaire (purchasing.questionnaire.view | send | review | manage).
+import { QUESTIONNAIRE_DEFINITIONS, QUESTIONNAIRE_PERMISSIONS } from '../../purchasing/questionnaire/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
 import { ACCOUNTING_DEFINITIONS, ACCOUNTING_PERMISSIONS } from '../../accounting/permissions'
+// B-W2b-201: accountant access (portal.accounting.view, partner only; accounting.accountants.manage).
+import { ACCOUNTANTS_DEFINITIONS, ACCOUNTANTS_PERMISSIONS, PORTAL_ACCOUNTING_DEFINITIONS, PORTAL_ACCOUNTING_PERMISSIONS } from '../../accounting/guest/permissions'
 // B-W2a-36: Security & health (security.view, security.drills.record).
 import { SECURITY_DEFINITIONS, SECURITY_PERMISSIONS } from '../../ops/permissions'
 // B-W2a-43: customer returns (sales.returns.view | manage | receive | inspect | decide).
@@ -598,6 +606,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ALERTS_DEFINITIONS,
   // B-W2a-39: the accounting exports and the period locks.
   ACCOUNTING_DEFINITIONS,
+  // B-W2b-201: who gives the accountant the guest portal (area `accounting`).
+  ACCOUNTANTS_DEFINITIONS,
   // B-W2a-36: Security & health.
   SECURITY_DEFINITIONS,
   // B-W2a-43: customer returns.
@@ -740,10 +750,18 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-184: approval requests to partners (the office's in area `partners`, the partner's in `portal`, both declared above).
   PARTNERS_APPROVALS_DEFINITIONS,
   PORTAL_APPROVALS_DEFINITIONS,
+  // B-W2b-200: inviting a partner to one record (area `partners`, declared above).
+  PARTNERS_SHARES_DEFINITIONS,
+  // B-W2b-201: the accountant's room (partner roles only; area `portal`, declared above).
+  PORTAL_ACCOUNTING_DEFINITIONS,
   // B-W2b-112: cut orders and cut tickets (area `production`, declared above).
   PRODUCTION_CUTORDERS_DEFINITIONS,
   // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (area `production`, declared above).
   PRODUCTION_CUTISSUE_DEFINITIONS,
+  // B-W2b-171: measurements by link (area `sales`, declared above).
+  SALES_MEASUREMENTS_DEFINITIONS,
+  // B-W2b-172: the supplier questionnaire (area `purchasing`, declared above).
+  QUESTIONNAIRE_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -836,6 +854,9 @@ for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-39: the accounting exports and the period locks.
 for (const name of ACCOUNTING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-201: accountant access (the office's; the portal's flagged partner).
+for (const name of ACCOUNTANTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_ACCOUNTING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2a-36: Security & health.
 for (const name of SECURITY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-43: customer returns.
@@ -973,10 +994,16 @@ for (const name of PORTAL_RETURNS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)
 // B-W2b-184: approval requests to partners (the office's; the portal's flagged partner).
 for (const name of PARTNERS_APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PORTAL_APPROVALS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-200: inviting a partner to one record (the office's).
+for (const name of PARTNERS_SHARES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-112: cut orders and cut tickets.
 for (const name of PRODUCTION_CUTORDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-117: after the cut.
 for (const name of PRODUCTION_CUTISSUE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-171: measurements by link.
+for (const name of SALES_MEASUREMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-172: the supplier questionnaire.
+for (const name of QUESTIONNAIRE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

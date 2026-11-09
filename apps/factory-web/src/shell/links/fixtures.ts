@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../lib/design/design-screen'
 import { DEMO_COMPANIES, demoPdf } from '../design-data'
 import type { LinkState } from './link-state'
+import type { LinkRenew, RenewState } from './renew/model'
 import { LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
 
 // A made-up sender: name, an inline logo (an SVG word mark), an accent that passes the DS contrast check, a contact.
@@ -26,6 +27,9 @@ const link = (state: LinkState, extra: Partial<Extract<LinkFrameViewModel['body'
   ...extra,
 })
 
+// B-W2b-169: "Ask for a new link" on a dead link (the landing's provider gives it live; a case gives its state).
+const renew = (state: RenewState = 'idle', waitUntil: string | null = null): LinkRenew => ({ state, waitUntil, ask: () => undefined })
+
 const PDF = demoPdf(['Officina Demo S.r.l.', 'Delivery note DDT 2026/0042 (made-up)', '', 'Demo jacket, black, size 50 - 2 pieces', 'Demo gloves, size L - 4 pairs'])
 
 export const designScreen = defineDesignScreen<LinkFrameViewModel>({
@@ -45,16 +49,27 @@ export const designScreen = defineDesignScreen<LinkFrameViewModel>({
       model: { sender: SENDER, title: 'DDT 2026/0042', body: link('valid', { purpose: 'DOCUMENT_VIEW', expiresAt: '2026-11-27T22:59:00.000Z', usesLeft: 19, document: { title: 'DDT 2026/0042', fileName: 'DDT-2026-0042.pdf', data: PDF } }) },
       note: 'The PDF viewer with this app\'s lazily loaded pdf.js.',
     },
-    { id: 'used', label: 'Already used', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('used') } },
-    { id: 'expired', label: 'Expired', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('expired') } },
+    { id: 'used', label: 'Already used: Ask for a new link', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('used'), renew: renew() } },
+    { id: 'expired', label: 'Expired: Ask for a new link', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('expired'), renew: renew() } },
     { id: 'wrong-person', label: 'Wrong person', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('wrong_person') } },
     { id: 'withdrawn', label: 'Withdrawn', model: { sender: PLAIN_SENDER, title: 'Purchase order PO-2026-0007', body: link('withdrawn') }, note: 'A sender without a logo: the name, no accent.' },
     {
       id: 'unavailable',
       label: 'Opens nothing (what the API says today)',
-      model: { sender: null, title: null, body: link('unavailable') },
-      note: 'The API answers one 404 for used, expired, withdrawn or unknown: the page cannot name the sender.',
+      model: { sender: null, title: null, body: link('unavailable'), renew: renew() },
+      note: 'The API answers one 404 for used, expired, withdrawn or unknown: the page cannot name the sender. Ask for a new link sends the dead token (POST /link/renew).',
     },
+    // B-W2b-169: the states of "Ask for a new link" (design links.frame sec:ask-new-link).
+    { id: 'ask-busy', label: 'Ask for a new link: asking', model: { sender: null, title: null, body: link('unavailable'), renew: renew('busy') } },
+    {
+      id: 'ask-done',
+      label: 'Asked — we passed it on (one answer, whatever the link was)',
+      model: { sender: null, title: null, body: link('unavailable'), renew: renew('done') },
+      note: 'Pressed once → held. The new link only ever goes to the address on file.',
+    },
+    { id: 'ask-checking', label: 'Ask for a new link: the connection is checked first (after suspicious traffic)', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('expired'), renew: renew('checking') } },
+    { id: 'ask-wait', label: 'Asked too often: held until 10:57', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('used'), renew: renew('wait', '2026-11-09T09:57:00.000Z') } },
+    { id: 'ask-failed', label: 'The request did not reach us: Ask again', model: { sender: null, title: null, body: link('unavailable'), renew: renew('failed') } },
     { id: 'missing', label: 'No token in the address', model: { sender: null, title: null, body: link('missing') } },
     { id: 'loading', label: 'Opening', model: { sender: null, title: null, body: link('loading') } },
     { id: 'error', label: 'API down', model: { sender: null, title: null, body: link('error') } },

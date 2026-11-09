@@ -1,0 +1,141 @@
+{
+  "title": {
+    "invoice": "Fattura {number}",
+    "depositOrder": "Acconto per l’ordine {order}",
+    "depositQuote": "Acconto per il preventivo {quote}",
+    "deposit": "Acconto"
+  },
+  "loading": {
+    "now": "Caricamento di cosa paghi…",
+    "slow": "Ancora in caricamento…"
+  },
+  "problem": {
+    "read": "Non siamo riusciti a leggere cosa paghi",
+    "readBody": "Non è cambiato nulla. Riprova tra un momento.",
+    "retry": "Riprova"
+  },
+  "status": {
+    "TO_PAY": "Da pagare",
+    "PAID": "Pagato",
+    "CLOSED": "Nulla da pagare"
+  },
+  "what": {
+    "title": "Cosa paghi",
+    "open": "Importo da pagare",
+    "document": "Documento",
+    "invoice": "Fattura {number}",
+    "invoiceIssued": "Fattura {number} del {date}",
+    "depositRequest": "Richiesta di acconto",
+    "for": "Per",
+    "forOrderQuote": "Ordine {order} (preventivo {quote})",
+    "forOrder": "Ordine {order}",
+    "forQuote": "Preventivo {quote}",
+    "total": "Totale",
+    "settled": "Già pagato",
+    "due": "Da pagare entro il"
+  },
+  "kind": {
+    "ACCONTO": "Acconto",
+    "CAPARRA": "Caparra confirmatoria",
+    "pct": "{kind}, {pct} del totale"
+  },
+  "bank": {
+    "title": "Paga con bonifico bancario",
+    "holder": "Beneficiario",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Banca",
+    "reference": "Causale da indicare",
+    "amount": "Importo",
+    "noneDeposit": "Le coordinate bancarie arrivano per e-mail: l’azienda non le ha ancora inserite qui.",
+    "noneInvoice": "Le coordinate bancarie sono sulla fattura.",
+    "production": "La produzione inizia quando riceviamo l’acconto."
+  },
+  "copy": "Copia {what}",
+  "copyShort": "Copia",
+  "copied": "{what} copiato.",
+  "card": {
+    "title": "Paga con carta o addebito diretto SEPA",
+    "method": {
+      "CARD": "Carta",
+      "SEPA_DEBIT": "Addebito diretto SEPA"
+    },
+    "methodHint": {
+      "CARD": "Visa, Mastercard e altre carte. La tua banca può chiederti di confermare nella sua app.",
+      "SEPA_DEBIT": "Da un conto bancario in euro. Il denaro arriva in pochi giorni lavorativi."
+    },
+    "testProvider": "un gestore di pagamento di prova",
+    "testNote": "Gestore di pagamento di prova: questi pulsanti simulano ciò che farebbe una carta o una banca. Non si muove denaro e non chiediamo dati della carta.",
+    "testConfirm": "La tua banca ti chiede di confermare il pagamento (3-D Secure), come farebbe nella sua finestra.",
+    "testProcessing": "L’addebito diretto SEPA è in corso. Qualche giorno dopo la banca risponde:",
+    "testAgain": "Mostra di nuovo il gestore di prova",
+    "scenario": {
+      "succeed": "Paga {amount}",
+      "sepaSucceed": "Firma il mandato e paga {amount}",
+      "decline": "La banca rifiuta la carta",
+      "insufficient_funds": "La carta non ha fondi sufficienti",
+      "authenticate": "La banca chiede di confermare",
+      "confirm": "Conferma nella finestra della banca",
+      "fail_authentication": "La conferma non riesce",
+      "settle": "Il denaro arriva",
+      "return": "La banca respinge l’addebito"
+    },
+    "sepaWaiting": "Il tuo addebito diretto SEPA è in corso: il denaro arriva in pochi giorni lavorativi. Puoi chiudere questa pagina; la ricevuta arriva per e-mail.",
+    "resumed": "Avevi già iniziato questo pagamento: lo abbiamo ripreso.",
+    "offline": "Nessuna connessione: il pagamento con carta attende che tu sia di nuovo online. Le coordinate per il bonifico restano su questa pagina.",
+    "paid": "Pagato. Grazie.",
+    "unavailable": {
+      "NO_ACCOUNT": "Il pagamento con carta non è disponibile: paga con bonifico.",
+      "NOT_A_PAYMENT_ACCOUNT": "Il pagamento con carta non è disponibile: paga con bonifico.",
+      "NOT_ACTIVE": "Il pagamento con carta è sospeso: paga con bonifico.",
+      "GATE_SPEND": "Il pagamento con carta non è ancora attivo: paga con bonifico.",
+      "FAKE_IN_PRODUCTION": "Il pagamento con carta non è disponibile: paga con bonifico.",
+      "FAKE_PROVIDER_LIVE": "Il pagamento con carta non è disponibile: paga con bonifico."
+    },
+    "refusal": {
+      "NOT_OPEN": "Non resta nulla da pagare su questo documento.",
+      "NO_PROVIDER": "I pagamenti con carta e SEPA non sono disponibili per questa azienda: paga con bonifico.",
+      "CURRENCY": "I pagamenti con carta e SEPA sono solo in euro: paga con bonifico.",
+      "NOT_PAYABLE": "Questo documento non si paga online.",
+      "PROVIDER": "Il servizio di pagamento non ha risposto: riprova tra un momento o paga con bonifico.",
+      "IN_PROGRESS": "Un pagamento di questo documento è in corso (in conferma presso la banca, o un addebito SEPA in arrivo): attendi, o paga con bonifico.",
+      "ended": "Questo pagamento è già concluso. Ricarica la pagina per vedere a che punto è.",
+      "rateLimited": "Troppi tentativi in poco tempo: attendi un minuto e riprova.",
+      "other": "Il pagamento non è partito. Riprova tra un momento o paga con bonifico."
+    },
+    "failure": {
+      "card_declined": "La banca ha rifiutato la carta. Prova con un’altra carta o paga con bonifico.",
+      "insufficient_funds": "La carta non ha fondi sufficienti. Prova con un’altra carta o paga con bonifico.",
+      "expired_card": "La carta è scaduta. Prova con un’altra carta o paga con bonifico.",
+      "incorrect_cvc": "Il codice di sicurezza non è corretto. Riprova.",
+      "authentication_failed": "La banca non ha confermato il pagamento. Riprova o paga con bonifico.",
+      "payment_intent_authentication_failure": "La banca non ha confermato il pagamento. Riprova o paga con bonifico.",
+      "debit_not_authorized": "La banca non ha autorizzato l’addebito SEPA. Paga con bonifico o con carta.",
+      "insufficient_funds_sepa": "L’addebito SEPA è stato respinto. Paga con bonifico o con carta.",
+      "provider_unavailable": "Il servizio di pagamento non risponde. Riprova tra poco o paga con bonifico.",
+      "provider_refused": "Il servizio di pagamento ha rifiutato la richiesta. Paga con bonifico.",
+      "default": "Il pagamento non è andato a buon fine. Riprova o paga con bonifico."
+    }
+  },
+  "done": {
+    "paid": "Pagato — grazie",
+    "paidDeposit": "Abbiamo ricevuto l’acconto di {amount}.",
+    "paidInvoice": "La fattura {number} è pagata: non resta nulla da pagare.",
+    "receipt": "La ricevuta arriva per e-mail all’indirizzo a cui è stata inviata questa pagina.",
+    "depositInvoice": "Se è prevista una fattura di acconto, arriva per e-mail.",
+    "amount": "Importo",
+    "method": "Pagato con",
+    "at": "Pagato il",
+    "reference": "Riferimento del pagamento",
+    "document": "Documento",
+    "contact": "Chiedi a loro se qualcosa non torna.",
+    "closed": "Nulla da pagare qui",
+    "closedBody": "Questo documento non chiede più un pagamento: è stato annullato o saldato in altro modo."
+  },
+  "quoteCard": {
+    "title": "Paga con carta o addebito diretto SEPA",
+    "held": "Il pagamento con carta o addebito diretto SEPA si fa sulla pagina di pagamento dell’acconto: chiedi a {sender} di inviartela per e-mail. Il bonifico qui sopra funziona già.",
+    "paid": "Abbiamo ricevuto l’acconto — grazie.",
+    "closed": "Questo acconto non chiede più un pagamento."
+  }
+}

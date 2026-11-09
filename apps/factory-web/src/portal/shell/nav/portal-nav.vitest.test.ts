@@ -34,11 +34,15 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('never shows a door to a page not built: today only Home, which the frame draws', () => {
-    expect(ids('GUEST', false).map(([id]) => id)).toEqual(['home'])
+    // B-W2b-201: the accountant's Accounting.
+    expect(ids('GUEST', false).map(([id]) => id)).toEqual(['home', 'accounting'])
     // B-W2b-181: a workshop's Jobs (the area left with one page takes its name and address).
     expect(ids('SUBCONTRACTOR', false)).toEqual([
       ['home', 'nav.home', '/'],
       ['work', 'nav.jobs', '/jobs'],
+      // B-W2b-193: a workshop's Documents and Profile.
+      ['supplier-documents', 'nav.documents', '/documents'],
+      ['profile', 'nav.profile', '/profile'],
     ])
     // B-W2b-179: a supplier's Purchase orders (the area left with one page takes its name and address).
     expect(ids('SUPPLIER', false)).toEqual([
@@ -46,6 +50,9 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['work', 'nav.purchaseOrders', '/orders'],
       // B-W2b-186: a supplier's Ship notices.
       ['deliveries', 'nav.deliveries', '/deliveries'],
+      // B-W2b-193: a supplier's Documents and Profile.
+      ['supplier-documents', 'nav.documents', '/documents'],
+      ['profile', 'nav.profile', '/profile'],
     ])
     // B-W2b-196: the customer's Account.
     // B-W2b-191: the customer's Orders & tracking; B-W2b-194: New order & reorder joins Orders (two pages: the area keeps its own name), the

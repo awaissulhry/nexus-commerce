@@ -1,0 +1,131 @@
+/*
+ * Files by link (SCR-272, links.document's set) LAYOUT inside the link frame (comfortable density, phone first; the
+ * frame keeps its own column). Controls are the design system's; semantic tokens only.
+ */
+.fw-fl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-fl-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-fl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fl-h2 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-fl-status {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-2);
+}
+
+.fw-fl-lead {
+  margin: 0;
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+.fw-fl-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-fl-live {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-fl-live:empty {
+  display: none;
+}
+
+.fw-fl-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fl-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  border-radius: var(--nds-radius-md);
+  outline: none;
+}
+
+.fw-fl-file:focus-visible,
+.fw-fl-file.is-focus {
+  box-shadow: 0 0 0 2px var(--nds-focus-ring, var(--nds-primary));
+}
+
+.fw-fl-file-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-fl-file-said {
+  color: var(--nds-text-strong);
+}
+
+.fw-fl-password,
+.fw-fl-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-fl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-fl-picture {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 720px);
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--nds-radius-md);
+}

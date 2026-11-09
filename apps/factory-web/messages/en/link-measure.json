@@ -1,0 +1,258 @@
+{
+  "title": "Send your measurements — {garment}",
+  "loading": {
+    "now": "Loading the form…",
+    "slow": "Still loading…"
+  },
+  "retry": "Try again",
+  "problem": {
+    "read": "We could not open the form",
+    "readBody": "Nothing is lost. Try again in a moment.",
+    "notice": "Read how your measurements are used first",
+    "noticeBody": "Tick it on the first step: no measurement or photo goes before that.",
+    "noticeChanged": "The privacy notice changed",
+    "noticeChangedBody": "{sender} published a new version since you read it: read it and tick it again on the first step.",
+    "noNotice": "The form is not open yet",
+    "noNoticeBody": "{sender} has not published its privacy notice yet. Ask them: the form opens once it is.",
+    "unavailable": "We could not reach the server",
+    "unavailableBody": "Nothing was sent twice. Try again in a moment.",
+    "internal": "Something went wrong on our side",
+    "internalBody": "Nothing is lost. Try again; if it happens again, write to {sender}.",
+    "rateLimited": "Too many tries in a short time",
+    "rateLimitedBody": "Wait a minute, then try again.",
+    "uploadsClosed": "Photos cannot be sent right now",
+    "uploadsClosedBody": "We check every photo before keeping it, and the check is not running. Send the form without photos where they are optional, or try again later.",
+    "photosFull": "This link took enough photos",
+    "photosFullBody": "Send the form with the photos you have, or ask {sender} for a new link.",
+    "fix": "Some answers need a look",
+    "fixBody": "We took you to the first one. Each field says what to change.",
+    "photosBusy": "A photo is still on its way",
+    "photosBusyBody": "Wait until it shows as sent, then send the form."
+  },
+  "draft": {
+    "restored": "We kept your answers from {day}, {time}",
+    "restoredBody": "Go on where you stopped, or start again with an empty form.",
+    "keep": "Go on",
+    "startAgain": "Start again"
+  },
+  "later": {
+    "button": "Finish later",
+    "held": "Type something first: there is nothing to keep yet.",
+    "saved": "Saved with us",
+    "savedBody": "Open this link again until {day} to finish. Nothing is kept on this device."
+  },
+  "held": {
+    "notice": "Tick that you read how your measurements are used first.",
+    "noNotice": "{sender} has not published its privacy notice yet.",
+    "photos": "A photo is still on its way."
+  },
+  "send": {
+    "busy": "Sending…",
+    "button": "Send measurements"
+  },
+  "step": {
+    "count": "Step {at} of {of}",
+    "start": {
+      "short": "Your data",
+      "title": "Before you start",
+      "lead": "{sender} asks for your measurements. Read how they are used, then start."
+    },
+    "basics": {
+      "short": "About you",
+      "title": "About you",
+      "lead": "The pattern department needs these three."
+    },
+    "points": {
+      "short": "Measurements",
+      "title": "Measurements",
+      "lead": "Point by point: the picture shows where the tape goes. Enter takes you to the next point."
+    },
+    "fit": {
+      "short": "Fit",
+      "title": "How you like it",
+      "lead": "What the fitter should know about how you ride and wear it."
+    },
+    "photos": {
+      "short": "Photos",
+      "title": "Photos",
+      "lead": "Front, side and back in a base layer help the pattern maker."
+    },
+    "review": {
+      "short": "Check and send",
+      "title": "Check and send",
+      "lead": "Every value in one table. Change anything before you send it."
+    }
+  },
+  "nav": {
+    "back": "Back",
+    "next": "Continue: {step}"
+  },
+  "intro": {
+    "title": "What this is",
+    "who": "{sender} makes your {garment} to measure and asks for your measurements.",
+    "whoOrder": "{sender} makes your {garment} to measure (order {order}) and asks for your measurements.",
+    "time": "About {minutes} minutes.",
+    "tape": "A soft tape measure.",
+    "helper": "Someone to help: most points cannot be measured alone.",
+    "layerRequired": "A base layer or close-fitting clothes for the photos (needed).",
+    "layerOptional": "A base layer or close-fitting clothes for the photos (if you want to add them).",
+    "later": "You can stop and finish later from this link until {day}: we keep your answers."
+  },
+  "privacy": {
+    "title": "Your data",
+    "lead": "Your measurements and photos are personal data",
+    "what": "What we collect: your height, weight and age, the measurements below, how you like the fit and, if you add them, three photos of you in a base layer.",
+    "why": "Why: {sender} uses them only to make your garment to measure and to check its fit.",
+    "keep": "How long: the photos are deleted {days} days after your garment ships; the measurements stay with your profile until you ask us to delete them.",
+    "who": "Who sees them: the people at {sender} who make and check your garment. Nobody else.",
+    "full": "Read the full privacy notice (version {version}) in a new tab",
+    "tick": "I have read how my measurements are used",
+    "ticked": "Read on {when}",
+    "tickFirst": "Tick it to start: no field opens before it.",
+    "tickFailed": "We could not keep your tick. Try again.",
+    "held": "Every field stays closed until you tick it.",
+    "missing": "{sender} has not published its privacy notice yet",
+    "missingBody": "The form opens once it is. Ask them."
+  },
+  "unit": {
+    "cm": "cm",
+    "in": "in",
+    "kg": "kg",
+    "lb": "lb",
+    "cmKg": "cm and kg",
+    "inLb": "inches and pounds"
+  },
+  "basics": {
+    "units": "Units",
+    "height": "Height",
+    "heightHint": "Without shoes, in {unit}.",
+    "weight": "Weight",
+    "weightHint": "In {unit}.",
+    "age": "Age",
+    "ageHint": "In years.",
+    "why": "We keep centimetres and kilograms; inches and pounds are turned into them exactly."
+  },
+  "issue": {
+    "REQUIRED": "{field}: needed.",
+    "NOT_A_NUMBER": "{field}: a number, like 61.5.",
+    "OUT_OF_LIMITS": "{field}: this cannot be right. Check the number and the units.",
+    "TOO_LONG": "At most {limit} characters.",
+    "PHOTO_REQUIRED": "This photo is needed. Take it, or take it again.",
+    "UNKNOWN_POINT": "{field}: not a point of this form.",
+    "SAME_PHOTO": "Take a different photo for each view."
+  },
+  "points": {
+    "none": "Your garment has no points to measure here: send the basics and the photos.",
+    "at": "Point {at} of {of}",
+    "filled": "{done} of {of} points measured",
+    "progress": "Points measured",
+    "guide": "How to measure: {point}"
+  },
+  "zone": {
+    "UPPER": "Upper body",
+    "ARMS": "Arms",
+    "LEGS": "Legs",
+    "RIDING": "Riding position",
+    "OTHER": "Other points"
+  },
+  "hint": {
+    "BELOW_RANGE": "{point} {value} is less than usual (from {bound}): check it. You can still send it.",
+    "ABOVE_RANGE": "{point} {value} is more than usual (up to {bound}): check it. You can still send it.",
+    "FOR_HEIGHT": "{point} {value} is unusual for a height of {bound}: check it. You can still send it."
+  },
+  "fit": {
+    "legend": "Fit",
+    "SNUG": {
+      "title": "Snug",
+      "body": "Close to the body, as for racing."
+    },
+    "REGULAR": {
+      "title": "Regular",
+      "body": "Room for a layer underneath, as for touring."
+    },
+    "posture": "Posture and riding",
+    "postureHint": "How you sit on the bike: racing crouch, upright, long reach…",
+    "asymmetry": "Asymmetry",
+    "asymmetryHint": "For example one arm or leg longer, one shoulder lower."
+  },
+  "photos": {
+    "leadRequired": "Three photos are needed: front, side and back.",
+    "leadOptional": "Three photos help the pattern maker: front, side and back. You can send the form without them.",
+    "howLayer": "Wear a base layer or close-fitting clothes.",
+    "howStand": "Stand straight, arms a little away from the body, the whole body in the picture.",
+    "howFace": "Your face is not needed: keep it out of the picture.",
+    "kept": "We keep the photos with us (never on this device) and delete them {days} days after your garment ships.",
+    "view": {
+      "FRONT": "Front",
+      "SIDE": "Side",
+      "BACK": "Back"
+    },
+    "needed": "needed",
+    "optional": "optional",
+    "alt": "Your photo: {view}",
+    "sending": "Sending…",
+    "loading": "Opening…",
+    "failed": "This photo did not reach us.",
+    "retake": "Take it again",
+    "take": "Take the photo",
+    "dialogTitle": "Photo: {view}",
+    "dialogIntro": {
+      "FRONT": "Face the camera; the outline shows where to stand.",
+      "SIDE": "Turn to your right side; arms relaxed.",
+      "BACK": "Turn your back to the camera."
+    },
+    "surface": "Photo: {view}",
+    "cancel": "Cancel",
+    "readFailed": "We could not show this photo now; it is kept with us. Try again."
+  },
+  "review": {
+    "lead": "Check every value. Change takes you to its step; what you typed stays.",
+    "change": "Change",
+    "empty": "—",
+    "kept": "kept as {value}",
+    "photoTaken": "Taken",
+    "photoNone": "Not taken",
+    "col": {
+      "what": "What",
+      "value": "Value",
+      "check": "Check",
+      "change": "Change"
+    },
+    "basics": "About you",
+    "points": "Measurements",
+    "fit": "How you like it",
+    "photos": "Photos",
+    "hints": "{count} values to check again",
+    "hintsBody": "They look unusual. If they are right, send them as they are.",
+    "name": "Your name (optional)",
+    "nameHint": "Who measured: it goes with the measurements."
+  },
+  "guide": {
+    "title": "How to measure: {point}",
+    "close": "Close",
+    "picture": "Where the tape goes for {point}",
+    "step": {
+      "stand": "Stand straight and relaxed, in a base layer, feet a little apart.",
+      "tape": "Let your helper hold the tape where the picture shows: snug, not tight, level all round.",
+      "read": "Read the number at the end of the tape and type it with the units you chose."
+    }
+  },
+  "done": {
+    "title": "Thank you, {name}",
+    "body": "Your measurements reached us.",
+    "next": {
+      "check": "Our fitter checks them. If something looks off, we write to you.",
+      "photos": "We delete your photos {days} days after your garment ships; your measurements stay with your profile.",
+      "noPhotos": "You sent no photos: your measurements stay with your profile.",
+      "again": "This link is now used. For new measurements, ask {sender} for a new link."
+    },
+    "fact": {
+      "garment": "Garment",
+      "sent": "Sent",
+      "version": "Version",
+      "photos": "Photos"
+    },
+    "photoCount": "{count} of 3",
+    "contact": "Questions about your measurements or your data"
+  }
+}

@@ -5,6 +5,8 @@ import { isLinkLive, isLinkPurpose, linkGrants, type LinkPurpose } from '@nexus/
 import { matchesLinkHash, parseLinkToken } from '@nexus/factory-domain/links/token'
 import type { Authenticator, SessionContext } from '../../core/context'
 import type { Clock } from '../../core/time'
+// B-W2b-200: a RECORD_INVITE link opens only while its share lives.
+import { linkLiveCheck } from './records'
 
 /**
  * The link authenticator (plan A1 §3.2 step 1, §3.10 "Links"; features SAL-099, PLT-007). A request that carries a
@@ -85,6 +87,9 @@ export function linkAuthenticator(core: { readonly database: FactoryDatabase; re
     const link = await core.database.withScope(scope, (client) => client.oneOffLink.findUnique({ where: { id: token.linkId }, select: LINK_SELECT }))
     // A purpose factory-domain does not know (none since B-W2b-163: the schema's thirteen are its thirteen) opens nothing.
     if (!link || !matchesLinkHash(token, link.tokenHash) || link.partyId !== token.partyId || !isLinkLive(link, now) || !isLinkPurpose(link.purpose)) throw linkUnavailable()
+    // B-W2b-200: what the link stands for must still live (a RECORD_INVITE link's share), on every request.
+    const live = linkLiveCheck(link.purpose)
+    if (live && !(await core.database.withScope(scope, (client) => live(client, link, now)).catch(() => false))) throw linkUnavailable()
     const tenant = await core.database.withScope({ audience: 'platform' }, (client) =>
       client.tenant.findUnique({ where: { id: token.tenantId }, select: { status: true } }),
     )

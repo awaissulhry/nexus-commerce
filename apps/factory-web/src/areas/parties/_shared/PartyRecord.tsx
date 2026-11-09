@@ -71,16 +71,18 @@ export type TermsSlot = (party: Party, reload: () => void) => ReactNode
 export type ItemsSlot = (party: Party, reload: () => void) => ReactNode
 /** B-W2b-180: the Portal access tab of both sides (areas/sales/customers/portal), drawn with the party read. */
 export type PortalSlot = (party: Party) => ReactNode
+/** B-W2b-172: a supplier's Questionnaire tab (areas/purchasing/suppliers/questionnaire), drawn with the party read. */
+export type QuestionnaireSlot = (party: Party) => ReactNode
 
-export function PartyRecord({ side, partyId, terms, items, overview, portal }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot }) {
+export function PartyRecord({ side, partyId, terms, items, overview, portal, questionnaire }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms, items, overview, portal }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot }) {
+function PartyRecordContainer({ side, partyId, terms, items, overview, portal, questionnaire }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -98,6 +100,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal }:
     cost: held.has('money.cost'),
     threads: held.has('threads.read'),
     partners: !!portal && held.has('partners.view'), // B-W2b-180
+    questionnaire: !!questionnaire && held.has('purchasing.questionnaire.view'), // B-W2b-172
   }
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(config.tabs)
@@ -341,6 +344,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal }:
       terms={party && terms ? terms(party, () => void load()) : null}
       items={party && items ? items(party, () => void load()) : null}
       portal={party && portal && tab === 'portal' ? portal(party) : null}
+      questionnaire={party && questionnaire && tab === 'questionnaire' ? questionnaire(party) : null}
       overview={overview}
       actions={{
         onRetry: () => {

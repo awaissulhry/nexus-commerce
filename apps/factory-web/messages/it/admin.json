@@ -1848,6 +1848,7 @@
     "accounting_export": "Creare e riesportare il lotto contabile numerato di un mese",
     "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",
     "accounting_unlock": "Riaprire una chiusura definitiva (d'accordo con il commercialista)",
+    "accounting_accountants_manage": "Dare al commercialista un portale ospite in sola lettura fino a una data, cambiarne la fine, chiuderlo",
     "security_view": "Vedere se ogni parte funziona, le regole di accesso, backup e prove di ripristino",
     "security_drills_record": "Registrare una prova di ripristino",
     "sales_returns_view": "Vedere i resi dei clienti",
@@ -2010,12 +2011,20 @@
     "portal_supplierProfile_change": "Inviare modifiche a indirizzi e contatti della propria organizzazione per la nostra verifica; valgono quando il buyer le approva",
     "purchasing_supplierDocuments_review": "Accettare un documento inviato da un fornitore nel portale (cos'è, fino a quando) o rifiutarlo indicando il motivo",
     "purchasing_supplierChanges_decide": "Approvare una modifica di indirizzi e contatti inviata da un fornitore nel portale, o rifiutarla indicando il motivo",
+    "purchasing_questionnaire_view": "Vedere il questionario fornitore dell'azienda, i link inviati a un fornitore e le sue risposte, con i documenti e la revisione",
+    "purchasing_questionnaire_send": "Inviare a un fornitore il questionario di due diligence con un link (per e-mail, o il link da passare)",
+    "purchasing_questionnaire_review": "Accettare la risposta di un fornitore al questionario (i suoi documenti valgono allora, con la scadenza) o mandare domande nella conversazione del fornitore",
+    "purchasing_questionnaire_manage": "Creare, modificare e pubblicare le versioni del questionario fornitore dell'azienda (le domande, il codice di condotta)",
     "portal_returns_view": "Vedere i resi e i reclami della vostra organizzazione: ogni pratica con il prossimo passo, cosa è stato chiesto, a che punto è, le istruzioni di reso e, per i ruoli che vedono i prezzi, la nota di credito",
     "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità, aggiungere foto finché non è deciso e annullare una richiesta di reso prima che la merce parta",
     "portal_complaints_view": "Seguire i reclami di qualità: le fasi dell'analisi, la nostra lettera di risposta e il rapporto 8D quando condiviso con voi",
     "partners_approvals_view": "Vedere le approvazioni chieste a clienti, fornitori e firmatari esterni su un documento: cosa abbiamo chiesto, entro quando, e la risposta firmata con le sue prove",
     "partners_approvals_ask": "Chiedere a un cliente, fornitore o firmatario esterno di approvare una concessione, un campione, un colore, un pellame, una grafica, una bozza del design, un ordine modificato o una firma; ritirare una richiesta aperta",
+    "partners_shares_view": "Vedere chi, fuori dall'azienda, è invitato a un record, cosa può fare e fino a quando",
+    "partners_shares_manage": "Invitare un contatto di un partner a un solo record con un link (leggere, scrivere, caricare file, fino a una data), cambiare cosa può fare, revocare l'invito",
     "portal_approvals_view": "Vedere cosa chiediamo di approvare alla propria organizzazione (campioni, colori, pellami, grafiche, bozze del design, concessioni, ordini modificati) e le risposte date; rispondere richiede il diritto di approvare",
-    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta"
+    "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
+    "sales_measurements_view": "Vedere le misure inviate tramite link e aprire le foto del corpo (ogni apertura registrata)",
+    "sales_measurements_manage": "Inviare ai piloti il link per le misure e decidere quando cancellare le foto del corpo"
   }
 }

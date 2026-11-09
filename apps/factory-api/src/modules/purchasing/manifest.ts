@@ -188,4 +188,20 @@ export const manifest = defineManifest({
   'GET /purchasing/supplier-changes': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
   'POST /purchasing/supplier-changes/:requestId/approve': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
   'POST /purchasing/supplier-changes/:requestId/refuse': { audiences: ['office'], permission: 'purchasing.supplierChanges.decide', scope: 'record' },
+  // B-W2b-172 (SCM-023): the supplier questionnaire. The office (can() over the company and the supplier in the handler):
+  // versions read with purchasing.questionnaire.view, kept with .manage; the link sent with .send; the answer reviewed with
+  // .review. The supplier's SUPPLIER_ONBOARD link: reading and the VAT check links.open, documents and the answer links.submit.
+  'GET /purchasing/questionnaires': { audiences: ['office'], permission: 'purchasing.questionnaire.view', scope: 'record' },
+  'POST /purchasing/questionnaires': { audiences: ['office'], permission: 'purchasing.questionnaire.manage', scope: 'record' },
+  'PATCH /purchasing/questionnaires/:questionnaireId': { audiences: ['office'], permission: 'purchasing.questionnaire.manage', scope: 'record' },
+  'POST /purchasing/questionnaires/:questionnaireId/publish': { audiences: ['office'], permission: 'purchasing.questionnaire.manage', scope: 'record' },
+  'GET /purchasing/suppliers/:partyId/questionnaire': { audiences: ['office'], permission: 'purchasing.questionnaire.view', scope: 'record' },
+  'POST /purchasing/suppliers/:partyId/questionnaire-link': { audiences: ['office'], permission: 'purchasing.questionnaire.send', scope: 'record' },
+  'POST /purchasing/questionnaire-answers/:responseId/review': { audiences: ['office'], permission: 'purchasing.questionnaire.review', scope: 'record' },
+  'GET /link/supplier-questionnaire': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  'POST /link/supplier-questionnaire': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
+  'POST /link/supplier-questionnaire/vat-check': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  'POST /link/supplier-questionnaire/documents': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
+  'POST /link/supplier-questionnaire/documents/:fileId/complete': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
+  'GET /link/supplier-questionnaire/code-of-conduct': { audiences: ['link'], permission: 'links.open', scope: 'record' },
 })
