@@ -136,7 +136,6 @@
 /* ── rows ── */
 .fw-pch-rows,
 .fw-pch-files,
-.fw-pch-versions,
 .fw-pch-askfiles {
   display: flex;
   flex-direction: column;
@@ -392,14 +391,6 @@
   margin: var(--nds-space-4) 0 0;
   color: var(--nds-danger-text, var(--nds-danger));
   font-size: var(--nds-font-size-sm);
-}
-
-.fw-pch-versions > li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8);
-  padding: var(--nds-space-4) 0;
 }
 
 /* One column in the design's order on a narrow screen. */

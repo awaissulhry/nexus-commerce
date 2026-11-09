@@ -100,22 +100,7 @@
     "previewOf": "Anteprima di {title}",
     "downloadOf": "Scarica {title}",
     "opening": "Preparazione…",
-    "openFailed": "Non è stato possibile aprire il documento. Riprova.",
-    "withdrawn": "Questa versione è stata ritirata: la sostituisce {title} v{version}."
-  },
-  "doc": {
-    "loading": "Apertura del documento…",
-    "failed": "Non è stato possibile aprire il documento.",
-    "noPreview": "Questo file non si può mostrare qui: scaricalo.",
-    "versions": "Versioni",
-    "replaced": "v{version} ha sostituito la v{previous} il {date}",
-    "first": "v{version} del {date}",
-    "current": "Attuale",
-    "previous": "Documento precedente",
-    "next": "Documento successivo",
-    "of": "{index} di {count}",
-    "atFirst": "È il primo nuovo documento.",
-    "atLast": "È l'ultimo nuovo documento."
+    "openFailed": "Non è stato possibile aprire il documento. Riprova."
   },
   "messages": {
     "title": "Messaggi recenti da noi",

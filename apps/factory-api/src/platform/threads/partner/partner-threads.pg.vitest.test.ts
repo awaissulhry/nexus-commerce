@@ -129,6 +129,25 @@ describe('COL-059: the record thread as the partner sees it', { timeout: SLOW_TE
     expect(own.body.record).toMatchObject({ ourRef: 'SEED-PO-0001', theirRef: 'SEED-OC-2201' })
   })
 
+  it('B-W2b-197: a customer’s return and complaint have their thread (the case’s Messages tab); a supplier never opens them', async () => {
+    const rma = await idOf('ReturnAuthorisation', 'SEED-RMA-0001')
+    const complaint = await idOf('Complaint', 'SEED-CMP-0001')
+    const read = await thread(buyer, 'ReturnAuthorisation', rma)
+    expect(read.status, JSON.stringify(read.body)).toBe(200)
+    expect(read.body.record).toMatchObject({ type: 'ReturnAuthorisation', id: rma, ourRef: 'SEED-RMA-0001' })
+    const claim = await thread(buyer, 'Complaint', complaint)
+    expect(claim.status, JSON.stringify(claim.body)).toBe(200)
+    expect(claim.body.record).toMatchObject({ type: 'Complaint', ourRef: 'SEED-CMP-0001' })
+    // Never the internal note of the complaint (the partner grant hides it; the view never names it).
+    expect(JSON.stringify(claim.body)).not.toMatch(/internalNote/)
+    const sent = await post(buyer, 'ReturnAuthorisation', rma, { body: 'We send it back on Monday.' }, newId())
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201)
+    expect((await admin(`SELECT m.direction, m.channel, m."authorKind" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'ReturnAuthorisation' AND t."recordId" = $1 AND m."bodyText" = $2`, [rma, 'We send it back on Monday.']))[0]).toMatchObject({ direction: 'INBOUND', channel: 'PORTAL', authorKind: 'PARTY' })
+    // The supplier of another party: as if it did not exist.
+    expect((await thread(orders, 'ReturnAuthorisation', rma)).status).toBe(404)
+    expect((await thread(orders, 'Complaint', complaint)).status).toBe(404)
+  })
+
   it('a session of another audience never reaches the portal routes', async () => {
     const anonymous = await h.app.inject({ method: 'GET', url: '/portal/threads' })
     expect(anonymous.statusCode).toBe(401)

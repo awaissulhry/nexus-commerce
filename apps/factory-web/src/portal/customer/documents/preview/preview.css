@@ -1,0 +1,78 @@
+/* The document pop-up (B-W2b-195, lifted from Home): layout and semantic tokens only. */
+.fw-pdp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+.fw-pdp-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pdp-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pdp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pdp-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-16);
+  color: var(--nds-text-2);
+}
+
+.fw-pdp-image {
+  display: block;
+  max-width: 100%;
+  max-height: 64vh;
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pdp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pdp-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pdp-versions {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-pdp-versions > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+}
+
+.fw-pdp-shown {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
