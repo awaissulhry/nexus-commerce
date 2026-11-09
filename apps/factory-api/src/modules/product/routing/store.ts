@@ -16,6 +16,7 @@ import { ApiError } from '../../../core/errors'
 import { bumpRevision, findRevision, lockStyleRow, revisionViewOf, STYLE_COLUMNS, type BomStyleRow, type LockedStyle, type RevisionRow } from '../bom/store'
 import { contextOf, mayWrite } from '../materials/store'
 import { readOperations, readSteps, readSubcontracts, readWorkshops, type OperationFacts, type StepRecord } from './read'
+import { requireEditRule } from '../lifecycle/edit-rule'
 
 /**
  * The routing's rows (factory-db `RoutingOperation`) and what they name (`Style`, `StyleRevision`, `Operation`): the
@@ -170,6 +171,8 @@ export async function lockDraft(tools: CommandTools, styleId: string, revisionId
   const row = await findRevision(tx, styleId, revisionId)
   const refusal = editRefusal(row, style.status)
   if (refusal) throw new InvalidStateError(refusal)
+  // B-W2b-221: a write to a draft under the edit rule of the style's lifecycle state.
+  await requireEditRule(tx, styleId, 'DRAFT')
   const version = await bumpRevision(tx, revisionId, expectedVersion, now)
   return { style, revisionId, revision: row.revision, version }
 }

@@ -22,6 +22,7 @@ import {
   styleViewInTx,
   VARIANT_COLUMNS,
 } from './store'
+import { requireEditRule } from '../lifecycle/edit-rule'
 
 /**
  * A style's colourways (feature PRD-004): added, renamed, archived (out of new use: their SKUs go off, never deleted,
@@ -40,6 +41,8 @@ interface LockedStyle {
 async function lockOpenStyle(tools: CommandTools, styleId: string): Promise<LockedStyle> {
   const locked = await lockStyle(tools.tx, styleId)
   if (locked.status === 'ARCHIVED') throw new InvalidStateError('This style is archived: reactivate it before changing its colourways.')
+  // B-W2b-221: its colourways are its spec (the edit rule of its lifecycle state).
+  await requireEditRule(tools.tx, styleId, 'SPEC')
   return { id: styleId, code: locked.code, companyId: locked.companyId }
 }
 

@@ -6,6 +6,7 @@ import { pieceIssues, piecesEditRefusal, type PieceData, type PieceFields, type 
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { ApiError } from '../../../core/errors'
 import { bumpRevision, findRevision, lockStyleRow, revisionViewOf, STYLE_COLUMNS, type BomStyleRow, type LockedDraft, type RevisionRow } from '../bom/store'
+import { requireEditRule } from '../lifecycle/edit-rule'
 
 /**
  * The pattern pieces' rows (factory-db `PatternPiece`, B-W2b-85) and what they name (`BomLine` and its `Item`, `LeatherGrade`):
@@ -166,6 +167,8 @@ export async function lockDraft(tools: CommandTools, styleId: string, revisionId
   const row = await findRevision(tx, styleId, revisionId)
   const refusal = piecesEditRefusal(row, style.status)
   if (refusal) throw new InvalidStateError(refusal)
+  // B-W2b-221: a write to a draft under the edit rule of the style's lifecycle state.
+  await requireEditRule(tx, styleId, 'DRAFT')
   const version = await bumpRevision(tx, revisionId, expectedVersion, now)
   return { style, revisionId, revision: row.revision, version }
 }
