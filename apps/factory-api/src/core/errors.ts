@@ -2,6 +2,8 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod'
 import { databaseHardLockWords, PERIOD_LOCK_ISSUES } from '@nexus/factory-domain/accounting/periods'
 import { DomainError, type ErrorCode, type Issue } from '@nexus/factory-domain/core/errors'
+// B-W2b-220 (PRD-167): a write that reached the database's lock of a released revision is a 409 in words.
+import { databaseLockWords, LOCKED_ISSUE } from '@nexus/factory-domain/product/versions/lock'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -130,6 +132,19 @@ function hardPeriodLockRefusal(error: unknown): MappedError | null {
   return message ? { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: PERIOD_LOCK_ISSUES.hard, message: 'Dated inside a month closed for good.' }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-220 (PRD-167): the database's own refusal of a write to a released or obsolete revision (W1's …_product_guards
+ * part guard and revision guard: restrict_violation 'product: revision … is RELEASED; …'), when a write reached it without
+ * its command's check (a race, or a later path that forgot it): a 409 in the words of modules/product/versions (issue
+ * `refusal/REVISION_LOCKED`), never a 500.
+ */
+function lockedRevisionRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if ((cause?.originalCode !== '23001' && cause?.originalCode !== '23514') || typeof cause.originalMessage !== 'string') return null
+  const words = databaseLockWords(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: LOCKED_ISSUE, message: words.message }], unexpected: false } : null
+}
+
 /** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
 export function mapError(error: unknown): MappedError {
   if (error instanceof DomainError) {
@@ -141,6 +156,8 @@ export function mapError(error: unknown): MappedError {
   }
   const closedMonth = hardPeriodLockRefusal(error)
   if (closedMonth) return closedMonth
+  const lockedRevision = lockedRevisionRefusal(error)
+  if (lockedRevision) return lockedRevision
   if (isBusyDatabaseError(error)) {
     return { status: STATUS_OF.not_ready, code: 'not_ready', message: BUSY_MESSAGE, unexpected: false, retryAfterSeconds: BUSY_RETRY_AFTER_SECONDS }
   }
