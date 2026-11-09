@@ -1,6 +1,10 @@
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
+import { CAPABILITY_ROLE_KEYS } from '@nexus/factory-domain/auth/partners/kinds'
 import { PORTAL_AREAS as TASK_AREAS } from '@nexus/factory-domain/portal/tasks/kinds'
 import { bottomBarLayout } from '@nexus/ui/components/BottomBar/index'
 import { CATALOGUE } from '../../../lib/i18n/messages'
@@ -145,5 +149,93 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     expect(recordPageOf(['CUSTOMER'], 'SalesOrder', 'x', built)).toBe('/orders/x')
     expect(recordPageOf(['SUPPLIER'], 'SalesOrder', 'x', built)).toBeNull()
     expect(recordPageOf(['SUPPLIER', 'SUBCONTRACTOR'], 'SubcontractOrder', 'j', built)).toBe('/jobs/j')
+  })
+})
+
+// B-W2b-203, the W2b-3 sweep (design check I8): every partner role as it signs in (its main role and the capabilities it
+// gets by default), on built pages only — the rail, the badges, the phone bar and the keys.
+describe('the portal rail per partner role (B-W2b-203)', () => {
+  const asSigned = (key: string) => {
+    const template = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === key)!
+    const capabilities = template.capabilities.byDefault.flatMap((capability) => PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === CAPABILITY_ROLE_KEYS[capability])!.permissions)
+    const held = new Set<string>([...template.permissions, ...capabilities])
+    const nav = portalNavFor({ can: (permission) => held.has(permission), kinds: [template.kind as PortalKind] })
+    const phone = bottomBarLayout(nav, '/')
+    return {
+      rail: nav.areas.map((area) => `${area.id}:${area.label}${area.badge ? `#${area.badge}` : ''}`),
+      tabs: phone.tabs.map((tab) => tab.id),
+      more: phone.more.map((entry) => entry.id),
+      keys: portalChords(nav),
+    }
+  }
+  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerRead = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const supplierOrders = ['home:nav.home#home', 'work:nav.purchaseOrders#orders', 'deliveries:nav.deliveries#deliveries', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
+  const supplierPapers = ['home:nav.home#home', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
+  const workshop = ['home:nav.home#home', 'work:nav.jobs#orders', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
+
+  it('every role of every kind: its areas, each with the badge of the one task list (none on a row that cannot show it)', () => {
+    const rails = Object.fromEntries(PARTNER_ROLE_TEMPLATES.filter((entry) => entry.kind).map((entry) => [entry.key, asSigned(entry.key).rail]))
+    expect(rails).toEqual({
+      'customer-buyer': customerFull,
+      'customer-finance': customerRead,
+      'customer-quality': customerRead,
+      // The Designer: the catalogue and its colleagues only.
+      'customer-designer': ['home:nav.home#home', 'quotes:nav.catalogue', 'account:nav.account#account'],
+      'customer-viewer': customerRead,
+      'customer-admin': customerFull,
+      'supplier-orders': supplierOrders,
+      'supplier-invoices': supplierPapers,
+      'supplier-quality': supplierPapers,
+      'supplier-admin': supplierOrders,
+      'subcontractor-jobs': workshop,
+      'subcontractor-admin': workshop,
+      // The accountant's room (B-W2b-201); the auditor's room is W3.
+      'guest-accountant': ['home:nav.home#home', 'accounting:nav.accounting#documents'],
+    })
+  })
+
+  it('a count leads to its requests: Quotes & samples carries its badge once a page that shows quotes or approvals is built', () => {
+    const customer = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'quotes')!
+    expect([customer.label, customer.href, customer.badge]).toEqual(['nav.catalogue', '/catalogue', undefined])
+    const later = PORTAL_AREAS.map((def) => (def.id === 'quotes' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
+    const withQuotes = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }, later).areas.find((area) => area.id === 'quotes')!
+    expect([withQuotes.label, withQuotes.badge]).toEqual(['nav.quotesSamples', 'quotes'])
+    // The design review draws the frame as it will be: the badge is there.
+    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.id === 'quotes')!.badge).toBe('quotes')
+  })
+
+  it('the phone: four tabs and More for a customer; a supplier\'s one More row (Profile) is its fifth tab (the DS bar), a workshop four tabs', () => {
+    expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
+    expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home'], more: ['quotes', 'account'] })
+    // Design portal.frame bottom-bar: "Supplier: Home · Orders (or Jobs) · Deliveries · Documents + More (Profile)"; the DS bar turns a
+    // More of one row into a fifth tab (bottomBarModel: a sheet with one row is a wasted tap); Sign out is in the person menu.
+    expect(asSigned('supplier-orders')).toMatchObject({ tabs: ['home', 'work', 'deliveries', 'supplier-documents', 'profile'], more: [] })
+    expect(asSigned('supplier-invoices')).toMatchObject({ tabs: ['home', 'supplier-documents', 'profile'], more: [] })
+    expect(asSigned('subcontractor-jobs')).toMatchObject({ tabs: ['home', 'work', 'supplier-documents', 'profile'], more: [] })
+    expect(asSigned('guest-accountant')).toMatchObject({ tabs: ['home', 'accounting'], more: [] })
+  })
+
+  it('keys: g h, g o and g d where the person has those areas', () => {
+    expect(asSigned('customer-buyer').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
+    expect(asSigned('customer-designer').keys).toEqual({ h: '/' })
+    expect(asSigned('supplier-invoices').keys).toEqual({ h: '/', d: '/documents' })
+    expect(asSigned('subcontractor-jobs').keys).toEqual({ h: '/', o: '/jobs', d: '/documents' })
+    expect(asSigned('guest-accountant').keys).toEqual({ h: '/', d: '/accounting' })
+  })
+
+  it('every built area, page and record page has its route in the portal (app/(portal)/p/[party])', () => {
+    const route = (href: string) => {
+      const path = href.split(/[?#]/)[0]!.replace(/\/$/, '')
+      return existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]', path, 'page.tsx'))
+    }
+    const hrefs = PORTAL_AREAS.flatMap((area) => [...(area.pages ?? []).filter((page) => page.built).map((page) => page.href), ...(area.built ? [area.href] : [])])
+    expect(hrefs.filter((href) => !route(href))).toEqual([])
+    expect(RECORD_PAGES.filter((page) => page.built && !route(page.href('[id]'))).map((page) => page.type)).toEqual([])
+  })
+
+  it('fails closed for a kind it does not know and for a person with no permission', () => {
+    expect(portalNavFor({ can: everything, kinds: ['SOMETHING' as PortalKind] }).areas).toEqual([])
+    for (const kind of ['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const) expect(portalNavFor({ can: () => false, kinds: [kind] }).areas, kind).toEqual([])
   })
 })

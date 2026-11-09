@@ -132,6 +132,26 @@ export interface HomeTile {
 const KEPT_LAST: readonly TileKey[] = ['incident', 'lineview', 'scan']
 
 /**
+ * B-W2b-203 (the Owner's answer of 2026-11-09 to B-W2b-151's question 1): at the inspection bench the bench's own jobs come
+ * first — Operation after Incoming, Final and In-line inspection — so a floor inspector's first page is My work, Incoming,
+ * Final, Report an incident, Scan + More (Operation on page two). Every other station keeps TILE_RULES' order. The scan router
+ * reads every tile, whatever its page: a bundle scanned at the bench still opens Operation, a work order Final.
+ */
+const MOVED_AFTER: Partial<Record<FloorMode, { readonly tile: TileKey; readonly after: readonly TileKey[] }>> = {
+  inspection: { tile: 'operation', after: ['incoming', 'final', 'inline'] },
+}
+
+/** The station's order of the tiles a person has: TILE_RULES' order, with MOVED_AFTER's tile after the last of its tiles held. */
+function inStationOrder(mode: FloorMode | null, rules: readonly TileRule[]): readonly TileRule[] {
+  const move = mode ? MOVED_AFTER[mode] : undefined
+  const moved = move ? rules.find((rule) => rule.key === move.tile) : undefined
+  if (!move || !moved) return rules
+  const rest = rules.filter((rule) => rule !== moved)
+  const last = rest.reduce((at, rule, index) => (move.after.includes(rule.key) ? index : at), -1)
+  return last < 0 ? rules : [...rest.slice(0, last + 1), moved, ...rest.slice(last + 1)]
+}
+
+/**
  * Every tile a person has here: the mode's tiles they hold the permission for, then Scan. With no station's mode, the tiles of
  * that device (`devices`; a subcontract station: Scan only). Held: "Read the notice first" while the notice blocks scans
  * (before "coming": it is the person's to fix), else "coming" for a page not built yet. A person without `floor.work` sees none
@@ -140,7 +160,7 @@ const KEPT_LAST: readonly TileKey[] = ['incident', 'lineview', 'scan']
 export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean, deviceMode?: string | null): HomeTile[] {
   const held = new Set(permissions)
   const onThis = (rule: TileRule) => rule.modes === 'all' || (mode === null ? rule.devices?.some((device) => device === deviceMode) === true : rule.modes.includes(mode))
-  const fits = TILE_RULES.filter((rule) => onThis(rule) && held.has(rule.permission) && held.has('floor.work'))
+  const fits = inStationOrder(mode, TILE_RULES.filter((rule) => onThis(rule) && held.has(rule.permission) && held.has('floor.work')))
   const kept = fits.filter((rule) => KEPT_LAST.includes(rule.key))
   return [...fits.filter((rule) => !kept.includes(rule)), ...kept].map((rule) => ({ key: rule.key, held: noticeBlocksScans && rule.takesScans ? 'notice' : rule.built ? null : 'coming' }))
 }

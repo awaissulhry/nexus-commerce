@@ -292,7 +292,9 @@
     "sent": "Orders already sent keep their address; new orders cannot choose it.",
     "confirm_one": "Remove address",
     "confirm_other": "Remove {count} addresses",
-    "back": "To use it again, add it again (we check it again)."
+    "back": "To use it again, add it again (we check it again).",
+    "acknowledge_one": "I understand: this address is removed; to use it again I add it again.",
+    "acknowledge_other": "I understand: these {count} addresses are removed; to use one again I add it again."
   },
   "company": {
     "title": "Company data",

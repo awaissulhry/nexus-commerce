@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
+import { readScan } from './scan/scan-model'
+import { taskForScan } from './tasks/routes'
 import { enrolmentCodeOf, floorLocale, homeTiles, idleWarnAfterMs, isBadgeCode, MAX_TILES, modeOf, newPinProblem, noticePages, tilePage, NOTICE_PAGE_CHARS, rosterLetters, TILE_RULES } from './model'
 
 const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'production.bundles', 'production.scan', 'shipping.pack']
@@ -87,9 +91,31 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     ])
   })
 
+  // B-W2b-203: the Owner's answer of 2026-11-09 to B-W2b-151's question 1 (B: the inspection bench's own jobs on page one).
+  it('at the inspection bench a floor inspector\'s first page is My work, Incoming, Final, Report an incident, Scan + More; other stations keep theirs', () => {
+    const roleOf = (key: string) => [...templateOf(key)!.permissions] as string[]
+    const pageKeys = (mode: 'cutting' | 'sewing' | 'packing' | 'inspection' | 'warehouse', role: string, page: number) => tilePage(homeTiles(mode, roleOf(role), false), page).tiles.map((tile) => tile.key)
+    expect(pageKeys('inspection', 'floor_inspector', 0)).toEqual(['mywork', 'incoming', 'final', 'incident', 'scan'])
+    expect(tilePage(homeTiles('inspection', roleOf('floor_inspector'), false), 0)).toMatchObject({ pages: 3, more: 5 })
+    expect(pageKeys('inspection', 'floor_inspector', 1)).toEqual(['inline', 'operation', 'machine', 'clock', 'training'])
+    expect(pageKeys('inspection', 'floor_inspector', 2)).toEqual(['help'])
+    // Every other station: today's order (B-W2b-151's walk), Operation second.
+    expect(pageKeys('cutting', 'cutting_operator', 0)).toEqual(['mywork', 'operation', 'cut', 'incident', 'scan'])
+    expect(pageKeys('cutting', 'cutting_operator', 1)[0]).toBe('fabriccut') // Owner answer 2: Fabric cutting stays first on page two.
+    for (const mode of ['sewing', 'packing'] as const) expect(pageKeys(mode, 'operator', 0).slice(0, 2), mode).toEqual(['mywork', 'operation'])
+    // An operator at the bench holds no inspection tile: Operation keeps its place.
+    expect(homeTiles('inspection', roleOf('operator'), false).map((tile) => tile.key).slice(0, 2)).toEqual(['mywork', 'operation'])
+    // The scan router reads every tile, whatever its page: a bundle still opens Operation at the bench, a work order Final.
+    const bench = homeTiles('inspection', roleOf('floor_inspector'), false)
+    const tag = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
+    expect(taskForScan('inspection', readScan(formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 123 }), tag), bench)).toBe('operation')
+    expect(taskForScan('inspection', readScan('WO-0042', tag), bench)).toBe('final')
+  })
+
   it('a tile asks the permission its page\'s API needs (fail closed)', () => {
     expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', /* B-W2b-121 */ 'fabriccut', 'clock', 'training', 'help', 'incident', 'scan'])
-    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'clock', 'training', 'help', 'incident', 'scan'])
+    // B-W2b-203: at the bench Operation comes after the inspection tiles (Owner answer 2026-11-09).
+    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'final', 'operation', 'clock', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'clock', 'myday', 'training', 'help', 'incident', 'scan'])
     expect(homeTiles('inspection', ['floor.work', 'quality.inspections.view'], false)).toEqual([

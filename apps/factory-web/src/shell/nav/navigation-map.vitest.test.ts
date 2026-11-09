@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -20,9 +20,9 @@ import { LOCALES, type Locale } from '../../lib/i18n/locales'
 import { CATALOGUE, createScopedTranslator, messagesFor } from '../../lib/i18n/messages'
 import { attentionAddress, hasRecordPage, LIST_PAGES, listAddress, RECORD_PAGES, recordAddress } from '../../lib/records/record-links'
 import { permissionCheck } from '../../lib/session/session'
-import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf } from '../../links/_nav/link-types'
+import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf, NO_NEW_LINK, offersNewLink } from '../../links/_nav/link-types'
 import { matchPages } from '../palette/palette-model'
-import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, OFFICE, type TreePage } from './approved-tree'
+import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, LINKS_NO_TOKEN, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
 
 /**
@@ -434,7 +434,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
-      inspection: ['mywork', 'operation', 'incoming', 'final', 'inline', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
+      inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
       warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
@@ -533,6 +534,33 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
 
   it('the frame names every purpose in both languages', () => {
     for (const locale of LOCALES) for (const purpose of LINK_PURPOSES) expect(CATALOGUE[locale].shell?.[`links.purpose.${purpose}`], `${locale} ${purpose}`).toBeTruthy()
+  })
+
+  // B-W2b-203: the link pages a QR or a typed code opens (no token, no task), and every route of the Links view.
+  it('every route of the Links view is a page of the tree: the landing, a page with no token, or a named part of one', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../../app/(links)')
+    const routes: string[] = []
+    const walk = (dir: string, address: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(join(dir, entry.name), `${address}/${entry.name}`)
+        else if (entry.name === 'page.tsx') routes.push(address || '/')
+      }
+    }
+    walk(root, '')
+    const noToken = LINKS_NO_TOKEN.flatMap((page) => page.hrefs)
+    for (const href of noToken) expect(routes, href).toContain(href)
+    // The landing of every token (/l), and parts of a tree page: an office approval from its e-mail (links.approve, B-W2b-188),
+    // the sender's privacy notice (links.frame's foot), Find your order (links.tracking's public search, B-W2b-170).
+    const parts = ['/l', '/l/approve', '/privacy/[company]', '/t']
+    expect(routes.filter((route) => !noToken.includes(route) && !parts.includes(route)).sort()).toEqual([])
+    expect(LINKS_NO_TOKEN.map((page) => page.id).filter((id) => LINKS.some((page) => page.id === id))).toEqual([])
+  })
+
+  it('a dead link offers "Ask for a new link" except a record invitation, the office\'s to send again (B-W2b-200)', () => {
+    expect([...NO_NEW_LINK]).toEqual(['RECORD_INVITE'])
+    expect(LINK_PURPOSES.filter((purpose) => !offersNewLink(purpose))).toEqual(['RECORD_INVITE'])
+    // The API's one 404 names no purpose: that dead link still offers it (the one answer).
+    expect([offersNewLink(null), offersNewLink('SOMETHING_NEW')]).toEqual([true, true])
   })
 })
 
