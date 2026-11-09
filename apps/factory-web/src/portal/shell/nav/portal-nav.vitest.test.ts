@@ -48,10 +48,14 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['deliveries', 'nav.deliveries', '/deliveries'],
     ])
     // B-W2b-196: the customer's Account.
-    // B-W2b-191: the customer's Orders & tracking (the area left with one page takes its name and address).
+    // B-W2b-191: the customer's Orders & tracking; B-W2b-194: New order & reorder joins Orders (two pages: the area keeps its own name), the
+    // Catalogue is the one page of Quotes & samples (it takes the page's name and address); B-W2b-195: Documents; B-W2b-197: Returns & claims.
     expect(ids('CUSTOMER', false)).toEqual([
       ['home', 'nav.home', '/'],
-      ['orders', 'nav.ordersTracking', '/orders'],
+      ['orders', 'nav.orders', '/orders'],
+      ['quotes', 'nav.catalogue', '/catalogue'],
+      ['documents', 'nav.documents', '/documents'],
+      ['returns', 'nav.returns', '/returns'],
       ['account', 'nav.account', '/account'],
     ])
   })
@@ -113,8 +117,13 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
-    // B-W2b-191: a customer's sales order opens its own page.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'PartyAddress'])
+    // B-W2b-191: a customer's sales order opens its own page; B-W2b-197: a return and a complaint too; B-W2b-195: an invoice opens Documents on it.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'PartyAddress', 'Invoice'])
+    expect(recordPageOf(['CUSTOMER'], 'ReturnAuthorisation', 'r1')).toBe('/returns/r1')
+    expect(recordPageOf(['CUSTOMER'], 'Complaint', 'c1')).toBe('/returns/complaints/c1')
+    expect(recordPageOf(['SUPPLIER'], 'ReturnAuthorisation', 'r1')).toBeNull()
+    expect(recordPageOf(['CUSTOMER'], 'Invoice', 'i1')).toBe('/documents?invoice=i1')
+    expect(recordPageOf(['SUPPLIER'], 'Invoice', 'i1')).toBeNull()
     // B-W2b-181: a workshop's job opens its own page.
     expect(recordPageOf(['SUBCONTRACTOR'], 'SubcontractOrder', 'j')).toBe('/jobs/j')
     // B-W2b-186: a supplier's ship notice opens its own page.

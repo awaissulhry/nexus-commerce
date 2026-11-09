@@ -52,6 +52,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
+  B-W2b-170: `/t?tenant=<slug>&company=<code>` — Find your order (the public tracking search, `links/tracking/TrackSearch.tsx`);
+  a SHIPMENT_TRACK link opens `links/tracking` (SCR-194, task `track-order`).
 - `src/app/(floor)/` + `src/floor/` — the Floor view (SCR-020 … 025): `/floor` (tile home), `/floor/enrol`,
   `/floor/sign-in`, `/floor/notice`, `/floor/scan`, `/floor/sync` (Waiting to send, SCR-023), the web app manifest
   `/floor/manifest.webmanifest` and icon (no service worker yet). The offline queue (B-W0-30, `floor/queue/`): every
@@ -112,6 +114,18 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   behind the e-mail step-up, asked first and again on 403 `stepUp`; Deactivate hands the leaver's assigned requests to the
   chosen colleague first, F14), `model.ts` (pure), `view/` (cards, the two list frames, the pop-ups, `AccountCase` for the
   design review). `RECORD_PAGES.PartyAddress` opens `/account?address=<id>#addresses`.
+- `src/portal/customer/returns/` — the customer's Returns & claims (B-W2b-197 on B-W2b-192's API, SCR-187; catalogue
+  `portal-returns`, CSS prefix `fw-pret-`): `/p/<party>/returns?chip=&q=&start=RETURN|COMPLAINT&order=<id>` (the cases in
+  the list frame with Export N, the Quality role's complaints, "Start a return or claim": what you need, details, check and
+  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status|messages` (`CasePage.tsx`: Add photos, Cancel
+  this request?, the return label and credit note PDFs in a new tab, the case's thread). `RECORD_PAGES.ReturnAuthorisation`
+  and `.Complaint` open them; their partner views are in factory-api `platform/search/partner/views/`.
+- `src/portal/customer/documents/` — the customer's Documents (B-W2b-195, SCR-186, `/p/<party>/documents?group=&q=&by=&versions=&invoice=`;
+  catalogue `portal-documents`, CSS prefix `fw-pdoc-`) on B-W2b-178's and B-W2b-185's APIs: the chips of the role's groups, To pay
+  (Finance/Admin: the open invoices and deposits, PDF/XML in new tabs, Pay = the DS PaymentPanel on the FAKE provider's own answers,
+  then the page polls the intent), All documents (the list frame; Download N, `d`), conformity per style received. `preview/` is
+  THE document pop-up (api, rules, `useDocumentPreview`, `view/DocumentPreview`), lifted from Home: Home and the order's Documents
+  tab use it. `RECORD_PAGES.Invoice` opens `/documents?invoice=<id>` (its Pay pop-up; `&tab=messages` its conversation).
 - `src/portal/supplier/deliveries/` — the supplier's Ship notices (B-W2b-186 on B-W2b-182's API, SCR-227; catalogue
   `portal-deliveries`, CSS prefix `fw-psn-`): `/p/<party>/deliveries?state=&q=` (the list frame, Export N, ⋯ Cancel…),
   `/deliveries/new?po=<id>` and `/deliveries/<id>?step=lines|packing|transport|review` (`NoticePage.tsx`: a draft on its
@@ -124,6 +138,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
   re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
   record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
+- `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
+  SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
+  &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
+  write queued with the version the last one left and one Idempotency-Key per body; Send held while `request.problems`, saves what
+  was typed first), `/p/<party>/catalogue?q=&category=&season=&ppe=&range=&view=&style=` (`CataloguePage.tsx`; "Add to order" =
+  `/orders/new?styles=…`: the newest draft takes them, else a new one), `/p/<party>/catalogue/<style>/sheet` (tab:style-sheet).
+  Problems, reorder differences and sheet reasons are said from codes and figures (`model.ts`); the address pop-up uses
+  `portal-account`'s field words. The Orders band, its empty state, a line's ⋯ "Reorder this line" and Home's band link here.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

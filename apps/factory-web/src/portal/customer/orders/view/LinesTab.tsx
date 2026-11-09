@@ -58,6 +58,8 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
       const items: MenuItemDef[] = [
         { id: 'sizes', label: t('lines.showSizes'), onSelect: () => now.actions?.onLine?.(data.id) },
         { id: 'change', label: t('lines.askChange'), disabled: now.model.changeHeld !== null, description: now.model.changeHeld ?? undefined, onSelect: () => now.actions?.onChangeLine?.(data.id) },
+        // B-W2b-194: Reorder this line (a size-grid line; New order copies it at today's prices).
+        ...(now.model.reorderHref && data.style && !data.measurement ? [{ id: 'reorder', label: t('lines.reorder'), href: `${now.model.reorderHref}&line=${encodeURIComponent(data.id)}` }] : []),
       ]
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('lines.menu', { seq: data.seq }) }} items={items} />
     }

@@ -23,6 +23,8 @@ import {
   fetchRules,
   fetchShipments,
   findRevision,
+  // B-W2b-170
+  makeTrackingLink,
   openDocument,
   startDepositPayment,
   withdrawRequest,
@@ -542,6 +544,22 @@ function OrderContainer({ id }: { id: string }) {
     })
   }
 
+  // B-W2b-170: "Copy tracking link" — a new link to the shipment's branded tracking page (its address in this answer only).
+  const linkHeld = preview ? t('shipments.copyLinkPreview') : offline ? t('held.offline') : null
+  const copyTrackingLink = (shipmentId: string) => {
+    if (linkHeld) return
+    makeTrackingLink(api, id, shipmentId, newIdempotencyKey())
+      .then((made) => {
+        if (!made.url) throw new Error('no link')
+        const url = made.url
+        return navigator.clipboard?.writeText(url).then(() => {
+          setCopied(`link:${shipmentId}`)
+          setTimeout(() => setCopied((current) => (current === `link:${shipmentId}` ? null : current)), 2000)
+        })
+      })
+      .catch((error: unknown) => setNotice({ tone: 'danger', key: isApiError(error) && error.kind === 'conflict' ? 'shipments.copyLinkTooMany' : 'shipments.copyLinkFailed' }))
+  }
+
   // ── the band ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const ready = state === 'ready' && record
   usePortalBand(
@@ -631,6 +649,8 @@ function OrderContainer({ id }: { id: string }) {
         record,
         tab,
         prefix: frame.prefix,
+        // B-W2b-194: a line's ⋯ "Reorder this line" opens New order's reorder of this order.
+        reorderHref: frame.me.permissions.includes('portal.orderRequests.manage') && !preview ? `${frame.prefix}/orders/new?reorder=${encodeURIComponent(id)}` : null,
         offlineSince: offline ? loadedAt : null,
         notice,
         revision,
@@ -645,6 +665,8 @@ function OrderContainer({ id }: { id: string }) {
         fileHeld,
         openLine,
         copied,
+        // B-W2b-170
+        linkHeld,
         historyOpen,
         dialog: dialogModel,
       }}
@@ -671,6 +693,8 @@ function OrderContainer({ id }: { id: string }) {
         onLine: (lineId) => setOpenLine(lineId),
         onHistory: setHistoryOpen,
         onCopy: copy,
+        // B-W2b-170
+        onCopyTrackingLink: copyTrackingLink,
         onPreview: previewFile,
         onDownload: download,
         onDismissNotice: () => setNotice(null),

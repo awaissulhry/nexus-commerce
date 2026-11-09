@@ -181,6 +181,8 @@
       "SubcontractOrder": "Lavorazione",
       "ShipNotice": "Avviso di spedizione",
       "Party": "Account",
+      "ReturnAuthorisation": "Reso",
+      "Complaint": "Reclamo",
       "other": "Documento"
     }
   },

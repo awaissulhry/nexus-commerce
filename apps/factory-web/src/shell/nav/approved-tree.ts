@@ -657,6 +657,10 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.approve', title: 'Approve', scr: ['SCR-198'], task: 'approve' },
   // W2b: B-W2b-181 Accept a job (a JOB_ACCEPT link's job).
   { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
+  // W2b: B-W2b-198 Report a problem (a CLAIM link of a shipment or an order).
+  { id: 'links.claim', title: 'Report a problem', scr: ['SCR-197'], task: 'report-problem' },
+  // W2b: B-W2b-170 Track an order (a SHIPMENT_TRACK link's tracking page; the public search /t is its section).
+  { id: 'links.tracking', title: 'Track an order', scr: ['SCR-194'], task: 'track-order' },
   // W2b: B-W2b-199 Pay online (a PAYMENT link's invoice or deposit; DEPOSIT_INFO opens it too as 'deposit-pay').
   { id: 'links.pay', title: 'Pay online', scr: ['SCR-199'], task: 'pay' },
 ]

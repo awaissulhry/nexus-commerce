@@ -42,7 +42,8 @@ describe('the thirteen purposes', () => {
   it('count the answers, every open of a view purpose, a secure file\'s downloads; never an open of an answer purpose, a receipt or a shared record\'s posts', () => {
     expect(PURPOSE_RULES.SECURE_FILE.actions).toMatchObject({ open: { counts: false }, download: { counts: true }, receive: { counts: false, typedName: 'optional' } })
     expect(PURPOSE_RULES.DOCUMENT_VIEW.actions).toMatchObject({ open: { counts: true }, download: { counts: false } })
-    expect(PURPOSE_RULES.SHIPMENT_TRACK.actions).toEqual({ open: { counts: false, typedName: 'none', checksEmail: false } })
+    // B-W2b-170: the tracking page's papers are downloads (evidence, never a use).
+    expect(PURPOSE_RULES.SHIPMENT_TRACK.actions).toEqual({ open: { counts: false, typedName: 'none', checksEmail: false }, download: { counts: false, typedName: 'none', checksEmail: false } })
     expect(PURPOSE_RULES.RECORD_INVITE.actions.post?.counts).toBe(false)
     expect(PURPOSE_RULES.APPROVAL.actions.approve).toEqual({ counts: true, typedName: 'required', checksEmail: false })
     expect(PURPOSE_RULES.SUPPLIER_ONBOARD.actions.submit?.typedName).toBe('required')

@@ -1,0 +1,204 @@
+{
+  "title": "Your order {order}",
+  "retry": "Try again",
+  "carrierSite": "Track on the carrier's site",
+  "loading": {
+    "label": "Loading where your order is…",
+    "slow": "Still loading…"
+  },
+  "state": {
+    "error": {
+      "title": "We could not read where your order is",
+      "body": "The connection or our service did not answer. Nothing is lost: try again."
+    },
+    "dead": {
+      "title": "This tracking link no longer works",
+      "body": "It was withdrawn, or the page ended 60 days after delivery. Ask for a new link: we send it to the address the link went to."
+    }
+  },
+  "ask": {
+    "label": "Ask for a new link",
+    "again": "Ask again",
+    "busy": "Asking…",
+    "asked": "Asked — we passed it on",
+    "held": "Already asked: look in the mailbox the link went to.",
+    "done": "We passed it on. If the link was ours, a new one goes to the address it was sent to.",
+    "failed": "Your request did not reach us. Check the connection and ask again.",
+    "onlyOnFile": "A new link only ever goes to the address on file, never to one typed here."
+  },
+  "pill": {
+    "PACKED": "Packed",
+    "COLLECTED": "Collected",
+    "IN_TRANSIT": "In transit",
+    "OUT_FOR_DELIVERY": "Out for delivery",
+    "DELIVERED": "Delivered",
+    "PROBLEM": "Problem"
+  },
+  "now": {
+    "PACKED": "Packed and waiting for the carrier.",
+    "COLLECTED": "The carrier collected it.",
+    "IN_TRANSIT": "On its way to you.",
+    "OUT_FOR_DELIVERY": "Out for delivery today.",
+    "DELIVERED": "Delivered.",
+    "PROBLEM": "Something is not as planned."
+  },
+  "problem": {
+    "DELAYED": "The carrier reports a delay or a missed delivery.",
+    "RETURNING": "The carrier is bringing it back to us.",
+    "RETURNED": "The goods came back to us. We will write to you."
+  },
+  "step": {
+    "PACKED": "Packed",
+    "COLLECTED": "Collected",
+    "IN_TRANSIT": "In transit",
+    "OUT_FOR_DELIVERY": "Out for delivery",
+    "DELIVERED": "Delivered"
+  },
+  "event": {
+    "LABEL_CREATED": "Label ready, waiting for the carrier",
+    "IN_TRANSIT": "On the way",
+    "OUT_FOR_DELIVERY": "Out for delivery",
+    "DELIVERED": "Delivered",
+    "EXCEPTION": "Delayed or held by the carrier",
+    "RETURNED": "Going back to the sender"
+  },
+  "by": {
+    "CARRIER": "A carrier",
+    "SENDER": "Our own van",
+    "RECIPIENT": "You collect it from us"
+  },
+  "fact": {
+    "expected": "Expected delivery",
+    "expectedUnknown": "The carrier has not said yet",
+    "delivered": "Delivered on",
+    "returned": "Back with us on",
+    "carrier": "Carrier",
+    "shipment": "Shipment",
+    "ourOrder": "Our order number"
+  },
+  "where": {
+    "title": "Where it is",
+    "sub": "The latest news of your shipment, in your language.",
+    "steps": "Where shipment {number} is"
+  },
+  "parcels": {
+    "label_one": "{count} parcel",
+    "label_other": "{count} parcels",
+    "name": "Parcel {seq} of {count}",
+    "noNumber": "No tracking number yet",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyOf": "Copy tracking number {number}",
+    "copiedSay": "Tracking number {number} copied.",
+    "carrierOf": "Track parcel {seq} on the carrier's site (opens a new tab)"
+  },
+  "events": {
+    "title": "Carrier events",
+    "sub": "What the carrier reported, in your language.",
+    "ofParcel": "{event} · parcel {seq}",
+    "none": {
+      "packed": "No carrier scans yet: it waits for the carrier.",
+      "packedEta": "No carrier scans yet: it waits for the carrier. Expected delivery: {date}.",
+      "left": "No carrier scans yet. They show here as soon as the carrier sends them.",
+      "SENDER": "This shipment travels with our own van: there are no carrier scans.",
+      "RECIPIENT": "You collect this shipment from us: there are no carrier scans."
+    }
+  },
+  "delivery": {
+    "title": "Delivery",
+    "sub": "Where it goes.",
+    "where": "Delivery town",
+    "unknown": "Not given",
+    "proof": "Delivered",
+    "proofAt": "{when} · {place}",
+    "only": "Only the town and postcode are shown here, never the full address."
+  },
+  "paper": {
+    "PACKING_LIST": "Packing list",
+    "DECLARATION_OF_CONFORMITY": "EU Declaration of Conformity",
+    "USER_INFORMATION": "Manufacturer's user information",
+    "packingListOf": "Packing list {number}",
+    "styled": "{kind} · {style}"
+  },
+  "papers": {
+    "title": "Papers",
+    "sub": "The packing list and the declarations of this shipment. No prices.",
+    "search": "The papers come with the link in our e-mail: open it to download them.",
+    "none": "No papers for this shipment yet.",
+    "download": "Download",
+    "again": "Try again",
+    "busy": "Downloading…",
+    "failed": "The download did not finish. Try again.",
+    "language": "In {language} · no prices",
+    "noPrice": "No prices",
+    "downloadOf": "Download {name}"
+  },
+  "claim": {
+    "title": "Something wrong?",
+    "sub": "Damaged, missing or not what you ordered: tell us from here.",
+    "button": "Report a problem with this delivery",
+    "busy": "Opening the form…",
+    "opened": "The form opened in a new tab.",
+    "failed": "The form did not open. Check the connection and try again.",
+    "tooMany": "Forms for this shipment were opened already: use the one you opened, or write to us.",
+    "held": {
+      "SEARCH": "To report a problem, open the link in our e-mail, or write to us.",
+      "NOT_LEFT": "It has not left us yet: write to us to change it.",
+      "RETURNED": "The goods came back to us: we will write to you."
+    }
+  },
+  "foot": {
+    "ends": "This page stays open until {date}.",
+    "read": "Updated {time}."
+  },
+  "search": {
+    "title": "Track an order",
+    "cardTitle": "Find your order",
+    "sub": "No link at hand? Type your order reference and the delivery postcode.",
+    "reference": "Your order reference",
+    "referenceHint": "As on your order or our confirmation.",
+    "postcode": "Delivery postcode",
+    "postcodeHint": "The postcode of the address it goes to.",
+    "button": "Find my shipment",
+    "enter": "Enter searches too.",
+    "again": "Find another order",
+    "foundLabel": "Shipments of this order",
+    "several_one": "This order left in {count} shipment. Choose it:",
+    "several_other": "This order left in {count} shipments. Choose one:",
+    "pickLeft": "Shipment {number} · left on {date}",
+    "pickPacked": "Shipment {number} · packed",
+    "checking": "A quick check of this browser, then we search…",
+    "error": "The search did not reach us. Check the connection and try again.",
+    "wait_one": "Too many searches: wait {count} minute, then try again.",
+    "wait_other": "Too many searches: wait {count} minutes, then try again.",
+    "miss": {
+      "title": "No shipment found for these details.",
+      "body": "Check the order reference and the postcode of the delivery address. An order shows here once it has been packed."
+    },
+    "ended": {
+      "title": "This shipment can no longer be followed here",
+      "body": "Search again, or write to us."
+    },
+    "missing": {
+      "title": "This address is missing whose order it is",
+      "body": "Open the tracking link from our e-mail, or ask us for it."
+    },
+    "held": {
+      "loading": "Loading the page…",
+      "searching": "Searching…",
+      "checking": "Checking this browser…"
+    },
+    "problem": {
+      "reference": {
+        "empty": "Type your order reference.",
+        "long": "An order reference has at most 60 characters.",
+        "format": "Type the reference as on your order."
+      },
+      "postcode": {
+        "empty": "Type the delivery postcode.",
+        "long": "Type the postcode as it is on the delivery address.",
+        "format": "Type the postcode as it is on the delivery address: letters and digits."
+      }
+    }
+  }
+}

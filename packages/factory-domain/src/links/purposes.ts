@@ -33,7 +33,7 @@ const FILES_READ = 'files.read' satisfies Permission
  *   DOCUMENT_VIEW     StoredFile, Shipment,     open*, download                         price   30 / 365  20 / 100 files, password
  *                     PayrollExport
  *   DEPOSIT_INFO      DepositRequest            open*                                   price   30 / 90   20 / 100
- *   SHIPMENT_TRACK    Shipment                  open                                    none    60 / 180  1 / 1
+ *   SHIPMENT_TRACK    Shipment                  open, download                          none    60 / 180  1 / 1
  *   MEASUREMENTS      MeasurementProfile        submit*                                 none    21 / 60   1 / 1    draft
  *   CLAIM             SalesOrder, Shipment      submit*                                 none    60 / 90   5 / 20   draft
  *   PAYMENT           DepositRequest, Invoice   pay*                                    price   30 / 90   1 / 1
@@ -252,8 +252,9 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     purpose: 'SHIPMENT_TRACK',
     description: 'The customer follows one shipment: its steps and the carrier\'s tracking, without any price.',
     recordTypes: ['Shipment'],
-    // "Unlimited opens" until it expires (60 days after delivery: the module renews it at delivery, links.tracking).
-    actions: { open: notCounted },
+    // "Unlimited opens" until it expires (the page ends 60 days after delivery: shipping/tracking-link). B-W2b-170: a paper
+    // downloaded from the page is evidence (DOWNLOADED, as links.document's rules), never a use.
+    actions: { open: notCounted, download: notCounted },
     grains: [],
     expiryDays: { default: 60, max: 180 },
     uses: { default: 1, max: 1 },
