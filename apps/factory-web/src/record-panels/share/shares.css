@@ -1,0 +1,97 @@
+/*
+ * The record panels' Partners tab (B-W2b-200, "Share with a partner"): layout only, semantic tokens only; controls are the
+ * design system's.
+ */
+.fw-rsh,
+.fw-rsh-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rsh-head,
+.fw-rsh-item-head,
+.fw-rsh-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rsh-head {
+  justify-content: space-between;
+}
+
+.fw-rsh-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+p.fw-rsh-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-rsh-spacer {
+  flex: 1 1 auto;
+}
+
+.fw-rsh-who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-rsh-url {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rsh-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rsh-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-rsh-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-rsh-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rsh-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--nds-space-8);
+}

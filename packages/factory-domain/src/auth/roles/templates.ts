@@ -14,6 +14,8 @@ import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from '../../sal
 import { PORTAL_RETURNS_ADDS } from '../../sales/portal-returns/permissions'
 // B-W2b-184: approval requests to partners (the office's asks, the partner's page).
 import { PARTNERS_APPROVALS_ADDS, PORTAL_APPROVALS_READERS } from '../../approvals-out/permissions'
+// B-W2b-200: inviting a partner to one record (the office's invitations).
+import { PARTNERS_SHARES_ADDS } from '../../shares/permissions'
 // B-W2b-112: cut orders and cut tickets (the production manager and the planner plan them).
 import { CUT_ORDERS_ADDS } from '../../production/cutorders/permissions'
 // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (office and floor templates).
@@ -771,6 +773,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SUPPLIER_REVIEW_ADDS[key] ?? []) : []),
   // B-W2b-184
   ...(audience === 'office' ? (PARTNERS_APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-200
+  ...(audience === 'office' ? (PARTNERS_SHARES_ADDS[key] ?? []) : []),
   // B-W2b-112
   ...(audience === 'office' ? (CUT_ORDERS_ADDS[key] ?? []) : []),
   // B-W2b-117

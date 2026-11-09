@@ -497,7 +497,8 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
     // B-W2b-188: APPROVAL has its page (links/approve).
     // B-W2b-181: JOB_ACCEPT has its page (links/job); B-W2b-198: CLAIM has its page (links/claim).
-    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'PAYMENT', 'SUPPLIER_ONBOARD', 'RECORD_INVITE', 'SECURE_FILE']
+    // B-W2b-200: RECORD_INVITE has its page (links/invite).
+    const W2B_3 = ['SHIPMENT_TRACK', 'MEASUREMENTS', 'PAYMENT', 'SUPPLIER_ONBOARD', 'SECURE_FILE']
     expect(frame.slice(2)).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     // B-W2b-198: one task may serve several record types (CLAIM × Shipment and × SalesOrder): every task has a rule.

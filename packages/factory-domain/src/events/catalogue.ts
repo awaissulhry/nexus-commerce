@@ -119,6 +119,8 @@ import { events as supplierPortal } from '../supplier-portal/events'
 import { events as portalReturns } from '../portal-returns/events'
 // B-W2b-184: approval requests to partners (asked, answered, withdrawn, expired).
 import { events as approvalsOut } from '../approvals-out/events'
+// B-W2b-200: inviting a partner to one record (invited, changed, revoked).
+import { events as shares } from '../shares/events'
 // B-W2b-136 (QHS-173): clicking dies (a die registered, changed or retired).
 import { events as plantDies } from '../plant-dies/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
@@ -313,6 +315,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...portalReturns,
   // B-W2b-184
   ...approvalsOut,
+  // B-W2b-200
+  ...shares,
   // B-W2b-136
   ...plantDies,
   // B-W2b-112

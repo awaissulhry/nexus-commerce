@@ -17,6 +17,8 @@ import { Approve } from '../../links/approve/Approve'
 import { JobLink } from '../../links/job/JobLink'
 // B-W2b-198: a CLAIM link's report-a-problem page (SCR-197).
 import { ReportProblem } from '../../links/claim/ReportProblem'
+// B-W2b-200: a RECORD_INVITE link's shared record (SCR-270).
+import { InviteLink } from '../../links/invite/InviteLink'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -112,6 +114,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-198
     case 'report-problem':
       return <ReportProblem api={task.api} />
+    // B-W2b-200
+    case 'invite':
+      return <InviteLink api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

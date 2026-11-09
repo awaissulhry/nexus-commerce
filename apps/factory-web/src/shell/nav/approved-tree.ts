@@ -659,6 +659,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
   // W2b: B-W2b-198 Report a problem (a CLAIM link of a shipment or an order).
   { id: 'links.claim', title: 'Report a problem', scr: ['SCR-197'], task: 'report-problem' },
+  // W2b: B-W2b-200 Join a record (a RECORD_INVITE link's shared record).
+  { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

@@ -1,0 +1,65 @@
+/*
+ * The invite-link page (SCR-270, Join a record) LAYOUT inside the link frame (comfortable density, phone first): one
+ * column of cards — why, the record, shared files, messages, e-mail me. Controls are the design system's; semantic tokens
+ * only.
+ */
+.fw-inv-stack,
+.fw-inv-card,
+.fw-inv-thread,
+.fw-inv-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-inv-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-inv-h2,
+.fw-inv-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-inv-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-inv-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+}
+
+.fw-inv-muted {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+  line-height: 1.5;
+}
+
+.fw-inv-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-inv-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-inv-toggle-label {
+  color: var(--nds-text-strong);
+  cursor: pointer;
+}
