@@ -743,7 +743,10 @@
       "trolleyUnload": "Bundle {code} off a trolley",
       "trolleySend": "A trolley sent to sewing",
       "trolleyReceive": "A trolley received at the line",
-      "incomingRecord": "Incoming inspection: a hide or the checks"
+      "incomingRecord": "Incoming inspection: a hide or the checks",
+      "inlineRecord": "In-line inspection: a check's result",
+      "inlineResults": "In-line inspection: the plan's checks",
+      "finalRecord": "Final inspection: results and measurements"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

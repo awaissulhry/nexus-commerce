@@ -76,6 +76,10 @@ export const WHAT_KEY = {
   'production.trolley.receive': 'trolleyReceive',
   // B-W2b-115: a hide or the plan's checks of an incoming inspection, kept while the network is gone.
   'quality.incoming.record': 'incomingRecord',
+  // B-W2b-151: the in-line check (B-W2b-105) and the final inspection's results (B-W2b-109) said in words, not "Action".
+  'quality.inprocess.record': 'inlineRecord',
+  'quality.inprocess.results': 'inlineResults',
+  'quality.final.record': 'finalRecord',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]
