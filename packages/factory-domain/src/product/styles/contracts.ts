@@ -71,6 +71,9 @@ export const createStyleBody = input({
   sizes: editable.sizes.optional(),
   ppeCategory: editable.ppeCategory.optional(),
   mtmAllowed: editable.mtmAllowed.optional(),
+  // B-W2b-221 (PRD-008): its product type; what the body leaves out (the size scale included) it takes from the type's defaults.
+  productTypeProfileId: id().nullish(),
+  sizeScaleId: editable.sizeScaleId.optional(),
   colourways: z.array(colourwayBody).max(MAX_COLOURWAYS).optional(),
   /** Make the SKU matrix at once (default false: generate it later from the style page). */
   generateSkus: z.boolean().optional(),

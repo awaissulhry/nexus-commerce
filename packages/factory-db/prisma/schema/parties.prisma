@@ -105,6 +105,11 @@ model Party {
   bomLines            BomLine[]
   // W2b-4 styles-depth.prisma (wave 26/33): as a private-label brand, its branding sets.
   brandingSets        BrandingSet[]
+  // W2b-4 compliance-rules.prisma (wave 30/33): the economic operator roles it holds and, as a brand, those set for its
+  // styles; compliance.prisma: as a supplier, the certified parts it sells us.
+  economicOperatorRoles       EconomicOperatorRole[] @relation("EconomicOperatorParty")
+  brandEconomicOperatorRoles  EconomicOperatorRole[] @relation("EconomicOperatorBrand")
+  suppliedCertificateCoverage CertificateCoverage[]  @relation("CertificateCoverageSupplier")
   // compliance.prisma: as a brand, the certificates it holds and the labels and documents that name it as the maker.
   certificatesHeld    Certificate[]
   labelTemplates      LabelTemplate[]
