@@ -1,0 +1,141 @@
+{
+  "title": {
+    "invoice": "Invoice {number}",
+    "depositOrder": "Deposit for order {order}",
+    "depositQuote": "Deposit for quote {quote}",
+    "deposit": "Deposit"
+  },
+  "loading": {
+    "now": "Loading what you pay…",
+    "slow": "Still loading…"
+  },
+  "problem": {
+    "read": "We could not read what you pay",
+    "readBody": "Nothing changed. Try again in a moment.",
+    "retry": "Try again"
+  },
+  "status": {
+    "TO_PAY": "To pay",
+    "PAID": "Paid",
+    "CLOSED": "Nothing to pay"
+  },
+  "what": {
+    "title": "What you pay",
+    "open": "Amount due",
+    "document": "Document",
+    "invoice": "Invoice {number}",
+    "invoiceIssued": "Invoice {number} of {date}",
+    "depositRequest": "Deposit request",
+    "for": "For",
+    "forOrderQuote": "Order {order} (quote {quote})",
+    "forOrder": "Order {order}",
+    "forQuote": "Quote {quote}",
+    "total": "Total",
+    "settled": "Already paid",
+    "due": "Due by"
+  },
+  "kind": {
+    "ACCONTO": "Advance (acconto)",
+    "CAPARRA": "Confirmatory deposit (caparra)",
+    "pct": "{kind}, {pct} of the total"
+  },
+  "bank": {
+    "title": "Pay by bank transfer",
+    "holder": "Beneficiary",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Bank",
+    "reference": "Reference to write",
+    "amount": "Amount",
+    "noneDeposit": "The bank details follow by e-mail: the company has not entered them here yet.",
+    "noneInvoice": "The bank details are on the invoice.",
+    "production": "Production starts when the deposit is received."
+  },
+  "copy": "Copy {what}",
+  "copyShort": "Copy",
+  "copied": "{what} copied.",
+  "card": {
+    "title": "Pay by card or SEPA Direct Debit",
+    "method": {
+      "CARD": "Card",
+      "SEPA_DEBIT": "SEPA Direct Debit"
+    },
+    "methodHint": {
+      "CARD": "Visa, Mastercard and other cards. Your bank may ask you to confirm in its app.",
+      "SEPA_DEBIT": "From a bank account in euro. The money arrives in a few working days."
+    },
+    "testProvider": "a test payment provider",
+    "testNote": "Test payment provider: these buttons play what a card or a bank would do. No money moves and no card data is asked.",
+    "testConfirm": "Your bank asks you to confirm the payment (3-D Secure), as it would in its own window.",
+    "testProcessing": "The SEPA Direct Debit is on its way. Days later the bank answers:",
+    "testAgain": "Show the test provider again",
+    "scenario": {
+      "succeed": "Pay {amount}",
+      "sepaSucceed": "Sign the mandate and pay {amount}",
+      "decline": "The bank declines the card",
+      "insufficient_funds": "The card has not enough funds",
+      "authenticate": "The bank asks to confirm",
+      "confirm": "Confirm in the bank's window",
+      "fail_authentication": "The confirmation fails",
+      "settle": "The money arrives",
+      "return": "The bank returns the debit"
+    },
+    "sepaWaiting": "Your SEPA Direct Debit is on its way: the money arrives in a few working days. You can close this page; the receipt follows by e-mail.",
+    "resumed": "You had started this payment already: we took it up again.",
+    "offline": "No connection: paying by card waits until you are back online. The bank transfer details stay on this page.",
+    "paid": "Paid. Thank you.",
+    "unavailable": {
+      "NO_ACCOUNT": "Card payment is not available: pay by bank transfer.",
+      "NOT_A_PAYMENT_ACCOUNT": "Card payment is not available: pay by bank transfer.",
+      "NOT_ACTIVE": "Card payment is paused: pay by bank transfer.",
+      "GATE_SPEND": "Card payment is not switched on yet: pay by bank transfer.",
+      "FAKE_IN_PRODUCTION": "Card payment is not available: pay by bank transfer.",
+      "FAKE_PROVIDER_LIVE": "Card payment is not available: pay by bank transfer."
+    },
+    "refusal": {
+      "NOT_OPEN": "There is nothing left to pay on this document.",
+      "NO_PROVIDER": "Card and SEPA payments are not available for this company: pay by bank transfer.",
+      "CURRENCY": "Card and SEPA payments are taken in euro only: pay by bank transfer.",
+      "NOT_PAYABLE": "This document is not paid online.",
+      "PROVIDER": "The payment service did not answer: try again in a moment, or pay by bank transfer.",
+      "IN_PROGRESS": "A payment of this document is under way (being confirmed at the bank, or a SEPA debit on its way): wait for it, or pay by bank transfer.",
+      "ended": "This payment has ended already. Read the page again to see where it stands.",
+      "rateLimited": "Too many tries in a short time: wait a minute and try again.",
+      "other": "The payment could not start. Try again in a moment, or pay by bank transfer."
+    },
+    "failure": {
+      "card_declined": "Your bank declined the card. Try another card or pay by transfer.",
+      "insufficient_funds": "The card has not enough funds. Try another card or pay by transfer.",
+      "expired_card": "The card has expired. Try another card or pay by transfer.",
+      "incorrect_cvc": "The security code is not right. Try again.",
+      "authentication_failed": "Your bank did not confirm the payment. Try again or pay by transfer.",
+      "payment_intent_authentication_failure": "Your bank did not confirm the payment. Try again or pay by transfer.",
+      "debit_not_authorized": "Your bank did not authorise the SEPA debit. Pay by transfer or by card.",
+      "insufficient_funds_sepa": "The SEPA debit was returned. Pay by transfer or by card.",
+      "provider_unavailable": "The payment service does not answer. Try again in a moment or pay by transfer.",
+      "provider_refused": "The payment service refused the request. Pay by transfer.",
+      "default": "The payment did not go through. Try again or pay by transfer."
+    }
+  },
+  "done": {
+    "paid": "Paid — thank you",
+    "paidDeposit": "The deposit of {amount} is received.",
+    "paidInvoice": "Invoice {number} is paid: nothing is left to pay.",
+    "receipt": "The receipt follows by e-mail to the address this page was sent to.",
+    "depositInvoice": "When a deposit invoice is due, it follows by e-mail.",
+    "amount": "Amount",
+    "method": "Paid by",
+    "at": "Paid on",
+    "reference": "Payment reference",
+    "document": "Document",
+    "contact": "Ask them if anything is not right.",
+    "closed": "Nothing to pay here",
+    "closedBody": "This document no longer asks for a payment: it was cancelled or settled another way."
+  },
+  "quoteCard": {
+    "title": "Pay by card or SEPA Direct Debit",
+    "held": "Paying by card or SEPA Direct Debit happens on the deposit's payment page: ask {sender} to send it to you by e-mail. The bank transfer above works now.",
+    "paid": "The deposit is received — thank you.",
+    "closed": "This deposit no longer asks for a payment."
+  }
+}

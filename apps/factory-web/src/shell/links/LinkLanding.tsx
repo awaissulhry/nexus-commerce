@@ -7,7 +7,7 @@ import { isApiError } from '../../lib/api/errors'
 import { openLink, type OpenedLink } from '../../lib/api/links'
 import { brandingTokensOf, readLinkBranding } from '../../lib/api/branding'
 import { takeLinkTokenFromLocation } from '../../lib/links/token'
-import { DepositPay } from '../../links/deposit-pay/DepositPay'
+import { Pay } from '../../links/pay/Pay'
 import { PoConfirm } from '../../links/po-confirm/PoConfirm'
 import { DocumentLink } from '../../links/document/DocumentLink'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
@@ -35,8 +35,8 @@ const linkBody = (state: LinkState, link?: OpenedLink): LinkFrameViewModel['body
  * `/l#token=…` — where every one-off link lands. It takes the token from the fragment (and out of the address bar),
  * opens the link (`POST /link/open`, token in `x-factory-link`, never in a URL), and shows the link's state. A valid
  * link's task is its module's page, as the link-type registry says (links/_nav/link-types.ts): a QUOTE_ACCEPT link opens
- * the quote to accept (links/quote-accept, SCR-099), a DEPOSIT_INFO link the deposit to pay by bank transfer
- * (links/deposit-pay, SCR-199), a PO_CONFIRM link the purchase order its supplier confirms (links/po-confirm, SCR-100), a
+ * the quote to accept (links/quote-accept, SCR-099), a DEPOSIT_INFO or PAYMENT link what to pay by bank transfer or card
+ * (links/pay, SCR-199), a PO_CONFIRM link the purchase order its supplier confirms (links/po-confirm, SCR-100), a
  * DOCUMENT_VIEW link of a Shipment its documents (links/document, SCR-101), each with the same client (the token stays
  * in memory, in its header); any other link shows what it opens and when it expires.
  */
@@ -100,7 +100,7 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     case 'quote-accept':
       return <QuoteAccept api={task.api} />
     case 'deposit-pay':
-      return <DepositPay api={task.api} />
+      return <Pay api={task.api} purpose="DEPOSIT_INFO" />
     case 'po-confirm':
       return <PoConfirm api={task.api} />
     case 'shipment-documents':
@@ -117,6 +117,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-170
     case 'track-order':
       return <TrackOrder api={task.api} />
+    // B-W2b-199
+    case 'pay':
+      return <Pay api={task.api} purpose="PAYMENT" />
     default:
       return <LinkFrameView model={model} />
   }
