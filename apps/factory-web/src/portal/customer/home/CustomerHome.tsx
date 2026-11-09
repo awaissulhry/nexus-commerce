@@ -451,6 +451,8 @@ function HomeContainer() {
       statement: seesPayments && seesPrices && !preview ? statementHref(locale) : null,
       emailSettings: !preview,
       ordersKey: built.orders && seesOrders,
+      // B-W2b-194: New order (a buyer, the page built, not in a preview).
+      newOrder: can('portal.orderRequests.manage') && pageBuilt('orders.new') && !preview ? `${prefix}/orders/new` : null,
     }),
   )
 

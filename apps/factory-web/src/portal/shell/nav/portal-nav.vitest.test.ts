@@ -44,9 +44,12 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     ])
     // B-W2b-196: the customer's Account.
     // B-W2b-191: the customer's Orders & tracking (the area left with one page takes its name and address).
+    // B-W2b-194: New order & reorder joins Orders (two pages: the area keeps its own name); the Catalogue is the one page of
+    // Quotes & samples (it takes the page's name and address).
     expect(ids('CUSTOMER', false)).toEqual([
       ['home', 'nav.home', '/'],
-      ['orders', 'nav.ordersTracking', '/orders'],
+      ['orders', 'nav.orders', '/orders'],
+      ['quotes', 'nav.catalogue', '/catalogue'],
       ['account', 'nav.account', '/account'],
     ])
   })

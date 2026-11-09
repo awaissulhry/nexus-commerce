@@ -10,12 +10,14 @@ import type { OrderWords } from './words'
  * "Ask a question"); the record's link tabs.
  */
 
-export function listBandOf(input: { words: OrderWords; asOf: string | null; rows: number; chip: OrderChip | null; q: string; prefix: string; onExport?: () => void }): PortalBand {
+// B-W2b-194: `newOrder` = the New order page's address for a person who may order (else null: no button).
+export function listBandOf(input: { words: OrderWords; asOf: string | null; rows: number; chip: OrderChip | null; q: string; prefix: string; onExport?: () => void; newOrder?: string | null }): PortalBand {
   const { t, time } = input.words
   return {
     title: t('list.title'),
     status: input.asOf ? { label: t('band.updated', { time: time(input.asOf) }), tone: 'neutral' } : null,
-    actions: [],
+    // B-W2b-194: the band's primary "New order" (a buyer's).
+    actions: input.newOrder ? [{ id: 'new-order', label: t('band.newOrder'), variant: 'primary', href: input.newOrder }] : [],
     more: [
       { id: 'export', label: t('band.export'), disabled: input.rows === 0, description: input.rows === 0 ? t('held.noRows') : undefined, onSelect: () => input.onExport?.() },
       { id: 'print', label: t('band.print'), href: `${input.prefix}/orders${listQuery(input.chip, input.q, { print: '1' })}`, target: '_blank' },

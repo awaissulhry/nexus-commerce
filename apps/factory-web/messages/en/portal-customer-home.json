@@ -3,7 +3,8 @@
   "band": {
     "updated": "Updated {time}",
     "statement": "Download statement of account",
-    "emailSettings": "E-mail settings"
+    "emailSettings": "E-mail settings",
+    "newOrder": "New order"
   },
   "keys": {
     "todo": "Move through What waits for you",
