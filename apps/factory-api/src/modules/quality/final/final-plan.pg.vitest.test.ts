@@ -182,9 +182,11 @@ describe('which plan applies, and the opening on it (QHS-049)', () => {
     refs.office = inspection.id
     expect(inspection).toMatchObject({ status: 'OPEN', planVersion: { id: A.vFinal1, code: 'FIN-JACKET', number: 1 }, aqlProfileId: A.exm, codeLetter: 'A', inspected: 0, checklist: [] })
     expect(inspection.plan).toMatchObject({ lotSize: 2, sampleSize: 2, inspectionLevel: 'II', acceptMajor: 0, acceptMinor: 0 })
-    const [row] = await admin<{ planVersionId: string; checklist: Json[] }>(`SELECT "planVersionId", checklist FROM "Inspection" WHERE id = $1`, [inspection.id])
+    const [row] = await admin<{ planVersionId: string; checklist: Json[] | null; inspectedCount: number | null }>(`SELECT "planVersionId", checklist, "inspectedCount" FROM "Inspection" WHERE id = $1`, [inspection.id])
     expect(row!.planVersionId).toBe(A.vFinal1)
-    expect(row!.checklist).toEqual([{ code: 'AQL_SAMPLE', ok: null, note: '0 of 2 inspected', inspected: 0 }])
+    // B-W2b-213: the counter is Inspection.inspectedCount (no AQL_SAMPLE entry any more).
+    expect(row!.checklist).toBeNull()
+    expect(row!.inspectedCount).toBe(0)
     expect((await audits(inspection.id))[0]!.after).toMatchObject({ plan: 'FIN-JACKET v1 applies', sampling: 'CUSTOMER', profileCode: 'AQL-EXM' })
   })
 

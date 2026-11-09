@@ -16,7 +16,8 @@ import { LANGUAGE_CODE, type ReasonWords } from '../../reasons/rules'
  */
 
 /** The lists the vocabulary event names (the defect library keeps its own event, quality.defects_changed). */
-export const VOCABULARY_LISTS = ['CAUSES', 'GRADES'] as const
+// B-W2b-213: SEVERITY, the tenant's severity words (QualitySettings.severityTexts; codes = the classes changed).
+export const VOCABULARY_LISTS = ['CAUSES', 'GRADES', 'SEVERITY'] as const
 export type VocabularyList = (typeof VOCABULARY_LISTS)[number]
 
 export const VOCABULARY_CHANGES = ['CREATED', 'EDITED', 'RETIRED', 'REACTIVATED', 'DELETED', 'STARTER_ADDED'] as const

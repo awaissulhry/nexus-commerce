@@ -19,8 +19,7 @@
     "acceptance_other": "Numero di accettazione {count} in ogni piano.",
     "defects_one": "{count} difetto attivo della libreria ha questa classe.",
     "defects_other": "{count} difetti attivi della libreria hanno questa classe.",
-    "rule": "Un difetto critico della libreria si registra sempre critico, mai più lieve, e non si accetta mai: niente uso così com’è, niente declassamento, niente concessione.",
-    "fixed": "Per ora i testi sono le parole fisse della fabbrica: non c’è ancora un posto per quelle di un’azienda."
+    "rule": "Un difetto critico della libreria si registra sempre critico, mai più lieve, e non si accetta mai: niente uso così com’è, niente declassamento, niente concessione."
   },
   "words": {
     "missing": "Ancora nessuna parola",

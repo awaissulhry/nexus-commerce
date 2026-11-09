@@ -1,3 +1,4 @@
+import type { SeverityEdit } from './severity/model'
 import {
   CLASS_RANK,
   DEFECT_CLASSES,
@@ -679,6 +680,8 @@ export interface DefectsModel {
 
 export interface VocabularyReads {
   readonly severity: ReadOf<Severity>
+  /** B-W2b-213: the severity words while edited (null or left out: read mode). */
+  readonly severityEdit?: SeverityEdit | null
   readonly causes: ReadOf<Causes>
   readonly grades: ReadOf<Grades>
   readonly coverage: Coverage | null

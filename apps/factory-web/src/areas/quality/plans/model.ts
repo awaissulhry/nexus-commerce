@@ -925,8 +925,13 @@ export interface RuleDraft {
   readonly chips: readonly ChipDraft[]
   readonly frequency: Frequency
   readonly frequencyValue: number | ''
+  /** B-W2b-213: within how many hours what it opens is due ('' : no due time). */
+  readonly dueHours: number | ''
   readonly active: boolean
 }
+
+/** B-W2b-213 (factory-domain dueHoursProblem): due within 1 to 720 hours, or none. */
+export const DUE_HOURS_MAX = 720
 
 export const ruleDraftOf = (rule: Rule): RuleDraft => ({
   key: rule.id,
@@ -936,10 +941,11 @@ export const ruleDraftOf = (rule: Rule): RuleDraft => ({
   chips: chipsOf(rule.appliesTo),
   frequency: rule.frequency,
   frequencyValue: rule.frequencyValue ?? '',
+  dueHours: rule.dueHours ?? '',
   active: rule.active,
 })
 
-export const newRule = (n: number, event: TriggerEvent, planId: string): RuleDraft => ({ key: `new-${n}`, id: null, event, planId, chips: [], frequency: 'EVERY_LOT', frequencyValue: '', active: true })
+export const newRule = (n: number, event: TriggerEvent, planId: string): RuleDraft => ({ key: `new-${n}`, id: null, event, planId, chips: [], frequency: 'EVERY_LOT', frequencyValue: '', dueHours: '', active: true })
 
 export function ruleBody(draft: RuleDraft): RuleBody {
   return {
@@ -948,6 +954,7 @@ export function ruleBody(draft: RuleDraft): RuleBody {
     appliesTo: chipList(draft.chips),
     frequency: draft.frequency,
     frequencyValue: FREQUENCY_TAKES_VALUE[draft.frequency] && draft.frequencyValue !== '' ? draft.frequencyValue : null,
+    dueHours: draft.dueHours === '' ? null : draft.dueHours,
     active: draft.active,
   }
 }
@@ -1003,6 +1010,7 @@ export function ruleProblems(draft: RuleDraft, events: readonly EventFacts[], pl
   else if (draft.frequency === 'FIRST_PIECE' && plan && plan.stage !== 'IN_LINE') problems.push(problem(at('frequency'), 'rules.firstPieceInLine'))
   if (draft.frequency === 'PERCENT_OF_OPERATIONS' && (draft.frequencyValue === '' || draft.frequencyValue < 1 || draft.frequencyValue > 100)) problems.push(problem(at('frequencyValue'), 'sampling.percent'))
   if (draft.frequency === 'EVERY_NTH_BUNDLE' && (draft.frequencyValue === '' || draft.frequencyValue < 1 || draft.frequencyValue > PLAN_LIMITS.everyNth)) problems.push(problem(at('frequencyValue'), 'sampling.everyNth', { max: PLAN_LIMITS.everyNth }))
+  if (draft.dueHours !== '' && (!Number.isInteger(draft.dueHours) || draft.dueHours < 1 || draft.dueHours > DUE_HOURS_MAX)) problems.push(problem(at('dueHours'), 'rules.dueHoursRange', { max: DUE_HOURS_MAX }))
   draft.chips.forEach((chip, index) => {
     if (!event.chipKinds.includes(chip.kind)) problems.push(problem(at(`appliesTo/${index}/kind`), 'rules.chipKind'))
   })

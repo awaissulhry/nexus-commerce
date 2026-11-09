@@ -15,6 +15,9 @@ export const manifest = defineManifest({
   'PUT /quality/inprocess/checks/:checkId/results': { audiences: ['office', 'floor'], permission: 'quality.inprocess.record', scope: 'record' },
   'POST /quality/inprocess/checks/:checkId/decide': { audiences: ['office', 'floor'], permission: 'quality.inprocess.record', scope: 'record' },
   'POST /quality/inprocess/checks/:checkId/cancel': { audiences: ['office', 'floor'], permission: 'quality.inprocess.record', scope: 'record' },
+  // B-W2b-213: the units of the AQL sample inspected (office and the line's tablet); by when it is due (the office).
+  'POST /quality/inprocess/checks/:checkId/count': { audiences: ['office', 'floor'], permission: 'quality.inprocess.record', scope: 'record' },
+  'PATCH /quality/inprocess/checks/:checkId/due': { audiences: ['office'], permission: 'quality.inprocess.record', scope: 'record' },
   'GET /quality/inprocess/dhu': { audiences: ['office', 'floor'], permission: 'quality.inprocess.view', scope: 'record' },
   'GET /quality/inprocess/roving': { audiences: ['office', 'floor'], permission: 'quality.inprocess.view', scope: 'record' },
   'GET /quality/inprocess/first-piece': { audiences: ['office', 'floor'], permission: 'production.scan', scope: 'record' },
