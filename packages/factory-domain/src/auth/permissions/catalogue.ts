@@ -121,6 +121,8 @@ import { SALES_MEASUREMENTS_DEFINITIONS, SALES_MEASUREMENTS_PERMISSIONS } from '
 import { PRODUCTION_CUTORDERS_DEFINITIONS, PRODUCTION_CUTORDERS_PERMISSIONS } from '../../production/cutorders/permissions'
 // B-W2b-117: after the cut (production.recuts, production.secondary, production.trolleys; shared with the floor).
 import { PRODUCTION_CUTISSUE_DEFINITIONS, PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS, PRODUCTION_CUTISSUE_PERMISSIONS } from '../../production/cutissue/permissions'
+// B-W2b-172: the supplier questionnaire (purchasing.questionnaire.view | send | review | manage).
+import { QUESTIONNAIRE_DEFINITIONS, QUESTIONNAIRE_PERMISSIONS } from '../../purchasing/questionnaire/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -748,6 +750,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_CUTISSUE_DEFINITIONS,
   // B-W2b-171: measurements by link (area `sales`, declared above).
   SALES_MEASUREMENTS_DEFINITIONS,
+  // B-W2b-172: the supplier questionnaire (area `purchasing`, declared above).
+  QUESTIONNAIRE_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -983,6 +987,8 @@ for (const name of PRODUCTION_CUTORDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.is
 for (const name of PRODUCTION_CUTISSUE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-171: measurements by link.
 for (const name of SALES_MEASUREMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-172: the supplier questionnaire.
+for (const name of QUESTIONNAIRE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

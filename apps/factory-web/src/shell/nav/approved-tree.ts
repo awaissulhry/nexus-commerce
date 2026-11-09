@@ -665,6 +665,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.pay', title: 'Pay online', scr: ['SCR-199'], task: 'pay' },
   // W2b: B-W2b-171 Send measurements (a MEASUREMENTS link of a rider's measurement profile).
   { id: 'links.measure', title: 'Send measurements', scr: ['SCR-195'], task: 'measure' },
+  // B-W2b-172: the supplier questionnaire (a SUPPLIER_ONBOARD link of the supplier).
+  { id: 'links.onboard', title: 'Supplier questionnaire', scr: ['SCR-269'], task: 'onboard' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

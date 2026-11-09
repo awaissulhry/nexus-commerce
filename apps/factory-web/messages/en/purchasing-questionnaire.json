@@ -1,0 +1,195 @@
+{
+  "retry": "Try again",
+  "loading": {
+    "now": "Loading the questionnaire…",
+    "slow": "Still loading…"
+  },
+  "problem": {
+    "read": "Couldn't load the questionnaire",
+    "readBody": "Check the connection and try again.",
+    "network": "The connection dropped: try again.",
+    "suppressed": "This address bounced or complained: correct it first.",
+    "changed": "Someone changed this meanwhile: we read it again.",
+    "forbidden": "Your role does not allow this.",
+    "gone": "This is not there any more: we read the tab again.",
+    "invalid": "Something here is not valid: check the fields.",
+    "server": "It did not go through: try again in a moment."
+  },
+  "notice": {
+    "close": "Close",
+    "sent": "The questionnaire went to {email}.",
+    "mailFailed": "The link was made but the e-mail to {email} did not go: send the questionnaire again.",
+    "accepted_one": "Answer accepted: its document is in force with its expiry.",
+    "accepted_other": "Answer accepted: its {count} documents are in force with their expiries.",
+    "questions": "Your questions are on the supplier's thread. Send a new link when it should answer again.",
+    "published": "Version {revision} of the questionnaire is published: links ask it from now on.",
+    "acceptedNone": "Answer accepted."
+  },
+  "title": "Supplier questionnaire",
+  "why": "Due diligence for the Forced Labour Regulation (EU) 2024/3015 (applies from December 2027): the supplier answers by link, signs it, and you review it here. Each answer is kept as a PDF in the supplier's files.",
+  "current": "{title} · version {revision}, published on {day} · {count} questions",
+  "noVersion": "The company has no published questionnaire yet.",
+  "draftVersion": "Version {revision} is a draft.",
+  "publishStarter": "Publish the starter questionnaire",
+  "publishing": "Publishing…",
+  "held": {
+    "manage": "Your role does not change the questionnaire (purchasing.questionnaire.manage).",
+    "draft": "Version {revision} is a draft: publish it first.",
+    "send": "Your role does not send the questionnaire (purchasing.questionnaire.send).",
+    "noVersion": "Publish a questionnaire first.",
+    "review": "Your role does not review answers (purchasing.questionnaire.review).",
+    "reviewed": "This answer was reviewed already."
+  },
+  "send": {
+    "button": "Send the questionnaire",
+    "title": "Send the questionnaire to {name}",
+    "done": "Done",
+    "cancel": "Cancel",
+    "busy": "Sending…",
+    "confirmMail": "Send by e-mail",
+    "confirmLink": "Make the link",
+    "linkReady": "The link is ready",
+    "linkOnce": "Copy it now and pass it on: it is shown only this once.",
+    "linkLabel": "The questionnaire link",
+    "copy": "Copy",
+    "mailFailed": "The e-mail did not go",
+    "mailFailedBody": "The link was made but not delivered: send the questionnaire again, or give the link by hand.",
+    "mailed": "Sent to {email}",
+    "mailedBody": "The link works until {day}. We tell you when the answer arrives.",
+    "withdrawn_one": "The earlier open link was withdrawn.",
+    "withdrawn_other": "The {count} earlier open links were withdrawn.",
+    "how": "How it goes",
+    "byMail": "By e-mail",
+    "byMailBody": "We send the link to a contact of the supplier.",
+    "byLink": "A link to pass on",
+    "byLinkBody": "You get the link once and send it yourself (WhatsApp, your own e-mail).",
+    "to": "To",
+    "other": "Another address…",
+    "email": "E-mail address",
+    "emailOptional": "Who it is for (optional)",
+    "emailHint": "Kept with the link, so a new one can be asked for later.",
+    "language": "Language of the page and the e-mail",
+    "days": "Works for (days)",
+    "daysHint": "1 to {max} days.",
+    "note": "A note to the supplier",
+    "noteHint": "Shown on the page and in the e-mail.",
+    "replaces": "An open link to this supplier is withdrawn when you send a new one.",
+    "check": {
+      "to": "Choose who it goes to.",
+      "email": "Write a valid e-mail address.",
+      "days": "Between 1 and 60 days.",
+      "note": "The note is too long."
+    }
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "answers": {
+    "title": "Answers",
+    "waiting": "No answer yet: the link is open.",
+    "none": "No answer yet. Send the questionnaire to ask for one."
+  },
+  "state": {
+    "WAITING": "To review",
+    "ACCEPTED": "Accepted",
+    "QUESTIONS": "Questions sent"
+  },
+  "answer": {
+    "title": "Version {revision} · sent {day}",
+    "byLink": "Signed by {name} ({role}) through the link",
+    "byPortal": "Signed by {name} ({role}) in the portal",
+    "open": "Read the answers",
+    "pdf": "PDF",
+    "review": "Review",
+    "sites": "Sites",
+    "siteCount": "{own} own · {sub} sub-suppliers",
+    "documents": "Documents",
+    "none": "—",
+    "reviewed": "Reviewed",
+    "reviewedBy": "{name}, {day}",
+    "note": "Office note",
+    "task": "Review task",
+    "taskOpen": "{name} · due {day}",
+    "nobody": "nobody yet",
+    "dialogTitle": "{name} · questionnaire version {revision}",
+    "dialogSub": "Signed by {name} ({role}) on {day}",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No",
+    "signed": "Read and signed",
+    "document": "Document"
+  },
+  "file": {
+    "opening": "Opening…",
+    "failed": "The file did not open: try again."
+  },
+  "links": {
+    "title": "Links sent",
+    "none": "No link sent yet.",
+    "handed": "Given to pass on",
+    "sent": "Sent {day} by {name}",
+    "until": "open until {day}"
+  },
+  "linkState": {
+    "OPEN": "Open",
+    "ANSWERED": "Answered",
+    "EXPIRED": "Expired",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "section": {
+    "company": "1 · Company",
+    "contacts": "2 · Contacts",
+    "sites": "3 · Sites and sub-suppliers",
+    "certifications": "4 · Certifications and tests",
+    "labour": "5 · Labour and social"
+  },
+  "siteStep": {
+    "BEAMHOUSE": "Beamhouse",
+    "TANNING": "Tanning",
+    "RETANNING": "Retanning",
+    "FINISHING": "Finishing",
+    "WEAVING": "Weaving",
+    "DYEING": "Dyeing",
+    "MANUFACTURING": "Manufacturing"
+  },
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Certificate",
+    "TEST_REPORT": "Test report",
+    "DECLARATION": "Declaration"
+  },
+  "documents": {
+    "title": "Documents",
+    "inForce": "In force",
+    "waiting": "Waiting for the review",
+    "held": "Being checked",
+    "issued": "issued {day}",
+    "expires": "expires {day}",
+    "noExpiry": "no expiry",
+    "open": "Open",
+    "notReady": "The file has not arrived or is being checked."
+  },
+  "review": {
+    "title": "Review {name} · version {revision}",
+    "cancel": "Cancel",
+    "busy": "Saving…",
+    "confirmAccept": "Accept the answer",
+    "confirmQuestions": "Send the questions",
+    "what": "Your review",
+    "accept": "Accepted",
+    "acceptBody_one": "The answer is complete. Its document is put in force with its expiry date.",
+    "acceptBody_other": "The answer is complete. Its {count} documents are put in force with their expiry dates.",
+    "questions": "Questions back",
+    "questionsBody": "Something is missing or unclear: your questions go on the supplier's thread; it answers again with a new link.",
+    "questionsLabel": "Questions for the supplier",
+    "questionsHint": "The supplier reads these words on its thread.",
+    "note": "Office note",
+    "noteHint": "For colleagues only: the supplier never sees it.",
+    "check": {
+      "decision": "Choose Accepted or Questions back.",
+      "questions": "Write the questions the supplier reads.",
+      "long": "This text is too long."
+    },
+    "acceptBodyNone": "The answer is complete."
+  }
+}

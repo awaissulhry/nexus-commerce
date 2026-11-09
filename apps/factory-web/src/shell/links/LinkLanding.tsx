@@ -21,6 +21,8 @@ import { ReportProblem } from '../../links/claim/ReportProblem'
 import { TrackOrder } from '../../links/tracking/TrackOrder'
 // B-W2b-171: a MEASUREMENTS link's form (SCR-195).
 import { SendMeasurements } from '../../links/measure/SendMeasurements'
+// B-W2b-172: a SUPPLIER_ONBOARD link's questionnaire (SCR-269).
+import { Onboard } from '../../links/onboard/Onboard'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -125,6 +127,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-171
     case 'measure':
       return <SendMeasurements api={task.api} />
+    // B-W2b-172
+    case 'onboard':
+      return <Onboard api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }
