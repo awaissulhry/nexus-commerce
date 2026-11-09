@@ -35,6 +35,7 @@ import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
+import { seed as seedOptions } from '../seed/options'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
@@ -329,6 +330,10 @@ beforeAll(async () => {
   // rules, prepacks, protector placement, template rules and limits.
   await seedSizesDepth({ db: factory, namespace: 'iso-a' })
   await seedSizesDepth({ db: factory, namespace: 'iso-b' })
+  // The BOM depth and option library schema of W2b-4 (wave 28/33): a sub-assembly, alternates, option groups, values, rules,
+  // effects and a style's offers; its first group, value, rule, effect, offer (archived) and alternate are the ones a copy may repeat.
+  await seedOptions({ db: factory, namespace: 'iso-a' })
+  await seedOptions({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -358,6 +363,7 @@ it('covers every classified table and every runtime role', () => {
     'AuditLog',
     'Badge',
     'BomLine',
+    'BomLineAlternate',
     'BomLineColour',
     'BomLineSize',
     'BrandingSet',
@@ -535,6 +541,10 @@ it('covers every classified table and every runtime role', () => {
     'OperationScanDefect',
     'OperationScanMember',
     'OperationTimeVersion',
+    'OptionEffect',
+    'OptionGroup',
+    'OptionRule',
+    'OptionValue',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
     'OrgArea',
@@ -702,6 +712,7 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleImage',
+    'StyleOptionGroup',
     'StyleRevision',
     'StyleRevisionFile',
     'StyleText',
