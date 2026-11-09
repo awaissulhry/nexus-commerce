@@ -196,7 +196,19 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    severity words (tenant-wide row only; CRITICAL's meaning locked); a downgrade's second-quality move named once; it
    redefines W1's `factory_inspection_guard` (a rule-opened inspection waits for its inspector while OPEN or CANCELLED) and
    wave 13's `factory_replacement_request_guard` (a RECUT DONE by its DONE recut ticket; a VOID ticket replaced while OPEN)
-   and `factory_garment_downgrade_guard` (moveId set once)): triggers, partial unique indexes and deferred
+   and `factory_garment_downgrade_guard` (moveId set once)),
+   `…_styles_libraries_w2b_guards` (W2b schema wave 26/33, B-W2b-206, styles and libraries in depth; it first fills the rows
+   made before it: a style's lifecycle from its record state and revisions, a material of a released BOM APPROVED by its first
+   release; then: a style's lifecycle moves with its time, into IN_PRODUCTION only with a RELEASED revision, its replacement
+   only while PHASE_OUT or DISCONTINUED, its product type of its kind and company, sold under our name only with a brand; a
+   SKU's GTIN in its shortest form with its check digit, fixed once garments with it shipped; a colour's system and reference;
+   a material's approval with who, when and why, its properties typed per kind, a BLOCKED one on no new BOM line and in no
+   release; names per language; pictures (one main per style: a partial unique; frozen with a released revision but for their
+   place and main mark); revision files (PATTERN and CAD frozen with a released revision); product types (one kind up the
+   tree, no circle, defaults that fit); GTIN ranges (next never back, limits fixed once used, never deleted); branding sets
+   (a brand, its own files, library colours, packaging rules, one ACTIVE per company and brand: a partial unique); product
+   settings; its own triggers on Style, Variant, Colour, Item, BomLine and StyleRevision, no earlier function redefined):
+   triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

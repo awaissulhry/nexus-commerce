@@ -152,6 +152,11 @@ model Company {
   qualitySettings      QualitySettings[]
   // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
   branding             CompanyBranding[]
+  // W2b-4 styles-depth.prisma (wave 26/33): its product types, GTIN ranges, private-label branding sets and product settings.
+  productTypeProfiles  ProductTypeProfile[]
+  gtinRanges           GtinRange[]
+  brandingSets         BrandingSet[]
+  productSettings      ProductSettings[]
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
