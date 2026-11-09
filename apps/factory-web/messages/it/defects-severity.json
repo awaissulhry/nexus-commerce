@@ -1,0 +1,36 @@
+{
+  "head": {
+    "intro": "Come ogni classe di gravità si chiama e si spiega a schermo, in ogni lingua della fabbrica. Le regole non cambiano: un difetto critico non è mai accettato (AQL 0)."
+  },
+  "edit": "Modifica le parole",
+  "held": {
+    "noManage": "Per cambiare le parole serve quality.defects.manage su tutte le aziende.",
+    "reading": "Le parole sono ancora in lettura."
+  },
+  "col": {
+    "words": "Parole",
+    "meaning": "Significato",
+    "wordsIn": "Parole di {klass} in {language}",
+    "meaningIn": "Significato di {klass} in {language}"
+  },
+  "group": "{klass} in {language}",
+  "own_one": "Le tue parole in {count} lingua; le altre sono quelle standard.",
+  "own_other": "Le tue parole in {count} lingue; le altre sono quelle standard.",
+  "standardOnly": "Le parole standard in ogni lingua.",
+  "lockedMeaning": "Il significato di critico è fissato dalla legge: solo il nome è tuo.",
+  "unsaved_one": "{count} modifica non salvata",
+  "unsaved_other": "{count} modifiche non salvate",
+  "save": "Salva le parole",
+  "fixFirst_one": "Correggi prima {count} testo",
+  "fixFirst_other": "Correggi prima {count} testi",
+  "nothingChanged": "Nessuna modifica ancora: una casella vuota tiene le parole standard.",
+  "problem": {
+    "title": "Le parole non sono state salvate",
+    "tooLong": "Al massimo {max} caratteri.",
+    "stale": "Qualcuno ha cambiato le parole nel frattempo: annulla e rileggile.",
+    "forbidden": "Non puoi cambiare le parole di gravità.",
+    "invalid": "Un testo è stato rifiutato: controlla ogni casella.",
+    "offline": "Nessuna risposta dal server: riprova.",
+    "failed": "Non salvato: riprova."
+  }
+}

@@ -315,3 +315,28 @@ describe('which plan applies, and the sample it keeps', () => {
     expect(samplingChanges(before, { sampleSize: 8, aqlMinor: '6.5' })).toEqual(['sampleSize', 'aqlMinor'])
   })
 })
+
+describe('B-W2b-213: the inspected count is a column', () => {
+  it('reads the column, else the AQL_SAMPLE entry an inspection kept before it', async () => {
+    const { inspectedNow, withoutEntry, keepsSampleEntry, sampleEntry, countWords } = await import('./plan')
+    const old = [{ code: 'CE_MARK', ok: true, note: null }, sampleEntry(3, 5)]
+    expect(inspectedNow({ inspectedCount: null, checklist: old })).toBe(3)
+    expect(inspectedNow({ inspectedCount: 4, checklist: old })).toBe(4)
+    expect(inspectedNow({ inspectedCount: 0, checklist: old })).toBe(0)
+    expect(inspectedNow({ inspectedCount: null, checklist: null })).toBe(0)
+    expect(keepsSampleEntry(old)).toBe(true)
+    expect(keepsSampleEntry(null)).toBe(false)
+    // The copy drops the entry and keeps the others in their order (an OPEN inspection's list may be empty).
+    const identity = { code: 'IDENTITY', ok: true, note: 'Batch SEED-BT-0001 checked.' }
+    expect(withoutEntry([sampleEntry(2, 5), identity], 'AQL_SAMPLE')).toEqual([identity])
+    expect(withoutEntry([sampleEntry(2, 5)], 'AQL_SAMPLE')).toEqual([])
+    expect(countWords(38, 50)).toEqual({ it: '38 di 50 controllati', en: '38 of 50 inspected' })
+  })
+
+  it('an inspection a rule opened is untaken until an inspector records it', async () => {
+    const { untaken } = await import('./rules')
+    expect(untaken({ inspectorWorkerId: null, inspectorUserId: null })).toBe(true)
+    expect(untaken({ inspectorWorkerId: null, inspectorUserId: null, assignedInspectorId: '0190a000-0000-7000-8000-000000000009' })).toBe(false)
+    expect(untaken({ inspectorWorkerId: '0190a000-0000-7000-8000-000000000009', inspectorUserId: null })).toBe(false)
+  })
+})

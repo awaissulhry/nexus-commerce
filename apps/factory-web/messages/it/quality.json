@@ -85,7 +85,8 @@
   "who": {
     "you": "Tu",
     "bench": "Al banco",
-    "office": "In ufficio"
+    "office": "In ufficio",
+    "nobody": "Nessuno ancora (aperta da una regola)"
   },
   "status": {
     "OPEN": "Aperta",
@@ -699,7 +700,8 @@
   "whereSigned": {
     "you": "da te",
     "bench": "al banco",
-    "office": "in ufficio"
+    "office": "in ufficio",
+    "nobody": "da nessuno ancora"
   },
   "plan": {
     "heading": "Piano di campionamento",

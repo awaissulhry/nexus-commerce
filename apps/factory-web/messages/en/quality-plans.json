@@ -148,7 +148,8 @@
     "CUTTING": "a cutting check",
     "FIRST_PIECE": "a first-piece check",
     "ROVING": "a roving check",
-    "END_OF_LINE": "an end-of-line check"
+    "END_OF_LINE": "an end-of-line check",
+    "FINAL": "a final inspection"
   },
   "recordKindOf": {
     "FINAL": "Final inspection",
@@ -435,7 +436,11 @@
     "noApproved": "The plan has no approved version: approve one, or keep the rule off.",
     "frequency": "This event does not take that frequency.",
     "firstPieceInLine": "First piece is for in-line plans only.",
-    "chipKind": "This event never knows that kind: the chip would never fit."
+    "chipKind": "This event never knows that kind: the chip would never fit.",
+    "dueHours": "Due within (hours)",
+    "dueHoursHint": "What the rule opens is due this many hours after it opens; empty: no due time. My inspections lists the earliest first.",
+    "dueWithin": "due within {hours} h",
+    "dueHoursRange": "Due within 1 to {max} hours, or leave it empty."
   },
   "calc": {
     "title": "AQL calculator",

@@ -5,7 +5,8 @@ import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { cancelCheck, decideCheck, openCheck, saveResults } from './checks'
-import { cancelContract, chargesContract, decideContract, dhuContract, firstPieceContract, getContract, listContract, mineContract, openContract, resultsContract, rovingContract } from './contract'
+import { cancelContract, chargesContract, countContract, decideContract, dhuContract, dueContract, firstPieceContract, getContract, listContract, mineContract, openContract, resultsContract, rovingContract } from './contract'
+import { countCheck, setCheckDue } from './count'
 import { manifest } from './manifest'
 import { chargesRead, firstPieceRead, lineDhuRead, listChecks, mineRead, rovingBoard } from './reads'
 import { checkViewOf } from './views'
@@ -32,6 +33,10 @@ export default defineRoutes('quality.inprocess', manifest, async (app) => {
   )
 
   app.post('/quality/inprocess/checks/:checkId/cancel', { schema: cancelContract }, async (request) => cancelCheck(request, request.params.checkId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/inprocess/checks/:checkId/count', { schema: countContract }, async (request) => countCheck(request, request.params.checkId, request.body, idempotencyKeyFrom(request)))
+
+  app.patch('/quality/inprocess/checks/:checkId/due', { schema: dueContract }, async (request) => setCheckDue(request, request.params.checkId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/quality/inprocess/dhu', { schema: dhuContract }, async (request) => lineDhuRead(request, request.query))
 

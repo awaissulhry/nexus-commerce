@@ -87,10 +87,12 @@ export async function incomingView(db: Reader, row: IncomingRow, subject: Subjec
   const aqlPlan = profile && lotWhole.isInteger() && lotWhole.greaterThanOrEqualTo(1) ? planView(planOfProfile(profile, Number(lotWhole.toFixed(0)))) : null
   const rollRows = await readRolls(db, row.id)
   const componentRows = await readComponents(db, row.id)
-  const done = byRoll ? rollRows.length : facts.results.length
+  // B-W2b-213: a lot counted on the AqlCounter (neither hide by hide nor roll by roll) has IncomingInspection.inspectedCount.
+  const counted = !byHide && !byRoll && row.inspectedCount !== null
+  const done = byRoll ? rollRows.length : counted ? row.inspectedCount! : facts.results.length
   const result = aqlResult({
     sampleSize: row.sampleSize,
-    inspected: byHide || byRoll ? Math.min(done, row.sampleSize) : null,
+    inspected: byHide || byRoll || counted ? Math.min(done, row.sampleSize) : null,
     classes: [
       { defectClass: 'CRITICAL', aql: '0', accept: 0, found: facts.found.critical },
       { defectClass: 'MAJOR', aql: row.aqlMajor === null ? '-' : aqlWords(row.aqlMajor.toString()), accept: row.acceptMajor ?? row.sampleSize, found: facts.found.major },
@@ -353,7 +355,7 @@ export async function incomingView(db: Reader, row: IncomingRow, subject: Subjec
     sampling: {
       method: version?.samplingMethod === 'FIXED' ? ('FIXED' as const) : profile ? ('AQL' as const) : ('WHOLE' as const),
       profile: profile ? { id: profile.id, code: profile.code, name: profile.name, inspectionLevel: profile.inspectionLevel as InspectionLevel } : null,
-      words: byRoll ? rollSampleWords(row.sampleSize, row.lotSize.toString(), row.uom as 'M', done) : sampleWords(row.sampleSize, row.lotSize.toString(), row.uom, byHide ? done : null),
+      words: byRoll ? rollSampleWords(row.sampleSize, row.lotSize.toString(), row.uom as 'M', done) : sampleWords(row.sampleSize, row.lotSize.toString(), row.uom, byHide || counted ? done : null),
       plan: aqlPlan,
     },
     progress: byRoll
@@ -474,6 +476,8 @@ export async function listIncoming(caller: CommandCaller, query: ListQuery) {
         inspectorWorkerId: true,
         inspectorUserId: true,
         dueAt: true,
+        inspectedCount: true,
+        openedByTriggerId: true,
         createdAt: true,
         subcontractReceiptId: true,
         workOrderId: true,
@@ -504,11 +508,13 @@ export async function listIncoming(caller: CommandCaller, query: ListQuery) {
         lotSize: fixed4(row.lotSize),
         uom: row.uom,
         sampleSize: row.sampleSize,
-        done: row._count.hideResults + row._count.rollResults,
+        // B-W2b-213: a counted lot's units inspected (IncomingInspection.inspectedCount).
+        done: row._count.hideResults + row._count.rollResults || (row.inspectedCount ?? 0),
         computedResult: row.computedResult,
         decision: row.status === 'DECIDED' ? { accepted: fixed4(row.acceptedQuantity!), rejected: fixed4(row.rejectedQuantity!), toSort: fixed4(row.toSortQuantity!) } : null,
         inspectorKind: row.inspectorWorkerId ? ('FLOOR' as const) : row.inspectorUserId ? ('OFFICE' as const) : null,
         dueAt: row.dueAt ? toUtcIso(row.dueAt) : null,
+        openedByRule: row.openedByTriggerId !== null,
         createdAt: toUtcIso(row.createdAt),
         supplier: row.lot?.supplierId ? (suppliers.get(row.lot.supplierId) ?? null) : null,
         plan: { code: row.planVersion.plan.code, number: row.planVersion.number },

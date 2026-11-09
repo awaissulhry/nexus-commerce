@@ -15,6 +15,9 @@ import { LINK_RENEW_ANSWER } from '@nexus/factory-domain/links/renew'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
+// B-W2b-F17: the seed's owner (the seed's actor, who "made" the planted links) as an ACTIVE office person with a role.
+import { seed as seedAuth } from '../../../../../packages/factory-db/seed/auth'
+import { seed as seedRoles } from '../../../../../packages/factory-db/seed/roles'
 import { seed as seedEmail } from '../../../../../packages/factory-db/seed/email'
 import { seed as seedFiles } from '../../../../../packages/factory-db/seed/files'
 import { seed as seedParties } from '../../../../../packages/factory-db/seed/parties'
@@ -34,6 +37,7 @@ import { createEmailRuntime, useEmail } from '../email-out/service'
 import { storeGeneratedFile } from '../files/files'
 import { createFilesRuntime, useFiles, type FilesRuntime } from '../files/service'
 import { createGateway } from '../gateway/gateway'
+import { fanOut } from '../notifications/fan-out'
 import { systemContext } from '../outbox/system'
 import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
@@ -41,6 +45,7 @@ import { localKeyProvider } from '../secrets/local'
 import { carriesLink, LINK_HEADER, LINK_UNAVAILABLE, linkAuthenticator } from './authenticator'
 import { UNLOCK_HEADER } from './contract'
 import { purgeLinkDrafts } from './drafts'
+import { registerLinkRenewer } from './renew'
 
 /**
  * Links in depth (B-W2b-163; COL-051, MES-274; design links.document, links.file, links.frame) through the app's real
@@ -67,7 +72,9 @@ let localRoot: string
 let files: FilesRuntime
 let auth: OfficeAuth
 const ses = new FakeSes()
-const clock: Clock = { now: () => new Date() }
+/** B-W2b-F17: the clock may move forward (ten minutes on, a maker may be told again). */
+let offsetMs = 0
+const clock: Clock = { now: () => new Date(Date.now() + offsetMs) }
 
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (grants: Grant[]): SessionContext => ({ audience: 'office', tenantId: T.tenant, actorId: newId(), grants })
@@ -123,21 +130,26 @@ async function share(body: Json, session = 'sender', status = 201): Promise<Json
 }
 
 /** A link written straight into the database (a purpose no module makes yet): its token is minted here. */
-async function plant(values: { purpose: string; recordType: string; expiresAt: Date; maxUses?: number }) {
+async function plant(values: { purpose: string; recordType: string; expiresAt: Date; maxUses?: number; recordId?: string }) {
   const linkId = newId()
+  const recordId = values.recordId ?? newId()
   const token = mintLinkToken({ tenantId: T.tenant, partyId: T.P1, linkId })
+  // A link made before it expired (B-W2b-F17 plants dead ones: made three days before their end).
+  const madeAt = new Date(Math.min(Date.now(), values.expiresAt.getTime() - 3 * 86_400_000))
   await admin(
     `INSERT INTO "OneOffLink" (id, "tenantId", "companyId", "partyId", purpose, "recordType", "recordId", "tokenHash", email, "expiresAt", "maxUses", "createdAt", "updatedAt", "createdById")
-     VALUES ($1, $2, $3, $4, $5::"LinkPurpose", $6, $7, $8, $9, $10, $11, now(), now(), $12)`,
-    [linkId, T.tenant, T.companyA, T.P1, values.purpose, values.recordType, newId(), linkTokenHash(token.value), BUYER, values.expiresAt, values.maxUses ?? 1, T.actor],
+     VALUES ($1, $2, $3, $4, $5::"LinkPurpose", $6, $7, $8, $9, $10, $11, $13, $13, $12)`,
+    [linkId, T.tenant, T.companyA, T.P1, values.purpose, values.recordType, recordId, linkTokenHash(token.value), BUYER, values.expiresAt, values.maxUses ?? 1, T.actor, madeAt],
   )
-  return { linkId, token: token.value }
+  return { linkId, recordId, token: token.value }
 }
 
 beforeAll(async () => {
   db = await migratedDatabase('links_depth')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: NS })
+  await seedAuth({ db: database, namespace: NS })
+  await seedRoles({ db: database, namespace: NS })
   await seedFiles({ db: database, namespace: NS })
   await seedParties({ db: database, namespace: NS })
   await seedEmail({ db: database, namespace: NS })
@@ -413,6 +425,116 @@ describe('ask for a new link (links.frame)', () => {
     expect(pathsOf(held.json())).toEqual(['retryAfter'])
     await auth.settled()
     expect(await admin(`SELECT id FROM "OneOffLink" WHERE "renewalOfId" = $1`, [made.link.id])).toEqual([])
+  })
+})
+
+describe('no renewer: the person who made the link is told (B-W2b-F17; Owner answer 11-09 = B)', () => {
+  const SYSTEM = '00000000-0000-7000-8000-000000000000'
+  const PAST = () => new Date(Date.now() - 86_400_000)
+  const ask = (token: string, payload: Json = {}) => app.inject({ method: 'POST', url: '/link/renew', headers: { [LINK_HEADER]: token }, payload })
+  const told = async (linkId: string) => (await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'link.renewal_asked' AND subject = $1 ORDER BY "occurredAt", id`, [linkId])).map((row) => row.payload)
+  const asks = (linkId: string) => admin(`SELECT "actorId", after, reason FROM "AuditLog" WHERE action = 'links.renewAsked' AND "recordId" = $1 ORDER BY at, id`, [linkId])
+  const renewals = (linkId: string) => admin(`SELECT id FROM "OneOffLink" WHERE "renewalOfId" = $1`, [linkId])
+  /** The fan-out of this link's events, as the worker runs it: how many notifications it made. */
+  async function bell(linkId: string): Promise<number> {
+    let made = 0
+    for (const row of await admin(`SELECT * FROM "OutboxEvent" WHERE type = 'link.renewal_asked' AND subject = $1 ORDER BY "occurredAt", id`, [linkId])) {
+      const envelope = { eventId: row.id, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload }
+      made += await fanOut(callerFor(database, systemContext(T.tenant, `test-${row.id}`)), envelope)
+    }
+    return made
+  }
+
+  it('a kind with a renewer still renews, by its module: the maker is not told', async () => {
+    freshGuard()
+    // The sets of files above were renewed here (route `files`): none of them told anybody.
+    expect((await admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'link.renewal_asked' AND payload->>'recordType' = 'StoredFile'`))[0]!.n).toBe(0)
+    // A module renewer registered for a kind (made up for the test): it is asked, and decides alone.
+    const asked: string[] = []
+    const withdraw = registerLinkRenewer('JOB_ACCEPT', 'SubcontractOrder', async (_email, _request, header) => {
+      asked.push(String(header))
+      return 'SENT'
+    })
+    try {
+      const job = await plant({ purpose: 'JOB_ACCEPT', recordType: 'SubcontractOrder', expiresAt: PAST() })
+      expect((await ask(job.token)).statusCode).toBe(202)
+      await auth.settled()
+      expect(asked).toEqual([job.token])
+      expect(await told(job.linkId)).toEqual([])
+      expect(await asks(job.linkId)).toEqual([])
+    } finally {
+      withdraw()
+    }
+  })
+
+  it('a kind with no renewer tells the maker: one audit row, one event, their bell with the record and the note; no link, no mail', async () => {
+    freshGuard()
+    const quote = await plant({ purpose: 'QUOTE_ACCEPT', recordType: 'Quote', expiresAt: PAST() })
+    const mails = ses.mails.length
+    const answer = await ask(quote.token, { note: '  Made-up: we were away, please send the quote again.  ' })
+    expect(answer.statusCode).toBe(202)
+    // The page gets the same one answer as for a renewal (it shows its own words).
+    expect(answer.json()).toEqual({ status: 'requested', message: LINK_RENEW_ANSWER })
+    await auth.settled()
+    expect(await renewals(quote.linkId)).toEqual([])
+    expect(ses.mails).toHaveLength(mails)
+    expect(await asks(quote.linkId)).toEqual([
+      { actorId: SYSTEM, reason: 'Made-up: we were away, please send the quote again.', after: { purpose: 'QUOTE_ACCEPT', recordType: 'Quote', recordId: quote.recordId, partyId: T.P1, makerId: T.actor, note: true, state: 'EXPIRED' } },
+    ])
+    expect(await told(quote.linkId)).toEqual([{ linkId: quote.linkId, purpose: 'QUOTE_ACCEPT', recordType: 'Quote', recordId: quote.recordId, makerId: T.actor, note: 'Made-up: we were away, please send the quote again.' }])
+    // The maker's bell: SYSTEM, the record, the note; once (a replayed event makes none).
+    expect(await bell(quote.linkId)).toBe(1)
+    expect(await bell(quote.linkId)).toBe(0)
+    const rows = await admin(`SELECT "userId", category::text, "recordType", "recordId", "messageKey", params FROM "Notification" WHERE "eventType" = 'link.renewal_asked' AND "recordId" = $1`, [quote.recordId])
+    expect(rows).toEqual([{ userId: T.actor, category: 'SYSTEM', recordType: 'Quote', recordId: quote.recordId, messageKey: 'notifications.links.renewAskedNote', params: { title: 'Made-up: we were away, please send the quote again.', linkId: quote.linkId } }])
+    // The dead link still opens nothing.
+    expect((await asLink(quote.token, 'POST', '/link/open', {})).statusCode).toBe(404)
+  })
+
+  it('a second ask inside ten minutes is refused and tells nobody again; ten minutes on it is passed on again', async () => {
+    freshGuard()
+    const payment = await plant({ purpose: 'PAYMENT', recordType: 'Invoice', expiresAt: PAST() })
+    expect((await ask(payment.token)).statusCode).toBe(202)
+    await auth.settled()
+    expect((await ask(payment.token, { note: 'Made-up: asked again' })).statusCode).toBe(202)
+    await auth.settled()
+    expect(await asks(payment.linkId)).toHaveLength(1)
+    expect(await told(payment.linkId)).toEqual([expect.objectContaining({ note: null })])
+    try {
+      offsetMs = 11 * 60_000
+      freshGuard()
+      expect((await ask(payment.token)).statusCode).toBe(202)
+      await auth.settled()
+    } finally {
+      offsetMs = 0
+    }
+    expect(await asks(payment.linkId)).toHaveLength(2)
+    expect(await renewals(payment.linkId)).toEqual([])
+  })
+
+  it('a revoked share\'s invitation (RECORD_INVITE) tells the maker and still opens nothing; a live link tells nobody', async () => {
+    freshGuard()
+    const invite = await plant({ purpose: 'RECORD_INVITE', recordType: 'SalesOrder', expiresAt: new Date(Date.now() + 7 * 86_400_000) })
+    const shareId = newId()
+    await admin(
+      `INSERT INTO "RecordShare" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", email, permissions, "expiresAt", "linkId", "createdById") VALUES ($1, $2, $3, 'SalesOrder', $4, $5, $6, ARRAY['VIEW']::"RecordSharePermission"[], $7, $8, $9)`,
+      [shareId, T.tenant, T.companyA, invite.recordId, T.P1, BUYER, new Date(Date.now() + 7 * 86_400_000), invite.linkId, T.actor],
+    )
+    // Still live: nobody is told.
+    expect((await ask(invite.token)).statusCode).toBe(202)
+    await auth.settled()
+    expect(await told(invite.linkId)).toEqual([])
+    // The office revokes the share and its link together (B-W2b-200).
+    await admin(`UPDATE "RecordShare" SET "revokedAt" = now(), "revokedById" = $2, version = version + 1 WHERE id = $1`, [shareId, T.actor])
+    await admin(`UPDATE "OneOffLink" SET "revokedAt" = now(), "revokedById" = $2 WHERE id = $1`, [invite.linkId, T.actor])
+    freshGuard()
+    expect((await ask(invite.token)).statusCode).toBe(202)
+    await auth.settled()
+    expect(await told(invite.linkId)).toEqual([{ linkId: invite.linkId, purpose: 'RECORD_INVITE', recordType: 'SalesOrder', recordId: invite.recordId, makerId: T.actor, note: null }])
+    expect(await renewals(invite.linkId)).toEqual([])
+    expect(await bell(invite.linkId)).toBe(1)
+    expect((await admin(`SELECT "messageKey" FROM "Notification" WHERE "eventType" = 'link.renewal_asked' AND "recordId" = $1`, [invite.recordId])).map((row) => row.messageKey)).toEqual(['notifications.links.renewAsked'])
+    expect((await asLink(invite.token, 'GET', '/link/share')).statusCode).toBe(404)
   })
 })
 

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import type { Frequency } from '@nexus/factory-domain/quality/plans/rules'
-import { decide, SCAN_KINDS, selects, type RecordKind, type TriggerEvent } from '@nexus/factory-domain/quality/triggers/rules'
+import { decide, PACKING_WORK_CENTRE, SCAN_KINDS, selects, type RecordKind, type TriggerEvent } from '@nexus/factory-domain/quality/triggers/rules'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { bundleSubject, lotSubjects, workshopSubject, type Subject } from './facts'
-import { openIncoming, openInProcess, type Opening, type Outcome } from './open'
+import { openFinal, openIncoming, openInProcess, type Opening, type Outcome } from './open'
 import { plansOf, ruleFactsOf, TRIGGER_COLUMNS, type Db } from './store'
 
 /**
@@ -15,7 +15,9 @@ import { plansOf, ruleFactsOf, TRIGGER_COLUMNS, type Db } from './store'
  *   inventory.receipt_posted     GOODS_RECEIPT: each lot of the receipt (office or floor receiving)
  *   subcontract_order.received   GOODS_RECEIPT: the pieces a workshop sent back
  *   production.scan_recorded     a REPORT: OPERATION_FINISHED (the bundle's first report at the operation) and BUNDLE_SCAN
- *                                (when it is the bundle's first scan there: a one-tap report)
+ *                                (when it is the bundle's first scan there: a one-tap report); PACKING (B-W2b-213: the
+ *                                bundle's first report at an operation of a PACKING work centre opens a final inspection
+ *                                of the garments that wait, with no inspector: ./open.ts openFinal)
  *   production.operation_timed   a START: BUNDLE_SCAN (the bundle's first scan at the operation)
  *
  * Read first, as the tenant's system caller (the floor has no grant on the rules): a company with no active rule for the
@@ -37,7 +39,7 @@ export function triggerEventsOf(event: Pick<EventEnvelope, 'type' | 'payload'>):
     case 'subcontract_order.received':
       return ['GOODS_RECEIPT']
     case 'production.scan_recorded':
-      return kind === 'REPORT' ? ['OPERATION_FINISHED', 'BUNDLE_SCAN'] : []
+      return kind === 'REPORT' ? ['OPERATION_FINISHED', 'BUNDLE_SCAN', 'PACKING'] : []
     case 'production.operation_timed':
       return kind === 'START' ? ['BUNDLE_SCAN'] : []
     default:
@@ -68,6 +70,8 @@ export async function plannedOpenings(db: Db, event: Pick<EventEnvelope, 'type' 
       else if (payload.receiptId) subjects = [await workshopSubject(db, payload.receiptId)].flatMap((subject) => subject ?? [])
     } else if (payload.scanId) {
       subjects = [await bundleSubject(db, payload.scanId, SCAN_KINDS[triggerEvent] ?? [])].flatMap((subject) => subject ?? [])
+      // B-W2b-213: packing is a report at an operation of a PACKING work centre.
+      if (triggerEvent === 'PACKING') subjects = subjects.filter((subject) => subject.type === 'BUNDLE' && subject.workCentreKind === PACKING_WORK_CENTRE)
     }
     // Only the company's own subjects (an event names its company; a lot of another company is never judged by these rules).
     for (const subject of subjects.filter((entry) => entry.companyId === event.companyId)) {
@@ -107,8 +111,10 @@ export async function applyTriggers(caller: CommandCaller, event: EventEnvelope)
         for (const opening of item.openings) {
           if (opening.kind === 'INCOMING') {
             if (item.subject.type !== 'BUNDLE') done.push(await openIncoming(tools, opening, item.subject))
+          } else if (opening.kind === 'FINAL') {
+            if (item.subject.type === 'BUNDLE') done.push(await openFinal(tools, opening, item.subject))
           } else if (item.subject.type === 'BUNDLE') {
-            done.push(await openInProcess(tools, { ...opening, kind: opening.kind as Exclude<RecordKind, 'INCOMING'> }, item.subject, opening.frequency))
+            done.push(await openInProcess(tools, { ...opening, kind: opening.kind as Exclude<RecordKind, 'INCOMING' | 'FINAL'> }, item.subject, opening.frequency))
           }
         }
         return done

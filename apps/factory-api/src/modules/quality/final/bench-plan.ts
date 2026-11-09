@@ -9,13 +9,15 @@ import {
   countProblem,
   identityEntry,
   identitySummary,
-  inspectedOf,
+  inspectedNow,
+  keepsSampleEntry,
   PLAN_LIMITS,
   resolveMeasurements,
   resultProblems,
-  sampleEntry,
   sampleRejected,
+  SAMPLE_ENTRY,
   withEntry,
+  withoutEntry,
   type IdentityChange,
   type MeasurementInput,
   type ResultInput,
@@ -28,7 +30,7 @@ import { completeUpload, requestUpload } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { readCells, type LabelHeader } from '../../production/serials/store'
 import { inspectorOf, type Inspector } from './access'
-import { assertOwnInspection, inspectionFor, invalid, lockInspection, takeOver } from './inspections'
+import { assertMayTake, assertOwnInspection, inspectionFor, invalid, lockInspection, takeOver } from './inspections'
 import { bindingOf, factsReader, identityFacts, measurementsOf, mtmFacts, RESULT_COLUMNS, RESULT_RECORD, type Binding } from './plan'
 import { readDefects, type InspectionRow } from './store'
 import { sheetOf } from './sheet'
@@ -64,6 +66,8 @@ async function recordable(caller: CommandCaller, inspectionId: string): Promise<
   const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
   assertOwnInspection(context, inspection)
   if (inspection.status !== 'OPEN') throw new InvalidStateError(`This inspection is ${inspection.status}; a signed or cancelled inspection never changes (a correction is an amendment).`)
+  // B-W2b-213: the first write of an inspection a rule opened takes it (never by one who made its garments).
+  await assertMayTake(caller, inspection, header)
   const binding = await caller.withClient((client) => bindingOf(client, inspection))
   return { context, inspection, header, binding }
 }
@@ -131,7 +135,7 @@ export async function recordResults(caller: CommandCaller, inspectionId: string,
     }
     await bump(tx, context, row, now)
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { results: before.length }, after: { results: changes } })
-    emitRecorded(tools, row, 'RESULTS', await stateAfter(tx, row, inspectedOf(row.checklist), binding))
+    emitRecorded(tools, row, 'RESULTS', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -177,7 +181,7 @@ export async function recordMeasurements(caller: CommandCaller, inspectionId: st
     }
     await bump(tx, context, row, now)
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { measurements: before.length }, after: { measurements: changes, ...(mtm ? { profileRevision: mtm.profile.revision } : {}) } })
-    emitRecorded(tools, row, 'MEASUREMENTS', await stateAfter(tx, row, inspectedOf(row.checklist), binding))
+    emitRecorded(tools, row, 'MEASUREMENTS', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -192,18 +196,24 @@ export interface CountBody {
   readonly add?: number | undefined
 }
 
+/**
+ * B-W2b-213: the count is Inspection.inspectedCount (the database keeps it 0..sample and freezes the AQL profile once it
+ * is above 0). An inspection counted before the column keeps its count in the AQL_SAMPLE entry of `checklist`: this write
+ * copies it into the column once (the count goes on from it) and drops the entry.
+ */
 export async function setCount(caller: CommandCaller, inspectionId: string, body: CountBody, idempotencyKey: string | undefined) {
   const { context, inspection, binding } = await recordable(caller, inspectionId)
   if ((body.inspected === undefined) === (body.add === undefined)) throw invalid('Give the units inspected, or how many to add.', [{ path: 'inspected', message: 'Give `inspected` (the count) or `add` (units to add), one of the two.' }])
   await command(caller, { name: 'quality.inspection.count', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockInspection(tx, inspection.id, body.version)
-    const was = inspectedOf(row.checklist)
+    const was = inspectedNow(row)
     const inspected = body.inspected ?? was + (body.add ?? 0)
     const problem = countProblem(inspected, row.sampleSize)
     if (problem) throw invalid(problem.message, [problem])
-    await bump(tx, context, row, now, { checklist: withEntry(row.checklist, sampleEntry(inspected, row.sampleSize)) })
-    tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { inspected: was }, after: { inspected } })
+    const copied = row.inspectedCount === null && keepsSampleEntry(row.checklist)
+    await bump(tx, context, row, now, { inspectedCount: inspected, ...(copied ? { checklist: withoutEntry(row.checklist, SAMPLE_ENTRY) } : {}) })
+    tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { inspected: was }, after: { inspected, ...(copied ? { copiedFrom: SAMPLE_ENTRY } : {}) } })
     emitRecorded(tools, row, 'COUNT', await stateAfter(tx, row, inspected, binding))
     return { id: row.id }
   })
@@ -228,7 +238,7 @@ export async function changeIdentity(caller: CommandCaller, inspectionId: string
     const summary = identitySummary({ mode: facts.mode, expected: facts.expected.map((serial) => serial.serial), batchNumber: header.batchNumber, lotSize: row.lotSize, scans: changed.scans })
     await bump(tx, context, row, now, { checklist: withEntry(row.checklist, identityEntry(facts.mode, changed.scans, summary)) })
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { identity: facts.summary.words }, after: { identity: summary.words, added: body.add ?? [], removed: body.remove ?? [], duplicates: changed.duplicates } })
-    emitRecorded(tools, row, 'IDENTITY', await stateAfter(tx, row, inspectedOf(row.checklist), binding))
+    emitRecorded(tools, row, 'IDENTITY', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -303,9 +313,9 @@ export async function completeResultPhoto(request: FastifyRequest, inspectionId:
   await command(request, { name: 'quality.inspection.photo', idempotencyKey: idempotencyKey ? `${idempotencyKey}.recorded` : undefined, input: { inspectionId, resultId, fileId } }, async (tools) => {
     const { tx } = tools
     await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${inspection.id}::uuid FOR UPDATE`
-    const row = (await tx.inspection.findUnique({ where: { id: inspection.id }, select: { id: true, status: true, checklist: true } }))!
+    const row = (await tx.inspection.findUnique({ where: { id: inspection.id }, select: { id: true, status: true, checklist: true, inspectedCount: true } }))!
     tools.audit({ recordType: 'Inspection', recordId: inspection.id, companyId: inspection.companyId, siteId: inspection.siteId, after: { photo: fileId, result: result.id, sampleIndex: result.sampleIndex, status: stored.status, by: context.audience === 'floor' ? 'FLOOR' : 'OFFICE' } })
-    if (row.status === 'OPEN') emitRecorded(tools, inspection, 'PHOTO', await stateAfter(tx, inspection, inspectedOf(row.checklist), binding))
+    if (row.status === 'OPEN') emitRecorded(tools, inspection, 'PHOTO', await stateAfter(tx, inspection, inspectedNow(row), binding))
     return { id: inspection.id }
   })
   return { file: stored }

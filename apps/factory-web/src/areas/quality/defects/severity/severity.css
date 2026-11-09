@@ -1,0 +1,102 @@
+/* B-W2b-213: the severity words (Quality › Defects & dispositions › Severity). Layout only, semantic tokens. */
+.fw-sev {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-sev-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+}
+
+.fw-sev-intro {
+  margin: 0;
+  color: var(--nds-text-muted);
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
+.fw-sev-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--nds-space-10);
+}
+
+/* Editing: one class per row, its languages in a grid (language · words · meaning). */
+.fw-sev-cards-edit {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fw-sev-card {
+  min-width: 0;
+}
+
+.fw-sev-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-sev-stack p {
+  margin: 0;
+}
+
+.fw-sev-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sev-row-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-sev-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sev-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) minmax(10rem, 1fr) minmax(14rem, 2fr);
+  align-items: start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-sev-lang {
+  padding-top: var(--nds-space-10);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-sev-locked {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  padding-top: var(--nds-space-10);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fw-sev-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-sev-lang,
+  .fw-sev-locked {
+    padding-top: 0;
+  }
+}

@@ -1,5 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
-import { stepsOfInstructions, type ChecklistStep } from '@nexus/factory-domain/production/checklists/rules'
+import { checklistOfLines, type MarkedStep } from '@nexus/factory-domain/production/instructions/rules'
+import { operationPlaceOf, publishedStepsOf } from '../instructions/lookup'
 import type { Reader } from '../scans/store'
 
 /**
@@ -7,13 +8,19 @@ import type { Reader } from '../scans/store'
  * keeps a floor device to its own site); inside a command they run on its one connection.
  */
 
-/** The steps of a work order's operation: W2b-4's instructions replace this one read (factory-domain checklists/rules). */
-export async function stepsOfOperation(db: Reader, operationId: string): Promise<ChecklistStep[]> {
-  const operation = await db.workOrderOperation.findUnique({ where: { id: operationId }, select: { styleRevisionId: true, routingSeq: true } })
-  // B-W2b-74: an unplanned operation has no routing step, so no steps to tick.
-  if (!operation || operation.routingSeq === null) return []
-  const step = await db.routingOperation.findFirst({ where: { revisionId: operation.styleRevisionId, seq: operation.routingSeq }, select: { instructions: true } })
-  return stepsOfInstructions(step?.instructions ?? null)
+/**
+ * The steps of a work order's operation (B-W2b-214, WI1:01): the steps of the PUBLISHED version of the operation's work
+ * instruction (its revision's own, else the one for every style; instructions/lookup.ts), each with its icon and critical
+ * point, the words in `language` when asked; until an instruction of the operation is published, the `[ ] CODE words` lines
+ * typed in the routing step (B-W2b-47; B-W2b-74: an unplanned operation has no routing step, so no typed lines). A step's
+ * code is what a tick names (OperationChecklistResult.stepCode). The tick and hold rules are factory-domain checklists/rules'.
+ */
+export async function stepsOfOperation(db: Reader, operationId: string, language?: string | null): Promise<MarkedStep[]> {
+  const place = await operationPlaceOf(db, operationId)
+  if (!place) return []
+  const published = await publishedStepsOf(db, place, language)
+  if (published) return published
+  return place.routingSeq === null ? [] : checklistOfLines(place.typedLines)
 }
 
 export const TICK = {

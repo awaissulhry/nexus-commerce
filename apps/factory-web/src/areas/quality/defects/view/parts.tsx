@@ -8,7 +8,7 @@ import { useT } from '../../../../lib/i18n/provider'
 import type { Mark, Notice } from '../model'
 
 /** The catalogues of this page: its own, the shared quality words, the list frame's, the reason editor's icon and colour words, the photo kit's. */
-export const DEFECT_NAMESPACES = ['defects', 'reasons', 'photo-kit', 'defects-vocab'] as const
+export const DEFECT_NAMESPACES = ['defects', 'reasons', 'photo-kit', 'defects-vocab', 'defects-severity'] as const
 
 /** A cell's save mark: saving / unknown (the DS CellSaveMark), refused ("!" with its reason); nothing once saved. */
 export function SaveMark({ mark }: { mark: Mark | undefined }) {

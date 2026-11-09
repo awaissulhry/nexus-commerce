@@ -11,7 +11,7 @@ import { LINK_PASSWORD, linkPasswordProblem, mintUnlock, passwordStep, passwordW
 import { isPayRecord, PAY_RECORD_TYPES, payByLinkProblem, PAYROLL_HOURS_ONLY_BY_LINK } from './pay'
 import { LINK_SESSION_PERMISSIONS } from './permissions'
 import { answersOf, DRAFT_PURPOSES, EVIDENCE_ACTIONS, FILE_SET_PURPOSES, LINK_ACTIONS, LINK_PURPOSES, linkPermissions, linkTerms, PURPOSE_RULES } from './purposes'
-import { fileRenewalRefusal, renewalTerms, type FileRenewalFacts } from './renew'
+import { askedRecentlyWords, fileRenewalRefusal, LINK_RENEW_COALESCE_MS, LINK_RENEW_NOTE_MAX, makerToldRefusal, renewalRoute, renewalTerms, type FileRenewalFacts, type MakerToldFacts } from './renew'
 
 /** B-W2b-163: links in depth (COL-051, MES-274; design 02 portal-links "New link purposes", links.document, links.file, links.frame). */
 
@@ -204,6 +204,41 @@ describe('ask for a new link (a set of files)', () => {
     expect(fileRenewalRefusal({ ...dead, askedRecently: true })).toBe('ASKED_RECENTLY')
     expect(fileRenewalRefusal({ ...dead, filesAvailable: 0 })).toBe('NOTHING_TO_SHARE')
     expect(fileRenewalRefusal({ ...dead, payProblem: 'x' })).toBe('PAY_FIGURES')
+  })
+
+  it('B-W2b-F17: a kind with no renewer goes to its maker; a set of files is renewed here; a module renewer decides first', () => {
+    expect(renewalRoute('SHIPMENT_TRACK', 'Shipment', true)).toBe('module')
+    expect(renewalRoute('SECURE_FILE', 'StoredFile', false)).toBe('files')
+    expect(renewalRoute('DOCUMENT_VIEW', 'StoredFile', false)).toBe('files')
+    // The payroll file is a DOCUMENT_VIEW of a PayrollExport: no set of files, no renewer → its maker.
+    expect(renewalRoute('DOCUMENT_VIEW', 'PayrollExport', false)).toBe('maker')
+    for (const purpose of ['QUOTE_ACCEPT', 'DEPOSIT_INFO', 'PAYMENT', 'JOB_ACCEPT', 'APPROVAL', 'RECORD_INVITE'] as const) {
+      for (const recordType of PURPOSE_RULES[purpose].recordTypes) expect(renewalRoute(purpose, recordType, false), `${purpose} ${recordType}`).toBe('maker')
+    }
+  })
+
+  it('B-W2b-F17: tells the maker of a dead link once in ten minutes, never of a live one, never a maker who left', () => {
+    const facts: MakerToldFacts = { state: 'EXPIRED', standsFor: true, makerActive: true, lastToldAt: null, now: NOW }
+    expect(makerToldRefusal(facts)).toBeNull()
+    expect(makerToldRefusal({ ...facts, state: 'REVOKED' })).toBeNull()
+    expect(makerToldRefusal({ ...facts, state: 'USED_UP' })).toBeNull()
+    expect(makerToldRefusal({ ...facts, state: 'LIVE' })).toBe('STILL_LIVE')
+    // A live link whose share was revoked behind it (RECORD_INVITE's live check) is dead to its holder.
+    expect(makerToldRefusal({ ...facts, state: 'LIVE', standsFor: false })).toBeNull()
+    expect(makerToldRefusal({ ...facts, makerActive: false })).toBe('NO_MAKER')
+    const recently = new Date(NOW.getTime() - LINK_RENEW_COALESCE_MS + 60_000)
+    expect(makerToldRefusal({ ...facts, lastToldAt: recently })).toBe('ASKED_RECENTLY')
+    expect(makerToldRefusal({ ...facts, lastToldAt: new Date(NOW.getTime() - LINK_RENEW_COALESCE_MS) })).toBeNull()
+    expect(askedRecentlyWords(recently, NOW)).toBe('The person who made this link was told about it already; it is passed on again in 1 minute at the earliest.')
+    expect(askedRecentlyWords(NOW, NOW)).toContain('in 10 minutes')
+    expect(LINK_RENEW_NOTE_MAX).toBe(500)
+  })
+
+  it('B-W2b-F17: declares link.renewal_asked, its note never on a live screen', () => {
+    const asked = EVENT_DEFINITIONS.find((definition) => definition.type === 'link.renewal_asked')
+    expect(asked?.live?.permission).toBe('links.view')
+    expect(asked?.live?.fields).not.toContain('note')
+    expect(asked?.live?.fields).not.toContain('makerId')
   })
 
   it('keeps the old span and use limit within the purpose', () => {
