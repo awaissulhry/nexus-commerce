@@ -6,6 +6,8 @@ import { TRACKING_SOURCES, TRACKING_STATUSES } from './labels/tracking'
 import { SHIPMENT_STATUSES } from './shipments'
 import { TRANSPORT_EVIDENCE_STATUSES } from './evidence/evidence'
 import { FREIGHT_BASES, FREIGHT_RULES } from './shipments/freight'
+// B-W2b-170: how a tracking link came to be.
+import { TRACKING_VIAS } from './tracking-link/rules'
 
 /**
  * The shipping module's events (plan A1 §3.4; LOG-001, LOG-039, LOG-117). apps/factory-api's modules/shipping emits
@@ -27,6 +29,8 @@ import { FREIGHT_BASES, FREIGHT_RULES } from './shipments/freight'
  *                                 shared with its party (B-W1-49)
  *   shipment.documents_link_sent  a link to them was mailed to the party: when the goods left, by the office, or because
  *                                 the party asked for a new one
+ *   shipment.tracking_link_made   B-W2b-170: links to the branded tracking page were made (when the goods left, by the
+ *                                 office, from the portal, by the public search, or asked for again)
  *   ddt.source_issued         a DDT for another reason was issued (B-W2a-17, LOG-056: no shipment; a subcontract kit, goods
  *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
  *                             replaces a cancelled one whose goods left
@@ -174,5 +178,13 @@ export const events = [
     description: 'The garments of a shipment the carrier brought back were put back into finished goods.',
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), garments: z.number().int().min(1), locationId: z.uuid() }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'garments'] },
+  }),
+  // B-W2b-170 (LOG-062): the branded tracking page's link(s) of a shipment were made (mailed, copied, found by the search).
+  defineEvent({
+    type: 'shipment.tracking_link_made',
+    context: 'shipping',
+    description: "Links to a shipment's branded tracking page were made: mailed when the goods left, by the office, copied in the portal, found by the public search, or asked for again.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), via: z.enum(TRACKING_VIAS), mailed: z.number().int().min(0) }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'via'] },
   }),
 ] as const

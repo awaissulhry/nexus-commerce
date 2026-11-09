@@ -1,0 +1,158 @@
+/*
+ * Track an order (SCR-194) LAYOUT inside the link frame (the centred link column, comfortable density, phone first; the
+ * frame keeps its own width: the link archetype). Controls are the design system's; semantic tokens only.
+ */
+.fw-trk,
+.fw-trk-stack,
+.fw-trk-grid,
+.fw-trk-col,
+.fw-trk-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-trk-card {
+  gap: var(--nds-space-12);
+}
+
+.fw-trk-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-trk-hint[role='status'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-trk-hint > svg {
+  vertical-align: -2px;
+  margin-inline-end: var(--nds-space-4);
+}
+
+.fw-trk-again {
+  margin: 0;
+}
+
+.fw-trk-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-trk-band-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-trk-band-line {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-trk-parcels,
+.fw-trk-papers,
+.fw-trk-found-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-trk-parcel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-trk-parcel-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-trk-parcel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-trk-mono {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-trk-muted {
+  color: var(--nds-text-2);
+}
+
+.fw-trk-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+}
+
+.fw-trk-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-trk-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-trk-search-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-trk-search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-trk-found {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 560px) {
+  .fw-trk-search-fields {
+    grid-template-columns: 1fr;
+  }
+}

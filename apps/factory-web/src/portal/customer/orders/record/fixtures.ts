@@ -148,6 +148,8 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     // ── Shipments & tracking ──
     { id: 'shipments', label: 'Shipments & tracking', model: recordCase({ tab: 'shipments' }), note: 'DDT, carrier, parcels with their tracking numbers (Copy) and the carrier’s site, the four steps, ETA, what it carries, the events, the papers; still to ship with the expected day.' },
     { id: 'shipments-copied', label: 'A tracking number copied', model: recordCase({ tab: 'shipments', model: () => ({ copied: 'DEMO00012345' }) }) },
+    // B-W2b-170: Copy tracking link (the branded tracking page, to pass on), copied.
+    { id: 'shipments-link-copied', label: 'The shipment\'s tracking link copied (B-W2b-170)', model: recordCase({ tab: 'shipments', model: () => ({ copied: `link:${shipmentsRead().shipments[0]!.id}` }) }) },
     { id: 'shipments-none', label: 'Nothing shipped yet', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'ready', read: shipmentsRead({ shipments: [], firstExpected: dayAt(9), stillToShip: [] }) } }) }), note: '“Nothing shipped yet. Expected first shipment: …”' },
     { id: 'shipments-error', label: 'Shipments could not be read', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'error', read: null } }) }) },
     // ── Documents ──

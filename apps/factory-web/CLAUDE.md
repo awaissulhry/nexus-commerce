@@ -52,6 +52,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
+  B-W2b-170: `/t?tenant=<slug>&company=<code>` — Find your order (the public tracking search, `links/tracking/TrackSearch.tsx`);
+  a SHIPMENT_TRACK link opens `links/tracking` (SCR-194, task `track-order`).
 - `src/app/(floor)/` + `src/floor/` — the Floor view (SCR-020 … 025): `/floor` (tile home), `/floor/enrol`,
   `/floor/sign-in`, `/floor/notice`, `/floor/scan`, `/floor/sync` (Waiting to send, SCR-023), the web app manifest
   `/floor/manifest.webmanifest` and icon (no service worker yet). The offline queue (B-W0-30, `floor/queue/`): every

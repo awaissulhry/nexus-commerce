@@ -225,6 +225,8 @@ describe('declarations', () => {
       // B-W2a-48: the freight charged and the intra-EU transport evidence.
       'shipment.freight_changed', 'shipping.freight_rule_saved', 'shipment.evidence_changed',
       // B-W2b-19: the carrier's freight cost and a carrier return back into finished goods.
-      'shipment.freight_cost_changed', 'shipment.carrier_return_received'])
+      'shipment.freight_cost_changed', 'shipment.carrier_return_received',
+      // B-W2b-170: links to the branded tracking page made.
+      'shipment.tracking_link_made'])
   })
 })
