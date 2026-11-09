@@ -659,6 +659,10 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.job', title: 'Accept a job', scr: ['SCR-196'], task: 'job' },
   // W2b: B-W2b-198 Report a problem (a CLAIM link of a shipment or an order).
   { id: 'links.claim', title: 'Report a problem', scr: ['SCR-197'], task: 'report-problem' },
+  // W2b: B-W2b-169 Secure file (SECURE_FILE; the plan's SCR-200 is W1's Hides: SCR-272) and links.document's set of files.
+  { id: 'links.file', title: 'Secure file', scr: ['SCR-272', 'SCR-101-set'], task: 'files' },
+  // W2b: B-W2b-169 the payroll file by link (DOCUMENT_VIEW of a payroll export, hours only).
+  { id: 'links.file.payroll', title: 'Payroll file', scr: ['SCR-272'], task: 'payroll-file' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [

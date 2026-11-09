@@ -12,8 +12,9 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   DEPOSIT_INFO    DepositRequest   deposit-pay             links/deposit-pay (SCR-199)
  *   PO_CONFIRM      PurchaseOrder    po-confirm              links/po-confirm (SCR-100)
  *   DOCUMENT_VIEW   Shipment         shipment-documents      links/document (SCR-101)
- *   DOCUMENT_VIEW   StoredFile       — the frame (one file; the public DoC and secure-file pages are W2b)
- *   DOCUMENT_VIEW   PayrollExport    — the frame until the secure-file page (SCR-200, W2b-3); its API routes are B-W2b-54's
+ *   DOCUMENT_VIEW   StoredFile       files                   links/file (links.document's set; B-W2b-169)
+ *   DOCUMENT_VIEW   PayrollExport    payroll-file            links/file (SCR-272; B-W2b-54's routes; B-W2b-169)
+ *   SECURE_FILE     StoredFile       files                   links/file (SCR-272; B-W2b-169)
  *   APPROVAL        ApprovalRequest  approve                 links/approve (SCR-198; B-W2b-188)
  *   JOB_ACCEPT      SubcontractOrder job                     links/job (SCR-196; B-W2b-181)
  *   CLAIM           Shipment         report-problem          links/claim (SCR-197; B-W2b-198)
@@ -33,6 +34,10 @@ export const LINK_TASKS = [
   'job',
   // B-W2b-198: report a problem with a shipment or an order (SCR-197).
   'report-problem',
+  // B-W2b-169: a set of files by link, with a password, a receipt, a newer version (SCR-272, links.document's set).
+  'files',
+  // B-W2b-169: the payroll file for the labour consultant, hours only (SCR-272; B-W2b-54's routes).
+  'payroll-file',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -55,6 +60,10 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   // B-W2b-198: a claim link of a shipment that left us, or of an order (SCR-197).
   { purpose: 'CLAIM', recordType: 'Shipment', task: 'report-problem' },
   { purpose: 'CLAIM', recordType: 'SalesOrder', task: 'report-problem' },
+  // B-W2b-169: files by link (one page, GET /link/files says which), and the payroll file.
+  { purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile', task: 'files' },
+  { purpose: 'SECURE_FILE', recordType: 'StoredFile', task: 'files' },
+  { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', task: 'payroll-file' },
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

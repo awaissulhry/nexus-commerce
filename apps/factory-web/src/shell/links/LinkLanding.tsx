@@ -17,6 +17,10 @@ import { Approve } from '../../links/approve/Approve'
 import { JobLink } from '../../links/job/JobLink'
 // B-W2b-198: a CLAIM link's report-a-problem page (SCR-197).
 import { ReportProblem } from '../../links/claim/ReportProblem'
+// B-W2b-169: a set of files (DOCUMENT_VIEW / SECURE_FILE, SCR-272 and links.document's set) and the payroll file.
+import { FileLink } from '../../links/file/FileLink'
+// B-W2b-169: "Ask for a new link" on every dead link, with the token this page opened.
+import { LinkRenewProvider } from './renew/LinkRenew'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -43,6 +47,8 @@ export function LinkLanding() {
   const [task, setTask] = useState<{ task: LinkTask; api: ApiClient } | null>(null)
   // B-W2b-161: the sender's branding (logo, colour) for the frame and every task page; null until read, or when it fails.
   const [branding, setBranding] = useState<LinkSender | null>(null)
+  // B-W2b-169: the client of the token this page opened (null: no token), for "Ask for a new link" once it is dead.
+  const [renew, setRenew] = useState<{ api: ApiClient; attempt: number } | null>(null)
   // The token taken from the address on arrival. React runs an effect twice in development (StrictMode): the second run
   // finds the address already clean, so it opens the token the first run took instead of saying the link is missing.
   const arrived = useRef<string | null>(null)
@@ -64,11 +70,12 @@ export function LinkLanding() {
       setBranding(null)
       setModel({ sender: null, title: null, body: linkBody('loading') })
       const api = browserApi({ linkToken: token })
+      setRenew({ api, attempt: mine }) // B-W2b-169
       openLink(api)
         .then((link) => {
           if (mine !== attempt) return
           const state = linkStateOfOpened(link, new Date())
-          // A DOCUMENT_VIEW link of one file (no task page yet) stays the frame's.
+          // A link no page takes yet stays the frame's (B-W2b-169: a set of files and the payroll file have theirs).
           const opens = state === 'valid' ? linkTaskOf(link) : null
           if (opens) setTask({ task: opens, api })
           setModel({ sender: null, title: null, body: linkBody(state, link) })
@@ -90,7 +97,14 @@ export function LinkLanding() {
     }
   }, [])
 
-  return <LinkBrandingContext.Provider value={branding}>{page(task, model)}</LinkBrandingContext.Provider>
+  return (
+    <LinkBrandingContext.Provider value={branding}>
+      {/* B-W2b-169: keyed by the opening, so a link pasted into this tab asks afresh. */}
+      <LinkRenewProvider key={renew?.attempt ?? 0} api={renew?.api ?? null}>
+        {page(task, model)}
+      </LinkRenewProvider>
+    </LinkBrandingContext.Provider>
+  )
 }
 
 function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameViewModel) {
@@ -112,6 +126,11 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
     // B-W2b-198
     case 'report-problem':
       return <ReportProblem api={task.api} />
+    // B-W2b-169
+    case 'files':
+      return <FileLink api={task.api} source="set" />
+    case 'payroll-file':
+      return <FileLink api={task.api} source="payroll" />
     default:
       return <LinkFrameView model={model} />
   }
