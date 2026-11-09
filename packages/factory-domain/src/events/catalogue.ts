@@ -127,6 +127,8 @@ import { events as plantDies } from '../plant-dies/events'
 import { events as textileRules } from '../textile-rules/events'
 // B-W2b-221: the style lifecycle, product types and product settings (a move, a type changed, the settings changed).
 import { events as productLifecycle } from '../product-lifecycle/events'
+// B-W2b-226: change requests and change orders (raised, changed; a change order changed).
+import { events as productChanges } from '../product-changes/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -356,7 +358,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-225
   ...routingDepth,
   // B-W2b-221
-  ...productLifecycle] as const satisfies readonly EventDefinition[]
+  ...productLifecycle,
+  // B-W2b-226
+  ...productChanges] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

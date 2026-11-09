@@ -82,6 +82,8 @@ export const WHAT_KEY = {
   'quality.final.record': 'finalRecord',
   // B-W2b-214: Seen of a work instruction (the Spec & instructions screen is B-W2b-232's).
   'production.instruction.ack': 'instructionSeen',
+  // B-W2b-226: a spec problem reported (its screen is B-W2b-232's "Report a spec problem").
+  'product.change.report': 'specProblem',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

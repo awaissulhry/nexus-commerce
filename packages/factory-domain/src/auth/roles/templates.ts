@@ -32,6 +32,8 @@ import { INSTRUCTIONS_ADDS } from '../../production/instructions/permissions'
 import { SMV_ADDS } from '../../product/minutes/permissions'
 // B-W2b-221: the style lifecycle and the product settings (the production manager).
 import { PRODUCT_LIFECYCLE_ADDS } from '../../product/lifecycle/permissions'
+// B-W2b-226: change requests and change orders (the production manager runs them; quality approves; sales, planner, buyer, floor supervisor raise).
+import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -813,7 +815,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-215
   ...(audience === 'office' ? (SMV_ADDS[key] ?? []) : []),
   // B-W2b-221
-  ...(audience === 'office' ? (PRODUCT_LIFECYCLE_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PRODUCT_LIFECYCLE_ADDS[key] ?? []) : []),
+  // B-W2b-226
+  ...(audience === 'office' ? (PRODUCT_CHANGES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
