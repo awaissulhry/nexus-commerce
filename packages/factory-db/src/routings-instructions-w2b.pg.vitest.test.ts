@@ -246,7 +246,11 @@ describe('routing depth (PRD-114, PRD-118, PRD-119, PRD-124, PRD-126, PRD-128)',
     await expect(cells(['54', '54'], [])).rejects.toThrow(/once, a size by its code/)
     await expect(cells(['5 4'], [])).rejects.toThrow(/once, a size by its code/)
     await expect(cells([], [key('production:colourway:JKT-02:BLK')])).rejects.toThrow(/only for colourways of its own style/)
-    const option = randomUUID()
+    // B-W2b-211 (wave 28): an option value is a value of the library, of a group the step's style offers.
+    const [group, option] = [randomUUID(), randomUUID()]
+    await run(office(), `INSERT INTO "OptionGroup" (id, code, name, kind) VALUES ($1::uuid, $2, 'Test group', 'MULTI')`, group, `T-OG-${group.slice(0, 8)}`)
+    await run(office(), `INSERT INTO "OptionValue" (id, "groupId", code, name) VALUES ($1::uuid, $2::uuid, 'V1', 'Test value')`, option, group)
+    await run(office(), `INSERT INTO "StyleOptionGroup" (id, "styleId", "groupId") SELECT $1::uuid, r."styleId", $2::uuid FROM "StyleRevision" r WHERE r.id = $3::uuid`, randomUUID(), group, seed.draftRevisionId)
     await expect(cells([], [], [option, option])).rejects.toThrow(/once, a size by its code/)
     expect(await cells(['52', '54'], [red, blk], [option])).toBe(1)
     await expect(run(office(), `UPDATE "RoutingOperation" SET "setupMinutes" = -1 WHERE id = $1::uuid`, step)).rejects.toThrow(/set-up, wait and move minutes .* are from 0/)

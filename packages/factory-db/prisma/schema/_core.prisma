@@ -131,6 +131,8 @@ model Company {
   colours              Colour[]
   items                Item[]
   sizeScales           SizeScale[]
+  // W2b-4 options.prisma (wave 28/33): its option groups.
+  optionGroups         OptionGroup[]
   styles               Style[]
   operations           Operation[]
   measurementTemplates MeasurementTemplate[]
