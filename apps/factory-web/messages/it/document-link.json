@@ -77,7 +77,6 @@
     "label": "Chiedi un nuovo link",
     "again": "Chiedi di nuovo",
     "busy": "Invio della richiesta…",
-    "asked": "Richiesto",
     "held": "Richiesto: lo abbiamo inoltrato",
     "done": "Abbiamo inoltrato la richiesta. Se il link era nostro, il mittente scriverà all'indirizzo a cui era stato inviato.",
     "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo.",

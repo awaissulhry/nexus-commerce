@@ -1,0 +1,172 @@
+{
+  "title": {
+    "secure": "Files from {sender}",
+    "shared": "Documents from {sender}",
+    "payroll": "Payroll file · {month}"
+  },
+  "loading": {
+    "now": "Reading what was sent…",
+    "slow": "Still loading…"
+  },
+  "error": {
+    "title": "Something went wrong on our side",
+    "body": "The files could not be read. Try again."
+  },
+  "retry": "Try again",
+  "status": {
+    "works": "Works until {date}",
+    "downloadsLeft_one": "{count} download left",
+    "downloadsLeft_other": "{count} downloads left",
+    "opensLeft_one": "{count} open left",
+    "opensLeft_other": "{count} opens left"
+  },
+  "lead": {
+    "secure_one": "{sender} sent you {count} file. It is never shown in the browser: download it to open it.",
+    "secure_other": "{sender} sent you {count} files. They are never shown in the browser: download them to open them.",
+    "shared_one": "{sender} shared {count} document with you: read it here or download it.",
+    "shared_other": "{sender} shared {count} documents with you: read them here or download them.",
+    "payroll": "{sender} sent you the payroll file of {month}: the hours of the month for your payroll software, and its summary. No pay figures go by link."
+  },
+  "logged": {
+    "secure": "Every download is recorded for {sender} and uses one of the downloads left.",
+    "shared": "Opening this link and every download are recorded for {sender}.",
+    "payroll": "Every download is recorded for {sender} and uses one of the downloads left."
+  },
+  "payroll": {
+    "month": "Month",
+    "number": "Number",
+    "revision": "Version",
+    "first": "First version",
+    "corrected": "Correction {revision}",
+    "what": "What it holds",
+    "hoursOnly": "Hours and absences only, without pay figures",
+    "kind": {
+      "DATA": "Data file for your payroll software",
+      "SUMMARY": "Summary to read (PDF)"
+    }
+  },
+  "password": {
+    "title": "Password",
+    "lead_one": "{count} file is waiting. Type the password {sender} gave you: it was sent to you separately, never in the e-mail.",
+    "lead_other": "{count} files are waiting. Type the password {sender} gave you: it was sent to you separately, never in the e-mail.",
+    "label": "Password",
+    "hint": "After 5 wrong passwords the link is held for 15 minutes.",
+    "lastTry": "One try left: after it the link is held for 15 minutes.",
+    "show": "Show",
+    "hide": "Hide",
+    "open": "Open the files",
+    "wrong_one": "That password does not match. {count} try left.",
+    "wrong_other": "That password does not match. {count} tries left.",
+    "wrongPlain": "That password does not match.",
+    "empty": "Type the password first.",
+    "failed": "The password did not reach us. Check the connection and try again.",
+    "relock": "The files were open for 30 minutes: type the password again to go on.",
+    "heldTitle": "Too many wrong passwords",
+    "heldBody": "The link is held until {time}. Try again then, or ask {sender}.",
+    "held": {
+      "busy": "Checking the password…",
+      "wait": "Held until {time}: too many wrong passwords.",
+      "empty": "Type the password first."
+    }
+  },
+  "files": {
+    "title": {
+      "secure_one": "{count} file",
+      "secure_other": "{count} files",
+      "shared_one": "{count} document",
+      "shared_other": "{count} documents",
+      "payroll_one": "{count} file",
+      "payroll_other": "{count} files"
+    },
+    "none": {
+      "title": "Nothing to download any more",
+      "body": "The files of this link are no longer available. Ask {sender} for them."
+    }
+  },
+  "all": {
+    "label_one": "Download the file",
+    "label_other": "Download all {count}",
+    "uses_one": "Downloading it uses {count} of the {left} downloads left.",
+    "uses_other": "Downloading all of them uses {count} of the {left} downloads left: one per file.",
+    "busy": "Downloading {done} of {of}…",
+    "partial": "{done} of {of} downloaded. Try the others again one by one.",
+    "done_one": "{count} file downloaded.",
+    "done_other": "{count} files downloaded.",
+    "held": {
+      "busy": "Downloading {done} of {of}…",
+      "uses": "All {count} need {count} downloads and {left} are left: download the files you need one by one."
+    },
+    "closesTitle_one": "Downloading all uses the last {count} downloads",
+    "closesTitle_other": "Downloading all uses the last {count} downloads",
+    "closesBody": "After it the link closes."
+  },
+  "download": {
+    "held": {
+      "all": "Downloading all the files…",
+      "busy": "Downloading…",
+      "none": "No downloads left."
+    }
+  },
+  "last": {
+    "title": "The next download is the last",
+    "body": "After it the link closes. Download the file you need most.",
+    "bodyReceipt": "After it the link closes and you can no longer confirm you received the files: if {sender} asked you to, confirm it first."
+  },
+  "file": {
+    "checksum": "Checksum {sum}…",
+    "checksumFull": "SHA-256: {sum}",
+    "download": "Download",
+    "downloadOf": "Download {name}",
+    "again": "Try again",
+    "read": "Read it here",
+    "readOf": "Read {name} here",
+    "busy": "Downloading…",
+    "done": "Downloaded",
+    "failed": "Not downloaded: try again.",
+    "gone": "No longer available. Ask {sender} for it.",
+    "replaced": "Replaced",
+    "replacedBy": "Replaced by version {version}"
+  },
+  "newer": {
+    "title": "Version {version} replaced this one on {date}",
+    "titleNoNumber": "A newer version replaced this one on {date}",
+    "onLink": "The new version is on this link too: {name}.",
+    "ask": "Ask {sender} for the new version before you use this one.",
+    "go": "Go to version {version}",
+    "goNoNumber": "Go to the new version"
+  },
+  "preview": {
+    "of": "{name}, read in the page",
+    "close": "Close",
+    "loading": "Opening the document…",
+    "failed": {
+      "title": "The document could not be shown",
+      "body": "Something went wrong while reading it. Try again, or download it."
+    }
+  },
+  "receipt": {
+    "title": "Confirm you received them",
+    "lead": "Optional: {sender} then sees that the files reached you, and when.",
+    "name": "Your name (optional)",
+    "nameHint": "So {sender} knows who received them.",
+    "send": "I received these files",
+    "failed": "Your confirmation did not reach us. Try again.",
+    "held": {
+      "busy": "Sending…",
+      "locked": "Type the password first.",
+      "long": "A name has at most {max} characters."
+    },
+    "done": {
+      "title": "You confirmed you received the files",
+      "body": "{sender} sees it. You can still download the files while the link works.",
+      "at": "Confirmed",
+      "name": "By"
+    }
+  },
+  "used": {
+    "title": "All downloads used",
+    "body": "You used the last download of this link: it no longer opens. {sender} sees what was downloaded.",
+    "downloaded_one": "Downloaded here ({count})",
+    "downloaded_other": "Downloaded here ({count})"
+  }
+}

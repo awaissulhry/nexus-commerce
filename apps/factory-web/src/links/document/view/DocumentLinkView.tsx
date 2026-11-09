@@ -3,8 +3,10 @@
 import type { ReactNode } from 'react'
 import { Clock3, Download, FileCheck2, FileText, Info, Link2Off, ShieldAlert, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, PressableRow } from '@nexus/ui/components'
+import { EndState } from '@nexus/ui/components/EndState/index'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Pill, SegmentedControl, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import type { Translate } from '../../../lib/i18n/messages'
@@ -94,45 +96,34 @@ function LoadingBody({ slow }: { slow: boolean }) {
 
 // ---- the link died while the page was open ---------------------------------------------------------------------------
 
+/** B-W2b-169: one EndState for every end — the link that died while open, with "Ask for a new link" (pressed once → held). */
 function DeadBody({ model, actions }: { model: DocumentLinkViewModel; actions?: DocumentLinkActions }) {
   const t = useT('document-link')
   const locale = useLocale()
+  const ds = useDsWords()
   const expired = model.link === 'expired'
   const at = model.expiredAt ?? model.documents?.link.expiresAt ?? null
   return (
     <div className="fw-dl">
-      <Card padded className="fw-link-state tone-warning">
-        <EmptyState
-          icon={expired ? <Clock3 size={28} aria-hidden /> : <Link2Off size={28} aria-hidden />}
-          title={expired ? t('state.expired.title') : t('state.withdrawn.title')}
-          description={expired ? (at ? t('state.expired.body', { time: formatDateTime(at, { locale, timeZone: model.timeZone }) }) : t('state.expired.bodyNoTime')) : t('state.withdrawn.body')}
-          action={<AskButton model={model} actions={actions} />}
-        />
-      </Card>
-      {model.ask === 'done' && (
-        <p className="fw-dl-hint" role="status">
-          {t('ask.done')}
-        </p>
-      )}
+      <EndState
+        tone="warning"
+        icon={expired ? <Clock3 size={28} aria-hidden /> : <Link2Off size={28} aria-hidden />}
+        title={expired ? t('state.expired.title') : t('state.withdrawn.title')}
+        body={expired ? (at ? t('state.expired.body', { time: formatDateTime(at, { locale, timeZone: model.timeZone }) }) : t('state.expired.bodyNoTime')) : t('state.withdrawn.body')}
+        next={model.ask === 'done' ? t('ask.done') : t('ask.onlyOnFile')}
+        actions={[
+          {
+            label: model.ask === 'failed' ? t('ask.again') : t('ask.label'),
+            variant: 'primary',
+            onClick: () => actions?.onAskNewLink?.(),
+            heldReason: model.ask === 'busy' ? t('ask.busy') : null,
+            done: model.ask === 'done' ? t('ask.held') : null,
+          },
+        ]}
+        labels={ds.endState}
+      />
       {model.ask === 'failed' && <Banner tone="danger" title={t('ask.failed')} />}
-      <p className="fw-dl-hint">{t('ask.onlyOnFile')}</p>
     </div>
-  )
-}
-
-function AskButton({ model, actions }: { model: DocumentLinkViewModel; actions?: DocumentLinkActions }) {
-  const t = useT('document-link')
-  if (model.ask === 'done') {
-    return (
-      <Button variant="secondary" heldReason={t('ask.held')}>
-        {t('ask.asked')}
-      </Button>
-    )
-  }
-  return (
-    <Button variant="primary" heldReason={model.ask === 'busy' ? t('ask.busy') : null} onClick={() => actions?.onAskNewLink?.()}>
-      {model.ask === 'busy' && <Spinner size={14} />} {model.ask === 'failed' ? t('ask.again') : t('ask.label')}
-    </Button>
   )
 }
 
