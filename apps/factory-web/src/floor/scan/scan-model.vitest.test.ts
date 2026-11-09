@@ -1,6 +1,6 @@
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { describe, expect, it } from 'vitest'
-import { planScan, readScan, resultCode, resultType } from './scan-model'
+import { isCutTicketNumber, planScan, readScan, resultCode, resultType } from './scan-model'
 
 const TAG = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
 const OTHER = tenantTag('0190f0e2-0000-7000-8000-000000000001')
@@ -23,6 +23,36 @@ describe('scan anything reads every label of the factory (PLT-126, PLT-155)', ()
     expect(readScan(typo, TAG)).toMatchObject({ kind: 'typo' })
     expect(readScan('0123456789ABCDEFGHJKMNPQRS', TAG)).toEqual({ kind: 'badge', code: '0123456789ABCDEFGHJKMNPQRS' })
     expect(readScan(' SEED-HIDE-0001 ', TAG)).toEqual({ kind: 'free', code: 'SEED-HIDE-0001' })
+  })
+})
+
+describe("a cut ticket's number beside a carton's label (B-W2b-F16: both start with CT)", () => {
+  it('reads a cut ticket as the office number it is, before the carton rule, in any case', () => {
+    for (let n = 1; n <= 40; n++) {
+      const number = `CTA-2026-${String(n).padStart(5, '0')}`
+      expect(readScan(number, TAG), number).toEqual({ kind: 'free', code: number, cutTicket: true })
+    }
+    expect(readScan(' ct-2027-00042 ', TAG)).toEqual({ kind: 'free', code: 'CT-2027-00042', cutTicket: true })
+    expect(isCutTicketNumber('CTB-2026-00001')).toBe(true)
+    // Not a ticket's shape: a work order's number, a carton code typed without its hyphens, a year out of range.
+    for (const other of ['WO-2026-00001', 'CT-26-00001', 'CTABCDEF-2026-00001', 'CT-1999-00001', 'CT-2026-'] as const) expect(isCutTicketNumber(other), other).toBe(false)
+  })
+
+  it("keeps a carton's label a carton's (and another factory's, and a misread one, as before)", () => {
+    const carton = formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 })
+    expect(isCutTicketNumber(carton)).toBe(false)
+    expect(readScan(carton, TAG)).toEqual({ kind: 'label', type: 'carton', code: carton })
+    expect(readScan(carton.replace(/-/g, '').toLowerCase(), TAG)).toEqual({ kind: 'label', type: 'carton', code: carton })
+    expect(readScan(formatScanId({ type: 'CARTON', tenantTag: OTHER, ref: 77 }), TAG)).toMatchObject({ kind: 'otherFactory' })
+    const typo = carton.slice(0, -1) + (carton.endsWith('A') ? 'B' : 'A')
+    expect(readScan(typo, TAG)).toMatchObject({ kind: 'typo' })
+  })
+
+  it('asks no lookup for a cut ticket: Scan anything names it and where it is used', () => {
+    expect(planScan(readScan('CTA-2026-00001', TAG), OPERATOR)).toEqual({ kind: 'cutTicket' })
+    expect(planScan(readScan(formatScanId({ type: 'CARTON', tenantTag: TAG, ref: 77 }), TAG), OPERATOR)).toEqual({ kind: 'notOnFloor', type: 'carton' })
+    expect(resultType({ kind: 'cutTicket', code: 'CTA-2026-00001' })).toBe('cutTicket')
+    expect(resultCode({ kind: 'cutTicket', code: 'CTA-2026-00001' })).toBe('CTA-2026-00001')
   })
 })
 

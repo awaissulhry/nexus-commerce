@@ -451,6 +451,10 @@
     "hide": {
       "notUsable": "Do not cut this hide: its lot is not released."
     },
+    "cutTicket": {
+      "title": "Cut ticket read",
+      "body": "It is used at the cutting table: open Fabric cutting there and scan it."
+    },
     "notOnFloor": {
       "title": "{type} label read",
       "body": "Its card is not on the tablet yet. Ask the office."
@@ -526,7 +530,8 @@
     "workOrder": "Work order",
     "roll": "Fabric roll",
     "remnant": "Remnant",
-    "machine": "Machine"
+    "machine": "Machine",
+    "cutTicket": "Cut ticket"
   },
   "labelPlural": {
     "hide": "hides",

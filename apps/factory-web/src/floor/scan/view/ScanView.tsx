@@ -66,7 +66,7 @@ export const LABEL_ICON: Readonly<Record<LabelType, ReactNode>> = {
 }
 
 /** A card's icon: its label type's, or a machine's (B-W2a-73: a machine tag is a free code, no label type). */
-const CARD_ICON: Readonly<Record<CardType, ReactNode>> = { ...LABEL_ICON, machine: <Wrench /> }
+const CARD_ICON: Readonly<Record<CardType, ReactNode>> = { ...LABEL_ICON, machine: <Wrench />, cutTicket: <Scissors /> }
 
 /** A status word from the API's value (`status.<group>.<VALUE>`), else the value as sent. */
 export function statusWord(t: Translate, group: string, value: string): string {
@@ -155,6 +155,13 @@ function ResultCard({ result, t, locale, timeZone }: { result: ScanResult; t: Tr
     case 'notOnFloor':
       return (
         <FloorState tone="info" icon={LABEL_ICON[result.type]} title={t('scan.notOnFloor.title', { type: t(`label.${result.type}`) })} text={t('scan.notOnFloor.body')}>
+          <p className="fw-floor-card-code">{result.code}</p>
+        </FloorState>
+      )
+    case 'cutTicket':
+      // B-W2b-F16: a cut ticket's number scanned away from Fabric cutting (Home at another station, or here).
+      return (
+        <FloorState tone="info" icon={<Scissors />} title={t('scan.cutTicket.title')} text={t('scan.cutTicket.body')}>
           <p className="fw-floor-card-code">{result.code}</p>
         </FloorState>
       )
