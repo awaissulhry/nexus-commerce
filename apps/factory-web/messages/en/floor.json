@@ -455,6 +455,10 @@
       "title": "Cut ticket read",
       "body": "It is used at the cutting table: open Fabric cutting there and scan it."
     },
+    "trolley": {
+      "title": "Trolley label read",
+      "body": "It is scanned at the sewing line to confirm the trolley arrived (Home there opens the receipt), and loaded at the cutting table in Fabric cutting › Send to sewing."
+    },
     "notOnFloor": {
       "title": "{type} label read",
       "body": "Its card is not on the tablet yet. Ask the office."
@@ -531,7 +535,8 @@
     "roll": "Fabric roll",
     "remnant": "Remnant",
     "machine": "Machine",
-    "cutTicket": "Cut ticket"
+    "cutTicket": "Cut ticket",
+    "trolley": "Trolley"
   },
   "labelPlural": {
     "hide": "hides",

@@ -30,11 +30,13 @@ export const DEPTH_TILES = { checksOverdue: 1, noCe: 3 }
 
 const tile = (machine: (typeof MACHINE_LIST)[number]) => ({ id: machine.id, assetNumber: machine.assetNumber, siteCode: machine.siteCode, class: machine.class, station: machine.station, status: machine.status, statusSince: machine.statusSince, locked: machine.locked })
 
+// B-W2b-F17: as the API answers (modules/plant/machines/reads.ts statusWall): ONE group per line, and ONE group of the
+// site's machines on no line (key `site:<siteId>`), each by asset number — the cutting table and the press stand at CUT-01,
+// a station of no line, so they share the line-less group with the heat press and the compressor.
 export const WALL: WallAnswer = {
   lines: [
     { line: MACHINES.sew1.line, siteCode: SITE.code, machines: [MACHINES.sew1, MACHINES.sew2, MACHINES.sew3, MACHINES.sew4].map(tile) },
-    { line: MACHINES.cutTable.line, siteCode: SITE.code, machines: [MACHINES.cutTable, MACHINES.press].map(tile) },
-    { line: null, siteCode: SITE.code, machines: [MACHINES.heat, MACHINES.compressor].map(tile) },
+    { line: null, siteCode: SITE.code, machines: [MACHINES.compressor, MACHINES.press, MACHINES.cutTable, MACHINES.heat].map(tile) },
   ],
   counts: { RUNNING: 5, DOWN: 1, UNDER_MAINTENANCE: 1, DO_NOT_USE: 1, locked: 1 },
   truncated: false,

@@ -70,6 +70,18 @@ export const designScreen = defineDesignScreen<LinkFrameViewModel>({
     { id: 'ask-checking', label: 'Ask for a new link: the connection is checked first (after suspicious traffic)', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('expired'), renew: renew('checking') } },
     { id: 'ask-wait', label: 'Asked too often: held until 10:57', model: { sender: SENDER, title: 'Quote Q-2026-0042', body: link('used'), renew: renew('wait', '2026-11-09T09:57:00.000Z') } },
     { id: 'ask-failed', label: 'The request did not reach us: Ask again', model: { sender: null, title: null, body: link('unavailable'), renew: renew('failed') } },
+    // B-W2b-F17: the reader's note to the sender, and the answer naming who was told.
+    {
+      id: 'ask-note',
+      label: 'Ask for a new link with a note for the sender',
+      model: { sender: SENDER, title: 'Approval request', body: link('expired', { purpose: 'APPROVAL' }), renew: { ...renew(), note: 'Made-up: we need a few more days to look at the sample.', setNote: () => undefined } },
+      note: 'A kind with no renewer (an approval, a quote, a payment, an invitation): the person who made the link is told, with the record and this note; no new link by itself.',
+    },
+    {
+      id: 'ask-done-sender',
+      label: 'Asked — passed on to the sender by name',
+      model: { sender: SENDER, title: 'Approval request', body: link('expired', { purpose: 'APPROVAL' }), renew: { ...renew('done'), note: 'Made-up note', setNote: () => undefined } },
+    },
     { id: 'missing', label: 'No token in the address', model: { sender: null, title: null, body: link('missing') } },
     { id: 'loading', label: 'Opening', model: { sender: null, title: null, body: link('loading') } },
     { id: 'error', label: 'API down', model: { sender: null, title: null, body: link('error') } },

@@ -86,7 +86,7 @@ export function FloorHome() {
         if (cabinet) return store.openWith(CABINET_PATH, cabinet)
         const read = readScan(action.code, me.scanTag)
         // The scan router: the job for this station with the label loaded, else Scan anything shows its card.
-        const task = taskForScan(mode, read, tiles)
+        const task = taskForScan(mode, read, tiles, me.permissions, me.notice.blocksScans)
         if (task) return store.openWith(TASK_ROUTES[task], read.code)
         if (read.kind !== 'badge') return store.openScan(action.code)
         const problem = await store.switchTo(read.code)

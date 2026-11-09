@@ -250,6 +250,10 @@
       },
       "files": {
         "expiryDue": "{kind} su {record} scade il {title}"
+      },
+      "links": {
+        "renewAsked": "Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo",
+        "renewAskedNote": "Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo (\"{title}\")"
       }
     },
     "fallback": "Novità su {record}",
