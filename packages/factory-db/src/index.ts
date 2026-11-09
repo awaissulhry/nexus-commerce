@@ -783,6 +783,7 @@ export {
   SecondaryProcessPlace,
   SecondaryProcessStatus,
   SessionEndReason,
+  ShadeRule,
   ShiftSegmentKind,
   ShipNoticeStatus,
   ShipmentStatus,

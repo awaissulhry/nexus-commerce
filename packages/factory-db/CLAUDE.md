@@ -187,7 +187,16 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    APPROVED approval request of its version for the appointment of the request's party, and no other safety register is
    signed LINK; a partner task's assignee, a parcel's https tracking page, the cancel fee, a party's website; it redefines
    W2a's `factory_purchase_order_guard`, F1's `factory_shipment_guard` (the carrier's ETA after the goods left) and wave
-   15's `factory_risk_assessment_signature_check`): triggers, partial unique indexes and deferred
+   15's `factory_risk_assessment_signature_check`),
+   `…_followups_quality_cutting_w2b2_guards` (W2b schema wave 24/33, B-W2b-204, the W2b-2 quality and cutting follow-ups:
+   the inspected count up to the sample on the three inspection records (a counted unit freezes the AQL profile) and the
+   in-process check's own sample; the rule that opened a record (given at insert by the office, never changed, of an event
+   of that kind of record, on the rule's plan; a rule that opened records is not deleted: Restrict); a rule's due hours and
+   the in-process check's due time (never the floor's); the site's cutting rules, the leather area tolerance, the tenant's
+   severity words (tenant-wide row only; CRITICAL's meaning locked); a downgrade's second-quality move named once; it
+   redefines W1's `factory_inspection_guard` (a rule-opened inspection waits for its inspector while OPEN or CANCELLED) and
+   wave 13's `factory_replacement_request_guard` (a RECUT DONE by its DONE recut ticket; a VOID ticket replaced while OPEN)
+   and `factory_garment_downgrade_guard` (moveId set once)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

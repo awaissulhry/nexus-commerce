@@ -95,6 +95,8 @@ model Inspection {
   status            InspectionStatus @default(OPEN)
   /// The inspector: a worker of the site (a floor inspector, signed in) or an office user; exactly one. The floor
   /// records only a worker's inspection.
+  /// W2b-4 (schema wave 24/33, B-W2b-204): none while OPEN or CANCELLED on an inspection a rule opened
+  /// (`openedByTriggerId`); the first inspector who takes it is written then. A decided inspection always has one.
   inspectorWorkerId String?          @db.Uuid
   inspectorUserId   String?          @db.Uuid
   /// The inspector's signed statement that they made none of the garments: required where the floor records do not
@@ -116,6 +118,15 @@ model Inspection {
   /// (W1). Fixed once counting starts (a defect, a result or a measurement is recorded).
   aqlProfileId              String?   @db.Uuid
   codeLetter                String?
+  /// W2b-4 (schema wave 24/33, B-W2b-204; QHS-013; B-W2b-93, -97): the units of the sample inspected so far, the bench's
+  /// counter ("38 of 50") and a verdict before the decision, from 0 up to the sample; null: not counted (W1, and the
+  /// inspections counted before this column in the AQL_SAMPLE entry of `checklist`). Once a unit is counted the AQL
+  /// profile and code letter stay fixed; a decided inspection keeps it.
+  inspectedCount            Int?
+  /// W2b-4 (schema wave 24/33, B-W2b-204; QHS-010, B-W2b-101): the rule that opened it (inspection-plans.prisma
+  /// InspectionTrigger, of its company, an event that finishes garments), on a version of the rule's plan; given when it
+  /// is opened (never by a floor session: the rules run in the worker) and never changed. Null: a person opened it.
+  openedByTriggerId         String?   @db.Uuid
   /// When it was decided (PASSED or FAILED), and the SHA-256 (hex) of the decision as the inspector signed it (the
   /// e-signature, QHS-058): set exactly then.
   decidedAt         DateTime?        @db.Timestamptz(3)
@@ -142,6 +153,8 @@ model Inspection {
   // W2b (inspection-plans.prisma): the plan version frozen on it and the AQL profile (Restrict, as above).
   planVersion     InspectionPlanVersion? @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   aqlProfile      AqlProfile?        @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 24/33): the rule that opened it (Restrict, as above: a rule that opened records is set inactive, not deleted).
+  openedByTrigger InspectionTrigger? @relation(fields: [tenantId, companyId, openedByTriggerId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   defects         InspectionDefect[]
   releases        QualityRelease[]
   // W2b (inspection-plans.prisma): its results by plan check, measurements and amendments.
@@ -159,6 +172,8 @@ model Inspection {
   @@index([tenantId, status])
   // W2b: the open inspections by due date (the list's Due column and its overdue view).
   @@index([tenantId, status, dueAt])
+  // W2b-4: what a rule opened.
+  @@index([tenantId, openedByTriggerId])
 }
 
 enum InspectionStatus {
@@ -547,6 +562,13 @@ model QualitySettings {
   /// FAIL) and CUSTOMER (the customers listed above). The release trigger reads it: a company's list adds to the tenant-wide
   /// one, as the customers do; no row: both. ALWAYS is the rule's, never here.
   fourEyesConditions      ReleaseSecondPersonReason[] @default([OVERRIDE, CUSTOMER])
+  /// W2b-4 (schema wave 24/33, B-W2b-204; QHS-002; design quality.defects df-severity "EditModeBar for the texts"; B-W2b-90,
+  /// -118): the tenant's own words for the severity classes, per class and language, on the tenant-wide row only (the
+  /// defect library is tenant-wide): { "MAJOR": { "words": { "it": "Grave", "ro": "Major" }, "meaning": { "it": "…" } } }.
+  /// Classes CRITICAL, MAJOR, MINOR; a language a code of two or three letters; words up to 60 characters, a meaning up
+  /// to 500. CRITICAL keeps the domain's locked meaning (factory-domain quality/defects/severity): its words only. null or
+  /// a text left out: the domain's words.
+  severityTexts           Json?
   version          Int              @default(1)
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)

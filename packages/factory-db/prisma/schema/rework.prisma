@@ -139,9 +139,12 @@ model ReplacementRequest {
   decidedById     String?           @db.Uuid
   decisionNote    String?
   /// RECUT, DONE: the cut log entry that cut the replacement (of the work order, not a reversal).
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-117): or none, when its recut ticket is DONE (a fabric recut is cut on its
+  /// ticket, with no cut log entry); a RECUT is DONE by one of the two.
   cutLogId        String?           @db.Uuid
   /// W2b-2 (B-W2b-85, wave 13/16; MES-044): a RECUT's recut ticket (cutting.prisma CutTicket, kind RECUT, of its work order,
   /// cell and part, not VOID), given while OPEN; never on a REDUCE.
+  /// W2b-4 (B-W2b-204): while OPEN another ticket may take its place once the named one is VOID; never cleared.
   recutTicketId   String?           @db.Uuid
   /// Set exactly when DONE.
   doneAt          DateTime?         @db.Timestamptz(3)

@@ -47,7 +47,7 @@
       }
     },
     "InspectionTrigger": {
-      "about": "The office keeps the ordered rules that open an inspection, and removes them; the worker reads them in the tenant's system context when an event arrives. Office only.",
+      "about": "The office keeps the ordered rules that open an inspection, and removes them; the worker reads them in the tenant's system context when an event arrives. Office only. W2b-4 (wave 24/33): the records a rule opened name it (openedByTriggerId, Restrict), so a rule that opened records is set inactive, not removed.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {

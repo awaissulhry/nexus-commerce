@@ -655,6 +655,11 @@ model GarmentDowngrade {
   /// What they are stocked as, exactly one: an item of kind FINISHED kept for second quality, or a SKU of the work order's style.
   secondQualityItemId String?   @db.Uuid
   variantId           String?   @db.Uuid
+  /// W2b-4 (schema wave 24/33, B-W2b-204; B-W2b-85, -126): the second-quality move that put the garments into stock (an
+  /// ADJUSTMENT or a PRODUCTION_RECEIPT of the work order into a place, not a reversal, of its garments in pieces and its
+  /// item when it names one), named by no other downgrade; given at insert or once later, never changed. Null: not linked
+  /// (a row made before this column is found by the move's key).
+  moveId              String?   @db.Uuid
   /// Withdrawn: when, by whom and why, all three or none, once.
   voidedAt            DateTime? @db.Timestamptz(3)
   voidedById          String?   @db.Uuid
@@ -672,9 +677,13 @@ model GarmentDowngrade {
   sourceScan        OperationScan? @relation(fields: [tenantId, siteId, sourceScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   secondQualityItem Item?          @relation("GarmentDowngradeItem", fields: [tenantId, secondQualityItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   variant           Variant?       @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 (wave 24/33): the second-quality move, on the downgrade's site (Restrict, as above).
+  move              StockMove?     @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, workOrderId])
   @@index([tenantId, siteId, createdAt])
+  // W2b-4: the downgrade of a move.
+  @@index([tenantId, moveId])
 }
 
 /// A warning of the cutting table that a lead overrode with "Cut anyway" (MES-053, MES-055, MES-063, MES-064; B-W2b-103).
