@@ -134,6 +134,8 @@ describe('a released revision (B-W2b-205\'s guard, redefined with the release sc
       if (column.type === 'date') return `coalesce("${column.name}", current_date) + 1`
       if (column.type.startsWith('timestamp')) return `coalesce("${column.name}", now()) + interval '1 minute'`
       if (column.udt === 'StyleRevisionStatus') return `'DRAFT'`
+      // B-W2b-211 (merged before this step): the BOM's output unit.
+      if (column.udt === 'Uom') return `CASE WHEN "${column.name}" = 'PAIR' THEN 'SET' ELSE 'PAIR' END::"Uom"`
       throw new Error(`no change for ${column.name} ${column.type}`)
     }
     let tried = 0
