@@ -93,6 +93,8 @@ model Party {
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]
+  // W2b-4 options.prisma (wave 28/33): the BOM lines whose material it sends us (customer-supplied).
+  customerSuppliedBomLines BomLine[] @relation("BomLineCustomerSupplied")
   bomLines            BomLine[]
   // W2b-4 styles-depth.prisma (wave 26/33): as a private-label brand, its branding sets.
   brandingSets        BrandingSet[]

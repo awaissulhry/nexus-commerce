@@ -34,6 +34,10 @@
 //
 // Uniqueness of a cell of two references (a BOM line's colour in one colourway) is the product module's: a unique key of
 // ids alone cannot be copied by the generated isolation tests (src/isolation.pg.vitest.test.ts), as for WorkerRole.
+//
+// W2b-4 (wave 28/33, options.prisma): a BOM line's section, group row, sub-assembly (a revision of another style, never in
+// a circle, RELEASED when its parent is released), customer-supplied material, workshop kit, source rule and option, and a
+// revision's output quantity; a line's alternates are parts of the revision under the same rule.
 
 /// A colour of the tenant's colour library (PRD-032, PRD-004): the reference our material colours and colourways use.
 model Colour {
@@ -184,6 +188,11 @@ model Item {
   // W2b leather.prisma (wave 12/16): what each grade means for it, and its shade groups.
   gradeRules      ItemGradeRule[]
   shadeGroups     ShadeGroup[]
+  // W2b-4 options.prisma (wave 28/33): the BOM lines it is an alternate on, and the option effects that add or put it in,
+  // or replace or leave it out.
+  bomLineAlternates   BomLineAlternate[] @relation("BomLineAlternateItem")
+  optionEffects       OptionEffect[]     @relation("OptionEffectItem")
+  optionEffectTargets OptionEffect[]     @relation("OptionEffectTargetItem")
   // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut it, and the downgrades that keep garments as it (second quality).
   cutOrders       CutOrder[]
   secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")
@@ -335,6 +344,9 @@ model ItemColour {
   shadeGroups          ShadeGroup[]
   // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut the material in this colour.
   cutOrders            CutOrder[]
+  // W2b-4 options.prisma (wave 28/33): the alternates and option effects in this colour.
+  bomLineAlternates    BomLineAlternate[] @relation("BomLineAlternateItemColour")
+  optionEffects        OptionEffect[]     @relation("OptionEffectItemColour")
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
 
@@ -490,6 +502,8 @@ model Style {
   copiedFrom          Style?                @relation("StyleCopiedFrom", fields: [tenantId, copiedFromStyleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   copiedFromRevision  StyleRevision?        @relation("StyleCopiedFromRevision", fields: [tenantId, copiedFromStyleId, copiedFromRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   copies              Style[]               @relation("StyleCopiedFrom")
+  // W2b-4 options.prisma (wave 28/33): the option groups it offers.
+  optionGroups        StyleOptionGroup[]
   // W2b-4 styles-depth.prisma (wave 26/33): the style that replaces it and those it replaces, its product type, its names
   // per language and its pictures (Restrict, not Prisma's SetNull default: that would also clear tenantId).
   replacedBy          Style?                @relation("StyleReplacedBy", fields: [tenantId, replacedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -667,6 +681,11 @@ model StyleRevision {
   plannedHideYieldPct Decimal?            @db.Decimal(7, 4)
   /// The garment label template revision its units carry (PRD-331; ACTIVE when the revision is released).
   labelTemplateId     String?             @db.Uuid
+  /// W2b-4 (B-W2b-211; PRD-099): what its BOM makes: outputQuantity (1 to 1000) units of outputUom (PCS, PAIR or SET):
+  /// every line's quantity is per that output (sleeves and gloves cut in pairs: 1 PAIR). 1 PCS: one garment (every revision
+  /// before W2b-4). Frozen with the revision once released.
+  outputQuantity      Int                 @default(1)
+  outputUom           Uom                 @default(PCS)
   /// When and by whom it was released; set exactly from RELEASED on.
   releasedAt          DateTime?           @db.Timestamptz(3)
   releasedById        String?             @db.Uuid
@@ -686,6 +705,8 @@ model StyleRevision {
   labelTemplate  LabelTemplate?     @relation(fields: [tenantId, labelTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
+  // W2b-4 options.prisma (wave 28/33): the BOM lines of other styles that use it as a sub-assembly.
+  subAssemblyLines BomLine[]        @relation("BomLineSubAssembly")
   routing        RoutingOperation[]
   // W2b-4 styles-depth.prisma (wave 26/33): its pictures and its pattern, marker and CAD files.
   images         StyleImage[]
@@ -749,6 +770,30 @@ model BomLine {
   colourwayId     String?  @db.Uuid
   /// Bought from this supplier when it is not the item's default.
   supplierId      String?  @db.Uuid
+  /// W2b-4 (B-W2b-211; PRD-077): the section of the BOM it is filed under; null: not filed (lines before W2b-4).
+  section         BomSection?
+  /// W2b-4 (PRD-077): the line of the same revision it is grouped under (a group row with its parts: a protector with its
+  /// pocket and hook-and-loop), never itself or a line grouped under it; null: not grouped. Grouping moves no quantity: a
+  /// line's quantity is always per output unit of the revision.
+  parentLineId    String?  @db.Uuid
+  /// W2b-4 (PRD-078, PRD-106): a sub-assembly: a revision of another style made as a part of this one (a removable liner,
+  /// an armour insert, a hump), its BOM and routing its own; both or neither. The line's material is then the COMPONENT we
+  /// make (sourcing MAKE or MAKE_OR_BUY) counted in PCS, PAIR or SET; the revision is DRAFT or RELEASED when named and
+  /// RELEASED when this revision is released (no draft part under a released parent); a style is never inside its own
+  /// sub-assemblies (no circle, at most 10 levels).
+  subAssemblyStyleId    String? @db.Uuid
+  subAssemblyRevisionId String? @db.Uuid
+  /// W2b-4 (PRD-084): the customer sends this material (cut-make-trim with the brand's leather): a party with the CUSTOMER
+  /// or BRAND role; no cost, no purchase (never with supplierId); null: we buy it.
+  customerSuppliedByPartyId String? @db.Uuid
+  /// W2b-4 (PRD-108): the line goes in the kit a workshop receives for a subcontracted job.
+  issueToSubcontract Boolean @default(false)
+  /// W2b-4 (PRD-088): the rule that made the line, "<source>:<key>": "branding:polybag" (a packaging rule of B-W2b-206's
+  /// BrandingSet), "compliance:<requirement key>" (a label or packaging requirement); null: typed by a person.
+  sourceKey       String?
+  /// W2b-4 (PRD-081): the line is in the garment only when this option value is chosen (a value of a group the style
+  /// offers, ACTIVE when newly named); null: always.
+  optionValueId   String?  @db.Uuid
   /// W2b-2 (B-W2b-74): the routing step of the same revision that uses the line (RoutingOperation.seq), so a material flag
   /// and a scan's components can be per operation (B-W2b-88); null: not tied to one step (what every line was before).
   routingSeq      Int?
@@ -771,6 +816,15 @@ model BomLine {
   itemColour ItemColour?     @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   colourway  Colourway?      @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier   Party?          @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 options.prisma (wave 28/33): its group row and the lines grouped under it, its sub-assembly (a revision of another
+  // style), the customer who sends the material, its option value (Restrict, not Prisma's SetNull default: that would also
+  // clear tenantId and revisionId), its alternates.
+  parentLine          BomLine?           @relation("BomLineGroup", fields: [tenantId, revisionId, parentLineId], references: [tenantId, revisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  groupedLines        BomLine[]          @relation("BomLineGroup")
+  subAssemblyRevision StyleRevision?     @relation("BomLineSubAssembly", fields: [tenantId, subAssemblyStyleId, subAssemblyRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  customerSuppliedBy  Party?             @relation("BomLineCustomerSupplied", fields: [tenantId, customerSuppliedByPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  optionValue         OptionValue?       @relation(fields: [tenantId, optionValueId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  alternates          BomLineAlternate[]
   sizes      BomLineSize[]
   colours    BomLineColour[]
   // W2b-4: the made-to-measure point its quantity follows (Restrict, not Prisma's SetNull default: that would also clear
@@ -784,6 +838,10 @@ model BomLine {
   @@unique([tenantId, revisionId, seq])
   // The target of the size rows' reference: a line of the same revision.
   @@unique([tenantId, revisionId, id])
+  // W2b-4: the lines grouped under a line, and the lines that use a revision as a sub-assembly (the circle and release rules
+  // and the references' checks read them).
+  @@index([tenantId, revisionId, parentLineId])
+  @@index([tenantId, subAssemblyStyleId, subAssemblyRevisionId])
   // The target of the grid cells' reference: a line of the same revision, and of the material whose colour they name.
   @@unique([tenantId, revisionId, id, itemId])
 }
@@ -880,6 +938,8 @@ model Operation {
   skills  Skill[]
   // W2b pay.prisma (schema wave 6/7): the piece rates that pay it.
   pieceRateEntries PieceRateEntry[]
+  // W2b-4 options.prisma (wave 28/33): the option effects that add it or add minutes at it.
+  optionEffects    OptionEffect[]
   // W2b-2 production.prisma (B-W2b-74): the unplanned operations made from it.
   unplannedOperations WorkOrderOperation[]
 
