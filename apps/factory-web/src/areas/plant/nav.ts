@@ -28,10 +28,11 @@ export const officeArea: OfficeAreaNav = {
           { id: 'plant-requests', label: 'shell:nav.plant.requests', href: '/plant/requests', icon: BellRing, permission: 'plant.view' },
           // SCR-149: maintenance jobs and their hand-back (GET /plant/jobs, plant.view).
           { id: 'plant-jobs', label: 'shell:nav.plant.jobs', href: '/plant/jobs', icon: Wrench, permission: 'plant.view' },
+          // B-W2b-142 SCR-266: the statutory checks of the machines — calendar, plans, the check register (GET /plant/checks/plans, plant.view).
+          // B-W2b-151: between Maintenance jobs and Machines & tools, the approved tree's order.
+          { id: 'plant-preventive', label: 'shell:nav.plant.preventive', href: '/plant/preventive', icon: CalendarClock, permission: 'plant.view' },
           // SCR-150: the machine and equipment register (GET /plant/machines, plant.view).
           { id: 'plant-machines', label: 'shell:nav.plant.machines', href: '/plant/machines', icon: Cog, permission: 'plant.view' },
-          // B-W2b-142 SCR-266: the statutory checks of the machines — calendar, plans, the check register (GET /plant/checks/plans, plant.view).
-          { id: 'plant-preventive', label: 'shell:nav.plant.preventive', href: '/plant/preventive', icon: CalendarClock, permission: 'plant.view' },
         ],
       },
       // B-W2b-120: Health & safety — the Safety calendar (SCR-267): every legal safety deadline, the safety organisation and

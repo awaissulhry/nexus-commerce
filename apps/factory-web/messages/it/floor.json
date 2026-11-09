@@ -743,7 +743,10 @@
       "trolleyUnload": "Fascio {code} tolto dal carrello",
       "trolleySend": "Carrello inviato al cucito",
       "trolleyReceive": "Carrello ricevuto in linea",
-      "incomingRecord": "Controllo in accettazione: una pelle o i controlli"
+      "incomingRecord": "Controllo in accettazione: una pelle o i controlli",
+      "inlineRecord": "Controllo in linea: l'esito di un controllo",
+      "inlineResults": "Controllo in linea: i controlli del piano",
+      "finalRecord": "Collaudo finale: risultati e misure"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
