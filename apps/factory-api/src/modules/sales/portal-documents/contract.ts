@@ -116,6 +116,8 @@ export const conformityContract = defineContract({
           certificateRequired: z.boolean(),
           standard: z.string().nullable(),
           ppeClass: z.string().nullable(),
+          /** B-W2b-166: the style's public DoC address (links.doc: its current declaration, the earlier ones); null when not PPE. */
+          publicDocAddress: z.string().nullable(),
           /** Per shipment that left, newest first. */
           received: z.array(
             output({
@@ -140,6 +142,8 @@ export const conformityContract = defineContract({
               }).nullable(),
               /** The shipment's certificate of conformity, inspection and test reports shared with you. */
               reports: z.array(docRef),
+              /** B-W2b-166: the batches of these garments and the public DoC address each one's label QR holds. */
+              batches: z.array(output({ number: z.string(), publicDocAddress: z.string() })),
             }),
           ),
         }),

@@ -1,0 +1,155 @@
+/*
+ * The public DoC (SCR-102) LAYOUT inside the link frame (comfortable density, phone first; the frame keeps its own
+ * column). Controls are the design system's; semantic tokens only.
+ */
+.fw-pd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pd-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pd-h2 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pd-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pd-head-hint {
+  flex-basis: 100%;
+}
+
+.fw-pd-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+p.fw-pd-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pd-lead {
+  margin: 0;
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+.fw-pd-lines {
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.fw-pd-mono {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pd-sha {
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.fw-pd-choose {
+  min-width: 0;
+}
+
+.fw-pd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-pd-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pd-rows,
+.fw-pd-versions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pd-care {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pd-care-list {
+  margin: 0;
+  padding-inline-start: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  line-height: 1.5;
+}
+
+.fw-pd-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-pd-form > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.fw-pd-others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-8);
+}
+
+.fw-pd-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pd-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
