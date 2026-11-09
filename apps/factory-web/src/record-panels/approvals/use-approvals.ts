@@ -108,7 +108,7 @@ export function useApprovals({ api, record, title, can, files, party, reloadPane
       })
       setAsk(null)
       setNotice(askedNotice(answer))
-      if (answer.url) setLink({ url: answer.url, label: answer.request.record.label || title })
+      if (answer.url) setLink({ url: answer.url, label: answer.request.record.words[locale] || title })
       await load()
       reloadPanels?.()
     } catch (error) {

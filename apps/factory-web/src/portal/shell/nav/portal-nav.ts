@@ -74,9 +74,11 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     badge: 'orders',
     phone: 'tab',
     key: 'o',
-    built: false,
+    // B-W2b-191: the customer's Orders & tracking.
+    built: true,
     pages: [
-      { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: false },
+      // B-W2b-191: the customer's Orders & tracking (SCR-184).
+      { id: 'orders.list', label: 'nav.ordersTracking', href: '/orders', permission: 'portal.salesOrders.view', built: true },
       { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: false },
     ],
   },
@@ -114,7 +116,8 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     pages: [
       // B-W2b-179: the supplier's purchase orders.
       { id: 'work.orders', label: 'nav.purchaseOrders', href: '/orders', permission: 'portal.purchaseOrders.view', kinds: ['SUPPLIER'], built: true },
-      { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: false },
+      // B-W2b-181: a workshop's Jobs (SCR-192, SCR-193).
+      { id: 'work.jobs', label: 'nav.jobs', href: '/jobs', permission: 'portal.jobs.view', kinds: ['SUBCONTRACTOR'], built: true },
     ],
   },
   // B-W2b-186: the supplier's Ship notices (SCR-227).
@@ -138,11 +141,13 @@ export interface PortalRecordPage {
 }
 
 export const RECORD_PAGES: readonly PortalRecordPage[] = [
-  { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: false },
+  // B-W2b-191: the customer's order (Status & progress first).
+  { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: true },
   { kinds: ['CUSTOMER'], type: 'Quote', href: (id) => `/quotes/${id}`, built: false },
   // B-W2b-179: the supplier's purchase order (its Lines tab first).
   { kinds: ['SUPPLIER'], type: 'PurchaseOrder', href: (id) => `/orders/${id}`, built: true },
-  { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: false },
+  // B-W2b-181: a workshop's job opens its own page.
+  { kinds: ['SUBCONTRACTOR'], type: 'SubcontractOrder', href: (id) => `/jobs/${id}`, built: true },
   // B-W2b-186: a supplier's ship notice.
   { kinds: ['SUPPLIER'], type: 'ShipNotice', href: (id) => `/deliveries/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.

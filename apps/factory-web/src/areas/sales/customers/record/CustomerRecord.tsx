@@ -6,6 +6,7 @@ import { PartyRecord } from '../../../parties/_shared/PartyRecord'
 import { useCustomerMoney } from '../money/hooks'
 import { CUSTOMER_MONEY_NAMESPACE } from '../money/model'
 import { useCustomerOverview } from '../money/overview'
+import { PortalAccess } from '../portal/PortalAccess'
 import { CommercialTerms } from '../terms/CommercialTerms'
 
 /**
@@ -27,5 +28,14 @@ function Customer({ partyId }: { partyId: string }) {
   const pathname = usePathname()
   const prefix = pathname.replace(/\/sales\/customers\/.*$/, '')
   const overview = useCustomerOverview(useCustomerMoney(partyId, prefix))
-  return <PartyRecord side="customers" partyId={partyId} overview={overview} terms={(party, reload) => <CommercialTerms party={party} onChanged={reload} />} />
+  return (
+    <PartyRecord
+      side="customers"
+      partyId={partyId}
+      overview={overview}
+      terms={(party, reload) => <CommercialTerms party={party} onChanged={reload} />}
+      // B-W2b-180: Portal access (`?tab=portal`).
+      portal={(party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} />}
+    />
+  )
 }

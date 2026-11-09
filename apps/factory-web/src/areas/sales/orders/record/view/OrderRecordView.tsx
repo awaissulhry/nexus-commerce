@@ -194,6 +194,8 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
     ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
     ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
     ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
+    // B-W2b-180 (design conn "Portal › Orders & tracking"): the order as the customer sees it in their portal, read-only.
+    ...(model.portal ? [{ id: 'portal', label: t('action.portal'), disabled: !!model.portal.held || model.portal.opening, description: model.portal.opening ? t('held.portalOpening') : held(model.portal.held), onSelect: () => actions?.onPortal?.() }] : []),
     {
       id: 'copy',
       label: t('action.copyNumber'),

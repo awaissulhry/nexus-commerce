@@ -62,6 +62,8 @@ export interface AmendState {
 }
 
 export interface OrderRecordModel {
+  /** B-W2b-180: ⋯ "See it in the customer's portal" (held: why); null/absent: not offered. */
+  portal?: { held: Phrase | null; opening: boolean } | null
   prefix: string
   can: OrderAbilities
   /** Today in the site's zone (YYYY-MM-DD). */
@@ -127,6 +129,8 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */
+  onPortal?: () => void
   /** B-W2a-80: the schedule card's verbs. */
   scheduleSteps?: ScheduleStepsActions
   onRetry?: () => void

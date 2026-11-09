@@ -51,14 +51,20 @@ export async function listUsers(auth: OfficeAuth, request: FastifyRequest) {
         totpConfirmedAt: true,
         lastSignInAt: true,
         version: true,
+        // B-W2b-180: who the person signs in as, and a partner's organisation and end of access (Admin › Users "Partners").
+        audience: true,
+        partyId: true,
+        partnerKind: true,
+        accessUntil: true,
         invitations: { where: { acceptedAt: null, revokedAt: null }, orderBy: { expiresAt: 'desc' }, take: 1, select: { expiresAt: true } },
       },
     })
     return { rows, roles: await liveAssignmentsOf(client, rows.map((row) => row.id), now) }
   })
   return {
-    users: rows.map(({ totpConfirmedAt, lastSignInAt, invitations, ...user }) => ({
+    users: rows.map(({ totpConfirmedAt, lastSignInAt, invitations, accessUntil, ...user }) => ({
       ...user,
+      accessUntil: accessUntil ? toUtcIso(accessUntil) : null,
       roles: (roles.get(user.id) ?? []).map(({ id, roleId, roleKey, roleName, allCompanies, companyIds, siteIds, partyIds, validTo }) => ({
         assignmentId: id,
         roleId,

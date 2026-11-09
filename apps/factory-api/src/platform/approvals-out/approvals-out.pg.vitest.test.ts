@@ -170,7 +170,9 @@ describe('a sample asked on an order, answered by link with changes and a marked
     const refused = await as(owner, 'POST', '/approvals-out', { kind: 'SAMPLE', recordType: 'SalesOrder', recordId: pricing.money.sales.orderId, email: BRAND_QA, question: 'Approve the stitching of the sample.', send: true, language: 'en' }, 400)
     expect(pathsOf(refused)).toEqual(['body/fileIds'])
     const made = await as(owner, 'POST', '/approvals-out', { kind: 'SAMPLE', recordType: 'SalesOrder', recordId: pricing.money.sales.orderId, email: BRAND_QA, question: 'Approve the stitching of the sample.', fileIds: [photo], send: true, language: 'en' }, 201)
-    expect(made).toMatchObject({ url: null, delivery: 'SENT', request: { kind: 'SAMPLE', status: 'OPEN', record: { type: 'SalesOrder' }, party: { id: P1 } } })
+    expect(made).toMatchObject({ url: null, delivery: 'SENT', request: { kind: 'SAMPLE', status: 'OPEN', record: { type: 'SalesOrder', words: { it: expect.any(String), en: expect.any(String) } }, party: { id: P1 } } })
+    // B-W2b-F16: codes and the record's words; no English-only kind, state or due words.
+    for (const field of ['kindName', 'stateWords', 'dueWords']) expect(made.request).not.toHaveProperty(field)
     requestId = made.request.id
     expect(made.request.files).toHaveLength(1)
     photoCopy = made.request.files[0].id
@@ -190,7 +192,11 @@ describe('a sample asked on an order, answered by link with changes and a marked
 
   it('the link shows what we ask, the photo, and what may be answered; opening uses nothing', async () => {
     const page = await viaLink(token, 'GET', '/link/approval?language=en')
-    expect(page.request).toMatchObject({ kind: 'SAMPLE', kindName: 'Sample', question: 'Approve the stitching of the sample.', status: 'OPEN', from: { companyName: expect.any(String) } })
+    expect(page.request).toMatchObject({ kind: 'SAMPLE', question: 'Approve the stitching of the sample.', status: 'OPEN', from: { companyName: expect.any(String) } })
+    // B-W2b-F16: a sample on an order is named by the order's number, the same in both languages (`label` keeps the English).
+    expect(page.request.words.it).toBe(page.request.words.en)
+    expect(page.request.label).toBe(page.request.words.en)
+    for (const field of ['kindName', 'stateWords', 'dueWords']) expect(page.request).not.toHaveProperty(field)
     expect(page.files.map((file: Json) => file.id)).toEqual([photoCopy])
     expect(page.may).toEqual({ answer: true, withChanges: true, held: null })
     expect(page.content.revisedOrder).toBeNull()
@@ -233,6 +239,10 @@ describe('the customer\'s concession answered in the portal (QHS-085; AP1:01)', 
     expect(await one('SELECT "approvalRequestId" FROM "NcrConcession" WHERE id = $1', [capa.concessionId])).toEqual({ approvalRequestId: requestId })
     const list = await as(viewer, 'GET', '/portal/approvals')
     expect(list.items.map((item: Json) => item.id)).toContain(requestId)
+    // B-W2b-F16: the concession in both languages, the kind and state as codes.
+    const item = list.items.find((entry: Json) => entry.id === requestId)
+    expect(item).toMatchObject({ kind: 'CONCESSION', status: 'OPEN', words: { it: expect.stringMatching(/ · concessione \d+$/), en: expect.stringMatching(/ · concession \d+$/) } })
+    for (const field of ['kindName', 'stateWords', 'dueWords', 'label']) expect(item).not.toHaveProperty(field)
     const page = await as(viewer, 'GET', `/portal/approvals/${requestId}`)
     expect(page.may.answer).toBe(false)
     expect(page.content.facts.map((fact: Json) => fact.label)).toEqual(['Nonconformance', 'The deviation', 'What we propose'])
@@ -276,6 +286,10 @@ describe('a revised order re-confirmed by the customer (SAL-222)', () => {
     const token = tokenOf(made.url)
     const page = await viaLink(token, 'GET', '/link/approval?language=en')
     expect(page.may.withChanges).toBe(false)
+    // B-W2b-F16: the revision in both languages (the page shows the reader's; Italian no longer reads "revision").
+    expect(page.request.words).toEqual({ it: `${order.number} · revisione ${amended.amendment.revision}`, en: `${order.number} · revision ${amended.amendment.revision}` })
+    const office = await as(owner, 'GET', `/approvals-out/${made.request.id}`)
+    expect(office.request.record).toEqual({ type: 'SalesOrderAmendment', id: amended.amendment.id, words: page.request.words })
     expect(page.content.revisedOrder).toMatchObject({ orderNumber: order.number, revision: amended.amendment.revision })
     expect(page.content.revisedOrder.netAmountAfter).toBeGreaterThan(page.content.revisedOrder.netAmountBefore)
     expect(page.content.revisedOrder.lines[0]).toMatchObject({ change: 'CHANGED', style: { code: expect.any(String) } })

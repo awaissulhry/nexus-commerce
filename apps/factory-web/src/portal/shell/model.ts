@@ -34,8 +34,18 @@ export function portalPathOf(pathname: string, prefix: string): string {
   return pathname.startsWith(`${prefix}/`) ? pathname.slice(prefix.length) : pathname
 }
 
-/** Sign in first, then back to the page the person was going to (B-W2b-164 reads `next`; a mailed link keeps its anchor). */
-export const signInHref = (next: string | null): string => (next ? `/p/signin?next=${encodeURIComponent(next)}` : '/p/signin')
+/** Why the frame sent the person to sign in, as B-W2b-164's sign-in reads `ended=` (its "You were signed out" banner). */
+export type SessionEnd = 'idle' | 'revoked'
+
+/**
+ * Sign in first, then back to the page the person was going to (B-W2b-164 reads `next`; a mailed link keeps its anchor).
+ * `ended`: the frame ended the session (idle) or found it ended (revoked): the sign-in says so, this tab's e-mail prefilled.
+ * A person who chose to sign out, or who arrives with no session, gets no `ended`.
+ */
+export function signInHref(next: string | null, ended: SessionEnd | null = null): string {
+  const query = [next ? `next=${encodeURIComponent(next)}` : null, ended ? `ended=${ended}` : null].filter((part) => part !== null).join('&')
+  return query ? `/p/signin?${query}` : '/p/signin'
+}
 
 /** The kinds a person reads the portal as: their own; an office preview has none and reads as every kind of its party. */
 export function kindsOf(me: Pick<PortalMe, 'user' | 'party'>): PortalKind[] {
@@ -105,6 +115,14 @@ export const stillThereAt = (idleEnd: number, absoluteEnd: number): number => Ma
 
 /** "Stay signed in" can help: the idle end, not the absolute 12 hours, is what ends the session. */
 export const staying = (idleEnd: number, absoluteEnd: number): boolean => idleEnd < absoluteEnd - SLIDE_MS
+
+/**
+ * Why the session ended at `at`, for the sign-in's banner: the frame's idle clock ran out first → `idle` ("after 30 minutes
+ * without use"); anything else → `revoked` ("Your session was ended"): the API refused the session (401) before its idle
+ * end — the office ended it, the access ended, a sign-out in another tab: the API answers one 401 for all of them — or the
+ * 12 hours ended it, which is no idleness either.
+ */
+export const sessionEndOf = (at: number, idleEnd: number, absoluteEnd: number): SessionEnd => (at >= idleEnd && idleEnd < absoluteEnd ? 'idle' : 'revoked')
 
 // ── the task list (COL-043) ──────────────────────────────────────────────────────────────────────────────────────────
 const DUE_STATE: Record<PortalTask['due'], ActionDue['state']> = { OVERDUE: 'overdue', TODAY: 'today', SOON: 'soon', LATER: 'later', NONE: 'none' }

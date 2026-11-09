@@ -1,0 +1,100 @@
+/*
+ * The job link page (SCR-196) LAYOUT inside the link frame (comfortable density, phone first): the job, the answer, the
+ * end. Controls are the design system's; semantic tokens only. "Print the job" prints the job panel alone.
+ */
+.fw-ljob-stack,
+.fw-ljob-job,
+.fw-ljob-answer,
+.fw-ljob-op {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ljob-stack {
+  gap: var(--nds-space-16);
+}
+
+.fw-ljob-op {
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-ljob-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-ljob-h2,
+.fw-ljob-h3 {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ljob-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-ljob-h3 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-ljob-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-ljob-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-ljob-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-ljob-legend {
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ljob-go {
+  display: flex;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .fw-ljob-job,
+  .fw-ljob-job * {
+    visibility: visible;
+  }
+
+  .fw-ljob-job {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  .fw-ljob-noprint {
+    display: none;
+  }
+}

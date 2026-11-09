@@ -17,6 +17,24 @@
     "state": "A che punto è",
     "dueAt": "Scadenza"
   },
+  "kind": {
+    "CONCESSION": "Concessione",
+    "SAMPLE": "Campione",
+    "COLOUR": "Colore",
+    "LEATHER": "Pellame",
+    "ARTWORK": "Grafica",
+    "PROOF": "Bozza del design",
+    "REVISED_ORDER": "Ordine modificato",
+    "SIGNATURE": "Firma"
+  },
+  "state": {
+    "OPEN": "In attesa di risposta",
+    "APPROVED": "Approvato",
+    "APPROVED_WITH_CHANGES": "Approvato con modifiche",
+    "REFUSED": "Rifiutato",
+    "WITHDRAWN": "Ritirato",
+    "EXPIRED": "Scaduto senza risposta"
+  },
   "panel": {
     "proof": {
       "title": "Bozza del design",

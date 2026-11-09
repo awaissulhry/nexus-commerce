@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { PauseCircle, PlayCircle, Plus, Trash2, UserX, Users } from 'lucide-react'
 import { Banner, Field, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
@@ -41,6 +42,8 @@ import {
   type WorkerDraft,
 } from '../model'
 import { floorColumns, officeColumns } from './columns'
+import { addDays, dayOf } from '../partners/model'
+import { PartnersPeople, partnersCount, type PartnersAudienceActions } from '../partners/view/PartnersPeople'
 
 export type { UsersViewModel } from '../model'
 
@@ -65,6 +68,8 @@ export interface UsersActions {
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-180: the Partners audience's own actions (areas/admin/users/partners). */
+  partners?: PartnersAudienceActions
 }
 
 /**
@@ -124,7 +129,7 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || dialog || bulk) return
+      if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || dialog || bulk || model.audience === 'partners') return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (office ? !model.can.invite : !model.can.manageWorkers) return
       event.preventDefault()
@@ -191,6 +196,8 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
         options={[
           ...(model.can.viewUsers ? [{ value: 'office', label: model.users.items ? t('users.audience.officeCount', { count: model.users.items.filter((user) => user.status !== 'DEACTIVATED').length }) : t('users.audience.office') }] : []),
           ...(model.can.viewWorkers ? [{ value: 'floor', label: model.workers.items ? t('users.audience.floorCount', { count: model.workers.items.filter((worker) => worker.status === 'ACTIVE').length }) : t('users.audience.floor') }] : []),
+          // B-W2b-180: "Partners (n)" — the people of the partner organisations (GET /partners counts).
+          ...(model.partners ? [{ value: 'partners', label: partnersCount(model.partners) === null ? t('users.audience.partners') : t('users.audience.partnersCount', { count: partnersCount(model.partners)! }) }] : []),
         ]}
       />
       {model.tile && (
@@ -266,55 +273,61 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
         }
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      <MetricStrip
-        metrics={tiles.map((tile) => ({
-          label: t(`users.tile.${tile}`),
-          value: counts[tile] === null ? '—' : String(counts[tile]),
-          hint: t(`users.tileHint.${tile}`),
-          active: model.tile === tile,
-          onClick: () => actions?.onTile?.(model.tile === tile ? null : tile),
-        }))}
-      />
-      {office ? (
-        <ListFrame<User>
-          {...frame}
-          label={t('users.tableOffice')}
-          rows={items === null ? null : officeShown.rows}
-          rowId={(user) => user.id}
-          columns={officeCols}
-          onOpen={(user) => actions?.onOpen?.(href(`/users/${user.id}`))}
-          selection={{
-            selected: pickedUsers.map((user) => user.id),
-            onChange: setSelected,
-            actions: (
-              <>
-                {(['suspend', 'reactivate', 'deactivate'] as const).map((action) => (
-                  <Fragment key={action}>{button(officeReachOf(action), OFFICE_ICONS[action], OFFICE_LABEL[action], OFFICE_VERB[action], () => setBulk({ audience: 'office', action }), action === 'reactivate' ? undefined : 'danger-outline')}</Fragment>
-                ))}
-              </>
-            ),
-          }}
-        />
+      {model.audience === 'partners' && model.partners ? (
+        <PartnersPeople model={model.partners} actions={{ ...actions?.partners, onOpen: actions?.onOpen }} tools={tools} search={<ListSearch label={t('users.search')} value={model.query} onChange={actions?.onQuery} />} />
       ) : (
-        <ListFrame<Worker>
-          {...frame}
-          label={t('users.tableFloor')}
-          rows={items === null ? null : floorShown.rows}
-          rowId={(worker) => worker.id}
-          columns={floorCols}
-          onOpen={(worker) => actions?.onOpen?.(href(`/users/floor/${worker.id}`))}
-          selection={{
-            selected: pickedWorkers.map((worker) => worker.id),
-            onChange: setSelected,
-            actions: (
-              <>
-                {(['deactivate', 'reactivate'] as const).map((action) => (
-                  <Fragment key={action}>{button(floorReachOf(action), FLOOR_ICONS[action], FLOOR_LABEL[action], FLOOR_VERB[action], () => setBulk({ audience: 'floor', action }), action === 'deactivate' ? 'danger-outline' : undefined)}</Fragment>
-                ))}
-              </>
-            ),
-          }}
-        />
+        <>
+          <MetricStrip
+            metrics={tiles.map((tile) => ({
+              label: t(`users.tile.${tile}`),
+              value: counts[tile] === null ? '—' : String(counts[tile]),
+              hint: t(`users.tileHint.${tile}`),
+              active: model.tile === tile,
+              onClick: () => actions?.onTile?.(model.tile === tile ? null : tile),
+            }))}
+          />
+          {office ? (
+            <ListFrame<User>
+              {...frame}
+              label={t('users.tableOffice')}
+              rows={items === null ? null : officeShown.rows}
+              rowId={(user) => user.id}
+              columns={officeCols}
+              onOpen={(user) => actions?.onOpen?.(href(`/users/${user.id}`))}
+              selection={{
+                selected: pickedUsers.map((user) => user.id),
+                onChange: setSelected,
+                actions: (
+                  <>
+                    {(['suspend', 'reactivate', 'deactivate'] as const).map((action) => (
+                      <Fragment key={action}>{button(officeReachOf(action), OFFICE_ICONS[action], OFFICE_LABEL[action], OFFICE_VERB[action], () => setBulk({ audience: 'office', action }), action === 'reactivate' ? undefined : 'danger-outline')}</Fragment>
+                    ))}
+                  </>
+                ),
+              }}
+            />
+          ) : (
+            <ListFrame<Worker>
+              {...frame}
+              label={t('users.tableFloor')}
+              rows={items === null ? null : floorShown.rows}
+              rowId={(worker) => worker.id}
+              columns={floorCols}
+              onOpen={(worker) => actions?.onOpen?.(href(`/users/floor/${worker.id}`))}
+              selection={{
+                selected: pickedWorkers.map((worker) => worker.id),
+                onChange: setSelected,
+                actions: (
+                  <>
+                    {(['deactivate', 'reactivate'] as const).map((action) => (
+                      <Fragment key={action}>{button(floorReachOf(action), FLOOR_ICONS[action], FLOOR_LABEL[action], FLOOR_VERB[action], () => setBulk({ audience: 'floor', action }), action === 'deactivate' ? 'danger-outline' : undefined)}</Fragment>
+                    ))}
+                  </>
+                ),
+              }}
+            />
+          )}
+        </>
       )}
       <p className="fw-adm-hint">{t('users.later')}</p>
       {/* B-W2b-55 (design admin.users conn "People › Employees (W2b) for HR data"): this page keeps the sign-in identity. */}
@@ -342,7 +355,7 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
   )
 }
 
-const BLANK_INVITE: InviteDraft = { people: [{ name: '', email: '' }], roleIds: [], scope: EVERYWHERE, locale: 'it' }
+const BLANK_INVITE: InviteDraft = { people: [{ name: '', email: '' }], roleIds: [], scope: EVERYWHERE, locale: 'it', until: '' }
 
 /** One role card: its name and what it does in a plain line, with what money it sees. */
 function RoleCard({ role, checked, onChange }: { role: Role; checked: boolean; onChange: (checked: boolean) => void }) {
@@ -372,6 +385,7 @@ function RoleCard({ role, checked, onChange }: { role: Role; checked: boolean; o
 
 function InviteModal({ model, open, onClose, actions }: { model: UsersViewModel; open: boolean; onClose: () => void; actions?: UsersActions }) {
   const t = useT('admin')
+  const locale = useLocale()
   const [draft, setDraft] = useState<InviteDraft>(BLANK_INVITE)
   const [paste, setPaste] = useState('')
   const [tried, setTried] = useState(false)
@@ -495,15 +509,30 @@ function InviteModal({ model, open, onClose, actions }: { model: UsersViewModel;
             <ScopePicker name="invite-scope" value={draft.scope} companies={model.companies} onChange={(scope) => setDraft({ ...draft, scope })} />
           </fieldset>
         )}
-        <Field label={t('users.invite.language')}>
-          <Select value={draft.locale} onChange={(event) => setDraft({ ...draft, locale: event.target.value })}>
-            {['it', 'en'].map((code) => (
-              <option key={code} value={code}>
-                {t(`common.language.${code}`)}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="fw-adm-person-row">
+          <Field label={t('users.invite.language')}>
+            <Select value={draft.locale} onChange={(event) => setDraft({ ...draft, locale: event.target.value })}>
+              {['it', 'en'].map((code) => (
+                <option key={code} value={code}>
+                  {t(`common.language.${code}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {/* B-W2b-180 (design pop:invite "until (optional, W2b)"): the roles of the invite end that day. */}
+          <Field label={t('users.invite.until')} hint={draft.roleIds.length === 0 ? t('users.invite.untilNoRole') : t('users.invite.untilHint')}>
+            <DateField
+              value={draft.until ?? ''}
+              onChange={(value) => setDraft({ ...draft, until: value })}
+              locale={INTL_LOCALE[locale]}
+              min={addDays(dayOf(new Date()), 1)}
+              clearable
+              clearLabel={t('users.invite.untilClear')}
+              ariaLabel={t('users.invite.until')}
+              disabled={draft.roleIds.length === 0}
+            />
+          </Field>
+        </div>
         <p className="fw-adm-hint">{t('users.invite.stepUp')}</p>
       </form>
     </Modal>

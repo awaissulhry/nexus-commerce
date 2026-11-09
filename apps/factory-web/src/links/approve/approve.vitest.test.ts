@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../lib/api/errors'
 import { linkTaskOf } from '../_nav/link-types'
+import { APPROVAL_KINDS, APPROVAL_STATUSES, KIND_RULES } from '@nexus/factory-domain/approvals-out/kinds'
 import { approvalPageSchema } from './api'
 import { designScreen } from './fixtures'
 import { answerProblem, answerRefusal, commentNeeded, decidedTone, decisionsOf, filesInOrder, isDecided, linePrices, markable, markSaveHeld, markupBodyOf, netMoved, panelOf, readRefusal, signLabelKey, sizeMoves } from './model'
@@ -90,6 +91,19 @@ describe('SCR-198 Approve — the link page', () => {
     expect(Object.keys(it).sort()).toEqual(Object.keys(en).sort())
     const holes = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
     for (const key of Object.keys(en)) expect(holes(it[key]!), key).toEqual(holes(en[key]!))
+  })
+
+  it('B-W2b-F16: says every kind and state in our words from the API codes; the record in the reader\'s language', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = flat(catalogue(locale))
+      for (const kind of APPROVAL_KINDS) expect(words[`kind.${kind}`], `${locale} ${kind}`).toEqual(KIND_RULES[kind].name[locale])
+      for (const status of APPROVAL_STATUSES) expect(words[`state.${status}`], `${locale} ${status}`).toBeTruthy()
+    }
+    const page = designScreen.cases.find((item) => item.id === 'revised-order')!.model.page!
+    expect(page.request.words).toEqual({ it: 'SO-2026-0042 · revisione 2', en: 'SO-2026-0042 · revision 2' })
+    // The API's English-only words are no longer read (a page with them still parses: zod drops them).
+    const parsed = approvalPageSchema.parse({ ...page, request: { ...page.request, kindName: 'Revised order', stateWords: 'Waiting', dueWords: 'Answer by 14 Nov', label: 'SO-2026-0042 · revision 2' } })
+    for (const field of ['kindName', 'stateWords', 'dueWords', 'label']) expect(parsed.request).not.toHaveProperty(field)
   })
 })
 

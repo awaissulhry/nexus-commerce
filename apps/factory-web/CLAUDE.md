@@ -88,12 +88,24 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   another organisation's address → a gate). `PortalShell.tsx` is the container (the one task list = badges and Home, the bell,
   ONE live channel per tab `GET /portal/live`, the idle sign-out + "Still there?", notices, the pop-ups, keys `/` `?` `g`,
   the unsaved guard, `brandPortals` + comfortable density on `<body>`); `view/` the frame and its pop-ups.
+  B-W2b-F16: a session that ends sends `signInHref(next, ended)` (`model.ts sessionEndOf`: the idle clock → `ended=idle`; a 401 before it,
+  or the 12 hours → `ended=revoked`); a chosen sign-out sends none. A cut ticket's number (`CT…-YYYY-N`) is read before the carton rule
+  (`floor/scan/scan-model.ts isCutTicketNumber`: a free code with `cutTicket`): Home opens Fabric cutting with it at a cutting table.
   `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
   `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
   `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,
   guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
   `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
   Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
+- `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
+  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
+  and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
+  tab: `admin/users/partners/preview.ts`), People with access (list frame; invite, change, resend, revoke, suspend,
+  reactivate, deactivate behind the step-up), the live line (`partner_user.signed_in`), Requests waiting for them (B-W2b-167).
+  `src/areas/admin/users/partners/` — the partner client and rules every partner screen shares (`api.ts`, `model.ts`:
+  the end of access as a site day, reaches, drafts, refusals in words), Admin › Users audience Partners (SCR-010-partners,
+  `use-partners.ts`) and User › Partner organisation (SCR-011-partner). Catalogue `portal-access`. The order studio's ⋯
+  "See it in the customer's portal" previews `/p/<code>/open/SalesOrder/<id>`.
 - `src/portal/customer/account/` — the customer's Account (B-W2b-196, SCR-188, `/p/<party>/account`; catalogue
   `portal-account`): `AccountRoute.tsx` (the gate: a customer with portal.colleagues.view), `AccountPage.tsx` (the container:
   each card reads on its own; profile and e-mail drafts with ⌘S and the frame's unsaved guard; the admin's colleague acts
@@ -107,6 +119,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Idempotency-Key per body; the sheet is read with `apply: false`, kept with `apply: true`). `model.ts` says every check,
   sheet row and refusal from codes, columns and issue paths (the API's English is dropped by the zod schemas).
   `RECORD_PAGES.ShipNotice` opens `/deliveries/<id>`; the PO record's Ship notices tab has "Announce delivery".
+- `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
+  `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
+  (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
+  re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
+  record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

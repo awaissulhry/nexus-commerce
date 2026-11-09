@@ -4,7 +4,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { completion, DVR_SIGNER_ROLES, dvrSignatureId, dvrSignatureKey, type DvrSignerRole } from '@nexus/factory-domain/safety/risk/rules'
 import { SAFETY_RISK_MANAGE } from '@nexus/factory-domain/safety/risk/permissions'
 import type { CommandTools, CommandTx } from '../../../core/command'
-import { words, type ReadContext, type RecordAdapter, type RequestRef } from '../../../platform/approvals-out/adapter'
+import { sameWords, words, type ReadContext, type RecordAdapter, type RequestRef } from '../../../platform/approvals-out/adapter'
 import { dateOf, dayOf } from '../organisation/access'
 
 /**
@@ -87,7 +87,7 @@ export const SIGNATURE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
     const version = await client.riskAssessmentVersion.findUnique({ where: { id: recordId }, select: VERSION })
     if (!version) return null
     const base = { companyId: version.companyId, siteId: version.siteId, thread: null }
-    const label = `${version.assessment.name} · v${version.versionNo}`
+    const label = sameWords(`${version.assessment.name} · v${version.versionNo}`)
     if (version.status !== 'AWAITING_SIGNATURES') return { ...base, partyId: context.partyId, label, held: `Version ${version.versionNo} is ${version.status.toLowerCase().replaceAll('_', ' ')}: it takes no more signatures.` }
     const signers = await outsideSigners(client, version, context.now)
     const chosen = context.partyId ? signers.filter((signer) => signer.partyId === context.partyId) : signers
@@ -96,7 +96,8 @@ export const SIGNATURE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
     }
     if (new Set(chosen.map((signer) => signer.partyId)).size > 1) return { ...base, partyId: null, label, held: `Name the signer: ${chosen.map((signer) => `${signer.role} ${signer.name}`).join(', ')}.` }
     const signer = chosen[0]!
-    return { ...base, partyId: signer.partyId, label: `${label} · ${signer.role}`, held: null }
+    const role = ROLE_WORDS[signer.role]
+    return { ...base, partyId: signer.partyId, label: { it: `${label.it} · ${role?.it ?? signer.role}`, en: `${label.en} · ${role?.en ?? signer.role}` }, held: null }
   },
   async fileRecords(client, recordId) {
     // The frozen PDF (autoFiles) is a file of the assessment the version freezes (versions.ts), not of the version: without
