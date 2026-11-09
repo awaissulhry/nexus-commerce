@@ -1,0 +1,314 @@
+{
+  "title": "Accounting files",
+  "readOnly": "Read-only",
+  "band": {
+    "zip": "Download period (zip)",
+    "status": "Read-only · until {date}"
+  },
+  "notice": {
+    "hide": "Hide"
+  },
+  "access": {
+    "title": "Your access",
+    "body": "Read-only access for {firm} to the books of {company}, given by {name}. It ends on {date}. Every download is recorded.",
+    "bodyNoName": "Read-only access for {firm} to the books of {company}. It ends on {date}. Every download is recorded.",
+    "preview": "You are looking at {firm}'s room as the office: it shows the files of {company} as the accountant sees them, and nothing is downloaded from a preview.",
+    "endsSoon": "Your access ends soon:"
+  },
+  "period": {
+    "title": "Period",
+    "hint": "Choose a month, a quarter or a year. The rest of the page follows the period; you see the months finance has handed over.",
+    "kindLabel": "Show by",
+    "kind": {
+      "MONTH": "Month",
+      "QUARTER": "Quarter",
+      "YEAR": "Year"
+    },
+    "choose": "Period",
+    "months": "The months of this period",
+    "shared": "Handed over",
+    "notShared": "Not handed over yet",
+    "locked": {
+      "SOFT": "Locked on {date}",
+      "HARD": "Closed for good on {date}"
+    },
+    "someMissing_one": "{count} month of this period is not handed over yet: ask finance.",
+    "someMissing_other": "{count} months of this period are not handed over yet: ask finance.",
+    "noneYet": "Finance has not handed over any period yet",
+    "noneYetBody": "A month appears here once finance has made its accounting export. Ask finance below.",
+    "refusedTitle": "Not handed over yet"
+  },
+  "exports": {
+    "title": "Accounting exports",
+    "hint": "The numbered exports finance made for you. A re-export carries only what changed since the export it amends.",
+    "empty": "No export for this period yet",
+    "emptyBody": "Ask finance."
+  },
+  "einvoices": {
+    "title": "E-invoices",
+    "hint": "Every sales and purchase invoice of the period: the FatturaPA XML, and the PDF copy when there is one.",
+    "empty": "No invoices in this period",
+    "emptyBody": "Nothing was issued or received in the months handed over.",
+    "allXml": "All XML of the period ({count})",
+    "noFile": "No file is kept for this invoice."
+  },
+  "registers": {
+    "title": "VAT and registers",
+    "hint": "What the exports carry besides the journals: the Intrastat file and the year-end stock pack. A later export replaces the whole file.",
+    "empty": "No register file in this period",
+    "emptyBody": "The Intrastat file comes with a month's export, the stock pack with the year end.",
+    "current": "Current",
+    "replacedBy": "Replaced by {number}",
+    "later": "{items} are not made by the system yet: ask finance for them.",
+    "laterItem": {
+      "VAT_REGISTERS": "The VAT registers",
+      "VAT_SUMMARY": "the VAT settlement summary"
+    },
+    "join": " and "
+  },
+  "ask": {
+    "title": "Ask finance"
+  },
+  "col": {
+    "export": "Export no.",
+    "journal": "Journal",
+    "period": "Period",
+    "created": "Made on",
+    "standing": "Standing",
+    "file": "File",
+    "actions": "Actions",
+    "number": "Number",
+    "date": "Date",
+    "party": "Other party",
+    "kind": "Kind",
+    "state": "SDI",
+    "files": "Files",
+    "register": "Register"
+  },
+  "standing": {
+    "final": "Final",
+    "amendedBy": "Amended by {number}",
+    "amends": "Changes to {number}"
+  },
+  "row": {
+    "download": "Download",
+    "downloadOf": "Download {name}",
+    "downloading": "Downloading…",
+    "fileFacts": "{format} · {size} · {rows} rows",
+    "fileSize": "{format} · {size}",
+    "xmlOf": "Download the XML of {number}",
+    "pdfOf": "Download the PDF of {number}"
+  },
+  "file": {
+    "xml": "XML",
+    "pdf": "PDF",
+    "no": {
+      "xml": "No XML is kept for this invoice.",
+      "pdf": "No PDF copy is kept for this invoice."
+    },
+    "none": {
+      "xml": "no XML",
+      "pdf": "no PDF"
+    }
+  },
+  "package": {
+    "SALES_JOURNAL": "Sales journal",
+    "PURCHASES_JOURNAL": "Purchases journal",
+    "PAYMENTS": "Payments and refunds",
+    "COST_OF_SALES": "Cost of goods sold and variances",
+    "VAT_REGISTERS": "VAT registers",
+    "INTRASTAT": "Intrastat (EU sales)",
+    "YEAR_END_STOCK": "Year-end stock pack"
+  },
+  "state": {
+    "ISSUED": "Issued",
+    "SENT": "Sent to SDI",
+    "DELIVERED": "Delivered",
+    "NOT_DELIVERABLE": "Not deliverable (in the buyer's tax area)",
+    "REJECTED": "Rejected by SDI",
+    "ERROR": "Sending failed",
+    "SDI": "Received through SDI",
+    "EMAIL": "Received by e-mail",
+    "MANUAL": "Typed in",
+    "loading": "Loading…",
+    "slow": "Still loading…",
+    "failed": "We could not read your accounting files",
+    "failedBody": "Nothing was lost. Try again in a moment.",
+    "retry": "Try again",
+    "listFailed": "We could not read this period",
+    "listFailedBody": "Nothing was lost. Try again in a moment."
+  },
+  "kind": {
+    "INVOICE": "Invoice",
+    "DEPOSIT": "Deposit invoice",
+    "CREDIT_NOTE": "Credit note"
+  },
+  "side": {
+    "SALES": "Sales",
+    "PURCHASE": "Purchase"
+  },
+  "count": {
+    "files_one": "{count} file",
+    "files_other": "{count} files",
+    "invoices_one": "{count} invoice",
+    "invoices_other": "{count} invoices"
+  },
+  "bulk": {
+    "download_one": "Download {count} (zip)",
+    "download_other": "Download {count} (zip)"
+  },
+  "keys": {
+    "download": "Download the focused file",
+    "downloadInvoice": "Download the focused invoice's XML",
+    "select": "Choose the focused file (zip several)"
+  },
+  "held": {
+    "preview": "This is the office's preview: nothing is downloaded from it.",
+    "offline": "No connection: downloads wait until you are back online.",
+    "busy": "A download is on its way.",
+    "choose": "Choose the files first.",
+    "noXml": "No XML in this period.",
+    "reading": "The period is still being read.",
+    "nothing": "There is no file in this period."
+  },
+  "refusal": {
+    "NOT_ACCOUNTANT": "This page is the accountant's: your access does not open it.",
+    "PERIOD_NOT_SHARED": "Finance has not handed this period over yet: it has no accounting export. Ask finance.",
+    "FILE_NOT_IN_PERIOD": "This file is not one of this period's: the period was read again.",
+    "TOO_MANY_FILES": "A zip holds at most 400 files: choose a shorter period or fewer files.",
+    "TOO_LARGE": "A zip holds at most 100 MB: choose a shorter period or fewer files.",
+    "NOTHING_TO_ZIP": "There is no file to put in the zip.",
+    "FILE_UNAVAILABLE": "These files cannot be downloaded right now. Try again later, or ask finance.",
+    "generic": "The download did not work. Try again.",
+    "network": "The factory is not answering. Try again in a moment."
+  },
+  "done": {
+    "file": "{name} is downloading.",
+    "zip": "{name} is saved on this device."
+  },
+  "noAccess": {
+    "title": "Not part of your access",
+    "body": "This page is the accountant's room of the company's books.",
+    "home": "Go to Home"
+  },
+  "office": {
+    "title": "Accountant access",
+    "hint": "The accounting firm reads the batches in its own portal: the months you exported, their e-invoices and registers for {company}, files only, until the day you set. Every download is recorded below.",
+    "give": "Give access…",
+    "listLabel": "Accountants with access",
+    "count_one": "{count} person",
+    "count_other": "{count} people",
+    "showLeft": "Show access that ended",
+    "bulkEnd_one": "End access ({count})",
+    "bulkEnd_other": "End access ({count})",
+    "empty": "Nobody has accountant access",
+    "emptyBody": "Give your accounting firm read-only access to the exports, e-invoices and registers.",
+    "noFirm": "First add the accounting firm as an organisation and give it the Consultant role on its record.",
+    "failed": "We could not read who has access",
+    "failedBody": "Nothing was changed. Try again.",
+    "stepUp": "Giving, changing or ending the accountant's access opens or closes the company's books to an outside firm: type the code from your authenticator app.",
+    "status": {
+      "INVITED": "Invited",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Paused",
+      "DEACTIVATED": "Ended"
+    },
+    "col": {
+      "person": "Person",
+      "firm": "Firm",
+      "status": "Status",
+      "ends": "Access ends",
+      "lastSignIn": "Last sign-in",
+      "actions": "Actions"
+    },
+    "row": {
+      "invitedUntil": "invitation until {date}",
+      "ended": "Ended",
+      "endsSoon": "Ends soon",
+      "never": "Not yet",
+      "change": "Change the end…",
+      "end": "End access…",
+      "menu": "Actions for {name}"
+    },
+    "keys": {
+      "change": "Change the end of access"
+    },
+    "held": {
+      "reading": "The access is still being read.",
+      "noManage": "Only finance gives, changes or ends accountant access.",
+      "noFirm": "Add the accounting firm with the Consultant role first.",
+      "left": "This access has ended already.",
+      "expired": "The invitation expired: give access again.",
+      "choose": "Choose the people first.",
+      "someLeft": "Some of the chosen people have no access any more.",
+      "busy": "Wait: a change is on its way."
+    },
+    "invite": {
+      "title": "Give the accountant access",
+      "body": "The person gets an e-mail with the sign-in page of the portal. They sign in with a code we e-mail them; no password.",
+      "firm": "Accounting firm",
+      "chooseFirm": "Choose the firm",
+      "everyCompany": "{firm} works for every company of the group: the person can open the files of any company whose portal they sign in to.",
+      "name": "Name",
+      "email": "E-mail",
+      "language": "Language of the e-mails",
+      "it": "Italian",
+      "en": "English",
+      "until": "Access until (the whole day)",
+      "datePlaceholder": "dd/mm/yyyy",
+      "dateClear": "Clear the date",
+      "what": "They see only the months you exported: the exports, the e-invoices (XML and PDF) and the registers; read-only, never a record or someone's pay.",
+      "go": "Give access",
+      "problem": {
+        "firm": "Choose the accounting firm.",
+        "name": "Write the person's name.",
+        "email": "Write a valid e-mail address.",
+        "until": "Choose the last day of access.",
+        "past": "The last day of access cannot be in the past."
+      }
+    },
+    "change": {
+      "title": "Change the end of access of {name}",
+      "body": "The access lasts until the end of the day you choose, then ends by itself.",
+      "go": "Save the date"
+    },
+    "end": {
+      "title_one": "End the access of {name}?",
+      "title_other": "End the access of {count} people?",
+      "body": "Their sessions end at once and their open invitation stops. You can give access again later.",
+      "reason": "Why (optional)",
+      "go_one": "End access",
+      "go_other": "End access ({count})"
+    },
+    "done": {
+      "invited": "{name} is invited: the sign-in page went to {email}.",
+      "invitedOn": "The firm's portal is on and {name} is invited: the sign-in page went to {email}.",
+      "changed": "The end of access of {name} is saved.",
+      "ended_one": "The access of {name} has ended.",
+      "ended_other": "The access of {count} people has ended."
+    },
+    "problem": {
+      "firm": "This organisation cannot get accountant access: it needs the Consultant role and to be of this company.",
+      "email": "This address belongs to someone else (an office person or another organisation), or already has access.",
+      "until": "The end of access is not valid: choose a day in the future.",
+      "conflict": "Someone changed this meanwhile: the list was read again. Try once more.",
+      "forbidden": "Your role does not let you change this access.",
+      "invalid": "Something in the form is not valid: check the fields.",
+      "unavailable": "The factory is not answering. Try again in a moment.",
+      "generic": "The change did not go through. Try again."
+    },
+    "downloads": {
+      "title": "Downloads",
+      "hint": "The newest downloads of the company's accountants: who, when and what.",
+      "at": "When",
+      "who": "Who",
+      "what": "What",
+      "period": "Period",
+      "zip_one": "A zip of {count} file: {name}",
+      "zip_other": "A zip of {count} files: {name}",
+      "count_one": "{count} download",
+      "count_other": "{count} downloads",
+      "empty": "Nothing downloaded yet"
+    }
+  }
+}

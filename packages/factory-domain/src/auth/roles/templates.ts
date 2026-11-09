@@ -653,6 +653,15 @@ const PARTNER_TASKS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   buyer: ['partners.tasks.manage'],
 })
 /**
+ * B-W2b-201 (FIN-158; design finance.accounting "Portal › Accountant"): finance gives the company's accountant the guest
+ * portal from Finance › Close (the firm's portal switched on, the person invited with an end date), changes when it ends and
+ * ends it (step-up); it does not hold partners.* (the customers' and suppliers' portals stay sales', the buyer's and the
+ * administrator's). The owner from every().
+ */
+const ACCOUNTANTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['accounting.accountants.manage'],
+})
+/**
  * B-W2b-177 (COL-048; design admin.documents › Required documents): the administrator keeps the rules of every record type;
  * the buyer keeps those of what suppliers send (certificates, test reports, declarations before a PO is confirmed).
  */
@@ -765,6 +774,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PARTNERS_ADDS[key] ?? []) : []),
   // B-W2b-167
   ...(audience === 'office' ? (PARTNER_TASKS_ADDS[key] ?? []) : []),
+  // B-W2b-201
+  ...(audience === 'office' ? (ACCOUNTANTS_ADDS[key] ?? []) : []),
   // B-W2b-177
   ...(audience === 'office' ? (REQUIRED_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-189
@@ -1418,6 +1429,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PORTAL_RETURNS_ADDS,
   // B-W2b-184: what we ask the organisation to approve, to every main role that works with us but the invoices-only ones (answering takes portal.approve).
   PORTAL_APPROVALS_READERS,
+  // B-W2b-201: the accountant's room (FIN-158): the handed-over months' exports, e-invoices and registers, files only.
+  { 'guest-accountant': ['portal.accounting.view' as Permission] },
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

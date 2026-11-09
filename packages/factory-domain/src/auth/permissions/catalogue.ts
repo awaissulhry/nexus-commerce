@@ -123,6 +123,8 @@ import { PRODUCTION_CUTISSUE_DEFINITIONS, PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS,
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
 import { ACCOUNTING_DEFINITIONS, ACCOUNTING_PERMISSIONS } from '../../accounting/permissions'
+// B-W2b-201: accountant access (portal.accounting.view, partner only; accounting.accountants.manage).
+import { ACCOUNTANTS_DEFINITIONS, ACCOUNTANTS_PERMISSIONS, PORTAL_ACCOUNTING_DEFINITIONS, PORTAL_ACCOUNTING_PERMISSIONS } from '../../accounting/guest/permissions'
 // B-W2a-36: Security & health (security.view, security.drills.record).
 import { SECURITY_DEFINITIONS, SECURITY_PERMISSIONS } from '../../ops/permissions'
 // B-W2a-43: customer returns (sales.returns.view | manage | receive | inspect | decide).
@@ -598,6 +600,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ALERTS_DEFINITIONS,
   // B-W2a-39: the accounting exports and the period locks.
   ACCOUNTING_DEFINITIONS,
+  // B-W2b-201: who gives the accountant the guest portal (area `accounting`).
+  ACCOUNTANTS_DEFINITIONS,
   // B-W2a-36: Security & health.
   SECURITY_DEFINITIONS,
   // B-W2a-43: customer returns.
@@ -740,6 +744,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-184: approval requests to partners (the office's in area `partners`, the partner's in `portal`, both declared above).
   PARTNERS_APPROVALS_DEFINITIONS,
   PORTAL_APPROVALS_DEFINITIONS,
+  // B-W2b-201: the accountant's room (partner roles only; area `portal`, declared above).
+  PORTAL_ACCOUNTING_DEFINITIONS,
   // B-W2b-112: cut orders and cut tickets (area `production`, declared above).
   PRODUCTION_CUTORDERS_DEFINITIONS,
   // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (area `production`, declared above).
@@ -836,6 +842,9 @@ for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-39: the accounting exports and the period locks.
 for (const name of ACCOUNTING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-201: accountant access (the office's; the portal's flagged partner).
+for (const name of ACCOUNTANTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_ACCOUNTING_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2a-36: Security & health.
 for (const name of SECURITY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-43: customer returns.

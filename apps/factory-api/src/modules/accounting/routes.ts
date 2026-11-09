@@ -19,6 +19,10 @@ import { cancelExport, createExport, downloadExportFile, exportRecord, listExpor
 import { liftLock, listLocks, lockMonth } from './locks'
 import { manifest } from './manifest'
 import { intrastatRows, periodWorkspace, yearOfPeriods } from './period'
+// B-W2b-201: accountant access (the portal's room and the office's invite).
+import { accountantsContract, changeAccountantContract, endAccountantContract, guestDownloadContract, guestOverviewContract, guestPeriodContract, guestZipContract, inviteAccountantContract } from './guest/contract'
+import { accountants, changeAccountant, endAccountant, inviteAccountant } from './guest/office'
+import { guestDownload, guestOverview, guestPeriod, guestZip } from './guest/portal'
 
 /**
  * Numbered accounting exports, Intrastat data and file, the year-end stock pack and the period lock (B-W2a-39; FIN-046,
@@ -68,4 +72,15 @@ export default defineRoutes('accounting', manifest, async (app) => {
   app.post('/accounting/locks/:lockId/lift', { schema: liftContract }, async (request) => ({
     lock: await liftLock(request, request.params.lockId, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
   }))
+
+  // B-W2b-201: accountant access (guest/): the portal's room — files only, every download in the audit log — and the
+  // office's half on Finance › Close (give, change, end; step-up).
+  app.get('/portal/accounting', { schema: guestOverviewContract }, async (request) => guestOverview(app, request))
+  app.get('/portal/accounting/periods/:period', { schema: guestPeriodContract }, async (request) => guestPeriod(app, request, request.params.period))
+  app.post('/portal/accounting/files/:fileId/download', { schema: guestDownloadContract }, async (request) => guestDownload(app, request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/accounting/zip', { schema: guestZipContract }, async (request, reply) => guestZip(app, request, reply, request.body))
+  app.get('/accounting/accountants', { schema: accountantsContract }, async (request) => accountants(app, request, request.query.companyId))
+  app.post('/accounting/accountants', { schema: inviteAccountantContract }, async (request, reply) => reply.code(201).send(await inviteAccountant(app, request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/accounting/accountants/:userId', { schema: changeAccountantContract }, async (request) => changeAccountant(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
+  app.post('/accounting/accountants/:userId/end', { schema: endAccountantContract }, async (request) => endAccountant(app, request, request.params.userId, request.body, idempotencyKeyFrom(request)))
 })
