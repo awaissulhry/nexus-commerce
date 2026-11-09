@@ -137,6 +137,8 @@ model StoredFile {
   // photo it is.
   cutOrderMarkers  CutOrder[]   @relation("CutOrderMarkerFile")
   cutLogPhotos     CutLog[]     @relation("CutLogPhoto")
+  // W2b-4 sizes-depth.prisma (wave 27/33): the point of measure whose how-to picture it is.
+  pointOfMeasurePictures PointOfMeasure[] @relation("PointOfMeasurePicture")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
   // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.

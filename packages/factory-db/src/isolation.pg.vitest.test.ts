@@ -63,6 +63,7 @@ import { seed as seedSales } from '../seed/sales'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
+import { seed as seedSizesDepth } from '../seed/sizes-depth'
 import { seed as seedSkills } from '../seed/skills'
 import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedSubcontract } from '../seed/subcontract'
@@ -319,6 +320,10 @@ beforeAll(async () => {
   // settings, work instructions with versions, steps and media, the acknowledgements on A1's tablet.
   await seedInstructions({ db: factory, namespace: 'iso-a' })
   await seedInstructions({ db: factory, namespace: 'iso-b' })
+  // W2b-4 sizes, measurements and made-to-measure rules (schema wave 27/33): a fit scale, points of measure, specs, grade
+  // rules, prepacks, protector placement, template rules and limits.
+  await seedSizesDepth({ db: factory, namespace: 'iso-a' })
+  await seedSizesDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -414,6 +419,8 @@ it('covers every classified table and every runtime role', () => {
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
+    'GradeRule',
+    'GradeRuleStep',
     'HandoverNote',
     'HealthPlan',
     'HealthVisit',
@@ -493,6 +500,9 @@ it('covers every classified table and every runtime role', () => {
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
+    'MeasurementRule',
+    'MeasurementSpec',
+    'MeasurementSpecValue',
     'MeasurementTemplate',
     'Message',
     'MessageMention',
@@ -561,6 +571,7 @@ it('covers every classified table and every runtime role', () => {
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PointOfMeasure',
     'PortalOrderRequest',
     'PortalOrderRequestLine',
     'PortalOrderRequestSize',
@@ -570,6 +581,8 @@ it('covers every classified table and every runtime role', () => {
     'PpeItem',
     'PpeKitLine',
     'PpeRegisterEntry',
+    'Prepack',
+    'PrepackLine',
     'PriceList',
     'PriceListEntry',
     'PriceListVersion',
@@ -581,6 +594,7 @@ it('covers every classified table and every runtime role', () => {
     'ProcessingActivity',
     'ProductionSettings',
     'ProtectedView',
+    'ProtectorPlacement',
     'PurchaseOrder',
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
