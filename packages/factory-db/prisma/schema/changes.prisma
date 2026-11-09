@@ -1,0 +1,287 @@
+// Change control (W2b-4, schema wave 29/33, B-W2b-212; features PRD-169, PRD-170, PRD-175, PRD-259, MES-006): how a style
+// changes after its release. A change request says what should change and why (from the office, the floor with a photo, a
+// customer, a sample round or a supplier); a change order carries one or more accepted requests from a style's RELEASED
+// revision to the DRAFT revision that holds the redlines, says what each change touches and what happens to the work in
+// progress of each open work order, and is approved by someone who is not its author (one approval stage in V1) before the
+// new revision is released. The release-scope columns this wave adds to StyleRevision (colourways and sizes released, the
+// completeness score at release) are in product.prisma. apps/factory-api's modules/product/changes writes these tables
+// through command() (B-W2b-226; the release B-W2b-231); the hand-written …_changes_samples_w2b_guards migration holds their
+// rules for every login.
+//
+// Who sees what (ownership/changes.json): the office reads and writes; a floor device only INSERTS a change request of its
+// site (source FLOOR, with its photos as files of the request) and reads none, not even its own (the actor is not a
+// database setting); portal and link sessions read nothing here. No money column, no personal data (a floor request names
+// no worker).
+
+/// A request to change a style (PRD-169, PRD-259, MES-006): what and why, from where, about which revision and work order,
+/// how urgent. OPEN → IN_REVIEW → ACCEPTED | REJECTED (OPEN → ACCEPTED | REJECTED too); ACCEPTED → DONE once the change
+/// order that carries it is RELEASED. Numbered from the company's CHANGE_REQUEST series: an office request at once; a floor
+/// request (a device cannot number it) when the office or the API in the tenant's system context first takes it up, at the
+/// latest when it leaves OPEN. Its photos are StoredFile rows of record type "ChangeRequest". Never deleted (REJECTED).
+model ChangeRequest {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is numbered in (the style's, or the floor site's); never changes.
+  companyId     String              @db.Uuid
+  /// The site it comes from or is about: always for a FLOOR request (the device's site) and with a work order (its site);
+  /// null otherwise. Never changes.
+  siteId        String?             @db.Uuid
+  /// From the company's CHANGE_REQUEST series (CR-…), unique in the company; given once, never changed. Null only on an
+  /// OPEN FLOOR request not taken up yet.
+  number        String?
+  /// Where it comes from; never changes.
+  source        ChangeRequestSource
+  /// The customer (CUSTOMER) or supplier (SUPPLIER) who asked; exactly for those two sources. Never changes.
+  partyId       String?             @db.Uuid
+  /// The sample round whose fit or decision raised it (SAMPLE, exactly): a round of the same style. Never changes.
+  sampleRoundId String?             @db.Uuid
+  styleId       String              @db.Uuid
+  /// The revision it is about (a revision of the style); null: the style as it is. Changes until it is decided.
+  revisionId    String?             @db.Uuid
+  /// The work order where the problem was seen (MES-006: what is already cut or sewn), of the style, at `siteId`.
+  workOrderId   String?             @db.Uuid
+  /// What should change, 1 to 200 characters; and why, 1 to 4000. Both fixed once it is decided.
+  title         String
+  reason        String
+  priority      ChangePriority      @default(NORMAL)
+  status        ChangeRequestStatus @default(OPEN)
+  /// The decision (ACCEPTED or REJECTED; kept when DONE): when and by whom, written once; why, required for a rejection.
+  decidedAt     DateTime?           @db.Timestamptz(3)
+  decidedById   String?             @db.Uuid
+  decisionNote  String?
+  /// The change order that carries it (of the same style): set or changed while IN_REVIEW or ACCEPTED; a DONE request's
+  /// change order is RELEASED.
+  changeOrderId String?             @db.Uuid
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who raised it; null for a floor request (a device names no worker here).
+  createdById   String?             @db.Uuid
+
+  company     Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId or
+  // styleId.
+  site        Site?          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party       Party?         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sampleRound SampleRound?   @relation(fields: [tenantId, styleId, sampleRoundId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  style       Style          @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  revision    StyleRevision? @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder   WorkOrder?     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  changeOrder ChangeOrder?   @relation(fields: [tenantId, styleId, changeOrderId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, number])
+  // What waits for triage, per company.
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, styleId])
+  @@index([tenantId, changeOrderId])
+}
+
+/// Where a change request comes from (design "Raised by": floor, quality, sales, customer).
+enum ChangeRequestSource {
+  /// The office (product, quality, sales, planning).
+  OFFICE
+  /// A floor device of the site (Spec & instructions › Report a spec problem, with a photo; PRD-259).
+  FLOOR
+  /// A customer or brand (partyId).
+  CUSTOMER
+  /// A sample round's fit or decision (sampleRoundId).
+  SAMPLE
+  /// A supplier (partyId): a material changed or no longer made.
+  SUPPLIER
+}
+
+/// OPEN → IN_REVIEW | ACCEPTED | REJECTED; IN_REVIEW → ACCEPTED | REJECTED; ACCEPTED → DONE (its change order RELEASED).
+/// REJECTED and DONE are final.
+enum ChangeRequestStatus {
+  OPEN
+  IN_REVIEW
+  ACCEPTED
+  REJECTED
+  DONE
+}
+
+/// How urgent a change request or order is.
+enum ChangePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// A change order (PRD-170, ECO): the change of one style from its RELEASED revision (fromRevisionId) to the DRAFT revision
+/// that holds the redlines (toRevisionId: the proposed BOM, spec and routing), with the requests it carries (ChangeRequest
+/// .changeOrderId), what each change touches and what happens to each open work order's work in progress (its items),
+/// approved by someone who is not its author (its approvals; one stage in V1) and then released with the new revision.
+/// DRAFT → SUBMITTED → APPROVED | REJECTED; APPROVED → RELEASED; CANCELLED (with a reason) from DRAFT, SUBMITTED or
+/// APPROVED. REJECTED, RELEASED and CANCELLED are final. Out of DRAFT only its status, the times of its moves and its
+/// priority change. Never deleted.
+model ChangeOrder {
+  id             String            @id @db.Uuid
+  tenantId       String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is numbered in; never changes.
+  companyId      String            @db.Uuid
+  /// From the company's CHANGE_ORDER series (ECO-…), unique in the company; given at insert, never changed.
+  number         String
+  styleId        String            @db.Uuid
+  /// The RELEASED revision it changes (RELEASED when given); fixed out of DRAFT.
+  fromRevisionId String            @db.Uuid
+  /// The DRAFT revision holding the proposed change, with a higher revision number than fromRevision's; required to submit;
+  /// RELEASED when the change order is. Fixed out of DRAFT.
+  toRevisionId   String?           @db.Uuid
+  /// What changes, 1 to 200 characters; why, 1 to 4000; the description, up to 10 000.
+  title          String
+  reason         String
+  description    String?
+  priority       ChangePriority    @default(NORMAL)
+  /// When the new revision takes over (PRD-170): for the next work order made, from a date (effectiveDate, exactly with
+  /// DATE), or at once (open work orders follow their items' dispositions).
+  effect         ChangeEffect      @default(NEXT_ORDER)
+  effectiveDate  DateTime?         @db.Date
+  status         ChangeOrderStatus @default(DRAFT)
+  /// Who wrote it and answers for it: never one of its approvers (the four eyes, PRD-170). Never changes.
+  authorId       String            @db.Uuid
+  /// Set when it is submitted (from SUBMITTED on, also when cancelled after it); decided when APPROVED or REJECTED (kept
+  /// when RELEASED); released exactly when RELEASED, with who released it; cancelled exactly when CANCELLED, with why.
+  submittedAt    DateTime?         @db.Timestamptz(3)
+  decidedAt      DateTime?         @db.Timestamptz(3)
+  releasedAt     DateTime?         @db.Timestamptz(3)
+  releasedById   String?           @db.Uuid
+  cancelledAt    DateTime?         @db.Timestamptz(3)
+  cancelReason   String?
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?           @db.Uuid
+
+  company      Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style        Style            @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  fromRevision StyleRevision    @relation("ChangeOrderFromRevision", fields: [tenantId, styleId, fromRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  toRevision   StyleRevision?   @relation("ChangeOrderToRevision", fields: [tenantId, styleId, toRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  requests     ChangeRequest[]
+  items        ChangeOrderItem[]
+  approvals    ChangeApproval[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of its items' and approvals' references.
+  @@unique([tenantId, id])
+  // The target of the requests' reference: a change order of the same style.
+  @@unique([tenantId, styleId, id])
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, styleId])
+}
+
+/// When a change order's new revision takes over (PRD-170).
+enum ChangeEffect {
+  /// For the next work order made; open ones keep their frozen revision (their items say what happens to them).
+  NEXT_ORDER
+  /// From effectiveDate (the new revision's effectiveFrom, B-W2b-225).
+  DATE
+  /// At once: every open work order follows its item's disposition.
+  AT_ONCE
+}
+
+/// DRAFT → SUBMITTED | CANCELLED; SUBMITTED → APPROVED | REJECTED | CANCELLED; APPROVED → RELEASED | CANCELLED.
+enum ChangeOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  RELEASED
+  CANCELLED
+}
+
+/// One line of a change order (PRD-170, PRD-171, MES-006): a CHANGE (a record it touches, by type and id, with what it is
+/// before and after) or a WORK_IN_PROGRESS line (an open work order of the style and what happens to what is already cut or
+/// sewn). Written, changed and removed only while the change order is DRAFT: the approver approves what it says.
+model ChangeOrderItem {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  changeOrderId String          @db.Uuid
+  /// Its place in the change order, from 1, unique in it.
+  seq           Int
+  /// Never changes.
+  kind          ChangeItemKind
+  /// CHANGE: the record it touches, by model name ("BomLine", "RoutingOperation", "MeasurementSpecValue" …) and id, the
+  /// field ("quantity"; null: the whole record), and what it is before and after (JSON as the API shows it; null before: a
+  /// new record, null after: one removed; not both null). Null on a WORK_IN_PROGRESS line.
+  recordType    String?
+  recordId      String?         @db.Uuid
+  field         String?
+  before        Json?
+  after         Json?
+  /// WORK_IN_PROGRESS: the open work order (of the change order's style, at siteId) and what happens to its work in
+  /// progress. Null on a CHANGE line.
+  siteId        String?         @db.Uuid
+  workOrderId   String?         @db.Uuid
+  disposition   WipDisposition?
+  /// In words, up to 1000 characters.
+  note          String?
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  changeOrder ChangeOrder @relation(fields: [tenantId, changeOrderId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  workOrder   WorkOrder?  @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, changeOrderId, seq])
+  @@index([tenantId, workOrderId])
+}
+
+/// What a change order line is.
+enum ChangeItemKind {
+  /// A record the change touches, before and after.
+  CHANGE
+  /// An open work order and what happens to its work in progress.
+  WORK_IN_PROGRESS
+}
+
+/// What happens to an open work order's work in progress when its style changes (MES-006).
+enum WipDisposition {
+  /// Finish it on the old revision (its frozen copy).
+  FINISH_OLD
+  /// Rework what is made to the new revision.
+  REWORK
+  /// Scrap what is made.
+  SCRAP
+  /// Hold it until someone decides (a work order hold).
+  HOLD
+}
+
+/// One approval of a change order (PRD-170; one stage in V1, stages and routing later: PRD-185): who is asked, whether
+/// their approval is required, and their decision, written once while the change order is SUBMITTED, with why for a
+/// rejection. The approver is never the change order's author (the database's four eyes). Named and removed (while
+/// undecided) only while the change order is DRAFT or SUBMITTED. Never deleted once decided.
+model ChangeApproval {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  changeOrderId String          @db.Uuid
+  /// The stage, from 1 (V1: every approval is stage 1). Never changes.
+  stage         Int             @default(1)
+  /// The office user asked to decide; never the change order's author. Changes only while undecided.
+  approverId    String          @db.Uuid
+  /// Required: the change order is approved only once this approval is APPROVED. Optional: it informs.
+  required      Boolean         @default(true)
+  /// APPROVED or REJECTED, with when (exactly with the decision) and why (required for a rejection): written once.
+  decision      ChangeDecision?
+  decidedAt     DateTime?       @db.Timestamptz(3)
+  reason        String?
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  changeOrder ChangeOrder @relation(fields: [tenantId, changeOrderId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, changeOrderId, stage, approverId])
+  // What waits for one person's decision.
+  @@index([tenantId, approverId])
+}
+
+/// An approver's decision on a change order.
+enum ChangeDecision {
+  APPROVED
+  REJECTED
+}

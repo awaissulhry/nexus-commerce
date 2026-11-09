@@ -1,0 +1,43 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/changes.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 29/33 (B-W2b-212): change control. The office (factory_runtime) reads and writes through apps/factory-api's modules/product/changes, always with command(): change requests, change orders with their items and approvals (the …_changes_samples_w2b_guards triggers keep the four eyes: an approver is never the change order's author). A floor device (factory_floor_runtime) only INSERTS a change request of its own site, from the floor (source FLOOR, OPEN, without a number, a decision, a change order, a party, a sample round or a creator: those columns are not granted to it), with its photos as files of the request; it reads none, not even its own (the actor is not a database setting, so 'its own' cannot be a policy; insert without RETURNING). Portal and link sessions read nothing here. No money column, no personal data (a floor request names no worker). Nothing is deleted but a change order's items while it is DRAFT and an approval not yet decided. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ChangeRequest": {
+      "about": "The office raises, numbers, reviews, accepts or rejects a change request and links it to the change order that carries it (never deleted: REJECTED). A floor device of the site inserts a FLOOR request (what and why, the style, revision and work order it saw it on, the priority) and reads none; the office numbers it when it takes it up.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["insert"],
+          "scopedBy": ["site"],
+          "onlyValues": { "source": ["FLOOR"] },
+          "hiddenColumns": ["number", "partyId", "sampleRoundId", "status", "decidedAt", "decidedById", "decisionNote", "changeOrderId", "createdById"]
+        }
+      }
+    },
+    "ChangeOrder": {
+      "about": "The office writes a change order while DRAFT, submits it, records its approval or rejection (from its approvals), releases it with its new revision, or cancels it with a reason. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ChangeOrderItem": {
+      "about": "The office writes, changes and removes a change order's lines (what each change touches before and after; each open work order's work in progress and what happens to it) only while the change order is DRAFT.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ChangeApproval": {
+      "about": "The office names a change order's approvers (never its author) while it is DRAFT or SUBMITTED, removes one not yet decided, and records each decision once while SUBMITTED (why, for a rejection).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
