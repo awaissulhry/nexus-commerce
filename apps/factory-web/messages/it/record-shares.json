@@ -1,0 +1,143 @@
+{
+  "tab": "Partner",
+  "intro": "Persone di {partner} invitate a questo record con un link: vedono solo i dati, i file e i messaggi condivisi.",
+  "introNoParty": "Persone esterne invitate a questo record con un link.",
+  "listLabel": "Partner invitati a {title}",
+  "loading": "Leggiamo gli inviti…",
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "problem": {
+    "read": "Non siamo riusciti a leggere gli inviti.",
+    "forbidden": "Non puoi vedere gli inviti di questo record.",
+    "notFound": "Record non trovato.",
+    "unavailable": "Il server non risponde. Riprova tra poco."
+  },
+  "empty": {
+    "title": "Nessun esterno invitato per ora",
+    "body": "Condividi con un partner porta una sua persona in questo record: senza account sul portale."
+  },
+  "state": {
+    "LIVE": "Attivo",
+    "EXPIRED": "Scaduto",
+    "REVOKED": "Revocato"
+  },
+  "may": {
+    "VIEW": "Leggere",
+    "COMMENT": "Scrivere messaggi",
+    "UPLOAD": "Caricare file"
+  },
+  "row": {
+    "may": "Può",
+    "until": "Fino al",
+    "ended": "Scaduto il",
+    "invited": "Invitato",
+    "invitedBy": "{name}, {at}",
+    "opened": "Ultima apertura",
+    "notOpened": "Non ancora aperto",
+    "mail": "Nuovi messaggi per e-mail",
+    "mailOn": "Attivo (sua scelta)",
+    "mailOff": "Spento (sua scelta)",
+    "revoked": "Revocato",
+    "revokedBy": "{name}, {at}",
+    "someone": "qualcuno"
+  },
+  "held": {
+    "noRight": "Solo chi ha il permesso di invitare partner può farlo.",
+    "noRecordRight": "Per invitare a questo record serve anche il permesso di modificarlo.",
+    "reading": "Aspetta che gli inviti siano letti.",
+    "busy": "Un momento: stiamo salvando l'ultima modifica.",
+    "ALL_COMPANIES": "Questo record è condiviso da tutte le aziende: invita il partner sulla sua offerta o sul suo ordine.",
+    "NO_PARTY": "Questo record non ha cliente, fornitore, laboratorio o marchio: non c'è nessun esterno da invitare.",
+    "revoked": "Questo invito è stato revocato.",
+    "ended": "Questo invito è scaduto: invitalo di nuovo per un nuovo periodo."
+  },
+  "invite": {
+    "open": "Condividi con un partner",
+    "title": "Condividi con un partner",
+    "to": "{reference} · {partner}",
+    "intro": "Riceve un link solo a questo record: i dati, i file e i messaggi condivisi. Nessun account sul portale, nessun prezzo.",
+    "who": "Chi",
+    "toContact": "Un contatto in anagrafica",
+    "toContactBody": "Una persona del partner che conosciamo già.",
+    "noContacts": "Nessun contatto con e-mail in anagrafica.",
+    "toEmail": "Un altro suo indirizzo",
+    "toEmailBody": "Un agente, un designer, un laboratorio che lavora con questo partner.",
+    "contact": "Contatto",
+    "contactPick": "Scegli un contatto",
+    "email": "Indirizzo e-mail",
+    "emailHint": "Una persona che lavora con {partner}.",
+    "may": "Cosa può fare",
+    "viewAlways": "Leggere fa sempre parte di un invito.",
+    "until": "Fino al",
+    "untilHint": "Il link scade alle 23:59 di quel giorno. Al massimo 180 giorni; un nuovo periodo è un nuovo invito.",
+    "note": "Due parole per lui (facoltativo)",
+    "noteHint": "Le legge nell'e-mail di invito.",
+    "how": "Come gli arriva",
+    "mail": "Per e-mail",
+    "mailBody": "Mandiamo subito il link all'indirizzo.",
+    "link": "Un link da girare",
+    "linkBody": "Ricevi il link una volta sola e lo mandi tu.",
+    "language": "La sua lingua",
+    "languageHint": "L'invito e la pagina.",
+    "languageParty": "Come in anagrafica",
+    "cancel": "Annulla",
+    "goMail": "Invita e manda",
+    "goLink": "Invita e prendi il link",
+    "problem": {
+      "contact": "Scegli un contatto con e-mail.",
+      "email": "Scrivi un indirizzo e-mail completo.",
+      "until": "Scegli l'ultimo giorno.",
+      "untilSoon": "L'invito deve durare almeno un'ora da adesso.",
+      "untilLate": "Un invito dura al massimo 180 giorni.",
+      "untilRefused": "Il server non ha accettato questo giorno: scegline un altro entro 180 giorni.",
+      "note": "Al massimo {max} caratteri.",
+      "suppressed": "Le e-mail a questo indirizzo sono tornate indietro o sono state rifiutate: correggilo prima.",
+      "already": "Questo indirizzo è già invitato a questo record: cambia cosa può fare, o revoca prima l'invito.",
+      "forbidden": "Non puoi invitare partner a questo record.",
+      "notFound": "Record non trovato.",
+      "invalid": "Non è stato possibile creare l'invito così.",
+      "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto.",
+      "unavailable": "Il server non risponde. Riprova tra poco.",
+      "failed": "Non è stato possibile creare l'invito. Riprova."
+    }
+  },
+  "change": {
+    "open": "Cambia",
+    "title": "Cosa può fare",
+    "body": "Vale dal suo prossimo clic: quello che sta scrivendo ora viene controllato di nuovo quando lo invia.",
+    "cancel": "Annulla",
+    "save": "Salva"
+  },
+  "revoke": {
+    "open": "Revoca",
+    "title": "Revocare questo invito?",
+    "body": "{email} non potrà più aprire questo record: il link si ferma ora. Quello che ha scritto e caricato resta sul record.",
+    "keep": "Tienilo",
+    "go": "Revoca"
+  },
+  "action": {
+    "problem": {
+      "changed": "Qualcuno ha cambiato questo invito poco fa: lo vedi com'è ora.",
+      "ended": "Nel frattempo questo invito è scaduto o è stato revocato.",
+      "forbidden": "Non puoi cambiare questo invito.",
+      "notFound": "Invito non trovato.",
+      "failed": "Non ha funzionato. Riprova."
+    }
+  },
+  "link": {
+    "title": "Il link per {email}",
+    "copy": "Copia link",
+    "dismiss": "Fatto",
+    "once": "Lo vedi una volta sola: copialo ora e mandalo tu."
+  },
+  "note": {
+    "mailed": "Invito mandato a {email}.",
+    "mailFailed": "L'invito è stato creato ma l'e-mail a {email} non è partita: revocalo e invita di nuovo, o gira un link.",
+    "queued": "L'invito a {email} sta partendo.",
+    "linkOnce": "L'invito è pronto: copia il link qui sotto.",
+    "changed": "Hai cambiato cosa può fare {email}.",
+    "revoked": "{email} non può più aprire questo record.",
+    "copied": "Link copiato.",
+    "copyFailed": "Non siamo riusciti a copiare il link: selezionalo e copialo a mano."
+  }
+}

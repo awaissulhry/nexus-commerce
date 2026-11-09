@@ -27,6 +27,8 @@ import { Onboard } from '../../links/onboard/Onboard'
 import { FileLink } from '../../links/file/FileLink'
 // B-W2b-169: "Ask for a new link" on every dead link, with the token this page opened.
 import { LinkRenewProvider } from './renew/LinkRenew'
+// B-W2b-200: a RECORD_INVITE link's shared record (SCR-270).
+import { InviteLink } from '../../links/invite/InviteLink'
 import { linkTaskOf, type LinkTask } from '../../links/_nav/link-types'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkBrandingContext, LinkFrameView, type LinkFrameViewModel, type LinkSender } from './view/LinkFrameView'
@@ -149,6 +151,9 @@ function page(task: { task: LinkTask; api: ApiClient } | null, model: LinkFrameV
       return <FileLink api={task.api} source="set" />
     case 'payroll-file':
       return <FileLink api={task.api} source="payroll" />
+    // B-W2b-200
+    case 'invite':
+      return <InviteLink api={task.api} />
     default:
       return <LinkFrameView model={model} />
   }

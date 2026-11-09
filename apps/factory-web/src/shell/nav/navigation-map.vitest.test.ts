@@ -497,9 +497,9 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     // B-W2b-163: W2b-3's purposes show the frame until their pages (B-W2b-169 and the purpose steps) add their rows.
     // B-W2b-188: APPROVAL has its page (links/approve).
     // B-W2b-181: JOB_ACCEPT has its page (links/job); B-W2b-198: CLAIM (links/claim); B-W2b-170: SHIPMENT_TRACK (links/tracking);
-    // B-W2b-199: PAYMENT (links/pay); B-W2b-171: MEASUREMENTS (links/measure); B-W2b-172: SUPPLIER_ONBOARD (links/onboard).
-    const W2B_3 = ['RECORD_INVITE']
-    expect(frame).toEqual(linkKinds().filter((kind) => W2B_3.includes(kind.purpose)))
+    // B-W2b-199: PAYMENT (links/pay); B-W2b-171: MEASUREMENTS (links/measure); B-W2b-172: SUPPLIER_ONBOARD (links/onboard);
+    // B-W2b-200: RECORD_INVITE (links/invite). Every W2b-3 purpose has its page now: none shows the frame.
+    expect(frame).toEqual([])
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     // B-W2b-198 / B-W2b-199: one task may serve several record types (CLAIM × Shipment and × SalesOrder; PAYMENT × Invoice and × DepositRequest): every task has a rule.
     expect([...new Set(LINK_TASK_RULES.map((rule) => rule.task))].sort()).toEqual([...LINK_TASKS].sort())

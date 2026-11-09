@@ -23,6 +23,8 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   PAYMENT         Invoice, DepositRequest  pay             links/pay (SCR-199; B-W2b-199)
  *   MEASUREMENTS    MeasurementProfile  measure              links/measure (SCR-195; B-W2b-171)
  *   SUPPLIER_ONBOARD Party           onboard                 links/onboard (SCR-269; B-W2b-172)
+ *   RECORD_INVITE   a shared record  invite                  links/invite (SCR-270; B-W2b-200): Style, Quote, SalesOrder, PurchaseOrder,
+ *                                                            SubcontractOrder, Shipment, Complaint, ReturnAuthorisation, SupplierClaim
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */
@@ -50,6 +52,8 @@ export const LINK_TASKS = [
   'files',
   // B-W2b-169: the payroll file for the labour consultant, hours only (SCR-272; B-W2b-54's routes).
   'payroll-file',
+  // B-W2b-200: a record a partner is invited to (SCR-270).
+  'invite',
 ] as const
 export type LinkTask = (typeof LINK_TASKS)[number]
 
@@ -85,6 +89,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   { purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile', task: 'files' },
   { purpose: 'SECURE_FILE', recordType: 'StoredFile', task: 'files' },
   { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', task: 'payroll-file' },
+  // B-W2b-200: a partner invited to one record (SCR-270): every record type a RECORD_INVITE link opens.
+  ...PURPOSE_RULES.RECORD_INVITE.recordTypes.map((recordType) => ({ purpose: 'RECORD_INVITE' as const, recordType, task: 'invite' as const })),
 ])
 
 /** Every purpose × record type a link can have (the domain's own list): what the registry must decide for. */

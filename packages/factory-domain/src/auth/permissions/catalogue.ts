@@ -117,6 +117,8 @@ import { PORTAL_RETURNS_DEFINITIONS, PORTAL_RETURNS_PERMISSIONS } from '../../sa
 import { PARTNERS_APPROVALS_DEFINITIONS, PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_DEFINITIONS, PORTAL_APPROVALS_PERMISSIONS } from '../../approvals-out/permissions'
 // B-W2b-171: measurements by link (sales.measurements.view | manage).
 import { SALES_MEASUREMENTS_DEFINITIONS, SALES_MEASUREMENTS_PERMISSIONS } from '../../sales/measure-link/permissions'
+// B-W2b-200: inviting a partner to one record (partners.shares.view | manage, the office's).
+import { PARTNERS_SHARES_DEFINITIONS, PARTNERS_SHARES_PERMISSIONS } from '../../shares/permissions'
 // B-W2b-112: cut orders and cut tickets (production.cutorders.manage; reading is production.cutting.view, the table's scans production.cut).
 import { PRODUCTION_CUTORDERS_DEFINITIONS, PRODUCTION_CUTORDERS_PERMISSIONS } from '../../production/cutorders/permissions'
 // B-W2b-117: after the cut (production.recuts, production.secondary, production.trolleys; shared with the floor).
@@ -744,6 +746,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-184: approval requests to partners (the office's in area `partners`, the partner's in `portal`, both declared above).
   PARTNERS_APPROVALS_DEFINITIONS,
   PORTAL_APPROVALS_DEFINITIONS,
+  // B-W2b-200: inviting a partner to one record (area `partners`, declared above).
+  PARTNERS_SHARES_DEFINITIONS,
   // B-W2b-112: cut orders and cut tickets (area `production`, declared above).
   PRODUCTION_CUTORDERS_DEFINITIONS,
   // B-W2b-117: recut tickets, secondary processes and trolleys to sewing (area `production`, declared above).
@@ -981,6 +985,8 @@ for (const name of PORTAL_RETURNS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)
 // B-W2b-184: approval requests to partners (the office's; the portal's flagged partner).
 for (const name of PARTNERS_APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PORTAL_APPROVALS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-200: inviting a partner to one record (the office's).
+for (const name of PARTNERS_SHARES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-112: cut orders and cut tickets.
 for (const name of PRODUCTION_CUTORDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-117: after the cut.

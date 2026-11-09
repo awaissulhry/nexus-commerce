@@ -671,6 +671,8 @@ export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string;
   { id: 'links.file', title: 'Secure file', scr: ['SCR-272', 'SCR-101-set'], task: 'files' },
   // W2b: B-W2b-169 the payroll file by link (DOCUMENT_VIEW of a payroll export, hours only).
   { id: 'links.file.payroll', title: 'Payroll file', scr: ['SCR-272'], task: 'payroll-file' },
+  // W2b: B-W2b-200 Join a record (a RECORD_INVITE link's shared record).
+  { id: 'links.invite', title: 'Join a record', scr: ['SCR-270'], task: 'invite' },
 ]
 
 export const FRAME: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [
