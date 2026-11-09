@@ -3,6 +3,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { openSteps, standingTicks, type ChecklistOutcome, type ChecklistStep } from '@nexus/factory-domain/production/checklists/rules'
+// B-W2b-214: a step of a work instruction carries its icon and critical point (WI1:02).
+import type { MarkedStep } from '@nexus/factory-domain/production/instructions/rules'
 import { isOwn, type Viewer } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -22,12 +24,12 @@ import { readBundleTicks, readTicks, stepsOfOperation, type TickRow } from './st
  * only inside one record, never a list, filter or total; a site that records stations has no name to show).
  */
 
-export function checklistView(steps: readonly ChecklistStep[], ticks: readonly TickRow[], viewer: Viewer, names: ReadonlyMap<string, string>) {
+export function checklistView(steps: readonly (ChecklistStep & Partial<Pick<MarkedStep, 'icon' | 'critical'>>)[], ticks: readonly TickRow[], viewer: Viewer, names: ReadonlyMap<string, string>) {
   const standing = standingTicks(ticks)
   return {
     steps: steps.map((step) => {
       const tick = standing.get(step.code)
-      return { code: step.code, words: step.words, required: step.required, tick: tick ? { outcome: tick.outcome as ChecklistOutcome, at: toUtcIso(tick.serverTime), mine: isOwn(tick, viewer), by: tick.workerId ? (names.get(tick.workerId) ?? null) : null } : null }
+      return { code: step.code, words: step.words, required: step.required, icon: step.icon ?? null, critical: step.critical ?? false, tick: tick ? { outcome: tick.outcome as ChecklistOutcome, at: toUtcIso(tick.serverTime), mine: isOwn(tick, viewer), by: tick.workerId ? (names.get(tick.workerId) ?? null) : null } : null }
     }),
     open: openSteps(steps, ticks).length,
   }
@@ -50,7 +52,8 @@ export async function checklistState(caller: CommandCaller, query: BundleRef) {
   const state = await bundleState(caller, query)
   return caller.withClient(async (db) => {
     const viewer = await floorViewerOf(db, context)
-    const steps = await stepsOfOperation(db, state.operation.id)
+    // B-W2b-214: the steps in the signed-in worker's language (MES-120).
+    const steps = await stepsOfOperation(db, state.operation.id, (await db.worker.findUnique({ where: { id: context.actorId }, select: { locale: true } }))?.locale ?? null)
     const ticks = await readTicks(db, state.bundle.id, state.operation.id)
     const names = await tickNames(db, ticks, viewer, holds(actorOf(context), 'floor.lead'))
     return { bundle: { id: state.bundle.id, code: state.bundle.code }, operation: state.operation, ...checklistView(steps, ticks, viewer, names) }
