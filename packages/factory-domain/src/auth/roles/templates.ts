@@ -57,6 +57,12 @@ import { SALES_SAMPLES_ADDS } from '../../sales/samples/permissions'
 import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 // B-W2b-257: the DoC generator (quality generates, checks a translation and builds packs; the warehouse builds packs).
 import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
+// B-W2b-252: sample decisions (sales and the production manager decide; the production manager and quality measure the fit).
+import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
+// B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
+import { RECALL_ADDS } from '../../compliance/recall/permissions'
+// B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
+import { USER_INFORMATION_ADDS } from '../../compliance/user-information/permissions'
 // B-W2b-259: label artwork (the quality inspector approves a proof someone else made).
 import { LABEL_ARTWORK_ADDS } from '../../compliance/label-artwork/permissions'
 
@@ -866,6 +872,12 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TECHFILES_ADDS[key] ?? []) : []),
   // B-W2b-257
   ...(audience === 'office' ? (DECLARATIONS_ADDS[key] ?? []) : []),
+  // B-W2b-252
+  ...(audience === 'office' ? (SALES_SAMPLE_DECISIONS_ADDS[key] ?? []) : []),
+  // B-W2b-260
+  ...(audience === 'office' ? (RECALL_ADDS[key] ?? []) : []),
+  // B-W2b-258
+  ...(audience === 'office' ? (USER_INFORMATION_ADDS[key] ?? []) : []),
   // B-W2b-259
   ...(audience === 'office' ? (LABEL_ARTWORK_ADDS[key] ?? []) : [])]
 /**

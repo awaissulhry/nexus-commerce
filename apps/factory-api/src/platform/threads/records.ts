@@ -142,6 +142,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const entry = await client.ppeRegisterEntry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return entry ? { companyId: entry.companyId, siteId: null, partyId: entry.partyId } : null
   },
+  // modules/compliance/recall (B-W2b-260; RG1:02): a notice to a distributor, its mail and the distributor's reply: the
+  // notice's company and its recipient (the party), so the reply comes back to this notice and is recorded as its answer.
+  DistributorNotice: async (client, id) => {
+    const notice = await client.distributorNotice.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return notice ? { companyId: notice.companyId, siteId: null, partyId: notice.partyId } : null
+  },
   // modules/quality/lab (SCR-075; B-W1-34 the lot's quality status timeline): the lot's company, site and supplier.
   Lot: async (client, id) => {
     const lot = await client.lot.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })

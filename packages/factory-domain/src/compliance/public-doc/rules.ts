@@ -5,6 +5,8 @@ import { certificateFor, certificateValidOn, type CertificateFacts } from '../..
 import { businessDate, type BusinessDate } from '../../core/time'
 import { formatPublicDocCode, readPublicDocCode, type PublicDocKind } from './code'
 import type { BatchSpan, CareLine, PublicDocFile, PublicDocPage } from './contracts'
+// B-W2b-260 (RG1:01): the recall notices the API read for the page (compliance/recall/public-notice noticesForPage).
+import type { PublicSafetyNotice } from '../recall/public-notice'
 
 /**
  * The public DoC page (B-W2b-166; PRD-294, PRD-356; design links.doc; Reg. (EU) 2016/425 art. 8(8), art. 15, Annex II 1.4;
@@ -93,6 +95,8 @@ export interface PublicDocFacts {
   readonly covering: readonly CertificateFacts[]
   /** Today in Europe/Rome. */
   readonly today: BusinessDate
+  /** B-W2b-260: the safety notices of the batch or style (published, not taken down), newest first; none when left out. */
+  readonly notices?: readonly PublicSafetyNotice[]
 }
 
 /** product/compliance `isUsableDocument`: issued (or superseded by a newer revision's) with its signed PDF confirmed. */
@@ -234,6 +238,8 @@ export function publicDocPage(facts: PublicDocFacts, sender: PublicDocPage['send
     versions,
     n,
     others,
+    // B-W2b-260 (RG1:01): first on the page.
+    notices: (facts.notices ?? []).map((notice) => ({ ...notice, batches: [...notice.batches], words: { ...notice.words } })),
   }
 }
 
