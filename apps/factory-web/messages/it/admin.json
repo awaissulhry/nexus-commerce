@@ -2043,6 +2043,8 @@
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "sales_measurements_view": "Vedere le misure inviate tramite link e aprire le foto del corpo (ogni apertura registrata)",
     "sales_measurements_manage": "Inviare ai piloti il link per le misure e decidere quando cancellare le foto del corpo",
+    "sales_samples_view": "Vedere le campionature, i loro ordini di lavoro campione e le spedizioni",
+    "sales_samples_manage": "Richiedere campionature, spostarle e annullarle, gestirne le spedizioni e fare i loro ordini di lavoro campione",
     "production_instructions_view": "Vedere le istruzioni di lavoro delle operazioni: passi, foto e video, versioni, la scheda stampata e quanti hanno visto una versione (conteggi, mai un nome)",
     "production_instructions_manage": "Scrivere istruzioni di lavoro: una bozza con passi per lingua, punti critici, note di sicurezza, icone, le spunte chieste dal tablet, foto e video; scartare una bozza, archiviare o ripristinare; riportare le righe di passi scritte nei cicli",
     "production_instructions_approve": "Approvare la bozza di un'altra persona di un'istruzione di lavoro: il reparto la vede da quel momento (mai la propria bozza)",
