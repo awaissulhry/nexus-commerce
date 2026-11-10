@@ -1,0 +1,164 @@
+/*
+ * The register in depth (B-W2b-271) LAYOUT only: the recalls list with its progress, the notice dialog's two columns (the
+ * words and the PDF), the send review, the builder's forms and number cells, the PDF window. The rest is the shared
+ * quality layout (fw-q-*), the register's (fw-reg-*) and the design system's controls; semantic --nds-* tokens only.
+ */
+.fw-rgd-clip {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.fw-rgd-recalls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1100px) {
+  .fw-rgd-recalls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1700px) {
+  .fw-rgd-recalls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-rgd-recall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-rgd-recall-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+
+.fw-rgd-recall p {
+  margin: 0;
+}
+
+.fw-rgd-counts {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rgd-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-width: 640px;
+}
+
+.fw-rgd-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-rgd-notice {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-rgd-pdf {
+  min-width: 0;
+}
+
+.fw-rgd-send {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-rgd-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rgd-words {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.fw-rgd-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rgd-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+}
+
+@media (min-width: 720px) {
+  .fw-rgd-review-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  }
+}
+
+.fw-rgd-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-rgd-num {
+  max-width: 96px;
+  margin-left: auto;
+  text-align: right;
+}
+
+.fw-rgd-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rgd-window-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-rgd-h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}

@@ -64,6 +64,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   StockCount: '/warehouse/counts/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
+  RecallAction: '/compliance/register/recall/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
   Payment: '/finance/payments/[id]',
