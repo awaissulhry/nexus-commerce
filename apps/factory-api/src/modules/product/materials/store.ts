@@ -67,6 +67,8 @@ export const MATERIAL_COLUMNS = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  // B-W2b-238: its approval for use (the list's Approval column).
+  approval: true,
   defaultSupplier: SUPPLIER,
   _count: { select: { colours: { where: { status: 'ACTIVE' } } } },
 } as const satisfies Prisma.ItemSelect
@@ -194,6 +196,7 @@ export function materialRowView(row: MaterialRowData): MaterialRow {
     status: row.status,
     version: row.version,
     updatedAt: toUtcIso(row.updatedAt),
+    approval: row.approval,
   }
 }
 

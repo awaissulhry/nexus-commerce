@@ -15,11 +15,12 @@ export type { ItemKind, Uom }
 
 // ---- saved views and tiles ----------------------------------------------------------------------------------------------
 
-export const MATERIAL_VIEWS = ['open', 'leather', 'textiles', 'trims', 'protectors', 'labels', 'missingCost', 'crvi', 'ppe', 'archived', 'all'] as const
+// B-W2b-238: `unused` = the "Not used in any BOM" tile (no draft or released BOM names it).
+export const MATERIAL_VIEWS = ['open', 'leather', 'textiles', 'trims', 'protectors', 'labels', 'missingCost', 'crvi', 'ppe', 'unused', 'archived', 'all'] as const
 export type MaterialListView = (typeof MATERIAL_VIEWS)[number]
 
 /** The tiles (design materials.tiles): a named saved filter each; "Missing cost" only for the cost grain. */
-export const MATERIAL_TILES = ['leather', 'missingCost', 'crvi', 'ppe'] as const satisfies readonly MaterialListView[]
+export const MATERIAL_TILES = ['leather', 'missingCost', 'crvi', 'ppe', 'unused'] as const satisfies readonly MaterialListView[]
 export type MaterialTile = (typeof MATERIAL_TILES)[number]
 
 const KIND_GROUPS: Partial<Record<MaterialListView, readonly ItemKind[]>> = {
@@ -49,6 +50,8 @@ export function viewQuery(view: MaterialListView): MaterialQuery {
       return { requiresCrViTest: true }
     case 'ppe':
       return { ppeComponent: true }
+    case 'unused':
+      return { used: false }
     case 'archived':
       return { status: 'ARCHIVED' }
     case 'all':
@@ -299,7 +302,8 @@ export const STATUS_TONE = { ACTIVE: 'success', ARCHIVED: 'neutral' } as const
 
 // ---- the record's tabs ------------------------------------------------------------------------------------------------
 
-export const MATERIAL_TABS = ['overview', 'colours', 'properties', 'suppliers', 'compliance', 'stock'] as const
+// B-W2b-238: Where used (PRD-036) after Stock, as the design orders the tabs.
+export const MATERIAL_TABS = ['overview', 'colours', 'properties', 'suppliers', 'compliance', 'stock', 'whereused'] as const
 export type MaterialTab = (typeof MATERIAL_TABS)[number]
 
 /** The tabs a person may read: Stock needs inventory.stock.view (Warehouse owns it). */

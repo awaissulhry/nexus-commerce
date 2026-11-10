@@ -131,6 +131,8 @@ import { events as productLifecycle } from '../product-lifecycle/events'
 import { events as stylesDepth } from '../styles-depth/events'
 // B-W2b-226: change requests and change orders (raised, changed; a change order changed).
 import { events as productChanges } from '../product-changes/events'
+// B-W2b-238: materials in depth (a material's approval decided).
+import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -153,6 +155,8 @@ import { events as routingDepth } from '../routing-depth/events'
 import { events as productMeasures } from '../product-measures/events'
 // B-W2b-229: the option library (a group, its values, rules, effects or prices changed).
 import { events as productOptions } from '../product-options/events'
+// B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
+import { events as complianceRules } from '../compliance-rules/events'
 // B-W2b-233: prepacks (a prepack changed) and protector placement (a draft revision's placement changed).
 import { events as productPrepacks } from '../product-prepacks/events'
 import { events as productProtectors } from '../product-protectors/events'
@@ -376,6 +380,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productChanges,
   // B-W2b-229
   ...productOptions,
+  // B-W2b-238
+  ...materialsDepth,
+  // B-W2b-249
+  ...complianceRules,
   // B-W2b-233
   ...productPrepacks,
   ...productProtectors] as const satisfies readonly EventDefinition[]

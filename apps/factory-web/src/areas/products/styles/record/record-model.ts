@@ -29,6 +29,7 @@ import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
 import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
+import type { StyleMaterialApprovals } from '../compliance/materials'
 import type { PrepacksActions, PrepacksModel } from './prepacks/prepacks-model'
 import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors-model'
 
@@ -130,6 +131,8 @@ export interface StyleRecordViewModel {
   exporting?: BomExportFormat | null
   /** B-W2b-95: the Files & patterns tab's Pattern pieces (absent: not read, like idle). */
   pieces?: PiecesModel
+  /** B-W2b-238: Compliance › Material checks — the approvals of the revision's materials (absent: not read). */
+  materialApprovals?: StyleMaterialApprovals
   /** B-W2b-233: the Sizes & measurements tab's Prepacks and Protector placement (absent: not read, like idle). */
   prepacks?: PrepacksModel
   protectors?: ProtectorsModel
@@ -200,6 +203,8 @@ export interface StyleRecordActions {
   onGarmentTracking?: (tracking: StyleView['garmentTracking']) => Promise<boolean>
   /** B-W2b-95: the Pattern pieces section. */
   pieces?: PiecesActions
+  /** B-W2b-238: read the revision's material approvals again after a failed read. */
+  onRetryMaterialApprovals?: () => void
   /** B-W2b-233: the Prepacks and Protector placement sections. */
   prepacks?: PrepacksActions
   protectors?: ProtectorsActions

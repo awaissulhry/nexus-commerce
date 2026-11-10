@@ -72,6 +72,8 @@ import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
 import { usePieces } from './pieces/use-pieces'
+// B-W2b-238: Compliance › Material checks — blocked or unapproved materials of the revision in view.
+import { useStyleApprovals } from '../../materials/approval/use-style-approvals'
 import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
 
@@ -306,8 +308,14 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     onApplied: () => reloadAll(),
   })
 
+  // B-W2b-238: the approvals of the revision's materials, read while Compliance shows (again when one is decided).
+  const approvals = useStyleApprovals({ api, styleId, revisionId, enabled: tab === 'compliance' && can.bomView })
+  const reloadApprovals = useRef(approvals.reload)
+  reloadApprovals.current = approvals.reload
+
   useLiveChanges({
     onChange: (change) => {
+      if (change.type === 'material.approval_changed') reloadApprovals.current()
       if (change.fields.styleId !== styleId) return
       if (inFlight.current > 0) return
       if (dialog) setChanged({ at: new Date().toISOString() })
@@ -490,6 +498,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     bomImport: bomImport.model,
     exporting,
     pieces: pieces.model,
+    materialApprovals: approvals.read,
     prepacks: prepacks.model,
     protectors: protectors.model,
   }
@@ -500,6 +509,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       actions={{
         pieces: pieces.actions,
+        onRetryMaterialApprovals: approvals.reload,
         prepacks: prepacks.actions,
         protectors: protectors.actions,
         onRetry: () => void loadStyle(),

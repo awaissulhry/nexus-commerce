@@ -31,6 +31,8 @@ import { sourcesCan, type SourcesRead, type SupplierPricesModel } from '../../..
 import { readProblem as sourcesProblem } from '../../../_shared/buying/model'
 import type { MaterialDialog, MaterialLoad, MaterialRecordViewModel } from './record-model'
 import { useGrades } from './grades/use-grades'
+import { useMaterialDepth } from '../approval/use-material-depth'
+import { useT } from '../../../../lib/i18n/provider'
 import { MaterialRecordView } from './view/MaterialRecordView'
 
 /**
@@ -41,7 +43,7 @@ import { MaterialRecordView } from './view/MaterialRecordView'
  */
 export function MaterialRecord({ materialId }: { materialId: string }) {
   return (
-    <WithMessages namespaces={['library']}>
+    <WithMessages namespaces={['library', 'products-materials-depth']}>
       <Container materialId={materialId} />
     </WithMessages>
   )
@@ -142,8 +144,17 @@ function Container({ materialId }: { materialId: string }) {
   const reloadGrades = useRef(grades.reload)
   reloadGrades.current = grades.reload
 
+  // B-W2b-238: the properties of its kind, its approval and where it is used, read while their tab shows; a write of theirs
+  // moves the material's version, so the material is read again.
+  const depthWords = useT('products-materials-depth')
+  const depth = useMaterialDepth({ api, materialId, version: current?.version ?? null, tab, permissions: session.permissions, onMaterialMoved: () => void load(), csvWords: depthWords })
+  const reloadDepth = useRef(depth.reload)
+  reloadDepth.current = depth.reload
+
   useLiveChanges({
     onChange: (change) => {
+      // B-W2b-238: a BOM naming it changed elsewhere: Where used reads again.
+      if (change.type === 'style.bom_changed' && tabRef.current === 'whereused') reloadDepth.current()
       // B-W2b-131: a grade rule of this material changed elsewhere: the section reads again (never during our own write).
       if (change.type === 'inventory.grade_rule_changed' && change.fields.itemId === materialId) reloadGrades.current()
       // B-W2a-69: a source of this material changed in Purchasing: the read-only Supplier prices are read again.
@@ -181,7 +192,7 @@ function Container({ materialId }: { materialId: string }) {
   }
 
   const supplierPrices: SupplierPricesModel = { prefix, can: { view: sourceCan.view, cost: sourceCan.cost }, read: sources, defaultSupplier: current?.defaultSupplier ?? null }
-  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused, supplierPrices, grades: grades.model }
+  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused, supplierPrices, grades: grades.model, depth: depth.model }
 
   return (
     <MaterialRecordView
@@ -219,6 +230,7 @@ function Container({ materialId }: { materialId: string }) {
         onDismissNotice: () => setNotice(null),
         onRetrySupplierPrices: loadSources,
         grades: grades.actions,
+        depth: depth.actions,
       }}
     />
   )

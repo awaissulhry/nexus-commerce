@@ -25,6 +25,8 @@ const ITEM_SELECT = {
   composition: true,
   animalOrigin: true,
   attributes: true,
+  // B-W2b-238: the typed weight (properties.weightGsm, widthCm) a textile is weighed with first.
+  properties: true,
   finish: true,
   baseUom: true,
   purchaseUom: true,
@@ -48,6 +50,7 @@ const materialOf = (row: ItemRow): MaterialFacts => ({
   composition: row.composition,
   animalOrigin: row.animalOrigin,
   attributes: textRecord(row.attributes),
+  properties: row.properties,
   units: {
     baseUom: row.baseUom as Uom,
     purchaseUom: row.purchaseUom as Uom,

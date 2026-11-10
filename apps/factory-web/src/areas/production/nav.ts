@@ -1,4 +1,6 @@
 import { Activity, BarChart3, BellRing, ClipboardCheck, ClipboardList, Factory, Kanban, Layers, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
+// B-W2b-234: Work instructions' icon.
+import { BookOpenCheck } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -51,6 +53,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'production-scrap', label: 'shell:nav.production.scrap', href: '/production/scrap', icon: Recycle, permission: 'production.scrap.view' },
           // B-W2b-58: Help calls (SCR-142, design production.calls): the calls with response and resolve times, who is called.
           { id: 'production-calls', label: 'shell:nav.production.calls', href: '/production/calls', icon: BellRing, permission: 'production.calls.view' },
+          // B-W2b-234: Work instructions (SCR-141, design production.instructions): photo and video instructions per operation.
+          { id: 'production-instructions', label: 'shell:nav.production.instructions', href: '/production/instructions', icon: BookOpenCheck, permission: 'production.instructions.view' },
         ],
       },
       {

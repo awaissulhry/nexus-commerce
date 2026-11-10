@@ -4,6 +4,7 @@ import type { LibraryCan, Notice, Read, WriteProblem } from '../../library/model
 import type { ColourInput, CoveringCertificate, LibraryColour, MaterialColour, MaterialPatch, MaterialStock, MaterialView, SupplierRow } from '../api'
 import type { MaterialTab } from '../model'
 import type { GradesActions, GradesModel } from './grades/grades-model'
+import type { MaterialDepthActions, MaterialDepthModel } from '../approval/depth-model'
 
 /** A record read: loading, the material, or why there is none. */
 export type MaterialLoad =
@@ -45,6 +46,8 @@ export interface MaterialRecordViewModel {
   supplierPrices?: SupplierPricesModel
   /** B-W2b-131: Properties & grades › Grades and usable area of a leather (idle for any other kind). */
   grades?: GradesModel
+  /** B-W2b-238: the properties of its kind and its fibres, its approval, where it is used (idle while their tab is not shown). */
+  depth?: MaterialDepthModel
 }
 
 export interface MaterialRecordActions {
@@ -65,4 +68,6 @@ export interface MaterialRecordActions {
   onRetrySupplierPrices?: () => void
   /** B-W2b-131: the Grades and usable area section's cells and row moves. */
   grades?: GradesActions
+  /** B-W2b-238: a decision on the approval, the properties of its kind, Where used's colour and export. */
+  depth?: MaterialDepthActions
 }

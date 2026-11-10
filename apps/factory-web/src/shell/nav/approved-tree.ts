@@ -304,6 +304,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' },
           // W2b: B-W2b-58 Help calls (SCR-142).
           { id: 'production.calls', title: 'Help calls', titleIt: 'Chiamate di aiuto', wave: 'W2b', href: '/production/calls' },
+          // W2b: B-W2b-234 Work instructions (SCR-141).
+          { id: 'production.instructions', title: 'Work instructions', titleIt: 'Istruzioni di lavoro', wave: 'W2b', href: '/production/instructions' },
         ],
       },
       {
@@ -638,6 +640,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
   // W2b: B-W2b-145 Training & PPE sign-off (SCR-231), tile family Me; supervisor = a team leader's line tablet.
   { id: 'floor.training', title: 'Training & PPE sign-off', titleIt: 'Firma formazione e DPI', tile: 'training', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
+  // W2b: B-W2b-232 Spec & instructions (SCR-174), tile family Work, before Call for help.
+  { id: 'floor.instructions', title: 'Spec & instructions', titleIt: 'Scheda e istruzioni', tile: 'instructions', modes: ['sewing', 'cutting', 'packing', 'inspection'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   // W2b: B-W2b-137 Report an incident (SCR-230), tile family Maintenance & safety; kept on the first page of every Home.
   { id: 'floor.incident', title: 'Report an incident', titleIt: 'Segnala un incidente', tile: 'incident', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'] },

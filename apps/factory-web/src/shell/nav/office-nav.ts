@@ -406,6 +406,12 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/piecerates',
   '/people/piecerates/rate-sheet',
   '/people/piecerates/statement/[id]',
+  // B-W2b-234: Production › Floor control › Work instructions (SCR-141), an instruction (SCR-285), its floor preview and
+  // its sheet PDF (new tabs, no navigation row).
+  '/production/instructions',
+  '/production/instructions/[id]',
+  '/production/instructions/[id]/preview',
+  '/production/instructions/[id]/sheet',
 ])
 
 /**
