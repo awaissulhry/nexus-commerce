@@ -33,6 +33,9 @@ import { StackBody, type StackAction, type StackLine } from './StackView'
 import { StepsPanel } from './StepsPanel'
 import { TimingPanel } from './TimingPanel'
 import { FirstPieceLine } from './FirstPieceLine'
+import { InstructionLines, InstructionsButton } from '../../instructions/view/OperationLines'
+import type { InstructionFlag } from '../../instructions/model'
+import type { NewerSpec } from '../../instructions/api'
 import { firstPieceHolds } from '../first-piece'
 import {
   CORRECTION_REASONS,
@@ -90,6 +93,9 @@ export interface Work {
   readonly lotsUnchecked?: boolean
   /** The site's skill rule only warns: said once at Start. */
   readonly qualification?: { readonly message: string } | null
+  /** B-W2b-232: the instruction in force (null: none; absent: not read) and the work order's newer-spec read (PRD-195). */
+  readonly instruction?: InstructionFlag | null
+  readonly newerSpec?: NewerSpec | null
 }
 
 export const NO_WORK: Work = Object.freeze({ timing: null, skewMs: 0, check: null, steps: null, lots: Object.freeze([]) as readonly LotLine[], lotRefusal: null })
@@ -243,6 +249,8 @@ export type OperationAction =
   | { type: 'notePost' }
   | { type: 'noteBack' }
   | { type: 'continue'; code: string }
+  // B-W2b-232: Instructions (design h.more "Instructions (W2b)").
+  | { type: 'instructions' }
   // B-W2b-82
   | { type: 'operationOpen'; operationId: string }
   | { type: 'extraOpen' }
@@ -562,6 +570,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
           <div className="fw-task-split">
             <div className="fw-floor-stack">
               <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} lifted={step.firstPieceLifted ?? false} />
+              {/* B-W2b-232: New instruction (opens before Start, MES-110) and Spec changed (PRD-195). */}
+              <InstructionLines flag={work.instruction} newer={work.newerSpec} />
               <TimingPanel timing={work.timing} skewMs={work.skewMs} reasons={model.pauseReasons ?? []} />
               {goodOnly ? (
                 <TaskLine tone="info" icon={<Workflow />}>
@@ -607,6 +617,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
                 <FloorButton size="lg" block variant="secondary" icon={<Camera />} onClick={() => send({ type: 'noteOpen' })}>
                   {t('note.open')}
                 </FloorButton>
+                <InstructionsButton flag={work.instruction} onPress={() => send({ type: 'instructions' })} />
               </div>
               {mine ? null : <UnplannedActions card={step.card} current={step.operation} mayAdd={model.mayAdd ?? false} online={model.online} t={t} send={send} />}
             </div>

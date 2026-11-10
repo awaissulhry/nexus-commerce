@@ -76,6 +76,8 @@ import { afterPause, afterResume, afterStart, piecesLeft, skewOf, type OpenItem 
 import { useWedgeScans } from './wedge'
 import { firstPieceHolds, firstPieceLifted, withFirstPiece, type FirstPieceFlag } from './first-piece'
 import { useFirstPieceLive } from './use-first-piece'
+import { handInstructions, readInstructionParts, shownFlag, startOpensInstruction } from './instructions'
+import { TASK_ROUTES } from '../routes'
 import { NO_WORK, OperationView, type CountsStep, type DoneLine, type LastStrip, type OperationAction, type OperationStep, type Work } from './view/OperationView'
 import type { OverrideModel } from './view/OverrideDialog'
 
@@ -199,20 +201,27 @@ export function FloorOperation() {
   const readWork = useCallback(
     async (card: BundleCard, operation: CardOperation): Promise<Work> => {
       const key = workKey(card.bundle.code, operation.id)
-      if (!online) return WORK.get(key)?.value ?? NO_WORK
-      const [state, check, steps] = await Promise.all([fetchTiming(api, card.bundle.code, operation.id), fetchCheck(api, card.bundle.code, operation.id), fetchSteps(api, card.bundle.code, operation.id)])
-      if ([state, check, steps].some((answer) => !answer.ok && answer.problem.kind === 'signedOut')) void sessionEnded()
+      if (!online) {
+        const kept = WORK.get(key)?.value ?? NO_WORK
+        // B-W2b-232: a version Seen on this tablet since (the Seen waits in the queue) is no longer new.
+        return kept.instruction ? { ...kept, instruction: shownFlag(kept.instruction, person) } : kept
+      }
+      // B-W2b-232: the instruction in force and the newer-spec banner are read beside them (and kept for Spec & instructions).
+      const [state, check, steps, instruction] = await Promise.all([fetchTiming(api, card.bundle.code, operation.id), fetchCheck(api, card.bundle.code, operation.id), fetchSteps(api, card.bundle.code, operation.id), readInstructionParts(api, { code: card.bundle.code, workOrderId: card.workOrder.id, operationId: operation.id, online, workerId: person })])
+      if ([state, check, steps].some((answer) => !answer.ok && answer.problem.kind === 'signedOut') || instruction.signedOut) void sessionEnded()
       const work: Work = {
         ...NO_WORK,
         timing: state.ok ? state.value.timing : null,
         skewMs: state.ok ? skewOf(state.value.serverTime, new Date()) : 0,
         check: check.ok ? check.value : null,
         steps: steps.ok && steps.value.steps.length > 0 ? steps.value : null,
+        ...('instruction' in instruction ? { instruction: instruction.instruction ?? null } : {}),
+        newerSpec: instruction.newerSpec ?? null,
       }
       WORK.keep(key, work)
       return work
     },
-    [api, online, sessionEnded],
+    [api, online, person, sessionEnded],
   )
 
   const openOperation = useCallback(
@@ -564,6 +573,11 @@ export function FloorOperation() {
   const members = () => (crew.current.length >= 2 ? { memberIds: crew.current.filter((id) => id !== me?.worker.id) } : {})
 
   const startWork = async (from: CountsStep) => {
+    // B-W2b-232 (FI9:01, MES-110): a new instruction version opens before this person's Start, once; Back returns to the bundle.
+    if (startOpensInstruction(from.work?.instruction, person)) {
+      handInstructions({ code: from.card.bundle.code, operationId: from.operation.id, from: 'start', workerId: person, flag: from.work?.instruction ?? null })
+      return router.push(TASK_ROUTES.instructions)
+    }
     const body = members()
     const sent = await timed(from, 'start', body)
     if (!sent) return
@@ -1128,6 +1142,11 @@ export function FloorOperation() {
         return step.kind === 'note' ? void postNote(step.from, step.draft) : undefined
       case 'continue':
         return void look(action.code)
+      // B-W2b-232: Spec & instructions for the bundle in hand (its counts stay: left.ts).
+      case 'instructions':
+        if (step.kind !== 'counts') return
+        handInstructions({ code: step.card.bundle.code, operationId: step.operation.id, from: 'operation', workerId: person })
+        return router.push(TASK_ROUTES.instructions)
     }
   }
 

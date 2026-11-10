@@ -3,6 +3,7 @@
 import { Check, Circle, CircleSlash, ListChecks } from 'lucide-react'
 import { FloorButton, FloorList, FloorListRow } from '@nexus/ui/floor'
 import type { Translate } from '../../../../lib/i18n/messages'
+import { instructionIcon } from '../../../../lib/production/instruction-icons'
 import type { OperationSteps, StepOutcome } from '../checks'
 
 /**
@@ -22,12 +23,14 @@ export function StepsPanel({ list, t, time, onTick }: { list: OperationSteps; t:
       </h3>
       {list.steps.map((step) => {
         const done = step.tick
+        // B-W2b-232 (FI9:01): an open step shows its instruction icon (the office's same picture); a ticked one its outcome.
+        const Icon = step.icon ? instructionIcon(step.icon) : Circle
         const who = done ? (done.mine ? t('steps.you') : (done.by ?? t('steps.other'))) : null
         return (
           <div key={step.code} className="fw-scans-step">
             <FloorList label={step.words}>
               <FloorListRow
-                icon={done ? done.outcome === 'DONE' ? <Check /> : <CircleSlash /> : <Circle />}
+                icon={done ? done.outcome === 'DONE' ? <Check /> : <CircleSlash /> : <Icon />}
                 tone={done ? 'success' : step.required ? 'warning' : 'neutral'}
                 title={step.words}
                 meta={done ? t('steps.when', { who: who!, time: time(done.at) }) : step.required ? t('steps.required') : t('steps.optional')}
