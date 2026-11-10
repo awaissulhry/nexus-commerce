@@ -4,6 +4,8 @@ import {
   careSchema,
   compositionSchema,
   LABEL_FIELDS,
+  LABEL_KINDS,
+  LABEL_QR_TARGETS,
   LABEL_TEMPLATE_STATUSES,
   labelLayoutSchema,
   LAYOUT_PRESET_KEYS,
@@ -57,6 +59,11 @@ export const templateView = output({
   layout: layoutView,
   widthMm: z.string(),
   heightMm: z.string(),
+  /** W2b (B-W2b-218 columns; set on a draft with PUT /compliance/label-rules/templates/:id/marking, B-W2b-253). */
+  kind: z.enum(LABEL_KINDS),
+  gpsrContact: z.string().nullable(),
+  qrTarget: z.enum(LABEL_QR_TARGETS),
+  originClaimKey: z.string().nullable(),
   nextStatuses: z.array(status),
   /** What keeps it from ACTIVE now (its content, its style's marking needs, the fit), each with its path. */
   problems: z.array(issue),

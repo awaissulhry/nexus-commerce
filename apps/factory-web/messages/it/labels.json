@@ -282,7 +282,10 @@
       "importer": "Importatore",
       "composition": "Composizione fibrosa",
       "animalOrigin": "Frase sull’origine animale",
-      "care": "Simboli di manutenzione"
+      "care": "Simboli di manutenzione",
+      "level": "Livello del guanto",
+      "gpsrContact": "Contatto GPSR",
+      "qr": "QR alla dichiarazione pubblica"
     },
     "languages": "Lingue",
     "languagesHint": "Codici ISO 639-1 (it, en, de…), al massimo 8.",
