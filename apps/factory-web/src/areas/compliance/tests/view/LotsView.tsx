@@ -15,6 +15,7 @@ import { LIST_MAX, type Lot } from '../../../quality/_shared/lots'
 import { dash, Freshness, NoAccess, NoticeBanner, PageHead } from '../../../quality/_shared/parts'
 import { LEGAL_LIMIT, LOT_TILES, LOT_VIEWS, mgKg, type ListDialog, type LotsListModel, type LotTile, type LotView, type RuleDraft } from '../model'
 import { PickLotDialog, RuleDialog } from './dialogs'
+import type { LotsDepth } from '../substances/frame/views' // B-W2b-267
 import { CrViMark, LabMessages, LabStepUp, LotStatusPill, ShortcutsDialog, useListWords } from './parts'
 
 export interface LotsListActions {
@@ -49,15 +50,15 @@ export const lotHref = (prefix: string, lotId: string, query = ''): string => `$
  * with the header select-all box and shift-click ranges, and the footer with Show more and the keys icon. A lot opens
  * its record (its results, documents and release). Fetches nothing: LotsPage.tsx reads and writes.
  */
-export function LotsView({ model, actions }: { model: LotsListModel; actions?: LotsListActions }) {
+export function LotsView({ model, actions, depth }: { model: LotsListModel; actions?: LotsListActions; depth?: LotsDepth }) {
   return (
     <LabMessages>
-      <Lots model={model} actions={actions} />
+      <Lots model={model} actions={actions} depth={depth} />
     </LabMessages>
   )
 }
 
-function Lots({ model, actions }: { model: LotsListModel; actions?: LotsListActions }) {
+function Lots({ model, actions, depth }: { model: LotsListModel; actions?: LotsListActions; depth?: LotsDepth }) {
   const t = useT('lab')
   const q = useT('quality')
   const locale = useLocale()
@@ -200,6 +201,7 @@ function Lots({ model, actions }: { model: LotsListModel; actions?: LotsListActi
       description: rows.length === 0 ? t('list.exportNothing') : t('list.exportViewHint', { count: rows.length }),
     },
     { id: 'rule', label: t('rule.change'), onSelect: () => open({ kind: 'rule' }), disabled: !can.settingsManage, description: can.settingsManage ? undefined : t('held.rule') },
+    ...(depth?.more ?? []), // B-W2b-267: Restricted substance list, Test plan rules
     { id: 'sep', separator: true },
     { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
@@ -265,7 +267,7 @@ function Lots({ model, actions }: { model: LotsListModel; actions?: LotsListActi
     )
   ) : undefined
 
-  const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.record') }]
+  const ownKeys: ListKey[] = [{ keys: ['c'], does: t('keys.record') }, ...(depth?.keys ?? [])]
 
   return (
     <div className="fw-q">
@@ -280,7 +282,8 @@ function Lots({ model, actions }: { model: LotsListModel; actions?: LotsListActi
       />
       {ruleBanner}
       <NoticeBanner notice={model.notice} namespace="lab" onDismiss={actions?.onDismissNotice} />
-      <MetricStrip metrics={LOT_TILES.map(tile)} />
+      <MetricStrip metrics={[...LOT_TILES.map(tile), ...(depth?.tiles ?? [])]} />
+      {depth?.switcher}
 
       <ListFrame<Lot>
         label={t('list.table')}
