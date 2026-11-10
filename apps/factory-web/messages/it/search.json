@@ -90,6 +90,8 @@
     "Capa": "Azione correttiva",
     "CutOrder": "Ordine di taglio",
     "SampleRound": "Giro di campionatura",
+    "Colour": "Colore",
+    "BrandingSet": "Kit di marca",
     "other": "Record"
   },
   "chip": {
@@ -130,6 +132,8 @@
     "Capa": "Azioni correttive",
     "CutOrder": "Ordini di taglio",
     "SampleRound": "Campionature",
+    "Colour": "Colori",
+    "BrandingSet": "Kit di marca",
     "other": "Altri record"
   },
   "status": {

@@ -47,6 +47,8 @@ import { capas } from './capas'
 import { complianceClaims } from './compliance-claims'
 // B-W2b-261: Products › Development › Samples & prototypes (B-W2b-246's read, registered with its page).
 import { sampleRounds } from './sample-rounds'
+// B-W2b-247: Products › Libraries › Colours & artwork (the colour library).
+import { colours } from './colours'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -106,4 +108,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   complianceClaims,
   // B-W2b-261: Products › Development › Samples & prototypes.
   sampleRounds,
+  // B-W2b-247: Products › Libraries › Colours & artwork.
+  colours,
 ])

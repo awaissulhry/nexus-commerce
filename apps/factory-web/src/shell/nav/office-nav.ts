@@ -186,6 +186,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/products/operations/[id]',
   '/products/sizes',
   '/products/sizes/[id]',
+  // B-W2b-247: Products › Libraries › Colours & artwork (SCR-118), the colour library and the brands' branding sets.
+  '/products/colours',
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',

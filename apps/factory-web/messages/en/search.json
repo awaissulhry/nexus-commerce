@@ -90,6 +90,8 @@
     "Capa": "Corrective action",
     "CutOrder": "Cut order",
     "SampleRound": "Sample round",
+    "Colour": "Colour",
+    "BrandingSet": "Branding set",
     "other": "Record"
   },
   "chip": {
@@ -130,6 +132,8 @@
     "Capa": "Corrective actions",
     "CutOrder": "Cut orders",
     "SampleRound": "Sample rounds",
+    "Colour": "Colours",
+    "BrandingSet": "Branding sets",
     "other": "Other records"
   },
   "status": {

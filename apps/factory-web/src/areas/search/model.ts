@@ -20,7 +20,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-129: a cut order (B-W2b-112's indexer).
   'CutOrder',
   // B-W2b-261: a sample round (its indexer comes with its page).
-  'SampleRound'] as const
+  'SampleRound',
+  // B-W2b-247: a library colour and a private-label brand's branding set.
+  'Colour', 'BrandingSet'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
