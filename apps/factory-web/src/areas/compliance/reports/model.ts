@@ -263,8 +263,8 @@ export const supplierHref = (party: Ref | null, prefix: string, can: ReportsCan,
 /** The lots whose chromium VI test failed (the tests list cannot filter by supplier yet: the failed lots of every supplier). */
 export const failedLotsHref = (prefix: string, can: ReportsCan, built: ReadonlySet<string> = OFFICE_PAGES): string | null => (can.lots && built.has('/compliance/tests') ? `${prefix}/compliance/tests?view=failed` : null)
 
-/** The register's kinds its list filters by (`?kind=`): W1's three. */
-const LISTED_KINDS: readonly RegisterKind[] = ['COMPLAINT', 'NON_CONFORMITY', 'RECALL']
+/** The register's kinds its list filters by (`?kind=`): every kind since B-W2b-271 (B-W2b-274: WITHDRAWAL, AUTHORITY_REQUEST too). */
+const LISTED_KINDS: readonly RegisterKind[] = ['COMPLAINT', 'NON_CONFORMITY', 'RECALL', 'WITHDRAWAL', 'AUTHORITY_REQUEST']
 
 /** A register kind's entries (the open ones when `open`); a kind the list does not filter by opens the view without it. */
 export function registerHref(kind: RegisterKind | null, prefix: string, can: ReportsCan, open: boolean, built: ReadonlySet<string> = OFFICE_PAGES): string | null {

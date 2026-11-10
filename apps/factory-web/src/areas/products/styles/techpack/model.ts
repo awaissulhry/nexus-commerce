@@ -79,7 +79,8 @@ export const languageOf = (value: string | null | undefined, fallback: TechPackL
 /** The section's data lives on this tab of the style (design style.tp.outline "each section links to where its data lives"). */
 export const SECTION_HOME: Readonly<Record<TechPackSection, StyleTab>> = {
   COVER: 'overview',
-  SKETCHES: 'files',
+  // B-W2b-274: the sketches and pictures live in the Overview's gallery section (B-W2b-236, SCR-304), not in Files & patterns.
+  SKETCHES: 'overview',
   BOM: 'bom',
   COLOURWAYS: 'variants',
   SIZE_SPEC: 'sizes',

@@ -79,7 +79,8 @@ export function PiecesTab({ model, actions }: { style?: StyleView; model: StyleR
           </div>
         </Card>
       )}
-      <Card header={t('pieces.files.title')} description={t('pieces.files.notBuilt')} />
+      {/* B-W2b-274: the sketches, pictures and pages are in the Overview's gallery (B-W2b-236), the pattern files above. */}
+      <Card header={t('pieces.files.title')} description={t('pieces.files.where')} />
     </div>
   )
 }

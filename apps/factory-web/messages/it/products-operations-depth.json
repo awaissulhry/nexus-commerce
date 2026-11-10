@@ -215,6 +215,7 @@
     "changes": "Modifiche e versioni",
     "changesNotBuilt": "arriva con la sua pagina; le modifiche in attesa sono sotto il riquadro in Operazioni",
     "changesWhy": "Lì le modifiche SMV sono elencate con le modifiche degli articoli.",
+    "changesNoRight": "il tuo ruolo non legge le modifiche",
     "notBuilt": "non ancora aperta"
   },
   "refused": {

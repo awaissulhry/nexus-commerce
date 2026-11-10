@@ -28,6 +28,13 @@ describe('where a result opens (B-W2a-32)', () => {
     expect(resultHref(result({ recordType: 'Party', area: 'sales' }), place)).toBe('/w/DEMO/sales/customers/r1')
   })
 
+  // B-W2b-274: a point of measure and a grade rule (B-W2b-224's indexers) open in their dialog on Sizes & measurements.
+  it('opens a point of measure and a grade rule on their Sizes & measurements view', () => {
+    expect(resultHref(result({ recordType: 'PointOfMeasure', area: 'products' }), place)).toBe('/w/DEMO/products/sizes?view=poms&open=r1')
+    expect(resultHref(result({ recordType: 'GradeRule', area: 'products' }), place)).toBe('/w/DEMO/products/sizes?view=rules&open=r1')
+    expect(SEARCH_TYPES).toEqual(expect.arrayContaining(['PointOfMeasure', 'GradeRule']))
+  })
+
   it('opens a record type without a page of its own in its panels', () => {
     expect(resultHref(result({ recordType: 'Gizmo', number: 'GZ-1' }), place)).toBe('/w/DEMO/records/Gizmo/r1?label=GZ-1')
   })

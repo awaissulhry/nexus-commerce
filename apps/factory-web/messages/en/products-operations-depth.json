@@ -215,6 +215,7 @@
     "changes": "Changes & versions",
     "changesNotBuilt": "comes with its page; the waiting changes are under the tile on Operations",
     "changesWhy": "SMV changes are listed there with the style changes.",
+    "changesNoRight": "your role does not read the changes",
     "notBuilt": "not open yet"
   },
   "refused": {

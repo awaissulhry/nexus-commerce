@@ -52,6 +52,7 @@ import {
   releaseProblems,
   scopeFromAddress,
   sourceKey,
+  SOURCE_RECORD,
   statusOf,
   tabFromAddress,
   tagAddress,
@@ -117,6 +118,9 @@ describe('a hold in our words', () => {
     expect(sourceKey(HOLDS[0]!)).toBe('source.manual')
     expect(sourceKey(HOLDS[1]!)).toBe('source.Inspection')
     expect(sourceKey({ sourceType: 'Something' })).toBe('source.other')
+    // B-W2b-274: a recall's hold names it and opens its page (B-W2b-271).
+    expect(sourceKey({ sourceType: 'RecallAction' })).toBe('source.RecallAction')
+    expect(recordAddress({ type: SOURCE_RECORD.RecallAction!, id: 'r1' }, OFFICE_PAGES)).toBe('/compliance/register/recall/r1')
     expect(statusOf(HOLDS[1]!)).toEqual({ key: 'status.OVERDUE', tone: 'danger' })
     expect(statusOf(RELEASED[0]!).key).toBe('status.RELEASED')
     expect(statusOf(CLOSED[0]!).key).toBe('status.CLOSED')

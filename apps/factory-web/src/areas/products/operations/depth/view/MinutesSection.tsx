@@ -255,7 +255,7 @@ function ConnectionsCard({ connections, view }: { connections: { pieceRates: Pla
       <div className="fw-opd-links">
         {place(connections.pieceRates, t('conn.pieceRates'), t('conn.notBuilt'), t('conn.pieceRatesNoRight'))}
         <span className="fw-opd-hint">{t('conn.pieceRatesWhy', { count: view.impact.pieceRates.count })}</span>
-        {place(connections.changes, t('conn.changes'), t('conn.changesNotBuilt'), t('conn.notBuilt'))}
+        {place(connections.changes, t('conn.changes'), t('conn.changesNotBuilt'), t('conn.changesNoRight') /* B-W2b-274 */)}
         <span className="fw-opd-hint">{t('conn.changesWhy')}</span>
       </div>
     </Card>

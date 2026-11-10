@@ -24,7 +24,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-247: a library colour and a private-label brand's branding set.
   'Colour', 'BrandingSet',
   // B-W2b-244: a change request and a change order (their indexers come with Changes & versions).
-  'ChangeRequest', 'ChangeOrder'] as const
+  'ChangeRequest', 'ChangeOrder',
+  // B-W2b-274: a point of measure and a grade rule (B-W2b-224's indexers; they open on Sizes & measurements, B-W2b-240).
+  'PointOfMeasure', 'GradeRule'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([

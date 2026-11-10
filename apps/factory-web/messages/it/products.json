@@ -1689,7 +1689,7 @@
     },
     "files": {
       "title": "Documenti e file",
-      "notBuilt": "Schizzi, file del cartamodello e pagine del cliente saranno elencati qui in un passo successivo. Per ora i file aggiunti al modello sono nella sua scheda Attività."
+      "where": "Schizzi, immagini e pagine del cliente sono nella galleria della Panoramica; i file del cartamodello sono qui sopra. Gli altri file aggiunti al modello sono nella sua scheda Attività."
     }
   }
 }

@@ -31,6 +31,7 @@ import {
   scanLanding,
   scanWords,
   scopeWords,
+  SECTION_HOME,
   SECTIONS,
   sizesText,
   startParty,
@@ -76,6 +77,12 @@ describe('the Contents', () => {
     expect(withSection(['BOM', 'COVER'], 'SKETCHES', true)).toEqual(['COVER', 'SKETCHES', 'BOM'])
     expect(withSection(['COVER', 'BOM'], 'COVER', false)).toEqual(['BOM'])
     expect(withSection(['COVER'], 'COVER', true)).toEqual(['COVER'])
+  })
+
+  // B-W2b-274: each section links to a tab of the style; the sketches to the Overview's gallery (B-W2b-236).
+  it('links each section to a tab the style has, the sketches to the Overview', () => {
+    for (const section of SECTIONS) expect(STYLE_TABS, section).toContain(SECTION_HOME[section])
+    expect(SECTION_HOME.SKETCHES).toBe('overview')
   })
 })
 

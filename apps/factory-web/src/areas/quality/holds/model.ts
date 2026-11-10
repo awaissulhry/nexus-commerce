@@ -179,6 +179,8 @@ export const SOURCE_RECORD: Readonly<Partial<Record<HoldSourceType, string>>> = 
   Certificate: 'Certificate',
   QualityReleaseReversal: 'QualityReleaseReversal',
   Complaint: 'Complaint',
+  // B-W2b-274: a recall or withdrawal's hold opens the recall's page (B-W2b-271, RECORD_PAGES.RecallAction).
+  RecallAction: 'RecallAction',
 })
 
 /** The reason in the reader's language: the HOLD list's words, else the API's (English) words. */
