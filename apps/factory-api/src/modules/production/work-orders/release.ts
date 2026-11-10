@@ -14,6 +14,9 @@ import { clearDraftMaterials, readWorkOrder, syncDraftOperations, type Header } 
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayNow, todayOfCommand } from './work-orders'
 import { readinessPart } from './release/blockers'
+// B-W2b-254 (PRD-272): the one compliance gate at the work-order release (MES-004 as a requirement); refusals become GateEvents.
+import { releaseGate } from '../../compliance/gates/at-steps'
+import { withGateRecords } from '../../compliance/gates/gate'
 
 /**
  * B-W2b-51: the release refused by its check (409 invalid_state with every blocker, as before), carrying the codes of the
@@ -93,7 +96,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
   const { tenantId } = officeContextOf(caller)
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_RELEASE)
   if (!beforeRelease(workOrder)) throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; it was released already.`)
-  return onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
+  return withGateRecords(caller, idempotencyKey, () => onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
     const { tx, now } = tools
     await lockSiteReleases(tx, tenantId, workOrder.siteId)
     await tx.$queryRaw`SELECT 1 FROM "Style" WHERE "id" = ${workOrder.styleId}::uuid FOR SHARE`
@@ -103,7 +106,10 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const facts = await readReleaseFacts(tx, await readBasics(tx, current), todayOfCommand(tools))
     const override = body.materialOverride ?? null
     const checklist = checklistOf(facts, override)
-    if (!checklist.releasable) throw new ReleaseBlockedError(releaseRefusal(current.number, checklist), checklist.blockers, blockingCodes(checklist.checks))
+    const blocked = checklist.releasable ? null : new ReleaseBlockedError(releaseRefusal(current.number, checklist), checklist.blockers, blockingCodes(checklist.checks))
+    // B-W2b-254: after W1's checklist (a repair checks no requirement, as it checks no certificate). W1's refusal stays the answer.
+    if (current.kind !== 'REPAIR') await releaseGate(tools, { id: current.id, number: current.number, companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, labelTemplateId: facts.label?.id ?? null }, blocked)
+    else if (blocked) throw blocked
     assertTransition(workOrderMachine, current.status, 'RELEASED', { releaseBlockers: [] })
     const revision = facts.revision!
     const label = facts.label!
@@ -201,5 +207,5 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const view = await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools))
     const release = view.release && materialOverride ? { ...view.release, materialOverride: { ...materialOverride, byId: actorId, at: toUtcIso(now) } } : view.release
     return { workOrder: { ...view, release } }
-  })
+  }))
 }
