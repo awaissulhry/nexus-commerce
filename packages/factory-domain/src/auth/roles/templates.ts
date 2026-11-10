@@ -43,6 +43,8 @@ import { PRODUCT_MATERIALS_DEPTH_ADDS } from '../../product/materials-depth/perm
 // B-W2b-249: Rules & markets (the quality inspector) and the phrase library (quality proposes and approves; the production manager proposes).
 import { RULES_LIBRARY_ADDS } from '../../compliance/register-of-rules/permissions'
 import { PHRASES_ADDS } from '../../compliance/phrases/permissions'
+// B-W2b-230: the tech pack PDF (the production manager and the buyer make one).
+import { PRODUCT_TECHPACKS_ADDS } from '../../product/techpack/permissions'
 // B-W2b-233: prepacks (sales and the production manager keep them).
 import { PRODUCT_PREPACKS_ADDS } from '../../product/prepacks/permissions'
 
@@ -838,6 +840,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-249
   ...(audience === 'office' ? (RULES_LIBRARY_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (PHRASES_ADDS[key] ?? []) : []),
+  // B-W2b-230
+  ...(audience === 'office' ? (PRODUCT_TECHPACKS_ADDS[key] ?? []) : []),
   // B-W2b-233
   ...(audience === 'office' ? (PRODUCT_PREPACKS_ADDS[key] ?? []) : [])]
 /**
