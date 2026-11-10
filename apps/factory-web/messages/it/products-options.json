@@ -1,0 +1,571 @@
+{
+  "page": {
+    "intro": "I gruppi di opzioni che un modello offre nel configuratore: cosa può scegliere il cliente, le regole tra le scelte e cosa fa ogni scelta alla distinta, al ciclo, al prezzo e al certificato.",
+    "new": "Nuovo gruppo di opzioni"
+  },
+  "keys": {
+    "new": "Nuovo gruppo di opzioni",
+    "add": "Aggiungi in questa scheda (opzione, effetto, modelli)"
+  },
+  "kind": {
+    "SINGLE": "Una scelta",
+    "MULTI": "Più scelte",
+    "FREE_TEXT": "Testo libero"
+  },
+  "kindHint": {
+    "SINGLE": "Il cliente sceglie al massimo un'opzione del gruppo (una foratura, un livello di protezione).",
+    "MULTI": "Il cliente può scegliere più opzioni (loghi, toppe).",
+    "FREE_TEXT": "Ogni opzione vuole un testo scritto dal cliente (un nome da ricamare)."
+  },
+  "view": {
+    "active": "Attivi",
+    "all": "Tutti",
+    "archived": "Archiviati"
+  },
+  "col": {
+    "group": "Gruppo",
+    "kind": "Tipo",
+    "options": "Opzioni",
+    "picks": "Scelte min–max",
+    "styles": "Modelli",
+    "rules": "Regole",
+    "status": "Stato"
+  },
+  "list": {
+    "label": "Gruppi di opzioni",
+    "title": "Gruppi di opzioni",
+    "search": "Cerca codice, nome o un'opzione",
+    "everyCompany": "tutte le aziende",
+    "noOptions": "Ancora nessuna",
+    "outside_one": "{count} fuori certificato",
+    "outside_other": "{count} fuori certificato",
+    "archive": "Archivia…",
+    "restore": "Ripristina…"
+  },
+  "filter": {
+    "view": "Righe",
+    "kindLabel": "Tipo",
+    "allKinds": "Ogni tipo",
+    "kind": "Tipo: {kind}",
+    "ignored": "Non applicato: {value}",
+    "outside": "Fuori certificato",
+    "style": "Offerti su {code}",
+    "styleUnread": "Un modello che non si è potuto leggere"
+  },
+  "tile": {
+    "outside": "Opzioni che portano il capo fuori dal suo certificato",
+    "outsideHint": "Gruppi con un'opzione così: il preventivo avvisa prima di venderla.",
+    "failed": "Conteggio non riuscito"
+  },
+  "notice": {
+    "label": "Avvisi",
+    "more_one": "Ancora {count} avviso",
+    "more_other": "Ancora {count} avvisi",
+    "fewer": "Meno avvisi",
+    "andMore_one": "e ancora {count}.",
+    "andMore_other": "e ancora {count}.",
+    "ignored": {
+      "title": "Filtro non applicato: {value}",
+      "body": "Questo tipo non esiste, quindi l'elenco mostra ogni tipo.",
+      "remove": "Togli il filtro"
+    },
+    "style": {
+      "title": "Il modello del collegamento non si è potuto leggere",
+      "body": "Può essere di un'azienda in cui non lavori, o il tuo ruolo non lo legge. L'elenco mostra ogni gruppo.",
+      "remove": "Mostra ogni gruppo"
+    },
+    "empty": {
+      "title_one": "{count} gruppo attivo non ha ancora opzioni",
+      "title_other": "{count} gruppi attivi non hanno ancora opzioni",
+      "body": "Un modello che lo offre non chiede nulla: {codes}."
+    },
+    "unoffered": {
+      "title_one": "{count} gruppo non è offerto su nessun modello",
+      "title_other": "{count} gruppi non sono offerti su nessun modello",
+      "body": "Offrili sui loro modelli (scheda Modelli) o archiviali: {codes}."
+    },
+    "archived_one": "{count} gruppo di opzioni archiviato.",
+    "archived_other": "{count} gruppi di opzioni archiviati.",
+    "restored_one": "{count} gruppo di opzioni ripristinato.",
+    "restored_other": "{count} gruppi di opzioni ripristinati.",
+    "valueAdded": "Opzione {code} aggiunta.",
+    "valueArchived": "Opzione {code} archiviata.",
+    "valueRestored": "Opzione {code} ripristinata.",
+    "rulesSaved": "Regole salvate.",
+    "effectAdded": "Effetto aggiunto a {code}.",
+    "effectSaved": "Effetto di {code} salvato.",
+    "effectRemoved": "Effetto di {code} tolto.",
+    "groupSaved": "Gruppo {code} salvato.",
+    "groupArchived": "Gruppo archiviato: nessun modello può offrirlo di nuovo.",
+    "groupRestored": "Gruppo ripristinato.",
+    "withdrawn": "Ritirato da {code}: {words}"
+  },
+  "bulk": {
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "restore_one": "Ripristina {count}",
+    "restore_other": "Ripristina {count}"
+  },
+  "held": {
+    "noManage": "Il tuo ruolo non tiene la libreria delle opzioni (quello del responsabile di produzione sì).",
+    "noneActive": "Nessuno dei selezionati è attivo.",
+    "noneArchived": "Nessuno dei selezionati è archiviato.",
+    "archived": "Il gruppo è archiviato: ripristinalo per cambiarlo.",
+    "valueArchived": "Quest'opzione è archiviata: ripristinala per cambiarla.",
+    "noPrice": "Per un supplemento servono il diritto ai prezzi e il grano prezzo (le vendite li hanno).",
+    "noOffer": "Per offrire un gruppo su un modello serve il diritto di cambiare i modelli.",
+    "offline": "Offline — le modifiche aspettano il ritorno della connessione."
+  },
+  "archive": {
+    "title_one": "Archivia {count} gruppo di opzioni",
+    "title_other": "Archivia {count} gruppi di opzioni",
+    "one": "Archivia {code}",
+    "reach": "Nessun modello può offrirlo di nuovo; preventivi e ordini tengono le opzioni che nominano.",
+    "offered_one": "{count} è offerto su dei modelli: quelle offerte restano finché ogni modello non lo ritira.",
+    "offered_other": "{count} sono offerti su dei modelli: quelle offerte restano finché ogni modello non li ritira.",
+    "back": "Ripristina lo riporta com'era."
+  },
+  "restore": {
+    "title_one": "Ripristina {count} gruppo di opzioni",
+    "title_other": "Ripristina {count} gruppi di opzioni",
+    "one": "Ripristina {code}",
+    "reach": "I modelli potranno offrirlo di nuovo."
+  },
+  "empty": {
+    "title": "Ancora nessun gruppo di opzioni",
+    "body": "Inizia con uno: una foratura, un livello di protezione, dei loghi o un nome da ricamare.",
+    "bodyView": "Li crea il responsabile di produzione; compaiono qui."
+  },
+  "forbidden": {
+    "title": "Non hai accesso ai gruppi di opzioni",
+    "body": "Per leggerli serve il diritto di leggere i modelli (sviluppo prodotto, vendite e qualità lo hanno)."
+  },
+  "offline": {
+    "title": "Offline — le modifiche aspettano di essere inviate",
+    "body": "Le righe restano come lette; non si può cambiare nulla finché la connessione non torna.",
+    "record": "Il gruppo resta come letto; celle, regole e finestre sono ferme finché la connessione non torna."
+  },
+  "style": {
+    "label": "Le opzioni del modello",
+    "title": "Opzioni di {code} · {name}",
+    "open": "Apri il modello",
+    "intro": "I gruppi che questo modello offre, e le sue righe di distinta e fasi di ciclo solo per un'opzione.",
+    "offers": "Gruppi offerti",
+    "noOffers": "Questo modello non offre ancora nessun gruppo di opzioni.",
+    "lines": "Righe di distinta solo per un'opzione",
+    "noLines": "Nessuna riga di distinta di questo modello è solo per un'opzione.",
+    "steps": "Fasi di ciclo solo per alcune opzioni",
+    "noSteps": "Nessuna fase di ciclo di questo modello è solo per un'opzione.",
+    "withdrawn": "Ritirato",
+    "revision": "Rev {revision} · {status}",
+    "col": {
+      "asks": "Chiede",
+      "options": "Opzioni",
+      "revision": "Revisione",
+      "line": "Riga",
+      "material": "Materiale",
+      "option": "Solo per",
+      "step": "Fase",
+      "operation": "Operazione"
+    },
+    "link": "Opzioni e regole di questo modello"
+  },
+  "revisionStatus": {
+    "DRAFT": "bozza",
+    "RELEASED": "rilasciata",
+    "OBSOLETE": "obsoleta"
+  },
+  "styleStatus": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "group": {
+    "newTitle": "Nuovo gruppo di opzioni",
+    "editTitle": "Modifica il gruppo {code}",
+    "create": "Crea",
+    "save": "Salva",
+    "company": "Per",
+    "companyHint": "Solo i modelli di questa azienda possono offrirlo.",
+    "everyCompany": "Tutte le aziende",
+    "everyCompanyHint": "I modelli di ogni azienda possono offrirlo (serve un ruolo su tutte le aziende).",
+    "code": "Codice",
+    "codeHint": "Senza spazi (DEMO-PERF).",
+    "name": "Nome",
+    "kind": "Tipo",
+    "minPicks": "Almeno",
+    "minHint": "Quante opzioni un modello chiede almeno (0: nessuna è obbligatoria).",
+    "maxPicks": "Al massimo",
+    "maxHint": "Vuoto: nessun massimo.",
+    "noMax": "Nessun massimo",
+    "description": "Descrizione",
+    "descriptionHint": "A cosa serve il gruppo (facoltativa).",
+    "problem": {
+      "code": "Dai un codice al gruppo.",
+      "codeForm": "Un codice non ha spazi e ha al massimo {max} caratteri.",
+      "name": "Dai un nome al gruppo.",
+      "long": "Al massimo {max} caratteri.",
+      "min": "Almeno è un numero intero da 0 a {max}.",
+      "max": "Al massimo è un numero intero da 1 a {max}, o vuoto.",
+      "maxBelow": "Al massimo ({max}) non è sotto almeno ({min}).",
+      "singleMax": "Una scelta vuole al massimo 1 opzione: al massimo è 1.",
+      "singleMin": "Una scelta vuole almeno 0 o 1 opzione."
+    }
+  },
+  "form": {
+    "refused": "Il server l'ha rifiutato: vedi sopra.",
+    "held_one": "{count} cosa da sistemare prima.",
+    "held_other": "{count} cose da sistemare prima."
+  },
+  "record": {
+    "back": "Opzioni e regole",
+    "edit": "Modifica il gruppo…",
+    "archive": "Archivia…",
+    "restore": "Ripristina…",
+    "picks": "scelte {picks}",
+    "ownCompany": "questa azienda",
+    "outside_one": "{count} opzione fuori certificato",
+    "outside_other": "{count} opzioni fuori certificato",
+    "archivedBanner": "Sola lettura: il gruppo è archiviato. Ripristinalo (⋯) per cambiarlo."
+  },
+  "tab": {
+    "options": "Opzioni",
+    "rules": "Regole",
+    "effects": "Effetti su prezzo e distinta",
+    "styles": "Modelli"
+  },
+  "readOnly": "Sola lettura: {reason}",
+  "refused": {
+    "title": "Cosa ha detto il server"
+  },
+  "options": {
+    "title": "Opzioni",
+    "intro": "Ogni cella si salva da sola.",
+    "add": "Aggiungi opzione",
+    "addMany": "Aggiungi opzioni",
+    "hint": "Scrivi in una cella e premi Invio per salvarla. Un supplemento è un importo (35 o 35 EUR) o una percentuale del prezzo (10 %); vuoto: nessuno.",
+    "noPriceGrain": "Il supplemento di prezzo vuole il grano prezzo: nel tuo ruolo non si vede.",
+    "col": {
+      "code": "Codice",
+      "name": "Nome",
+      "price": "Supplemento di prezzo",
+      "freeText": "Testo libero",
+      "maxLength": "Lunghezza max",
+      "pattern": "Schema",
+      "outside": "Fuori certificato",
+      "used": "Usata da"
+    },
+    "priceHint": "Un importo (35, -25 EUR) o una percentuale del prezzo (10 %); le percentuali si sommano e non si compongono mai.",
+    "patternHint": "Un'espressione regolare che il testo deve contenere: àncorala con ^ e $ (^[A-Za-z ]+$).",
+    "freeTextOf": "{code} vuole un testo scritto",
+    "outsideOf": "{code} porta il capo fuori dal suo certificato",
+    "held": {
+      "freeTextGroup": "Ogni opzione di un gruppo a testo libero vuole un testo.",
+      "noText": "Solo per un'opzione che vuole un testo scritto."
+    },
+    "usedLines_one": "{count} riga di distinta",
+    "usedLines_other": "{count} righe di distinta",
+    "usedSteps_one": "{count} fase",
+    "usedSteps_other": "{count} fasi",
+    "up": "Sposta su",
+    "down": "Sposta giù",
+    "atEnd": "È già a quel capo.",
+    "archive": "Archivia…",
+    "restore": "Ripristina…",
+    "empty": {
+      "title": "Aggiungi opzioni",
+      "body": "Le scelte di questo gruppo: ogni opzione un codice e un nome.",
+      "bodyView": "Ancora nessuna opzione."
+    },
+    "priceOnly": "Qui cambia solo il supplemento: {reason}"
+  },
+  "value": {
+    "title": "Aggiungi un'opzione a {code}",
+    "add": "Aggiungi opzione",
+    "code": "Codice",
+    "codeHint": "Senza spazi (PERF-FULL).",
+    "name": "Nome",
+    "freeText": "Il cliente scrive un testo",
+    "freeTextHint": "Un nome da ricamare, un numero sulla manica.",
+    "freeTextGroup": "Ogni opzione di un gruppo a testo libero vuole un testo.",
+    "maxLength": "Lunghezza max",
+    "maxLengthHint": "Da 1 a {max} caratteri.",
+    "pattern": "Schema (facoltativo)",
+    "archiveTitle": "Archivia l'opzione {code}",
+    "restoreTitle": "Ripristina l'opzione {code}",
+    "archiveReach": "Nessuna nuova configurazione può sceglierla; preventivi e ordini la tengono.",
+    "archiveUsed": "I modelli tengono le loro {lines} righe di distinta e {steps} fasi di ciclo solo per lei.",
+    "archiveBack": "Ripristina la riporta com'era.",
+    "restoreReach": "Le configurazioni potranno sceglierla di nuovo.",
+    "held": {
+      "required_one": "{count} regola attiva richiede quest'opzione: cambia prima quella regola.",
+      "required_other": "{count} regole attive richiedono quest'opzione: cambia prima quelle regole."
+    },
+    "problem": {
+      "code": "Dai un codice all'opzione.",
+      "codeTaken": "{code} è già un'opzione di questo gruppo.",
+      "name": "Dai un nome all'opzione.",
+      "freeTextGroup": "Ogni opzione di un gruppo a testo libero vuole un testo.",
+      "maxLength": "Un testo scritto è al massimo da 1 a {max} caratteri: di' quanti.",
+      "pattern": "Questa non è un'espressione regolare: controlla le parentesi e le barre rovesciate.",
+      "patternClass": "Scrivi i caratteri stessi ([A-Za-z]), non una classe come [[:alpha:]]: lo schema deve voler dire lo stesso in ogni controllo.",
+      "patternUnicode": "Uno schema non prende classi \\p{…}: scrivi i caratteri stessi.",
+      "patternLength": "Uno schema è da 1 a {max} caratteri."
+    }
+  },
+  "price": {
+    "problem": {
+      "form": "Scrivi un importo (35 o 35 EUR) o una percentuale (10 %); vuoto per nessuno.",
+      "zero": "Un supplemento non è mai 0: lascialo vuoto per nessuno.",
+      "percent": "Una percentuale da −100 a 1000, con al massimo 4 decimali.",
+      "amount": "Un importo con al massimo 6 decimali."
+    }
+  },
+  "certificate": {
+    "title": "{code} porta il capo fuori dal suo certificato",
+    "body": "Di' cosa il certificato non copre più quando si sceglie quest'opzione. Un preventivo avvisa prima di vendere un capo così.",
+    "note": "Cosa il certificato non copre più",
+    "noteHint": "Parole per il cliente e per la conformità (al massimo 1000 caratteri).",
+    "save": "Segnala"
+  },
+  "rules": {
+    "title": "Regole",
+    "intro": "Richiede ed esclude, come blocco o avviso con un messaggio. Salva l'insieme con la barra sotto.",
+    "viewOnly": "Puoi vedere, non cambiare",
+    "add": "Aggiungi regola",
+    "save": "Salva le regole",
+    "rule": "Regola {n}",
+    "new": "Nuova",
+    "off": "Spenta",
+    "on": "Attiva",
+    "onOf": "Regola {n} attiva",
+    "remove": "Togli la regola {n}",
+    "removeShort": "Togli",
+    "lead": "Quando",
+    "field": "l'opzione",
+    "any": "qualsiasi opzione di {group}",
+    "kind": "Richiede o esclude",
+    "requires": "richiede",
+    "excludes": "esclude",
+    "otherGroup": "Gruppo dell'altra opzione",
+    "pickGroup": "Scegli un gruppo",
+    "thisGroup": "Questo gruppo ({code})",
+    "savedGroup": "Il gruppo della regola salvata",
+    "other": "L'altra opzione",
+    "pickOther": "Scegli un'opzione",
+    "severity": "Se non è rispettata",
+    "block": "blocca",
+    "warn": "avviso",
+    "messageIt": "Messaggio in italiano",
+    "messageEn": "Messaggio in inglese",
+    "messageHint": "Cosa legge la persona quando la regola non è rispettata; vuoto: parole nostre.",
+    "reading": "Lettura…",
+    "readFailed": "Le sue opzioni non si sono potute leggere: scegli di nuovo il gruppo.",
+    "brokenSays": "Se non è rispettata: {words}",
+    "held_one": "{count} regola da sistemare prima.",
+    "held_other": "{count} regole da sistemare prima.",
+    "tooMany": "Al massimo {max} regole per gruppo.",
+    "later": "Le tabelle delle combinazioni ammesse, le regole che nascondono o bloccano un'opzione e un banco di prova arrivano più avanti.",
+    "empty": {
+      "title": "Ancora nessuna regola",
+      "body": "Aggiungi una regola: un'opzione che ne richiede o ne esclude un'altra.",
+      "bodyView": "Ancora nessuna regola."
+    },
+    "problem": {
+      "subject": "Scegli l'opzione di cui parla la regola, o qualsiasi opzione del gruppo.",
+      "other": "Scegli l'altra opzione.",
+      "same": "Una regola parla di un'opzione e di un'altra, non della stessa.",
+      "anyOwn": "Una regola su qualsiasi opzione del gruppo nomina un'opzione di un altro gruppo.",
+      "message": "Un messaggio è al massimo di {max} caratteri.",
+      "twice": "La stessa regola della regola {other}.",
+      "opposite": "La regola {other} dice il contrario sulle stesse opzioni."
+    },
+    "subject": "Di cosa parla"
+  },
+  "effectKind": {
+    "BOM_ADD": "Aggiunge un materiale",
+    "BOM_REPLACE": "Sostituisce un materiale",
+    "BOM_REMOVE": "Toglie un materiale",
+    "OPERATION_ADD": "Aggiunge un'operazione",
+    "MINUTES": "Minuti",
+    "PRICE": "Supplemento di prezzo",
+    "CERTIFICATE": "Fuori certificato"
+  },
+  "effectHint": {
+    "BOM_ADD": "Una riga di distinta che l'opzione aggiunge: materiale, quantità per capo o per taglia, unità.",
+    "BOM_REPLACE": "Mette un altro materiale al posto di uno del modello (la sua quantità, o una nuova).",
+    "BOM_REMOVE": "Toglie uno dei materiali del modello.",
+    "OPERATION_ADD": "Un'operazione in più per il capo (i suoi minuti standard, o i tuoi).",
+    "MINUTES": "Minuti aggiunti o tolti, a un'operazione o sul capo.",
+    "CERTIFICATE": "Il capo non è più quello che il suo certificato copre."
+  },
+  "section": {
+    "SHELL": "Esterno",
+    "LINING": "Fodera",
+    "INSULATION": "Imbottitura",
+    "PROTECTION": "Protezioni",
+    "TRIMS": "Accessori",
+    "THREAD": "Filo",
+    "LABELS": "Etichette",
+    "PACKAGING": "Imballo",
+    "OTHER": "Altro"
+  },
+  "effects": {
+    "title": "Effetti su prezzo e distinta",
+    "add": "Aggiungi effetto",
+    "edit": "Modifica…",
+    "remove": "Togli…",
+    "rowMenu": "Azioni per un effetto di {code}",
+    "hint": "Quantità e minuti si salvano per cella (con la virgola o il punto). Materiale, operazione e sezione si cambiano con Modifica…; il tipo non cambia mai.",
+    "noPriceGrain": "I supplementi di prezzo vogliono il grano prezzo: le loro righe dicono che il prezzo cambia, non di quanto.",
+    "costLater": "Il costo di un'opzione arriva con i costi (FIN-018): non ancora calcolato.",
+    "scale": "Quantità per taglia",
+    "scaleHint": "Scegli una scala taglie per scrivere le quantità per taglia.",
+    "noScale": "Nessuna taglia",
+    "sizeCell": "{code}, taglia {size}",
+    "notNumber": "Taglia {size}: «{text}» non è un numero — il valore resta.",
+    "held": {
+      "noOptions": "Aggiungi prima un'opzione."
+    },
+    "col": {
+      "option": "Opzione",
+      "what": "Cosa fa",
+      "perSize": "Per taglia ({scale})",
+      "note": "Nota",
+      "price": "Prezzo",
+      "cost": "Costo",
+      "amount": "Quantità"
+    },
+    "empty": {
+      "title": "Ancora nessun effetto",
+      "body": "Cosa fa un'opzione al capo: un materiale aggiunto, sostituito o tolto, un'operazione, dei minuti, il certificato.",
+      "bodyView": "Ancora nessun effetto."
+    },
+    "amountHint": "La quantità per capo di una riga di distinta, o i minuti di un'operazione.",
+    "standardMinutes": "minuti standard",
+    "minutes": "{minutes} min",
+    "priceHint": "Il supplemento dell'opzione: un importo (35 o 35 EUR) o una percentuale del prezzo (10 %)."
+  },
+  "effect": {
+    "newTitle": "Aggiungi un effetto",
+    "editTitle": "Modifica l'effetto",
+    "add": "Aggiungi effetto",
+    "save": "Salva",
+    "option": "Opzione",
+    "kind": "Effetto",
+    "fixed": "Resta (un altro è un altro effetto).",
+    "item": "Materiale aggiunto",
+    "itemIn": "Materiale messo",
+    "target": "Materiale che sostituisce",
+    "targetOut": "Materiale tolto",
+    "searchMaterial": "Cerca materiali",
+    "searchOperation": "Cerca operazioni",
+    "pick": "Scegline uno",
+    "searchFirst": "Prima cerca",
+    "noMaterials": "Il tuo ruolo non legge i materiali.",
+    "noOperations": "Il tuo ruolo non legge le operazioni.",
+    "qty": "Quantità",
+    "qtyHint": "Per capo; per taglia nella griglia.",
+    "qtyReplaceHint": "Vuota e senza unità: quella della riga sostituita.",
+    "uom": "Unità",
+    "noUom": "Nessuna unità",
+    "section": "Sezione",
+    "sectionHint": "Dove va nella distinta (facoltativa).",
+    "noSection": "Nessuna",
+    "operation": "Operazione",
+    "operationAt": "All'operazione (facoltativa)",
+    "operationAtHint": "Vuota: sul capo.",
+    "minutes": "Minuti",
+    "minutesHint": "Vuoti: i minuti standard dell'operazione.",
+    "minutesSignedHint": "Sopra 0 aggiunge, sotto 0 toglie; non 0.",
+    "note": "Nota",
+    "sizesKept_one": "La sua quantità per {count} taglia resta: cambiala nella griglia.",
+    "sizesKept_other": "Le sue quantità per {count} taglie restano: cambiale nella griglia.",
+    "removeTitle": "Togli un effetto di {code}",
+    "removeBody": "L'opzione non fa più questo. Nient'altro cambia.",
+    "problem": {
+      "item": "Scegli il materiale che l'opzione aggiunge.",
+      "itemIn": "Scegli il materiale che l'opzione mette.",
+      "target": "Scegli il materiale che sostituisce.",
+      "targetOut": "Scegli il materiale che toglie.",
+      "sameItem": "Mette un materiale diverso da quello che sostituisce.",
+      "uom": "Scegli l'unità della quantità.",
+      "qtyNeeded": "Dai la quantità per capo, o per taglia.",
+      "qty": "Una quantità sopra 0, con al massimo 4 decimali.",
+      "qtyWithUom": "Una nuova quantità con la sua unità, o nessuna delle due.",
+      "operation": "Scegli l'operazione che l'opzione aggiunge.",
+      "minutes": "Minuti sopra 0, con al massimo 3 decimali (o vuoti: i minuti standard).",
+      "minutesNotZero": "Minuti aggiunti (sopra 0) o tolti (sotto 0), non 0, con al massimo 3 decimali.",
+      "certificate": "Di' cosa il certificato non copre più.",
+      "note": "Una nota è al massimo di {max} caratteri."
+    }
+  },
+  "styles": {
+    "title": "Modelli",
+    "intro": "I modelli che offrono questo gruppo, ognuno con il suo minimo e massimo.",
+    "add": "Aggiungi modelli",
+    "hint": "Scrivi il minimo o il massimo di un modello; vuoto: quello del gruppo. Un modello rilasciato può volere prima una nuova revisione.",
+    "picksHint": "Vuoto: quello del gruppo.",
+    "groups": "del gruppo: {value}",
+    "any": "qualsiasi",
+    "offered": "Offerto",
+    "withdrawn": "Ritirato",
+    "withdraw": "Ritira…",
+    "withdrawOf": "Ritira da {code}",
+    "withdrawTitle": "Ritira da {code}",
+    "withdrawReach": "Il modello non offre più {code} alle nuove configurazioni.",
+    "withdrawKept": "Se le sue righe di distinta o fasi di ciclo nominano un'opzione del gruppo, l'offerta resta archiviata perché restino; altrimenti si toglie.",
+    "withdrawRule": "Un modello rilasciato può volere prima una nuova revisione.",
+    "addTitle": "Offri {code} sui modelli",
+    "addBody": "Scegli i modelli che offrono questo gruppo; ognuno prende il minimo e il massimo del gruppo finché non li cambi.",
+    "search": "Cerca modelli",
+    "none": "Nessun modello corrisponde.",
+    "already": "Lo offre già",
+    "addN_one": "Aggiungi {count} modello",
+    "addN_other": "Aggiungi {count} modelli",
+    "done": "Fatto",
+    "added_one": "{count} modello ora lo offre",
+    "added_other": "{count} modelli ora lo offrono",
+    "refusedTitle_one": "{count} modello l'ha rifiutato",
+    "refusedTitle_other": "{count} modelli l'hanno rifiutato",
+    "held": {
+      "pick": "Scegli almeno un modello.",
+      "withdrawn": "Ritirato: offrilo di nuovo con Aggiungi modelli.",
+      "styleArchived": "Il modello è archiviato."
+    },
+    "col": {
+      "style": "Modello",
+      "styleStatus": "Stato del modello",
+      "min": "Min",
+      "max": "Max",
+      "asks": "Chiede",
+      "offer": "Offerta",
+      "withdraw": "Ritira"
+    },
+    "empty": {
+      "title": "Non offerto su nessun modello",
+      "body": "Aggiungi i modelli che offrono questo gruppo.",
+      "bodyView": "Nessun modello offre ancora questo gruppo."
+    },
+    "problem": {
+      "min": "Almeno è da 0 a 100, o vuoto.",
+      "max": "Al massimo è da 1 a 100, o vuoto.",
+      "single": "Una scelta vuole al massimo 1 opzione.",
+      "contradicts": "Il modello chiederebbe più come minimo che come massimo.",
+      "whole": "Un numero intero, o vuoto per quello del gruppo."
+    }
+  },
+  "what": {
+    "add": "Aggiunge {item}",
+    "perSize_one": "per taglia ({count} taglia)",
+    "perSize_other": "per taglia ({count} taglie)",
+    "replace": "Mette {item} al posto di {target}",
+    "remove": "Toglie {target}",
+    "operation": "Aggiunge l'operazione {operation} ({minutes} min)",
+    "operationStandard": "Aggiunge l'operazione {operation} (i suoi minuti standard)",
+    "minutesAt": "{minutes} min a {operation}",
+    "minutes": "{minutes} min sul capo",
+    "price": "Cambia il prezzo",
+    "certificate": "Fuori certificato — vedi la nota"
+  }
+}

@@ -31,6 +31,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-247: a private-label brand's branding set opens in its DetailModal on Colours & artwork (SCR-118); a library colour
   // has no page of its own (its row is edited in the list) and opens in its panels (its photo, history, thread).
   BrandingSet: '/products/colours?open=[id]',
+  // B-W2b-242: an option group's record (SCR-114-record: options, rules, price and BOM effects, styles).
+  OptionGroup: '/products/options/[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
@@ -214,6 +216,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/product/materials': '/products/materials',
   '/product/operations': '/products/operations',
   '/product/size-scales': '/products/sizes',
+  // B-W2b-242
+  '/product/option-groups': '/products/options',
   '/compliance/certificates': '/compliance/certificates',
   '/compliance/labels': '/compliance/labels',
   '/production/work-orders': '/production/work-orders',

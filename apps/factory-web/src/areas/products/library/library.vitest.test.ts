@@ -207,11 +207,11 @@ describe('navigation, pages and record links', () => {
     expect(products.sections?.map((section) => [section.id, section.items.map((item) => item.id)])).toEqual([
       ['products-main', ['products-styles', 'products-materials']],
       // B-W2b-247: Colours & artwork after Sizes (product.styles.view).
-      ['products-libraries', ['products-operations', 'products-sizes', 'products-colours']],
+      ['products-libraries', ['products-operations', 'products-sizes', 'products-colours', /* B-W2b-242 */ 'products-options']],
     ])
     // Sales reads materials and styles, not routings: no Operations row.
     const sales = officeNavFor(permissionCheck(['product.styles.view', 'product.materials.view'])).areas.find((area) => area.id === 'products')!
-    expect(sales.sections?.flatMap((section) => section.items.map((item) => item.id))).toEqual(['products-styles', 'products-materials', 'products-sizes', 'products-colours'])
+    expect(sales.sections?.flatMap((section) => section.items.map((item) => item.id))).toEqual(['products-styles', 'products-materials', 'products-sizes', 'products-colours', /* B-W2b-242 */ 'products-options'])
     // B-W2b-266: the status board heads Compliance › Main (the approved tree's order).
     expect(OFFICE_NAV.areas.find((area) => area.id === 'compliance')?.sections?.[0]?.items.map((item) => item.id)).toEqual(['compliance-status', 'compliance-certificates', /* B-W2b-268 */ 'compliance-declarations', 'compliance-labels', 'compliance-tests'])
   })
