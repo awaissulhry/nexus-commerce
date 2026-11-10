@@ -61,6 +61,8 @@ import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
+// B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
+import { USER_INFORMATION_ADDS } from '../../compliance/user-information/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -871,7 +873,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-252
   ...(audience === 'office' ? (SALES_SAMPLE_DECISIONS_ADDS[key] ?? []) : []),
   // B-W2b-260
-  ...(audience === 'office' ? (RECALL_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (RECALL_ADDS[key] ?? []) : []),
+  // B-W2b-258
+  ...(audience === 'office' ? (USER_INFORMATION_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
