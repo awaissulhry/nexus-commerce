@@ -1,0 +1,161 @@
+/*
+ * LanguageMatrix (Compliance area part, B-W2b-265) LAYOUT: a plain table that scrolls inside its own box (never the page), the
+ * first column kept in view; the document letters as small chips; the coverage row's state as a word with its tone. Semantic
+ * tokens only (light and dark follow the theme).
+ */
+.fw-lm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-lm-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-lm-scroll:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+.fw-lm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.fw-lm-table th,
+.fw-lm-table td {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-bottom: 1px solid var(--nds-border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fw-lm-table thead th {
+  background: var(--nds-surface-sunken);
+  font-weight: var(--nds-font-weight-semibold);
+  vertical-align: bottom;
+}
+
+.fw-lm-table .fw-lm-first {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--nds-surface);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-lm-table thead .fw-lm-first {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-lm-table tfoot th,
+.fw-lm-table tfoot td {
+  border-bottom: none;
+  background: var(--nds-surface-sunken);
+}
+
+.fw-lm-lang {
+  display: block;
+  font-family: var(--nds-font-mono);
+}
+
+.fw-lm-lang-name {
+  display: block;
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.fw-lm-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lm-off th,
+.fw-lm-off td {
+  color: var(--nds-text-3);
+}
+
+.fw-lm-offword {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-lm-none {
+  color: var(--nds-text-3);
+}
+
+.fw-lm-docs {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-lm-doc {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 var(--nds-space-4);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: none;
+  text-align: center;
+}
+
+.fw-lm-cov {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-lm-cov.is-complete {
+  color: var(--nds-success-text);
+}
+
+.fw-lm-cov.is-partial {
+  color: var(--nds-info-text);
+}
+
+.fw-lm-cov.is-missing {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lm-cov.is-none {
+  color: var(--nds-text-3);
+}
+
+.fw-lm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-lm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-lm-empty {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-lm-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -415,6 +415,8 @@ export const OFFICE: readonly TreeArea[] = [
       },
       // W2b: B-W2b-272 Compliance reports (SCR-261). The tree's Reports group, after Product safety (Sustainability joins with its step).
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'compliance.reports', title: 'Compliance reports', titleIt: 'Report conformità', wave: 'W2b', href: '/compliance/reports' }] },
+      // W2b: B-W2b-265 Rules & markets (SCR-262), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'compliance.settings', title: 'Rules & markets', titleIt: 'Norme e mercati', wave: 'W2b', href: '/compliance/settings' }] },
     ],
   },
   {
