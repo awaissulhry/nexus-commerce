@@ -1,0 +1,520 @@
+{
+  "min": "{minutes} min",
+  "minUnit": "min",
+  "pct": "{value} %",
+  "retry": "Riprova",
+  "held": {
+    "busy": "Attendi la modifica in salvataggio."
+  },
+  "tab": {
+    "machine": "Macchina e impostazioni"
+  },
+  "source": {
+    "TIME_STUDY": "Rilievo tempi",
+    "PREDETERMINED": "Tempi predeterminati",
+    "ESTIMATE": "Stima"
+  },
+  "revisionStatus": {
+    "DRAFT": "bozza",
+    "RELEASED": "rilasciata",
+    "OBSOLETE": "obsoleta"
+  },
+  "stage": {
+    "INCOMING": "In entrata",
+    "CUTTING": "Taglio",
+    "IN_LINE": "In linea",
+    "END_OF_LINE": "Fine linea",
+    "FINAL": "Finale",
+    "RETURN": "Reso"
+  },
+  "run": {
+    "VERSION": "Versione {number}",
+    "ALLOWANCES": "Maggiorazioni proprie",
+    "TYPED": "Digitato",
+    "version": "Dalla versione SMV {number}",
+    "versionOld": "Dalla versione {number} (non più approvata)",
+    "allowances": "Calcolato dalle sue maggiorazioni",
+    "typed": "Digitato qui",
+    "library": "libreria {minutes} min"
+  },
+  "runSource": {
+    "VERSION": "L'SMV approvato della libreria",
+    "ALLOWANCES": "Tempo base e maggiorazioni propri",
+    "TYPED": "SMV digitato"
+  },
+  "minutes": {
+    "title": "Minuti standard",
+    "loading": "Lettura dei minuti…",
+    "failed": "Impossibile caricare i minuti",
+    "governed": "Versioni approvate governano questo SMV: una modifica si propone e una seconda persona la approva.",
+    "notGoverned": "Nessuna versione ancora approvata: l'SMV si digita. La prima versione approvata avvia la regola di approvazione.",
+    "governedTag": "Le modifiche vanno approvate",
+    "inForceLabel": "SMV in vigore oggi",
+    "inForceVersion": "Versione {number}, dal {day}",
+    "inForceOwn": "L'SMV proprio dell'operazione (nessuna versione approvata)",
+    "basic": "Tempo base",
+    "personal": "Maggiorazione personale",
+    "fatigue": "Maggiorazione per fatica",
+    "delay": "Maggiorazione per attese",
+    "smv": "SMV per capo",
+    "noBasic": "Non registrato (l'SMV è stato digitato)",
+    "formula": "{basic} min + {allowances} % = {smv} min",
+    "notYetMoved": "La libreria mostra ancora {minutes} min finché il controllo orario non la porta alla versione in vigore.",
+    "suggestedLater": "Un SMV suggerito dai tempi registrati arriverà più avanti.",
+    "typed": {
+      "governed": "L'SMV non si digita più qui: lo governa una versione approvata. Proponi una modifica.",
+      "allowances": "L'SMV è calcolato da tempo base e maggiorazioni: proponi una modifica per impostare nuovi valori.",
+      "waiting": "Una modifica proposta attende l'approvazione: va decisa prima (o sostituita da una nuova proposta)."
+    }
+  },
+  "versions": {
+    "title_one": "Versioni SMV ({count})",
+    "title_other": "Versioni SMV ({count})",
+    "intro": "Dalla più recente: ognuna con i suoi valori, il giorno da cui vale, il motivo, chi l'ha proposta e chi ha deciso.",
+    "empty": {
+      "title": "Nessuna versione SMV",
+      "body": "Proponi una modifica: quando una seconda persona la approva diventa la versione 1."
+    },
+    "label": "Versione {number} · {minutes} min",
+    "built": "{basic} min + {personal} % personale + {fatigue} % fatica + {delay} % attese",
+    "from": "dal {day}",
+    "reason": "Motivo: {reason}",
+    "proposed": "Proposta da {name} il {day}",
+    "approvedBy": "approvata da {name} il {day}",
+    "rejectedBy": "respinta da {name} il {day}",
+    "note": "Nota: {note}"
+  },
+  "version": {
+    "state": {
+      "PROPOSED": "In attesa di approvazione",
+      "APPROVED": "Approvata",
+      "REJECTED": "Respinta",
+      "SUPERSEDED": "Sostituita",
+      "inForce": "In vigore",
+      "waiting": "Approvata, dal suo giorno"
+    }
+  },
+  "pending": {
+    "title": "La versione {number} attende l'approvazione: {from} → {to} min dal {day}",
+    "by": "Proposta da {name}."
+  },
+  "propose": {
+    "open": "Proponi modifica SMV",
+    "openFor": "Proponi modifica SMV di {code}",
+    "title": "Proponi modifica SMV · {code}",
+    "titleLoading": "Proponi modifica SMV",
+    "introGoverned": "Il nuovo SMV vale dal giorno che scegli, quando una seconda persona lo approva. I cicli che seguono la libreria e le nuove tariffe a cottimo lo prendono.",
+    "introFirst": "Diventa la prima versione SMV dell'operazione: dopo l'approvazione di una seconda persona l'SMV si cambia solo così.",
+    "pending": "La versione {number} ({minutes} min dal {day}, proposta da {name}) attende l'approvazione.",
+    "replace": "Invia questa al posto della versione {number} (viene ritirata senza decisione)",
+    "basic": "Tempo base",
+    "basicHint": "Il tempo osservato a ritmo normale, prima delle maggiorazioni.",
+    "personal": "Maggiorazione personale",
+    "allowanceHint": "Percentuale del tempo base, da 0 a meno di 100.",
+    "fatigue": "Maggiorazione per fatica",
+    "delay": "Maggiorazione per attese",
+    "newSmv": "Nuovo SMV per capo:",
+    "was": "ora {minutes} min",
+    "source": "Da dove viene il tempo",
+    "effectiveFrom": "Vale dal",
+    "dayHint": "Oggi o un giorno successivo.",
+    "dayHintApproved": "Dal {day} o dopo: una versione approvata vale da quel giorno.",
+    "reason": "Perché cambia",
+    "reasonHint": "Lo leggono chi approva e l'ufficio cottimi.",
+    "reviewLabel": "Vecchio → nuovo",
+    "today": "Se approvata oggi, entra in vigore subito.",
+    "later": "Se approvata, entra in vigore il {day}.",
+    "send": "Invia per approvazione",
+    "change": {
+      "smv": "SMV per capo",
+      "basic": "Tempo base",
+      "personal": "Maggiorazione personale",
+      "fatigue": "Maggiorazione per fatica",
+      "delay": "Maggiorazione per attese",
+      "day": "Vale dal"
+    },
+    "held": {
+      "noRight": "Proporre una modifica SMV spetta a un ruolo che propone modifiche SMV (un responsabile di produzione).",
+      "archived": "L'operazione è archiviata: riattivala prima.",
+      "waiting": "Una proposta attende l'approvazione: spunta \"Invia questa al posto della versione …\" o lasciala decidere prima.",
+      "same": "Sono già i valori dell'operazione: niente da proporre."
+    },
+    "problem": {
+      "basic": "Inserisci il tempo base in minuti, sopra 0 (al massimo 6 decimali).",
+      "basicEmpty": "Inserisci il tempo base.",
+      "allowance": "Una percentuale da 0 a meno di 100, al massimo 4 decimali.",
+      "source": "Scegli da dove viene il tempo.",
+      "dayEmpty": "Scegli il giorno da cui vale.",
+      "dayPast": "Un nuovo SMV vale da oggi o da un giorno successivo.",
+      "dayBeforeApproved": "Non prima del giorno da cui vale una versione approvata.",
+      "reason": "Indica perché cambia l'SMV.",
+      "reasonLong": "Al massimo 2000 caratteri."
+    }
+  },
+  "decide": {
+    "approve": "Approva",
+    "reject": "Respingi",
+    "approveTitle": "Approvare la versione {number} di {code}?",
+    "rejectTitle": "Respingere la versione {number} di {code}?",
+    "change": "SMV",
+    "oldNew": "{from} → {to} min",
+    "built": "Calcolato da",
+    "from": "Vale dal",
+    "source": "Da dove viene il tempo",
+    "reason": "Motivo",
+    "proposedBy": "Proposta da",
+    "reaches": "Raggiunge",
+    "reachesValue": "{routings} passi di ciclo ({following} seguono la libreria) · {rates} tariffe a cottimo",
+    "atOnce": "Il suo giorno è arrivato: approvandola l'SMV cambia ora, per i cicli che seguono la libreria e le nuove tariffe a cottimo.",
+    "onDay": "Approvandola l'SMV cambia il {day}; fino ad allora vale l'SMV attuale.",
+    "rejectWhat": "L'SMV resta com'è. Chi l'ha proposta legge il tuo motivo.",
+    "note": "Nota (facoltativa)",
+    "noteRequired": "Perché viene respinta",
+    "held": {
+      "own": "Hai proposto tu questa modifica: la decide una seconda persona.",
+      "noRight": "Il tuo ruolo non approva modifiche SMV.",
+      "notWaiting": "Questa versione non attende più una decisione.",
+      "note": "Indica perché viene respinta."
+    }
+  },
+  "impact": {
+    "title": "Cicli e tariffe a cottimo coinvolti",
+    "intro": "Cosa raggiunge una modifica SMV di questa operazione.",
+    "routings_one": "{count} passo di ciclo ({drafts} in bozze, {released} rilasciati)",
+    "routings_other": "{count} passi di ciclo ({drafts} in bozze, {released} rilasciati)",
+    "following_one": "{count} passo segue la versione approvata della libreria: prende una nuova versione con \"Usa valore della libreria\".",
+    "following_other": "{count} passi seguono la versione approvata della libreria: prendono una nuova versione con \"Usa valore della libreria\".",
+    "noneFollowing": "Nessun passo segue ancora una versione approvata: ognuno tiene i suoi minuti fino a \"Usa valore della libreria\".",
+    "rates_one": "{count} tariffa a cottimo è pagata su questo SMV",
+    "rates_other": "{count} tariffe a cottimo sono pagate su questo SMV",
+    "routingsLabel": "Passi di ciclo fatti da questa operazione",
+    "ratesLabel": "Tariffe a cottimo su questo SMV",
+    "ratesHidden": "Quali tariffe: Persone › Cottimi (il tuo ruolo non le legge).",
+    "ratesRule": "Un ciclo rilasciato e un ordine di lavoro tengono i loro minuti; le tariffe a cottimo prendono l'SMV approvato del giorno in cui inizia la loro versione.",
+    "more_one": "e {count} altro passo",
+    "more_other": "e altri {count} passi",
+    "revision": "Rev {revision} ({status})",
+    "rateVersion": "v{number} · {status} · dal {day}",
+    "col": {
+      "style": "Articolo",
+      "revision": "Revisione",
+      "step": "Passo",
+      "smv": "SMV",
+      "from": "Tempo da",
+      "table": "Tabella tariffe",
+      "version": "Versione",
+      "band": "Fascia taglie"
+    }
+  },
+  "conn": {
+    "title": "Collegamenti",
+    "pieceRates": "Persone › Cottimi",
+    "pieceRatesWhy_one": "{count} tariffa a cottimo è pagata su questo SMV.",
+    "pieceRatesWhy_other": "{count} tariffe a cottimo sono pagate su questo SMV.",
+    "pieceRatesNoRight": "il tuo ruolo non legge i cottimi",
+    "changes": "Modifiche e versioni",
+    "changesNotBuilt": "arriva con la sua pagina; le modifiche in attesa sono sotto il riquadro in Operazioni",
+    "changesWhy": "Lì le modifiche SMV sono elencate con le modifiche degli articoli.",
+    "notBuilt": "non ancora aperta"
+  },
+  "refused": {
+    "forbidden": "Non consentito: hai proposto tu questa modifica, o il tuo ruolo non la decide.",
+    "state": "L'operazione o la versione è cambiata nel frattempo: è stata riletta."
+  },
+  "notice": {
+    "proposed": "Modifica SMV di {code} inviata per approvazione.",
+    "replaced": "Modifica SMV di {code} inviata al posto di quella in attesa.",
+    "approved": "Versione {number} approvata.",
+    "approvedWaits": "Versione {number} approvata: entra in vigore il {day}.",
+    "rejected": "Versione {number} respinta."
+  },
+  "waiting": {
+    "tile": "Modifiche SMV in attesa di approvazione",
+    "tileHint": "Modifiche proposte che decide una seconda persona",
+    "view": "Modifiche SMV in attesa",
+    "intro": "Dalla più vecchia. Una modifica che hai proposto la decide qualcun altro; per respingerne una, aprila e indica il motivo.",
+    "label": "Modifiche SMV in attesa di approvazione",
+    "count_one": "{count} in attesa",
+    "count_other": "{count} in attesa",
+    "version": "Versione {number}",
+    "failed": "Impossibile caricare le modifiche in attesa",
+    "empty": {
+      "title": "Niente in attesa di approvazione",
+      "body": "Una modifica SMV proposta compare qui finché una seconda persona non la decide."
+    },
+    "approveN_one": "Approva {count}",
+    "approveN_other": "Approva {count}",
+    "confirmTitle_one": "Approvare {count} modifica SMV?",
+    "confirmTitle_other": "Approvare {count} modifiche SMV?",
+    "confirmIntro": "Ognuna entra in vigore il suo giorno (subito se il giorno è arrivato), per i cicli che seguono la libreria e le nuove tariffe a cottimo.",
+    "col": {
+      "operation": "Operazione",
+      "change": "SMV vecchio → nuovo",
+      "from": "Vale dal",
+      "reason": "Motivo",
+      "by": "Proposta da"
+    },
+    "notice": {
+      "approved_one": "{count} modifica SMV approvata.",
+      "approved_other": "{count} modifiche SMV approvate.",
+      "partly": "{count} di {total} approvate; la successiva è stata rifiutata: è stata riletta."
+    }
+  },
+  "settings": {
+    "title": "Impostazioni macchina",
+    "intro": "Ago, punti per cm, numero filo e accessorio per questa operazione. Un passo di ciclo li copia e il tablet li mostra con l'istruzione.",
+    "loading": "Lettura delle impostazioni…",
+    "failed": "Impossibile caricare le impostazioni",
+    "listLabel": "Impostazioni di macchina e punto",
+    "number": "Impostazione {n}",
+    "empty": {
+      "title": "Nessuna impostazione",
+      "body": "Aggiungi macchina, ago, filo e punti con cui si cuce l'operazione.",
+      "bodyRead": "Nessuna impostazione macchina registrata per questa operazione."
+    },
+    "add": "Aggiungi un'impostazione",
+    "remove": "Rimuovi l'impostazione {n}",
+    "moveUp": "Sposta su l'impostazione {n}",
+    "moveDown": "Sposta giù l'impostazione {n}",
+    "noClass": "Nessuna classe di macchina",
+    "classesUnread": "Le classi di macchina si leggono con Stabilimento (il tuo ruolo non le legge).",
+    "classOff": "Classe di macchina disattivata",
+    "perCm": "per cm",
+    "stitches": "{value} per cm",
+    "unsaved": "Le impostazioni sono cambiate",
+    "save": "Salva impostazioni",
+    "field": {
+      "machineClass": "Classe di macchina",
+      "stitchType": "Tipo di punto",
+      "needle": "Ago",
+      "thread": "Numero filo",
+      "stitchesPerCm": "Punti per cm",
+      "tension": "Tensione",
+      "foot": "Piedino o accessorio",
+      "notes": "Note"
+    },
+    "hint": {
+      "stitchType": "ISO 4915, es. 301",
+      "needle": "Sistema e misura, es. 134 LR Nm 110",
+      "thread": "es. Tkt 40",
+      "foot": "es. piedino a rullo, bordatore"
+    },
+    "whereTitle": "Dove vanno queste impostazioni",
+    "where": {
+      "copy": "Un passo di ciclo le prende con \"Copia dalla libreria\" (la sua lista resta sua).",
+      "tablet": "Il tablet di reparto mostra le impostazioni del passo accanto all'istruzione.",
+      "without_one": "{count} passo di ciclo in bozza di questa operazione non ha ancora impostazioni proprie.",
+      "without_other": "{count} passi di ciclo in bozza di questa operazione non hanno ancora impostazioni proprie.",
+      "allOwn": "Ogni passo di ciclo in bozza di questa operazione ha le sue impostazioni."
+    },
+    "held": {
+      "first": "È già la prima",
+      "last": "È già l'ultima",
+      "full_one": "Al massimo {count} impostazione",
+      "full_other": "Al massimo {count} impostazioni",
+      "noManage": "Sola lettura: il tuo ruolo non modifica la libreria delle operazioni.",
+      "archived": "Sola lettura: l'operazione è archiviata.",
+      "fix": "Correggi prima le impostazioni segnate.",
+      "same": "Niente è cambiato."
+    },
+    "problem": {
+      "empty": "Scrivi qualcosa in questa impostazione, o rimuovila.",
+      "stitches": "Un numero sopra 0 con al massimo 4 cifre e 2 decimali.",
+      "long": "Troppo lungo.",
+      "tooMany": "Al massimo 10 impostazioni."
+    },
+    "notice": {
+      "saved_one": "{count} impostazione salvata.",
+      "saved_other": "{count} impostazioni salvate."
+    }
+  },
+  "depth": {
+    "title": "Tempi, taglie e controlli",
+    "intro": "Il tempo di ogni passo e da dove viene, attrezzaggio, attesa e movimentazione per ordine di lavoro, i minuti in più per taglia, le varianti per cui vale, il suo controllo qualità e le impostazioni macchina.",
+    "loading": "Lettura del ciclo in dettaglio…",
+    "failed": "Impossibile caricare il ciclo in dettaglio",
+    "table": "Il ciclo in dettaglio",
+    "count_one": "{count} passo",
+    "count_other": "{count} passi",
+    "empty": "Ancora nessun passo.",
+    "perGarment": "Per capo: {minutes} min",
+    "bySize": "Per taglia:",
+    "perOrder": "Per ordine di lavoro: attrezzaggio {setup} · attesa {wait} · movimentazione {move} min",
+    "daysFrom": "Questa revisione vale per i nuovi ordini di lavoro dal {from}.",
+    "daysTo": "Questa revisione è valsa per i nuovi ordini di lavoro dal {from} al {to}.",
+    "held": {
+      "noManage": "Sola lettura: il tuo ruolo non modifica i cicli.",
+      "reading": "Il ciclo è ancora in lettura.",
+      "archived": "Sola lettura: l'articolo è archiviato.",
+      "frozen": "Sola lettura: questa revisione è rilasciata e bloccata; modifica la sua bozza."
+    },
+    "notice": {
+      "times": "I minuti del passo sono salvati.",
+      "variants_one": "Per cosa vale {count} passo è salvato.",
+      "variants_other": "Per cosa valgono {count} passi è salvato.",
+      "checkpoint": "Il controllo qualità è impostato.",
+      "checkpointOff": "Il controllo qualità è tolto.",
+      "settings_one": "Le impostazioni del passo sono salvate.",
+      "settings_other": "Le impostazioni dei passi sono salvate.",
+      "copied_one": "{count} passo ha preso le impostazioni della libreria.",
+      "copied_other": "{count} passi hanno preso le impostazioni della libreria.",
+      "library": "Il passo prende l'SMV approvato della libreria."
+    }
+  },
+  "col": {
+    "step": "Passo",
+    "run": "Tempo per capo",
+    "side": "Attrezzaggio · attesa · movimentazione",
+    "variants": "Solo per",
+    "checkpoint": "Controllo qualità",
+    "settings": "Impostazioni macchina",
+    "more": "Altro"
+  },
+  "sizes": {
+    "cell": "Minuti in più di {step} nella taglia {size}"
+  },
+  "variants": {
+    "every": "Ogni taglia e variante colore",
+    "title": "Solo per · {step}",
+    "titleMany_one": "Solo per · {count} passo",
+    "titleMany_other": "Solo per · {count} passi",
+    "intro": "Spunta per cosa vale il passo. Niente spuntato: vale per ogni taglia, variante colore e opzione.",
+    "sizesLabel": "Taglie",
+    "colourwaysLabel": "Varianti colore",
+    "optionsLabel": "Opzioni",
+    "noColourways": "L'articolo non ha ancora varianti colore.",
+    "optionsLoading": "Lettura delle opzioni dell'articolo…",
+    "optionsFailed": "Impossibile leggere le opzioni dell'articolo; quelle già scelte restano.",
+    "result": "Vale per:",
+    "sizes": "taglie {list}",
+    "colourways": "varianti colore {list}",
+    "options": "opzioni {list}",
+    "workOrders": "Un ordine di lavoro prende il passo se una delle sue celle ne ha bisogno; i suoi mazzetti di altre celle passano comunque dal passo.",
+    "manyReplace_one": "{count} passo prende esattamente queste scelte.",
+    "manyReplace_other": "I {count} passi prendono esattamente queste scelte.",
+    "save": "Salva",
+    "saveMany_one": "Salva per {count} passo",
+    "saveMany_other": "Salva per {count} passi",
+    "held": {
+      "same": "Niente è cambiato."
+    }
+  },
+  "checkpoint": {
+    "none": "Nessuno",
+    "title": "Controllo qualità · {step}",
+    "intro": "Un piano di ispezione che il reparto apre al primo avanzamento di un mazzetto in questo passo: un piano di taglio, in linea o di fine linea dell'azienda dell'articolo.",
+    "current": "Ora: {code} · {name}",
+    "loading": "Lettura dei piani di ispezione…",
+    "failed": "Impossibile leggere i piani di ispezione",
+    "noPlansRight": "Scegliere un piano richiede Qualità › Piani di controllo e AQL nel tuo ruolo; il passo tiene il suo controllo.",
+    "pick": "Piano di ispezione",
+    "notApproved": "nessuna versione approvata: per ora non apre nulla",
+    "noneYet": "Ancora nessun piano di taglio, in linea o di fine linea per questa azienda.",
+    "rule": "Un'ispezione finale si apre al banco o all'imballo, mai a un passo.",
+    "save": "Salva controllo",
+    "held": {
+      "same": "Niente è cambiato."
+    }
+  },
+  "settingsCol": {
+    "none": "Nessuna",
+    "library_one": "La libreria ha {count} impostazione",
+    "library_other": "La libreria ha {count} impostazioni",
+    "more_one": "+ {count} altra",
+    "more_other": "+ altre {count}"
+  },
+  "stepSettings": {
+    "title": "Impostazioni macchina · {step}",
+    "library_one": "L'operazione della libreria ha {count} impostazione: copiala per sostituire la lista di questo passo.",
+    "library_other": "L'operazione della libreria ha {count} impostazioni: copiale per sostituire la lista di questo passo.",
+    "noLibrary": "L'operazione della libreria non ha ancora impostazioni.",
+    "copy": "Copia dalla libreria"
+  },
+  "copy": {
+    "title_one": "Copiare le impostazioni della libreria in {count} passo?",
+    "title_other": "Copiare le impostazioni della libreria in {count} passi?",
+    "intro": "La lista di ogni passo viene sostituita da quella attuale della sua operazione di libreria.",
+    "replaces": "{from} → {to} impostazioni",
+    "skipped": "saltato: la sua operazione di libreria non ha impostazioni"
+  },
+  "bulk": {
+    "variants_one": "Solo per… {count}",
+    "variants_other": "Solo per… {count}",
+    "copy_one": "Copia impostazioni libreria {count}",
+    "copy_other": "Copia impostazioni libreria {count}",
+    "held": {
+      "noLibrary": "Nessuna impostazione di libreria da copiare."
+    }
+  },
+  "menu": {
+    "more": "Altro per il passo {step}",
+    "times": "Tempi…",
+    "timesView": "Vedi i tempi",
+    "variants": "Solo per…",
+    "variantsView": "Vedi per cosa vale",
+    "checkpoint": "Controllo qualità…",
+    "checkpointView": "Vedi il controllo",
+    "settings": "Impostazioni macchina…",
+    "settingsView": "Vedi le impostazioni macchina",
+    "copyLibrary_one": "Copia impostazioni libreria ({count})",
+    "copyLibrary_other": "Copia impostazioni libreria ({count})",
+    "openMinutes": "Minuti e versioni SMV"
+  },
+  "times": {
+    "title": "Tempi · {step}",
+    "runFrom": "Il tempo per capo viene da",
+    "versionHint": "Versione {number}: {minutes} min, e le versioni approvate dopo con \"Usa valore della libreria\".",
+    "allowancesHint": "Tempo base e maggiorazioni propri di questo passo.",
+    "typedHint": "Un SMV digitato solo per questo passo.",
+    "smv": "SMV per capo",
+    "runIs": "Tempo per capo:",
+    "run": "Tempo per capo",
+    "setup": "Attrezzaggio",
+    "wait": "Attesa",
+    "move": "Movimentazione",
+    "sideHint": "Per ordine di lavoro; vuoto: nessuno.",
+    "extras": "Minuti in più per le taglie grandi",
+    "extrasHint": "Minuti aggiunti al (o, col meno, tolti dal) tempo in quella taglia; vuoto: nessuno.",
+    "inSize": "Nella taglia {size}",
+    "inSizeHint": "{minutes} min",
+    "extraOf": "in più {extra}",
+    "libraryDiffers": "L'SMV della libreria in vigore oggi è {minutes} min.",
+    "save": "Salva tempi",
+    "held": {
+      "fix": "Correggi prima i campi segnati.",
+      "same": "Niente è cambiato."
+    },
+    "problem": {
+      "noVersion": "L'operazione della libreria non ha ancora una versione approvata.",
+      "typed": "Minuti sopra 0, al massimo 6 decimali.",
+      "allowance": "Una percentuale da 0 a meno di 100.",
+      "side": "Minuti da 0, al massimo 6 decimali.",
+      "extra": "Minuti, col meno per meno tempo, al massimo 6 decimali.",
+      "belowZero": "In questa taglia il passo non richiederebbe tempo.",
+      "refused": "Non salvato: vedi il messaggio sopra.",
+      "notInForce": "Oggi non è in vigore una versione approvata dell'operazione della libreria."
+    },
+    "versionKept": "Copiato dalla versione {number}: {minutes} min. Oggi non è in vigore una versione approvata; una successiva arriva con \"Usa valore della libreria\"."
+  },
+  "sideCol": {
+    "values": "{setup} · {wait} · {move}",
+    "unit": "min per ordine di lavoro",
+    "none": "Nessuno"
+  },
+  "depthKeys": {
+    "open": "i tempi del passo"
+  },
+  "rateStatus": {
+    "DRAFT": "bozza",
+    "PROVISIONAL": "provvisoria",
+    "PUBLISHED": "pubblicata",
+    "SUPERSEDED": "sostituita",
+    "CANCELLED": "annullata",
+    "ACTIVE": "attiva"
+  },
+  "offline": {
+    "held": "Offline — le modifiche restano su questa pagina.",
+    "cells_one": "Offline — {count} cella attende l'invio; nient'altro viene inviato finché la connessione non torna.",
+    "cells_other": "Offline — {count} celle attendono l'invio; nient'altro viene inviato finché la connessione non torna."
+  }
+}

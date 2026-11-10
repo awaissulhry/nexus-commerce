@@ -4,6 +4,9 @@ import { demoSheetImport } from '../styles/demo/fixtures'
 import type { OperationRow, OperationView } from './api'
 import { emptyDraft } from './model'
 import { OperationsListView, type NewOperationModel, type OperationsListViewModel } from './view/OperationsListView'
+// B-W2b-235: the tile "SMV changes waiting for approval", its rows, Propose SMV change from the SMV cell (made-up data).
+import { minutesModel, READER_ID, WAITING } from './depth/demo'
+import type { WaitingModel } from './depth/use-waiting'
 
 /**
  * SCR-049 Operations — made-up data only: an invented factory's operation library (cutting, sewing, assembly, finishing,
@@ -93,8 +96,29 @@ export const designScreen = defineDesignScreen<OperationsListViewModel>({
     { id: 'loading', label: 'Loading', model: { ...base, rows: { items: null, more: false, count: null, problem: null }, tiles: { unused: null, differs: null }, asOf: null } },
     { id: 'error', label: 'Could not load', model: { ...base, rows: { items: null, more: false, count: null, problem: 'problem.read.unavailable' }, tiles: { unused: null, differs: null } } },
     { id: 'no-permission', label: 'No access (sales)', model: { ...base, can: canFor('sales'), rows: { items: null, more: false, count: null, problem: 'problem.read.forbidden' }, tiles: {} }, note: 'Sales does not read routings: the page is absent from its navigation; a direct address says who has it.' },
+    // ---- B-W2b-235: SMV changes waiting for approval, Propose SMV change from the SMV cell ------------------------------------
+    { id: 'w2b-235-tile', label: 'W2b: the tile "SMV changes waiting"', model: w2b(), note: 'A third tile counts the SMV changes waiting for approval (3); the SMV cell has Propose SMV change (pencil) for a production manager; ⋯ adds "Minutes and SMV versions" and Propose SMV change.' },
+    { id: 'w2b-235-waiting', label: 'W2b: the waiting changes', model: w2b({ filters: { view: 'smv', q: '', kind: '' } }), note: 'Old → new SMV, from which day, why, who proposed it; oldest first. The change the reader proposed (DEMO-TAG-PELLE) is not selectable: its box says a second person decides it.' },
+    { id: 'w2b-235-waiting-selected', label: 'W2b: Approve 2', model: w2b({ filters: { view: 'smv', q: '', kind: '' }, waitingSelected: [WAITING[0]!.proposal.id, WAITING[2]!.proposal.id], waitingConfirm: true }), note: 'Each takes effect on its day; one approval per change, at its version.' },
+    { id: 'w2b-235-waiting-empty', label: 'W2b: nothing waiting', model: w2b({ filters: { view: 'smv', q: '', kind: '' }, waiting: waitingModel({ count: 0, entries: [] }) }) },
+    { id: 'w2b-235-waiting-loading', label: 'W2b: waiting changes loading', model: w2b({ filters: { view: 'smv', q: '', kind: '' }, waiting: waitingModel({ count: null, entries: null }) }) },
+    { id: 'w2b-235-waiting-error', label: 'W2b: waiting changes could not load', model: w2b({ filters: { view: 'smv', q: '', kind: '' }, waiting: waitingModel({ count: null, entries: null, problem: 'problem.read.unavailable' }) }), note: 'The tile says "—" (never 0); the view says why with Try again.' },
+    { id: 'w2b-235-propose', label: 'W2b: Propose SMV change from the SMV cell', model: w2b({ smvChange: minutesModel('developer', {}, { pending: false }) }), note: 'Old → new SMV from basic time and allowances (5.5 min + 5 % + 4.5 % + 3.2273 % = 6.2), where the time comes from, the day (from today), why; the routings and piece rates it reaches. Send for approval held until the reason is typed.' },
+    { id: 'w2b-235-propose-loading', label: 'W2b: Propose SMV change, minutes being read', model: w2b({ smvChange: minutesModel('developer', { part: { status: 'loading' } }) }) },
+    { id: 'w2b-235-proposed', label: 'W2b: after Send for approval', model: w2b({ smvNotice: { key: 'notice.proposed', tone: 'success', params: { code: 'DEMO-CUC-SPALLA' } } }) },
+    { id: 'w2b-235-quality', label: 'W2b: quality (reads, proposes nothing)', model: w2b({ can: canFor('quality'), canPropose: false, waiting: waitingModel({ entries: WAITING.map((entry) => ({ ...entry, mayDecide: false })) }) }), note: 'No pencil in the SMV cell; the waiting rows are read only (no approve right, said on each box).' },
   ],
 })
+
+/** B-W2b-235: the waiting changes as the list reads them. */
+function waitingModel(overrides: Partial<WaitingModel> = {}): WaitingModel {
+  return { count: WAITING.length, entries: WAITING, problem: null, busy: false, notice: null, ...overrides }
+}
+
+/** B-W2b-235: the list with its W2b parts, for a production manager (proposes and approves). */
+function w2b(overrides: Partial<OperationsListViewModel> = {}): OperationsListViewModel {
+  return { ...base, can: canFor('developer'), waiting: waitingModel(), canPropose: true, userId: READER_ID, ...overrides }
+}
 
 /** The shoulder seam's record: used in six routings, two of them (one a draft) with other minutes. */
 export const SHOULDER: OperationView = {

@@ -231,10 +231,12 @@ const AREA = fileURLToPath(new URL('..', import.meta.url))
 const FOLDERS = ['library', 'materials', 'operations', 'sizes']
 // B-W2b-238: materials in depth speak their own catalogue (products-materials-depth; its own key test in materials/approval).
 const OWN_CATALOGUE = new Set(['approval', 'properties', 'whereused'])
+// B-W2b-235: operations in depth speak their own catalogue (products-operations-depth; its own key test in operations/depth).
+const OWN_OPERATIONS_CATALOGUE = new Set(['depth'])
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return OWN_CATALOGUE.has(entry.name) && dir.endsWith('materials') ? [] : sources(path)
+    if (entry.isDirectory()) return (OWN_CATALOGUE.has(entry.name) && dir.endsWith('materials')) || (OWN_OPERATIONS_CATALOGUE.has(entry.name) && dir.endsWith('operations')) ? [] : sources(path)
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.') ? [path] : []
   })
 }
@@ -257,7 +259,8 @@ const built = [
   // B-W2b-238: `unused` (Not used in any BOM) is said by products-materials-depth (materialsList.*).
   ...MATERIAL_VIEWS.filter((view) => view !== 'unused').map((view) => `materials.view.${view}`),
   ...MATERIAL_TILES.filter((tile) => tile !== 'unused').flatMap((tile) => [`materials.tile.${tile}`, `materials.tileHint.${tile}`]),
-  ...OPERATION_VIEWS.map((view) => `operations.view.${view}`),
+  // B-W2b-235: `smv` (SMV changes waiting) is said by products-operations-depth (waiting.view).
+  ...OPERATION_VIEWS.filter((view) => view !== 'smv').map((view) => `operations.view.${view}`),
   ...OPERATION_TILES.flatMap((tile) => [`operations.tile.${tile}`, `operations.tileHint.${tile}`]),
   ...SCALE_VIEWS.map((view) => `sizes.view.${view}`),
   ...SCALE_TABS.map((tab) => `scale.tab.${tab}`),

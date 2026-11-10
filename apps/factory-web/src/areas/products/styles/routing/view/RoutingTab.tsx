@@ -12,6 +12,10 @@ import type { RoutingStep, RoutingView, StyleView } from '../../api'
 import { costCellOf, decimalInput, editableRevision, editText, issueWords, minutesText, moneyText, parallelChoices, revisionInView, sideBySideWith, stepLabel } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName, workshopsFor, type SubcontractDraft } from '../subcontract-model'
+// B-W2b-235: the routing in depth (times, sizes, variants, checkpoints, settings) and the step's run beside its SMV.
+import { WithMessages } from '../../../../../record-panels/i18n'
+import { runWords, type RoutingDepthActions, type StepTimes } from '../depth/model'
+import { DepthSection } from '../depth/view/DepthSection'
 
 /**
  * SCR-043 Operations (routing) of the revision in view: the minutes strip (standard minutes per garment, by department
@@ -23,6 +27,15 @@ import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName
  * (the floor never says a sibling was skipped; dispatch shows them side by side). A step a BOM line uses is not removed.
  */
 export function RoutingTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  // B-W2b-235: the depth's words beside the routing's.
+  return (
+    <WithMessages namespaces={['products-operations-depth']}>
+      <Routing style={style} model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+
+function Routing({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
   const locale = useLocale()
   const revision = revisionInView(style.revisions, model.revisionId)
@@ -163,7 +176,19 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
               </thead>
               <tbody>
                 {shown.map((step) => (
-                  <StepRow key={step.id} step={step} routing={routing} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} costGrain={model.grains.cost} onInstructions={() => setInstructions(step.id)} />
+                  <StepRow
+                    key={step.id}
+                    step={step}
+                    routing={routing}
+                    editable={editable}
+                    heldWhy={heldWhy}
+                    actions={actions}
+                    prefix={model.prefix}
+                    costGrain={model.grains.cost}
+                    onInstructions={() => setInstructions(step.id)}
+                    times={model.routingDepth?.times.status === 'ready' ? (model.routingDepth.times.value.steps.find((entry) => entry.stepId === step.id) ?? null) : null}
+                    depthActions={actions?.routingDepth}
+                  />
                 ))}
               </tbody>
             </table>
@@ -171,6 +196,9 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
           </div>
         )}
       </Card>
+
+      {/* B-W2b-235: the routing in depth (design style.rt.grid's W2b columns and the operation drawer's variants). */}
+      {routing.steps.length > 0 && <DepthSection model={model.routingDepth} actions={actions?.routingDepth} />}
 
       {model.dialog?.kind === 'addOperations' && <AddOperationsDialog routing={routing} model={model} actions={actions} />}
       {model.dialog?.kind === 'removeStep' && <RemoveStepDialog routing={routing} model={model} actions={actions} stepId={model.dialog.stepId} />}
@@ -182,8 +210,32 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
   )
 }
 
-function StepRow({ step, routing, editable, heldWhy, actions, prefix, costGrain, onInstructions }: { step: RoutingStep; routing: RoutingView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string; costGrain: boolean; onInstructions: () => void }) {
+function StepRow({
+  step,
+  routing,
+  editable,
+  heldWhy,
+  actions,
+  prefix,
+  costGrain,
+  onInstructions,
+  times,
+  depthActions,
+}: {
+  step: RoutingStep
+  routing: RoutingView
+  editable: boolean
+  heldWhy: string | null
+  actions?: StyleRecordActions
+  prefix: string
+  costGrain: boolean
+  onInstructions: () => void
+  /** B-W2b-235: the step's run (where it comes from) and the library's SMV in force today, when read. */
+  times: StepTimes | null
+  depthActions?: RoutingDepthActions
+}) {
   const t = useT('products')
+  const td = useT('products-operations-depth')
   const locale = useLocale()
   const [minutes, setMinutes] = useState(editText(step.standardMinutes, locale))
   const [bad, setBad] = useState(false)
@@ -196,8 +248,21 @@ function StepRow({ step, routing, editable, heldWhy, actions, prefix, costGrain,
       return
     }
     setBad(false)
-    if (value !== decimalInput(step.standardMinutes, 6)) void actions?.onStep?.(step.id, { standardMinutes: value })
+    if (value === decimalInput(step.standardMinutes, 6)) return
+    // B-W2b-235: a step whose run is copied from an approved version or built from allowances is typed through its minutes
+    // (W1's step change refuses it).
+    if (times && times.run.from !== 'TYPED' && depthActions?.onTypedRun) void depthActions.onTypedRun(step.id, value)
+    else void actions?.onStep?.(step.id, { standardMinutes: value })
   }
+  // B-W2b-235: the library's SMV in force today (an approved version) — "Use library value" copies that version.
+  const differs = times ? times.library.differs : step.differsFromLibrary
+  const libraryMinutes = times ? times.library.standardMinutes : step.operation.standardMinutes
+  const useLibrary = () => {
+    if (times?.library.inForceVersionId && depthActions?.onUseLibrary) void depthActions.onUseLibrary(step.id)
+    else if (times && times.run.from !== 'TYPED' && depthActions?.onTypedRun) void depthActions.onTypedRun(step.id, libraryMinutes)
+    else void actions?.onStep?.(step.id, { standardMinutes: libraryMinutes })
+  }
+  const run = times && times.run.from !== 'TYPED' ? runWords(times) : null
   return (
     <tr data-step={step.id}>
       <td>{step.seq}</td>
@@ -258,11 +323,12 @@ function StepRow({ step, routing, editable, heldWhy, actions, prefix, costGrain,
           ) : (
             <span>{t('routing.minutes', { minutes: minutesText(step.standardMinutes, locale) })}</span>
           )}
-          {step.differsFromLibrary && (
+          {run && <span className="fw-st-hint">{td(run.key, run.params)}</span>}
+          {differs && (
             <span className="fw-st-hint fw-st-inline">
-              {t('routing.library', { minutes: minutesText(step.operation.standardMinutes, locale) })}
+              {t('routing.library', { minutes: minutesText(libraryMinutes, locale) })}
               {editable && (
-                <Button size="sm" variant="link" onClick={() => void actions?.onStep?.(step.id, { standardMinutes: step.operation.standardMinutes })}>
+                <Button size="sm" variant="link" onClick={useLibrary}>
                   {t('routing.useLibrary')}
                 </Button>
               )}

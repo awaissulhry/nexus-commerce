@@ -1,0 +1,520 @@
+{
+  "min": "{minutes} min",
+  "minUnit": "min",
+  "pct": "{value} %",
+  "retry": "Try again",
+  "held": {
+    "busy": "Wait for the change being saved."
+  },
+  "tab": {
+    "machine": "Machine & settings"
+  },
+  "source": {
+    "TIME_STUDY": "Time study",
+    "PREDETERMINED": "Predetermined times",
+    "ESTIMATE": "Estimate"
+  },
+  "revisionStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "OBSOLETE": "obsolete"
+  },
+  "stage": {
+    "INCOMING": "Incoming",
+    "CUTTING": "Cutting",
+    "IN_LINE": "In-line",
+    "END_OF_LINE": "End of line",
+    "FINAL": "Final",
+    "RETURN": "Return"
+  },
+  "run": {
+    "VERSION": "Version {number}",
+    "ALLOWANCES": "Own allowances",
+    "TYPED": "Typed",
+    "version": "From SMV version {number}",
+    "versionOld": "From version {number} (no longer approved)",
+    "allowances": "Built from its own allowances",
+    "typed": "Typed here",
+    "library": "library {minutes} min"
+  },
+  "runSource": {
+    "VERSION": "The library's approved SMV",
+    "ALLOWANCES": "Own basic time and allowances",
+    "TYPED": "Typed SMV"
+  },
+  "minutes": {
+    "title": "Standard minutes",
+    "loading": "Reading the minutes…",
+    "failed": "Couldn't load the minutes",
+    "governed": "Approved versions govern this SMV: a change is proposed and a second person approves it.",
+    "notGoverned": "No version approved yet: the SMV is typed. The first approved version starts the approval rule.",
+    "governedTag": "Changes need approval",
+    "inForceLabel": "SMV in force today",
+    "inForceVersion": "Version {number}, from {day}",
+    "inForceOwn": "The operation's own SMV (no approved version)",
+    "basic": "Basic time",
+    "personal": "Personal allowance",
+    "fatigue": "Fatigue allowance",
+    "delay": "Delay allowance",
+    "smv": "SMV per garment",
+    "noBasic": "Not recorded (the SMV was typed)",
+    "formula": "{basic} min + {allowances} % = {smv} min",
+    "notYetMoved": "The library still shows {minutes} min until the hourly check moves it to the version in force.",
+    "suggestedLater": "A suggested SMV from recorded times comes later.",
+    "typed": {
+      "governed": "The SMV is not typed here any more: an approved version governs it. Propose a change instead.",
+      "allowances": "The SMV is built from basic time and allowances: propose a change to set new numbers.",
+      "waiting": "A proposed change waits for approval: it is decided first (or replaced by a new proposal)."
+    }
+  },
+  "versions": {
+    "title_one": "SMV versions ({count})",
+    "title_other": "SMV versions ({count})",
+    "intro": "Newest first: each with its numbers, the day it applies from, why, who proposed it and who decided.",
+    "empty": {
+      "title": "No SMV versions yet",
+      "body": "Propose a change: once a second person approves it, it becomes version 1."
+    },
+    "label": "Version {number} · {minutes} min",
+    "built": "{basic} min + {personal} % personal + {fatigue} % fatigue + {delay} % delay",
+    "from": "from {day}",
+    "reason": "Why: {reason}",
+    "proposed": "Proposed by {name} on {day}",
+    "approvedBy": "approved by {name} on {day}",
+    "rejectedBy": "rejected by {name} on {day}",
+    "note": "Note: {note}"
+  },
+  "version": {
+    "state": {
+      "PROPOSED": "Waiting for approval",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "SUPERSEDED": "Replaced",
+      "inForce": "In force",
+      "waiting": "Approved, from its day"
+    }
+  },
+  "pending": {
+    "title": "Version {number} waits for approval: {from} → {to} min from {day}",
+    "by": "Proposed by {name}."
+  },
+  "propose": {
+    "open": "Propose SMV change",
+    "openFor": "Propose SMV change of {code}",
+    "title": "Propose SMV change · {code}",
+    "titleLoading": "Propose SMV change",
+    "introGoverned": "The new SMV applies from the day you choose once a second person approves it. Routings that follow the library and new piece rates take it.",
+    "introFirst": "This becomes the operation's first SMV version: once a second person approves it, the SMV is changed only this way.",
+    "pending": "Version {number} ({minutes} min from {day}, proposed by {name}) waits for approval.",
+    "replace": "Send this one in place of version {number} (it is withdrawn with no decision)",
+    "basic": "Basic time",
+    "basicHint": "The observed time at normal pace, before allowances.",
+    "personal": "Personal allowance",
+    "allowanceHint": "Percent of the basic time, from 0 to below 100.",
+    "fatigue": "Fatigue allowance",
+    "delay": "Delay allowance",
+    "newSmv": "New SMV per garment:",
+    "was": "now {minutes} min",
+    "source": "Where the time comes from",
+    "effectiveFrom": "Applies from",
+    "dayHint": "Today or a later day.",
+    "dayHintApproved": "From {day} or later: an approved version applies from that day.",
+    "reason": "Why it changes",
+    "reasonHint": "The approver and the piece-rate office read it.",
+    "reviewLabel": "Old → new",
+    "today": "Approved today, it takes effect at once.",
+    "later": "Approved, it takes effect on {day}.",
+    "send": "Send for approval",
+    "change": {
+      "smv": "SMV per garment",
+      "basic": "Basic time",
+      "personal": "Personal allowance",
+      "fatigue": "Fatigue allowance",
+      "delay": "Delay allowance",
+      "day": "Applies from"
+    },
+    "held": {
+      "noRight": "Proposing an SMV change is for a role that proposes SMV changes (a production manager).",
+      "archived": "The operation is archived: reactivate it first.",
+      "waiting": "A proposal waits for approval: tick \"Send this one in place of version …\" or let it be decided first.",
+      "same": "These are the operation's numbers already: nothing to propose."
+    },
+    "problem": {
+      "basic": "Type the basic time in minutes, above 0 (at most 6 decimals).",
+      "basicEmpty": "Type the basic time.",
+      "allowance": "A percentage from 0 to below 100, at most 4 decimals.",
+      "source": "Choose where the time comes from.",
+      "dayEmpty": "Choose the day it applies from.",
+      "dayPast": "A new SMV applies from today or a later day.",
+      "dayBeforeApproved": "Not before the day an approved version applies from.",
+      "reason": "Say why the SMV changes.",
+      "reasonLong": "At most 2000 characters."
+    }
+  },
+  "decide": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveTitle": "Approve version {number} of {code}?",
+    "rejectTitle": "Reject version {number} of {code}?",
+    "change": "SMV",
+    "oldNew": "{from} → {to} min",
+    "built": "Built from",
+    "from": "Applies from",
+    "source": "Where the time comes from",
+    "reason": "Why",
+    "proposedBy": "Proposed by",
+    "reaches": "Reaches",
+    "reachesValue": "{routings} routing steps ({following} follow the library) · {rates} piece rates",
+    "atOnce": "Its day has come: approving it changes the SMV now, for routings that follow the library and for new piece rates.",
+    "onDay": "Approving it changes the SMV on {day}; until then the current SMV applies.",
+    "rejectWhat": "The SMV stays as it is. The proposer reads your reason.",
+    "note": "Note (optional)",
+    "noteRequired": "Why it is rejected",
+    "held": {
+      "own": "You proposed this change: a second person decides it.",
+      "noRight": "Your role does not approve SMV changes.",
+      "notWaiting": "This version no longer waits for a decision.",
+      "note": "Say why it is rejected."
+    }
+  },
+  "impact": {
+    "title": "Routings and piece rates affected",
+    "intro": "What an SMV change of this operation reaches.",
+    "routings_one": "{count} routing step ({drafts} in drafts, {released} released)",
+    "routings_other": "{count} routing steps ({drafts} in drafts, {released} released)",
+    "following_one": "{count} step follows the library's approved version: it takes a new version through \"Use library value\".",
+    "following_other": "{count} steps follow the library's approved version: they take a new version through \"Use library value\".",
+    "noneFollowing": "No step follows an approved version yet: each keeps its own minutes until \"Use library value\".",
+    "rates_one": "{count} piece rate is paid on this SMV",
+    "rates_other": "{count} piece rates are paid on this SMV",
+    "routingsLabel": "Routing steps made from this operation",
+    "ratesLabel": "Piece rates on this SMV",
+    "ratesHidden": "Which piece rates: People › Piece rates (your role does not read them).",
+    "ratesRule": "A released routing and a work order keep their minutes; piece rates take the approved SMV of the day their version starts.",
+    "more_one": "and {count} more step",
+    "more_other": "and {count} more steps",
+    "revision": "Rev {revision} ({status})",
+    "rateVersion": "v{number} · {status} · from {day}",
+    "col": {
+      "style": "Style",
+      "revision": "Revision",
+      "step": "Step",
+      "smv": "SMV",
+      "from": "Run from",
+      "table": "Rate table",
+      "version": "Version",
+      "band": "Size band"
+    }
+  },
+  "conn": {
+    "title": "Connections",
+    "pieceRates": "People › Piece rates",
+    "pieceRatesWhy_one": "{count} piece rate is paid on this SMV.",
+    "pieceRatesWhy_other": "{count} piece rates are paid on this SMV.",
+    "pieceRatesNoRight": "your role does not read piece rates",
+    "changes": "Changes & versions",
+    "changesNotBuilt": "comes with its page; the waiting changes are under the tile on Operations",
+    "changesWhy": "SMV changes are listed there with the style changes.",
+    "notBuilt": "not open yet"
+  },
+  "refused": {
+    "forbidden": "Not allowed: you proposed this change, or your role does not decide it.",
+    "state": "The operation or the version changed meanwhile: it was read again."
+  },
+  "notice": {
+    "proposed": "SMV change of {code} sent for approval.",
+    "replaced": "SMV change of {code} sent in place of the waiting one.",
+    "approved": "Version {number} approved.",
+    "approvedWaits": "Version {number} approved: it takes effect on {day}.",
+    "rejected": "Version {number} rejected."
+  },
+  "waiting": {
+    "tile": "SMV changes waiting for approval",
+    "tileHint": "Proposed changes a second person decides",
+    "view": "SMV changes waiting",
+    "intro": "Oldest first. A change you proposed is decided by someone else; to reject one, open it and say why.",
+    "label": "SMV changes waiting for approval",
+    "count_one": "{count} waiting",
+    "count_other": "{count} waiting",
+    "version": "Version {number}",
+    "failed": "Couldn't load the waiting changes",
+    "empty": {
+      "title": "Nothing waits for approval",
+      "body": "A proposed SMV change shows here until a second person decides it."
+    },
+    "approveN_one": "Approve {count}",
+    "approveN_other": "Approve {count}",
+    "confirmTitle_one": "Approve {count} SMV change?",
+    "confirmTitle_other": "Approve {count} SMV changes?",
+    "confirmIntro": "Each takes effect on its day (at once when its day has come), for routings that follow the library and new piece rates.",
+    "col": {
+      "operation": "Operation",
+      "change": "Old → new SMV",
+      "from": "Applies from",
+      "reason": "Why",
+      "by": "Proposed by"
+    },
+    "notice": {
+      "approved_one": "{count} SMV change approved.",
+      "approved_other": "{count} SMV changes approved.",
+      "partly": "{count} of {total} approved; the next one was refused: it was read again."
+    }
+  },
+  "settings": {
+    "title": "Machine settings",
+    "intro": "Needle, stitches per cm, thread ticket and attachment for this operation. A routing step copies them, and the tablet shows them with the instruction.",
+    "loading": "Reading the settings…",
+    "failed": "Couldn't load settings",
+    "listLabel": "Machine and stitch settings",
+    "number": "Setting {n}",
+    "empty": {
+      "title": "No settings yet",
+      "body": "Add the machine, needle, thread and stitches the operation is sewn with.",
+      "bodyRead": "No machine settings are recorded for this operation."
+    },
+    "add": "Add a setting",
+    "remove": "Remove setting {n}",
+    "moveUp": "Move setting {n} up",
+    "moveDown": "Move setting {n} down",
+    "noClass": "No machine class",
+    "classesUnread": "The machine classes are read with Plant (your role does not read them).",
+    "classOff": "Machine class switched off",
+    "perCm": "per cm",
+    "stitches": "{value} per cm",
+    "unsaved": "The settings changed",
+    "save": "Save settings",
+    "field": {
+      "machineClass": "Machine class",
+      "stitchType": "Stitch type",
+      "needle": "Needle",
+      "thread": "Thread ticket",
+      "stitchesPerCm": "Stitches per cm",
+      "tension": "Tension",
+      "foot": "Foot or attachment",
+      "notes": "Notes"
+    },
+    "hint": {
+      "stitchType": "ISO 4915, e.g. 301",
+      "needle": "System and size, e.g. 134 LR Nm 110",
+      "thread": "e.g. Tkt 40",
+      "foot": "e.g. roller foot, binder"
+    },
+    "whereTitle": "Where these settings go",
+    "where": {
+      "copy": "A routing step takes them with \"Copy from library\" (its own list stays its own).",
+      "tablet": "The floor tablet shows the step's settings beside the instruction.",
+      "without_one": "{count} draft routing step of this operation has no settings of its own yet.",
+      "without_other": "{count} draft routing steps of this operation have no settings of their own yet.",
+      "allOwn": "Every draft routing step of this operation has its own settings."
+    },
+    "held": {
+      "first": "Already the first",
+      "last": "Already the last",
+      "full_one": "At most {count} setting",
+      "full_other": "At most {count} settings",
+      "noManage": "Read only: your role does not change the operation library.",
+      "archived": "Read only: the operation is archived.",
+      "fix": "Fix the settings marked first.",
+      "same": "Nothing changed."
+    },
+    "problem": {
+      "empty": "Say something in this setting, or remove it.",
+      "stitches": "A number above 0 with at most 4 digits and 2 decimals.",
+      "long": "Too long.",
+      "tooMany": "At most 10 settings."
+    },
+    "notice": {
+      "saved_one": "{count} setting saved.",
+      "saved_other": "{count} settings saved."
+    }
+  },
+  "depth": {
+    "title": "Times, sizes and checkpoints",
+    "intro": "Each step's run and where it comes from, set-up, wait and move per work order, the extra minutes per size, the cells it is for, its quality checkpoint and its machine settings.",
+    "loading": "Reading the routing in depth…",
+    "failed": "Couldn't load the routing in depth",
+    "table": "The routing in depth",
+    "count_one": "{count} step",
+    "count_other": "{count} steps",
+    "empty": "No steps yet.",
+    "perGarment": "Per garment: {minutes} min",
+    "bySize": "By size:",
+    "perOrder": "Per work order: set-up {setup} · wait {wait} · move {move} min",
+    "daysFrom": "This revision applies to new work orders from {from}.",
+    "daysTo": "This revision applied to new work orders from {from} to {to}.",
+    "held": {
+      "noManage": "Read only: your role does not change routings.",
+      "reading": "The routing is still being read.",
+      "archived": "Read only: the style is archived.",
+      "frozen": "Read only: this revision is released and frozen; change its draft."
+    },
+    "notice": {
+      "times": "The step's minutes are saved.",
+      "variants_one": "What {count} step is for is saved.",
+      "variants_other": "What {count} steps are for is saved.",
+      "checkpoint": "The quality checkpoint is set.",
+      "checkpointOff": "The quality checkpoint is taken off.",
+      "settings_one": "The step's settings are saved.",
+      "settings_other": "The steps' settings are saved.",
+      "copied_one": "{count} step took the library's settings.",
+      "copied_other": "{count} steps took the library's settings.",
+      "library": "The step takes the library's approved SMV."
+    }
+  },
+  "col": {
+    "step": "Step",
+    "run": "Run per garment",
+    "side": "Set-up · wait · move",
+    "variants": "Only for",
+    "checkpoint": "Quality checkpoint",
+    "settings": "Machine settings",
+    "more": "More"
+  },
+  "sizes": {
+    "cell": "Extra minutes of {step} in size {size}"
+  },
+  "variants": {
+    "every": "Every size and colourway",
+    "title": "Only for · {step}",
+    "titleMany_one": "Only for · {count} step",
+    "titleMany_other": "Only for · {count} steps",
+    "intro": "Tick what the step runs for. Nothing ticked: it runs for every size, colourway and option.",
+    "sizesLabel": "Sizes",
+    "colourwaysLabel": "Colourways",
+    "optionsLabel": "Options",
+    "noColourways": "The style has no colourways yet.",
+    "optionsLoading": "Reading the style's options…",
+    "optionsFailed": "Couldn't read the style's options; the ones already chosen stay.",
+    "result": "It runs for:",
+    "sizes": "sizes {list}",
+    "colourways": "colourways {list}",
+    "options": "options {list}",
+    "workOrders": "A work order takes the step when any of its cells needs it; its bundles of other cells still pass the step.",
+    "manyReplace_one": "The {count} step takes exactly these choices.",
+    "manyReplace_other": "The {count} steps take exactly these choices.",
+    "save": "Save",
+    "saveMany_one": "Save for {count} step",
+    "saveMany_other": "Save for {count} steps",
+    "held": {
+      "same": "Nothing changed."
+    }
+  },
+  "checkpoint": {
+    "none": "None",
+    "title": "Quality checkpoint · {step}",
+    "intro": "An inspection plan the floor opens at this step's first report of a bundle: a cutting, in-line or end-of-line plan of the style's company.",
+    "current": "Now: {code} · {name}",
+    "loading": "Reading the inspection plans…",
+    "failed": "Couldn't read the inspection plans",
+    "noPlansRight": "Picking a plan needs Quality › Inspection plans & AQL in your role; the step keeps its checkpoint.",
+    "pick": "Inspection plan",
+    "notApproved": "no approved version: opens nothing yet",
+    "noneYet": "No cutting, in-line or end-of-line plan for this company yet.",
+    "rule": "A final inspection is opened at the bench or at packing, never at a step.",
+    "save": "Save checkpoint",
+    "held": {
+      "same": "Nothing changed."
+    }
+  },
+  "settingsCol": {
+    "none": "None",
+    "library_one": "Library has {count} setting",
+    "library_other": "Library has {count} settings",
+    "more_one": "+ {count} more",
+    "more_other": "+ {count} more"
+  },
+  "stepSettings": {
+    "title": "Machine settings · {step}",
+    "library_one": "The library operation has {count} setting: copy it to replace this step's list.",
+    "library_other": "The library operation has {count} settings: copy them to replace this step's list.",
+    "noLibrary": "The library operation has no settings yet.",
+    "copy": "Copy from library"
+  },
+  "copy": {
+    "title_one": "Copy the library's settings to {count} step?",
+    "title_other": "Copy the library's settings to {count} steps?",
+    "intro": "Each step's own list is replaced by its library operation's list as it is now.",
+    "replaces": "{from} → {to} settings",
+    "skipped": "skipped: its library operation has no settings"
+  },
+  "bulk": {
+    "variants_one": "Only for… {count}",
+    "variants_other": "Only for… {count}",
+    "copy_one": "Copy library settings {count}",
+    "copy_other": "Copy library settings {count}",
+    "held": {
+      "noLibrary": "No library settings to copy."
+    }
+  },
+  "menu": {
+    "more": "More for step {step}",
+    "times": "Times…",
+    "timesView": "See the times",
+    "variants": "Only for…",
+    "variantsView": "See what it runs for",
+    "checkpoint": "Quality checkpoint…",
+    "checkpointView": "See the checkpoint",
+    "settings": "Machine settings…",
+    "settingsView": "See the machine settings",
+    "copyLibrary_one": "Copy library settings ({count})",
+    "copyLibrary_other": "Copy library settings ({count})",
+    "openMinutes": "Minutes and SMV versions"
+  },
+  "times": {
+    "title": "Times · {step}",
+    "runFrom": "The run per garment comes from",
+    "versionHint": "Version {number}: {minutes} min, and later approved versions through \"Use library value\".",
+    "allowancesHint": "This step's own basic time and allowances.",
+    "typedHint": "An SMV typed for this step only.",
+    "smv": "SMV per garment",
+    "runIs": "Run per garment:",
+    "run": "Run per garment",
+    "setup": "Set-up",
+    "wait": "Wait",
+    "move": "Move",
+    "sideHint": "Per work order; empty: none.",
+    "extras": "Extra minutes for big sizes",
+    "extrasHint": "Minutes added to (or, with a minus, taken from) the run in that size; empty: none.",
+    "inSize": "In size {size}",
+    "inSizeHint": "{minutes} min",
+    "extraOf": "extra {extra}",
+    "libraryDiffers": "The library's SMV in force today is {minutes} min.",
+    "save": "Save times",
+    "held": {
+      "fix": "Fix the fields marked first.",
+      "same": "Nothing changed."
+    },
+    "problem": {
+      "noVersion": "No approved version of the library operation yet.",
+      "typed": "Minutes above 0, at most 6 decimals.",
+      "allowance": "A percentage from 0 to below 100.",
+      "side": "Minutes from 0, at most 6 decimals.",
+      "extra": "Minutes, a minus for less, at most 6 decimals.",
+      "belowZero": "The step would take no time in this size.",
+      "refused": "Not saved: see the message above.",
+      "notInForce": "No approved version of the library operation is in force today."
+    },
+    "versionKept": "Copied from version {number}: {minutes} min. No approved version is in force today; a later one comes through \"Use library value\"."
+  },
+  "sideCol": {
+    "values": "{setup} · {wait} · {move}",
+    "unit": "min per work order",
+    "none": "None"
+  },
+  "depthKeys": {
+    "open": "the step's times"
+  },
+  "rateStatus": {
+    "DRAFT": "draft",
+    "PROVISIONAL": "provisional",
+    "PUBLISHED": "published",
+    "SUPERSEDED": "superseded",
+    "CANCELLED": "cancelled",
+    "ACTIVE": "active"
+  },
+  "offline": {
+    "held": "Offline — your changes are kept on this page.",
+    "cells_one": "Offline — {count} cell waits to be sent; nothing else is sent until the connection is back.",
+    "cells_other": "Offline — {count} cells wait to be sent; nothing else is sent until the connection is back."
+  }
+}
