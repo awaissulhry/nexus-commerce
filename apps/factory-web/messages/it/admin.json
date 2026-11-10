@@ -1695,6 +1695,7 @@
     "product_materials_approve": "Decidere l'approvazione di un materiale (approvare, con una condizione, bloccare)",
     "product_styles_view": "Vedere gli articoli",
     "product_styles_manage": "Creare e modificare articoli",
+    "product_mtm_switch": "Attivare o disattivare le regole su misura di un modello di misure (se disattivate non si controlla nulla)",
     "product_styles_lifecycle": "Spostare un articolo nel suo ciclo di vita",
     "product_settings_manage": "Gestire tipi di prodotto, regole di modifica e tolleranza di consumo",
     "product_gtins_manage": "Gestire gli intervalli GTIN GS1 e assegnare i GTIN agli SKU",

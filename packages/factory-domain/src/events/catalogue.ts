@@ -184,6 +184,8 @@ import { events as complianceUserInformation } from '../compliance-user-informat
 import { events as complianceMaterialTests } from '../compliance-material-tests/events'
 // B-W2b-259: label artwork (a version added, approved by a second person, retired) and labels logged spoiled or returned.
 import { events as complianceLabelArtwork } from '../compliance-label-artwork/events'
+// B-W2b-248: made-to-measure rules.
+import { events as productMtm } from '../product-mtm/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -434,7 +436,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-256
   ...complianceMaterialTests,
   // B-W2b-259
-  ...complianceLabelArtwork] as const satisfies readonly EventDefinition[]
+  ...complianceLabelArtwork,
+  // B-W2b-248
+  ...productMtm] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
