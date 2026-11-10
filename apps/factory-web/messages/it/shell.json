@@ -118,7 +118,8 @@
       "floorControl": "Controllo reparto",
       "scrap": "Scarti e rilavorazioni",
       "calls": "Chiamate di aiuto",
-      "labour": "Manodopera e rettifiche"
+      "labour": "Manodopera e rettifiche",
+      "instructions": "Istruzioni di lavoro"
     },
     "quality": {
       "area": "Qualità",

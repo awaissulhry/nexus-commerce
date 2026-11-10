@@ -19,6 +19,8 @@ import { OPEN_PURCHASE_STATUSES, openQuantityOf, type LotFacts } from '@nexus/fa
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../core/command'
 import { readLines } from '../product/bom/store'
+// B-W2b-228 (PRD-084): a material the customer sends is not bought.
+import { withoutCustomerSupplied } from '../product/bom-lines/store'
 
 /**
  * What a planning run reads (B-W1-29), in one client: the run's command transaction for a run, a read-only client for
@@ -157,7 +159,7 @@ export async function readDemand(db: Reader, site: SiteRow): Promise<DemandRead>
   })
   const revisions: PlanRevision[] = []
   for (const revisionId of [...new Set(orderLines.flatMap((line) => (line.revisionId ? [line.revisionId] : [])))].sort()) {
-    revisions.push({ id: revisionId, lines: await readLines(db, revisionId) })
+    revisions.push({ id: revisionId, lines: await withoutCustomerSupplied(db, revisionId, await readLines(db, revisionId)) })
   }
   return { orderLines, revisions, unplaced }
 }
