@@ -168,7 +168,7 @@ export const REVISION_COLUMNS = {
 } as const satisfies Prisma.StyleRevisionSelect
 export type RevisionRowData = Prisma.StyleRevisionGetPayload<{ select: typeof REVISION_COLUMNS }>
 
-export const SIZE_COLUMNS = { id: true, scaleId: true, code: true, label: true, seq: true, bodyMeasures: true, status: true, version: true } as const satisfies Prisma.SizeSelect
+export const SIZE_COLUMNS = { id: true, scaleId: true, code: true, label: true, seq: true, bodyMeasures: true, fitCode: true, status: true, version: true } as const satisfies Prisma.SizeSelect
 export type SizeRowData = Prisma.SizeGetPayload<{ select: typeof SIZE_COLUMNS }>
 
 export const SCALE_COLUMNS = {
@@ -176,6 +176,8 @@ export const SCALE_COLUMNS = {
   companyId: true,
   code: true,
   name: true,
+  // B-W2b-224 (PRD-049): one dimension or two (size and fit).
+  dimensions: true,
   status: true,
   version: true,
   createdAt: true,

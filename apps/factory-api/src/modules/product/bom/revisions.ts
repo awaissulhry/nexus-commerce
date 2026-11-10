@@ -21,6 +21,10 @@ import { effectivityAtReleaseInCommand, effectivityAtWithdrawalInCommand } from 
 // B-W2b-223: B-W2b-211's columns travel with the copy; the release reads the BOM check's structure blockers.
 import { assertStructureReleasable, structureBlockersInCommand } from '../bom-structure/check'
 import { copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
+// B-W2b-224: the measurement spec and the protector placement travel with a copied revision.
+import { copyMeasuresInCommand, emptyMeasuresCopy } from '../measures/copy'
+// B-W2b-226: a change order starts its draft revision with the copy and is released with the draft.
+import { changeOrderAtReleaseInCommand, linkDraftInCommand, releaseChangeOrderInCommand, type DraftFor } from '../changes/hooks'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -54,8 +58,11 @@ import {
  * change to its parts, for every login.
  */
 
-/** product.bom.copyRevision: a RELEASED (or OBSOLETE) revision's BOM, routing, pattern pieces (B-W2b-95), planned yield and label into the next DRAFT. */
-export async function copyRevision(caller: CommandCaller, styleId: string, sourceId: string, body: CopyRevisionBody, idempotencyKey?: string): Promise<BomView> {
+/**
+ * product.bom.copyRevision: a RELEASED (or OBSOLETE) revision's BOM, routing, pattern pieces (B-W2b-95), planned yield and label into the next DRAFT.
+ * B-W2b-226: `changeOrder` (its own "Start the draft revision" only) lets it through the CHANGE_ORDER edit rule and names the draft its proposed revision.
+ */
+export async function copyRevision(caller: CommandCaller, styleId: string, sourceId: string, body: CopyRevisionBody, idempotencyKey?: string, changeOrder?: DraftFor): Promise<BomView> {
   const context = contextOf(caller)
   const { style } = await readRevisionFor(caller, styleId, sourceId)
   assertMayWrite(context, PRODUCT_BOM_MANAGE, style.companyId)
@@ -69,7 +76,7 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     const refusal = newRevisionRefusal(locked.status, revisions)
     if (refusal) throw new ConflictError(refusal)
     // B-W2b-221: a new revision under the edit rule of the style's lifecycle state.
-    await requireEditRule(tx, styleId, 'NEW_REVISION')
+    await requireEditRule(tx, styleId, 'NEW_REVISION', changeOrder?.number)
     const id = newId()
     const revision = nextRevisionNumber(revisions)
     const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
@@ -164,9 +171,14 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     if (!emptyCopy(structure)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, structure } })
     // B-W2b-95: the pattern pieces travel with the BOM, AFTER it (a piece names its line); the range is the style's now.
     const pieces = await copyPiecesInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines), (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })).sizes)
+    // B-W2b-224: the spec (a DRAFT again, cells of the range now) and the protector placement, after the BOM.
+    const range = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true, sizeScaleId: true } })
+    const measures = await copyMeasuresInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, range.sizes, range.sizeScaleId)
+    if (!emptyMeasuresCopy(measures)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, measures } })
     const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
     tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, ...copied } })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id, revision, status: 'DRAFT', copiedFrom: source.revision } } })
+    if (changeOrder) await linkDraftInCommand(tools, changeOrder, { styleId, revisionId: id, revision })
     tools.emit({ type: 'style.revision_created', subject: styleId, companyId: locked.companyId, payload: { styleId, code: locked.code, revisionId: id, revision } })
     return bomViewInTx(tx, styleId, id)
   }).catch((error: unknown) => {
@@ -223,6 +235,7 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     if (refusal) throw new InvalidStateError(refusal)
     // B-W2b-221: a release under the edit rule of the style's lifecycle state.
     await requireEditRule(tx, styleId, 'RELEASE')
+    const changeOrder = await changeOrderAtReleaseInCommand(tools, { styleId, revisionId })
     assertTransition(styleRevisionMachine, row.status, 'RELEASED')
     const version = await bumpRevision(tx, revisionId, body.version, now)
 
@@ -291,6 +304,7 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
       companyId: locked.companyId,
       payload: { styleId, code: locked.code, revisionId, revision: row.revision, obsoletedRevisionId: previous?.id ?? null },
     })
+    if (changeOrder) await releaseChangeOrderInCommand(tools, changeOrder)
     return bomViewInTx(tx, styleId, revisionId)
   })
   return result

@@ -14,6 +14,8 @@ import {
   type StyleLifecycle,
 } from '@nexus/factory-domain/product/lifecycle/rules'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-226: the change order that holds the style's draft (frozen while it waits for approval or is approved).
+import { draftHolderOf } from '../changes/held'
 
 /**
  * THE edit rule of a style (B-W2b-221; PRD-182; factory-domain product/lifecycle/rules): every product write asks it with
@@ -44,7 +46,7 @@ export const refuse = (refusal: EditRefusal | LifecycleRefusal): never => {
   throw new EditRefusedError(refusal)
 }
 
-type Reader = Pick<CommandTx, 'style' | 'styleRevision' | 'productSettings'> | FactoryClient
+type Reader = Pick<CommandTx, 'style' | 'styleRevision' | 'productSettings' | 'changeOrder'> | FactoryClient
 
 const RULE_COLUMNS = {
   editRuleConcept: true,
@@ -77,23 +79,26 @@ export interface StyleEditRule {
 export async function editRuleOf(db: Reader, styleId: string): Promise<StyleEditRule> {
   const style = await db.style.findUnique({ where: { id: styleId }, select: { id: true, tenantId: true, companyId: true, code: true, lifecycle: true } })
   if (!style) throw new NotFoundError('Style not found.')
-  const draft = await db.styleRevision.findFirst({ where: { styleId, status: 'DRAFT' }, select: { revision: true }, orderBy: { revision: 'desc' } })
+  const draft = await db.styleRevision.findFirst({ where: { styleId, status: 'DRAFT' }, select: { id: true, revision: true }, orderBy: { revision: 'desc' } })
   const rows = await ruleRows(db, style.tenantId, style.companyId)
   const { rule, source } = editRuleFor(style.lifecycle, rows.company, rows.tenant)
   return {
     styleId,
     tenantId: style.tenantId,
     companyId: style.companyId,
-    facts: { code: style.code, lifecycle: style.lifecycle, draftRevision: draft?.revision ?? null },
+    facts: { code: style.code, lifecycle: style.lifecycle, draftRevision: draft?.revision ?? null, draftHeldBy: draft ? await draftHolderOf(db, draft.id) : null },
     rule,
     source,
     table: editRuleTable(rows.company, rows.tenant),
   }
 }
 
-/** Refuses `kind` of write to the style in words (409 `refusal/<CODE>`) when its lifecycle state's rule does not allow it. */
-export async function requireEditRule(tx: CommandTx, styleId: string, kind: EditKind): Promise<void> {
+/**
+ * Refuses `kind` of write to the style in words (409 `refusal/<CODE>`) when its lifecycle state's rule does not allow it.
+ * B-W2b-226: `forChangeOrder` (its number) is passed only by a change order's own "Start the draft revision".
+ */
+export async function requireEditRule(tx: CommandTx, styleId: string, kind: EditKind, forChangeOrder?: string): Promise<void> {
   const { rule, facts } = await editRuleOf(tx, styleId)
-  const refusal = editRefusal(rule, kind, facts)
+  const refusal = editRefusal(rule, kind, forChangeOrder ? { ...facts, changeOrder: forChangeOrder } : facts)
   if (refusal) refuse(refusal)
 }

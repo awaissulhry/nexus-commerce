@@ -146,6 +146,12 @@ model Company {
   economicOperatorRoles  EconomicOperatorRole[]
   phrases                Phrase[]
   gateEvents             GateEvent[]
+  // W2b-4 techfiles.prisma (wave 32/33): the declarations its batches went with, its technical files, production-control
+  // tests and evidence packs.
+  complianceDocumentBatches ComplianceDocumentBatch[]
+  technicalFiles            TechnicalFile[]
+  productionControlTests    ProductionControlTest[]
+  evidencePacks             EvidencePack[]
   // compliance.prisma: the certificates it holds, its label templates and compliance documents.
   certificates         Certificate[]
   labelTemplates       LabelTemplate[]
@@ -384,6 +390,11 @@ model Site {
   requestRoutingRules     RequestRoutingRule[]
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
+  // W2b-4 techfiles.prisma (wave 32/33): its spoiled and returned labels, the declarations and production-control tests of
+  // its work orders.
+  garmentLabelSpoils        GarmentLabelSpoil[]
+  complianceDocumentBatches ComplianceDocumentBatch[]
+  productionControlTests    ProductionControlTest[]
   bundleReprints          BundleReprint[]
   // W2b labour.prisma, andon.prisma (wave 7/7): its off-standard time, the edits of its labour records, its help-call
   // types and their routing.

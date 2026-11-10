@@ -31,7 +31,7 @@ const T = idOf('tenant')
 const companyA = idOf('company:A')
 const lineL1 = idOf('site:A1:line:L1')
 const SEED_DIR = fileURLToPath(new URL('../../../../../../packages/factory-db/seed/', import.meta.url))
-const PERMISSIONS: Permission[] = ['workorders.view', 'workorders.manage', 'workorders.release', 'planning.view', 'planning.schedule.manage', 'product.bom.view', 'product.bom.manage']
+const PERMISSIONS: Permission[] = ['workorders.view', 'workorders.manage', 'workorders.release', 'planning.view', 'planning.schedule.manage', 'product.bom.view', 'product.bom.manage', 'product.styles.view', 'product.settings.manage']
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const SESSIONS: Record<string, SessionContext> = {
   planner: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(PERMISSIONS)] },
@@ -249,6 +249,10 @@ describe('B-W2a-F3: a draft whose operations are on the planning board', () => {
     const placed = await ok('POST', '/planning/schedule/slots', { workOrderId: workOrder.id, operationId: sew.id, lane: { kind: 'LINE', id: lineL1 }, startAt: '2026-11-24T08:00:00.000Z', overloadReason: 'Made-up reason to keep it there.' }, 201)
     const bar = placed.slot.id as string
     const revision1 = (await workOrderOf(workOrder.number)).styleRevisionId
+    // B-W2b-221: SEED-JKT-02 is IN_PRODUCTION, whose default edit rule asks a change order for a new revision; this test is about
+    // the planning board, so the tenant lets a style in production take a new revision directly (the rule B-W2b-221's live check used).
+    const tenantSettings = (await ok('GET', '/product/settings')).settings
+    await ok('PUT', '/product/settings', { companyId: null, ...(tenantSettings.version ? { version: tenantSettings.version } : {}), editRules: { IN_PRODUCTION: 'NEW_REVISION' }, reason: 'A made-up test: a new revision without a change order.' })
     const copy = await ok('POST', `/product/styles/${idOf('production:style:JKT-02')}/revisions/${revision1}/copy`, { changeNote: 'A made-up second revision.' }, 201)
     const revision2 = copy.bom.revision.id as string
 

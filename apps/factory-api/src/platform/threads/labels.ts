@@ -69,6 +69,12 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   Ddt: async (client, id) => (await client.ddt.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2b-108 (modules/quality/capa): a CAPA or an 8D by its number.
   Capa: async (client, id) => (await client.capa.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2b-226 (modules/product/changes): a change request by its number (a floor one not taken up yet: "Floor request"), a change order by its number.
+  ChangeRequest: async (client, id) => {
+    const request = await client.changeRequest.findUnique({ where: { id }, select: { number: true } })
+    return request ? (request.number ?? 'Floor request') : null
+  },
+  ChangeOrder: async (client, id) => (await client.changeOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
 })
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */

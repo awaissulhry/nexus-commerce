@@ -226,6 +226,16 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const request = await client.approvalRequest.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return request ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
   },
+  // B-W2b-226 (modules/product/changes; design products.changes Activity): a change request's company and site (a floor one's,
+  // or its work order's) and the customer or supplier who asked; a change order's company, internal notes only (no party).
+  ChangeRequest: async (client, id) => {
+    const request = await client.changeRequest.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return request ? { companyId: request.companyId, siteId: request.siteId, partyId: request.partyId } : null
+  },
+  ChangeOrder: async (client, id) => {
+    const order = await client.changeOrder.findUnique({ where: { id }, select: { companyId: true } })
+    return order ? { companyId: order.companyId, siteId: null, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

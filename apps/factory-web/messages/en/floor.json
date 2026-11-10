@@ -752,7 +752,8 @@
       "inlineRecord": "In-line inspection: a check's result",
       "inlineResults": "In-line inspection: the plan's checks",
       "finalRecord": "Final inspection: results and measurements",
-      "instructionSeen": "Work instruction seen"
+      "instructionSeen": "Work instruction seen",
+      "specProblem": "Spec problem reported"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

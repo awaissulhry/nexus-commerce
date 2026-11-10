@@ -76,6 +76,7 @@ import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSubstances } from '../seed/substances'
 import { seed as seedSupply } from '../seed/supply'
+import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
@@ -356,6 +357,12 @@ beforeAll(async () => {
   // the partner reads its request and line). Their first rows are the plain ones a copy may repeat.
   await seedSubstances({ db: factory, namespace: 'iso-a' })
   await seedSubstances({ db: factory, namespace: 'iso-b' })
+  // The declarations, technical files and labels of W2b-4 (wave 32/33): documents and their batches, technical files with items,
+  // risk assessments, production-control tests, evidence packs, label kinds, artwork and spoiled labels at A1; its first batch
+  // record (typed), file (archived), item, assessment (draft) and row, test (due), pack (building), artwork (draft) and spoiled
+  // labels are the plain ones a copy may repeat.
+  await seedTechfiles({ db: factory, namespace: 'iso-a' })
+  await seedTechfiles({ db: factory, namespace: 'iso-b' })
   // The recall, authority and claims schema of W2b-4 (wave 33/33): authority notices, recalls and withdrawals with their
   // progress, distributor notices, authority requests, sustainability claims and their uses; their first rows (DRAFT notices,
   // recall and claim of OPEN entries, an OPEN request, the DRAFT recall's progress without a shipment, a use of an APPROVED
@@ -422,6 +429,7 @@ it('covers every classified table and every runtime role', () => {
     'CompanyBranding',
     'Complaint',
     'ComplianceDocument',
+    'ComplianceDocumentBatch',
     'ComplianceRequirement',
     'CostingSettings',
     'CrewMember',
@@ -451,6 +459,7 @@ it('covers every classified table and every runtime role', () => {
     'EmailOutbound',
     'Employee',
     'EmployeeSkill',
+    'EvidencePack',
     'ExportJob',
     'FabricRoll',
     'FileMarkup',
@@ -464,6 +473,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorSyncEvent',
     'GarmentDowngrade',
     'GarmentLabelPrint',
+    'GarmentLabelSpoil',
     'GarmentProtectorLot',
     'GarmentSerial',
     'GateEvent',
@@ -519,6 +529,7 @@ it('covers every classified table and every runtime role', () => {
     'ItemGradeRule',
     'ItemPlanning',
     'LabResult',
+    'LabelArtworkVersion',
     'LabelTemplate',
     'LabourDay',
     'LabourDispute',
@@ -654,8 +665,11 @@ it('covers every classified table and every runtime role', () => {
     'PrivacyNotice',
     'PrivacyNoticeText',
     'ProcessingActivity',
+    'ProductRiskAssessment',
+    'ProductRiskRow',
     'ProductSettings',
     'ProductTypeProfile',
+    'ProductionControlTest',
     'ProductionSettings',
     'ProtectedView',
     'ProtectorPlacement',
@@ -798,6 +812,8 @@ it('covers every classified table and every runtime role', () => {
     'Task',
     'Team',
     'TeamMember',
+    'TechnicalFile',
+    'TechnicalFileItem',
     'Tenant',
     'TestPlanRule',
     'Thread',
