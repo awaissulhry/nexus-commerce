@@ -1689,6 +1689,7 @@
     "compliance_userInformation_generate": "Make generated user-information drafts and their translations for each market",
     "compliance_userInformation_check": "Check a generated leaflet's translation (never one's own)",
     "compliance_supplierDeclarations_manage": "Ask suppliers for declarations (REACH SVHC, RSL, PFAS-free, nickel release, chromium VI), remind them, record and decide their answers",
+    "compliance_reports_view": "See a company's compliance reports: certificate coverage of styles and markets, shipped styles covered, open gaps by type, gate refusals, the expiry calendar, chromium VI per supplier, the register summary and the annual review (only from records you may see)",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",

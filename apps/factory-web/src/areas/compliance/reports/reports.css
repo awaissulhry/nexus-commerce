@@ -1,0 +1,219 @@
+/*
+ * Compliance › Reports (SCR-261) and the annual compliance review (SCR-307) LAYOUT: the band, the scope row, the panels' heads,
+ * the skeletons, the tiles' hints, the expiry calendar's months and chips, the keys and the print page. The controls are the
+ * design system's; this file only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule
+ * 2026-10-29): the page fills the shell's main area and every panel starts full width.
+ */
+.fw-cr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cr-band,
+.fw-cr-scope,
+.fw-cr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-cr-scope {
+  justify-content: flex-start;
+}
+
+.fw-cr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-cr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-cr-head-controls,
+.fw-cr-status,
+.fw-cr-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-cr-hint,
+.fw-cr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-cr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-cr-sections {
+  min-width: 0;
+}
+
+.fw-cr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-cr-shape-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+
+.fw-cr-shape-months {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+}
+
+.fw-cr-tile-hint,
+.fw-cr-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* The expiry calendar: twelve months side by side as the width allows, each with its chips. */
+.fw-cr-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-cr-month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-cr-month-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-cr-month-name {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.fw-cr-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-cr-chip-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cr-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-cr-chip:focus-visible {
+  outline: var(--nds-focus-ring);
+}
+
+.fw-cr-chip-text {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-cr-chip-label {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.fw-cr-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-cr-keymap > div {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-cr-keymap dd {
+  margin: 0;
+}
+
+.fw-cr-print-note {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cr-print-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
