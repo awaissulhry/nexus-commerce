@@ -168,6 +168,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/reports': 'compliance.reports.view', // GET /compliance/reports/kpis (B-W2b-272)
       '/compliance/status': 'compliance.certificates.view', // GET /compliance/status/board (B-W2b-266)
       '/compliance/sourcing': 'compliance.certificates.view', // GET /compliance/claims (B-W2b-264)
+      '/compliance/declarations': 'compliance.certificates.view', // GET /compliance/declarations (B-W2b-268)
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/receivables': 'receivables.view', // GET /receivables/ageing (B-W2a-81)

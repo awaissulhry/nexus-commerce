@@ -45,6 +45,8 @@ import { inspectionPlans } from './inspection-plans'
 import { capas } from './capas'
 // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
 import { complianceClaims } from './compliance-claims'
+// B-W2b-268: Compliance › Declarations & instructions.
+import { complianceDeclarations } from './compliance-declarations'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -102,4 +104,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   capas,
   // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
   complianceClaims,
+  // B-W2b-268: Compliance › Declarations & instructions.
+  complianceDeclarations,
 ])
