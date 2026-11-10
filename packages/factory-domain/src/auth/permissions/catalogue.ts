@@ -148,6 +148,8 @@ import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phras
 import { PRODUCT_TECHPACKS_DEFINITIONS, PRODUCT_TECHPACKS_PERMISSIONS } from '../../product/techpack/permissions'
 // B-W2b-233: prepacks (product.prepacks.manage; reading is product.styles.view).
 import { PRODUCT_PREPACKS_DEFINITIONS, PRODUCT_PREPACKS_PERMISSIONS } from '../../product/prepacks/permissions'
+// B-W2b-257: the DoC generator (compliance.declarations.generate | check | pack); reading is compliance.certificates.view.
+import { DECLARATIONS_DEFINITIONS, DECLARATIONS_PERMISSIONS } from '../../compliance/declarations/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -808,6 +810,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_TECHPACKS_DEFINITIONS,
   // B-W2b-233: prepacks (area `product`, declared above).
   PRODUCT_PREPACKS_DEFINITIONS,
+  // B-W2b-257: the DoC generator (area `compliance`, declared above).
+  DECLARATIONS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1072,6 +1076,8 @@ for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!
 for (const name of PRODUCT_TECHPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-233: prepacks.
 for (const name of PRODUCT_PREPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-257: the DoC generator.
+for (const name of DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
