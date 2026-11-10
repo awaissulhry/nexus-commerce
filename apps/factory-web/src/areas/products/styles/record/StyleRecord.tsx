@@ -74,6 +74,7 @@ import { StyleRecordView } from './view/StyleRecordView'
 import { usePieces } from './pieces/use-pieces'
 // B-W2b-238: Compliance › Material checks — blocked or unapproved materials of the revision in view.
 import { useStyleApprovals } from '../../materials/approval/use-style-approvals'
+import { useStyleComposition } from '../compliance/composition'
 import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
 // B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
@@ -317,6 +318,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const approvals = useStyleApprovals({ api, styleId, revisionId, enabled: tab === 'compliance' && can.bomView })
   const reloadApprovals = useRef(approvals.reload)
   reloadApprovals.current = approvals.reload
+  // B-W2b-270: the composition computed from the BOM, read while Compliance shows (compliance.certificates.view).
+  const composition = useStyleComposition({ api, styleId, revisionId, enabled: tab === 'compliance' && can.complianceView })
 
   useLiveChanges({
     onChange: (change) => {
@@ -509,6 +512,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     exporting,
     pieces: pieces.model,
     materialApprovals: approvals.read,
+    composition: composition.read,
     prepacks: prepacks.model,
     protectors: protectors.model,
     gallery: gallery.model,
@@ -525,6 +529,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       actions={{
         pieces: pieces.actions,
         onRetryMaterialApprovals: approvals.reload,
+        onRetryComposition: composition.reload,
         prepacks: prepacks.actions,
         protectors: protectors.actions,
         gallery: gallery.actions,

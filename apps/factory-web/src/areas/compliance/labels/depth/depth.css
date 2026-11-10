@@ -1,0 +1,160 @@
+/*
+ * Labels & marking in depth (B-W2b-270) LAYOUT only, beside labels.css: the rule lines with their law chips, the marking's
+ * texts per language, the BOM's computed parts, the Languages tab's column list and cells, the artwork versions and the
+ * approve dialog's two columns (the proof beside its sign-off; stacked on a phone). The controls are the design system's;
+ * semantic tokens only; no page max-width (Owner rule 2026-10-29).
+ */
+.fw-lbd-laws {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-lbd-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-lbd-findings {
+  margin: 0;
+  padding-inline-start: var(--nds-space-14);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lbd-lines {
+  white-space: pre-line;
+}
+
+.fw-lbd-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-lbd-warnings,
+.fw-lbd-parts,
+.fw-lbd-versions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-lbd-texts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: var(--nds-space-4) 0 0;
+}
+
+.fw-lbd-texts > div {
+  display: flex;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-lbd-texts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-lbd-missing {
+  color: var(--nds-danger-text);
+}
+
+.fw-lbd-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-block-end: var(--nds-space-8);
+  border-block-end: 1px solid var(--nds-border);
+}
+
+.fw-lbd-group:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+
+.fw-lbd-parts li {
+  overflow-wrap: anywhere;
+}
+
+.fw-lbd-celltext {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.fw-lbd-rule-words {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-lbd-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-lbd-columns li.is-missing {
+  color: var(--nds-danger-text);
+}
+
+.fw-lbd-version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  min-width: 0;
+}
+
+.fw-lbd-version p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-lbd-note {
+  white-space: pre-line;
+}
+
+.fw-lbd-approve {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-lbd-approve {
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  }
+}
+
+.fw-lbd-approve-proof {
+  min-width: 0;
+}
+
+.fw-lbd-picture {
+  display: block;
+  max-width: 100%;
+  max-height: min(60vh, 640px);
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+/* A dialog's form column takes its full width (the sign-off sizes to its container: inline-size containment), as do the fields. */
+.fw-lbd-dialog {
+  align-items: stretch;
+}

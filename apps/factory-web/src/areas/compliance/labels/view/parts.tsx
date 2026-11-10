@@ -19,7 +19,8 @@ import '../labels.css'
  */
 
 export function LabelsMessages({ children }: { children?: ReactNode }) {
-  return <QualityMessages namespaces={['labels']}>{children}</QualityMessages>
+  // B-W2b-270: the W2b words (compliance-labels-depth) beside W1's.
+  return <QualityMessages namespaces={['labels', 'compliance-labels-depth']}>{children}</QualityMessages>
 }
 
 export function StatusPill({ status }: { status: LabelTemplate['status'] }) {
@@ -33,7 +34,7 @@ export function StatusPill({ status }: { status: LabelTemplate['status'] }) {
 
 /** A stand-in mark: a dashed box with the words of what it stands for, filling its square (an SVG scales with the label). */
 function StandInMark({ mark, standIn }: { mark: StandIn; standIn: string }) {
-  const lines = mark.kind === 'ce' ? ['CE', standIn] : mark.kind === 'pictogram' ? [...mark.text.split(' ').filter(Boolean), standIn] : [mark.text]
+  const lines = mark.kind === 'ce' ? ['CE', standIn] : mark.kind === 'pictogram' ? [...mark.text.split(' ').filter(Boolean), standIn] : mark.kind === 'qr' ? ['QR', standIn] : [mark.text]
   const size = mark.kind === 'care' ? 30 : lines.length > 2 ? 17 : 20
   const top = 50 - ((lines.length - 1) * size * 1.1) / 2
   return (
@@ -54,12 +55,14 @@ function StandInMark({ mark, standIn }: { mark: StandIn; standIn: string }) {
  */
 export function LabelSheet({ label, widthMm, heightMm, test, print, onRetry, retryHeld, scale }: { label: Rendered; widthMm: number; heightMm: number; test?: boolean; print?: LabelPrintState; onRetry?: () => void; retryHeld?: string | null; scale?: number }) {
   const t = useT('labels')
+  const d = useT('compliance-labels-depth')
   const sheet = sheetOf(label, widthMm, heightMm, {
     name: t('sheet.name', { code: label.template.code, revision: label.template.revision }),
     ce: t('sheet.ce'),
     pictogram: (standard, ppeClass) => t('sheet.pictogram', { standard: standard || '—', class: ppeClass || '—' }),
     care: (words) => t('sheet.care', { words }),
     test: test ? t('sheet.test') : null,
+    qr: d('sheet.qrAtPrint'),
   })
   const hasStandIns = Object.keys(sheet.marks).length > 0
   return (
@@ -73,7 +76,7 @@ export function LabelSheet({ label, widthMm, heightMm, test, print, onRetry, ret
             const mark = sheet.marks[id]
             return mark ? <StandInMark mark={mark} standIn={t('sheet.standIn')} /> : null
           }}
-          codeLabel={(value) => t('sheet.barcode', { value })}
+          codeLabel={(value, kind) => (kind === 'qr' ? d('sheet.qr', { value }) : t('sheet.barcode', { value }))}
           invalidCodeLabel={(value) => t('sheet.barcodeInvalid', { value })}
           print={print}
           onRetry={onRetry}
