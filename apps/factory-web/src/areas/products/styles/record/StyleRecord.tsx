@@ -517,6 +517,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     protectors: protectors.model,
     gallery: gallery.model,
     patternFiles: patternFiles.model,
+    // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
+    samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
   }
 
   return (

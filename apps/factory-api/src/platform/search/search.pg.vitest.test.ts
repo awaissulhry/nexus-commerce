@@ -110,6 +110,10 @@ describe('the index (worker side)', () => {
       ...['Complaint', 'GoodsReceipt', 'Hide', 'Invoice', 'Item', 'Lot', 'Party', 'PurchaseOrder', 'Quote', 'RepairOrder', 'ReturnAuthorisation', 'SalesOrder', 'Shipment', 'Style', 'SupplierClaim', 'WorkOrder'],
       // B-W2b-23: every other W1 and W2a record type (indexers/every-record.pg.vitest.test.ts).
       ...['Certificate', 'Ddt', 'Inspection', 'LabelTemplate', 'Location', 'Machine', 'MaintenanceJob', 'Nonconformance', 'Operation', 'Payment', 'PpeRegisterEntry', 'QualityHold', 'SizeScale', 'StockCount', 'SubcontractOrder', 'SupplierInvoice'],
+      // W2b steps that added an indexer to the folder (the lead added them here 11-10; B-W2b-261 adds SampleRound).
+      ...['Capa', 'CutOrder', 'GradeRule', 'Incident', 'InspectionPlan', 'PointOfMeasure', 'SampleRound'],
+      // B-W2b-247: the colour library and the branding sets.
+      ...['BrandingSet', 'Colour'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])

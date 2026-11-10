@@ -13,6 +13,7 @@ import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleTypeChange
 import { CELL_TONE, CHECK_TONE, documentFileProblem, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { MaterialApprovalsCard } from '../materials'
+import { StyleDocStatus } from '../doc-status' // B-W2b-268
 import { StyleCompositionCard } from '../composition'
 
 const DOC_TONE = { CURRENT: 'success', OLDER_REVISION: 'warning', MISSING: 'danger' } as const
@@ -49,6 +50,7 @@ export function ComplianceTab({ style, model, actions }: { style: StyleView; mod
       <MaterialApprovalsCard read={model.materialApprovals} prefix={model.prefix} onRetry={actions?.onRetryMaterialApprovals} />
       <TypeChangesCard model={model} actions={actions} />
       <DocumentsCard compliance={compliance} model={model} actions={actions} />
+      <StyleDocStatus styleId={style.id} styleCode={style.code} prefix={model.prefix} />
       <div className="fw-st-pair">
         <LabelCard compliance={compliance} style={style} model={model} actions={actions} />
         <TrackingCard style={style} model={model} actions={actions} />

@@ -1,0 +1,226 @@
+/*
+ * Products › Development › Samples & prototypes (SCR-110, B-W2b-261): layout only, semantic tokens. The page fills the
+ * shell's main area (no max-width of its own: Owner rule 2026-10-29); inner text columns may keep one.
+ */
+
+.fw-smp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-smp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-smp-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 820px;
+}
+
+.fw-smp-intro,
+.fw-smp-hint,
+.fw-smp-asof {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-smp-actions,
+.fw-smp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-smp-row {
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+
+.fw-smp-keys {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  margin-left: var(--nds-space-6);
+}
+
+.fw-smp-lines {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-smp-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-smp-cell > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-smp-code,
+.fw-smp-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-smp-code {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-smp-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-smp-link:hover,
+.fw-smp-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-smp-search {
+  min-width: 200px;
+}
+
+/* The band of the record: the header, then its tabs. */
+.fw-smp-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-smp-title-name {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-smp-stack,
+.fw-smp-form,
+.fw-smp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* Two cards side by side on a wide screen (the width is used, never left empty), one under the other below. */
+.fw-smp-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-smp-two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-smp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-smp-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-smp-pick-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.fw-smp-pick-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-smp-h2,
+.fw-smp-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-smp-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-smp-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  margin-bottom: var(--nds-space-8);
+}
+
+.fw-smp-value,
+.fw-smp-text {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-smp-radios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-smp-legend {
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+/* A size grid or a sheet that may be wider than a phone scrolls inside its own box, never the page. */
+.fw-smp-bleed,
+.fw-smp-grid {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.fw-smp-grid {
+  margin-top: var(--nds-space-8);
+}
+
+.fw-smp-cell-saving {
+  color: var(--nds-text-2);
+}
+
+.fw-smp-cell-failed {
+  box-shadow: inset 0 -2px 0 var(--nds-danger);
+}

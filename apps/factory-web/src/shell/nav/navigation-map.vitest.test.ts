@@ -118,6 +118,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/materials': 'product.materials.view', // GET /product/materials
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
+      '/products/samples': 'sales.samples.view', // GET /sales/samples/rounds (B-W2b-261)
+      '/products/colours': 'product.styles.view', // GET /product/colours/library (B-W2b-247)
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
       '/planning/leather': 'planning.view', // GET /planning/leather/need (B-W2b-132)
       '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
@@ -169,6 +171,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/status': 'compliance.certificates.view', // GET /compliance/status/board (B-W2b-266)
       '/compliance/sourcing': 'compliance.certificates.view', // GET /compliance/claims (B-W2b-264)
       '/compliance/settings': 'compliance.certificates.view', // GET /compliance/requirements/gates and /compliance/rules/* (B-W2b-265)
+      '/compliance/declarations': 'compliance.certificates.view', // GET /compliance/declarations (B-W2b-268)
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/receivables': 'receivables.view', // GET /receivables/ageing (B-W2a-81)
@@ -317,7 +320,8 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
 
   it('every record type the search finds opens its own page (B-W2a-83: returns, repairs, complaints and supplier claims too)', () => {
     // B-W2b-23: a DDT has no page of its own (design 00 §2.3): the search opens its record panels, as every opener does.
-    const PANELS_ONLY = new Set(['Ddt'])
+    // B-W2b-247: a library colour is edited in its list row; its panels hold its photo, history and thread.
+    const PANELS_ONLY = new Set(['Ddt', 'Colour'])
     for (const type of SEARCH_TYPES) {
       if (PANELS_ONLY.has(type)) {
         expect(RECORD_PAGES[type], type).toBeUndefined()

@@ -1,0 +1,301 @@
+/*
+ * Compliance › Declarations & instructions (SCR-052, its record, the PDF and pack windows, the style's status card) LAYOUT: the
+ * band, the sections' heads, the coverage cells, the points with their sources, the record's two columns (the fields beside the
+ * PDF), the forms in the dialogs. The controls are the design system's; this file only places them, with semantic tokens (no
+ * colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the shell's main area; wide screens put the PDF
+ * beside the fields, narrow ones below them.
+ */
+.fw-dc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-dc-window {
+  padding: var(--nds-space-16);
+}
+
+.fw-dc-section,
+.fw-dc-stack,
+.fw-dc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dc-form {
+  gap: var(--nds-space-12);
+}
+
+.fw-dc-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-dc-band,
+.fw-dc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dc-head {
+  align-items: flex-start;
+}
+
+.fw-dc-head-title,
+.fw-dc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-dc-status,
+.fw-dc-actions,
+.fw-dc-tools,
+.fw-dc-row,
+.fw-dc-cellrow,
+.fw-dc-values {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dc-h,
+.fw-dc-h1,
+.fw-dc-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-dc-h1 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-dc-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dc-p,
+.fw-dc-muted {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-dc-muted {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dc-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-dc-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fw-dc-code,
+.fw-dc-hash {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-dc-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: 0 var(--nds-space-6);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-dc-cellrow {
+  flex-wrap: nowrap;
+}
+
+.fw-dc-tree {
+  padding-left: var(--nds-space-12);
+}
+
+.fw-dc-celllink {
+  display: inline-flex;
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-dc-celllink:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-dc-lang {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+  margin-right: var(--nds-space-4);
+}
+
+.fw-dc-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-dc-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-dc-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-dc-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-dc-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-dc-formgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-dc-facts dt {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dc-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dc-points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-dc-point {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-dc-point.is-open {
+  border-color: var(--nds-warning);
+}
+
+.fw-dc-pointhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+
+.fw-dc-pointtext {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.fw-dc-fieldset {
+  margin: 0;
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-dc-fieldset legend {
+  padding: 0 var(--nds-space-4);
+  font-weight: 600;
+}
+
+/* The record's Content: the fields, and the PDF beside them on a wide screen (below them on a narrow one). */
+.fw-dc-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-dc-preview {
+  position: sticky;
+  top: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dc-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+.fw-dc-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .fw-dc-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-dc-preview {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .fw-dc-window {
+    padding: var(--nds-space-8);
+  }
+}

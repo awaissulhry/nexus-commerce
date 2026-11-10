@@ -145,6 +145,8 @@ export interface StyleRecordViewModel {
   /** B-W2b-236: Overview › Sketches and pictures and Files & patterns › Pattern files (absent: not read, like idle). */
   gallery?: GalleryModel
   patternFiles?: PatternsModel
+  /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
+  samples?: { view: boolean; manage: boolean }
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
