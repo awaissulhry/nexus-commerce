@@ -132,6 +132,8 @@ import { distributorHandlers } from './modules/compliance/recall/distributors'
 // B-W2b-256: supplier declarations (a portal upload answers its request; overdue and reminders hourly) and material profiles evaluated again.
 import { declarationHandlers, declarationsCron } from './modules/compliance/declarations-asked/jobs'
 import { profilesNightlyCron, reevaluateHandlers } from './modules/compliance/material-profiles/reevaluate'
+// B-W2b-264: the claims' evidence check (daily 00:25 Europe/Rome; claim.evidence_expired once per claim and cause).
+import { claimEvidenceExpiryCron } from './modules/compliance/claims/expiry'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -339,6 +341,8 @@ if (mode === 'worker') {
   // B-W2b-256: hourly at minute 35, declaration requests past their due day move overdue and portal requests are reminded by
   // their own cadence; every night at 03:50, every material profile is evaluated again.
   crons.push(declarationsCron({ database, log }), profilesNightlyCron({ database, log }))
+  // B-W2b-264: daily at 00:25, every approved claim whose evidence stopped holding is flagged once (claim.evidence_expired).
+  crons.push(claimEvidenceExpiryCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

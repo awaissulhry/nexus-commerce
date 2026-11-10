@@ -1,0 +1,449 @@
+{
+  "access": {
+    "title": "Nessun accesso al registro delle dichiarazioni",
+    "body": "Questa pagina richiede il diritto di vedere la conformità (compliance.certificates.view). Chiedete a chi gestisce i ruoli nella vostra azienda."
+  },
+  "common": {
+    "stillLoading": "Caricamento in corso…",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "reading": "Lettura…",
+    "working": "In corso…"
+  },
+  "band": {
+    "label": "Azioni sulle dichiarazioni",
+    "reading": "Non ancora letto",
+    "add": "Nuova dichiarazione",
+    "more": "Altre azioni",
+    "export": "Esporta",
+    "exportHint": "Da Esporta ▾ nell'elenco delle dichiarazioni: questa vista in CSV."
+  },
+  "tile": {
+    "title": "Riquadri delle dichiarazioni",
+    "failed": "Non è stato possibile leggere i riquadri.",
+    "approved": {
+      "label": "Dichiarazioni approvate",
+      "hint": "Approvate, con prove ancora valide"
+    },
+    "blocked": {
+      "label": "Dichiarazioni con prove scadute – bloccate",
+      "hint": "Non si possono usare altrove; cambiate dove sono ancora usate"
+    },
+    "drafts": {
+      "label": "Bozze in attesa di approvazione",
+      "hint": "Non utilizzabili finché una persona non le approva"
+    }
+  },
+  "views": {
+    "label": "Viste",
+    "claims": "Dichiarazioni",
+    "custodyLater": "Catena di custodia · in arrivo"
+  },
+  "held": {
+    "company": "Aprite prima un'azienda: una dichiarazione appartiene a una sola azienda.",
+    "manage": "Solo un ruolo che tiene il registro delle dichiarazioni può farlo (compliance.claims.manage).",
+    "approve": "Solo un ruolo che approva le dichiarazioni può approvare (compliance.claims.approve).",
+    "busy": "Salvataggio…",
+    "notDraft": "Si approva solo una bozza.",
+    "nothingChanged": "Non è cambiato nulla.",
+    "code": "Date un codice: una lettera o cifra, poi lettere, cifre, \".\", \"_\" o \"-\" (fino a 60).",
+    "kind": "Scegliete il tipo di dichiarazione.",
+    "wording": "Scrivete la dichiarazione in almeno una lingua.",
+    "wordingLine": "Una dichiarazione è una riga di massimo 1000 caratteri per lingua.",
+    "wordingRefused": "Il testo è rifiutato dal controllo: usate il testo proposto o dite che cosa è migliore.",
+    "style": "Scegliete il modello a cui si riferisce la dichiarazione.",
+    "material": "Scegliete il materiale a cui si riferisce la dichiarazione.",
+    "validUntil": "Indicate l'ultimo giorno di validità come data.",
+    "evidenceMany": "Al massimo 50 file di prova.",
+    "upload": "Caricare un file richiede il diritto di caricare file (files.upload).",
+    "reason": "Dite perché viene ritirata.",
+    "reasonLong": "Il motivo è di massimo 500 caratteri.",
+    "noneWithdrawable": "Scegliete dichiarazioni non ancora ritirate.",
+    "retiredRow": "Già ritirata.",
+    "replaceDraft": "Una bozza si cambia con Modifica, non si sostituisce.",
+    "replaced": "Già sostituita da {code}.",
+    "fileGone": "Questo file non è più disponibile.",
+    "useLabel": "Scegliete l'etichetta su cui è stampata.",
+    "useStyle": "Scegliete il modello su cui compare.",
+    "useName": "Indicate dove compare (\"Catalogo autunno 2026\").",
+    "styleId": "Scegliete un modello di questa azienda.",
+    "itemId": "Scegliete un materiale di questa azienda.",
+    "phraseKey": "Scegliete una frase della libreria.",
+    "scopeNote": "Quale parte copre, in massimo 1000 caratteri.",
+    "evidenceFileIds": "Controllate i file di prova.",
+    "note": "Una nota di massimo 2000 caratteri.",
+    "label": "Indicate dove compare.",
+    "recordId": "Scegliete dove è usata.",
+    "companyId": "Aprite prima un'azienda.",
+    "supersedesId": "Controllate la dichiarazione che sostituisce.",
+    "version": "Qualcuno l'ha cambiata nel frattempo: rileggetela."
+  },
+  "kind": {
+    "RECYCLED_CONTENT": "Contenuto riciclato",
+    "ORGANIC_CONTENT": "Contenuto biologico",
+    "BIO_BASED": "Di origine biologica",
+    "RESPONSIBLE_SOURCING": "Approvvigionamento responsabile",
+    "SUBSTANCE_FREE": "Senza una sostanza",
+    "DURABILITY": "Durata",
+    "REPAIRABILITY": "Riparabilità",
+    "CARBON": "Clima",
+    "SOCIAL": "Sociale",
+    "CERTIFICATION_LABEL": "Marchio di certificazione",
+    "OTHER": "Altro"
+  },
+  "state": {
+    "DRAFT": "Bozza",
+    "APPROVED": "Approvata",
+    "BLOCKED": "Bloccata – prove scadute",
+    "RETIRED": "Ritirata"
+  },
+  "status": {
+    "DRAFT": "bozza",
+    "APPROVED": "approvata",
+    "WITHDRAWN": "ritirata"
+  },
+  "rows": {
+    "current": "Dichiarazioni attuali",
+    "all": "Tutte le dichiarazioni",
+    "DRAFT": "Bozze",
+    "APPROVED": "Approvate",
+    "BLOCKED": "Bloccate – prove scadute",
+    "RETIRED": "Ritirate"
+  },
+  "scope": {
+    "COMPANY": "Tutta l'azienda"
+  },
+  "scopeKind": {
+    "COMPANY": "L'azienda",
+    "STYLE": "Un modello",
+    "MATERIAL": "Un materiale"
+  },
+  "use": {
+    "LABEL": "Etichetta",
+    "STYLE": "Testi del modello",
+    "CATALOGUE": "Catalogo",
+    "WEB_SHOP": "Negozio online",
+    "OTHER": "Altro",
+    "open": "Registra un uso",
+    "save": "Registra l'uso",
+    "hint": "Dove compare {code}: un'etichetta su cui è stampata, o un modello i cui testi, catalogo o pagina del negozio online la riportano.",
+    "kind": "Dove",
+    "label": "Etichetta",
+    "style": "Modello",
+    "name": "Come è chiamato lì",
+    "nameHint": "Per esempio \"Catalogo autunno 2026\" o \"Pagina prodotto\".",
+    "note": "Nota"
+  },
+  "law": {
+    "claims": "Dal 27 settembre 2026 una dichiarazione ambientale richiede le sue prove; non sono ammesse dichiarazioni generiche né di neutralità tramite compensazione.",
+    "GENERIC": "Una dichiarazione ambientale generica (\"ecologico\", \"green\", \"sostenibile\") non è ammessa senza prova di prestazioni ambientali eccellenti riconosciute.",
+    "OFFSETTING": "Non è ammesso dire che un prodotto ha un impatto neutro, ridotto o positivo perché le emissioni sono compensate.",
+    "CERTIFIED_PRODUCT": "Un marchio di sostenibilità deve basarsi su un sistema di certificazione; LWG valuta le concerie, non i capi.",
+    "NO_SHARE": "Dite quanto: la quota e di quale parte, perché la dichiarazione non riguardi l'intero prodotto quando riguarda una parte."
+  },
+  "finding": {
+    "GENERIC": "\"{words}\" è una dichiarazione generica: rifiutata.",
+    "OFFSETTING": "\"{words}\": la neutralità tramite compensazione non è ammessa: rifiutata.",
+    "CERTIFIED_PRODUCT": "\"{words}\": LWG valuta la conceria, non il capo: rifiutata.",
+    "NO_SHARE": "Dite quanto (una percentuale) e di quale parte.",
+    "use": "Usa questo testo",
+    "suggestion": "Testo ammesso: \"{words}\""
+  },
+  "claims": {
+    "title": "Dichiarazioni",
+    "label": "Dichiarazioni ambientali",
+    "failed": "Non è stato possibile leggere le dichiarazioni.",
+    "count_one": "{count} dichiarazione",
+    "count_other": "{count} dichiarazioni",
+    "languages": "Lingue: {list}",
+    "col": {
+      "claim": "Dichiarazione",
+      "wording": "Testo",
+      "scope": "Ambito",
+      "evidence": "Prove",
+      "validUntil": "Valida fino al",
+      "approver": "Approvata da",
+      "state": "Stato",
+      "uses": "Usata su"
+    },
+    "labelCheck": {
+      "ON": "La stampa etichette controlla ogni dichiarazione usata su un'etichetta.",
+      "OFF": "La stampa etichette non controlla ancora le dichiarazioni: spento finché un modello o un mercato non ne ha bisogno (Regole e mercati › Controlli).",
+      "NONE": "La stampa etichette non controlla le dichiarazioni: ancora nessun requisito (Regole e mercati › Controlli)."
+    },
+    "noEvidence": "Ancora nessuna prova",
+    "notUsed": "Non usata",
+    "search": "Cerca codice, testo, modello o materiale",
+    "filterState": "Righe",
+    "filterKind": "Tipo",
+    "allKinds": "Ogni tipo",
+    "filterScope": "Ambito",
+    "allScopes": "Ogni ambito",
+    "more": "Altre dichiarazioni",
+    "moreHeld": "Sono mostrate le prime 500: restringete i filtri.",
+    "noneFiltered": "Nessuna dichiarazione corrisponde a questi filtri.",
+    "noneFilteredHint": "Togliete i filtri per vedere tutte le dichiarazioni attuali.",
+    "clearFilters": "Togli i filtri",
+    "emptyTitle": "Ancora nessuna dichiarazione",
+    "empty": "Le dichiarazioni generiche (\"ecologico\") non sono ammesse senza prove (Dir. 2024/825). Preparate una dichiarazione con testo, ambito, prove e scadenza."
+  },
+  "bulk": {
+    "withdraw_one": "Ritira {count}",
+    "withdraw_other": "Ritira {count}",
+    "withdrawnResult_one": "{count} dichiarazione ritirata.",
+    "withdrawnResult_other": "{count} dichiarazioni ritirate.",
+    "refusedRow": "{label}: {why}"
+  },
+  "validity": {
+    "none": "Senza scadenza",
+    "left_one": "{count} giorno rimasto · {date}",
+    "left_other": "{count} giorni rimasti · {date}",
+    "expired_one": "Scaduta da {count} giorno · {date}",
+    "expired_other": "Scaduta da {count} giorni · {date}",
+    "threshold": "Entro {days} giorni dalla scadenza"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "add": "Nuova dichiarazione",
+    "moves": "Dichiarazione precedente o successiva nella finestra",
+    "close": "Chiudi la finestra"
+  },
+  "new": {
+    "title": "Nuova dichiarazione",
+    "subtitle": "Una bozza: si usa solo quando una persona la approva con le sue prove.",
+    "replaceTitle": "Sostituzione di {code}",
+    "replaceSubtitle": "Quando questa bozza è approvata, la dichiarazione sostituita è ritirata e ogni suo uso passa alla nuova.",
+    "save": "Crea la bozza",
+    "savedWithoutFile": "La bozza è salvata, ma un file non è stato accettato. Aprite la bozza e aggiungete di nuovo il file (Modifica).",
+    "openDraft": "Apri la bozza"
+  },
+  "form": {
+    "choicesFailed": "Non è stato possibile leggere modelli, materiali e file da scegliere.",
+    "code": "Codice",
+    "codeHint": "Il prossimo codice libero è {code}.",
+    "kind": "Tipo di dichiarazione",
+    "chooseKind": "Scegliete…",
+    "wording": "Testo",
+    "wordingIn": "In {language}",
+    "phrase": "Stampata dalla frase",
+    "phraseHint": "Una frase della libreria, con le sue traduzioni approvate.",
+    "noPhrase": "Nessuna frase",
+    "scope": "Ambito",
+    "covers": "Riguarda",
+    "style": "Modello",
+    "material": "Materiale",
+    "scopeNote": "Quale parte",
+    "scopeNoteHint": "Per esempio \"solo la fodera\": una dichiarazione su una parte non deve sembrare sull'intero prodotto.",
+    "evidence": "Prove",
+    "evidenceHint": "I file che la provano: un certificato, un rapporto di prova, una dichiarazione del fornitore.",
+    "noEvidence": "Ancora nessuna prova: una dichiarazione si approva solo con almeno un file.",
+    "storedFile": "File archiviato",
+    "fileExpires": "valido fino al {date}",
+    "fileStored": "Archiviato",
+    "fileToUpload": "Caricato quando la dichiarazione è salvata",
+    "addStored": "Aggiungi un file archiviato",
+    "upload": "Carica un file",
+    "uploadHint": "PDF, JPEG o PNG, fino a 20 MB.",
+    "validUntil": "Prove valide fino al",
+    "validHint": "L'ultimo giorno in cui le prove valgono; lasciate vuoto se non scadono.",
+    "validSuggested": "La prima scadenza dei file scelti è il {date}.",
+    "useSuggested": "Usa {date}",
+    "note": "Nota"
+  },
+  "claim": {
+    "noun": "dichiarazione"
+  },
+  "tab": {
+    "wording": "Testo",
+    "evidence": "Prove",
+    "where": "Dove è usata",
+    "activity": "Attività",
+    "label": "Schede della dichiarazione"
+  },
+  "edit": {
+    "open": "Modifica",
+    "save": "Salva la bozza"
+  },
+  "approve": {
+    "open": "Approva",
+    "do": "Approva la dichiarazione",
+    "sentence": "Approvare una dichiarazione la rende usabile su etichette, modelli, cataloghi e testi del negozio online.",
+    "signOff": "Approvazione",
+    "stepDraft": "{code} preparata",
+    "roleKeeper": "Registro dichiarazioni",
+    "stepApprove": "{code} approvata con le sue prove",
+    "roleApprover": "Approvatore",
+    "whoMay": "Una persona il cui ruolo approva le dichiarazioni, con un codice nuovo dall'app di autenticazione",
+    "note": "Da quel momento si può usare; non cambia più (una dichiarazione cambiata è una sostituzione).",
+    "replacesNote": "Approvarla ritira {code} e sposta su questa dichiarazione ogni suo uso.",
+    "evidence": "Prove",
+    "until": "Valida fino al",
+    "code": "L'approvazione chiede un codice nuovo dalla vostra app di autenticazione."
+  },
+  "withdraw": {
+    "open": "Ritira",
+    "save": "Ritira la dichiarazione",
+    "reason": "Perché viene ritirata",
+    "usesEnd_one": "È usata in {count} punto: quell'uso termina con lei.",
+    "usesEnd_other": "È usata in {count} punti: quegli usi terminano con lei.",
+    "noUses": "Ora non è usata da nessuna parte.",
+    "bulkTitle_one": "Ritira {count} dichiarazione",
+    "bulkTitle_other": "Ritira {count} dichiarazioni"
+  },
+  "replace": {
+    "open": "Prepara una sostituzione"
+  },
+  "wording": {
+    "title": "La dichiarazione per lingua",
+    "checked": "Controllata: nulla di rifiutato.",
+    "phrase": "Stampata dalla frase {key}.",
+    "covers": "Riguarda",
+    "part": "Quale parte",
+    "drafted": "Preparata",
+    "approved": "Approvata",
+    "notApproved": "Non ancora approvata",
+    "someone": "Qualcuno",
+    "replaces": "Sostituisce",
+    "replacedBy": "Sostituita da",
+    "withdrawn": "Ritirata",
+    "note": "Nota"
+  },
+  "evidence": {
+    "blocked": "Le sue prove non valgono più: non si può usare altrove.",
+    "until": "Prove valide fino al",
+    "files": "File",
+    "none": "Nessun file di prova.",
+    "file": "File",
+    "of": "di {record}",
+    "open": "Apri",
+    "openNamed": "Apri {name} in una nuova scheda"
+  },
+  "block": {
+    "VALID_UNTIL": "Le prove valevano fino al {date}.",
+    "FILE_EXPIRED": "{file} è scaduto il {date}.",
+    "FILE_GONE": "Un file di prova non è più disponibile."
+  },
+  "category": {
+    "DDT_PHOTO": "Foto del DDT",
+    "POD": "Prova di consegna",
+    "CMR": "CMR",
+    "CARRIER_INVOICE": "Fattura del vettore",
+    "CLAIM_PHOTO": "Foto del reclamo",
+    "MACHINE_CE": "Documento CE della macchina",
+    "MANUAL": "Manuale",
+    "CHECK_REPORT": "Rapporto di verifica",
+    "BEFORE_WORK": "Prima del lavoro",
+    "AFTER_WORK": "Dopo il lavoro",
+    "OTHER": "Altro file",
+    "SUPPLIER_CERTIFICATE": "Certificato del fornitore",
+    "TEST_REPORT": "Rapporto di prova",
+    "DECLARATION": "Dichiarazione",
+    "BODY_PHOTO": "Foto",
+    "QUESTIONNAIRE": "Questionario",
+    "PROOF": "Bozza grafica",
+    "SAMPLE_PHOTO": "Foto del campione"
+  },
+  "record": {
+    "SustainabilityClaim": "dichiarazione",
+    "Certificate": "certificato",
+    "Lot": "lotto",
+    "Item": "materiale",
+    "Party": "fornitore",
+    "Style": "modello",
+    "Company": "azienda"
+  },
+  "fileStatus": {
+    "PENDING_UPLOAD": "caricamento in corso",
+    "AVAILABLE": "disponibile",
+    "QUARANTINED": "trattenuto per un controllo",
+    "DELETED": "eliminato",
+    "MISSING": "non trovato"
+  },
+  "where": {
+    "noneTitle": "Non ancora usata",
+    "none": "Registrate dove compare: un'etichetta, un modello, un catalogo, testi del negozio online.",
+    "noneNotApproved": "Una dichiarazione si usa solo quando è approvata.",
+    "outOfSight": "Un record che non potete vedere",
+    "flagBlocked_one": "Le sue prove non valgono più ed è ancora usata in {count} punto: cambiatela lì.",
+    "flagBlocked_other": "Le sue prove non valgono più ed è ancora usata in {count} punti: cambiateli.",
+    "flagRetired_one": "È ritirata ma ancora registrata in {count} punto: terminate quell'uso.",
+    "flagRetired_other": "È ritirata ma ancora registrata in {count} punti: terminate quegli usi.",
+    "live_one": "Usata ora: {count}",
+    "live_other": "Usata ora: {count}",
+    "ended_one": "Terminati: {count}",
+    "ended_other": "Terminati: {count}",
+    "noLive": "Ora non è usata da nessuna parte.",
+    "col": {
+      "kind": "Dove",
+      "record": "Record",
+      "label": "Nome",
+      "since": "Da",
+      "end": "Termina",
+      "ended": "Terminato"
+    },
+    "mustChange": "da cambiare",
+    "end": "Termina",
+    "endNamed": "Termina l'uso su {kind} {record}"
+  },
+  "activity": {
+    "label": "Modifiche e approvazioni",
+    "none": "Ancora nulla di registrato.",
+    "system": "Il sistema",
+    "draft": "Preparata",
+    "edit": "Bozza modificata",
+    "approve": "Approvata",
+    "withdraw": "Ritirata",
+    "addUse": "Uso registrato",
+    "endUse": "Uso terminato",
+    "replaced": "Sostituita da {code}",
+    "evidenceExpired": "Prove scadute: segnalata dove è usata"
+  },
+  "saved": {
+    "edited": "Bozza salvata.",
+    "approved": "Approvata: da ora si può usare.",
+    "approvedReplacing": "Approvata: {code} è ritirata e {count} usi sono passati qui.",
+    "withdrawn": "Ritirata; usi terminati: {count}.",
+    "useAdded": "Uso registrato.",
+    "useEnded": "Uso terminato."
+  },
+  "notice": {
+    "drafted": "Bozza {code} creata: aggiungete le prove e approvatela.",
+    "replacementDrafted": "Sostituzione {code} preparata: approvatela con le sue prove perché subentri."
+  },
+  "refusal": {
+    "NOT_DRAFT": "Solo una bozza si modifica o si approva; una dichiarazione approvata si sostituisce con una nuova.",
+    "NOT_APPROVED": "Una dichiarazione si usa solo quando è approvata.",
+    "ALREADY_WITHDRAWN": "Questa dichiarazione è già ritirata.",
+    "NO_EVIDENCE": "Aggiungete almeno un file di prova prima di approvare.",
+    "EVIDENCE_NOT_AVAILABLE": "Ogni file di prova deve essere caricato e disponibile prima di approvare.",
+    "EVIDENCE_EXPIRED": "Un file di prova è scaduto: aggiungetene prima uno valido.",
+    "EVIDENCE_OTHER_COMPANY": "I file di prova devono essere file di questa azienda non eliminati.",
+    "VALID_UNTIL_PAST": "Le prove sono scadute: una dichiarazione non si approva dopo la scadenza delle prove.",
+    "CODE_TAKEN": "Questo codice è già usato in questa azienda: sceglietene un altro.",
+    "STYLE_OTHER_COMPANY": "Il modello deve essere di questa azienda.",
+    "MATERIAL_NOT_ALLOWED": "Il materiale deve essere di questa azienda, mai un capo finito.",
+    "PHRASE_UNKNOWN": "La frase non è nella libreria.",
+    "REPLACES_OTHER": "Una sostituzione sostituisce una dichiarazione approvata o ritirata di questa azienda.",
+    "ALREADY_REPLACED": "Questa dichiarazione ha già una sostituzione: modificate o ritirate quella.",
+    "NOT_HOLDING": "Le sue prove non valgono più: non si può usare altrove finché una sostituzione non è approvata.",
+    "USE_TAKEN": "Questa dichiarazione è già registrata lì.",
+    "USE_RECORD": "Scegliete un'etichetta o un modello di questa azienda.",
+    "USE_ENDED": "Questo uso è già terminato.",
+    "WORDING_REFUSED": "Il testo è rifiutato dal controllo.",
+    "DATABASE": "Il database ha rifiutato questa modifica: rileggete la dichiarazione."
+  },
+  "problem": {
+    "unavailable": "Il server della fabbrica non ha risposto. Riprovate tra poco.",
+    "signedOut": "La sessione è terminata: accedete di nuovo.",
+    "forbidden": "Il vostro ruolo non lo consente.",
+    "notFound": "Questa dichiarazione non c'è (o non è per voi).",
+    "conflict": "Qualcuno l'ha cambiata nel frattempo: rileggetela.",
+    "rateLimited": "Troppe richieste: attendete un momento.",
+    "noAnswer": "Nessuna risposta: controllate la connessione.",
+    "internal": "Qualcosa è andato storto sul server.",
+    "invalid": "Controllate i campi.",
+    "read": "Non è stato possibile leggerla."
+  }
+}

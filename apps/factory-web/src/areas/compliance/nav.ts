@@ -1,4 +1,4 @@
-import { BadgeCheck, FlaskConical, ScrollText, ShieldCheck, Tag } from 'lucide-react'
+import { BadgeCheck, FlaskConical, Leaf, ScrollText, ShieldCheck, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -37,6 +37,15 @@ export const officeArea: OfficeAreaNav = {
         items: [
           // SCR-113: the legal register of complaints, non-conformities and recalls (Reg. 2016/425 art. 8).
           { id: 'compliance-register', label: 'shell:nav.compliance.register', href: '/compliance/register', icon: ScrollText, permission: 'compliance.register.view' },
+        ],
+      },
+      // B-W2b-264: Sustainability (design group "Sustainability"; the digital product passport joins it later).
+      {
+        id: 'compliance-sustainability',
+        label: 'shell:nav.compliance.sustainability',
+        items: [
+          // SCR-215: the sustainability claims register with words, scope, evidence and expiry (Dir. (EU) 2024/825).
+          { id: 'compliance-sourcing', label: 'shell:nav.compliance.sourcing', href: '/compliance/sourcing', icon: Leaf, permission: 'compliance.certificates.view' },
         ],
       },
     ],

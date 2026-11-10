@@ -390,6 +390,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'compliance.register', title: 'PPE register & recalls', titleIt: 'Registro DPI e richiami', wave: 'W1', href: '/compliance/register' }],
       },
+      // W2b: B-W2b-264 Sourcing & claims (SCR-215), the design's group "Sustainability" (the product passport comes later).
+      {
+        label: 'Sustainability',
+        labelIt: 'Sostenibilità',
+        hideLabel: false,
+        pages: [{ id: 'compliance.sourcing', title: 'Sourcing & claims', titleIt: 'Filiera e dichiarazioni ambientali', wave: 'W2b', href: '/compliance/sourcing' }],
+      },
     ],
   },
   {

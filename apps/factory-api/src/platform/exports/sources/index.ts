@@ -43,6 +43,8 @@ import { incidents } from './incidents'
 import { inspectionPlans } from './inspection-plans'
 // B-W2b-119: Quality › Problems › Corrective actions (B-W2b-108's source, registered with its page).
 import { capas } from './capas'
+// B-W2b-264: Compliance › Sustainability › Sourcing & claims.
+import { complianceClaims } from './compliance-claims'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -98,4 +100,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   inspectionPlans,
   // B-W2b-119: Quality › Problems › Corrective actions.
   capas,
+  // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
+  complianceClaims,
 ])

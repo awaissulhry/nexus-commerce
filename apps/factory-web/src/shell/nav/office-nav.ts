@@ -234,6 +234,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/register',
   '/compliance/register/[id]',
   '/compliance/evidence/[kind]/[subject]',
+  // B-W2b-264: Compliance › Sustainability › Sourcing & claims (SCR-215).
+  '/compliance/sourcing',
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
