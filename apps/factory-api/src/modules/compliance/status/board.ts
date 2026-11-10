@@ -4,6 +4,8 @@ import { CERTIFICATES_VIEW } from '@nexus/factory-domain/compliance/certificates
 import { linesOf, type GateLine, type GateMarket, type GateTarget } from '@nexus/factory-domain/compliance/gates/gate'
 import { checkOf, notApplying, byGateOrder, ownerOf, type RequirementRow } from '@nexus/factory-domain/compliance/requirements/rules'
 import { cellOf, cellWords, expiryMonths, needsAction, windowEnd, type ActionInput, type CellSummary } from '@nexus/factory-domain/compliance/status/board'
+import { gapTypeOf, type GapType } from '@nexus/factory-domain/compliance/reports/rules'
+import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -11,6 +13,7 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeOf, rulesClock, type Reader } from '../register-of-rules/common'
 import { gateRequirements } from '../requirements/store'
 import { checkerFor, checksAsked, readGateStyle, readMarkets, styleLabelTemplateId, type GateStyle } from '../gates/facts'
+import { crViGapLots, expiriesOf } from '../reports/facts'
 
 /**
  * The compliance status board's reads (B-W2b-254; PRD-277, PRD-271; design compliance.status SCR-119, screens B-W2b-266):
@@ -51,12 +54,14 @@ async function styleLines(db: Reader, style: GateStyle, requirements: readonly R
   return out
 }
 
-const styleWhere = (context: OfficeContext, query: { readonly companyId?: string | undefined; readonly q?: string | undefined }): Prisma.StyleWhereInput => ({
+const styleWhere = (context: OfficeContext, query: { readonly companyId?: string | undefined; readonly q?: string | undefined; readonly brandId?: string | undefined }): Prisma.StyleWhereInput => ({
   AND: [
     scopeWhere(actorOf(context), CERTIFICATES_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput,
     // Styles in development and in production (an archived one sells nowhere).
     { status: { not: 'ARCHIVED' } },
     query.companyId ? { companyId: query.companyId } : {},
+    // B-W2b-266: one brand's styles (the board's brand picker).
+    query.brandId ? { brandPartyId: query.brandId } : {},
     query.q ? { OR: [{ code: { contains: query.q, mode: 'insensitive' } }, { name: { contains: query.q, mode: 'insensitive' } }] } : {},
   ],
 })
@@ -66,6 +71,9 @@ export interface BoardQuery {
   readonly markets?: string | undefined
   readonly q?: string | undefined
   readonly limit?: number | undefined
+  /** B-W2b-266: one brand's styles; one gap type (cells and "Needs action" over its lines only: `gapView`). */
+  readonly brandId?: string | undefined
+  readonly gap?: GapType | undefined
 }
 
 const marketCodesOf = (value: string | undefined): string[] | undefined =>
@@ -104,7 +112,8 @@ export async function readMatrix(db: Reader, context: OfficeContext, query: Boar
     const cells = markets.map((market) => {
       const marketLines = lines.get(market.code) ?? []
       const cell = cellOf(marketLines)
-      if (marketLines.some((line) => line.state === 'MISSING' && (line.check === 'doc.languages' || line.check === 'userInfo.languages' || line.check === 'label.languages'))) missingLanguages += 1
+      // B-W2b-266: the design's tile "Missing DoC or user-information languages" (= the cells `?gap=docLanguage` shows; a label's languages are the label gap).
+      if (marketLines.some((line) => line.state === 'MISSING' && (line.check === 'doc.languages' || line.check === 'userInfo.languages'))) missingLanguages += 1
       actions.push({ styleId: style.id, styleCode: style.code, marketCode: market.code, marketName: market.name, cell })
       cellLines.push({ styleId: style.id, marketCode: market.code, lines: marketLines })
       return cellView(market.code, cell)
@@ -135,6 +144,27 @@ async function shipmentsHeld(db: Reader, context: OfficeContext, now: Date): Pro
   return db.shipment.count({ where: { id: { in: subjects }, status: { in: ['DRAFT', 'PACKED'] } } })
 }
 
+type Matrix = Awaited<ReturnType<typeof readMatrix>>
+
+/**
+ * B-W2b-266: `?gap=<type>` (B-W2b-272's gap bars open the board with it): every cell and "Needs action" over the lines of that
+ * gap type only (`gapTypeOf`, the reports' own rule); a style with nothing of that type is left out. The tiles stay the board's.
+ */
+function gapView(matrix: Matrix, gap: GapType): { rows: Matrix['rows']; actions: ActionInput[] } {
+  const names = new Map(matrix.markets.map((market) => [market.code, market.name]))
+  const lines = new Map(matrix.cellLines.map((cell) => [`${cell.styleId}|${cell.marketCode}`, cell.lines.filter((line) => gapTypeOf(line) === gap)]))
+  const actions: ActionInput[] = []
+  const rows = matrix.rows.flatMap((row) => {
+    const cells = row.cells.map((shown) => {
+      const cell = cellOf(lines.get(`${row.style.id}|${shown.marketCode}`) ?? [])
+      actions.push({ styleId: row.style.id, styleCode: row.style.code, marketCode: shown.marketCode, marketName: names.get(shown.marketCode) ?? shown.marketCode, cell })
+      return cellView(shown.marketCode, cell)
+    })
+    return cells.some((cell) => cell.state !== 'READY') ? [{ ...row, cells, ready: false, blocked: cells.some((cell) => cell.state === 'BLOCKED') }] : []
+  })
+  return { rows, actions }
+}
+
 const certificateWhere = (context: OfficeContext): Prisma.CertificateWhereInput => scopeWhere(actorOf(context), CERTIFICATES_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.CertificateWhereInput
 
 /** GET /compliance/status/board */
@@ -145,19 +175,23 @@ export async function statusBoard(request: FastifyRequest, query: BoardQuery) {
     const within90 = windowEnd(matrix.day, 3)
     const expiring = await db.certificate.count({ where: { AND: [certificateWhere(context), { status: 'VALID', validTo: { gte: new Date(`${matrix.day}T00:00:00Z`), lte: new Date(`${within90}T00:00:00Z`) } }] } })
     const held = await shipmentsHeld(db, context, matrix.now)
-    const actions = needsAction(matrix.actions, 5)
+    // B-W2b-266: ?gap= narrows the matrix and "Needs action"; lots in stock without Cr VI evidence = the reports' open Cr VI gaps
+    // (B-W2b-272 crViGapLots), counted for a reader of lots only (else null: the tile says it is not in the role).
+    const shown = query.gap ? gapView(matrix, query.gap) : { rows: matrix.rows, actions: matrix.actions }
+    const actions = needsAction(shown.actions, 5)
+    const actor = actorOf(context)
+    const lotsWithoutCrVi = can(actor, QUALITY_LOTS_VIEW) ? await crViGapLots(db, { actor, company: null }) : null
     return {
       markets: matrix.markets.map((market) => ({ code: market.code, name: market.name, switchedOn: market.switchedOn })),
       tiles: {
         stylesReady: matrix.rows.filter((row) => row.ready).length,
         stylesBlocked: matrix.rows.filter((row) => row.blocked).length,
         certificatesExpiring90: expiring,
-        // Cr VI evidence per lot in stock is B-W2b-256's material profile (not counted here).
-        lotsWithoutCrVi: null,
+        lotsWithoutCrVi,
         missingLanguages: matrix.missingLanguages,
         shipmentsHeld: held,
       },
-      rows: matrix.rows,
+      rows: shown.rows,
       more: matrix.more,
       needsAction: actions,
       asOf: toUtcIso(matrix.now),
@@ -170,7 +204,8 @@ export async function statusActions(request: FastifyRequest, query: BoardQuery) 
   const context = officeOf(request)
   return request.withClient(async (db) => {
     const matrix = await readMatrix(db, context, query)
-    return { ...needsAction(matrix.actions, 200), asOf: toUtcIso(matrix.now) }
+    // B-W2b-266: ?gap= as on the board.
+    return { ...needsAction(query.gap ? gapView(matrix, query.gap).actions : matrix.actions, 200), asOf: toUtcIso(matrix.now) }
   })
 }
 
@@ -225,21 +260,29 @@ export async function statusCell(request: FastifyRequest, query: { readonly styl
   })
 }
 
-/** GET /compliance/status/expiries?months — certificates in force that end within the months (1-24, default 12), per month. */
+/**
+ * GET /compliance/status/expiries?months — what stops within the months (1-24, default 12), per month. B-W2b-266: the compliance
+ * reports' calendar (B-W2b-272 `expiriesOf`): certificates in force (a brand's own stops with its base) and accepted supplier
+ * declarations, each with its first valid day; and approved sustainability claims whose evidence stops (B-W2b-264: validUntil,
+ * the claim's first day = its approval); within the reader's certificate view, every company it reaches. LWG comes later.
+ */
 export async function statusExpiries(request: FastifyRequest, query: { readonly months?: number | undefined }) {
   const context = officeOf(request)
   const months = Math.min(Math.max(query.months ?? 12, 1), 24)
   return request.withClient(async (db) => {
     const day = today()
-    const end = windowEnd(day, months)
-    const rows = await db.certificate.findMany({
-      where: { AND: [certificateWhere(context), { status: { in: ['VALID', 'SUSPENDED'] }, validTo: { gte: new Date(`${day}T00:00:00Z`), lte: new Date(`${end}T00:00:00Z`) } }] },
-      select: { id: true, number: true, standard: true, validTo: true, status: true },
-      orderBy: [{ validTo: 'asc' }, { number: 'asc' }],
+    const actor = actorOf(context)
+    const answer = await expiriesOf(db, { actor, company: null, brand: null, today: day, sight: { certificates: true, register: false, lots: false, shipments: false } }, months, null)
+    const claims = await db.sustainabilityClaim.findMany({
+      where: { AND: [scopeWhere(actor, CERTIFICATES_VIEW, { company: 'companyId' }) as Prisma.SustainabilityClaimWhereInput, { status: 'APPROVED', validUntil: { gte: new Date(`${day}T00:00:00Z`), lte: new Date(`${answer.end}T00:00:00Z`) } }] },
+      select: { id: true, code: true, kind: true, status: true, validUntil: true, approvedAt: true },
+      orderBy: [{ validUntil: 'asc' }, { code: 'asc' }],
       take: 500,
     })
-    const items = rows.map((row) => ({ recordType: 'Certificate', recordId: row.id, label: `${row.number} (${row.standard})`, validTo: row.validTo.toISOString().slice(0, 10) }))
-    // Supplier declarations, LWG and claims evidence join with their steps (B-W2b-256, B-W2b-264).
-    return { months: expiryMonths(items, day, months), count: items.length, from: day, to: end, asOf: toUtcIso(rulesClock().now()) }
+    const items = [
+      ...answer.months.flatMap((month) => month.items),
+      ...claims.map((row) => ({ recordType: 'SustainabilityClaim', recordId: row.id, label: row.code, validFrom: row.approvedAt ? businessDate(row.approvedAt) : null, validTo: row.validUntil!.toISOString().slice(0, 10), status: row.status, detail: row.kind, party: null, endsWithBase: false })),
+    ]
+    return { months: expiryMonths(items, day, months) as { month: string; count: number; items: typeof items }[], count: items.length, from: day, to: answer.end, asOf: toUtcIso(rulesClock().now()) }
   })
 }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { COMPLIANCE_GATES, FIX_PLACES, WHO } from '@nexus/factory-domain/compliance/requirements/rules'
 import { LINE_STATES } from '@nexus/factory-domain/compliance/gates/gate'
 import { CELL_STATES } from '@nexus/factory-domain/compliance/status/board'
+import { GAP_TYPES } from '@nexus/factory-domain/compliance/reports/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 
 /**
@@ -31,6 +32,10 @@ const boardQuery = {
   markets: z.string().trim().max(400).optional(),
   q: z.string().trim().min(1).max(100).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+  // B-W2b-266 (the board's screen): one brand's styles; one gap type (B-W2b-272's gap bars link `?gap=`): the cells and
+  // "Needs action" over that type's lines only, the tiles the whole board's.
+  brandId: id().optional(),
+  gap: z.enum(GAP_TYPES).optional(),
 }
 
 export const boardContract = defineContract({
@@ -96,7 +101,27 @@ export const expiriesContract = defineContract({
   querystring: input({ months: z.coerce.number().int().min(1).max(24).optional() }),
   response: {
     200: output({
-      months: z.array(output({ month: z.string(), count: z.number().int(), items: z.array(output({ recordType: z.string(), recordId: id(), label: z.string(), validTo: businessDate() })) })),
+      months: z.array(
+        output({
+          month: z.string(),
+          count: z.number().int(),
+          items: z.array(
+            output({
+              recordType: z.string(),
+              recordId: id(),
+              label: z.string(),
+              validTo: businessDate(),
+              // B-W2b-266: the compliance reports' calendar (B-W2b-272 expiriesOf): certificates (a brand's own stops with its
+              // base) and accepted supplier declarations, with the first valid day for the ValidityBar.
+              validFrom: businessDate().nullable(),
+              status: z.string(),
+              detail: z.string().nullable(),
+              party: z.string().nullable(),
+              endsWithBase: z.boolean(),
+            }),
+          ),
+        }),
+      ),
       count: z.number().int(),
       from: businessDate(),
       to: businessDate(),

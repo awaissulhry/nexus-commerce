@@ -1,0 +1,73 @@
+/* ValidityBar (compliance area part, B-W2b-266): layout only, semantic tokens. The words beside the track carry the meaning. */
+.fw-vb {
+  display: grid;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-vb-track {
+  position: relative;
+  display: block;
+  height: var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  border: 1px solid var(--nds-border);
+  overflow: hidden;
+}
+
+.fw-vb-mini .fw-vb-track {
+  height: var(--nds-space-3);
+}
+
+.fw-vb-gone {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--nds-success-soft);
+}
+
+.fw-vb[data-stage='d180'] .fw-vb-gone {
+  background: var(--nds-info-soft);
+}
+
+.fw-vb[data-stage='d90'] .fw-vb-gone {
+  background: var(--nds-warning-soft);
+}
+
+.fw-vb[data-stage='d30'] .fw-vb-gone,
+.fw-vb[data-stage='ended'] .fw-vb-gone {
+  background: var(--nds-danger-soft);
+}
+
+.fw-vb-alert {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--nds-warning-strong);
+}
+
+.fw-vb-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--nds-text-strong);
+}
+
+.fw-vb-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-vb-left {
+  color: var(--nds-text-strong);
+  font-weight: 600;
+}
+
+.fw-vb-mini .fw-vb-words {
+  font-size: var(--nds-font-size-xs);
+}

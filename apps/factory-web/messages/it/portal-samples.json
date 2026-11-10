@@ -1,0 +1,265 @@
+{
+  "title": "Campioni e schede tecniche",
+  "band": {
+    "updated": "Aggiornato alle {time}",
+    "decide_one": "Decidi il campione in attesa",
+    "decide_other": "Decidi {count} campioni in attesa"
+  },
+  "keys": {
+    "rows": "Scorri le righe",
+    "open": "Apri la riga",
+    "nextSample": "Campione in attesa successivo o precedente (nella decisione)",
+    "approve": "Approva (nella decisione, non mentre scrivi)",
+    "reject": "Rifiuta (nella decisione, non mentre scrivi)",
+    "close": "Chiudi la decisione",
+    "styleRounds": "Mostra i giri del modello",
+    "openRound": "Decidi il giro, oppure aprilo"
+  },
+  "state": {
+    "retry": "Riprova",
+    "failed": "Non siamo riusciti a leggere i tuoi campioni. Non si è perso nulla: riprova.",
+    "failedBody": "L'elenco non è stato letto; non è vuoto.",
+    "loading": "Caricamento dei tuoi campioni…",
+    "slow": "Ancora in caricamento…",
+    "hide": "Nascondi"
+  },
+  "held": {
+    "preview": "Questa è un'anteprima del portale: non viene inviato nulla.",
+    "mayApprove": "Il tuo accesso ti permette di vedere questo campione, non di deciderlo: chiedi al tuo amministratore il diritto di approvare.",
+    "mayApproveAsk": "Il tuo accesso ti permette di vedere questo campione, non di deciderlo: chiedi a {admins} il diritto di approvare.",
+    "offline": "Nessuna connessione: riprova quando sei di nuovo online.",
+    "busy": "Invio della tua decisione…",
+    "reading": "La richiesta è ancora in lettura.",
+    "answered": "Questo campione è già stato deciso.",
+    "closed": "Questa richiesta non attende più una risposta."
+  },
+  "noAccess": {
+    "title": "Questa pagina non fa parte del tuo accesso",
+    "body": "Chiedi al tuo amministratore se ti serve vedere i campioni e le schede tecniche.",
+    "bodyAsk": "Chiedi a {admins} se ti serve vedere i campioni e le schede tecniche.",
+    "home": "Vai alla Home"
+  },
+  "waiting": {
+    "title": "In attesa della tua decisione",
+    "hint": "Giri di campionatura, colori, pellami e grafiche che ti abbiamo chiesto di decidere. Prima le scadenze più vicine.",
+    "group": "Campioni da decidere",
+    "rowTitle": "Decidi su {what}",
+    "style": "{code} · {name}",
+    "received": "Ricevuto il {date}",
+    "asked": "Richiesto il {date}",
+    "decide": "Decidi",
+    "empty": "Nessun campione attende la tua decisione.",
+    "noAccess": "Il tuo accesso non mostra ciò che ti chiediamo di approvare. Chiedi al tuo amministratore.",
+    "noAccessAsk": "Il tuo accesso non mostra ciò che ti chiediamo di approvare. Chiedi a {admins}."
+  },
+  "kind": {
+    "SAMPLE": "Campione",
+    "COLOUR": "Colore",
+    "LEATHER": "Pellame",
+    "ARTWORK": "Grafica",
+    "PROTO": "Prototipo",
+    "FIT": "Fit",
+    "SALESMAN": "Campionario vendita",
+    "PRE_PRODUCTION": "Pre-produzione",
+    "CERTIFICATION": "Campione per prova CE",
+    "BRAND": "Campione del brand"
+  },
+  "round": {
+    "label": "{kind} · giro {n}"
+  },
+  "stage": {
+    "IN_DEVELOPMENT": "In sviluppo",
+    "PROTO": "Prototipo",
+    "FIT": "Fit",
+    "SALESMAN": "Campionario vendita",
+    "PRE_PRODUCTION": "Pre-produzione",
+    "CERTIFICATION": "Prova CE",
+    "BRAND": "Campione del brand",
+    "APPROVED": "Approvato per la produzione"
+  },
+  "status": {
+    "BEING_MADE": "In lavorazione",
+    "SENT": "Spedito",
+    "RECEIVED": "Ricevuto, in valutazione",
+    "WAITING": "Attende la tua decisione",
+    "APPROVED": "Approvato",
+    "APPROVED_WITH_COMMENTS": "Approvato con commenti",
+    "REJECTED": "Rifiutato",
+    "CANCELLED": "Annullato"
+  },
+  "styles": {
+    "title": "I tuoi modelli in sviluppo",
+    "hint": "Solo i tuoi modelli, la loro fase e la scheda tecnica che ti abbiamo condiviso. Seleziona dei modelli per scaricarne le schede tecniche.",
+    "label": "I tuoi modelli in sviluppo",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "col": {
+      "style": "Modello",
+      "season": "Stagione",
+      "stage": "Fase",
+      "round": "Ultimo giro",
+      "next": "Prossima data",
+      "pack": "PDF scheda tecnica"
+    },
+    "noRound": "Nessun giro ancora",
+    "bulk_one": "Scarica {count} scheda tecnica",
+    "bulk_other": "Scarica {count} schede tecniche",
+    "bulkNone": "Nessuno dei modelli selezionati ha ancora una scheda tecnica.",
+    "noPackToSelect": "Per questo modello non è ancora stata condivisa una scheda tecnica.",
+    "failed": "Non siamo riusciti a leggere i tuoi modelli.",
+    "empty": "Nessun modello in sviluppo.",
+    "emptyBody": "I tuoi modelli a marchio compaiono qui mentre li sviluppiamo."
+  },
+  "pack": {
+    "none": "Non ancora condivisa",
+    "opening": "Apertura della scheda tecnica…",
+    "openOf": "Apri in una nuova scheda la scheda tecnica di {code}, revisione {revision} versione {version}",
+    "version": "Rev. {revision} · v{version} · {language}",
+    "state": {
+      "CURRENT": "In vigore",
+      "DRAFT": "Bozza",
+      "NEWER_VERSION": "Superata",
+      "NEWER_REVISION": "Revisione vecchia",
+      "OBSOLETE": "Obsoleta"
+    },
+    "gone": "La scheda tecnica di {code} non è più condivisa con te. L'elenco viene riletto.",
+    "failed": "Non è stato possibile aprire la scheda tecnica di {code}. Riprova.",
+    "someFailed_one": "{count} scheda tecnica non è stata scaricata. Riprova.",
+    "someFailed_other": "{count} schede tecniche non sono state scaricate. Riprova.",
+    "downloaded_one": "{count} scheda tecnica scaricata.",
+    "downloaded_other": "{count} schede tecniche scaricate.",
+    "stateHint": {
+      "CURRENT": "La copia più recente della revisione in vigore.",
+      "DRAFT": "La revisione è ancora una bozza: può cambiare prima del rilascio.",
+      "NEWER_VERSION": "Esiste una versione più recente di questa revisione.",
+      "NEWER_REVISION": "È in vigore una revisione più recente.",
+      "OBSOLETE": "La revisione è obsoleta e nessuna è in vigore."
+    }
+  },
+  "rounds": {
+    "title": "Giri di campionatura",
+    "hint": "Ogni giro che facciamo per te, con il suo stato e la spedizione. Un giro che attende te apre la sua decisione.",
+    "label": "Giri di campionatura",
+    "count_one": "{count} giro",
+    "count_other": "{count} giri",
+    "countOf": "{count} di {total} giri · {code}",
+    "col": {
+      "round": "Giro",
+      "style": "Modello",
+      "pieces": "Pezzi",
+      "sent": "Spedito il",
+      "received": "Ricevuto il",
+      "tracking": "Tracciamento",
+      "status": "Stato"
+    },
+    "noTracking": "Nessun tracciamento ancora",
+    "trackOf": "Traccia la spedizione {tracking} (nuova scheda)",
+    "decidedOn": "Deciso il {date}",
+    "dueOn": "Previsto il {date}",
+    "bulk_one": "Decidi {count} giro in attesa",
+    "bulk_other": "Decidi {count} giri in attesa",
+    "bulkNone": "Nessuno dei giri selezionati attende la tua decisione.",
+    "failed": "Non siamo riusciti a leggere i tuoi giri di campionatura.",
+    "noneOf": "Nessun giro di {code} ancora.",
+    "showAll": "Mostra tutti i giri",
+    "empty": "Nessun giro di campionatura ancora.",
+    "emptyBody": "Quando facciamo un campione per te, compare qui con la sua spedizione.",
+    "only": "Giri di {code}"
+  },
+  "decide": {
+    "loading": "Lettura del campione…",
+    "title": "Decidi su {what}",
+    "previous": "Campione precedente",
+    "next": "Campione successivo",
+    "first": "Questo è il primo campione in attesa.",
+    "last": "Questo è l'ultimo campione in attesa.",
+    "nav": "{index} di {count} in attesa",
+    "failed": "Non siamo riusciti a leggere questa richiesta.",
+    "gone": "Questa richiesta non attende più te: è stata risposta, ritirata o è scaduta.",
+    "what": "Cosa ti chiediamo",
+    "due": "Rispondi entro",
+    "dueIn": "tra {left}",
+    "dueNow": "in scadenza ora",
+    "from": "Da",
+    "received": "Ricevuto il",
+    "photos": "Foto",
+    "photosNone": "Con questa richiesta non sono arrivate foto.",
+    "photoOpen": "Apri {name} in una nuova scheda",
+    "photoAlt": "Foto {name}",
+    "photoFailed": "Questa foto non si è caricata.",
+    "spec": "Il campione",
+    "files": "Documenti",
+    "fileOpen": "Apri {name}",
+    "fileLoading": "Apertura di {name}…",
+    "fileFailed": "Non è stato possibile aprire {name}.",
+    "decision": "La tua decisione",
+    "legend": "Scegli una risposta",
+    "option": {
+      "approve": "Approva",
+      "approve_body": "Il campione va bene: procediamo.",
+      "comments": "Approva con commenti",
+      "comments_body": "Procediamo con le modifiche che scrivi.",
+      "reject": "Rifiuta",
+      "reject_body": "Il campione non va bene: scrivi perché, facciamo un nuovo giro."
+    },
+    "comment": {
+      "why": "Perché lo rifiuti?",
+      "what": "Cosa deve cambiare?",
+      "optional": "Un commento (facoltativo)",
+      "needed": "Necessario per questa decisione.",
+      "hint": "Punto, taglia e cosa hai visto, così il reparto campionatura può intervenire."
+    },
+    "sign": {
+      "title": "Firma la tua decisione",
+      "summary": {
+        "approve": "Approvi {what} per {company}.",
+        "comments": "Approvi {what} per {company} con le modifiche che hai scritto.",
+        "reject": "Rifiuti {what} per {company}.",
+        "none": "Prima scegli una decisione."
+      },
+      "legal": "Il nome che scrivi firma questa decisione. {company} la conserva con il campione e ti invia una ricevuta.",
+      "name": "Nome e cognome",
+      "nameHint": "Come firmi i tuoi documenti.",
+      "nameEmpty": "Scrivi il tuo nome per firmare.",
+      "go": {
+        "approve": "Firma e approva",
+        "comments": "Firma e approva con commenti",
+        "reject": "Firma e rifiuta"
+      },
+      "choose": "Scegli una decisione",
+      "busy": "Invio…"
+    },
+    "problem": {
+      "choose": "Scegli Approva, Approva con commenti o Rifiuta.",
+      "why": "Scrivi perché rifiuti il campione.",
+      "what": "Scrivi cosa deve cambiare.",
+      "long": "Il commento è troppo lungo (al massimo 4000 caratteri).",
+      "gone": "Questa richiesta non attende più te.",
+      "forbidden": "Il tuo accesso non ti permette di decidere questo campione.",
+      "changed": "La richiesta è cambiata nel frattempo: è stata riletta, controllala e firma di nuovo.",
+      "invalid": "La decisione non è valida: controlla il commento e il tuo nome.",
+      "unavailable": "Il portale è occupato: riprova tra un momento.",
+      "failed": "La tua decisione non è stata inviata. Riprova."
+    },
+    "done": {
+      "next": "Campione successivo",
+      "close": "Chiudi",
+      "body": "La tua decisione è arrivata: il reparto campionatura la vede ora.",
+      "name": "Firmato da",
+      "at": "Alle",
+      "words": "Le tue parole",
+      "receiptSent": "Una ricevuta sta arrivando alla tua e-mail.",
+      "receiptFailed": "Non è stato possibile inviare la ricevuta; la tua decisione è conservata.",
+      "reference": "Campione",
+      "contact": "Scrivici dalla pagina del campione se qualcosa cambia."
+    }
+  },
+  "decided": {
+    "OPEN": "In attesa",
+    "APPROVED": "Approvato",
+    "APPROVED_WITH_CHANGES": "Approvato con commenti",
+    "REFUSED": "Rifiutato",
+    "WITHDRAWN": "Ritirata",
+    "EXPIRED": "Scaduta"
+  }
+}
