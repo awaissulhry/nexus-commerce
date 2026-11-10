@@ -17,9 +17,9 @@ import '../register.css'
  * garments are now — as small read-only tables (DS SummaryTable; the design's TraceTree is a DS part not built yet).
  */
 
-/** The `register` words plus the shared `quality`, `lists` and `records` words. */
+/** The `register` words plus the shared `quality`, `lists` and `records` words (B-W2b-271: and the register in depth's). */
 export function RegisterMessages({ children }: { children?: ReactNode }) {
-  return <QualityMessages namespaces={['register']}>{children}</QualityMessages>
+  return <QualityMessages namespaces={['register', 'compliance-register-depth']}>{children}</QualityMessages>
 }
 
 export function RiskTag({ risk }: { risk: Entry['risk'] }) {

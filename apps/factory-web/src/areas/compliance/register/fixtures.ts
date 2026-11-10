@@ -4,7 +4,7 @@ import { DEMO_COMPANIES } from '../../../shell/design-data'
 import { at, canFor, COMPANY_ID, inShell, NOW, PREFIX, uid, type RoleCase } from '../../quality/_shared/fixtures'
 import { failedRead, ready, reading, type Read } from '../../quality/_shared/model'
 import type { Entry, EntryDetail, PartyOption, ReversedRelease, StyleOption, Trace } from './api'
-import { blankDraft, PAGE, tileCounts, viewRows, type ListDialog, type NewEntryDraft, type NewEntryModel, type RegisterListModel, type RegisterView } from './model'
+import { blankDraft, LIST_MAX, PAGE, tileCounts, viewRows, type ListDialog, type NewEntryDraft, type NewEntryModel, type RegisterListModel, type RegisterView } from './model'
 import { RegisterListView } from './view/RegisterListView'
 
 /**
@@ -155,7 +155,27 @@ export const ENTRIES: Entry[] = [
 
 const OPEN = ENTRIES.filter((row) => row.status === 'OPEN')
 const CLOSED = ENTRIES.filter((row) => row.status === 'CLOSED')
-export const TILES = tileCounts(OPEN, CLOSED)
+// B-W2b-271: one recall in progress (on REG-DEMO-2026-0007), as GET /compliance/recalls?status=ACTIVE counts it.
+export const TILES = tileCounts(OPEN, CLOSED, LIST_MAX, 1)
+const DEPTH_TILES = { notices: { drafts: 1, sentThisYear: 3 }, recalls: { unitsStillOut: 9 } }
+
+/** B-W2b-271: the register with the two kinds B-W2b-260 added (a withdrawal, an entry opened by an authority request). */
+const W2B_ENTRIES: Entry[] = [
+  entry(10, {
+    kind: 'WITHDRAWAL',
+    batchNumbers: ['B-DEMO-0150'],
+    risk: 'YES',
+    reportedAt: at(29, 8, 30),
+    description: 'Batch taken off the market after a supplier warned of a weak zip puller (made-up).',
+  }),
+  entry(9, {
+    kind: 'AUTHORITY_REQUEST',
+    source: { type: 'AuthorityRequest', id: uid('7301', 1) },
+    reportedAt: at(28, 17, 0),
+    description: 'Authority (IT, PROT-DEMO-101) asks: the declaration and the production records of batch B-DEMO-0139 (made-up).',
+  }),
+  ...ENTRIES,
+]
 
 export const RELEASES: ReversedRelease[] = [{ id: RELEASE_ID, releaseNumber: 'REL-DEMO-2026-0031', number: 'WO-DEMO-0139', reversals: [{ id: REVERSAL_ID }] }]
 
@@ -301,7 +321,12 @@ export const newModel = (over: Partial<NewEntryModel> = {}, draft: Partial<NewEn
 
 function listModel(role: RoleCase, over: Partial<RegisterListModel> = {}): RegisterListModel {
   const view: RegisterView = over.view ?? 'all'
-  const filtered = view === 'all' ? ENTRIES : view === 'closed' ? CLOSED : viewRows(view, OPEN).filter((row) => (view === 'risk' ? row.risk === 'YES' : view === 'assessing' ? row.risk === 'ASSESSING' : true))
+  const filtered =
+    view === 'all'
+      ? ENTRIES
+      : view === 'closed'
+        ? CLOSED
+        : viewRows(view, OPEN, new Set([ENTRIES.find((row) => row.reference.endsWith('0007'))!.id])).filter((row) => (view === 'risk' ? row.risk === 'YES' : view === 'assessing' ? row.risk === 'ASSESSING' : true))
   return {
     prefix: PREFIX,
     can: canFor(role),
@@ -311,6 +336,7 @@ function listModel(role: RoleCase, over: Partial<RegisterListModel> = {}): Regis
     query: '',
     limit: PAGE,
     tiles: TILES,
+    depthTiles: DEPTH_TILES,
     asOf: NOW,
     live: 'live',
     updates: 0,
@@ -370,6 +396,29 @@ export const designScreen = defineDesignScreen<RegisterDesignModel>({
       note: 'Open entries not yet marked as informed (the list rows carry no duties: an entry whose goods never left is listed too).',
     },
     { id: 'tile-closed', label: 'Tile pressed: closed', model: { role: 'owner', list: listModel('owner', { view: 'closed' }) } },
+    // B-W2b-271 (design rg-metrics W2b, rg-grid W2b): the two W2b tiles and the new kinds in the grid.
+    {
+      id: 'w2b-tile-notices',
+      label: 'W2b · Tile pressed: authority notices due (risk yes, no notice sent)',
+      model: { role: 'owner', list: listModel('owner', { view: 'notices' }) },
+      note: 'The hint says the drafts and the notices sent this year (GET /compliance/authority-notices tiles).',
+    },
+    { id: 'w2b-tile-recalls', label: 'W2b · Tile pressed: recalls in progress (the entries an active recall names)', model: { role: 'owner', list: listModel('owner', { view: 'recalls' }) } },
+    {
+      id: 'w2b-kinds',
+      label: 'W2b · The grid with a withdrawal and an entry opened by an authority request',
+      model: { role: 'owner', list: listModel('owner', { rows: ready(W2B_ENTRIES), tiles: tileCounts(W2B_ENTRIES.filter((row) => row.status === 'OPEN'), CLOSED, LIST_MAX, 1) }) },
+    },
+    {
+      id: 'w2b-filter-withdrawal',
+      label: 'W2b · Filter: kind Withdrawal',
+      model: { role: 'owner', list: listModel('owner', { filters: { kind: 'WITHDRAWAL' }, rows: ready(W2B_ENTRIES.filter((row) => row.kind === 'WITHDRAWAL')) }) },
+    },
+    {
+      id: 'w2b-tiles-unread',
+      label: 'W2b · The notices and recalls could not be counted (the other tiles still count)',
+      model: { role: 'owner', list: listModel('owner', { tiles: { ...TILES, recalls: null }, depthTiles: { notices: null, recalls: null } }) },
+    },
     {
       id: 'filtered',
       label: 'Filters and search: kind Complaint, “sleeve”',
@@ -385,7 +434,10 @@ export const designScreen = defineDesignScreen<RegisterDesignModel>({
     {
       id: 'error',
       label: "The API didn't answer",
-      model: { role: 'owner', list: listModel('owner', { rows: failedRead('problem.unavailable'), tiles: { open: null, risk: null, assessing: null, uninformed: null, closed: null }, asOf: null, live: 'offline' }) },
+      model: {
+        role: 'owner',
+        list: listModel('owner', { rows: failedRead('problem.unavailable'), tiles: { open: null, risk: null, notices: null, recalls: null, assessing: null, uninformed: null, closed: null }, depthTiles: null, asOf: null, live: 'offline' }),
+      },
       note: 'Never drawn as an empty list; the tiles say they could not count.',
     },
     { id: 'selection', label: 'Selection: Export 3 (CSV)', model: { role: 'owner', list: listModel('owner', { selected: pick(8, 7, 4) }) } },

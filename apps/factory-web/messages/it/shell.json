@@ -26,7 +26,9 @@
       "development": "Sviluppo",
       "samples": "Campionature e prototipi",
       "colours": "Colori e grafiche",
-      "options": "Opzioni e regole"
+      "options": "Opzioni e regole",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni prodotto"
     },
     "sales": {
       "area": "Vendite",
@@ -149,6 +151,7 @@
       "register": "Registro DPI e richiami",
       "certificates": "Certificati",
       "declarations": "Dichiarazioni e istruzioni",
+      "techfiles": "Fascicoli tecnici",
       "labels": "Etichette e marcature",
       "sustainability": "Sostenibilità",
       "sourcing": "Filiera e dichiarazioni ambientali",

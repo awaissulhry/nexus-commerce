@@ -13,6 +13,8 @@ import { LABEL_EVENTS, labelHref, labelsCan, labelsCsvRows, mmTyped, NEW_LABEL, 
 import { LabelsMessages } from './view/parts'
 import { LabelsListView } from './view/LabelsListView'
 import type { NewLabelModel } from './view-model'
+import { readMarkets, readPhraseTexts, readWaitingArtwork } from './depth/api'
+import { DEPTH_EVENTS, gapsOf, listPhraseKeys, marketLabelLanguages, NO_DEPTH, type ListDepth } from './depth/model'
 
 /**
  * The Labels & marking container (`/w/<company>/compliance/labels`, SCR-053): reads every label the person may see
@@ -49,6 +51,29 @@ function LabelsContainer() {
   const [shortcuts, setShortcuts] = useState(false)
   const request = useRef<AbortController | null>(null)
   const search = useRef<AbortController | null>(null)
+  const [depth, setDepth] = useState<ListDepth>(NO_DEPTH)
+
+  // B-W2b-270: the proofs waiting approval and the markets a label cannot print for, read beside the list (each on its own:
+  // a failed one leaves its tile "—" and the rest of the page as it is).
+  const loadDepth = useCallback(
+    async (templates: readonly LabelTemplate[], signal: AbortSignal) => {
+      setDepth(NO_DEPTH)
+      const waiting = readWaitingArtwork(api, signal)
+        .then((answer) => !signal.aborted && setDepth((current) => ({ ...current, waiting: new Set(answer.waiting.map((entry) => entry.templateId)), waitingFailed: false })))
+        .catch(() => !signal.aborted && setDepth((current) => ({ ...current, waiting: null, waitingFailed: true })))
+      const gaps = (async () => {
+        try {
+          const { markets } = await readMarkets(api, signal)
+          const texts = await readPhraseTexts(api, listPhraseKeys(templates), marketLabelLanguages(markets), signal)
+          if (!signal.aborted) setDepth((current) => ({ ...current, gaps: gapsOf(templates, markets, texts), gapsFailed: false }))
+        } catch {
+          if (!signal.aborted) setDepth((current) => ({ ...current, gaps: null, gapsFailed: true }))
+        }
+      })()
+      await Promise.all([waiting, gaps])
+    },
+    [api],
+  )
 
   const load = useCallback(async () => {
     if (!can.view) return
@@ -62,11 +87,12 @@ function LabelsContainer() {
       setAsOf(new Date().toISOString())
       setUpdates(0)
       setSelected((current) => current.filter((id) => answer.templates.some((row) => row.id === id)))
+      void loadDepth(answer.templates, controller.signal)
     } catch (error) {
       if ((error as { name?: string } | null)?.name === 'AbortError') return
       setRows(failedRead(problemKey(error)))
     }
-  }, [api, can.view])
+  }, [api, can.view, loadDepth])
 
   useEffect(() => {
     void load()
@@ -74,7 +100,8 @@ function LabelsContainer() {
 
   const live = useLive(
     (change) => {
-      if (liveMatches(change, LABEL_EVENTS)) setUpdates((count) => count + 1)
+      // B-W2b-270: a proof added or approved, a phrase or a market changed, count as updates too.
+      if (liveMatches(change, LABEL_EVENTS) || liveMatches(change, DEPTH_EVENTS)) setUpdates((count) => count + 1)
     },
     () => void load(),
   )
@@ -165,7 +192,7 @@ function LabelsContainer() {
 
   return (
     <LabelsListView
-      model={{ prefix, can, view, query, rows, asOf, live, updates, selected, notice, newLabel: newLabel ? { ...newLabel, sources } : null, shortcuts }}
+      model={{ prefix, can, view, query, rows, asOf, live, updates, selected, notice, newLabel: newLabel ? { ...newLabel, sources } : null, shortcuts, depth }}
       actions={{
         onQuery: (text) => {
           setQuery(text)

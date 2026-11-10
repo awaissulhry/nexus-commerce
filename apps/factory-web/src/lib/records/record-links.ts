@@ -33,6 +33,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   BrandingSet: '/products/colours?open=[id]',
   // B-W2b-242: an option group's record (SCR-114-record: options, rules, price and BOM effects, styles).
   OptionGroup: '/products/options/[id]',
+  // B-W2b-239: a product type opens in its dialog on Products › Settings › Product settings (SCR-251).
+  ProductTypeProfile: '/products/settings?type=[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
@@ -69,6 +71,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   StockCount: '/warehouse/counts/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
+  RecallAction: '/compliance/register/recall/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
   Payment: '/finance/payments/[id]',
@@ -188,6 +192,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   WorkInstruction: '/production/instructions/[id]',
   // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
   SampleRound: '/products/samples/[id]',
+  // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
+  TechnicalFile: '/compliance/techfiles/[id]',
+  EvidencePack: '/compliance/techfiles/pack?pack=[id]',
 })
 
 /**

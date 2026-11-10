@@ -53,6 +53,9 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
   const t = useT('register')
   const q = useT('quality')
   const lists = useT('lists')
+  // B-W2b-271: the words of the two W2b tiles and views (catalogue compliance-register-depth).
+  const d = useT('compliance-register-depth')
+  const viewWord = (view: RegisterView) => (view === 'notices' || view === 'recalls' ? d(`view.${view}`) : t(`view.${view}`))
   const locale = useLocale()
   const can = model.can
   const dialog = model.dialog ?? null
@@ -160,13 +163,19 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
   if (!can.registerView) return <NoAccess title={t('noAccess.title')} body={t('noAccess.body')} />
 
   const filtered = isFiltered(model.view, model.filters, model.query)
+  const tileHint = (id: TileId): string => {
+    // B-W2b-271: the notices tile says the drafts and what was sent this year; the recalls tile the garments still out.
+    if (id === 'notices') return model.depthTiles?.notices ? d('tile.noticesHint', { drafts: model.depthTiles.notices.drafts, sent: model.depthTiles.notices.sentThisYear }) : d('tile.noticesHintBare')
+    if (id === 'recalls') return model.depthTiles?.recalls ? d('tile.recallsHint', { count: model.depthTiles.recalls.unitsStillOut }) : d('tile.recallsHintBare')
+    return t(`tile.${id}Hint`)
+  }
   const tile = (id: TileId) => {
     const count = model.tiles[id]
     const active = model.view === id
     return {
-      label: t(`tile.${id}`),
+      label: id === 'notices' || id === 'recalls' ? d(`tile.${id}`) : t(`tile.${id}`),
       value: count === undefined ? <Skeleton width={36} height={22} /> : count === null ? '—' : count.complete ? String(count.count) : t('tile.atLeast', { count: count.count }),
-      hint: count === null ? t('tile.unknown') : t(`tile.${id}Hint`),
+      hint: count === null ? t('tile.unknown') : tileHint(id),
       active,
       onClick: () => actions?.onView?.(active ? 'all' : id),
     }
@@ -174,7 +183,7 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
 
   const viewItems: MenuItemDef[] = [
     { id: 'heading', heading: true, label: t('list.rowsHeading') } as MenuItemDef,
-    ...(['all', ...TILES] as RegisterView[]).map((view) => ({ id: view, label: t(`view.${view}`), checked: model.view === view, onSelect: () => actions?.onView?.(view) }) as MenuItemDef),
+    ...(['all', ...TILES] as RegisterView[]).map((view) => ({ id: view, label: viewWord(view), checked: model.view === view, onSelect: () => actions?.onView?.(view) }) as MenuItemDef),
   ]
   const filterItems: MenuItemDef[] = [
     { id: 'kind', heading: true, label: t('list.col.kind') } as MenuItemDef,
@@ -195,8 +204,8 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
           id: `risk-${risk}`,
           label: t(`risk.${risk}`),
           checked: model.filters.risk === risk,
-          disabled: model.view === 'risk' || model.view === 'assessing',
-          description: model.view === 'risk' || model.view === 'assessing' ? t('held.viewSetsRisk') : undefined,
+          disabled: model.view === 'risk' || model.view === 'assessing' || model.view === 'notices',
+          description: model.view === 'risk' || model.view === 'assessing' || model.view === 'notices' ? t('held.viewSetsRisk') : undefined,
           onSelect: () => actions?.onFilters?.({ ...model.filters, risk: model.filters.risk === risk ? null : (risk as RegisterRisk) }),
         }) as MenuItemDef,
     ),
@@ -220,11 +229,11 @@ function RegisterList({ model, actions }: { model: RegisterListModel; actions?: 
   )
   const tools = (
     <>
-      <Menu label={t('list.rows', { view: t(`view.${model.view}`) })} items={viewItems} />
+      <Menu label={t('list.rows', { view: viewWord(model.view) })} items={viewItems} />
       <Menu label={filterCount > 0 ? t('list.filtersCount', { count: filterCount }) : t('list.filters')} items={filterItems} />
       {filtered && (
         <span className="fw-q-chips" aria-label={t('list.activeFilters')}>
-          {model.view !== 'all' && chip('view', t(`view.${model.view}`), () => actions?.onView?.('all'))}
+          {model.view !== 'all' && chip('view', viewWord(model.view), () => actions?.onView?.('all'))}
           {model.filters.kind && chip('kind', t(`kind.${model.filters.kind}`), () => actions?.onFilters?.({ ...model.filters, kind: null }))}
           {model.filters.risk && chip('risk', t(`risk.${model.filters.risk}`), () => actions?.onFilters?.({ ...model.filters, risk: null }))}
           {model.query.trim() !== '' && chip('q', `“${model.query.trim()}”`, () => actions?.onQuery?.(''))}

@@ -121,6 +121,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/samples': 'sales.samples.view', // GET /sales/samples/rounds (B-W2b-261)
       '/products/colours': 'product.styles.view', // GET /product/colours/library (B-W2b-247)
       '/products/options': 'product.styles.view', // GET /product/option-groups (B-W2b-242)
+      '/products/settings': 'product.styles.view', // GET /product/settings (B-W2b-239)
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
       '/planning/leather': 'planning.view', // GET /planning/leather/need (B-W2b-132)
       '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
@@ -173,6 +174,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/sourcing': 'compliance.certificates.view', // GET /compliance/claims (B-W2b-264)
       '/compliance/settings': 'compliance.certificates.view', // GET /compliance/requirements/gates and /compliance/rules/* (B-W2b-265)
       '/compliance/declarations': 'compliance.certificates.view', // GET /compliance/declarations (B-W2b-268)
+      '/compliance/techfiles': 'compliance.certificates.view', // GET /compliance/techfiles (B-W2b-269)
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/receivables': 'receivables.view', // GET /receivables/ageing (B-W2a-81)

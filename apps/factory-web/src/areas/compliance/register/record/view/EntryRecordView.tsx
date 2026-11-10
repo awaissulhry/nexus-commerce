@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, MoreHorizontal, Pencil } from 'lucide-react'
+import { ExternalLink, MoreHorizontal, Pencil, Siren } from 'lucide-react'
 import { Banner, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -12,6 +12,21 @@ import { evidenceAddress } from '../../../../quality/_shared/model'
 import { actionHeld, ACTIONS, dutyState, evidenceSubject, nextAction, sourceKey, sourceLink, type EntryAction, type EntryRecordModel, type RecordTab } from '../../model'
 import { DayText, RegisterMessages, RiskTag, StatusPill, TraceTables } from '../../view/parts'
 import { EntryDialogs, type DialogsActions } from './dialogs'
+// B-W2b-271: the entry's W2b parts — the Authority notices tab, recall progress and the distributor log, their dialogs.
+import type { Notice } from '../../../../quality/_shared/model'
+import { authorityCount, recallAddress, recallVerb } from '../../depth/model'
+import { ActionsDepth } from '../../depth/view/ActionsDepth'
+import { AuthorityTab } from '../../depth/view/AuthorityTab'
+import { DepthDialogs } from '../../depth/view/DepthDialogs'
+import type { DepthActions, DepthModel } from '../../depth/view/types'
+
+/** B-W2b-271: the depth parts as the record mounts them (absent: a W1 record, as before). */
+export interface EntryDepth {
+  readonly model: DepthModel
+  readonly actions?: DepthActions
+  readonly notice?: Notice | null
+  readonly onDismissNotice?: () => void
+}
 
 export interface EntryRecordActions extends DialogsActions {
   onDialog?: (action: EntryAction | null) => void
@@ -28,22 +43,24 @@ export interface EntryRecordActions extends DialogsActions {
  * correction is a note in its thread. Fetches nothing: EntryRecord.tsx reads and writes; the record panels come in as
  * `panels`, and the reporters the event may name as `parties`.
  */
-export function EntryRecordView({ model, actions, panels, parties = null }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties?: DialogsParties }) {
+export function EntryRecordView({ model, actions, panels, parties = null, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties?: DialogsParties; depth?: EntryDepth }) {
   return (
     <RegisterMessages>
-      <EntryRecord model={model} actions={actions} panels={panels} parties={parties} />
+      <EntryRecord model={model} actions={actions} panels={panels} parties={parties} depth={depth} />
     </RegisterMessages>
   )
 }
 
 type DialogsParties = Parameters<typeof EntryDialogs>[0]['model']['parties']
 
-function EntryRecord({ model, actions, panels, parties }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties: DialogsParties }) {
+function EntryRecord({ model, actions, panels, parties, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties: DialogsParties; depth?: EntryDepth }) {
   const t = useT('register')
+  const d = useT('compliance-register-depth')
   const locale = useLocale()
   const { entry, can, prefix } = model
-  // Activity needs the record panels (threads.read): without them the record opens on Event.
-  const tab: RecordTab = model.tab === 'activity' && !panels ? 'event' : model.tab
+  // Activity needs the record panels (threads.read): without them the record opens on Event. B-W2b-271: Authority notices
+  // needs the depth parts.
+  const tab: RecordTab = (model.tab === 'activity' && !panels) || (model.tab === 'authority' && !depth) ? 'event' : model.tab
   const next = nextAction(entry)
   const held = (action: EntryAction) => {
     const key = actionHeld(action, entry, can)
@@ -69,6 +86,8 @@ function EntryRecord({ model, actions, panels, parties }: { model: EntryRecordMo
   const tabs: { id: RecordTab; label: string; count?: number | null }[] = [
     { id: 'event', label: t('tab.event') },
     { id: 'affected', label: t('tab.affected'), count: entry.trace.counts.concerned },
+    // B-W2b-271: notices sent and requests received (the count: notices not cancelled + requests still open).
+    ...(depth ? [{ id: 'authority' as RecordTab, label: d('tab.authority'), count: authorityCount(depth.model.surveillance.value) }] : []),
     { id: 'actions', label: t('tab.actions'), count: entry.status === 'OPEN' ? openDuties : null },
     ...(panels ? [{ id: 'activity' as RecordTab, label: t('tab.activity') }] : []),
   ]
@@ -101,6 +120,7 @@ function EntryRecord({ model, actions, panels, parties }: { model: EntryRecordMo
               {t(`action.${next}`)}
             </Button>
           )}
+          {depth && <RecallBandButton depth={depth} />}
           <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={moreItems} />
         </>
       }
@@ -112,6 +132,7 @@ function EntryRecord({ model, actions, panels, parties }: { model: EntryRecordMo
       onDock={actions?.onDock}
     >
       <NoticeBanner notice={model.notice} namespace="register" onDismiss={actions?.onDismissNotice} />
+      {depth && <NoticeBanner notice={depth.notice} namespace="compliance-register-depth" onDismiss={depth.onDismissNotice} />}
       {model.changedAt && (
         <Banner
           tone="info"
@@ -143,12 +164,15 @@ function EntryRecord({ model, actions, panels, parties }: { model: EntryRecordMo
           {entry.trace.workOrders.length === 0 && <p className="fw-q-hint">{t('affected.none')}</p>}
         </Section>
       )}
+      {tab === 'authority' && depth && <AuthorityTab model={depth.model} actions={depth.actions} />}
       {tab === 'actions' && <ActionsTab model={model} held={held} onDialog={actions?.onDialog} />}
+      {tab === 'actions' && depth && <ActionsDepth model={depth.model} actions={depth.actions} />}
       {tab === 'activity' && panels}
       <EntryDialogs
         model={{ entry, dialog: model.dialog ?? null, busy: !!model.busy, problem: model.dialogProblem ?? null, today: model.today, parties }}
         actions={actions}
       />
+      {depth && <DepthDialogs model={depth.model} actions={depth.actions} />}
     </RecordFrame>
   )
 }
@@ -309,5 +333,27 @@ function ActionsTab({ model, held, onDialog }: { model: EntryRecordModel; held: 
         </Section>
       </div>
     </div>
+  )
+}
+
+/** B-W2b-271 (design: record band "Start recall"): a recall or withdrawal in progress opens its page; none: start one. */
+function RecallBandButton({ depth }: { depth: EntryDepth }) {
+  const d = useT('compliance-register-depth')
+  const recalls = depth.model.surveillance.value?.recalls ?? null
+  if (recalls === null) return null
+  const verb = recallVerb(depth.model.entry, recalls)
+  if (verb.kind === 'open')
+    return (
+      <Button size="sm" asChild>
+        <Link href={recallAddress(depth.model.prefix, verb.recallId)}>
+          <Siren size={14} aria-hidden /> {d('recalls.openLive', { number: verb.number })}
+        </Link>
+      </Button>
+    )
+  const held = !depth.model.can.recallManage ? d('held.manage') : depth.model.entry.status !== 'OPEN' ? d('held.entryClosed') : null
+  return (
+    <Button size="sm" heldReason={held} onClick={() => depth.actions?.onDialog?.({ kind: 'startRecall' })}>
+      <Siren size={14} aria-hidden /> {d(verb.recallKind === 'WITHDRAWAL' ? 'recalls.startWithdrawal' : 'recalls.start')}
+    </Button>
   )
 }

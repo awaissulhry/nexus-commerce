@@ -70,6 +70,15 @@ export const artworkRemoveContract = defineContract({
   response: { 200: output({ artwork: artworkView }) },
 })
 
+// B-W2b-270: the DRAFT proofs waiting for a second person (Labels & marking's tile "Artwork waiting approval").
+export const artworkWaitingView = output({
+  waiting: z.array(output({ templateId: id(), artworkId: id(), versionNo: z.number().int(), byYou: z.boolean(), createdAt: instant() })),
+  asOf: businessDate(),
+})
+export type ArtworkWaitingView = z.infer<typeof artworkWaitingView>
+
+export const artworkWaitingContract = defineContract({ response: { 200: output({ artwork: artworkWaitingView }) } })
+
 // ---- label lines (PRD-088) --------------------------------------------------------------------------------------------
 
 const lineRef = output({ id: id(), seq: z.number().int(), itemId: id(), qty: z.string(), uom: z.enum(UOMS), section: z.string().nullable() })

@@ -14,6 +14,8 @@ import { defineManifest } from '../../../core/manifest'
  */
 export const manifest = defineManifest({
   'GET /compliance/label-artwork/templates/:templateId': { audiences: ['office'], permission: 'compliance.certificates.view', scope: 'record' },
+  // B-W2b-270: the drafts waiting approval of the labels the reader sees (W1's list scope).
+  'GET /compliance/label-artwork/waiting': { audiences: ['office'], permission: 'compliance.certificates.view', scope: 'record' },
   'POST /compliance/label-artwork/templates/:templateId/versions': { audiences: ['office'], permission: 'compliance.labels.manage', scope: 'record' },
   'POST /compliance/label-artwork/versions/:artworkId/approve': { audiences: ['office'], permission: 'compliance.artwork.approve', scope: 'record' },
   'POST /compliance/label-artwork/versions/:artworkId/retire': { audiences: ['office'], permission: 'compliance.labels.manage', scope: 'record' },

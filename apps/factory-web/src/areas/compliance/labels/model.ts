@@ -1,4 +1,4 @@
-import { activationProblems, renderLabel, type LabelTemplateFacts, type LabelValues } from '@nexus/factory-domain/compliance/labels/render'
+import { activationProblems, renderLabel, type LabelQr, type LabelTemplateFacts, type LabelValues } from '@nexus/factory-domain/compliance/labels/render'
 import {
   CARE_CATEGORIES,
   CARE_SYMBOLS,
@@ -16,6 +16,7 @@ import { classificationOf } from '@nexus/factory-domain/product/compliance/rules
 import type { PpeCategory, ProductType } from '@nexus/factory-domain/product/styles/rules'
 import type { LabelBlock, LabelLayout as SheetLayout, LabelPrintState } from '@nexus/ui/components/LabelPreview/index'
 import type { CellValues, ContentPatch, LabelDetail, LabelIssue, LabelTemplate, PrintJob, Rendered } from './api'
+import { NO_DEPTH, type ListDepth, type MarkingDraft } from './depth/model'
 
 /**
  * The rules of Labels & marking (SCR-053), pure — no React, no API client: who may do what, the list's views and tiles,
@@ -59,10 +60,11 @@ export function labelsCan(permissions: readonly string[]): LabelsCan {
 /** The live events that change labels (the label builder's, B-W1-19): a hint to read again, never data. */
 export const LABEL_EVENTS: readonly string[] = ['compliance.label_template_', 'compliance.label_assigned']
 
-export const LABEL_VIEWS = ['all', 'active', 'drafts', 'retired'] as const
+// B-W2b-270: 'artwork' (a proof waits for a second person's approval) and 'translations' (a market it cannot print for).
+export const LABEL_VIEWS = ['all', 'active', 'drafts', 'artwork', 'translations', 'retired'] as const
 export type LabelView = (typeof LABEL_VIEWS)[number]
 /** The tiles: each a saved view (pressing it sets the view: one filter model). */
-export const LABEL_TILES = ['active', 'drafts', 'retired'] as const satisfies readonly LabelView[]
+export const LABEL_TILES = ['active', 'drafts', 'artwork', 'translations', 'retired'] as const satisfies readonly LabelView[]
 /** The list reads at most this many (the API's own cap): beyond it a count is "500+". */
 export const LIST_CAP = 500
 
@@ -70,13 +72,22 @@ export function viewOf(value: string | null | undefined): LabelView {
   return (LABEL_VIEWS as readonly string[]).includes(value ?? '') ? (value as LabelView) : 'all'
 }
 
-const VIEW_STATUS: Record<Exclude<LabelView, 'all'>, LabelTemplate['status']> = { active: 'ACTIVE', drafts: 'DRAFT', retired: 'RETIRED' }
+type StatusView = Exclude<LabelView, 'all' | 'artwork' | 'translations'>
+const VIEW_STATUS: Record<StatusView, LabelTemplate['status']> = { active: 'ACTIVE', drafts: 'DRAFT', retired: 'RETIRED' }
+
+/** Whether a row is in a view: by status, or (B-W2b-270) by a proof waiting / a market it cannot print for. */
+function inView(row: LabelTemplate, view: LabelView, depth: ListDepth): boolean {
+  if (view === 'all') return true
+  if (view === 'artwork') return depth.waiting?.has(row.id) ?? false
+  if (view === 'translations') return depth.gaps?.has(row.id) ?? false
+  return row.status === VIEW_STATUS[view]
+}
 
 /** The rows a view shows, searched over code, name, style and maker. */
-export function viewRows(rows: readonly LabelTemplate[], view: LabelView, query: string): LabelTemplate[] {
+export function viewRows(rows: readonly LabelTemplate[], view: LabelView, query: string, depth: ListDepth = NO_DEPTH): LabelTemplate[] {
   const words = query.trim().toLowerCase()
   return rows.filter((row) => {
-    if (view !== 'all' && row.status !== VIEW_STATUS[view]) return false
+    if (!inView(row, view, depth)) return false
     if (!words) return true
     return [row.code, row.name, row.style?.code ?? '', row.style?.name ?? '', row.makerName].some((text) => text.toLowerCase().includes(words))
   })
@@ -88,10 +99,19 @@ export interface TileCount {
   atLeast: boolean
 }
 
-export function tileCounts(rows: readonly LabelTemplate[] | null, failed: boolean): Record<(typeof LABEL_TILES)[number], TileCount> {
-  const count = (view: Exclude<LabelView, 'all'>): TileCount =>
+export function tileCounts(rows: readonly LabelTemplate[] | null, failed: boolean, depth: ListDepth = NO_DEPTH): Record<(typeof LABEL_TILES)[number], TileCount> {
+  const count = (view: StatusView): TileCount =>
     failed ? { count: null, atLeast: false } : rows === null ? { count: undefined, atLeast: false } : { count: rows.filter((row) => row.status === VIEW_STATUS[view]).length, atLeast: rows.length >= LIST_CAP }
-  return { active: count('active'), drafts: count('drafts'), retired: count('retired') }
+  // B-W2b-270: counted from their own reads; unknown ("—") when the read failed, being read while it runs.
+  const counted = (view: 'artwork' | 'translations', known: boolean, readFailed: boolean): TileCount =>
+    failed || readFailed ? { count: null, atLeast: false } : rows === null || !known ? { count: undefined, atLeast: false } : { count: rows.filter((row) => inView(row, view, depth)).length, atLeast: rows.length >= LIST_CAP }
+  return {
+    active: count('active'),
+    drafts: count('drafts'),
+    artwork: counted('artwork', depth.waiting !== null, depth.waitingFailed),
+    translations: counted('translations', depth.gaps !== null, depth.gapsFailed),
+    retired: count('retired'),
+  }
 }
 
 export const STATUS_TONE: Record<LabelTemplate['status'], 'success' | 'info' | 'neutral'> = { ACTIVE: 'success', DRAFT: 'info', RETIRED: 'neutral' }
@@ -225,8 +245,8 @@ export function patchOf(template: LabelTemplate, draft: LabelDraft): ContentPatc
 
 export const isDirty = (template: LabelTemplate, draft: LabelDraft | null): boolean => draft !== null && Object.keys(patchOf(template, draft)).length > 0
 
-/** The draft as the domain's renderer reads a template. */
-export function factsOf(template: LabelTemplate, draft: LabelDraft): LabelTemplateFacts {
+/** The draft as the domain's renderer reads a template (B-W2b-270: with its kind, GPSR contact and QR target). */
+export function factsOf(template: LabelTemplate, draft: LabelDraft, marking: MarkingDraft | null = null): LabelTemplateFacts {
   const content = contentOf(draft)
   return {
     id: template.id,
@@ -238,6 +258,9 @@ export function factsOf(template: LabelTemplate, draft: LabelDraft): LabelTempla
     storedProblems: [],
     makerPartyId: template.makerPartyId,
     ...(content as Omit<LabelContent, 'makerPartyId'>),
+    kind: marking?.kind ?? template.kind,
+    gpsrContact: marking ? marking.gpsrContact.trim() || null : template.gpsrContact,
+    qrTarget: marking?.qrTarget ?? template.qrTarget,
   }
 }
 
@@ -260,17 +283,25 @@ export function valuesOf(values: CellValues): LabelValues {
  * The draft rendered in the browser, as it is typed: factory-domain's renderLabel with the values the server rendered the
  * cell with (the API's PG test holds that the two agree for saved content). Null without those values.
  */
-export function localRender(template: LabelTemplate, draft: LabelDraft, values: CellValues | null): Rendered | null {
+export function localRender(template: LabelTemplate, draft: LabelDraft, values: CellValues | null, extra: { marking?: MarkingDraft | null; qr?: LabelQr | null } = {}): Rendered | null {
   if (!values) return null
-  const label = renderLabel(factsOf(template, draft), valuesOf(values))
+  const label = renderLabel(factsOf(template, draft, extra.marking ?? null), { ...valuesOf(values), qr: extra.qr ?? null })
   return JSON.parse(JSON.stringify(label)) as Rendered
 }
 
+/** B-W2b-270: the QR the server drew (the preview's values carry none): its address, else a batch QR known at print. */
+export function qrOfLabel(label: Rendered | null): LabelQr | null {
+  const block = label?.blocks.find((entry) => entry.field === 'qr')
+  if (!block) return null
+  if (!block.value) return { kind: 'BATCH', address: null, printed: null, recordType: null, recordId: null, reference: null }
+  return { kind: block.source.kind === 'WORK_ORDER' ? 'BATCH' : 'STYLE', address: block.value, printed: block.lines.map((line) => line.text).join('') || null, recordType: block.source.recordType, recordId: block.source.recordId, reference: null }
+}
+
 /** What would keep the draft from ACTIVE as typed (the API's own activation check, run on this page). */
-export function localActivation(template: LabelTemplate, draft: LabelDraft, values: CellValues | null, today: string): LabelIssue[] {
+export function localActivation(template: LabelTemplate, draft: LabelDraft, values: CellValues | null, today: string, marking: MarkingDraft | null = null): LabelIssue[] {
   const style = template.styleId && values && values.style.id === template.styleId ? valuesOf(values).style : null
   if (template.styleId && !style) return template.problems
-  return activationProblems(factsOf(template, draft), style ? { ...style, companyId: values!.style.companyId } : null, today).map((issue) => ({ ...issue }))
+  return activationProblems(factsOf(template, draft, marking), style ? { ...style, companyId: values!.style.companyId } : null, today).map((issue) => ({ ...issue }))
 }
 
 // ---- printed fields and their order ---------------------------------------------------------------------------------------------
@@ -347,7 +378,8 @@ export function languagesTyped(text: string): string[] {
 
 /** A stand-in mark on the sheet: what it stands for, drawn as words in a dashed box (never the artwork). */
 export interface StandIn {
-  kind: 'ce' | 'pictogram' | 'care'
+  /** B-W2b-270: 'qr' — a batch QR whose address is known only at print (a box, never a made-up code). */
+  kind: 'ce' | 'pictogram' | 'care' | 'qr'
   /** The care symbol's stand-in letters ("W40"), the pictogram's standard and class, the CE's notified body. */
   text: string
   /** The words a screen reader reads (the care symbol's meaning; the stand-in words for the rest). */
@@ -367,7 +399,7 @@ const mm = (hundredths: number): number => Math.round(hundredths) / 100
  * (the CE mark, the pictogram, the care symbols: stand-ins named as such; the batch or serial as Code 128 bars when there
  * is a value) and its printed lines, as the printer wraps them.
  */
-export function sheetOf(label: Rendered, widthMm: number, heightMm: number, words: { name: string; ce: string; pictogram: (standard: string, ppeClass: string) => string; care: (symbolWords: string) => string; test?: string | null }): Sheet {
+export function sheetOf(label: Rendered, widthMm: number, heightMm: number, words: { name: string; ce: string; pictogram: (standard: string, ppeClass: string) => string; care: (symbolWords: string) => string; test?: string | null; qr?: string }): Sheet {
   const preset = LAYOUT_PRESETS[label.preset]
   const blocks: LabelBlock[] = []
   const marks: Record<string, StandIn> = {}
@@ -396,6 +428,14 @@ export function sheetOf(label: Rendered, widthMm: number, heightMm: number, word
       })
     } else if (graphic?.kind === 'BARCODE' && graphic.value) {
       blocks.push({ kind: 'barcode', value: graphic.value, heightMm: mm(preset.barcode) * 0.6, showText: false })
+    } else if (block.field === 'qr') {
+      // B-W2b-253: the QR block has no graphic entry; its address is `value` (drawn as a QR), none yet: a box (B-W2b-270).
+      if (block.value) blocks.push({ kind: 'qr', value: block.value, sizeMm: mm(preset.qr) })
+      else {
+        const id = `qr:${blocks.length}`
+        marks[id] = { kind: 'qr', text: 'QR', words: words.qr ?? 'QR' }
+        blocks.push({ kind: 'mark', id, label: words.qr ?? 'QR', sizeMm: mm(preset.qr) })
+      }
     }
     for (const line of block.lines) blocks.push({ kind: 'text', text: line.text, size: 'sm', bold: block.field === 'model' || block.field === 'size' })
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { ArrowDownToLine } from 'lucide-react'
 import { Banner, Card, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { Button, Input, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
@@ -18,7 +19,7 @@ import type { LabelRecordActions, LabelRecordModel } from '../../view-model'
  * checks: what keeps it from ACTIVE (and what is only noted), each in our words with the API's sentence under it and a
  * link to the field to fix; and what this one garment's label could not print with (the certificate on that day…).
  */
-export function PreviewPanel({ detail, model, actions, label, activation, warnings, local }: { detail: LabelDetail; model: LabelRecordModel; actions?: LabelRecordActions; label: Rendered | null; activation: readonly LabelIssue[]; warnings: readonly LabelIssue[]; local: boolean }) {
+export function PreviewPanel({ detail, model, actions, label, activation, warnings, local, extra }: { detail: LabelDetail; model: LabelRecordModel; actions?: LabelRecordActions; label: Rendered | null; activation: readonly LabelIssue[]; warnings: readonly LabelIssue[]; local: boolean; extra?: ReactNode }) {
   const locale = useLocale()
   const t = useT('labels')
   const q = useT('quality')
@@ -138,6 +139,7 @@ export function PreviewPanel({ detail, model, actions, label, activation, warnin
           )}
         </section>
       </Card>
+      {extra}
     </div>
   )
 }
