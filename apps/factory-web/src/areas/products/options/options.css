@@ -1,0 +1,156 @@
+/*
+ * Products › Options & rules (SCR-114, SCR-114-record; B-W2b-242). Layout only, semantic --nds-* tokens; the parts are the
+ * design system's (ListFrame, NexusGrid sheets, RuleBuilder, SizeColumns, Banner, Card). No page max-width (Owner
+ * 2026-10-29): every block fills the shell's main area; a rule's outcome takes more columns on wide screens.
+ */
+.fw-opt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-opt-notices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-opt-notices > * {
+  align-self: stretch;
+}
+
+.fw-opt-notices > button {
+  align-self: flex-start;
+}
+
+.fw-opt-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-opt-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin-bottom: var(--nds-space-8);
+}
+
+.fw-opt-style {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-opt-grid {
+  min-width: 0;
+  margin-block: var(--nds-space-8);
+}
+
+/* A cell being saved, or refused (its words in the tooltip and above the tab). */
+.fw-opt-cell-saving {
+  color: var(--nds-text-2);
+}
+
+.fw-opt-cell-refused {
+  box-shadow: inset 0 -2px 0 var(--nds-danger);
+}
+
+/* The Rules tab: one card per rule, the RuleBuilder then the outcome. */
+.fw-opt-rules,
+.fw-opt-rules-read {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-opt-rules-read > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding-block: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-opt-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-opt-rule[data-off='true'] {
+  border-style: dashed;
+}
+
+.fw-opt-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-opt-rule-head > .fw-lib-actions {
+  margin-inline-start: auto;
+}
+
+.fw-opt-rule-outcome {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+}
+
+/* A search field with the found records beside it (Add / Edit effect). */
+.fw-opt-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-8);
+}
+
+.fw-opt-pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .fw-opt-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A grid cell that wraps its words (what an effect does, a note) instead of cutting them. */
+.fw-opt-wrap {
+  white-space: normal;
+  line-height: 1.35;
+  padding-block: var(--nds-space-4);
+}
+
+.fw-opt-rule-messages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+/* The API's own sentence under our words (kept as data): its own line, wrapped. */
+.fw-opt-said {
+  display: block;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}

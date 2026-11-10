@@ -1,0 +1,118 @@
+/*
+ * Tests & substances, the W2b views (B-W2b-267: Supplier declarations, Material profiles, Substance list, test plan rules,
+ * the material profile card) LAYOUT only, beside the shared quality layout (areas/quality/_shared/quality.css) and the lab's
+ * (../../lab.css). Prefix `fw-mt-`. Semantic tokens only; no page max-width (Owner rule 2026-10-29): the views fill the
+ * shell's main area, wide screens get more columns, a form's fields wrap into columns.
+ */
+.fw-mt-switch {
+  min-width: 0;
+}
+
+.fw-mt-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-mt-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-mt-verbs {
+  padding-top: var(--nds-space-4);
+}
+
+.fw-mt-quote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-left: 3px solid var(--nds-border);
+}
+
+.fw-mt-quote p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.fw-mt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  min-width: 0;
+}
+
+.fw-mt-panel h3,
+.fw-mt-section-head h3,
+.fw-mt-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-mt-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-mt-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: end;
+  padding-bottom: var(--nds-space-10);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-mt-decide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-mt-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-mt-kinds legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-mt-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-mt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+@media (max-width: 720px) {
+  .fw-mt-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

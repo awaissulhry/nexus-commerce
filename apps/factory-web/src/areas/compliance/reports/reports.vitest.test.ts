@@ -120,7 +120,8 @@ describe('compliance reports: where each number leads', () => {
     const certificate = EXPIRIES.months.flatMap((month) => month.items).find((item) => item.recordType === 'Certificate')!
     expect(expiryHref(certificate, '/w/DEMO', BUILT)).toBe(`/w/DEMO/compliance/certificates/${certificate.recordId}`)
     const declaration = EXPIRIES.months.flatMap((month) => month.items).find((item) => item.recordType === 'SupplierDeclarationRequest')!
-    expect(expiryHref(declaration, '/w/DEMO', BUILT)).toMatch(new RegExp(`^/w/DEMO/records/SupplierDeclarationRequest/${declaration.recordId}\\?label=`))
+    // B-W2b-267: a supplier declaration opens its DetailModal on Tests & substances › Supplier declarations.
+    expect(expiryHref(declaration, '/w/DEMO', BUILT)).toBe(`/w/DEMO/compliance/tests?view=declarations&open=${declaration.recordId}`)
     expect(supplierHref(CR6.suppliers[0]!.party, '/w/DEMO', ALL, BUILT)).toBe(`/w/DEMO/purchasing/suppliers/${CR6.suppliers[0]!.party!.id}`)
     expect(supplierHref(CR6.suppliers[0]!.party, '/w/DEMO', { ...ALL, suppliers: false }, BUILT)).toBeNull()
     expect(failedLotsHref('/w/DEMO', ALL, BUILT)).toBe('/w/DEMO/compliance/tests?view=failed')

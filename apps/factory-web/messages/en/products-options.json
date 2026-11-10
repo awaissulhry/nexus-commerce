@@ -1,0 +1,571 @@
+{
+  "page": {
+    "intro": "The option groups a style offers in the configurator: what a customer may choose, the rules between choices, and what each choice does to the BOM, the routing, the price and the certificate.",
+    "new": "New option group"
+  },
+  "keys": {
+    "new": "New option group",
+    "add": "Add to this tab (option, effect, styles)"
+  },
+  "kind": {
+    "SINGLE": "One choice",
+    "MULTI": "Several choices",
+    "FREE_TEXT": "Typed text"
+  },
+  "kindHint": {
+    "SINGLE": "The customer picks at most one option of the group (a perforation, a protector level).",
+    "MULTI": "The customer may pick several options (logos, patches).",
+    "FREE_TEXT": "Every option takes a text the customer types (a name to embroider)."
+  },
+  "view": {
+    "active": "Active",
+    "all": "All",
+    "archived": "Archived"
+  },
+  "col": {
+    "group": "Group",
+    "kind": "Kind",
+    "options": "Options",
+    "picks": "Min–max picks",
+    "styles": "Styles",
+    "rules": "Rules",
+    "status": "Status"
+  },
+  "list": {
+    "label": "Option groups",
+    "title": "Option groups",
+    "search": "Search code, name or an option",
+    "everyCompany": "every company",
+    "noOptions": "None yet",
+    "outside_one": "{count} outside the certificate",
+    "outside_other": "{count} outside the certificate",
+    "archive": "Archive…",
+    "restore": "Restore…"
+  },
+  "filter": {
+    "view": "Rows",
+    "kindLabel": "Kind",
+    "allKinds": "Every kind",
+    "kind": "Kind: {kind}",
+    "ignored": "Not applied: {value}",
+    "outside": "Outside the certificate",
+    "style": "Offered on {code}",
+    "styleUnread": "A style that could not be read"
+  },
+  "tile": {
+    "outside": "Options that take a garment outside its certificate",
+    "outsideHint": "Groups with such an option: the quote warns before it is sold.",
+    "failed": "Couldn't count"
+  },
+  "notice": {
+    "label": "Notices",
+    "more_one": "{count} more notice",
+    "more_other": "{count} more notices",
+    "fewer": "Fewer notices",
+    "andMore_one": "and {count} more.",
+    "andMore_other": "and {count} more.",
+    "ignored": {
+      "title": "Filter not applied: {value}",
+      "body": "This kind does not exist, so the list shows every kind.",
+      "remove": "Remove the filter"
+    },
+    "style": {
+      "title": "The style of the link could not be read",
+      "body": "It may be in a company you do not work in, or your role does not read it. The list shows every group.",
+      "remove": "Show every group"
+    },
+    "empty": {
+      "title_one": "{count} active group has no options yet",
+      "title_other": "{count} active groups have no options yet",
+      "body": "A style that offers it asks nothing of it: {codes}."
+    },
+    "unoffered": {
+      "title_one": "{count} group is offered on no style",
+      "title_other": "{count} groups are offered on no style",
+      "body": "Offer them on their styles (Styles tab), or archive them: {codes}."
+    },
+    "archived_one": "{count} option group archived.",
+    "archived_other": "{count} option groups archived.",
+    "restored_one": "{count} option group restored.",
+    "restored_other": "{count} option groups restored.",
+    "valueAdded": "Option {code} added.",
+    "valueArchived": "Option {code} archived.",
+    "valueRestored": "Option {code} restored.",
+    "rulesSaved": "Rules saved.",
+    "effectAdded": "Effect added to {code}.",
+    "effectSaved": "Effect of {code} saved.",
+    "effectRemoved": "Effect of {code} removed.",
+    "groupSaved": "Group {code} saved.",
+    "groupArchived": "Group archived: no style may offer it anew.",
+    "groupRestored": "Group restored.",
+    "withdrawn": "Withdrawn from {code}: {words}"
+  },
+  "bulk": {
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "restore_one": "Restore {count}",
+    "restore_other": "Restore {count}"
+  },
+  "held": {
+    "noManage": "Your role does not keep the option library (the production manager's does).",
+    "noneActive": "None of the selected is active.",
+    "noneArchived": "None of the selected is archived.",
+    "archived": "The group is archived: restore it to change it.",
+    "valueArchived": "This option is archived: restore it to change it.",
+    "noPrice": "Setting a surcharge needs the pricing right and the price grain (sales has them).",
+    "noOffer": "Offering a group on a style needs the right to change styles.",
+    "offline": "Offline — changes wait until the connection is back."
+  },
+  "archive": {
+    "title_one": "Archive {count} option group",
+    "title_other": "Archive {count} option groups",
+    "one": "Archive {code}",
+    "reach": "No style can offer it anew; quotes and orders keep the options they name.",
+    "offered_one": "{count} of them is offered on styles: those offers stay until each style withdraws it.",
+    "offered_other": "{count} of them are offered on styles: those offers stay until each style withdraws them.",
+    "back": "Restore brings it back as it was."
+  },
+  "restore": {
+    "title_one": "Restore {count} option group",
+    "title_other": "Restore {count} option groups",
+    "one": "Restore {code}",
+    "reach": "Styles may offer it again."
+  },
+  "empty": {
+    "title": "No option groups yet",
+    "body": "Start one: a perforation, a protector level, logos or a name to embroider.",
+    "bodyView": "The production manager starts them; they show here."
+  },
+  "forbidden": {
+    "title": "You don't have access to option groups",
+    "body": "Reading them needs the right to read styles (product developers, sales and quality have it)."
+  },
+  "offline": {
+    "title": "Offline — changes wait to be sent",
+    "body": "The rows stay as they were read; nothing can be changed until the connection is back.",
+    "record": "The group stays as it was read; cells, rules and dialogs are held until the connection is back."
+  },
+  "style": {
+    "label": "The style's options",
+    "title": "Options of {code} · {name}",
+    "open": "Open the style",
+    "intro": "The groups this style offers, and its BOM lines and routing steps that are only for an option.",
+    "offers": "Groups offered",
+    "noOffers": "This style offers no option group yet.",
+    "lines": "BOM lines only for an option",
+    "noLines": "No BOM line of this style is only for an option.",
+    "steps": "Routing steps only for some options",
+    "noSteps": "No routing step of this style is only for an option.",
+    "withdrawn": "Withdrawn",
+    "revision": "Rev {revision} · {status}",
+    "col": {
+      "asks": "Asks",
+      "options": "Options",
+      "revision": "Revision",
+      "line": "Line",
+      "material": "Material",
+      "option": "Only for",
+      "step": "Step",
+      "operation": "Operation"
+    },
+    "link": "Options & rules of this style"
+  },
+  "revisionStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "OBSOLETE": "obsolete"
+  },
+  "styleStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "group": {
+    "newTitle": "New option group",
+    "editTitle": "Edit group {code}",
+    "create": "Create",
+    "save": "Save",
+    "company": "For",
+    "companyHint": "Only this company's styles may offer it.",
+    "everyCompany": "Every company",
+    "everyCompanyHint": "Every company's styles may offer it (it needs a role over every company).",
+    "code": "Code",
+    "codeHint": "Without spaces (DEMO-PERF).",
+    "name": "Name",
+    "kind": "Kind",
+    "minPicks": "At least",
+    "minHint": "How many options a style asks at least (0: none is needed).",
+    "maxPicks": "At most",
+    "maxHint": "Empty: no maximum.",
+    "noMax": "No maximum",
+    "description": "Description",
+    "descriptionHint": "What the group is for (optional).",
+    "problem": {
+      "code": "Give the group a code.",
+      "codeForm": "A code has no spaces and at most {max} characters.",
+      "name": "Give the group a name.",
+      "long": "At most {max} characters.",
+      "min": "At least is a whole number from 0 to {max}.",
+      "max": "At most is a whole number from 1 to {max}, or empty.",
+      "maxBelow": "At most ({max}) is not below at least ({min}).",
+      "singleMax": "One choice takes 1 option at most: at most is 1.",
+      "singleMin": "One choice takes 0 or 1 option at least."
+    }
+  },
+  "form": {
+    "refused": "The server refused it: see above.",
+    "held_one": "{count} thing to fix first.",
+    "held_other": "{count} things to fix first."
+  },
+  "record": {
+    "back": "Options & rules",
+    "edit": "Edit group…",
+    "archive": "Archive…",
+    "restore": "Restore…",
+    "picks": "picks {picks}",
+    "ownCompany": "this company",
+    "outside_one": "{count} option outside the certificate",
+    "outside_other": "{count} options outside the certificate",
+    "archivedBanner": "Read-only: the group is archived. Restore it (⋯) to change it."
+  },
+  "tab": {
+    "options": "Options",
+    "rules": "Rules",
+    "effects": "Price & BOM effects",
+    "styles": "Styles"
+  },
+  "readOnly": "Read-only: {reason}",
+  "refused": {
+    "title": "What the server said"
+  },
+  "options": {
+    "title": "Options",
+    "intro": "Each cell saves on its own.",
+    "add": "Add option",
+    "addMany": "Add options",
+    "hint": "Type in a cell and press Enter to save it. A surcharge is an amount (35 or 35 EUR) or a percent of the price (10 %); empty: none.",
+    "noPriceGrain": "The price surcharge needs the price grain: it is not shown in your role.",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "price": "Price surcharge",
+      "freeText": "Typed text",
+      "maxLength": "Max length",
+      "pattern": "Pattern",
+      "outside": "Outside the certificate",
+      "used": "Used by"
+    },
+    "priceHint": "An amount (35, -25 EUR) or a percent of the price (10 %); percents add up and never compound.",
+    "patternHint": "A regular expression the text must match, found anywhere in it: anchor it with ^ and $ (^[A-Za-z ]+$).",
+    "freeTextOf": "{code} takes a typed text",
+    "outsideOf": "{code} takes the garment outside its certificate",
+    "held": {
+      "freeTextGroup": "Every option of a typed-text group takes a text.",
+      "noText": "Only for an option that takes a typed text."
+    },
+    "usedLines_one": "{count} BOM line",
+    "usedLines_other": "{count} BOM lines",
+    "usedSteps_one": "{count} step",
+    "usedSteps_other": "{count} steps",
+    "up": "Move up",
+    "down": "Move down",
+    "atEnd": "It is already at that end.",
+    "archive": "Archive…",
+    "restore": "Restore…",
+    "empty": {
+      "title": "Add options",
+      "body": "The choices of this group: each option a code and a name.",
+      "bodyView": "No options yet."
+    },
+    "priceOnly": "Only the surcharge changes here: {reason}"
+  },
+  "value": {
+    "title": "Add an option to {code}",
+    "add": "Add option",
+    "code": "Code",
+    "codeHint": "Without spaces (PERF-FULL).",
+    "name": "Name",
+    "freeText": "The customer types a text",
+    "freeTextHint": "A name to embroider, a number on the sleeve.",
+    "freeTextGroup": "Every option of a typed-text group takes a text.",
+    "maxLength": "Max length",
+    "maxLengthHint": "1 to {max} characters.",
+    "pattern": "Pattern (optional)",
+    "archiveTitle": "Archive option {code}",
+    "restoreTitle": "Restore option {code}",
+    "archiveReach": "No new configuration may choose it; quotes and orders keep it.",
+    "archiveUsed": "Styles keep their {lines} BOM line(s) and {steps} routing step(s) only for it.",
+    "archiveBack": "Restore brings it back as it was.",
+    "restoreReach": "Configurations may choose it again.",
+    "held": {
+      "required_one": "{count} active rule requires this option: change that rule first.",
+      "required_other": "{count} active rules require this option: change those rules first."
+    },
+    "problem": {
+      "code": "Give the option a code.",
+      "codeTaken": "{code} is already an option of this group.",
+      "name": "Give the option a name.",
+      "freeTextGroup": "Every option of a typed-text group takes a text.",
+      "maxLength": "A typed text is 1 to {max} characters at most: say how many.",
+      "pattern": "This is not a regular expression: check the brackets and the backslashes.",
+      "patternClass": "Write the characters themselves ([A-Za-z]), not a class like [[:alpha:]]: the pattern must mean the same in every check.",
+      "patternUnicode": "A pattern takes no \\p{…} class: write the characters themselves.",
+      "patternLength": "A pattern is 1 to {max} characters."
+    }
+  },
+  "price": {
+    "problem": {
+      "form": "Type an amount (35 or 35 EUR) or a percent (10 %); empty for none.",
+      "zero": "A surcharge is never 0: leave it empty for none.",
+      "percent": "A percent from −100 to 1000, with at most 4 decimals.",
+      "amount": "An amount with at most 6 decimals."
+    }
+  },
+  "certificate": {
+    "title": "{code} takes the garment outside its certificate",
+    "body": "Say what the certificate no longer covers when this option is chosen. A quote warns before such a garment is sold.",
+    "note": "What the certificate no longer covers",
+    "noteHint": "The customer's and the compliance team's words (at most 1000 characters).",
+    "save": "Mark it"
+  },
+  "rules": {
+    "title": "Rules",
+    "intro": "Requires and excludes, as a block or a warning with a message. Save the set with the bar below.",
+    "viewOnly": "You can view, not change",
+    "add": "Add rule",
+    "save": "Save rules",
+    "rule": "Rule {n}",
+    "new": "New",
+    "off": "Switched off",
+    "on": "On",
+    "onOf": "Rule {n} on",
+    "remove": "Remove rule {n}",
+    "removeShort": "Remove",
+    "lead": "When",
+    "field": "the option",
+    "any": "any option of {group}",
+    "kind": "Requires or excludes",
+    "requires": "requires",
+    "excludes": "excludes",
+    "otherGroup": "Group of the other option",
+    "pickGroup": "Pick a group",
+    "thisGroup": "This group ({code})",
+    "savedGroup": "The group of the saved rule",
+    "other": "The other option",
+    "pickOther": "Pick an option",
+    "severity": "When broken",
+    "block": "block",
+    "warn": "warning",
+    "messageIt": "Message in Italian",
+    "messageEn": "Message in English",
+    "messageHint": "What the person reads when the rule is broken; empty: our own words.",
+    "reading": "Reading…",
+    "readFailed": "Its options could not be read: pick the group again.",
+    "brokenSays": "When broken: {words}",
+    "held_one": "{count} rule to fix first.",
+    "held_other": "{count} rules to fix first.",
+    "tooMany": "At most {max} rules per group.",
+    "later": "Allowed-combination tables, rules that hide or lock an option, and a test bench come later.",
+    "empty": {
+      "title": "No rules yet",
+      "body": "Add a rule: an option that requires or excludes another one.",
+      "bodyView": "No rules yet."
+    },
+    "problem": {
+      "subject": "Pick the option the rule is about, or any option of the group.",
+      "other": "Pick the other option.",
+      "same": "A rule is about one option and another, not the same.",
+      "anyOwn": "A rule about any option of the group names an option of another group.",
+      "message": "A message is at most {max} characters.",
+      "twice": "The same rule as rule {other}.",
+      "opposite": "Rule {other} says the opposite about the same options."
+    },
+    "subject": "What it is about"
+  },
+  "effectKind": {
+    "BOM_ADD": "Adds a material",
+    "BOM_REPLACE": "Replaces a material",
+    "BOM_REMOVE": "Leaves out a material",
+    "OPERATION_ADD": "Adds an operation",
+    "MINUTES": "Minutes",
+    "PRICE": "Price surcharge",
+    "CERTIFICATE": "Outside the certificate"
+  },
+  "effectHint": {
+    "BOM_ADD": "A BOM line the option adds: material, quantity per garment or per size, unit.",
+    "BOM_REPLACE": "Puts another material in place of one of the style's (its quantity, or a new one).",
+    "BOM_REMOVE": "Leaves one of the style's materials out.",
+    "OPERATION_ADD": "An operation the garment needs too (its standard minutes, or yours).",
+    "MINUTES": "Minutes added or taken away, at an operation or on the garment.",
+    "CERTIFICATE": "The garment is no longer the one its certificate covers."
+  },
+  "section": {
+    "SHELL": "Shell",
+    "LINING": "Lining",
+    "INSULATION": "Insulation",
+    "PROTECTION": "Protection",
+    "TRIMS": "Trims",
+    "THREAD": "Thread",
+    "LABELS": "Labels",
+    "PACKAGING": "Packaging",
+    "OTHER": "Other"
+  },
+  "effects": {
+    "title": "Price & BOM effects",
+    "add": "Add effect",
+    "edit": "Edit…",
+    "remove": "Remove…",
+    "rowMenu": "Actions for an effect of {code}",
+    "hint": "Quantities and minutes save per cell (a comma or a point). Material, operation and section change with Edit…; the kind never changes.",
+    "noPriceGrain": "Price surcharges need the price grain: their rows say the price moves, not by how much.",
+    "costLater": "An option's cost comes with costing (FIN-018): not counted yet.",
+    "scale": "Quantities per size",
+    "scaleHint": "Pick a size scale to type quantities per size.",
+    "noScale": "No sizes",
+    "sizeCell": "{code}, size {size}",
+    "notNumber": "Size {size}: «{text}» is not a number — the value stays.",
+    "held": {
+      "noOptions": "Add an option first."
+    },
+    "col": {
+      "option": "Option",
+      "what": "What it does",
+      "perSize": "Per size ({scale})",
+      "note": "Note",
+      "price": "Price",
+      "cost": "Cost",
+      "amount": "Amount"
+    },
+    "empty": {
+      "title": "No effects yet",
+      "body": "What an option does to the garment: a material added, replaced or left out, an operation, minutes, the certificate.",
+      "bodyView": "No effects yet."
+    },
+    "amountHint": "A BOM line's quantity per garment, or an operation's minutes.",
+    "standardMinutes": "standard minutes",
+    "minutes": "{minutes} min",
+    "priceHint": "The surcharge of the option: an amount (35 or 35 EUR) or a percent of the price (10 %)."
+  },
+  "effect": {
+    "newTitle": "Add an effect",
+    "editTitle": "Edit the effect",
+    "add": "Add effect",
+    "save": "Save",
+    "option": "Option",
+    "kind": "Effect",
+    "fixed": "It stays (another one is another effect).",
+    "item": "Material added",
+    "itemIn": "Material put in",
+    "target": "Material it replaces",
+    "targetOut": "Material left out",
+    "searchMaterial": "Search materials",
+    "searchOperation": "Search operations",
+    "pick": "Pick one",
+    "searchFirst": "Search first",
+    "noMaterials": "Your role does not read materials.",
+    "noOperations": "Your role does not read operations.",
+    "qty": "Quantity",
+    "qtyHint": "Per garment; per size in the grid.",
+    "qtyReplaceHint": "Empty with no unit: the replaced line's.",
+    "uom": "Unit",
+    "noUom": "No unit",
+    "section": "Section",
+    "sectionHint": "Where it goes in the BOM (optional).",
+    "noSection": "None",
+    "operation": "Operation",
+    "operationAt": "At operation (optional)",
+    "operationAtHint": "Empty: on the garment.",
+    "minutes": "Minutes",
+    "minutesHint": "Empty: the operation's standard minutes.",
+    "minutesSignedHint": "Above 0 adds, below 0 takes away; not 0.",
+    "note": "Note",
+    "sizesKept_one": "Its quantity for {count} size stays: change it in the grid.",
+    "sizesKept_other": "Its quantities for {count} sizes stay: change them in the grid.",
+    "removeTitle": "Remove an effect of {code}",
+    "removeBody": "The option no longer does this. Nothing else changes.",
+    "problem": {
+      "item": "Pick the material the option adds.",
+      "itemIn": "Pick the material the option puts in.",
+      "target": "Pick the material it replaces.",
+      "targetOut": "Pick the material it leaves out.",
+      "sameItem": "It puts in another material than the one it replaces.",
+      "uom": "Pick the unit of the quantity.",
+      "qtyNeeded": "Give the quantity per garment, or per size.",
+      "qty": "A quantity above 0, with at most 4 decimals.",
+      "qtyWithUom": "A new quantity with its unit, or neither.",
+      "operation": "Pick the operation the option adds.",
+      "minutes": "Minutes above 0, with at most 3 decimals (or empty: the standard minutes).",
+      "minutesNotZero": "Minutes added (above 0) or taken away (below 0), not 0, with at most 3 decimals.",
+      "certificate": "Say what the certificate no longer covers.",
+      "note": "A note is at most {max} characters."
+    }
+  },
+  "styles": {
+    "title": "Styles",
+    "intro": "The styles that offer this group, each with its own minimum and maximum.",
+    "add": "Add styles",
+    "hint": "Type a style's own minimum or maximum; empty: the group's. A released style may need a new revision first.",
+    "picksHint": "Empty: the group's.",
+    "groups": "group's: {value}",
+    "any": "any",
+    "offered": "Offered",
+    "withdrawn": "Withdrawn",
+    "withdraw": "Withdraw…",
+    "withdrawOf": "Withdraw from {code}",
+    "withdrawTitle": "Withdraw from {code}",
+    "withdrawReach": "The style no longer offers {code} to new configurations.",
+    "withdrawKept": "When its BOM lines or routing steps name an option of the group, the offer is kept archived so they stay; otherwise it is removed.",
+    "withdrawRule": "A released style may need a new revision first.",
+    "addTitle": "Offer {code} on styles",
+    "addBody": "Pick the styles that offer this group; each takes the group's minimum and maximum until you change them.",
+    "search": "Search styles",
+    "none": "No style matches.",
+    "already": "Already offers it",
+    "addN_one": "Add {count} style",
+    "addN_other": "Add {count} styles",
+    "done": "Done",
+    "added_one": "{count} style offers it now",
+    "added_other": "{count} styles offer it now",
+    "refusedTitle_one": "{count} style refused it",
+    "refusedTitle_other": "{count} styles refused it",
+    "held": {
+      "pick": "Pick at least one style.",
+      "withdrawn": "Withdrawn: offer it again with Add styles.",
+      "styleArchived": "The style is archived."
+    },
+    "col": {
+      "style": "Style",
+      "styleStatus": "Style status",
+      "min": "Min",
+      "max": "Max",
+      "asks": "Asks",
+      "offer": "Offer",
+      "withdraw": "Withdraw"
+    },
+    "empty": {
+      "title": "Not offered on any style",
+      "body": "Add the styles that offer this group.",
+      "bodyView": "No style offers this group yet."
+    },
+    "problem": {
+      "min": "At least is 0 to 100, or empty.",
+      "max": "At most is 1 to 100, or empty.",
+      "single": "One choice takes 1 option at most.",
+      "contradicts": "The style would ask more at least than at most.",
+      "whole": "A whole number, or empty for the group's."
+    }
+  },
+  "what": {
+    "add": "Adds {item}",
+    "perSize_one": "per size ({count} size)",
+    "perSize_other": "per size ({count} sizes)",
+    "replace": "Puts {item} in place of {target}",
+    "remove": "Leaves out {target}",
+    "operation": "Adds operation {operation} ({minutes} min)",
+    "operationStandard": "Adds operation {operation} (its standard minutes)",
+    "minutesAt": "{minutes} min at {operation}",
+    "minutes": "{minutes} min on the garment",
+    "price": "Moves the price",
+    "certificate": "Outside the certificate — see the note"
+  }
+}
