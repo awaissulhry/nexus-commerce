@@ -20,7 +20,8 @@ import '../certificates.css'
  */
 
 export function CertMessages({ children }: { children?: ReactNode }) {
-  return <QualityMessages namespaces={['certificates']}>{children}</QualityMessages>
+  // B-W2b-255: certificates in depth (the directory, the five-year words, the saved views' parts) speak from their own catalogue.
+  return <QualityMessages namespaces={['certificates', 'compliance-certificates-depth']}>{children}</QualityMessages>
 }
 
 /** A field's problem in words; a day in it (the five-year rule's latest day) in the person's language. */

@@ -65,6 +65,15 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { rule: 'GR-JKT-EU', point: 'CHEST_W', step: '*', increment: '2', ruleName: 'Jacket EU', scale: 'EU-46-58', baseSize: '52', format: 'RELATIVE' },
     { rule: 'GR-JKT-EU', point: 'BACK_LEN', step: '52-54', increment: '1.5' },
   ],
+  // B-W2b-250: the substance list (public CAS and EC numbers; a made-up note) and its rules (a made-up brand RSL line).
+  'compliance.substances': [
+    { identifier: '117-81-7', name: 'Bis(2-ethylhexyl) phthalate (DEHP)', ecNumber: '204-211-0', lists: 'SVHC, AFIRM_RSL', svhcAddedOn: '2008-10-28', note: 'Example row: a plasticiser in coated parts.' },
+    { identifier: 'Nonylphenol ethoxylates', group: 'NPE', lists: 'REACH_ANNEX_XVII', annexXviiEntries: '46a' },
+  ],
+  'compliance.substanceRules': [
+    { key: 'BRAND-RSL-EX-01', code: 'OTHER', name: 'DMF in coated materials, the brand\'s limit', substance: '68-12-2', limit: '10', unit: 'MG_KG', bound: 'AT_MOST', evidence: 'EITHER', source: 'CUSTOMER', customer: 'CLI-001', legalReference: 'Example brand RSL 2026, line 14' },
+    { key: 'AFIRM-EX-PFAS', code: 'PFAS', name: 'PFAS in water-repellent finishes', group: 'PFAS_AFIRM', materialKinds: 'TEXTILE, MEMBRANE', markets: 'FR', evidence: 'DECLARATION', source: 'INDUSTRY', legalReference: 'Example industry RSL' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

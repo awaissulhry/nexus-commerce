@@ -30,6 +30,8 @@ import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
 import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
 import type { StyleMaterialApprovals } from '../compliance/materials'
+import type { PrepacksActions, PrepacksModel } from './prepacks/prepacks-model'
+import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors-model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -131,6 +133,9 @@ export interface StyleRecordViewModel {
   pieces?: PiecesModel
   /** B-W2b-238: Compliance › Material checks — the approvals of the revision's materials (absent: not read). */
   materialApprovals?: StyleMaterialApprovals
+  /** B-W2b-233: the Sizes & measurements tab's Prepacks and Protector placement (absent: not read, like idle). */
+  prepacks?: PrepacksModel
+  protectors?: ProtectorsModel
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -200,4 +205,7 @@ export interface StyleRecordActions {
   pieces?: PiecesActions
   /** B-W2b-238: read the revision's material approvals again after a failed read. */
   onRetryMaterialApprovals?: () => void
+  /** B-W2b-233: the Prepacks and Protector placement sections. */
+  prepacks?: PrepacksActions
+  protectors?: ProtectorsActions
 }

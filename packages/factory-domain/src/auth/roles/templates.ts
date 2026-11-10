@@ -45,6 +45,10 @@ import { RULES_LIBRARY_ADDS } from '../../compliance/register-of-rules/permissio
 import { PHRASES_ADDS } from '../../compliance/phrases/permissions'
 // B-W2b-230: the tech pack PDF (the production manager and the buyer make one).
 import { PRODUCT_TECHPACKS_ADDS } from '../../product/techpack/permissions'
+// B-W2b-233: prepacks (sales and the production manager keep them).
+import { PRODUCT_PREPACKS_ADDS } from '../../product/prepacks/permissions'
+// B-W2b-250: restricted substances and their rules (the quality inspector).
+import { SUBSTANCES_ADDS } from '../../compliance/substances/permissions'
 // B-W2b-246: sample rounds (sales and the production manager keep them; the planner and quality read them).
 import { SALES_SAMPLES_ADDS } from '../../sales/samples/permissions'
 
@@ -842,6 +846,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PHRASES_ADDS[key] ?? []) : []),
   // B-W2b-230
   ...(audience === 'office' ? (PRODUCT_TECHPACKS_ADDS[key] ?? []) : []),
+  // B-W2b-233
+  ...(audience === 'office' ? (PRODUCT_PREPACKS_ADDS[key] ?? []) : []),
+  // B-W2b-250
+  ...(audience === 'office' ? (SUBSTANCES_ADDS[key] ?? []) : []),
   // B-W2b-246
   ...(audience === 'office' ? (SALES_SAMPLES_ADDS[key] ?? []) : [])]
 /**

@@ -1,0 +1,263 @@
+{
+  "prepacks": {
+    "title": "Prepacks",
+    "loading": "Loading the prepacks…",
+    "failed": "Couldn't load the prepacks",
+    "intro": "Fixed size mixes dealers order as one unit: this style's own, and those of every style of size scale {scale}.",
+    "rule": "A prepack is not part of a revision: releasing or starting a revision does not change it. A size with no pieces reads “—”.",
+    "add": "New prepack",
+    "table": "Prepacks",
+    "count": "{count} active · {usable} this style can sell",
+    "showArchived": "Show archived ({count})",
+    "unit": "pcs",
+    "cell": "{code}, pieces of size {size}",
+    "ratio": "ratio {ratio}",
+    "byColour": "By colourway",
+    "offline": "Offline: {count} change(s) wait on this page and go when the connection is back.",
+    "col": {
+      "prepack": "Prepack",
+      "for": "For",
+      "pieces": "Pieces per pack",
+      "fit": "This style",
+      "more": "More",
+      "code": "Code",
+      "name": "Name"
+    },
+    "for": {
+      "style": "This style",
+      "scale": "Scale {scale}",
+      "styleLong": "This style only ({style})",
+      "scaleLong": "Every style of size scale {scale}"
+    },
+    "fit": {
+      "usable": "Can sell it",
+      "outside": "Not made in {sizes}",
+      "archived": "Archived"
+    },
+    "row": {
+      "open": "Open",
+      "edit": "Edit",
+      "archive": "Archive",
+      "restore": "Restore",
+      "more": "More for {code}"
+    },
+    "bulk": {
+      "archive": "Archive {count}",
+      "restore": "Restore {count}",
+      "noneActive": "None of the selected prepacks is active.",
+      "noneArchived": "None of the selected prepacks is archived."
+    },
+    "keys": {
+      "add": "New prepack",
+      "open": "Open the prepack"
+    },
+    "held": {
+      "noManage": "Your role can see the prepacks, not change them.",
+      "archivedStyle": "This style is archived: reactivate it before changing its prepacks.",
+      "rule": "The style's lifecycle state holds every change now: its own prepacks wait (the scale's still change).",
+      "archived": "This prepack is archived: restore it to change it."
+    },
+    "readOnly": {
+      "noManage": "Read only: your role can see the prepacks, not change them.",
+      "rule": "The style's lifecycle state holds every change now, so this style's own prepacks are read only; the scale's prepacks still change."
+    },
+    "empty": {
+      "title": "No prepacks",
+      "body": "Add a fixed mix of sizes dealers can order as one pack, for this style or every style of its scale."
+    },
+    "problem": {
+      "write": "The change was not saved.",
+      "quantity": "Type whole pieces from 1 to 10,000 (empty: none of that size).",
+      "lastSize": "A prepack keeps at least one size: archive it instead.",
+      "codeMissing": "Give the prepack a code.",
+      "codeShape": "The code has no spaces and at most 40 characters.",
+      "codeTaken": "Another prepack of this size scale has this code.",
+      "nameMissing": "Give the prepack a name.",
+      "noLine": "Type the pieces of at least one size.",
+      "moved": "Someone changed this prepack meanwhile: it was read again.",
+      "state": "This prepack cannot change now: it was read again.",
+      "invalid": "The prepack was refused: check its sizes and pieces."
+    },
+    "dialog": {
+      "addTitle": "New prepack",
+      "editTitle": "Prepack {code}",
+      "add": "Add prepack",
+      "save": "Save",
+      "codeHint": "Unique in the size scale, no spaces (“PP-7”).",
+      "forHint": "A scale's prepack serves every style made in all of its sizes.",
+      "forFixed": "Who a prepack is for does not change: make a new one instead.",
+      "byColour": "Pieces per colourway",
+      "grid": "Pieces per size",
+      "colourway": "Colourway",
+      "pieces": "Pieces",
+      "anyColour": "Any colourway",
+      "cell": "{row}, size {size}",
+      "totals": "{pieces} pieces per pack · ratio {ratio}"
+    },
+    "status": {
+      "archiveTitle": "Archive {count} prepack(s)",
+      "restoreTitle": "Restore {count} prepack(s)",
+      "archive": "Archive {count}",
+      "restore": "Restore {count}",
+      "archiveBody": "An archived prepack keeps its sizes as they are and no new order line takes it. You can restore it later.",
+      "restoreBody": "A restored prepack can be ordered again and its sizes changed."
+    },
+    "notice": {
+      "added": "Prepack {code} added.",
+      "saved": "Prepack {code} saved.",
+      "archived": "{count} prepack(s) archived.",
+      "restored": "{count} prepack(s) restored."
+    }
+  },
+  "protectors": {
+    "title": "Protector placement",
+    "loading": "Loading the protector placement…",
+    "failed": "Couldn't load the protector placement",
+    "noRevision": "The style has no revision yet: start revision 1 to place its protectors.",
+    "intro": "Which protector goes in which pocket of revision {revision}, for which sizes, with the standard and level the certified type asks.",
+    "rule": "Each pocket takes one protector per size. The list is checked against the revision's BOM and the certificates; what does not agree is said here, it never blocks.",
+    "add": "Add placement",
+    "table": "Protector placement",
+    "count": "{count} placement(s) in {pockets} pocket(s)",
+    "inBom": "in the BOM",
+    "level": "Level {level}",
+    "offline": "Offline: {count} change(s) wait on this page and go when the connection is back.",
+    "position": {
+      "placeholder": "e.g. left and right, 2 cm above the elbow seam"
+    },
+    "col": {
+      "seq": "#",
+      "pocket": "Pocket",
+      "protector": "Protector",
+      "standard": "Standard",
+      "level": "Level",
+      "sizes": "Sizes",
+      "position": "Pocket position",
+      "more": "More"
+    },
+    "cell": {
+      "pocket": "Pocket of placement {seq}",
+      "protector": "Protector of placement {seq}",
+      "standard": "Standard of placement {seq}",
+      "level": "Level of placement {seq}",
+      "position": "Pocket position of placement {seq}"
+    },
+    "pocket": {
+      "SHOULDER": "Shoulder",
+      "ELBOW": "Elbow",
+      "BACK": "Back",
+      "CHEST": "Chest",
+      "HIP": "Hip",
+      "KNEE": "Knee"
+    },
+    "pocketWord": {
+      "SHOULDER": "shoulder",
+      "ELBOW": "elbow",
+      "BACK": "back",
+      "CHEST": "chest",
+      "HIP": "hip",
+      "KNEE": "knee"
+    },
+    "sizes": {
+      "all": "All sizes",
+      "run": "{from}–{to}",
+      "some": "{sizes}",
+      "every": "Every size (follows the style's range)",
+      "only": "Only these sizes",
+      "hint": "Two placements of one pocket never share a size.",
+      "pickOne": "Tick at least one size.",
+      "change": "Change the sizes of placement {seq}",
+      "changeShort": "Change…",
+      "title": "Sizes of placement {seq} ({pocket})",
+      "apply": "Apply"
+    },
+    "row": {
+      "edit": "Edit",
+      "open": "Open",
+      "up": "Move up",
+      "down": "Move down",
+      "remove": "Remove",
+      "more": "More for placement {seq}"
+    },
+    "bulk": {
+      "remove": "Remove {count}"
+    },
+    "keys": {
+      "add": "Add a placement",
+      "open": "Open the placement"
+    },
+    "frozen": {
+      "released": "Revision {revision} is released and frozen: its protector placement is read only.",
+      "obsolete": "Revision {revision} is obsolete: kept for the record, read only."
+    },
+    "held": {
+      "noManage": "Your role can see the protector placement, not change it.",
+      "frozen": "The revision in view is frozen: change the placement in a draft revision.",
+      "archived": "This style is archived: reactivate it before changing its protector placement.",
+      "rule": "The style's lifecycle state does not allow changes to its draft now (see Overview).",
+      "noChoice": "No protector material can be placed: add a PROTECTOR material in Materials & trims first."
+    },
+    "readOnly": {
+      "noManage": "Read only: your role can see the protector placement, not change it.",
+      "rule": "Read only: the style's lifecycle state does not allow changes to its draft now (see Overview)."
+    },
+    "findings": {
+      "title": "{count} thing(s) to look at",
+      "none": "The placement agrees with the BOM and the certificates."
+    },
+    "finding": {
+      "POCKET_STANDARD": "The {pocket} pocket takes a protector tested to {expected}; placement {seq} names {standard}.",
+      "ITEM_BLOCKED": "{item} is blocked for use: placement {seq} ({pocket}) needs another protector.",
+      "ITEM_STANDARD": "{item} is tested to {itemStandard}; placement {seq} ({pocket}) asks {standard}.",
+      "ITEM_LEVEL": "{item} is a level {level} protector; the {pocket} pocket asks level {asked}.",
+      "NOT_IN_BOM": "{item} ({pocket}) is not in the BOM of this revision.",
+      "NOT_IN_BOM_SIZES": "The BOM has no {item} for sizes {sizes}, where the {pocket} pocket places it.",
+      "NO_ITEM_CERTIFICATE": "No valid certificate covers {item} (placement {seq}, {pocket}).",
+      "ITEM_CERTIFICATE_LEVEL": "Certificate {certificate} covers {item} to {certificateStandard} level {level}; the {pocket} pocket asks level {asked}.",
+      "BOM_NOT_PLACED": "{item} is in the BOM for sizes {sizes}, but no pocket places it there.",
+      "BOM_NOT_PLACED_ALL": "{item} is in the BOM (line {seq}), but no pocket places it.",
+      "STYLE_CERTIFICATE_LEVEL": "Certificate {certificate} was granted with a level {level} {pocket} protector; placement {seq} asks level {asked}.",
+      "STYLE_CERTIFICATE_POCKET": "Certificate {certificate} was granted with a {pocket} protector (level {level}); no pocket places one."
+    },
+    "empty": {
+      "title": "No protectors placed",
+      "body": "Add each pocket with the protector that goes in it.",
+      "frozen": "Nothing was placed in this revision."
+    },
+    "problem": {
+      "write": "The change was not saved.",
+      "pocket": "Pick a pocket.",
+      "overlap": "That pocket already has a protector for one of these sizes.",
+      "protector": "Pick an active protector material of this style's company.",
+      "standard": "Write the standard with its edition (“EN 1621-1:2012”), at most 60 characters.",
+      "level": "The level is 1 or 2.",
+      "size": "A size of the style's range only.",
+      "note": "At most 500 characters.",
+      "moved": "Someone changed this placement meanwhile: it was read again.",
+      "state": "The placement cannot change now: it was read again.",
+      "invalid": "The placement was refused: check its fields."
+    },
+    "dialog": {
+      "addTitle": "Add a placement to revision {revision}",
+      "editTitle": "Placement {seq}",
+      "add": "Add placement",
+      "save": "Save",
+      "pick": "Pick a protector",
+      "inBom": "This protector is in the revision's BOM.",
+      "notInBom": "This protector is not in the revision's BOM yet: it will be pointed out.",
+      "standardHint": "As the certified type asks it, with its edition. Filled from the protector when it says it.",
+      "levelHint": "Level 2 protects more; a level 1 protector does not serve where 2 is asked.",
+      "positionHint": "Where the pocket sits, as the sewing room and the user information read it."
+    },
+    "remove": {
+      "title": "Remove {count} placement(s)",
+      "confirm": "Remove {count}",
+      "body": "They leave the draft revision {revision}; add them again to bring them back."
+    },
+    "notice": {
+      "added": "Placement added.",
+      "saved": "Placement saved.",
+      "removed": "{count} placement(s) removed."
+    }
+  }
+}

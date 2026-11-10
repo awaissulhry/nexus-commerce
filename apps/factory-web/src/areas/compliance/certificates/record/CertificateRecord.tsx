@@ -56,6 +56,9 @@ import type { Review } from '../renewals/api'
 import { csvLine, downloadText } from '../../../quality/_shared/hooks'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { CertificateRecordView } from './view/CertificateRecordView'
+import { useDepth } from '../depth/use-depth'
+import { useBodies } from '../bodies/use-bodies'
+import { bodiesCsv } from '../depth/model'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.ce.dock'
@@ -225,9 +228,33 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
     onExport: exportReviews,
   })
 
+  // W2b (B-W2b-255): the certificate in depth (Coverage and Notified body tabs) and the Notified bodies pop-up.
+  const depth = useDepth({ api, certificateId, can, active: tab === 'coverage' || tab === 'body', onCertificateChanged: () => void load() })
+  const d = useT('compliance-certificates-depth')
+  const bodies = useBodies({
+    api,
+    onChanged: () => void depth.reload(),
+    onExport: (rows) => {
+      const header = [d('csv.number'), d('csv.name'), d('csv.country'), d('csv.address'), d('csv.scopes'), d('csv.clothing'), d('csv.nando'), d('csv.email'), d('csv.phone'), d('csv.certificates'), d('csv.status')]
+      const lines = bodiesCsv(rows, header, { status: (body) => d(`bodies.status.${body.status}`), scope: (body) => d(`scope.${body.clothing.state}.GARMENT`) }).map(csvLine)
+      downloadText(`notified-bodies-${new Date().toISOString().slice(0, 10)}.csv`, lines.join('\r\n'))
+    },
+  })
+
   const live = useLive(
     (change) => {
-      if (liveMatches(change, ['compliance.certificate_', 'compliance.renewal_']) && change.fields.certificateId === certificateId && !dialog) void load()
+      if (liveMatches(change, ['certificates_depth.certificate_']) && change.fields.certificateId === certificateId && !depth.model.dialog) {
+        void depth.reload()
+        if (!dialog) void load()
+      }
+      if (liveMatches(change, ['certificates_depth.notified_body_'])) {
+        if (bodies.model.open && !bodies.model.form) void bodies.reload()
+        if (!depth.model.dialog) void depth.reload()
+      }
+      if (liveMatches(change, ['compliance.certificate_', 'compliance.renewal_']) && change.fields.certificateId === certificateId && !dialog) {
+        void load()
+        if ((tab === 'coverage' || tab === 'body') && !depth.model.dialog) void depth.reload()
+      }
       if (tab === 'renewals' && liveMatches(change, ['compliance.renewal_', 'compliance.certificate_renewed', 'compliance.type_change_']) && change.fields.certificateId === certificateId && !renewals.model.dialog) void renewals.reload()
     },
     () => void load(),
@@ -507,6 +534,8 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
         dialogLines,
         dockOpen,
         renewals: renewals.model,
+        depth: depth.model,
+        bodies: bodies.model,
       }}
       panels={panels}
       actions={{
@@ -557,6 +586,8 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
         onCheckPatch: (patch) => setCheck((current) => (current ? { ...current, ...patch, result: null, problem: null } : current)),
         onCheckRun: () => void runCheck(),
         renewals: renewals.actions,
+        depth: depth.actions,
+        bodies: bodies.actions,
       }}
     />
   )
