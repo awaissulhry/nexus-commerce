@@ -1,4 +1,6 @@
-import { Clock, FlaskConical, Layers, Palette, Ruler, Shirt } from 'lucide-react'
+import { Clock, FlaskConical, Layers, ListChecks, Palette, Ruler, Shirt } from 'lucide-react'
+// B-W2b-239: Settings › Product settings.
+import { SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -48,7 +50,15 @@ export const officeArea: OfficeAreaNav = {
           { id: 'products-sizes', label: 'shell:nav.products.sizes', href: '/products/sizes', icon: Ruler, permission: 'product.styles.view' },
           // B-W2b-247 SCR-118: the colour library and the private-label brands' branding sets (read with product.styles.view).
           { id: 'products-colours', label: 'shell:nav.products.colours', href: '/products/colours', icon: Palette, permission: 'product.styles.view' },
+          // B-W2b-242 SCR-114: option groups, their rules and price and BOM effects, the styles that offer them (product.styles.view).
+          { id: 'products-options', label: 'shell:nav.products.options', href: '/products/options', icon: ListChecks, permission: 'product.styles.view' },
         ],
+      },
+      // B-W2b-239: Settings › Product settings (SCR-251; design 01: the area's last group). GET /product/settings reads with product.styles.view.
+      {
+        id: 'products-settings',
+        label: 'shell:nav.products.settingsGroup',
+        items: [{ id: 'products-settings-page', label: 'shell:nav.products.settings', href: '/products/settings', icon: SlidersHorizontal, permission: 'product.styles.view' }],
       },
     ],
   },

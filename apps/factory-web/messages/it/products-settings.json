@@ -1,0 +1,415 @@
+{
+  "head": {
+    "intro": "Ciò che ogni modello segue: il tipo di prodotto con i campi obbligatori e i valori iniziali, cosa si può cambiare in ogni fase della sua vita e quanto il materiale usato può scostarsi dalla stima.",
+    "reload": "Rileggi",
+    "more": "Altro"
+  },
+  "live": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline",
+    "changedTitle": "Qualcun altro ha cambiato queste impostazioni",
+    "changedBody": "Le tue modifiche restano su questa pagina finché non rileggi; salvare ora viene rifiutato perché le impostazioni sono cambiate.",
+    "reload": "Rileggi"
+  },
+  "scope": {
+    "label": "Di chi sono le impostazioni",
+    "company": "{company}",
+    "all": "Tutte le aziende",
+    "companyHint": "Le impostazioni di {company}. Dove non ha una regola propria segue quella di tutte le aziende, poi quella predefinita.",
+    "allHint": "Le impostazioni che ogni azienda segue dove non ne ha di proprie. Dove queste non dicono nulla vale quella predefinita."
+  },
+  "noAccess": {
+    "title": "Le impostazioni prodotto non sono nel tuo ruolo",
+    "body": "Per leggerle serve il permesso di vedere i modelli (product.styles.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+  },
+  "card": {
+    "neverChanged": "Mai cambiate qui: vale quanto è in vigore sopra.",
+    "changedBy": "Cambiate da {name} · {time}",
+    "changedAt": "Cambiate il {time}",
+    "history": "Cronologia",
+    "viewOnly": "Puoi vedere, non cambiare"
+  },
+  "source": {
+    "COMPANY": "Questa azienda",
+    "TENANT": "Tutte le aziende",
+    "DEFAULT": "Predefinita"
+  },
+  "common": {
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "dismiss": "Chiudi",
+    "loading": "Caricamento…"
+  },
+  "loosen": {
+    "title": "Conferma una regola meno restrittiva",
+    "intro": "Da quando salvi, nei modelli in queste fasi si potrà cambiare di più:",
+    "line": "{state}: da “{from}” a “{to}”",
+    "reason": "Perché",
+    "reasonHint": "Resta con la modifica nel registro delle modifiche.",
+    "reasonNeeded": "Prima scrivi il perché.",
+    "confirm": "Salva la regola meno restrittiva"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "newType": "Nuovo tipo di prodotto",
+    "save": "Salva la scheda che hai cambiato",
+    "saveType": "Salva il tipo di prodotto (nella sua finestra)",
+    "close": "Chiudi la finestra"
+  },
+  "state": {
+    "CONCEPT": "Idea",
+    "DEVELOPMENT": "Sviluppo",
+    "SAMPLING": "Campionatura",
+    "APPROVED": "Approvato",
+    "IN_PRODUCTION": "In produzione",
+    "PHASE_OUT": "In uscita",
+    "DISCONTINUED": "Fuori produzione"
+  },
+  "rule": {
+    "FREE": "Modifica libera",
+    "NEW_REVISION": "Serve una nuova revisione",
+    "CHANGE_ORDER": "Serve un ordine di modifica",
+    "BLOCKED": "Bloccato"
+  },
+  "rules": {
+    "title": "Regole di modifica per fase",
+    "description": "Cosa si può cambiare in un modello in ogni fase della sua vita. Ogni modifica a un prodotto chiede la regola della fase del suo modello.",
+    "table": "Regola di modifica per fase",
+    "unknown": "Non ancora nota",
+    "failed": "Impossibile caricare le regole di modifica",
+    "col": {
+      "state": "Fase",
+      "follow": "Segui tutte le aziende",
+      "default": "Predefinita",
+      "inForce": "In vigore dopo il salvataggio",
+      "rule": "Regola in vigore",
+      "from": "Da dove viene"
+    },
+    "changed": "Cambiata",
+    "choose": "{state}: {rule}",
+    "followOf": "{state}: segui tutte le aziende ({rule})",
+    "defaultOf": "{state}: la predefinita ({rule})",
+    "followUnknown": "{state}: segui tutte le aziende",
+    "companyHint": "Una fase su “Segui tutte le aziende” prende la regola di tutte le aziende, e quella predefinita dove questa non dice nulla.",
+    "allHint": "Una fase su “Predefinita” prende la regola del modulo prodotto: libera fino all’approvazione, nuova revisione da approvato a in uscita, bloccata quando fuori produzione.",
+    "loosens_one": "1 fase lascia passare più di oggi: prima di salvare ti verrà chiesto perché.",
+    "loosens_other": "{count} fasi lasciano passare più di oggi: prima di salvare ti verrà chiesto perché.",
+    "apply": "Salva le regole di modifica",
+    "applyLoosen": "Salva… (meno restrittiva)"
+  },
+  "lets": {
+    "title": "Cosa lascia passare ogni regola",
+    "intro": "Lo stesso controllo che fa ogni modifica a un prodotto. Una revisione rilasciata non cambia mai: una modifica esce con una nuova.",
+    "col": {
+      "write": "Cosa cambia"
+    },
+    "yes": "Sì",
+    "withDraft": "Sì, mentre è aperta una nuova revisione",
+    "changeOrder": "Solo da un ordine di modifica approvato",
+    "no": "No"
+  },
+  "kind": {
+    "DETAILS": "Le sue parole",
+    "SPEC": "La sua specifica",
+    "NEW_REVISION": "Una nuova revisione",
+    "DRAFT": "La sua revisione in bozza",
+    "RELEASE": "Un rilascio"
+  },
+  "kindHint": {
+    "DETAILS": "Nome, nomi in altre lingue, descrizione, stagione",
+    "SPEC": "Ogni altro campo del modello, le sue varianti colore e il suo tipo",
+    "NEW_REVISION": "Avviare una revisione o copiarne una in una nuova bozza",
+    "DRAFT": "Distinta base, ciclo e pezzi di una bozza aperta",
+    "RELEASE": "Rilasciare una revisione in bozza"
+  },
+  "tolerance": {
+    "title": "Tolleranza di consumo",
+    "description": "Quanto il materiale usato davvero al banco di taglio può scostarsi dalla stima del piazzamento.",
+    "failed": "Impossibile caricare le tolleranze",
+    "generalLabel": "La regola generale",
+    "rule": {
+      "MATCH": "Deve corrispondere",
+      "MAY_DIFFER": "Può scostarsi",
+      "WARN_ABOVE": "Avvisa oltre una percentuale"
+    },
+    "ruleHint": {
+      "MATCH": "Una cifra diversa dalla stima viene rifiutata finché una nota non la spiega.",
+      "MAY_DIFFER": "La cifra scritta viene tenuta com’è.",
+      "WARN_ABOVE": "La cifra viene tenuta; uno scostamento oltre la percentuale, in più o in meno, mostra un avviso."
+    },
+    "warnAbove": "Avvisa oltre il {percent} %",
+    "general": "la regola generale",
+    "follow": "Segui tutte le aziende",
+    "followNow": "Ora: {rule}",
+    "default": "La predefinita",
+    "defaultHint": "Può scostarsi: la cifra scritta viene tenuta.",
+    "percent": "Avvisa oltre",
+    "percentHint": "Una percentuale sopra 0 e al massimo 100, come 3 o 2,5.",
+    "applies": "Vale dopo il salvataggio:",
+    "table": "Tolleranza per tipo di materiale",
+    "col": {
+      "kind": "Tipo di materiale",
+      "own": "Regola propria",
+      "percent": "Percentuale",
+      "inForce": "In vigore"
+    },
+    "ownOf": "Regola propria per {kind}",
+    "percentOf": "Avvisa oltre, per {kind}",
+    "none": "Nessuna regola propria",
+    "problem": {
+      "percent": "Scrivi una percentuale sopra 0 e al massimo 100, con al massimo 4 decimali."
+    },
+    "where": "Il banco di taglio legge la regola del materiale dell’ordine di taglio: quella propria del suo tipo, altrimenti la regola generale, poi quella di tutte le aziende.",
+    "apply": "Salva la tolleranza"
+  },
+  "itemKind": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessorio",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezione",
+    "LABEL": "Etichetta",
+    "PACKAGING": "Imballo",
+    "COMPONENT": "Componente"
+  },
+  "costing": {
+    "title": "Valori di costo",
+    "description": "Costo al minuto, efficienza prevista e spese generali: si tengono nelle Impostazioni amministrazione, la loro unica sede, e qui si leggono soltanto.",
+    "open": "Apri Impostazioni amministrazione",
+    "noRight": "Il tuo ruolo non legge i valori di costo.",
+    "failed": "Impossibile caricare i valori di costo",
+    "notInRole": "Non nel tuo ruolo",
+    "perMinute": "{amount} al minuto",
+    "efficiency": "Efficienza prevista {percent} %",
+    "everyCompany": "Tutte le aziende",
+    "thisCompany": "Questa azienda",
+    "overhead": "Spese generali",
+    "overheadPct": "{percent} % su materiale e manodopera",
+    "noOverhead": "Nessuna spesa generale impostata",
+    "noRates": "Nessuna tariffa di manodopera è in vigore: un foglio costi non conta la manodopera finché l’amministrazione non ne imposta una.",
+    "noGrain": "Il costo al minuto si mostra solo ai ruoli che vedono i costi.",
+    "where": "Cambiali nelle Impostazioni amministrazione: una modifica lì raggiunge ogni foglio costi.",
+    "whereNoRight": "Si cambiano nelle Impostazioni amministrazione, a cura del contabile o del titolare."
+  },
+  "workCentre": {
+    "CUTTING": "Taglio",
+    "SEWING": "Cucitura",
+    "ASSEMBLY": "Montaggio",
+    "FINISHING": "Rifinitura",
+    "INSPECTION": "Controllo",
+    "PACKING": "Imballaggio",
+    "SUBCONTRACT": "Terzisti"
+  },
+  "types": {
+    "title": "Tipi di prodotto",
+    "description": "Giacca, pantaloni, tuta, guanti, gilet: i campi che un modello di ciascuno deve avere prima del rilascio e i valori con cui parte un nuovo modello. Un tipo figlio eredita quelli del padre.",
+    "table": "Tipi di prodotto",
+    "failed": "Impossibile caricare i tipi di prodotto",
+    "add": "Nuovo tipo di prodotto",
+    "count_one": "1 tipo",
+    "count_other": "{count} tipi",
+    "childOf": "Sotto {parent}",
+    "top": "Tipo principale",
+    "archived": "Archiviato",
+    "noneRequired": "Nessuno",
+    "inherited_one": "1 da un tipo padre",
+    "inherited_other": "{count} da tipi padre",
+    "from": "Da {code}",
+    "everyCompany": "Tutte le aziende",
+    "thisCompany": "Questa azienda",
+    "col": {
+      "type": "Tipo",
+      "kind": "Capo",
+      "whose": "Di chi",
+      "required": "Obbligatori prima del rilascio",
+      "scale": "Scala taglie",
+      "ppe": "DPI",
+      "styles": "Modelli",
+      "actions": "Azioni"
+    },
+    "status": {
+      "label": "Quali tipi",
+      "ACTIVE": "Attivi",
+      "ARCHIVED": "Archiviati",
+      "ALL": "Tutti"
+    },
+    "empty": {
+      "title": "Ancora nessun tipo di prodotto",
+      "body": "Un tipo dice cosa deve avere un modello e con cosa parte. I modelli funzionano anche senza."
+    },
+    "emptyArchived": {
+      "title": "Nessun tipo archiviato",
+      "body": "Un tipo archiviato resta sui modelli che lo hanno; un nuovo modello non lo prende più."
+    },
+    "how": "Un nuovo modello prende i valori del suo tipo dove lascia un campo vuoto; il controllo di rilascio chiede i campi obbligatori."
+  },
+  "row": {
+    "edit": "Apri e modifica",
+    "view": "Apri",
+    "archive": "Archivia",
+    "archiveHint": "I suoi modelli lo tengono; un nuovo modello non lo prende più.",
+    "restore": "Ripristina",
+    "menu": "Azioni per {code}"
+  },
+  "bulk": {
+    "archive_one": "Archivia 1",
+    "archive_other": "Archivia {count}",
+    "restore_one": "Ripristina 1",
+    "restore_other": "Ripristina {count}"
+  },
+  "held": {
+    "reading": "Sto ancora leggendo le impostazioni.",
+    "noRight": "Per cambiare le impostazioni prodotto serve il permesso product.settings.manage su questa azienda.",
+    "noRightAll": "Le impostazioni di tutte le aziende le cambia solo un ruolo su tutte le aziende con product.settings.manage.",
+    "offline": "Offline: le modifiche restano su questa pagina finché torna la connessione.",
+    "offlineTitle": "Offline",
+    "offlineBody": "Quello che vedi è l’ultima copia letta. Il salvataggio è sospeso finché torna la connessione; le modifiche restano su questa pagina.",
+    "busy": "Salvataggio…",
+    "noneActive": "Nessuno dei tipi spuntati è attivo.",
+    "noneArchived": "Nessuno dei tipi spuntati è archiviato."
+  },
+  "garment": {
+    "JACKET": "Giacca",
+    "TROUSERS": "Pantaloni",
+    "SUIT": "Tuta",
+    "GLOVES": "Guanti",
+    "VEST": "Gilet",
+    "OTHER": "Altro"
+  },
+  "ppe": {
+    "NOT_PPE": "Non DPI",
+    "CATEGORY_I": "Categoria I",
+    "CATEGORY_II": "Categoria II",
+    "CATEGORY_III": "Categoria III"
+  },
+  "attr": {
+    "nameI18n": "Nomi in altre lingue",
+    "description": "Descrizione",
+    "season": "Stagione",
+    "brandPartyId": "Marchio",
+    "sizes": "Taglie",
+    "baseSize": "Taglia base",
+    "ppeStandard": "Norma DPI",
+    "ppeClass": "Classe DPI",
+    "measurementTemplateId": "Modello di misure",
+    "hsCode": "Codice doganale",
+    "originCountry": "Paese di origine",
+    "netMassKg": "Massa netta",
+    "gender": "Taglio per"
+  },
+  "type": {
+    "titleNew": "Nuovo tipo di prodotto",
+    "titleOf": "{code} · {name}",
+    "code": "Codice",
+    "codeHint": "Fino a 60 caratteri, senza spazi. Unico.",
+    "name": "Nome",
+    "kind": "Tipo di capo",
+    "kindHint": "Un tipo padre è dello stesso tipo di capo.",
+    "whose": "Di chi",
+    "whoseFixed": "Resta come creato.",
+    "whoseHint": "Un tipo di tutte le aziende può essere preso dai modelli di ogni azienda.",
+    "whoseCompany": "Solo {company}",
+    "parent": "Tipo padre",
+    "parentHint": "Eredita i campi obbligatori del padre e ogni valore che non imposta.",
+    "noParent": "Nessun padre (tipo principale)",
+    "required": "Obbligatori prima del rilascio",
+    "requiredHint": "I campi che un modello di questo tipo deve avere compilati prima del rilascio. Quelli del padre si aggiungono.",
+    "requiredFrom": "{field} (da {code})",
+    "requiredInherited": "Richiesto dal tipo padre {code}",
+    "defaults": "Con cosa parte un nuovo modello",
+    "defaultsHint": "Un nuovo modello di questo tipo li prende dove lascia il campo vuoto. Vuoto qui: quelli del padre.",
+    "scale": "Scala taglie",
+    "label": "Modello di etichetta del capo",
+    "labelNoRight": "Per scegliere un modello di etichetta serve il permesso di leggere certificati ed etichette.",
+    "labelOption": "{code} · {name} (rev. {revision})",
+    "template": "Modello di misure",
+    "templateHint": "Usato solo per un modello su misura. I modelli di misure si scelgono con il su misura, non qui.",
+    "clear": "Togli",
+    "ppeCategory": "Categoria DPI",
+    "standard": "Norma DPI",
+    "standardHint": "Con la sua edizione, come EN 17092-4:2020.",
+    "ppeClass": "Classe DPI",
+    "ppeClassHint": "Come AA, A o B.",
+    "inherits": "Eredita {value} da {code}",
+    "noneOwn": "Nessuno impostato qui o sopra.",
+    "inheritOption": "Quello del padre",
+    "noneOption": "Nessuno",
+    "unknownRef": "uno che non puoi vedere",
+    "save": "Salva il tipo",
+    "add": "Aggiungi il tipo",
+    "archivedTitle": "Questo tipo è archiviato",
+    "archivedBody": "I suoi modelli lo tengono; un nuovo modello non lo prende più. Ripristinalo per cambiarlo.",
+    "styles": "Modelli con questo tipo",
+    "stylesCount_one": "1 modello",
+    "stylesCount_other": "{count} modelli",
+    "children": "Tipi figli",
+    "held": {
+      "kindInUse": "Il tipo di capo resta finché modelli o tipi figli usano questo tipo: un altro tipo di capo è un nuovo tipo.",
+      "archived": "Archiviato: ripristinalo per cambiarlo.",
+      "nothing": "Ancora nessuna modifica."
+    },
+    "problem": {
+      "code": "Scrivi un codice da 1 a 60 caratteri senza spazi.",
+      "codeTaken": "Questo codice è già di un altro tipo.",
+      "name": "Scrivi un nome da 1 a 200 caratteri.",
+      "standard": "Una norma è al massimo di 60 caratteri.",
+      "ppeClass": "Una classe è al massimo di 10 caratteri.",
+      "ppeCategory": "Scegli la categoria DPI a cui vanno la norma e la classe (qui o sul padre).",
+      "ppe": "Questa categoria, norma e classe DPI non vanno insieme per questo tipo di capo (EN 17092 mai sui guanti; un capo protettivo è almeno Categoria II).",
+      "kindInUse": "Modelli o tipi figli usano questo tipo: il tipo di capo resta.",
+      "parent": "Questo padre non si può prendere: deve essere attivo, dello stesso tipo di capo, dell’azienda di questo tipo o di tutte le aziende, e non uno dei suoi figli.",
+      "required": "Uno dei campi obbligatori non si può richiedere.",
+      "scale": "Questa scala taglie non si può prendere: deve essere attiva e dell’azienda di questo tipo o di tutte le aziende.",
+      "label": "Questo modello di etichetta non si può prendere: non deve essere ritirato e deve essere dell’azienda di questo tipo o di tutte le aziende.",
+      "template": "Questo modello di misure non si può prendere qui."
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta. Accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non legge queste impostazioni.",
+      "not_found": "Questa azienda non è tra quelle che puoi vedere.",
+      "unavailable": "Il server non ha risposto. Riprova tra poco.",
+      "rate_limited": "Troppe richieste in questo momento. Attendi e riprova.",
+      "contract": "La risposta non è quella che questa pagina si aspetta. Ricarica la pagina.",
+      "internal": "Qualcosa è andato storto sul server. Riprova."
+    },
+    "write": {
+      "moved": "Qualcuno lo ha cambiato nel frattempo: rileggi, poi rifai la modifica.",
+      "codeTaken": "Questo codice è già di un altro tipo.",
+      "kindInUse": "Modelli o tipi figli usano questo tipo: il tipo di capo resta.",
+      "state": "Non è possibile nel suo stato attuale: rileggi.",
+      "archived": "Archiviato: prima ripristinalo (un tipo sotto un padre archiviato: prima ripristina il padre).",
+      "invalid": "Qualcosa non va: guarda i campi.",
+      "forbidden": "Il tuo ruolo non cambia queste impostazioni.",
+      "forbiddenAll": "Le impostazioni di tutte le aziende le cambia solo un ruolo su tutte le aziende.",
+      "signed_out": "La sessione è scaduta. Accedi di nuovo; le modifiche restano su questa pagina.",
+      "not_found": "Non c’è più: rileggi.",
+      "rate_limited": "Troppe richieste in questo momento. Attendi e salva di nuovo.",
+      "unavailable": "Il server non ha risposto: non è stato salvato nulla. Riprova.",
+      "internal": "Qualcosa è andato storto sul server: non è stato salvato nulla."
+    },
+    "typeGone": "Quel tipo di prodotto non c’è più."
+  },
+  "done": {
+    "rules": "Regole di modifica salvate.",
+    "rulesLoosened": "Regole di modifica salvate: la regola meno restrittiva e il suo perché sono nel registro delle modifiche.",
+    "tolerance": "Tolleranza di consumo salvata.",
+    "typeSaved": "Tipo di prodotto {code} salvato.",
+    "typeAdded": "Tipo di prodotto {code} aggiunto.",
+    "archived_one": "1 tipo archiviato. I suoi modelli lo tengono.",
+    "archived_other": "{count} tipi archiviati. I loro modelli li tengono.",
+    "restored_one": "1 tipo ripristinato.",
+    "restored_other": "{count} tipi ripristinati.",
+    "archivedSome": "{count} tipi su {total} archiviati; gli altri sono stati rifiutati (rileggi l’elenco).",
+    "restoredSome": "{count} tipi su {total} ripristinati; gli altri sono stati rifiutati (un tipo sotto un padre archiviato: prima ripristina il padre)."
+  }
+}

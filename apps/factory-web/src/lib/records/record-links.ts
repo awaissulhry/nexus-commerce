@@ -31,6 +31,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-247: a private-label brand's branding set opens in its DetailModal on Colours & artwork (SCR-118); a library colour
   // has no page of its own (its row is edited in the list) and opens in its panels (its photo, history, thread).
   BrandingSet: '/products/colours?open=[id]',
+  // B-W2b-242: an option group's record (SCR-114-record: options, rules, price and BOM effects, styles).
+  OptionGroup: '/products/options/[id]',
+  // B-W2b-239: a product type opens in its dialog on Products › Settings › Product settings (SCR-251).
+  ProductTypeProfile: '/products/settings?type=[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
@@ -167,6 +171,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
   // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
   ComplianceDocument: '/compliance/declarations/[id]',
+  // B-W2b-267 Compliance › Tests & substances: a supplier declaration opens in its DetailModal on the Supplier declarations
+  // view (SCR-054-declaration); a material's compliance profile (its id is the material's) on the material's Compliance tab.
+  SupplierDeclarationRequest: '/compliance/tests?view=declarations&open=[id]',
+  MaterialComplianceProfile: '/products/materials/[id]?tab=compliance',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
@@ -219,6 +227,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/product/materials': '/products/materials',
   '/product/operations': '/products/operations',
   '/product/size-scales': '/products/sizes',
+  // B-W2b-242
+  '/product/option-groups': '/products/options',
   '/compliance/certificates': '/compliance/certificates',
   '/compliance/labels': '/compliance/labels',
   '/production/work-orders': '/production/work-orders',

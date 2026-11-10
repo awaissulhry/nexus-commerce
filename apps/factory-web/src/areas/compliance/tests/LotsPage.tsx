@@ -11,8 +11,12 @@ import { LIST_MAX, listLots, type Lot } from '../../quality/_shared/lots'
 import { failedRead, problemKey, qualityCan, reading, ready, type Notice, type Read } from '../../quality/_shared/model'
 import { getSettings, saveSettings, type LabSettings } from './api'
 import { capped as isCapped, crViWord, hasMore, isWaitingEvidence, loosens, lotsCsvRows, tileCounts, viewFromAddress, viewQuery, viewRows, type ListDialog, type LotTile, type LotView, type RuleDraft, type TileCount } from './model'
-import { LabMessages } from './view/parts'
 import { lotHref, LotsView } from './view/LotsView'
+// B-W2b-267: the W2b views of the page (Supplier declarations, Material profiles, Substance list) and the frame they share.
+import { MaterialTestsPage } from './substances/frame/MaterialTestsPage'
+import { DepthMessages } from './substances/frame/parts'
+import { useLotsDepth } from './substances/frame/use-depth'
+import { depthViewOf } from './substances/frame/views'
 
 /**
  * The Tests & substances container (`/w/<company>/compliance/tests`, SCR-054): reads the view's lots (`GET /quality/lots`,
@@ -22,10 +26,13 @@ import { lotHref, LotsView } from './view/LotsView'
  * tightens; when it loosens it carries the reason and the fresh code (step-up). `?view=` keeps the view in the address.
  */
 export function LotsPage() {
+  // B-W2b-267: `?view=declarations|profiles|substances` is a W2b view with its own container; every other address is Lot tests.
+  const depthView = depthViewOf(useSearchParams())
+  if (depthView) return <MaterialTestsPage view={depthView} />
   return (
-    <LabMessages>
+    <DepthMessages>
       <LotsContainer />
-    </LabMessages>
+    </DepthMessages>
   )
 }
 
@@ -62,6 +69,7 @@ function LotsContainer() {
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const request = useRef<AbortController | null>(null)
+  const depth = useLotsDepth(prefix) // B-W2b-267: the view switch, the W2b tiles, two ⋯ items
 
   const load = useCallback(
     async (size = limit) => {
@@ -197,6 +205,7 @@ function LotsContainer() {
 
   return (
     <LotsView
+      depth={depth}
       model={{
         prefix,
         can,

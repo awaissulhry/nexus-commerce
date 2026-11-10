@@ -321,6 +321,11 @@ describe('the product settings (PRD-182, PRD-105)', () => {
     expect(cleared.tolerance).toMatchObject({ own: { rule: null }, rule: 'MAY_DIFFER', source: 'TENANT' })
     await refused('companyB', 'PUT', '/product/settings', { companyId: null, version: (await tenantSettings()).version, editRules: { CONCEPT: 'BLOCKED' } }, 403)
     await refused('styles', 'PUT', '/product/settings', { companyId: companyB, version: 2, editRules: { CONCEPT: 'BLOCKED' } }, 403)
+    // B-W2b-239: the read says whether the caller may change the row (the Product settings screen draws text otherwise).
+    expect((await ok('companyB', 'GET', `/product/settings?companyId=${companyB}`)).settings.mayChange).toBe(true)
+    expect((await ok('companyB', 'GET', '/product/settings')).settings.mayChange).toBe(false)
+    expect((await ok('manager', 'GET', '/product/settings')).settings.mayChange).toBe(true)
+    expect((await tenantSettings()).mayChange).toBe(false)
   })
 
   it('the cutting table (a floor session) reads the tolerance of the cut order\'s material for its company', async () => {

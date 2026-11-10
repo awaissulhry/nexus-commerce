@@ -157,8 +157,12 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.sizes', title: 'Sizes & measurements', titleIt: 'Taglie e misure', wave: 'W1', href: '/products/sizes' },
           // W2b: B-W2b-247 Colours & artwork (SCR-118), after Sizes (the design's order).
           { id: 'products.colours', title: 'Colours & artwork', titleIt: 'Colori e grafiche', wave: 'W2b', href: '/products/colours' },
+          // W2b: B-W2b-242 Options & rules (SCR-114), after Colours & artwork (the design's order).
+          { id: 'products.options', title: 'Options & rules', titleIt: 'Opzioni e regole', wave: 'W2b', href: '/products/options' },
         ],
       },
+      // W2b: B-W2b-239 Product settings (SCR-251), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'products.settings', title: 'Product settings', titleIt: 'Impostazioni prodotto', wave: 'W2b', href: '/products/settings' }] },
     ],
   },
   {

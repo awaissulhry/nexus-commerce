@@ -25,7 +25,10 @@
       "sizes": "Sizes & measurements",
       "development": "Development",
       "samples": "Samples & prototypes",
-      "colours": "Colours & artwork"
+      "colours": "Colours & artwork",
+      "options": "Options & rules",
+      "settingsGroup": "Settings",
+      "settings": "Product settings"
     },
     "sales": {
       "area": "Sales",
