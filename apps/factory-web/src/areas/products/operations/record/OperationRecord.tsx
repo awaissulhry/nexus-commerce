@@ -10,6 +10,11 @@ import { libraryCan, readProblem, writeProblem, type Notice, type WriteProblem }
 import { archiveOperation, getOperation, reactivateOperation, updateOperation, useLibraryMinutes, type OperationInput, type OperationView } from '../api'
 import { tabOf } from '../model'
 import { OperationRecordView, type OperationLoad, type OperationRecordViewModel } from './view/OperationRecordView'
+// B-W2b-235: Minutes in depth and Machine & settings.
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
+import { connectionsOf, smvCanOf } from '../depth/model'
+import { useOperationMinutes } from '../depth/use-minutes'
+import { useOperationSettings } from '../depth/use-settings'
 
 /**
  * `/w/<company>/products/operations/<id>` (SCR-049): reads the operation with where it is used, one write at a time with
@@ -114,7 +119,23 @@ function Container({ operationId }: { operationId: string }) {
     }
   }
 
-  const model: OperationRecordViewModel = { prefix, can, tab, operation, save, busy, notice, changed, refused, dialog }
+  // B-W2b-235: the Minutes tab's W2b parts (read while it shows) and Machine & settings (read while it shows); a change that
+  // took effect or new settings read the operation again.
+  const smvCan = useMemo(() => smvCanOf(session.permissions), [session.permissions])
+  const connections = useMemo(() => connectionsOf(prefix, OFFICE_PAGES, session.permissions), [prefix, session.permissions])
+  const minutes = useOperationMinutes({ api, operationId, enabled: tab === 'minutes' && smvCan.view, userId: session.user.id, can: smvCan, connections, onChanged: () => void load() })
+  const settings = useOperationSettings({ api, operationId, enabled: tab === 'machine' && smvCan.view, classesReadable: smvCan.machineClasses, onChanged: () => void load() })
+
+  // The operation moved (W1's typed SMV saved, a change took effect, someone else): the minutes are read again.
+  const seenVersion = useRef<number | null>(null)
+  const reloadMinutes = minutes.reload
+  useEffect(() => {
+    const version = current?.version ?? null
+    if (seenVersion.current !== null && version !== null && version !== seenVersion.current) reloadMinutes()
+    seenVersion.current = version
+  }, [current?.version, reloadMinutes])
+
+  const model: OperationRecordViewModel = { prefix, can, tab, operation, save, busy, notice, changed, refused, dialog, minutes: smvCan.view ? minutes.model : undefined, settings: smvCan.view ? settings.model : undefined }
   return (
     <OperationRecordView
       model={model}
@@ -127,6 +148,9 @@ function Container({ operationId }: { operationId: string }) {
         onUpdateRoutings: updateRoutings,
         onDialog: setDialog,
         onDismissNotice: () => setNotice(null),
+        // B-W2b-235
+        minutes: minutes.actions,
+        settings: settings.actions,
       }}
     />
   )

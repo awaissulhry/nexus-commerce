@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Archive, Download, MoreHorizontal, Plus, RotateCcw, Search, Upload } from 'lucide-react'
+import { Archive, Download, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Upload } from 'lucide-react'
 import { Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, TokenChip } from '@nexus/ui/primitives'
@@ -17,6 +17,12 @@ import { minutesText } from '../../styles/model'
 import { isPageKey, keepLoaded, type LibraryCan, type Notice } from '../../library/model'
 import { Freshness, KeysDialog, LibraryMessages, listState, NoticeBanner, PageHead, showsState } from '../../library/parts'
 import type { OperationRow } from '../api'
+// B-W2b-235: the tile "SMV changes waiting for approval", its rows, and Propose SMV change from the SMV cell.
+import { WithMessages } from '../../../../record-panels/i18n'
+import type { MinutesActions, MinutesModel } from '../depth/model'
+import type { WaitingActions, WaitingModel } from '../depth/use-waiting'
+import { SmvFromList } from '../depth/view/SmvFromList'
+import { WaitingList } from '../depth/view/WaitingList'
 import { archiveHeld, createHeld, isFiltered, NO_FILTERS, OPERATION_TILES, OPERATION_VIEWS, reactivateHeld, STATUS_TONE, WORK_CENTRE_KINDS, type OperationDraft, type OperationFilters, type OperationTile, type WorkCentreKind } from '../model'
 
 export interface NewOperationModel {
@@ -44,6 +50,19 @@ export interface OperationsListViewModel {
   selected?: string[]
   focusRow?: number
   dialog?: 'archive' | 'help' | null
+  /** B-W2b-235: the SMV changes waiting (the tile and its view); absent: not read (no routing right). */
+  waiting?: WaitingModel
+  /** B-W2b-235: product.smv.propose (the SMV cell's Propose SMV change). */
+  canPropose?: boolean
+  /** B-W2b-235: the operation whose SMV change is being proposed from the list (its minutes read). */
+  smvChange?: MinutesModel | null
+  /** B-W2b-235: what Propose SMV change from the list sent (shown above the list). */
+  smvNotice?: Notice | null
+  /** B-W2b-235: the person reading (a waiting change of their own is not theirs to approve). */
+  userId?: string | null
+  /** B-W2b-235 design cases: waiting rows already selected, the approve dialog open. */
+  waitingSelected?: string[]
+  waitingConfirm?: boolean
 }
 
 export interface OperationsListActions {
@@ -60,6 +79,11 @@ export interface OperationsListActions {
   onDismissNotice?: () => void
   onImport?: () => void
   sheetImport?: WizardActions
+  /** B-W2b-235: the waiting list's actions; Propose SMV change of one operation (null closes it) and its dialog's actions. */
+  waiting?: WaitingActions
+  onProposeSmv?: (operationId: string | null) => void
+  smvChange?: MinutesActions
+  onDismissSmvNotice?: () => void
 }
 
 /**
@@ -72,13 +96,19 @@ export interface OperationsListActions {
 export function OperationsListView({ model, actions }: { model: OperationsListViewModel; actions?: OperationsListActions }) {
   return (
     <LibraryMessages>
-      <OperationsList model={model} actions={actions} />
+      <WithMessages namespaces={['products-operations-depth']}>
+        <OperationsList model={model} actions={actions} />
+      </WithMessages>
     </LibraryMessages>
   )
 }
 
 function OperationsList({ model, actions }: { model: OperationsListViewModel; actions?: OperationsListActions }) {
   const t = useT('library')
+  // B-W2b-235: the W2b words (the waiting tile and view, Propose SMV change).
+  const td = useT('products-operations-depth')
+  const viewLabel = (view: OperationFilters['view']) => (view === 'smv' ? td('waiting.view') : t(`operations.view.${view}`))
+  const canPropose = model.canPropose ?? false
   const locale = useLocale()
   const [query, setQuery] = useState(model.filters.q)
   useEffect(() => setQuery(model.filters.q), [model.filters.q])
@@ -138,6 +168,18 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
         </span>
       ) : null
     const StatusCell = ({ data }: ICellRendererParams<OperationRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
+    // B-W2b-235: the SMV with Propose SMV change (a change a second person approves; it feeds routings and piece rates).
+    const SmvCell = ({ data, valueFormatted }: ICellRendererParams<OperationRow>) =>
+      data ? (
+        <span className="fw-lib-inline">
+          <span>{valueFormatted}</span>
+          {canPropose && data.status === 'ACTIVE' && (
+            <Button size="sm" variant="quiet" onClick={() => latest.current.actions?.onProposeSmv?.(data.id)} aria-label={td('propose.openFor', { code: data.code })} title={td('propose.openFor', { code: data.code })}>
+              <PencilLine size={13} aria-hidden />
+            </Button>
+          )}
+        </span>
+      ) : null
     const MoreCell = ({ data }: ICellRendererParams<OperationRow>) =>
       data ? (
         <Menu
@@ -148,6 +190,9 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
             { id: 'used', label: t('operations.list.openUsed'), href: `${recordHref(data)}?tab=whereused` },
+            // B-W2b-235: the operation's minutes and versions; Propose SMV change.
+            { id: 'minutes', label: td('menu.openMinutes'), href: `${recordHref(data)}?tab=minutes` },
+            ...(canPropose && data.status === 'ACTIVE' ? [{ id: 'propose', label: td('propose.open'), onSelect: () => latest.current.actions?.onProposeSmv?.(data.id) }] : []),
             {
               id: 'copy',
               label: t('list.copyCode'),
@@ -162,12 +207,22 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
       { colId: 'code', headerName: t('operations.col.operation'), field: 'code', minWidth: 200, flex: 2, cellRenderer: CodeCell },
       { colId: 'kind', headerName: t('operations.col.department'), field: 'workCentreKind', minWidth: 130, flex: 1, valueFormatter: (params) => t(`department.${params.value as string}`) },
       { colId: 'machine', headerName: t('operations.col.machine'), field: 'machineType', minWidth: 160, flex: 1.2, cellRenderer: MachineCell },
-      { colId: 'smv', headerName: t('operations.col.smv'), field: 'standardMinutes', minWidth: 110, flex: 0.8, type: 'rightAligned', valueFormatter: (params) => t('operations.list.minutes', { minutes: minutesText(params.value as string, locale) }) },
+      {
+        colId: 'smv',
+        headerName: t('operations.col.smv'),
+        field: 'standardMinutes',
+        minWidth: 130,
+        flex: 0.9,
+        type: 'rightAligned',
+        valueFormatter: (params) => t('operations.list.minutes', { minutes: minutesText(params.value as string, locale) }),
+        // B-W2b-235 (design operations.grid "from W2b an SMV change that feeds piece rates opens 'Propose SMV change'").
+        cellRenderer: SmvCell,
+      },
       { colId: 'used', headerName: t('operations.col.used'), field: 'usedIn', minWidth: 150, flex: 1, type: 'rightAligned', cellRenderer: UsedCell },
       { colId: 'status', headerName: t('operations.col.status'), field: 'status', minWidth: 100, maxWidth: 130, cellRenderer: StatusCell },
       { colId: 'more', headerName: t('list.col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, recordHref])
+  }, [t, td, locale, recordHref, canPropose])
 
   const filtered = isFiltered(model.filters)
   const state = showsState(model.rows.problem, items)
@@ -210,22 +265,38 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
       <MetricStrip
-        metrics={OPERATION_TILES.map((tile) => {
-          const count = model.tiles[tile]
-          return {
-            label: t(`operations.tile.${tile}`),
-            value: count === null || count === undefined ? '—' : String(count),
-            hint: t(`operations.tileHint.${tile}`),
-            onClick: () => actions?.onFilters?.({ ...model.filters, view: model.filters.view === tile ? 'open' : tile }),
-            active: model.filters.view === tile,
-          }
-        })}
+        metrics={[
+          ...OPERATION_TILES.map((tile) => {
+            const count = model.tiles[tile]
+            return {
+              label: t(`operations.tile.${tile}`),
+              value: count === null || count === undefined ? '—' : String(count),
+              hint: t(`operations.tileHint.${tile}`),
+              onClick: () => actions?.onFilters?.({ ...model.filters, view: model.filters.view === tile ? 'open' : tile }),
+              active: model.filters.view === tile,
+            }
+          }),
+          // B-W2b-235: SMV changes waiting for approval (design operations.tiles#1).
+          ...(model.waiting
+            ? [
+                {
+                  label: td('waiting.tile'),
+                  value: model.waiting.count === null ? '—' : String(model.waiting.count),
+                  hint: td('waiting.tileHint'),
+                  onClick: () => actions?.onFilters?.({ ...model.filters, view: model.filters.view === 'smv' ? 'open' : 'smv' }),
+                  active: model.filters.view === 'smv',
+                },
+              ]
+            : []),
+        ]}
       />
+      {/* B-W2b-235: Propose SMV change from the SMV cell, and its notice. */}
+      <SmvFromList model={model.smvChange ?? null} notice={model.smvNotice} actions={actions?.smvChange} onClose={() => actions?.onProposeSmv?.(null)} onDismissNotice={() => actions?.onDismissSmvNotice?.()} />
       {filtered && (
         <div className="fw-lib-chips" aria-label={t('list.activeFilters')}>
           {model.filters.view !== 'open' && (
             <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, view: 'open' })}>
-              {t(`operations.view.${model.filters.view}`)}
+              {viewLabel(model.filters.view)}
             </TokenChip>
           )}
           {model.filters.kind && (
@@ -243,73 +314,78 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
           </Button>
         </div>
       )}
-      <ListFrame<OperationRow>
-        label={t('operations.list.tableLabel')}
-        rows={state ? [] : items}
-        rowId={(row) => row.id}
-        columns={columns}
-        count={items ? t(model.rows.more ? 'list.countMore' : 'list.count', { count: items.length, total: model.rows.count ?? items.length }) : '—'}
-        search={
-          <Input
-            size="sm"
-            type="search"
-            leadingIcon={<Search size={13} aria-hidden />}
-            aria-label={t('operations.list.search')}
-            placeholder={t('operations.list.search')}
-            value={query}
-            onChange={(event) => {
-              typed.current = true
-              setQuery(event.target.value)
-            }}
-          />
-        }
-        tools={
-          <>
-            <Select size="sm" aria-label={t('list.viewFilter')} value={model.filters.view} onChange={(event) => actions?.onFilters?.({ ...model.filters, view: event.target.value as OperationFilters['view'] })}>
-              {OPERATION_VIEWS.map((view) => (
-                <option key={view} value={view}>
-                  {t(`operations.view.${view}`)}
-                </option>
-              ))}
-            </Select>
-            <Select size="sm" aria-label={t('operations.list.departmentFilter')} value={model.filters.kind} onChange={(event) => actions?.onFilters?.({ ...model.filters, kind: event.target.value as OperationFilters['kind'] })}>
-              <option value="">{t('operations.list.allDepartments')}</option>
-              {WORK_CENTRE_KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {t(`department.${kind}`)}
-                </option>
-              ))}
-            </Select>
-          </>
-        }
-        selection={{
-          selected,
-          onChange: setSelected,
-          actions: (
+      {model.filters.view === 'smv' && model.waiting ? (
+        // B-W2b-235: the tile's view — the SMV changes waiting for approval, Approve N.
+        <WaitingList model={model.waiting} actions={actions?.waiting} prefix={model.prefix} userId={model.userId ?? null} selected={model.waitingSelected} confirmOpen={model.waitingConfirm} />
+      ) : (
+        <ListFrame<OperationRow>
+          label={t('operations.list.tableLabel')}
+          rows={state ? [] : items}
+          rowId={(row) => row.id}
+          columns={columns}
+          count={items ? t(model.rows.more ? 'list.countMore' : 'list.count', { count: items.length, total: model.rows.count ?? items.length }) : '—'}
+          search={
+            <Input
+              size="sm"
+              type="search"
+              leadingIcon={<Search size={13} aria-hidden />}
+              aria-label={t('operations.list.search')}
+              placeholder={t('operations.list.search')}
+              value={query}
+              onChange={(event) => {
+                typed.current = true
+                setQuery(event.target.value)
+              }}
+            />
+          }
+          tools={
             <>
-              <Button size="sm" aria-label={t('list.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
-              {picked.length > 0 && picked.every((row) => row.status === 'ARCHIVED') ? (
-                <Button size="sm" aria-label={t('list.bulk.reactivate', { count: picked.length })} heldReason={reactivateReason ? t(reactivateReason) : model.busy ? t('held.busy') : null} onClick={() => void actions?.onStatusMany?.(picked.map((row) => row.id), 'ACTIVE', '').then((done) => done && setSelected([]))}>
-                  <RotateCcw size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.reactivate', { count: picked.length })}</SelectionLabel>
-                </Button>
-              ) : (
-                <Button size="sm" variant="danger-outline" aria-label={t('list.bulk.archive', { count: picked.length })} heldReason={archiveReason ? t(archiveReason) : null} onClick={() => setDialog('archive')}>
-                  <Archive size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.archive', { count: picked.length })}</SelectionLabel>
-                </Button>
-              )}
+              <Select size="sm" aria-label={t('list.viewFilter')} value={model.filters.view} onChange={(event) => actions?.onFilters?.({ ...model.filters, view: event.target.value as OperationFilters['view'] })}>
+                {OPERATION_VIEWS.map((view) => (
+                  <option key={view} value={view}>
+                    {viewLabel(view)}
+                  </option>
+                ))}
+              </Select>
+              <Select size="sm" aria-label={t('operations.list.departmentFilter')} value={model.filters.kind} onChange={(event) => actions?.onFilters?.({ ...model.filters, kind: event.target.value as OperationFilters['kind'] })}>
+                <option value="">{t('operations.list.allDepartments')}</option>
+                {WORK_CENTRE_KINDS.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {t(`department.${kind}`)}
+                  </option>
+                ))}
+              </Select>
             </>
-          ),
-        }}
-        updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-        more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
-        keys={ownKeys}
-        onHelp={() => setDialog('help')}
-        onOpen={(row) => actions?.onOpen?.(row.id)}
-        state={state}
-        focusRow={model.focusRow}
-      />
+          }
+          selection={{
+            selected,
+            onChange: setSelected,
+            actions: (
+              <>
+                <Button size="sm" aria-label={t('list.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                  <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.export', { count: picked.length })}</SelectionLabel>
+                </Button>
+                {picked.length > 0 && picked.every((row) => row.status === 'ARCHIVED') ? (
+                  <Button size="sm" aria-label={t('list.bulk.reactivate', { count: picked.length })} heldReason={reactivateReason ? t(reactivateReason) : model.busy ? t('held.busy') : null} onClick={() => void actions?.onStatusMany?.(picked.map((row) => row.id), 'ACTIVE', '').then((done) => done && setSelected([]))}>
+                    <RotateCcw size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.reactivate', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="danger-outline" aria-label={t('list.bulk.archive', { count: picked.length })} heldReason={archiveReason ? t(archiveReason) : null} onClick={() => setDialog('archive')}>
+                    <Archive size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.archive', { count: picked.length })}</SelectionLabel>
+                  </Button>
+                )}
+              </>
+            ),
+          }}
+          updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+          more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
+          keys={ownKeys}
+          onHelp={() => setDialog('help')}
+          onOpen={(row) => actions?.onOpen?.(row.id)}
+          state={state}
+          focusRow={model.focusRow}
+        />
+      )}
       {model.newOperation && <NewOperationDialog model={model.newOperation} actions={actions} />}
       {model.sheetImport && <SheetImportDialog model={model.sheetImport} actions={actions?.sheetImport} />}
       {dialog === 'archive' && <ArchiveDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}

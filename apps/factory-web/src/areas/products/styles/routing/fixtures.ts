@@ -2,6 +2,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { demoBom, demoCost, demoRouting, demoStyle, demoSubcontractedRouting, newStyle, OPERATIONS, recordModel, REV, REVISIONS, WORKSHOPS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
 import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-W2b-235: the routing in depth (made-up data).
+import { DEMO_OPTIONS, DEMO_PLANS, demoDepthModel, STEP_ID } from './depth/demo/fixtures'
 
 /**
  * SCR-043 Operations (routing) of DEMO-JKT-01 — made-up data only: nine operations, 96.5 standard minutes per garment
@@ -38,5 +40,31 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'remove-used', label: 'W2b: remove an operation a BOM line uses', model: routing({ bom: { status: 'ready', value: demoBom({ tied: true }) }, dialog: { kind: 'removeStep', stepId: demoRouting().steps[6]!.id } }), note: 'Remove held: lines 40 · PROT-SPAL-L2 and 50 · PROT-GOM-L2 name Op 70; tie them elsewhere in the BOM first.' },
     { id: 'loading', label: 'Loading', model: routing({ routing: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: routing({ routing: { status: 'error', problem: 'problem.read.unavailable' } }) },
+    // ---- B-W2b-235: the routing in depth (design style.rt.grid's W2b columns, the operation drawer's variants) ----------------
+    { id: 'w2b-235-depth', label: 'W2b: times, sizes and checkpoints', model: routing({ routingDepth: demoDepthModel() }), note: 'Run per garment and where it comes from (Op 10 from SMV version 2; Op 60 its own allowances; Op 40 typed 18.5 vs the library\'s approved 17 — "Use library value" copies version 1); set-up · wait · move per work order; extra minutes per size (SizeColumns, "—" = none, a cell saves by itself); Only for (Op 20 sizes 54–58); checkpoints (Op 10 first piece; Op 40 a plan with no approved version, warned); machine settings (Op 40 two, Op 30 "Library has 1"). Above the table: minutes per size and per work order.' },
+    { id: 'w2b-235-selected', label: 'W2b: three steps selected', model: routing({ routingDepth: demoDepthModel({ selected: [STEP_ID['CUC-SPA']!, STEP_ID['CUC-MAN']!, STEP_ID['CUC-FOD']!] }) }), note: 'Only for… 3 · Copy library settings 3; keys only in the footer icon.' },
+    { id: 'w2b-235-times', label: 'W2b: Times of Op 40', model: routing({ routingDepth: demoDepthModel({ dialog: { kind: 'times', stepId: STEP_ID['CUC-MAN']! } }) }), note: 'Run from the library\'s approved SMV (v1, 17 min) · own allowances · typed (18.5 now); set-up, wait, move; extra minutes per size with the minutes in that size; Save sends only what changed.' },
+    { id: 'w2b-235-times-version', label: 'W2b: Times of Op 10 (from version 2)', model: routing({ routingDepth: demoDepthModel({ dialog: { kind: 'times', stepId: STEP_ID['TAG-PEL']! } }) }) },
+    { id: 'w2b-235-times-plain', label: 'W2b: Times of Op 50 (no approved version)', model: routing({ routingDepth: demoDepthModel({ dialog: { kind: 'times', stepId: STEP_ID['CUC-ZIP']! } }) }), note: 'The library\'s SMV choice is held: no approved version of the operation yet.' },
+    { id: 'w2b-235-variants', label: 'W2b: Only for (Op 20)', model: routing({ routingDepth: demoDepthModel({ dialog: { kind: 'variants', stepIds: [STEP_ID['TAG-FOD']!] } }) }), note: 'Sizes 54, 56, 58 ticked; colourways none; options held in words (the style offers none).' },
+    { id: 'w2b-235-variants-options', label: 'W2b: Only for with options', model: routing({ routingDepth: demoDepthModel({ options: DEMO_OPTIONS, dialog: { kind: 'variants', stepIds: [STEP_ID['FIN-STI']!] } }, { options: true }) }), note: 'The style offers Hood: fixed / detachable; Op 80 only for "Hood: detachable".' },
+    { id: 'w2b-235-variants-many', label: 'W2b: Only for, three steps', model: routing({ routingDepth: demoDepthModel({ dialog: { kind: 'variants', stepIds: [STEP_ID['CUC-SPA']!, STEP_ID['CUC-MAN']!, STEP_ID['CUC-FOD']!] } }) }), note: 'The three steps take exactly these choices (said).' },
+    { id: 'w2b-235-checkpoint', label: 'W2b: Quality checkpoint (Op 40)', model: routing({ routingDepth: demoDepthModel({ plans: DEMO_PLANS, dialog: { kind: 'checkpoint', stepId: STEP_ID['CUC-MAN']! } }) }), note: 'Cutting, in-line and end-of-line plans of the company; the final plan is left out; a plan with no approved version says so.' },
+    { id: 'w2b-235-checkpoint-noright', label: 'W2b: checkpoint without Quality\'s plans', model: routing({ routingDepth: demoDepthModel({ plans: 'forbidden', dialog: { kind: 'checkpoint', stepId: STEP_ID['TAG-PEL']! } }) }, 'production'), note: 'Held in words: picking a plan needs quality.plans.view; the step keeps its checkpoint.' },
+    { id: 'w2b-235-settings', label: 'W2b: Machine settings (Op 40)', model: routing({ routingDepth: demoDepthModel({ classes: [{ id: '0190f0e2-2356-7000-8000-000000000001', code: 'DEMO-COL', labelIt: 'Colonna', labelEn: 'Post-bed' }], dialog: { kind: 'settings', stepId: STEP_ID['CUC-MAN']! } }) }), note: 'The step\'s two settings (machine class, stitch type, needle, thread, stitches per cm, tension, foot, notes); Copy from library replaces them.' },
+    { id: 'w2b-235-copy', label: 'W2b: Copy library settings to 3 steps', model: routing({ routingDepth: demoDepthModel({ selected: [STEP_ID['CUC-SPA']!, STEP_ID['CUC-ZIP']!, STEP_ID['CUC-FOD']!], dialog: { kind: 'copyLibrary', stepIds: [STEP_ID['CUC-SPA']!, STEP_ID['CUC-ZIP']!, STEP_ID['CUC-FOD']!] } }) }), note: 'Op 50 is skipped (its library operation has no settings).' },
+    { id: 'w2b-235-offline', label: 'W2b: offline, a size cell waiting', model: routing({ routingDepth: demoDepthModel({ offline: true, marks: { [`${STEP_ID['CUC-SPA']!}:56`]: { state: 'waiting', value: '0.5' } } }) }), note: 'The cell keeps 0.5 with its "waiting" mark and is sent when the connection is back; every dialog\'s Save is held.' },
+    { id: 'w2b-235-notice', label: 'W2b: after a save', model: routing({ routingDepth: demoDepthModel({ notice: { key: 'depth.notice.times', tone: 'success' } }) }) },
+    { id: 'w2b-235-cell-refused', label: 'W2b: a size cell refused', model: routing({ routingDepth: demoDepthModel({ marks: { [`${STEP_ID['CQ-FIN']!}:46`]: { state: 'refused', value: '-6', problem: 'times.problem.belowZero' } } }) }), note: '"!" with the reason: the step would take no time in size 46.' },
+    {
+      id: 'w2b-235-released',
+      label: 'W2b: in depth on a released revision',
+      model: routing({ style: { status: 'ready', value: demoStyle() }, revisionId: REV.r2, routing: { status: 'ready', value: demoRouting({ revision: REVISIONS[1] }) }, bom: { status: 'ready', value: demoBom({ revision: REVISIONS[1] }) }, routingDepth: demoDepthModel({}, { released: true }) }),
+      note: 'Drawn as text; no box selectable (why on the box); the dialogs open read only; "applies to new work orders from 5 Oct".',
+    },
+    { id: 'w2b-235-released-times', label: 'W2b: Times on a released revision', model: routing({ style: { status: 'ready', value: demoStyle() }, revisionId: REV.r2, routing: { status: 'ready', value: demoRouting({ revision: REVISIONS[1] }) }, bom: { status: 'ready', value: demoBom({ revision: REVISIONS[1] }) }, routingDepth: demoDepthModel({ dialog: { kind: 'times', stepId: STEP_ID['CUC-MAN']! } }, { released: true }) }) },
+    { id: 'w2b-235-quality', label: 'W2b: a role without routing changes', model: routing({ routingDepth: demoDepthModel({ canManage: false }) }, 'production'), note: 'Read only: changing a routing needs product.routing.manage (said once).' },
+    { id: 'w2b-235-loading', label: 'W2b: in depth loading', model: routing({ routingDepth: demoDepthModel({ depth: { status: 'loading' }, times: { status: 'loading' } }) }) },
+    { id: 'w2b-235-error', label: 'W2b: in depth could not load', model: routing({ routingDepth: demoDepthModel({ depth: { status: 'error', problem: 'problem.read.unavailable' } }) }), note: 'The W1 routing stays usable; the depth says why with Try again.' },
   ],
 })
