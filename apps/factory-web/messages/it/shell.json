@@ -148,7 +148,9 @@
       "sustainability": "Sostenibilità",
       "sourcing": "Filiera e dichiarazioni ambientali",
       "reportsGroup": "Report",
-      "reports": "Report conformità"
+      "reports": "Report conformità",
+      "settingsGroup": "Impostazioni",
+      "settings": "Norme e mercati"
     },
     "finance": {
       "area": "Amministrazione",

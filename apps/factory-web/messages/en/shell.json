@@ -148,7 +148,9 @@
       "sustainability": "Sustainability",
       "sourcing": "Sourcing & claims",
       "reportsGroup": "Reports",
-      "reports": "Compliance reports"
+      "reports": "Compliance reports",
+      "settingsGroup": "Settings",
+      "settings": "Rules & markets"
     },
     "finance": {
       "area": "Finance",

@@ -1,4 +1,4 @@
-import { BadgeCheck, BarChart3, FlaskConical, Leaf, ScrollText, ShieldCheck, Tag } from 'lucide-react'
+import { BadgeCheck, BarChart3, FlaskConical, Leaf, ScrollText, ShieldCheck, SlidersHorizontal, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -54,6 +54,13 @@ export const officeArea: OfficeAreaNav = {
         id: 'compliance-reports',
         label: 'shell:nav.compliance.reportsGroup',
         items: [{ id: 'compliance-reports', label: 'shell:nav.compliance.reports', href: '/compliance/reports', icon: BarChart3, permission: 'compliance.reports.view' }],
+      },
+      // B-W2b-265 SCR-262: Compliance › Settings › Rules & markets (the tree's last group): the Cr VI rule, the gates, the
+      // register of laws and standards, markets, phrases and operators (compliance.certificates.view; Cr VI reads quality.lots.view).
+      {
+        id: 'compliance-settings',
+        label: 'shell:nav.compliance.settingsGroup',
+        items: [{ id: 'compliance-settings', label: 'shell:nav.compliance.settings', href: '/compliance/settings', icon: SlidersHorizontal, permission: 'compliance.certificates.view' }],
       },
     ],
   },

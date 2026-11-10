@@ -241,6 +241,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
   '/compliance/reports',
   '/compliance/reports/print',
+  // B-W2b-265: Compliance › Settings › Rules & markets (SCR-262).
+  '/compliance/settings',
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
