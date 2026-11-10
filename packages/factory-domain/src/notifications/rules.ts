@@ -91,6 +91,17 @@ export const MESSAGE_TEMPLATES = {
   // who made the link (SYSTEM), with the reader's note as {title} when they wrote one. No new link was made.
   'notifications.links.renewAsked': { en: 'The link you sent for {record} no longer opens: its holder asks for a new one', it: 'Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo' },
   'notifications.links.renewAskedNote': { en: 'The link you sent for {record} no longer opens: its holder asks for a new one ("{title}")', it: 'Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo ("{title}")' },
+  // B-W2b-226 (modules/product/changes/notices.ts): a new change request to who triages it and the style's owner ({title}: the
+  // style and what should change), its decision to who raised it ({title}: why, for a rejection), a change order's approval
+  // asked of its approvers and decided for its author, its release to its followers, the style's owner and the supervisors of
+  // the work orders it decides for ({kind}: their numbers).
+  'notifications.changes.requestRaised': { en: 'New change request {record}: {title}', it: 'Nuova richiesta di modifica {record}: {title}' },
+  'notifications.changes.requestAccepted': { en: '{actor} accepted your change request {record}', it: '{actor} ha accettato la tua richiesta di modifica {record}' },
+  'notifications.changes.requestRejected': { en: '{actor} rejected your change request {record}: {title}', it: '{actor} ha rifiutato la tua richiesta di modifica {record}: {title}' },
+  'notifications.changes.approvalAsked': { en: '{actor} asks you to approve change order {record}: {title}', it: '{actor} ti chiede di approvare l’ordine di modifica {record}: {title}' },
+  'notifications.changes.orderDecided': { en: '{actor} {status} change order {record}', it: '{actor} ha {status} l’ordine di modifica {record}' },
+  'notifications.changes.orderReleased': { en: 'Change order {record} was released: {title}', it: 'L’ordine di modifica {record} è stato rilasciato: {title}' },
+  'notifications.changes.workInProgress': { en: 'Change order {record} was released: {title}. It decides what happens to work orders {kind}', it: 'L’ordine di modifica {record} è stato rilasciato: {title}. Decide cosa succede agli ordini di lavoro {kind}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES

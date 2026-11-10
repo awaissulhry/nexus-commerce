@@ -274,6 +274,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-214: the version seen; never who, never the language.
     case 'production.instruction.ack':
       return { target: text(p.versionId, 40) }
+    // B-W2b-226: the tile of the spec problem and the work order; never the words, never who.
+    case 'product.change.report':
+      return { code: text(p.problem, 20), ...(workOrderId ? { workOrderId } : {}) }
   }
 }
 

@@ -752,7 +752,8 @@
       "inlineRecord": "Controllo in linea: l'esito di un controllo",
       "inlineResults": "Controllo in linea: i controlli del piano",
       "finalRecord": "Collaudo finale: risultati e misure",
-      "instructionSeen": "Istruzione di lavoro vista"
+      "instructionSeen": "Istruzione di lavoro vista",
+      "specProblem": "Problema della scheda segnalato"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

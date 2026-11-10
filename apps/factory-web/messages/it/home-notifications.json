@@ -254,6 +254,15 @@
       "links": {
         "renewAsked": "Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo",
         "renewAskedNote": "Il link che hai mandato per {record} non si apre più: chi lo ha ricevuto ne chiede uno nuovo (\"{title}\")"
+      },
+      "changes": {
+        "requestRaised": "Nuova richiesta di modifica {record}: {title}",
+        "requestAccepted": "{actor} ha accettato la tua richiesta di modifica {record}",
+        "requestRejected": "{actor} ha rifiutato la tua richiesta di modifica {record}: {title}",
+        "approvalAsked": "{actor} ti chiede di approvare l’ordine di modifica {record}: {title}",
+        "orderDecided": "{actor} ha {status} l’ordine di modifica {record}",
+        "orderReleased": "L’ordine di modifica {record} è stato rilasciato: {title}",
+        "workInProgress": "L’ordine di modifica {record} è stato rilasciato: {title}. Decide cosa succede agli ordini di lavoro {kind}"
       }
     },
     "fallback": "Novità su {record}",
