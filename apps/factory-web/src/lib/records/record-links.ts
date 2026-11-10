@@ -188,6 +188,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   WorkInstruction: '/production/instructions/[id]',
   // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
   SampleRound: '/products/samples/[id]',
+  // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
+  TechnicalFile: '/compliance/techfiles/[id]',
+  EvidencePack: '/compliance/techfiles/pack?pack=[id]',
 })
 
 /**

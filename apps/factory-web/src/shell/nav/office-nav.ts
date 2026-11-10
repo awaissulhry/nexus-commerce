@@ -256,6 +256,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/reports/print',
   // B-W2b-265: Compliance › Settings › Rules & markets (SCR-262).
   '/compliance/settings',
+  // B-W2b-269: Compliance › Technical files (SCR-120), a technical file, the pack's PDF (SCR-326) and the authority link preview (SCR-327) (new tabs).
+  '/compliance/techfiles',
+  '/compliance/techfiles/[id]',
+  '/compliance/techfiles/pack',
+  '/compliance/techfiles/pack/link',
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
@@ -479,7 +484,8 @@ export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* 
   /* B-W2b-129 */ '/production/cutting/sheet',
   /* B-W2b-243 */ '/products/styles/tech-pack',
   /* B-W2b-268 */ '/compliance/declarations/pdf', '/compliance/declarations/pack',
-  /* B-W2b-271 */ '/compliance/register/notice'])
+  /* B-W2b-271 */ '/compliance/register/notice',
+  /* B-W2b-269 */ '/compliance/techfiles/pack', '/compliance/techfiles/pack/link'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')
