@@ -1,0 +1,403 @@
+{
+  "tab": {
+    "languages": "Lingue",
+    "artwork": "Grafica e approvazione"
+  },
+  "kind": {
+    "PPE_GARMENT": "Etichetta DPI del capo",
+    "GLOVE_MARKING": "Marcatura guanti",
+    "FIBRE_CARE": "Fibre e manutenzione",
+    "PACKAGING": "Imballaggio",
+    "gpsr": "GPSR"
+  },
+  "kindHint": {
+    "PPE_GARMENT": "L'etichetta cucita di un capo DPI: marchio CE, pittogramma e classe, fabbricante, taglia.",
+    "GLOVE_MARKING": "Un guanto marcato secondo la EN 13594 con il livello (1 o 2) e KP se le nocche sono protette.",
+    "FIBRE_CARE": "Solo fibre e simboli di manutenzione: nessuna marcatura DPI (la porta l'etichetta DPI del capo).",
+    "PACKAGING": "Un'etichetta sull'imballaggio, non cucita nel capo."
+  },
+  "qr": {
+    "NONE": "Nessun QR",
+    "BATCH_DOC": "QR alla dichiarazione del lotto",
+    "STYLE_DOC": "QR alla dichiarazione del modello"
+  },
+  "qrHint": {
+    "NONE": "La dichiarazione accompagna la merce: il QR è una scelta, non un obbligo.",
+    "BATCH_DOC": "Il QR di ogni capo apre la pagina pubblica del suo lotto; l'indirizzo è noto quando il lotto viene stampato.",
+    "STYLE_DOC": "Il QR apre la pagina pubblica del modello con la dichiarazione in vigore (di solito l'etichetta di un capo indica il suo lotto)."
+  },
+  "list": {
+    "col": {
+      "kind": "Tipo"
+    },
+    "blocks": "Non stampabile per {markets}",
+    "proofWaiting": "Bozza grafica da approvare",
+    "phraseLibrary": "Libreria delle frasi",
+    "phraseLibraryHint": "Le parole approvate di avvertenze, manutenzione e marcature in ogni lingua (Regole e mercati)",
+    "failed": {
+      "artwork": "Impossibile leggere le bozze da approvare",
+      "translations": "Impossibile leggere le traduzioni mancanti",
+      "body": "L'elenco delle etichette è a posto; questa vista richiede una lettura in più. Riprova."
+    }
+  },
+  "tile": {
+    "artwork": "Grafiche da approvare",
+    "artworkHint": "Bozze che una seconda persona approva prima della stampa",
+    "translations": "Traduzioni mancanti che bloccano un mercato",
+    "translationsHint": "Una lingua o un'avvertenza approvata che serve a un mercato attivo"
+  },
+  "view": {
+    "artwork": "Grafiche da approvare",
+    "translations": "Traduzioni mancanti"
+  },
+  "action": {
+    "proof": "Bozza dell'etichetta (PDF) ↗",
+    "proofApproved": "La bozza approvata, in una nuova scheda",
+    "proofSample": "Nessuna bozza approvata: l'etichetta di prova in PDF, in una nuova scheda"
+  },
+  "sheet": {
+    "qr": "Codice QR: {value}",
+    "qrAtPrint": "QR del lotto alla stampa"
+  },
+  "marking": {
+    "title": "Tipo e marcatura",
+    "intro": "Che cosa è l'etichetta, il suo QR alla dichiarazione, il contatto GPSR, il livello del guanto e le avvertenze di classe che deve riportare.",
+    "kind": "Tipo di etichetta",
+    "qr": "QR",
+    "gpsr": "Contatto GPSR",
+    "gpsrHint": "Nome, indirizzo postale e un indirizzo e-mail o web, uno per riga (Reg. (UE) 2023/988 art. 9). Al massimo {max} caratteri.",
+    "gpsrNone": "Nessuno",
+    "problem": {
+      "long": "Il contatto GPSR è troppo lungo."
+    },
+    "failed": "Impossibile leggere che cosa deve riportare l'etichetta",
+    "senderWhy": "Il marchio per un modello a marchio privato venduto con il proprio nome, altrimenti la nostra azienda (gli operatori economici di Regole e mercati).",
+    "fill": "Compila dai ruoli degli operatori",
+    "operators": "Operatori economici",
+    "qrHolds": "Il QR contiene",
+    "qrAtPrint": "Noto alla stampa",
+    "qrBatchLater": "L'indirizzo di un lotto nasce quando si stampano le sue etichette.",
+    "qrNone": "Nessun indirizzo.",
+    "qrLive": "La pagina risponde oggi",
+    "qrLiveYes": "Sì",
+    "qrLiveNo": "Non ancora",
+    "qrLiveUnknown": "Non ancora noto",
+    "glove": "Livello del guanto {level}",
+    "gloveGranted": "Come lo concede il certificato.",
+    "gloveNotGranted": "Nessun certificato di copertura indica ancora il livello."
+  },
+  "sender": {
+    "BRAND": "Indica il marchio: {name}",
+    "COMPANY": "Indica la nostra azienda: {name}",
+    "none": "Per questo modello non è ancora indicato un fabbricante"
+  },
+  "warnings": {
+    "title": "Avvertenze di classe",
+    "none": "Questa etichetta non richiede avvertenze di classe.",
+    "draftTitle": "Non ancora stampate: le avvertenze attendono il consulente DPI",
+    "draftBody": "Le parole vengono dalla libreria delle frasi e restano bozze finché un consulente DPI non approva i testi di questa etichetta (GATE-PPE-TEXTS).",
+    "draft": "Bozza",
+    "languages": "Le loro traduzioni: la scheda Lingue"
+  },
+  "warning": {
+    "CLASS_B": "Avvertenza classe B",
+    "CLASS_C": "Avvertenza classe C",
+    "REMOVABLE_PROTECTORS": "Avvertenza protezioni rimovibili"
+  },
+  "composition": {
+    "title": "Composizione calcolata dalla distinta base",
+    "intro": "Le fibre di ogni parte, dai materiali della distinta base del modello, con i nomi ufficiali (Reg. (UE) 1007/2011).",
+    "noStyle": "L'etichetta non indica un modello: niente da cui calcolare.",
+    "failed": "Impossibile calcolare la composizione",
+    "read": "{style} revisione {revision}, taglia {size}.",
+    "comparedWith": "I controlli confrontano la distinta base con l'etichetta {code} r{revision}, quella indicata da questa revisione.",
+    "comparedNone": "La revisione {revision} non indica ancora un'etichetta: i controlli non hanno un'etichetta da confrontare.",
+    "none": "La distinta base non ha ancora parti tessili.",
+    "group": "Varianti colore {colourways}",
+    "every": "Tutte le varianti colore",
+    "use": "Usa per l'etichetta",
+    "labelSame": "L'etichetta dice lo stesso",
+    "notComputed": "non calcolata (manca un peso)",
+    "missing": "Scrivile a mano o aggiungi il peso del materiale: {parts}.",
+    "shareUnknown": "La quota tessile non è ancora nota.",
+    "shareApplies": "Quota tessile {pct} % in peso: si applica l'etichettatura tessile.",
+    "shareBelow": "Quota tessile {pct} % in peso: sotto l'80 %.",
+    "shareMissing_one": "{count} riga senza peso",
+    "shareMissing_other": "{count} righe senza peso"
+  },
+  "basis": {
+    "ONE_COMPOSITION": "un solo materiale",
+    "BY_WEIGHT": "in peso"
+  },
+  "rules": {
+    "title": "Regole di marcatura e tessili",
+    "intro": "Ogni regola in una frase con la sua norma. Una regola non superata blocca solo i mercati che riguarda.",
+    "gates": "Che cosa blocca una stampa: Controlli",
+    "failed": "Impossibile leggere le regole di marcatura",
+    "market": "Mercato",
+    "blocked": "Non ancora stampabile per {markets}.",
+    "noneBlocked": "Stampabile per ogni mercato attivo.",
+    "marketBlocks": "non stampabile",
+    "marketPrints": "stampabile",
+    "marketLanguages": "{market} richiede etichette in {languages}.",
+    "noMarket": "Nessun mercato attivo: le regole sono verificate per la sola etichetta.",
+    "fix": {
+      "waiting": "Attende il consulente DPI: qui non c'è nulla da correggere.",
+      "languages": "Traducila: Lingue",
+      "marking": "Vai a Tipo e marcatura",
+      "layout": "Vai all'impaginazione",
+      "markets": "Regole e mercati › Mercati",
+      "operators": "Regole e mercati › Operatori",
+      "style": "Sul modello o sul suo certificato.",
+      "gates": "Apri la regola in Regole e mercati",
+      "switch": "Disattivata: Regole e mercati",
+      "composition": "Confronta con la distinta base",
+      "care": "Vai ai simboli di manutenzione"
+    }
+  },
+  "rule": {
+    "ceMarking": "Marcatura CE",
+    "classWarnings": "Avvertenze di classe",
+    "gloveMarking": "Marcatura guanti",
+    "gpsr": "Identificativo e contatto GPSR",
+    "qrCode": "QR alla dichiarazione"
+  },
+  "outcome": {
+    "PASS": "Superata.",
+    "FAIL": "Non superata: correggila prima della stampa.",
+    "WARN": "Superata con una nota.",
+    "WAITING": "Attende un sì esterno.",
+    "UNKNOWN": "Non ancora nota: blocca la stampa finché non lo è.",
+    "NOT_APPLICABLE": "Non si applica a questa etichetta."
+  },
+  "textile": {
+    "title": "Tessile, pelle e origine",
+    "failed": "Impossibile leggere i controlli tessili",
+    "read": "Di {style} revisione {revision}.",
+    "composition": "Composizione",
+    "fibreNames": "Nomi delle fibre",
+    "animalOrigin": "Frase sull'origine animale",
+    "textileShare": "Quota tessile",
+    "careLabel": "Etichetta di manutenzione",
+    "madeInItaly": "Made in Italy",
+    "leatherNaming": "Denominazione della pelle"
+  },
+  "textileOutcome": {
+    "PASS": "Superato.",
+    "FAIL": "Non superato.",
+    "WARN": "Superato con una nota.",
+    "UNKNOWN": "Non ancora noto.",
+    "NOT_APPLICABLE": "Non si applica.",
+    "OFF": "Disattivato per lo stabilimento."
+  },
+  "languages": {
+    "title": "Lingue",
+    "intro": "Ogni frase che l'etichetta stampa, con le parole approvate in ogni lingua dell'etichetta e in ogni lingua richiesta da un mercato attivo.",
+    "rule": "Una traduzione mancante di un'avvertenza, o una lingua che l'etichetta non stampa, blocca la stampa per i mercati che richiedono quella lingua. Le parole di manutenzione e di origine animale si stampano dall'etichetta stessa: Compila dalla libreria copia le parole approvate in una bozza.",
+    "fill": "Compila dalla libreria",
+    "fillN_one": "Compila {count} testo dalla libreria",
+    "fillN_other": "Compila {count} testi dalla libreria",
+    "columns": "Le lingue",
+    "onLabel": "sull'etichetta",
+    "notOnLabel": "non sull'etichetta",
+    "notOnLabelShort": "mancante",
+    "neededBy": "richiesta da {markets}",
+    "neededByNone": "nessun mercato attivo la richiede",
+    "blocked": "L'etichetta non è stampabile per {markets}",
+    "blockedLanguage": "Un mercato richiede una lingua che l'etichetta non stampa: aggiungila in una nuova revisione.",
+    "blockedPhrase": "Un'avvertenza non ha parole approvate in una lingua richiesta da un mercato: traducila e falla approvare.",
+    "noneBlocked": "Qui nulla impedisce all'etichetta di essere stampata.",
+    "checksFailed": "Impossibile leggere che cosa deve riportare l'etichetta",
+    "failed": "Impossibile leggere la libreria delle frasi",
+    "table": "Frasi e lingue",
+    "count_one": "{count} frase",
+    "count_other": "{count} frasi",
+    "col": {
+      "phrase": "Frase",
+      "actions": "Azioni"
+    },
+    "translate": "Traduci…",
+    "translateRow": "Traduci {phrase}",
+    "bulkApprove_one": "Approva {count} traduzione",
+    "bulkApprove_other": "Approva {count} traduzioni",
+    "empty": "L'etichetta non stampa frasi della libreria",
+    "emptyBody": "Ancora nessuna avvertenza di classe, frase sull'origine animale o simbolo di manutenzione."
+  },
+  "row": {
+    "WARNING": "Avvertenza {key}",
+    "ANIMAL_ORIGIN": "Frase sull'origine animale",
+    "CARE": "Manutenzione: {symbol}",
+    "CLAIM": "Indicazione di origine"
+  },
+  "cell": {
+    "SOURCE": "Originale",
+    "APPROVED": "Approvata",
+    "PROPOSED": "Da approvare",
+    "STALE": "Superata",
+    "MISSING": "Mancante ✕",
+    "NOT_IN_LIBRARY": "Non in libreria",
+    "notInLibraryKey": "{key} · non in libreria",
+    "blocks": "Blocca {markets}",
+    "proposal": "Proposta: {text}",
+    "labelSays": "L'etichetta dice: {text}"
+  },
+  "translate": {
+    "title": "Traduci: {phrase}",
+    "source": "Originale ({language}):",
+    "intro": "Una proposta si salva quando lasci il campo e attende una seconda persona. L'approvazione è esplicita.",
+    "approved": "Si stampa:",
+    "propose": "Proponi le parole",
+    "change": "Cambia la proposta in attesa",
+    "hint": "Si salva quando lasci il campo.",
+    "waiting": "Proposta da {name}: attende una seconda persona.",
+    "saving": "Salvataggio…",
+    "approve": "Approva"
+  },
+  "artwork": {
+    "title": "Bozze grafiche",
+    "introApproved": "La bozza approvata viene stampata; una nuova attende una seconda persona.",
+    "introNone": "Nessuna bozza è ancora approvata: dove un requisito chiede una grafica approvata, l'etichetta non si stampa.",
+    "add": "Aggiungi una bozza",
+    "send": "Invia al marchio",
+    "empty": "Ancora nessuna bozza",
+    "emptyBody": "Aggiungi la bozza dell'etichetta come PDF o immagine: una seconda persona la approva.",
+    "emptyBodyView": "La bozza la aggiunge chi gestisce le etichette.",
+    "version": "Bozza v{n}",
+    "prints": "in stampa ora",
+    "open": "Apri ↗",
+    "openN": "Apri la bozza v{n} in una nuova scheda",
+    "noFile": "Il file della bozza non è più leggibile",
+    "madeBy": "fatta da {name}, {time}",
+    "byYou": "tua",
+    "approvedBy": "Approvata da {name}, {time}.",
+    "approve": "Approva…",
+    "retire": "Ritira…",
+    "remove": "Elimina la bozza",
+    "failed": "Impossibile leggere le bozze",
+    "workOrders": "Ordini di lavoro e la loro bozza",
+    "workOrdersIntro": "Ogni ordine di lavoro rilasciato con questa revisione segue la bozza in vigore alla sua prima stampa: le ristampe usano la stessa.",
+    "noWorkOrders": "Nessun ordine di lavoro è ancora rilasciato con questa revisione.",
+    "notPrinted": "Non ancora stampato",
+    "followsNone": "Allora non ne era approvata nessuna",
+    "followsLater": "Si decide alla prima stampa",
+    "col": {
+      "workOrder": "Ordine di lavoro",
+      "firstPrint": "Prima stampa",
+      "follows": "Segue"
+    },
+    "problem": {
+      "type": "Una bozza è un PDF o un'immagine (PNG, JPEG, WebP).",
+      "size": "Una bozza è al massimo di 25 MB.",
+      "read": "Impossibile leggere il file."
+    }
+  },
+  "artworkStatus": {
+    "DRAFT": "Da approvare",
+    "APPROVED": "Approvata",
+    "RETIRED": "Ritirata"
+  },
+  "signoff": {
+    "title": "Approvazione",
+    "made": "Bozza fatta",
+    "madeRole": "Gestisce le etichette",
+    "approved": "Approvata da una seconda persona",
+    "approvedRole": "Approva la grafica delle etichette",
+    "whoMay": "Chi approva la grafica delle etichette, diverso dall'autore",
+    "retiredUnapproved": "Ritirata senza approvazione.",
+    "ruleYours": "Questa bozza l'hai fatta tu: la approva qualcun altro.",
+    "ruleOk": "Fatta da un'altra persona.",
+    "brand": "Approvata dal marchio",
+    "brandRole": "Il marchio (B2B)"
+  },
+  "approve": {
+    "title": "Approva la bozza v{n} di {code} r{revision}",
+    "confirm": "Approva la bozza",
+    "proofLoading": "Lettura della bozza…",
+    "proofFailed": "Impossibile leggere la bozza",
+    "picture": "Bozza v{n}",
+    "note": "Nota di {name}:",
+    "comment": "Commento (facoltativo)",
+    "commentHint": "Conservato con l'approvazione.",
+    "replaces": "La bozza approvata ora (v{n}) viene ritirata con questa approvazione: si stampa una bozza per revisione dell'etichetta.",
+    "first": "Diventa la bozza che l'etichetta stampa."
+  },
+  "add": {
+    "title": "Aggiungi una bozza a {code} r{revision}",
+    "intro": "La bozza resta come file di questa etichetta e attende l'approvazione di una seconda persona.",
+    "hint": "Un PDF o un'immagine, al massimo 25 MB.",
+    "size": "{kb} KB",
+    "note": "Nota (facoltativa)",
+    "noteHint": "Che cosa è cambiato, per chi la approva.",
+    "confirm": "Aggiungi la bozza"
+  },
+  "retireProof": {
+    "title": "Ritira la bozza v{n}",
+    "approved": "Non viene più stampata: finché non se ne approva un'altra, l'etichetta non ha una bozza approvata. Gli ordini di lavoro che l'hanno stampata la conservano.",
+    "draft": "Esce di scena e resta in archivio.",
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Conservato con la bozza.",
+    "confirm": "Ritira la bozza"
+  },
+  "held": {
+    "busy": "Attendi: l'ultima modifica è in salvataggio.",
+    "brandLater": "L'approvazione del marchio tramite il portale arriverà più avanti; registra il sì scritto del marchio nella nota della bozza.",
+    "noFile": "Il file della bozza non è più leggibile.",
+    "noOperator": "Nessuna riga degli operatori economici indica il fabbricante: aggiungila in Regole e mercati › Operatori.",
+    "sameContact": "Il contatto dice già questo.",
+    "nothingComputed": "La distinta base non ha dato parti con fibre.",
+    "sameComposition": "L'etichetta dice già questo.",
+    "nothingToApprove": "Nessuna delle frasi scelte ha una proposta che puoi approvare.",
+    "rowNothingToApprove": "Qui non c'è una proposta che puoi approvare.",
+    "nothingToFill": "L'etichetta contiene già le parole approvate della libreria.",
+    "notInLibrary": "Questa frase non è nella libreria: aggiungila in Regole e mercati › Frasi.",
+    "frozen": "Le etichette attive non si modificano mai: una modifica è una nuova revisione.",
+    "manage": "Non gestisci le etichette.",
+    "upload": "Non carichi file.",
+    "labelRetired": "L'etichetta è ritirata.",
+    "notDraft": "Si approva solo una bozza in attesa di approvazione.",
+    "ownProof": "Questa bozza l'hai fatta tu: la approva una seconda persona.",
+    "approveOther": "Ora non si può approvare.",
+    "approveRight": "Non approvi la grafica delle etichette.",
+    "retired": "È già ritirata.",
+    "kept": "Le bozze approvate e ritirate si conservano, non si eliminano.",
+    "pickFile": "Scegli prima il file della bozza.",
+    "phrasesManage": "Non gestisci la libreria delle frasi.",
+    "phrasesApprove": "Non approvi le traduzioni.",
+    "ownProposal": "L'hai proposta tu: la approva qualcun altro.",
+    "noProposal": "Nessuna proposta è in attesa.",
+    "source": "Questa è la lingua originale della frase."
+  },
+  "problem": {
+    "conflict": "Qualcuno l'ha modificata nel frattempo: rileggi e riprova.",
+    "invalid": "Non salvato: qualcosa non è valido.",
+    "forbidden": "Non puoi farlo.",
+    "failed": "Non salvato. Riprova.",
+    "proposeFailed": "La proposta non è stata salvata.",
+    "approveFailed": "L'approvazione non è stata salvata."
+  },
+  "depth": {
+    "needStyle": "Nessun modello indica ancora questa etichetta: le regole si verificano per un modello.",
+    "done": {
+      "approvedTranslations_one": "{count} traduzione approvata.",
+      "approvedTranslations_other": "{count} traduzioni approvate.",
+      "filled_one": "{count} testo compilato dalla libreria: salva per conservarlo.",
+      "filled_other": "{count} testi compilati dalla libreria: salva per conservarli.",
+      "proofAdded": "Bozza v{n} aggiunta: attende una seconda persona.",
+      "proofApproved": "Bozza v{n} approvata: ora viene stampata.",
+      "proofRetired": "Bozza v{n} ritirata.",
+      "proofRemoved": "Bozza v{n} eliminata."
+    },
+    "notice": {
+      "proofFailed": "Impossibile aprire la bozza."
+    }
+  },
+  "styleComposition": {
+    "title": "Composizione calcolata dalla distinta base",
+    "intro": "Revisione {revision}, taglia {size}: le fibre di ogni parte con i nomi ufficiali.",
+    "openLabel": "Apri l'etichetta",
+    "label": "L'etichetta {code} r{revision} stampa ciò che vi è scritto: confrontala in Etichette e marcature.",
+    "noLabel": "La revisione non indica ancora un'etichetta.",
+    "loading": "Calcolo della composizione…",
+    "retry": "Riprova"
+  }
+}

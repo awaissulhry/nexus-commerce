@@ -18,7 +18,7 @@ import { LanguagesField } from '../../view/NewLabelDialog'
  * label's size. Every change redraws the preview at once; Save sends what changed. Each section is an anchor the rule
  * checks point to. A label out of DRAFT, or a person without the right, sees the same content as text.
  */
-export function Builder({ detail, draft, problems, onDraft }: { detail: LabelDetail; draft: LabelDraft; problems: readonly LabelIssue[]; onDraft: (draft: LabelDraft) => void }) {
+export function Builder({ detail, draft, problems, onDraft, slots }: { detail: LabelDetail; draft: LabelDraft; problems: readonly LabelIssue[]; onDraft: (draft: LabelDraft) => void; slots?: BuilderSlots }) {
   const t = useT('labels')
   const set = (patch: Partial<LabelDraft>) => onDraft({ ...draft, ...patch })
   const ppe = isPpeLabel(detail)
@@ -64,6 +64,7 @@ export function Builder({ detail, draft, problems, onDraft }: { detail: LabelDet
           </div>
         </section>
       </Card>
+      {slots?.afterMaker}
 
       <Card padded>
         <section className="fw-q-section" id="lb-sec-composition" aria-labelledby="lb-h-composition">
@@ -137,6 +138,7 @@ export function Builder({ detail, draft, problems, onDraft }: { detail: LabelDet
           )}
         </section>
       </Card>
+      {slots?.afterComposition}
 
       <Card padded>
         <section className="fw-q-section" id="lb-sec-care" aria-labelledby="lb-h-care">
@@ -252,6 +254,12 @@ export function Builder({ detail, draft, problems, onDraft }: { detail: LabelDet
   )
 }
 
+/** B-W2b-270: the W2b cards drawn between W1's (the marking after the maker, the BOM's composition after the label's). */
+export interface BuilderSlots {
+  afterMaker?: ReactNode
+  afterComposition?: ReactNode
+}
+
 function SectionHead({ id, title, sub, actions }: { id: string; title: ReactNode; sub?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="fw-q-section-head">
@@ -265,7 +273,7 @@ function SectionHead({ id, title, sub, actions }: { id: string; title: ReactNode
 }
 
 /** The same content as text (a label out of DRAFT, or no right to change it): never greyed inputs. */
-export function ContentFacts({ detail }: { detail: LabelDetail }) {
+export function ContentFacts({ detail, slots }: { detail: LabelDetail; slots?: BuilderSlots }) {
   const t = useT('labels')
   const ppe = isPpeLabel(detail)
   const order = printedOrder(
@@ -316,6 +324,8 @@ export function ContentFacts({ detail }: { detail: LabelDetail }) {
           />
         </section>
       </Card>
+      {slots?.afterMaker}
+      {slots?.afterComposition}
     </div>
   )
 }

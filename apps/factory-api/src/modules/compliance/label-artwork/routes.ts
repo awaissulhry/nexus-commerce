@@ -1,12 +1,13 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { addArtwork, approveArtwork, readLabelArtwork, removeArtwork, retireArtwork } from './artwork'
-import { artworkActContract, artworkAddContract, artworkReadContract, artworkRemoveContract, labelLinesReadContract, labelLinesRefreshContract, reconciliationContract, spoiledContract } from './contract'
+import { artworkActContract, artworkAddContract, artworkReadContract, artworkRemoveContract, artworkWaitingContract, labelLinesReadContract, labelLinesRefreshContract, reconciliationContract, spoiledContract } from './contract'
 // B-W2b-254's one gate: this step's checks plugged in by name (label.artwork, label.reconciliation).
 import './gate-plug'
 import { readLabelLines, refreshLabelLines } from './lines'
 import { manifest } from './manifest'
 import { logSpoiledLabels, readReconciliation } from './reconciliation'
+import { readWaitingArtwork } from './waiting'
 
 /**
  * Label artwork, label lines in the BOM and the label reconciliation (B-W2b-259; PRD-347, PRD-088, MES-140): a label
@@ -16,6 +17,9 @@ import { logSpoiledLabels, readReconciliation } from './reconciliation'
  */
 export default defineRoutes('compliance.label-artwork', manifest, async (app) => {
   app.get('/compliance/label-artwork/templates/:templateId', { schema: artworkReadContract }, async (request) => ({ artwork: await readLabelArtwork(request, request.params.templateId) }))
+
+  // B-W2b-270: the list's tile and view "Artwork waiting approval".
+  app.get('/compliance/label-artwork/waiting', { schema: artworkWaitingContract }, async (request) => ({ artwork: await readWaitingArtwork(request) }))
 
   app.post('/compliance/label-artwork/templates/:templateId/versions', { schema: artworkAddContract }, async (request, reply) => {
     const result = await addArtwork(request, request.params.templateId, request.body, idempotencyKeyFrom(request))
