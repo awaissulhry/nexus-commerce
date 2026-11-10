@@ -63,6 +63,9 @@ import { openInspectionsOfOrder } from './held'
 // B-W2b-176: the job's links and requests follow the order (../portal-jobs).
 import { settleJobInCommand } from '../portal-jobs/tasks'
 
+// B-W2b-228 (PRD-108): the kit takes the BOM's lines for the workshop (./kit-lines.ts).
+import { kitLinesOf } from './kit-lines'
+
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
  * "Operations & quantities"): work of one work order sent to an outside workshop. Office only; each write is ONE command
@@ -435,14 +438,16 @@ async function locationFor(db: Reader, siteId: string, partyId: string, location
 }
 
 /** The work order's planned materials for the cells sent, per material and colour (a HIDE-tracked leather goes cut, as bundles). */
-async function kitPlanOf(db: Reader, workOrderId: string, operations: readonly { readonly pieces: number; readonly sizes: readonly SizePieces[] }[], cells: WorkOrderFacts['cells']) {
+async function kitPlanOf(db: Reader, workOrderId: string, operations: readonly { readonly pieces: number; readonly sizes: readonly SizePieces[]; readonly workOrderOperationId: string }[], cells: WorkOrderFacts['cells']) {
   // Per cell, the most pieces any operation sends out (a garment travels once for all the order's operations).
   const share = new Map<string, number>()
   for (const operation of operations) {
     const sizes = operation.sizes.length > 0 ? operation.sizes : defaultSizes(cells)
     for (const size of sizes) share.set(size.workOrderSizeId, Math.max(share.get(size.workOrderSizeId) ?? 0, size.pieces))
   }
-  const materials = await db.workOrderMaterial.findMany({ where: { workOrderId, workOrderSizeId: { in: [...share.keys()] } }, select: { itemId: true, itemColourId: true, workOrderSizeId: true, baseQuantity: true }, orderBy: [{ itemId: 'asc' }] })
+  // B-W2b-228: only the materials of the BOM's lines for the workshop (none marked: every planned material, as before).
+  const kit = await kitLinesOf(db, workOrderId, operations.map((operation) => operation.workOrderOperationId))
+  const materials = (await db.workOrderMaterial.findMany({ where: { workOrderId, workOrderSizeId: { in: [...share.keys()] } }, select: { itemId: true, itemColourId: true, workOrderSizeId: true, baseQuantity: true, bomLineId: true }, orderBy: [{ itemId: 'asc' }] })).filter((row) => kit.lineIds.has(row.bomLineId))
   const items = new Map((await db.item.findMany({ where: { id: { in: [...new Set(materials.map((row) => row.itemId))] } }, select: { id: true, baseUom: true, tracking: true } })).map((item) => [item.id, item]))
   const cellQuantity = new Map(cells.map((cell) => [cell.id, cell.quantity]))
   const totals = new Map<string, { itemId: string; itemColourId: string | null; baseUom: Uom; base: number }>()
@@ -455,12 +460,12 @@ async function kitPlanOf(db: Reader, workOrderId: string, operations: readonly {
     entry.base += Number(row.baseQuantity.toString()) * ratio
     totals.set(key, entry)
   }
-  return [...totals.values()].filter((entry) => entry.base > 0).map((entry) => ({ ...entry, quantity: entry.base.toFixed(4) }))
+  return { lines: [...totals.values()].filter((entry) => entry.base > 0).map((entry) => ({ ...entry, quantity: entry.base.toFixed(4) })), note: kit.note }
 }
 
-async function insertKitPlan(tools: CommandTools, order: Pick<OrderRow, 'id' | 'siteId' | 'partyId' | 'workOrderId'>, workOrder: WorkOrderFacts, operations: readonly { pieces: number; sizes: readonly SizePieces[] }[]): Promise<number> {
+async function insertKitPlan(tools: CommandTools, order: Pick<OrderRow, 'id' | 'siteId' | 'partyId' | 'workOrderId'>, workOrder: WorkOrderFacts, operations: readonly { pieces: number; sizes: readonly SizePieces[]; workOrderOperationId: string }[]): Promise<number> {
   const existing = await readKitLines(tools.tx, order.id)
-  const planned = await kitPlanOf(tools.tx, order.workOrderId, operations, workOrder.cells)
+  const { lines: planned, note } = await kitPlanOf(tools.tx, order.workOrderId, operations, workOrder.cells)
   const already = new Set(existing.filter((line) => line.status !== 'CANCELLED').map((line) => `${line.itemId}|${line.itemColourId ?? '-'}`))
   let seq = existing.reduce((max, line) => Math.max(max, line.seq), 0)
   let added = 0
@@ -470,7 +475,7 @@ async function insertKitPlan(tools: CommandTools, order: Pick<OrderRow, 'id' | '
     seq += SEQ_STEP
     const id = newId()
     await tools.tx.subcontractKitLine.create({
-      data: { id, siteId: order.siteId, partyId: order.partyId, subcontractOrderId: order.id, seq, itemId: line.itemId, itemColourId: line.itemColourId, quantity: line.quantity, uom: line.baseUom, baseQuantity: line.quantity, note: 'From the work order’s planned materials.', createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
+      data: { id, siteId: order.siteId, partyId: order.partyId, subcontractOrderId: order.id, seq, itemId: line.itemId, itemColourId: line.itemColourId, quantity: line.quantity, uom: line.baseUom, baseQuantity: line.quantity, note, createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
       select: { id: true },
     })
     tools.audit({ action: 'purchasing.subcontract.planKitLine', recordType: 'SubcontractKitLine', recordId: id, after: { seq, itemId: line.itemId, itemColourId: line.itemColourId, quantity: line.quantity, uom: line.baseUom } })
@@ -884,7 +889,7 @@ export async function planKit(caller: CommandCaller, orderId: string, input: { r
       if (!KIT_OPEN.has(order.status)) throw new InvalidStateError(`Subcontract order ${order.number} is ${order.status.toLowerCase().replace('_', ' ')}; no kit line is added to it.`)
       const workOrder = await readWorkOrderFacts(tools.tx, order.workOrderId)
       if (!workOrder) throw new NotFoundError('Work order not found.')
-      const operations = (await readOperations(tools.tx, orderId)).map((row) => ({ pieces: row.pieces, sizes: sizesOf(row.sizes) }))
+      const operations = (await readOperations(tools.tx, orderId)).map((row) => ({ pieces: row.pieces, sizes: sizesOf(row.sizes), workOrderOperationId: row.workOrderOperationId }))
       const added = await insertKitPlan(tools, order, workOrder, operations)
       tools.audit({ action: 'purchasing.subcontract.planKit', recordType: 'SubcontractOrder', recordId: orderId, companyId: order.companyId, siteId: order.siteId, after: { added } })
       if (added > 0) changed(tools, order, order.status, ['kit'])
