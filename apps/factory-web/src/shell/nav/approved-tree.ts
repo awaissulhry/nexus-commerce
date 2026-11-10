@@ -400,6 +400,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'compliance.certificates', title: 'Certificates', titleIt: 'Certificati', wave: 'W1', href: '/compliance/certificates' },
           // W2b: B-W2b-268 Declarations & instructions (SCR-052), after Certificates (design compliance group Main).
           { id: 'compliance.declarations', title: 'Declarations & instructions', titleIt: 'Dichiarazioni e istruzioni', wave: 'W2b', href: '/compliance/declarations' },
+          // W2b: B-W2b-269 Technical files (SCR-120), after Certificates (design compliance group Main; Declarations joins before it).
+          { id: 'compliance.techfiles', title: 'Technical files', titleIt: 'Fascicoli tecnici', wave: 'W2b', href: '/compliance/techfiles' },
           { id: 'compliance.labels', title: 'Labels & marking', titleIt: 'Etichette e marcature', wave: 'W1', href: '/compliance/labels' },
           { id: 'compliance.tests', title: 'Tests & substances', titleIt: 'Test e sostanze', wave: 'W1', href: '/compliance/tests' },
         ],

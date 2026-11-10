@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { SOURCE_KINDS } from '@nexus/factory-domain/compliance/labels/render'
-import { LABEL_FIELDS, LABEL_TEMPLATE_STATUSES, LAYOUT_PRESET_KEYS, MANUFACTURE_DATE_FORMATS } from '@nexus/factory-domain/compliance/labels/rules'
+import { LABEL_FIELDS, LABEL_KINDS, LABEL_QR_TARGETS, LABEL_TEMPLATE_STATUSES, LAYOUT_PRESET_KEYS, MANUFACTURE_DATE_FORMATS } from '@nexus/factory-domain/compliance/labels/rules'
 import { styleRow, styleView, type StyleRow, type StyleView } from '@nexus/factory-domain/product/styles/contracts'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
@@ -51,6 +51,11 @@ export const templateSchema = z.object({
   version: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // B-W2b-253's columns, shown by B-W2b-270 (the grid's Kind, the builder's marking): an answer without them reads as W1's.
+  kind: z.enum(LABEL_KINDS).optional().default('PPE_GARMENT'),
+  gpsrContact: z.string().nullable().optional().default(null),
+  qrTarget: z.enum(LABEL_QR_TARGETS).optional().default('NONE'),
+  originClaimKey: z.string().nullable().optional().default(null),
 })
 export type LabelTemplate = z.infer<typeof templateSchema>
 export type LabelIssue = z.infer<typeof issue>

@@ -31,8 +31,10 @@ import { draftOf, isDirty, jobSettled, LABEL_EVENTS, labelHref, labelsCan, patch
 import { LabelsMessages } from '../view/parts'
 import type { CellChoices, LabelRecordModel, RecordDialog, RecordTab, TestPrintState } from '../view-model'
 import { LabelRecordView } from './view/LabelRecordView'
+import { DEPTH_EVENTS } from '../depth/model'
+import { useLabelDepth } from '../depth/use-depth'
 
-const TABS: readonly RecordTab[] = ['content', 'versions', 'prints']
+const TABS: readonly RecordTab[] = ['content', 'languages', 'artwork', 'versions', 'prints']
 /** The business day in Europe/Rome (the API's "today"; the date field's default). */
 const todayInRome = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 /** A live event right after our own write is our own: it says nothing new. */
@@ -124,6 +126,23 @@ function LabelContainer({ templateId }: { templateId: string }) {
     return () => controller.abort()
   }, [loadPreview])
 
+  // B-W2b-270: the label's W2b parts (marking checks, textile checks, artwork, phrases), beside W1's.
+  const depthPart = useLabelDepth({
+    api,
+    me: session.user.id,
+    permissions: session.permissions,
+    detail: current,
+    styleId,
+    tab,
+    draft,
+    setDraft: (next) => setDraft(next),
+    dialog,
+    setDialog: (next) => setDialog(next),
+    setBusy,
+    setNotice,
+    samplePdf: () => (current ? previewPdf(api, current.id, { ...ask, styleId: current.styleId ? undefined : styleId }) : Promise.reject(new Error('no label'))),
+  })
+
   useEffect(() => {
     if (!styleId || !can.styles) return
     getStyle(api, styleId)
@@ -164,10 +183,17 @@ function LabelContainer({ templateId }: { templateId: string }) {
 
   const live = useLive(
     (change) => {
-      if (!current || !liveMatches(change, LABEL_EVENTS)) return
+      if (!current) return
+      // B-W2b-270: a proof of this label, or a phrase / market, changed: read that part again.
+      if (liveMatches(change, DEPTH_EVENTS)) {
+        if (change.type.startsWith('label_artwork.') && change.fields.templateId === current.id && Date.now() - lastWrite.current >= OWN_ECHO_MS) depthPart.reloadArtwork()
+        if (change.type.startsWith('compliance_rules.')) depthPart.reloadPhrases()
+        return
+      }
+      if (!liveMatches(change, LABEL_EVENTS)) return
       if (change.fields.templateId !== current.id && change.fields.code !== current.code) return
       if (Date.now() - lastWrite.current < OWN_ECHO_MS) return
-      if (isDirty(current, draft)) setChanged({ at: new Date().toISOString() })
+      if (isDirty(current, draft) || depthPart.dirty) setChanged({ at: new Date().toISOString() })
       else void load()
     },
     () => void load(),
@@ -221,11 +247,18 @@ function LabelContainer({ templateId }: { templateId: string }) {
   const saveDraft = async () => {
     if (!current || !draft) return
     const patch = patchOf(current, draft)
-    if (Object.keys(patch).length === 0) return
+    // B-W2b-270: the marking saves with the same Save (W1's patch first, then the marking on the version it left).
+    if (Object.keys(patch).length === 0 && !depthPart.dirty) return
     setSave({ state: 'saving', at: save.at })
     lastWrite.current = Date.now()
     try {
-      const saved = await updateTemplate(api, current, patch)
+      const content = Object.keys(patch).length > 0 ? await updateTemplate(api, current, patch) : current
+      // The content is saved: kept at once, so a refused marking leaves the page on the version the PATCH made.
+      if (content !== current) {
+        setDetail(ready(content))
+        setDraft(draftOf(content))
+      }
+      const saved = await depthPart.saveMarking(content)
       setDetail(ready(saved))
       setDraft(draftOf(saved))
       setSave({ state: 'idle', at: new Date().toISOString() })
@@ -269,17 +302,22 @@ function LabelContainer({ templateId }: { templateId: string }) {
     if (next?.kind === 'test' && dialog?.kind !== 'test') setTest({ job: null, label: null, printer: null })
   }
 
-  const model: LabelRecordModel = { prefix, can, tab, detail, today, draft, preview, ask, style, save, live, changed, notice, dialog, printers, prints, test, busy, problem }
+  const model: LabelRecordModel = { prefix, can, tab, detail, today, draft, preview, ask, style, save, live, changed, notice, dialog, printers, prints, test, busy, problem, depth: depthPart.depth }
   return (
     <LabelRecordView
       model={model}
       actions={{
+        ...depthPart.actions,
         onRetry: () => void load(),
-        onReload: () => void load(),
+        onReload: () => {
+          depthPart.resetMarking()
+          void load()
+        },
         onDraft: setDraft,
         onSave: () => void saveDraft(),
         onDiscard: () => {
           if (current) setDraft(draftOf(current))
+          depthPart.resetMarking()
           setDialog(null)
         },
         onAsk: setAsk,

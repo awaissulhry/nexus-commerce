@@ -1,0 +1,403 @@
+{
+  "tab": {
+    "languages": "Languages",
+    "artwork": "Artwork & approval"
+  },
+  "kind": {
+    "PPE_GARMENT": "PPE garment label",
+    "GLOVE_MARKING": "Glove marking",
+    "FIBRE_CARE": "Fibre & care",
+    "PACKAGING": "Packaging",
+    "gpsr": "GPSR"
+  },
+  "kindHint": {
+    "PPE_GARMENT": "The sewn-in label of a PPE garment: CE mark, pictogram and class, maker, size.",
+    "GLOVE_MARKING": "A glove marked to EN 13594 with its level (1 or 2) and KP when the knuckles are protected.",
+    "FIBRE_CARE": "Fibres and care symbols only: no PPE marking (the PPE garment label carries it).",
+    "PACKAGING": "A label on the packaging, not sewn into the garment."
+  },
+  "qr": {
+    "NONE": "No QR",
+    "BATCH_DOC": "QR to the batch's declaration",
+    "STYLE_DOC": "QR to the style's declaration"
+  },
+  "qrHint": {
+    "NONE": "The declaration travels with the goods: a QR is a choice, not a duty.",
+    "BATCH_DOC": "Each garment's QR opens the public page of its batch; the address is known when the batch is printed.",
+    "STYLE_DOC": "The QR opens the style's public page with its current declaration (a garment label usually names its batch)."
+  },
+  "list": {
+    "col": {
+      "kind": "Kind"
+    },
+    "blocks": "Cannot print for {markets}",
+    "proofWaiting": "Proof waiting approval",
+    "phraseLibrary": "Phrase library",
+    "phraseLibraryHint": "The approved words of warnings, care and marking in every language (Rules & markets)",
+    "failed": {
+      "artwork": "Could not read the proofs waiting approval",
+      "translations": "Could not read the missing translations",
+      "body": "The list of labels is fine; this view needs one more read. Try again."
+    }
+  },
+  "tile": {
+    "artwork": "Artwork waiting approval",
+    "artworkHint": "Proofs a second person approves before they print",
+    "translations": "Missing translations blocking a market",
+    "translationsHint": "A language or an approved warning a switched-on market needs"
+  },
+  "view": {
+    "artwork": "Artwork waiting approval",
+    "translations": "Missing translations"
+  },
+  "action": {
+    "proof": "Label proof (PDF) ↗",
+    "proofApproved": "The approved proof, in a new tab",
+    "proofSample": "No approved proof yet: the sample label as a PDF, in a new tab"
+  },
+  "sheet": {
+    "qr": "QR code: {value}",
+    "qrAtPrint": "batch QR at print"
+  },
+  "marking": {
+    "title": "Kind and marking",
+    "intro": "What the label is, its QR to the declaration, the GPSR contact, the glove level and the class warnings it must carry.",
+    "kind": "Kind of label",
+    "qr": "QR",
+    "gpsr": "GPSR contact",
+    "gpsrHint": "Name, postal address and an e-mail or web address, one per line (Reg. (EU) 2023/988 art. 9). At most {max} characters.",
+    "gpsrNone": "None",
+    "problem": {
+      "long": "The GPSR contact is too long."
+    },
+    "failed": "Could not read what the label must say",
+    "senderWhy": "The brand for a private-label style sold under its own name, our company otherwise (the economic operators of Rules & markets).",
+    "fill": "Fill from operator roles",
+    "operators": "Economic operators",
+    "qrHolds": "The QR holds",
+    "qrAtPrint": "Known at print",
+    "qrBatchLater": "A batch's address is made when its labels are printed.",
+    "qrNone": "No address.",
+    "qrLive": "The page answers today",
+    "qrLiveYes": "Yes",
+    "qrLiveNo": "Not yet",
+    "qrLiveUnknown": "Not known yet",
+    "glove": "Glove level {level}",
+    "gloveGranted": "As the certificate grants it.",
+    "gloveNotGranted": "No covering certificate names the level yet."
+  },
+  "sender": {
+    "BRAND": "Names the brand: {name}",
+    "COMPANY": "Names our company: {name}",
+    "none": "No manufacturer is named for this style yet"
+  },
+  "warnings": {
+    "title": "Class warnings",
+    "none": "This label needs no class warning.",
+    "draftTitle": "Not printed yet: the warnings wait for the PPE consultant",
+    "draftBody": "Their words come from the phrase library and stay drafts until a PPE consultant says yes to this label's texts (GATE-PPE-TEXTS).",
+    "draft": "Draft",
+    "languages": "Their translations: the Languages tab"
+  },
+  "warning": {
+    "CLASS_B": "Class B warning",
+    "CLASS_C": "Class C warning",
+    "REMOVABLE_PROTECTORS": "Removable protectors warning"
+  },
+  "composition": {
+    "title": "Composition computed from the BOM",
+    "intro": "The fibres of each part, from the materials of the style's BOM, in their official names (Reg. (EU) 1007/2011).",
+    "noStyle": "The label names no style: nothing to compute from.",
+    "failed": "Could not compute the composition",
+    "read": "{style} revision {revision}, size {size}.",
+    "comparedWith": "The checks compare the BOM with label {code} r{revision}, the one this revision names.",
+    "comparedNone": "Revision {revision} names no label yet: the checks compare the BOM with none.",
+    "none": "The BOM has no textile part yet.",
+    "group": "Colourways {colourways}",
+    "every": "Every colourway",
+    "use": "Use for the label",
+    "labelSame": "The label says the same",
+    "notComputed": "not computed (a weight is missing)",
+    "missing": "Type these by hand or add the material's weight: {parts}.",
+    "shareUnknown": "The textile share is not known yet.",
+    "shareApplies": "Textile share {pct} % by weight: textile labelling applies.",
+    "shareBelow": "Textile share {pct} % by weight: below 80 %.",
+    "shareMissing_one": "{count} line has no weight",
+    "shareMissing_other": "{count} lines have no weight"
+  },
+  "basis": {
+    "ONE_COMPOSITION": "one material",
+    "BY_WEIGHT": "by weight"
+  },
+  "rules": {
+    "title": "Marking and textile rules",
+    "intro": "Each rule in a sentence with its law. A failing rule blocks only the markets it concerns.",
+    "gates": "What blocks a print: Gates",
+    "failed": "Could not read the marking rules",
+    "market": "Market",
+    "blocked": "Cannot print for {markets} yet.",
+    "noneBlocked": "Prints for every switched-on market.",
+    "marketBlocks": "cannot print",
+    "marketPrints": "prints",
+    "marketLanguages": "{market} needs labels in {languages}.",
+    "noMarket": "No market is switched on: the rules are checked for the label alone.",
+    "fix": {
+      "waiting": "Waits for the PPE consultant: nothing to fix here.",
+      "languages": "Translate it: Languages",
+      "marking": "Go to Kind and marking",
+      "layout": "Go to the layout",
+      "markets": "Rules & markets › Markets",
+      "operators": "Rules & markets › Operators",
+      "style": "On the style or its certificate.",
+      "gates": "Open the rule in Rules & markets",
+      "switch": "Switched off: Rules & markets",
+      "composition": "Compare with the BOM",
+      "care": "Go to the care symbols"
+    }
+  },
+  "rule": {
+    "ceMarking": "CE marking",
+    "classWarnings": "Class warnings",
+    "gloveMarking": "Glove marking",
+    "gpsr": "GPSR identifier and contact",
+    "qrCode": "QR to the declaration"
+  },
+  "outcome": {
+    "PASS": "Passes.",
+    "FAIL": "Fails: fix it before the label prints.",
+    "WARN": "Passes with a note.",
+    "WAITING": "Waits for an outside yes.",
+    "UNKNOWN": "Not known yet: it holds the print until it is.",
+    "NOT_APPLICABLE": "Does not apply to this label."
+  },
+  "textile": {
+    "title": "Textile, leather and origin",
+    "failed": "Could not read the textile checks",
+    "read": "Of {style} revision {revision}.",
+    "composition": "Composition",
+    "fibreNames": "Fibre names",
+    "animalOrigin": "Animal-origin phrase",
+    "textileShare": "Textile share",
+    "careLabel": "Care label",
+    "madeInItaly": "Made in Italy",
+    "leatherNaming": "Leather naming"
+  },
+  "textileOutcome": {
+    "PASS": "Passes.",
+    "FAIL": "Fails.",
+    "WARN": "Passes with a note.",
+    "UNKNOWN": "Not known yet.",
+    "NOT_APPLICABLE": "Does not apply.",
+    "OFF": "Switched off for the factory."
+  },
+  "languages": {
+    "title": "Languages",
+    "intro": "Each phrase the label prints, with its approved words in every language the label prints and every language a switched-on market needs.",
+    "rule": "A missing translation of a warning, or a language the label does not print, blocks printing for the markets that need that language. Care and animal-origin words print from the label itself: Fill from the library copies the approved words into a draft.",
+    "fill": "Fill from the library",
+    "fillN_one": "Fill {count} text from the library",
+    "fillN_other": "Fill {count} texts from the library",
+    "columns": "The languages",
+    "onLabel": "on the label",
+    "notOnLabel": "not on the label",
+    "notOnLabelShort": "missing",
+    "neededBy": "needed by {markets}",
+    "neededByNone": "no switched-on market needs it",
+    "blocked": "The label cannot print for {markets}",
+    "blockedLanguage": "A market needs a language the label does not print: add it in a new revision.",
+    "blockedPhrase": "A warning has no approved words in a language a market needs: translate it and have it approved.",
+    "noneBlocked": "Nothing here keeps the label from printing.",
+    "checksFailed": "Could not read what the label must say",
+    "failed": "Could not read the phrase library",
+    "table": "Phrases and their languages",
+    "count_one": "{count} phrase",
+    "count_other": "{count} phrases",
+    "col": {
+      "phrase": "Phrase",
+      "actions": "Actions"
+    },
+    "translate": "Translate…",
+    "translateRow": "Translate {phrase}",
+    "bulkApprove_one": "Approve {count} translation",
+    "bulkApprove_other": "Approve {count} translations",
+    "empty": "The label prints no phrase from the library",
+    "emptyBody": "No class warning, animal-origin phrase or care symbol yet."
+  },
+  "row": {
+    "WARNING": "Warning {key}",
+    "ANIMAL_ORIGIN": "Animal-origin phrase",
+    "CARE": "Care: {symbol}",
+    "CLAIM": "Origin claim"
+  },
+  "cell": {
+    "SOURCE": "Source",
+    "APPROVED": "Approved",
+    "PROPOSED": "Waiting approval",
+    "STALE": "Out of date",
+    "MISSING": "Missing ✕",
+    "NOT_IN_LIBRARY": "Not in the library",
+    "notInLibraryKey": "{key} · not in the library",
+    "blocks": "Blocks {markets}",
+    "proposal": "Proposed: {text}",
+    "labelSays": "The label says: {text}"
+  },
+  "translate": {
+    "title": "Translate: {phrase}",
+    "source": "Source ({language}):",
+    "intro": "A proposal is saved when you leave its field and waits for a second person. Approving is explicit.",
+    "approved": "Prints:",
+    "propose": "Propose words",
+    "change": "Change the waiting proposal",
+    "hint": "Saved when you leave the field.",
+    "waiting": "Proposed by {name}: waits for a second person.",
+    "saving": "Saving…",
+    "approve": "Approve"
+  },
+  "artwork": {
+    "title": "Proofs",
+    "introApproved": "The approved proof prints; a new one waits for a second person.",
+    "introNone": "No proof is approved yet: where a requirement asks for approved artwork, the label does not print.",
+    "add": "Add a proof",
+    "send": "Send to the brand",
+    "empty": "No proof yet",
+    "emptyBody": "Add the label's proof as a PDF or a picture: a second person approves it.",
+    "emptyBodyView": "A person who keeps labels adds the proof.",
+    "version": "Proof v{n}",
+    "prints": "prints now",
+    "open": "Open ↗",
+    "openN": "Open proof v{n} in a new tab",
+    "noFile": "The proof's file can no longer be read",
+    "madeBy": "made by {name}, {time}",
+    "byYou": "yours",
+    "approvedBy": "Approved by {name}, {time}.",
+    "approve": "Approve…",
+    "retire": "Retire…",
+    "remove": "Remove draft",
+    "failed": "Could not read the proofs",
+    "workOrders": "Work orders and their proof",
+    "workOrdersIntro": "Each work order released with this revision follows the proof in force at its first print: reprints use the same.",
+    "noWorkOrders": "No work order is released with this revision yet.",
+    "notPrinted": "Not printed yet",
+    "followsNone": "None was approved then",
+    "followsLater": "Decided at its first print",
+    "col": {
+      "workOrder": "Work order",
+      "firstPrint": "First print",
+      "follows": "Follows"
+    },
+    "problem": {
+      "type": "A proof is a PDF or a picture (PNG, JPEG, WebP).",
+      "size": "A proof is at most 25 MB.",
+      "read": "Could not read the file."
+    }
+  },
+  "artworkStatus": {
+    "DRAFT": "Waiting approval",
+    "APPROVED": "Approved",
+    "RETIRED": "Retired"
+  },
+  "signoff": {
+    "title": "Approval",
+    "made": "Proof made",
+    "madeRole": "Keeps labels",
+    "approved": "Approved by a second person",
+    "approvedRole": "Approves label artwork",
+    "whoMay": "A person who approves label artwork, other than its author",
+    "retiredUnapproved": "Retired without approval.",
+    "ruleYours": "You made this proof: someone else approves it.",
+    "ruleOk": "Made by someone else.",
+    "brand": "Approved by the brand",
+    "brandRole": "The brand (B2B)"
+  },
+  "approve": {
+    "title": "Approve proof v{n} of {code} r{revision}",
+    "confirm": "Approve proof",
+    "proofLoading": "Reading the proof…",
+    "proofFailed": "Could not read the proof",
+    "picture": "Proof v{n}",
+    "note": "Note from {name}:",
+    "comment": "Comment (optional)",
+    "commentHint": "Kept with the approval.",
+    "replaces": "The proof approved now (v{n}) is retired with this approval: one proof prints per label revision.",
+    "first": "It becomes the proof the label prints."
+  },
+  "add": {
+    "title": "Add a proof to {code} r{revision}",
+    "intro": "The proof is kept as a file of this label and waits for a second person's approval.",
+    "hint": "A PDF or a picture, at most 25 MB.",
+    "size": "{kb} KB",
+    "note": "Note (optional)",
+    "noteHint": "What changed, for the person who approves it.",
+    "confirm": "Add proof"
+  },
+  "retireProof": {
+    "title": "Retire proof v{n}",
+    "approved": "It no longer prints: until another is approved, the label has no approved proof. Work orders that printed with it keep it.",
+    "draft": "It goes out of the way and is kept on record.",
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept with the proof.",
+    "confirm": "Retire proof"
+  },
+  "held": {
+    "busy": "Wait: the last change is being saved.",
+    "brandLater": "Brand approval through the portal comes later; record the brand's written yes in the proof's note.",
+    "noFile": "The proof's file can no longer be read.",
+    "noOperator": "No economic operator row names the manufacturer: add one in Rules & markets › Operators.",
+    "sameContact": "The contact already says this.",
+    "nothingComputed": "The BOM gave no part with fibres.",
+    "sameComposition": "The label already says this.",
+    "nothingToApprove": "None of the selected phrases has a proposal you may approve.",
+    "rowNothingToApprove": "No proposal here that you may approve.",
+    "nothingToFill": "The label already holds the library's approved words.",
+    "notInLibrary": "This phrase is not in the library: add it in Rules & markets › Phrases.",
+    "frozen": "Active labels are never edited: a change is a new revision.",
+    "manage": "You do not keep labels.",
+    "upload": "You do not upload files.",
+    "labelRetired": "The label is retired.",
+    "notDraft": "Only a proof waiting approval is approved.",
+    "ownProof": "You made this proof: a second person approves it.",
+    "approveOther": "It cannot be approved now.",
+    "approveRight": "You do not approve label artwork.",
+    "retired": "It is retired already.",
+    "kept": "Approved and retired proofs are kept, never removed.",
+    "pickFile": "Pick the proof's file first.",
+    "phrasesManage": "You do not keep the phrase library.",
+    "phrasesApprove": "You do not approve translations.",
+    "ownProposal": "You proposed it: someone else approves it.",
+    "noProposal": "No proposal is waiting.",
+    "source": "This is the phrase's own language."
+  },
+  "problem": {
+    "conflict": "Someone changed it meanwhile: read again and retry.",
+    "invalid": "Not saved: something in it is not valid.",
+    "forbidden": "You may not do this.",
+    "failed": "Not saved. Try again.",
+    "proposeFailed": "The proposal was not saved.",
+    "approveFailed": "The approval was not saved."
+  },
+  "depth": {
+    "needStyle": "No style names this label yet: the rules are checked for a style.",
+    "done": {
+      "approvedTranslations_one": "{count} translation approved.",
+      "approvedTranslations_other": "{count} translations approved.",
+      "filled_one": "{count} text filled from the library: Save to keep it.",
+      "filled_other": "{count} texts filled from the library: Save to keep them.",
+      "proofAdded": "Proof v{n} added: it waits for a second person.",
+      "proofApproved": "Proof v{n} approved: it prints now.",
+      "proofRetired": "Proof v{n} retired.",
+      "proofRemoved": "Draft proof v{n} removed."
+    },
+    "notice": {
+      "proofFailed": "Could not open the proof."
+    }
+  },
+  "styleComposition": {
+    "title": "Composition computed from the BOM",
+    "intro": "Revision {revision}, size {size}: the fibres of each part in their official names.",
+    "openLabel": "Open the label",
+    "label": "Label {code} r{revision} prints what is typed on it: compare it in Labels & marking.",
+    "noLabel": "The revision names no label yet.",
+    "loading": "Computing the composition…",
+    "retry": "Try again"
+  }
+}
