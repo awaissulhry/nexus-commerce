@@ -170,6 +170,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-147 Plant › PPE for workers (SCR-211): a PPE issue (any line id names its receipt) opens its receipt tab, an item its dialog.
   PpeIssue: '/plant/ppe/receipt?receipt=[id]',
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
+  // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
+  WorkInstruction: '/production/instructions/[id]',
 })
 
 /**
@@ -309,6 +311,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/risk/assessments': '/plant/risk',
   '/safety/risk/measures': '/plant/risk',
   '/safety/rolesheets': '/plant/risk',
+  // B-W2b-234: the work instructions (SCR-141).
+  '/production/instructions': '/production/instructions',
 })
 
 export interface RecordRef {

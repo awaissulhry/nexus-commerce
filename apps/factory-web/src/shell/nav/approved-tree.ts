@@ -304,6 +304,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' },
           // W2b: B-W2b-58 Help calls (SCR-142).
           { id: 'production.calls', title: 'Help calls', titleIt: 'Chiamate di aiuto', wave: 'W2b', href: '/production/calls' },
+          // W2b: B-W2b-234 Work instructions (SCR-141).
+          { id: 'production.instructions', title: 'Work instructions', titleIt: 'Istruzioni di lavoro', wave: 'W2b', href: '/production/instructions' },
         ],
       },
       {
