@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Select, Spinner } from '@nexus/ui/primitives'
@@ -19,8 +20,15 @@ export function MadeText({ made }: { made: { cut: { bundles: number; pieces: num
   return <span>{t('impact.made', { cut: made.cut.bundles, cutPieces: made.cut.pieces, worked: made.worked.bundles, workedPieces: made.worked.pieces })}</span>
 }
 
-/** The open quotes and orders whose lines are on another revision than the one in force (B-W2b-220's drift). */
-export function DriftTable({ drift, onRetry }: { drift: DriftPart | null; onRetry?: () => void }) {
+/** One drift row of B-W2b-220's read. */
+export type DriftRow = StyleDriftView['rows'][number]
+
+/**
+ * The open quotes and orders whose lines are on another revision than the one in force (B-W2b-220's drift). B-W2b-245 (the
+ * style's Versions & changes, "Orders on older revisions"): `hrefOf` opens each record, `extra` adds one column (the cost
+ * difference, drawn by the caller with its grain).
+ */
+export function DriftTable({ drift, onRetry, hrefOf, extra }: { drift: DriftPart | null; onRetry?: () => void; hrefOf?: (row: DriftRow) => string | null; extra?: { label: string; cell: (row: DriftRow) => ReactNode } }) {
   const { t } = useWords()
   if (!drift) return null
   if (drift.problem)
@@ -53,20 +61,31 @@ export function DriftTable({ drift, onRetry }: { drift: DriftPart | null; onRetr
       ) : (
         <SummaryTable
           label={t('impact.drift')}
-          columns={[t('impact.col.record'), t('impact.col.line'), t('impact.col.pieces'), t('impact.col.revision'), t('impact.col.differs')]}
-          align={['left', 'left', 'right', 'left', 'left']}
-          widths={['24%', '16%', '10%', '18%', undefined]}
+          columns={[t('impact.col.record'), t('impact.col.line'), t('impact.col.pieces'), t('impact.col.revision'), t('impact.col.differs'), ...(extra ? [extra.label] : [])]}
+          align={['left', 'left', 'right', 'left', 'left', ...(extra ? (['right'] as const) : [])]}
+          widths={['24%', '16%', '10%', '18%', undefined, ...(extra ? ['16%'] : [])]}
           stackOnPhone
-          rows={rows.map((row) => ({
-            id: `${row.documentId}-${row.lineId}`,
-            cells: [
-              `${t(`document.${row.kind}`)} ${row.number}`,
-              [String(row.seq), row.colourway].filter(Boolean).join(' · '),
-              String(row.pieces),
-              row.revision && row.against ? t('impact.revisionMove', { from: row.revision.revision, to: row.against.revision }) : '—',
-              row.differs.length === 0 ? t('impact.same') : row.differs.map((entry) => t(`section.${entry.section}`)).join(', '),
-            ],
-          }))}
+          rows={rows.map((row) => {
+            const record = `${t(`document.${row.kind}`)} ${row.number}`
+            const href = hrefOf?.(row) ?? null
+            return {
+              id: `${row.documentId}-${row.lineId}`,
+              cells: [
+                href ? (
+                  <Link className="fw-chg-link fw-chg-code" href={href}>
+                    {record}
+                  </Link>
+                ) : (
+                  record
+                ),
+                [String(row.seq), row.colourway].filter(Boolean).join(' · '),
+                String(row.pieces),
+                row.revision && row.against ? t('impact.revisionMove', { from: row.revision.revision, to: row.against.revision }) : '—',
+                row.differs.length === 0 ? t('impact.same') : row.differs.map((entry) => t(`section.${entry.section}`)).join(', '),
+                ...(extra ? [extra.cell(row)] : []),
+              ],
+            }
+          })}
         />
       )}
       {drift.value.held.length > 0 && <p className="fw-chg-hint">{t('impact.held', { kinds: drift.value.held.map((kind) => t(`document.${kind}`)).join(', ') })}</p>}

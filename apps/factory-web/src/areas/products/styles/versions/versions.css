@@ -1,0 +1,129 @@
+/* B-W2b-245 — Style › Versions & changes, Compare revisions, the Release modal on the gate (layout only; DS tokens). */
+
+.fw-ver-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The two revisions compared: From · ⇄ · To, side by side; stacked on a phone. */
+.fw-ver-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: end;
+  max-width: 720px;
+}
+
+@media (max-width: 520px) {
+  .fw-ver-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A release check item: its name and state, what it checks, its findings. */
+.fw-ver-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-ver-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* The completeness meter: label, bar, what is open. */
+.fw-ver-score {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  gap: var(--nds-space-10);
+  align-items: center;
+}
+
+@media (max-width: 520px) {
+  .fw-ver-score {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-ver-score-label {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The colourways and sizes a release takes. */
+.fw-ver-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-ver-scope-now {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The work order's spec parts (frozen card, size run, the pop-ups). */
+.fw-ver-spec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The work order's parts live outside the style studio's stylesheet: their own text and stacks. */
+.fw-ver-stack,
+.fw-ver-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ver-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ver-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ver-list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-ver-link {
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+}
+
+.fw-ver-link:hover,
+.fw-ver-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-ver-text {
+  margin: 0;
+  color: var(--nds-text-strong);
+}

@@ -308,7 +308,8 @@
     },
     "CELLS": {
       "OK": "{cells} celle taglia da produrre.",
-      "BLOCKED": "Alcune taglie non sono più nel modello."
+      "BLOCKED": "Alcune taglie non sono più nel modello.",
+      "scope": "Alcune celle aspettano un rilascio successivo della revisione del modello."
     },
     "DEPOSIT": {
       "OK": "L'acconto di ogni ordine è pagato o condonato.",
@@ -334,6 +335,7 @@
     "certificate": "{cell}: nessun certificato valido la copre oggi",
     "bom": "{cell}: la distinta non la copre",
     "size": "{cell}: la taglia non è più nel modello",
+    "scope": "{cell}: non ancora rilasciata — rilascia di più la revisione (Prodotti › Modelli › Versioni e modifiche), oppure toglila dall'ordine di lavoro",
     "deposit": "{order} attende l'acconto",
     "material": {
       "short": "{material}: mancano {short} {uom} (servono {needed}, disponibili {available})",
