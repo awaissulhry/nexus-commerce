@@ -202,6 +202,8 @@ describe('the rider sends measurements', { timeout: SLOW_TEST_TIMEOUT_MS }, () =
     expect(answer.statusCode, answer.body).toBe(201)
     const sent = (answer.json() as Json).sent
     expect(sent).toMatchObject({ profileId: revisionIdFor(linkId), revision: 3, photos: 3 })
+    // B-W2b-248: the JACKET template's made-to-measure rules are off (as built): nothing was checked.
+    expect((answer.json() as Json).checks).toEqual({ on: false, warnings: [] })
     // A MEASUREMENTS link has one use: once sent it opens nothing, a repeat of the same send included (the uniform 404).
     const replay = await linkCall(token, 'POST', '/link/measure', form({ FRONT: front, SIDE: side, BACK: back }, noticeId), idempotencyKey)
     expect(replay.statusCode).toBe(404)
@@ -254,5 +256,32 @@ describe('the office sees who sent what, and the photos go', { timeout: SLOW_TES
 
   it('REFUSES clearing the day (the database moves it, never clears it)', async () => {
     await expect(admin(`UPDATE "MeasurementProfile" SET "photosDeleteAfter" = NULL WHERE id = $1`, [revisionIdFor(linkId)])).rejects.toThrow(/moved, never cleared/)
+  })
+})
+
+describe('B-W2b-248: the template’s made-to-measure rules on the send (PRD-201)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('once they are on, a broken BLOCK rule refuses the send at its point in the rider’s words; a WARN rule goes with the revision', async () => {
+    const made = await post(office, '/sales/measure-links', { profileId: seeded.profileId, companyId: companyA, send: false, photos: 'OPTIONAL' })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const fresh = tokenOf(made.body.url)
+    expect((await linkCall(fresh, 'POST', '/link/measure/notice', { noticeId })).statusCode).toBe(200)
+    const template = await one<{ id: string }>(`SELECT id FROM "MeasurementTemplate" WHERE "tenantId" = $1 AND code = 'JACKET'`, [T])
+    const points = await admin<{ id: string; code: string }>(`SELECT id, code FROM "MeasurementPoint" WHERE "templateId" = $1`, [template.id])
+    const pointId = (code: string) => points.find((point) => point.code === code)!.id
+    await admin(`INSERT INTO "MeasurementRule" (id, "tenantId", "templateId", code, kind, "pointId", "maxValue", severity, "messageI18n") VALUES ($1, $2, $3, 'CHEST_RANGE', 'RANGE', $4, 130, 'BLOCK', $5)`, [newId(), T, template.id, pointId('chest'), { it: 'Il torace non sembra giusto: misuralo di nuovo', en: 'The chest does not look right: measure it again' }])
+    await admin(`INSERT INTO "MeasurementRule" (id, "tenantId", "templateId", code, kind, "pointId", "otherPointId", "minFactor", "maxFactor", severity, "messageI18n") VALUES ($1, $2, $3, 'WAIST_TO_CHEST', 'RATIO', $4, $5, 0.6, 0.8, 'WARN', $6)`, [newId(), T, template.id, pointId('waist'), pointId('chest'), { it: 'Vita e torace non tornano', en: 'Waist and chest do not match' }])
+    await admin(`UPDATE "MeasurementTemplate" SET "rulesOn" = true WHERE id = $1`, [template.id])
+    const linkRow = { id: made.body.link.id as string }
+
+    const blocked = await linkCall(fresh, 'POST', '/link/measure', form({}, noticeId))
+    expect(blocked.statusCode, blocked.body).toBe(400)
+    expect((blocked.json() as Json).error.issues).toEqual([{ path: 'body/values/chest', message: 'Il torace non sembra giusto: misuralo di nuovo' }])
+    expect((await one(`SELECT uses FROM "OneOffLink" WHERE id = $1`, [linkRow.id])).uses).toBe(0)
+
+    const sent = await linkCall(fresh, 'POST', '/link/measure', { ...form({}, noticeId), values: { chest: '100', waist: '86', sleeve: '64.5' } })
+    expect(sent.statusCode, sent.body).toBe(201)
+    expect((sent.json() as Json).checks).toEqual({ on: true, warnings: [{ code: 'WAIST_TO_CHEST', pointCode: 'waist', message: 'Vita e torace non tornano' }] })
+    const audit = await one(`SELECT "after" FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'MeasurementProfile' AND "recordId" = $2`, [T, revisionIdFor(linkRow.id)])
+    expect(audit.after).toMatchObject({ mtmWarnings: ['WAIST_TO_CHEST'] })
   })
 })

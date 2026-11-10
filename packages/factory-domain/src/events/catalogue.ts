@@ -188,6 +188,8 @@ import { events as complianceLabelArtwork } from '../compliance-label-artwork/ev
 import { events as productImages } from '../product-images/events'
 // B-W2b-263: Time & action (order_gate.changed).
 import { events as planningMilestones } from '../planning-milestones/events'
+// B-W2b-248: made-to-measure rules.
+import { events as productMtm } from '../product-mtm/events'
 // B-W2b-264: sourcing & claims (a claim drafted, approved, withdrawn or replaced; a use recorded or ended; evidence expired).
 import { events as complianceClaims } from '../compliance-claims/events'
 import type { EventDefinition } from './define'
@@ -445,6 +447,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productImages,
   // B-W2b-263
   ...planningMilestones,
+  // B-W2b-248
+  ...productMtm,
   // B-W2b-264
   ...complianceClaims] as const satisfies readonly EventDefinition[]
 

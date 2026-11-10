@@ -71,7 +71,14 @@ export const sendBody = input({
 })
 export const sendContract = defineContract({
   body: sendBody,
-  response: { 201: output({ sent: output({ profileId: id(), revision: z.number().int(), at, photos: z.number().int() }), link: output({ usesLeft: z.number().int() }) }) },
+  response: {
+    201: output({
+      sent: output({ profileId: id(), revision: z.number().int(), at, photos: z.number().int() }),
+      link: output({ usesLeft: z.number().int() }),
+      // B-W2b-248: the template's made-to-measure rules (on: checked); the broken WARN rules in the rider's language.
+      checks: output({ on: z.boolean(), warnings: z.array(output({ code: z.string(), pointCode: z.string(), message: z.string() })) }),
+    }),
+  },
 })
 
 // ---- the office ---------------------------------------------------------------------------------------------------------
