@@ -10,6 +10,7 @@ import { Modal, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'
+import { InstructionsTile } from '../instructions-tile'
 import type { Locale } from '../../../../lib/i18n/locales'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
@@ -87,6 +88,8 @@ export interface MyWorkViewModel {
   messagesAsOf?: string | null
   /** The messages could not be read, and none are kept. */
   messagesFailed?: boolean
+  /** B-W2b-232 (FI9:02): the instruction versions waiting for this person's Seen ("New instructions N"; 0 or absent: hidden). */
+  instructions?: number
   /** Why Call for help: Material cannot go now; null: one tap sends it. */
   helpHeld?: HelpHeld | null
   /** The call just sent from here. */
@@ -142,6 +145,8 @@ export type MyWorkAction =
   | { type: 'reason'; action: ReasonPickerAction }
   | { type: 'reasonDone' }
   | { type: 'messages' }
+  // B-W2b-232
+  | { type: 'instructions' }
   | { type: 'message'; id: string }
   | { type: 'help' }
   | { type: 'repair' }
@@ -309,8 +314,10 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
   const repairCount = repairTile(model.repair ?? null)
   // B-W2b-109: my inspections' tile (hidden at zero), what waits for me or for nobody yet.
   const inspectionCount = model.inspections?.queue?.rows.length ?? 0
+  // B-W2b-232 (FI9:02): "New instructions N", the second tile, counted in the condition.
+  const instructionCount = model.instructions ?? 0
   const forYourWork =
-    unread > 0 || repairCount || inspectionCount > 0 ? (
+    unread > 0 || instructionCount > 0 || repairCount || inspectionCount > 0 ? (
       // Design "For your work": a count as a chip, hidden at zero. "New instructions" joins it with W2b-4.
       <section className="fw-floor-stack fw-mywork-foryou" aria-labelledby="fw-mywork-foryou">
         <h2 id="fw-mywork-foryou" className="fw-floor-section-title">
@@ -318,6 +325,7 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
         </h2>
         <FloorTileGrid label={t('foryou.title')} columns={2}>
           {unread > 0 ? <FloorTile icon={<MessageSquareText />} label={t('foryou.messages')} count={formatNumber(unread, locale)} countLabel={t('foryou.messagesCount', { count: unread })} tone="primary" onPress={() => send({ type: 'messages' })} /> : null}
+          <InstructionsTile count={instructionCount} onPress={() => send({ type: 'instructions' })} />
           {repairCount ? (
             <FloorTile
               icon={<Wrench />}

@@ -1,0 +1,235 @@
+{
+  "title": "Spec & instructions",
+  "asOf": "From this tablet, as of {time}",
+  "opShort": "Op {seq}",
+  "action": {
+    "home": "Home",
+    "scanAnother": "Another bundle",
+    "back": "Back",
+    "backToBundle": "Back to the bundle",
+    "backToInstruction": "Instruction",
+    "problem": "Spec problem",
+    "seen": "Seen",
+    "send": "Send"
+  },
+  "noPermission": {
+    "title": "Not open for you",
+    "body": "Instructions open for people who report work at this station. Ask your team leader."
+  },
+  "open": {
+    "title": "For this work",
+    "scan": "Scan the bundle's ticket",
+    "hint": "The instruction of its operation and the spec for its size open",
+    "prompt": "Scan a bundle at {operation} to see version {n}.",
+    "paper": "A work order's page or a printed instruction: scan the bundle's ticket instead. The size is the bundle's, and the screen always shows the version in force.",
+    "offline": "No network: a bundle opened on this tablet before still opens, as of then.",
+    "inHand": "Your work on this tablet",
+    "state": {
+      "running": "Running",
+      "paused": "Paused"
+    },
+    "due": "New for you",
+    "dueMeta": "{number} · version {n} · {date}",
+    "dueCount": "{count} waiting for your Seen",
+    "workOrder": "{what} {code}: a work order has many sizes. Scan a bundle's ticket.",
+    "wrongLabel": "{what} {code}: this screen opens a bundle's ticket."
+  },
+  "due": {
+    "FIRST": "First time",
+    "CHANGED": "Changed"
+  },
+  "keys": {
+    "open": "Open the row",
+    "next": "Next step",
+    "prev": "Previous step",
+    "back": "Back"
+  },
+  "loading": {
+    "title": "Opening the instruction"
+  },
+  "notOnTablet": {
+    "title": "Not on this tablet",
+    "body": "{code} was not opened here before the network went. It opens when the network is back."
+  },
+  "failed": {
+    "refused": "This bundle has no operation to show here. Ask your team leader.",
+    "notFound": {
+      "title": "Bundle not found here",
+      "body": "{code} is not a bundle of this site. Check the ticket."
+    }
+  },
+  "card": {
+    "version": "Version {n}",
+    "noInstruction": "No instruction",
+    "changeNote": "What changed: {note}"
+  },
+  "head": {
+    "bundle": "Bundle {code}",
+    "since": "in force since {date}",
+    "seenOn": "you saw it on {date}",
+    "due": {
+      "FIRST": "First time",
+      "CHANGED": "New"
+    }
+  },
+  "tabs": {
+    "label": "What to show",
+    "steps": "How to do it",
+    "spec": "Spec for this size"
+  },
+  "none": {
+    "title": "No instruction yet",
+    "body": "{operation} has no published instruction. The spec for this size is on the other tab."
+  },
+  "steps": {
+    "of": "Step {n} of {count}",
+    "critical": "Critical point",
+    "zoom": "Zoom",
+    "zoomOpen": "Open the photo full screen",
+    "mediaLoading": "Loading the picture…",
+    "mediaOffline": "The picture is not on this tablet: it shows when the network is back.",
+    "mediaFailed": "The picture could not be opened. The words below still hold.",
+    "mediaPick": "Pictures of this step",
+    "photoN": "Photo {n}",
+    "videoN": "Video {n}",
+    "otherLanguage": "Not written in your language yet: shown in another one.",
+    "tick": "Tick this step on the Operation screen before Finish.",
+    "prev": "Previous",
+    "next": "Next",
+    "firstHeld": "This is the first step",
+    "lastHeld": "This is the last step",
+    "strip": "Steps",
+    "stripShown": "Step {n}, looked at",
+    "stripNot": "Step {n}, not looked at yet",
+    "shownCount": "{seen} of {count} steps looked at"
+  },
+  "seen": {
+    "held": "Look at every step first: {seen} of {count}",
+    "busy": "Saving…",
+    "done": "Seen: thank you.",
+    "failed": "Seen was not saved: the office did not take it. Tap Seen again."
+  },
+  "zoom": {
+    "title": "Photo",
+    "in": "Bigger",
+    "out": "Smaller",
+    "level": "{percent} %",
+    "mostHeld": "This is the biggest",
+    "leastHeld": "This is the whole photo",
+    "close": "Close",
+    "area": "The photo: move it with a finger"
+  },
+  "spec": {
+    "notKept": "The spec for this size is not on this tablet: it shows when the network is back.",
+    "failed": "The spec for this size could not be read. Try again in a moment.",
+    "factsTitle": "This work order",
+    "fact": {
+      "workOrder": "Work order",
+      "style": "Style",
+      "revision": "Spec revision",
+      "colourway": "Colourway",
+      "size": "Size",
+      "bundle": "Bundle",
+      "label": "Label",
+      "ppe": "PPE"
+    },
+    "revision": "Revision {n}",
+    "noRevision": "No revision chosen",
+    "frozen": "Frozen at release, {date}",
+    "pieces": "{count} pieces",
+    "labelValue": "{code} · revision {n}",
+    "noLabel": "No label set",
+    "measuresTitle": "Measures for size {size}",
+    "col": {
+      "point": "Point",
+      "value": "Measure",
+      "placement": "Where",
+      "material": "Material",
+      "colour": "Colour",
+      "perGarment": "Per garment"
+    },
+    "noMeasures": "No measures are written for this size.",
+    "measuresNote": "The size's own measures. Ask your team leader for a garment measure not listed here.",
+    "materialsTitle": "Materials per garment",
+    "noMaterials": "No materials are planned for this bundle's size.",
+    "settingsTitle": "Machine settings",
+    "setting": {
+      "machine": "Machine",
+      "stitchType": "Stitch",
+      "needle": "Needle",
+      "thread": "Thread",
+      "stitchesPerCm": "Stitches per cm",
+      "tension": "Tension",
+      "foot": "Foot",
+      "notes": "Notes"
+    },
+    "routeTitle": "The operations of this work order",
+    "here": "You are here",
+    "pdfNote": "The full spec pages with the label positions are the tech pack's: the office prints them.",
+    "banner": {
+      "title": "Spec changed",
+      "newer": "Revision {newer} of this spec is out. This work order is made to revision {pinned}: keep to revision {pinned} until the office decides.",
+      "withdrawn": "Revision {pinned} of this spec was withdrawn. Keep to the pages you have and ask the office before going on.",
+      "decided": {
+        "FINISH_OLD": "Decided ({changeOrder}): finish this work order on revision {pinned}, as these pages show.",
+        "REWORK": "Decided ({changeOrder}): rework to revision {newer}. The new pages apply.",
+        "SCRAP": "Decided ({changeOrder}): the work in progress is scrapped. Stop and ask your team leader.",
+        "HOLD": "Decided ({changeOrder}): the work order is held. Stop and ask your team leader."
+      },
+      "newPages": "The new pages are not on this tablet yet: ask your team leader for them."
+    }
+  },
+  "problem": {
+    "title": "Spec problem",
+    "question": "What is wrong?",
+    "kind": {
+      "WRONG_MEASUREMENT": "Wrong measurement",
+      "UNCLEAR": "Unclear instruction",
+      "MATERIAL_DIFFERS": "Material differs",
+      "OTHER": "Something else"
+    },
+    "faces": "A photo of the spec or the piece only: keep faces out of the picture.",
+    "photo": "Photo of the problem",
+    "photoOptional": "Add a photo (if it helps)",
+    "photoOffline": "A photo needs the network: send without it, the report is saved on this tablet",
+    "drop": "Take off {name}",
+    "words": "A few words (if they help)",
+    "detail": "Say in a few words what is wrong.",
+    "offline": "No network: the report is saved on this tablet and goes when the network is back.",
+    "linked": "It goes to the office with this work order, operation and bundle. Your name is not on it.",
+    "held": {
+      "tile": "Tap what is wrong first",
+      "detail": "Say in a few words what is wrong",
+      "busy": "Sending…"
+    }
+  },
+  "sent": {
+    "title": "Spec problem sent",
+    "body": "The office sees it on work order {number}, operation {seq}.",
+    "photo": {
+      "waiting": "The photo goes up as soon as the office has the report.",
+      "sending": "Sending the photo…",
+      "sent": "Photo sent.",
+      "failed": "The photo did not go up. The report itself is there."
+    },
+    "next": "Keep working to the spec you have until the office answers.",
+    "notSent": "Spec problem not sent",
+    "failed": "The office did not take it. Go back and report it again, or tell your team leader."
+  },
+  "refusal": {
+    "NOT_PUBLISHED": "This version is no longer the one shown on the floor. Open the instruction again.",
+    "CLIENT_ID_REUSED": "This tap was sent before with other details. Try again."
+  },
+  "op": {
+    "instructions": "Instructions",
+    "instructionsNew": "Instructions · New",
+    "new": {
+      "FIRST": "Instruction for this operation: version {n}. It opens before Start: look at it once.",
+      "CHANGED": "New instruction: version {n}. It opens before Start."
+    }
+  },
+  "mywork": {
+    "tile": "New instructions",
+    "tileCount": "{count} waiting for your Seen"
+  }
+}

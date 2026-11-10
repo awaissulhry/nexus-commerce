@@ -201,7 +201,8 @@ export function fetchCheck(api: ApiClient, code: string, operationId: string, co
 }
 
 const stepsSchema = z.object({
-  steps: z.array(z.object({ code: z.string(), words: z.string(), required: z.boolean(), tick: z.object({ outcome: z.enum(['DONE', 'NOT_APPLICABLE']), at: z.string(), mine: z.boolean(), by: z.string().nullable() }).nullable() })),
+  // B-W2b-232 (FI9:01): each step's icon and critical point (B-W2b-214's WI1:02; optional: typed lines have none).
+  steps: z.array(z.object({ code: z.string(), words: z.string(), required: z.boolean(), tick: z.object({ outcome: z.enum(['DONE', 'NOT_APPLICABLE']), at: z.string(), mine: z.boolean(), by: z.string().nullable() }).nullable(), icon: z.string().nullable().optional(), critical: z.boolean().optional() })),
   open: z.number(),
 }) satisfies z.ZodType<OperationSteps>
 

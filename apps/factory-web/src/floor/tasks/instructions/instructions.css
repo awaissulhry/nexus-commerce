@@ -1,0 +1,390 @@
+/*
+ * SCR-174 Spec & instructions (B-W2b-232): layout only, semantic --nds-* tokens, sized by the floor density. The one-job content
+ * stays centred inside the floor frame (plan §10, the Owner rule's floor exception); nothing sets a page max-width.
+ */
+
+.fw-fi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+.fw-fi-op {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-primary);
+  font-size: calc(var(--nds-density-font-body) * 1.25);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+
+.fw-fi-change {
+  overflow-wrap: anywhere;
+}
+
+/* ── the head: the operation big, the facts in one line, the version and "New" ────────────────────────────────── */
+.fw-fi-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-fi-head-icon {
+  display: inline-flex;
+  color: var(--nds-primary);
+}
+.fw-fi-head-icon > svg {
+  inline-size: calc(var(--nds-density-icon) * 1.4);
+  block-size: calc(var(--nds-density-icon) * 1.4);
+}
+.fw-fi-head-text {
+  display: flex;
+  flex: 1 1 18em;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-fi-head-facts {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+}
+.fw-fi-head-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.fw-fi-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.fw-fi-new > svg {
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+/* ── How to do it / Spec for this size / Spec problem: big buttons side by side (a phone: one under the other) ───── */
+.fw-fi-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── Spec changed (PRD-195): a floor-size banner, icon + words, its tone by the decision ─────────────────────────── */
+.fw-fi-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-warning);
+  border-inline-start-width: 6px;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.fw-fi-banner[data-tone='danger'] {
+  border-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-fi-banner-title {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-fi-banner .fw-floor-muted {
+  color: inherit;
+}
+
+.fw-fi-seen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+/* ── FloorMediaSteps: one step per screen, picture first ──────────────────────────────────────────────────────────── */
+.fw-fi-step {
+  min-width: 0;
+}
+/* The picture and the words side by side on a tablet, Previous / Next under the picture so they stay in view; one column on a
+   phone: picture, words, then Previous / Next. */
+.fw-fi-step-split {
+  display: grid;
+  grid-template-areas: 'picture' 'text' 'nav';
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+.fw-fi-step-picture {
+  grid-area: picture;
+  min-width: 0;
+}
+.fw-fi-step-text {
+  grid-area: text;
+  min-width: 0;
+}
+.fw-fi-step-nav {
+  grid-area: nav;
+}
+@container nds-floor-frame (min-width: 900px) {
+  .fw-fi-step-split {
+    grid-template-areas: 'picture text' 'nav text';
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: auto 1fr;
+  }
+}
+.fw-fi-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+.fw-fi-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--nds-density-icon) * 1.6);
+  block-size: calc(var(--nds-density-icon) * 1.6);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.fw-fi-step-icon > svg {
+  inline-size: var(--nds-density-icon);
+  block-size: var(--nds-density-icon);
+}
+.fw-fi-step-count {
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-fi-step-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin-inline-start: auto;
+}
+
+.fw-fi-picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 10rem;
+  max-block-size: 44vh;
+  overflow: hidden;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.fw-fi-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.fw-fi-photo:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: calc(var(--nds-density-focus-offset) * -1);
+}
+.fw-fi-photo > img,
+.fw-fi-video {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: 44vh;
+  object-fit: contain;
+}
+.fw-fi-picture-icon {
+  display: inline-flex;
+  color: var(--nds-primary);
+}
+.fw-fi-picture-icon > svg {
+  inline-size: calc(var(--nds-density-icon) * 4);
+  block-size: calc(var(--nds-density-icon) * 4);
+}
+.fw-fi-picture-wait {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: var(--nds-density-pad-x);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-body);
+  text-align: center;
+}
+
+.fw-fi-media-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+.fw-fi-caption {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+}
+.fw-fi-words {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: calc(var(--nds-density-font-body) * 1.25);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.35;
+}
+
+.fw-fi-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* The numbered strip: which steps were on screen (Seen waits for all of them). */
+.fw-fi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fi-strip-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  min-inline-size: var(--nds-density-target-min);
+  min-block-size: var(--nds-density-target-min);
+  padding: 0 var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  font-weight: var(--nds-font-weight-semibold);
+  cursor: pointer;
+}
+.fw-fi-strip-step > svg {
+  inline-size: calc(var(--nds-density-icon) * 0.7);
+  block-size: calc(var(--nds-density-icon) * 0.7);
+}
+.fw-fi-strip-step[data-shown='true'] {
+  border-color: var(--nds-success);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-fi-strip-step[data-current='true'] {
+  border-width: 3px;
+  border-color: var(--nds-primary);
+}
+.fw-fi-strip-step:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+
+/* ── pop:instructions.zoom ────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-fi-zoom-area {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-block-size: 50vh;
+  max-block-size: 70vh;
+  overflow: auto;
+  background: var(--nds-surface-sunken);
+}
+.fw-fi-zoom-area > img {
+  display: block;
+  max-inline-size: none;
+  block-size: auto;
+}
+.fw-fi-zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-target-gap, var(--nds-space-12));
+  inline-size: 100%;
+}
+.fw-fi-zoom-bar > .grow {
+  flex: 1 1 auto;
+}
+.fw-fi-zoom-level {
+  min-inline-size: 4em;
+  font-weight: var(--nds-font-weight-semibold);
+  text-align: center;
+}
+
+/* ── Spec for this size ───────────────────────────────────────────────────────────────────────────────────────────── */
+/* Tables at floor size (the DS SummaryTable keeps the console's size): the measures big, as the design asks. */
+.fw-fi-spec .nds-summary-table {
+  font-size: var(--nds-density-font-body);
+}
+.fw-fi-spec section[aria-labelledby='fw-fi-spec-measures'] .nds-summary-table td[data-align='right'] {
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-fi-sub {
+  display: block;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-normal);
+}
+.fw-fi-spec-title {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+.fw-fi-route {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fi-route > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  overflow-wrap: anywhere;
+}
+.fw-fi-route > li[data-current='true'] {
+  border-width: 2px;
+  border-color: var(--nds-primary);
+}
+.fw-fi-route-seq {
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── Report a spec problem ────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-fi-photo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+}
+.fw-fi-photo-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
