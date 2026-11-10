@@ -155,6 +155,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Chemical: '/plant/chemicals?open=[id]',
   // B-W2b-264 Compliance › Sourcing & claims (SCR-215): a sustainability claim opens in its window.
   SustainabilityClaim: '/compliance/sourcing?open=[id]',
+  // B-W2b-265 Compliance › Settings › Rules & markets (SCR-262): a register entry, a change of the watch and an operator row open in
+  // their tab's window.
+  RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
+  StandardChange: '/compliance/settings?tab=regulations&change=[id]',
+  EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.

@@ -149,7 +149,9 @@
       "sourcing": "Sourcing & claims",
       "reportsGroup": "Reports",
       "reports": "Compliance reports",
-      "status": "Status board"
+      "status": "Status board",
+      "settingsGroup": "Settings",
+      "settings": "Rules & markets"
     },
     "finance": {
       "area": "Finance",

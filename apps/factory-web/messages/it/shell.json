@@ -149,7 +149,9 @@
       "sourcing": "Filiera e dichiarazioni ambientali",
       "reportsGroup": "Report",
       "reports": "Report conformità",
-      "status": "Stato conformità"
+      "status": "Stato conformità",
+      "settingsGroup": "Impostazioni",
+      "settings": "Norme e mercati"
     },
     "finance": {
       "area": "Amministrazione",
