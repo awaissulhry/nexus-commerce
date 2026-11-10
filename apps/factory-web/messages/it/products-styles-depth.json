@@ -1,0 +1,501 @@
+{
+  "base": {
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "reason": "Motivo",
+    "reasonHint": "Facoltativo: resta nella storia del modello."
+  },
+  "hold": {
+    "loading": "Ancora in caricamento.",
+    "busy": "Si sta salvando una modifica: attendi un momento.",
+    "offline": "Senza connessione: attende che la connessione torni.",
+    "noManage": "Il tuo ruolo non modifica i modelli (product.styles.manage).",
+    "archived": "Il modello è archiviato: riattivalo prima.",
+    "long": "Al massimo 500 caratteri."
+  },
+  "fault": {
+    "internal": "Qualcosa non ha funzionato da parte nostra. Riprova.",
+    "moved": "Qualcuno ha modificato questo modello nel frattempo: è stato riletto. Controlla e riprova.",
+    "state": "Lo stato del modello non lo consente più: è stato riletto.",
+    "invalid": "Non è stato accettato così: controlla i campi.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "signed_out": "Sei uscito. Accedi di nuovo.",
+    "not_found": "Questo modello non c'è più.",
+    "rate_limited": "Troppi tentativi: attendi un momento.",
+    "unavailable": "Il server non risponde ora. Riprova.",
+    "step_up": "Conferma prima la tua identità.",
+    "read": {
+      "forbidden": "Il tuo ruolo non legge questi dati."
+    }
+  },
+  "refusal": {
+    "SAME_STATE": "È già in questo stato.",
+    "MOVE_NOT_ALLOWED": "Questo passaggio non è consentito dal suo stato.",
+    "NEEDS_RELEASED_REVISION": "Prima rilascia una revisione: la produzione richiede una revisione rilasciata.",
+    "REASON_NEEDED": "Un passaggio all'indietro richiede il motivo.",
+    "STYLE_ARCHIVED": "Il modello è archiviato: riattivalo prima.",
+    "REPLACEMENT_NOT_HERE": "Solo un modello in uscita o dismesso indica il modello che lo sostituisce.",
+    "REPLACEMENT_SELF": "Un modello non sostituisce sé stesso.",
+    "REPLACEMENT_UNUSABLE": "Quel modello non può sostituirlo: è archiviato, dismesso o di un'altra azienda.",
+    "REPLACEMENT_CIRCLE": "Quel modello è a sua volta sostituito da questo: niente sostituzioni in cerchio.",
+    "EDIT_BLOCKED": "In questo stato non cambia nulla: portalo prima in un altro stato.",
+    "NEEDS_NEW_REVISION": "La sua scheda cambia solo con una nuova revisione: avviane una prima.",
+    "NEEDS_CHANGE_ORDER": "Solo con un ordine di modifica approvato, con una nuova revisione.",
+    "DRAFT_UNDER_CHANGE_ORDER": "La sua bozza è la modifica proposta da un ordine di modifica: ora non cambia.",
+    "other": "Le regole del modello ora non lo consentono."
+  },
+  "lifecycle": {
+    "title": "Ciclo di vita",
+    "move": "Porta a…",
+    "moveTo": "Porta a {state}",
+    "moveBack": "Riporta a {state}",
+    "since": "dal {date}",
+    "allows": "Cosa può cambiare ora",
+    "replacedBy": "Sostituito da",
+    "replaces": "Sostituisce",
+    "nameReplacement": "Indica il modello sostitutivo…",
+    "changeReplacement": "Cambia il modello sostitutivo…",
+    "rulesLink": "Regole di modifica per stato (Impostazioni prodotto)",
+    "state": {
+      "CONCEPT": "Idea",
+      "DEVELOPMENT": "In sviluppo",
+      "SAMPLING": "Campionatura",
+      "APPROVED": "Approvato",
+      "IN_PRODUCTION": "In produzione",
+      "PHASE_OUT": "In uscita",
+      "DISCONTINUED": "Dismesso"
+    },
+    "means": {
+      "CONCEPT": "Un'idea, prima dello sviluppo.",
+      "DEVELOPMENT": "In sviluppo: cartamodello, distinta e ciclo prendono forma.",
+      "SAMPLING": "Si fanno e si valutano i campioni.",
+      "APPROVED": "Approvato: va in produzione quando una revisione è rilasciata.",
+      "IN_PRODUCTION": "In produzione: gli ordini di lavoro usano la sua revisione rilasciata.",
+      "PHASE_OUT": "In uscita: il lavoro aperto si conclude; indica il modello che lo sostituisce.",
+      "DISCONTINUED": "Dismesso: in questo stato non cambia nulla."
+    },
+    "rule": {
+      "FREE": "Modifica libera",
+      "NEW_REVISION": "Serve una nuova revisione",
+      "CHANGE_ORDER": "Serve un ordine di modifica",
+      "BLOCKED": "Bloccato"
+    },
+    "source": {
+      "COMPANY": "impostata per questa azienda",
+      "TENANT": "impostata per tutte le aziende",
+      "DEFAULT": "la predefinita"
+    },
+    "kind": {
+      "DETAILS": "Nome, nomi per lingua, descrizione, stagione, GTIN",
+      "SPEC": "La scheda: taglie, varianti colore, DPI, tipo di prodotto, marchio privato",
+      "NEW_REVISION": "Avviare una nuova revisione",
+      "DRAFT": "Modificare la revisione in bozza (distinta, ciclo, pezzi)",
+      "RELEASE": "Rilasciare una revisione"
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non sposta i modelli nel loro ciclo di vita (product.styles.lifecycle).",
+      "archived": "Il modello è archiviato: riattivalo prima di spostarlo.",
+      "noMove": "Nessun passaggio da questo stato."
+    },
+    "notice": {
+      "moved": "Portato a {state}.",
+      "replacement": "Il modello sostitutivo è stato salvato."
+    }
+  },
+  "move": {
+    "title": "Porta {code} a {state}",
+    "confirm": "Porta a {state}",
+    "after": "Dopo il passaggio la sua regola di modifica è: {rule}.",
+    "production": "Da ora i suoi ordini di lavoro usano la revisione rilasciata.",
+    "reasonBack": "Un passaggio all'indietro richiede il motivo: resta nella storia del modello.",
+    "held": {
+      "reason": "Scrivi perché torna indietro."
+    }
+  },
+  "replacement": {
+    "title": "Il modello che sostituisce {code}",
+    "intro": "Proposto al posto di questo modello mentre è in uscita o dismesso.",
+    "find": "Cerca un modello",
+    "findHint": "Il suo codice o nome, almeno 2 lettere.",
+    "field": "Sostituito da",
+    "none": "Nessun modello sostitutivo",
+    "noneFound": "Nessun modello trovato.",
+    "save": "Salva",
+    "held": {
+      "same": "Nulla è cambiato finora."
+    }
+  },
+  "type": {
+    "title": "Tipo di prodotto",
+    "intro": "Cosa chiede il tipo prima del rilascio e i suoi valori predefiniti; i tipi sono in Impostazioni prodotto.",
+    "change": "Cambia…",
+    "none": "Nessun tipo di prodotto: non valgono campi obbligatori né valori predefiniti.",
+    "under": "sotto {code}",
+    "everyCompany": "Tutte le aziende",
+    "ownCompany": "Questa azienda",
+    "archived": "Tipo archiviato",
+    "missing_one": "Manca {count} campo obbligatorio",
+    "missing_other": "Mancano {count} campi obbligatori",
+    "missingHint": "Il controllo di rilascio li elenca.",
+    "allFilled": "Ogni campo obbligatorio è compilato",
+    "noneRequired": "Il tipo non chiede alcun campo",
+    "differs": "Diverso dai valori predefiniti del tipo (restano i suoi valori): {fields}.",
+    "dialogTitle": "Tipo di prodotto di {code}",
+    "dialogIntro": "I tipi di questo genere di capo che l'azienda del modello può usare.",
+    "field": "Tipo di prodotto",
+    "fieldHint": "I suoi campi obbligatori contano nel controllo di rilascio.",
+    "noType": "Nessun tipo",
+    "rule": "Un nuovo tipo non cambia i valori del modello: i suoi predefiniti compilano solo un modello nuovo.",
+    "save": "Salva",
+    "held": {
+      "same": "Nulla è cambiato finora."
+    },
+    "notice": {
+      "set": "Il tipo di prodotto è stato salvato.",
+      "cleared": "Il modello ora non ha un tipo di prodotto."
+    },
+    "default": {
+      "sizeScaleId": "scala taglie",
+      "measurementTemplateId": "modello di misure",
+      "ppeCategory": "categoria DPI",
+      "ppeStandard": "norma DPI",
+      "ppeClass": "classe DPI",
+      "other": "un altro predefinito"
+    }
+  },
+  "attr": {
+    "nameI18n": "Nomi in altre lingue",
+    "description": "Descrizione",
+    "season": "Stagione",
+    "brandPartyId": "Marchio",
+    "sizes": "Taglie",
+    "baseSize": "Taglia base",
+    "ppeStandard": "Norma DPI",
+    "ppeClass": "Classe DPI",
+    "measurementTemplateId": "Modello di misure",
+    "hsCode": "Codice doganale",
+    "originCountry": "Paese di origine",
+    "netMassKg": "Massa netta",
+    "gender": "Taglio per",
+    "other": "Un altro campo"
+  },
+  "names": {
+    "title": "Nomi per lingua",
+    "intro": "Etichette, scheda tecnica, portale e ricerca li leggono. Una lingua senza un nome proprio riceve {language}, poi il nome del modello.",
+    "introShort": "Etichette, scheda tecnica, portale e ricerca li leggono.",
+    "add": "Aggiungi una lingua",
+    "refused": "I nomi ora non possono cambiare: {why}",
+    "companyLanguage": "la lingua dell'azienda",
+    "fromStyle": "Dai nomi del modello (non ancora scritto qui)",
+    "editOne": "Modifica i nomi in {language}",
+    "removeOne": "Rimuovi i nomi in {language}",
+    "write": "Scrivilo qui",
+    "empty": {
+      "title": "Ancora nessun nome in altre lingue",
+      "body": "Ogni lettore riceve il nome del modello, {name}, finché non si aggiunge una lingua."
+    },
+    "col": {
+      "language": "Lingua",
+      "name": "Nome",
+      "short": "Descrizione breve",
+      "actions": "Azioni"
+    }
+  },
+  "text": {
+    "titleNew": "Aggiungi una lingua",
+    "titleEdit": "Nomi in {language}",
+    "save": "Salva",
+    "language": "Lingua",
+    "languageHint": "Ogni lingua una volta.",
+    "pickLanguage": "Scegli una lingua",
+    "otherLanguage": "Un'altra lingua…",
+    "tag": "Codice lingua",
+    "tagHint": "Come \"de\", \"fr-CH\" o \"pt-BR\".",
+    "name": "Nome",
+    "short": "Descrizione breve",
+    "shortHint": "Una riga: schede del catalogo ed etichette.",
+    "long": "Descrizione lunga",
+    "longHint": "Paragrafi: la pagina del portale e la scheda tecnica.",
+    "readers": "Etichette, scheda tecnica e portale leggono le parole di questa lingua dalla prossima volta che vengono create o aperte.",
+    "held": {
+      "same": "Nulla è cambiato finora.",
+      "gone": "Questa lingua è stata rimossa nel frattempo."
+    },
+    "problem": {
+      "languageEmpty": "Scegli la lingua.",
+      "languageTag": "Non è un codice lingua: due o tre lettere, poi parti come \"-CH\".",
+      "languageTaken": "Questa lingua è già scritta: modificala.",
+      "nameEmpty": "Scrivi il nome.",
+      "long": "Troppo lungo: al massimo {max} caratteri.",
+      "oneLine": "Una riga, senza a capo né tabulazioni.",
+      "control": "Togli i caratteri di controllo nascosti.",
+      "meanwhile": "Qualcuno ha cambiato questi nomi nel frattempo: sono stati riletti."
+    },
+    "remove": {
+      "title": "Rimuovere i nomi in {language}?",
+      "confirm": "Rimuovi",
+      "toStyleName": "Un lettore in questa lingua riceve allora il nome del modello in essa: {name}.",
+      "toStyle": "Un lettore in questa lingua riceve allora il nome del modello: {name}.",
+      "toCompany": "Un lettore in questa lingua riceve allora {language}, poi il nome del modello."
+    },
+    "notice": {
+      "added": "I nomi in {language} sono stati aggiunti.",
+      "saved": "I nomi in {language} sono stati salvati.",
+      "removed": "I nomi in {language} sono stati rimossi."
+    }
+  },
+  "label": {
+    "title": "Marchio privato",
+    "intro": "Chi vede il modello, con quale nome è venduto, chi invia la sua dichiarazione.",
+    "mark": "Marchio privato · {brand}",
+    "own": "Collezione propria",
+    "shownToLabel": "Chi lo vede nel portale",
+    "shown": {
+      "BRAND_ONLY": "Solo le persone di {brand}",
+      "EVERY_CUSTOMER": "Ogni cliente a cui il catalogo lo offre"
+    },
+    "soldUnder": "Venduto con il nostro nome",
+    "soldToggle": "Venduto con il nostro nome",
+    "sold": {
+      "ours": "Sì: il nostro nome sulla sua etichetta",
+      "theirs": "No: il nome del marchio sulla sua etichetta",
+      "ownCollection": "Collezione propria"
+    },
+    "declarationLabel": "Dichiarazione di conformità inviata da",
+    "declares": {
+      "BRAND": "{brand}",
+      "COMPANY": "La nostra azienda"
+    },
+    "others": "Preventivi ({quotes}) e ordini ({orders}) aperti di altri clienti indicano questo modello: proseguono, mentre il portale lo offre solo al suo marchio.",
+    "brandInIdentity": "Il marchio si sceglie in Identità qui sopra.",
+    "makeForBrand": "Per farlo per un marchio, scegli il marchio in Identità qui sopra.",
+    "held": {
+      "noBrand": "Venduto con il nostro nome solo come modello di un marchio: scegli prima il marchio in Identità.",
+      "same": "Nulla è cambiato finora."
+    },
+    "dialog": {
+      "oursTitle": "Vendere {code} con il nostro nome?",
+      "theirsTitle": "Vendere {code} con il nome del suo marchio?",
+      "ours": "Vendi con il nostro nome",
+      "theirs": "Vendi con il nome del marchio",
+      "oursLabel": "Le sue etichette riportano il nostro nome, non quello di {brand}.",
+      "theirsLabel": "Le sue etichette riportano il nome di {brand}.",
+      "oursDoc": "Inviamo noi la sua dichiarazione di conformità.",
+      "theirsDoc": "{brand} invia la sua dichiarazione di conformità.",
+      "portal": "Il portale continua a offrirlo solo a {brand}."
+    },
+    "notice": {
+      "ours": "Ora è venduto con il nostro nome.",
+      "theirs": "Ora è venduto con il nome del suo marchio."
+    },
+    "problem": {
+      "thread": "La sua conversazione è condivisa con il marchio: il marchio resta. È stato riletto."
+    }
+  },
+  "score": {
+    "completeness": "Completezza",
+    "atRelease": "Punteggio al rilascio della revisione {revision}",
+    "completenessOf": "Completezza {value}",
+    "nothingOpen": "Nulla di aperto prima del rilascio.",
+    "open_one": "{count} cosa prima del rilascio · bloccanti: {blockers}",
+    "open_other": "{count} cose prima del rilascio · bloccanti: {blockers}",
+    "first": "prima: {item} — {state}",
+    "fix": "Correggi",
+    "item": {
+      "BOM": "Materiali (distinta)",
+      "ROUTING": "Operazioni (ciclo)",
+      "SMV": "Minuti standard",
+      "MATERIALS": "Materiali approvati",
+      "PRICES": "Ogni materiale con prezzo",
+      "LABEL": "Etichetta del capo",
+      "CERTIFICATE": "Copertura dei certificati",
+      "MEASUREMENTS": "Scheda misure",
+      "ATTRIBUTES": "Campi obbligatori del tipo",
+      "CHANGE_ORDERS": "Ordini di modifica",
+      "SCOPE": "Cosa prende il rilascio",
+      "DRIFT": "Lavoro che già la usa",
+      "other": "Un altro controllo"
+    },
+    "state": {
+      "OK": "fatto",
+      "WARNING": "da controllare",
+      "BLOCKED": "bloccante",
+      "NOT_REQUIRED": "non serve"
+    }
+  },
+  "whereUsed": {
+    "title": "Usato da",
+    "showAll": "Mostra tutto",
+    "none": "Non ancora usato in un documento che puoi vedere.",
+    "count": "aperti: {open} su {count}",
+    "onHand_one": "{count} capo a magazzino",
+    "onHand_other": "{count} capi a magazzino",
+    "hidden_one": "{count} genere di documento non è nel tuo ruolo.",
+    "hidden_other": "{count} generi di documento non sono nel tuo ruolo.",
+    "dialogTitle": "Dove è usato {code}",
+    "kinds": "Genere di documento",
+    "more": "Sono mostrati i {shown} più recenti su {count}.",
+    "kind": {
+      "QUOTES": "Preventivi",
+      "SALES_ORDERS": "Ordini di vendita",
+      "WORK_ORDERS": "Ordini di lavoro",
+      "STOCK": "Magazzino",
+      "PRICE_LISTS": "Listini",
+      "SAMPLE_ROUNDS": "Giri di campionatura",
+      "CERTIFICATES": "Certificati"
+    },
+    "col": {
+      "record": "Documento",
+      "state": "Stato",
+      "date": "Data",
+      "party": "Controparte",
+      "detail": "Cosa riguarda",
+      "pieces": "Capi"
+    },
+    "state": {
+      "DRAFT": "Bozza",
+      "PENDING_APPROVAL": "In attesa di approvazione",
+      "APPROVED": "Approvato",
+      "SENT": "Inviato",
+      "ACCEPTED": "Accettato",
+      "DECLINED": "Rifiutato",
+      "EXPIRED": "Scaduto",
+      "CANCELLED": "Annullato",
+      "CONFIRMED": "Confermato",
+      "IN_PRODUCTION": "In produzione",
+      "READY": "Pronto",
+      "PARTLY_SHIPPED": "Spedito in parte",
+      "SHIPPED": "Spedito",
+      "CLOSED": "Chiuso",
+      "RELEASED": "Rilasciato",
+      "IN_PROGRESS": "In corso",
+      "COMPLETED": "Completato",
+      "ON_HOLD": "Sospeso",
+      "ACTIVE": "Attivo",
+      "REQUESTED": "Richiesto",
+      "IN_MAKING": "In lavorazione",
+      "UNDER_REVIEW": "In valutazione",
+      "DECIDED": "Deciso",
+      "VALID": "Valido",
+      "SUSPENDED": "Sospeso dall'ente",
+      "WITHDRAWN": "Ritirato",
+      "ON_HAND": "A magazzino",
+      "otherOpen": "Aperto",
+      "otherClosed": "Chiuso"
+    }
+  },
+  "cells": {
+    "noGtin": "senza GTIN",
+    "show": {
+      "label": "Cosa mostrano le celle",
+      "state": "Attivo / spento",
+      "sku": "SKU",
+      "gtin": "GTIN"
+    }
+  },
+  "gtin": {
+    "assign": "Assegna GTIN",
+    "assignCount_one": "Assegna {count} GTIN…",
+    "assignCount_other": "Assegna {count} GTIN…",
+    "title": "Assegna GTIN a {code}",
+    "intro": "Gli SKU attivi senza GTIN ricevono i prossimi numeri liberi dell'intervallo GS1 dell'azienda. Nulla viene assegnato finché non confermi.",
+    "range": "Intervallo GS1",
+    "rangeOption": "{name} · prefisso {prefix} · {left} liberi",
+    "prefix": "Prefisso GS1",
+    "next": "Prossimo GTIN libero",
+    "usedUp": "Nessuno rimasto",
+    "left": "Numeri rimasti",
+    "neverReused": "Un GTIN, una volta assegnato, non viene mai riassegnato: un numero già su uno SKU viene saltato.",
+    "noRange": "Questa azienda non ha ancora un intervallo GS1.",
+    "noRangeHint": "Un intervallo è il prefisso GS1 dell'azienda con i suoi numeri; lo aggiunge un amministratore con il diritto di gestire i GTIN. Intanto i GTIN si possono scrivere in ogni cella.",
+    "gate": "Assegnare GTIN da un intervallo non è attivo qui.",
+    "gateHint": "Prima viene il prefisso GS1 dell'azienda (una quota annuale GS1): l'anteprima mostra cosa verrebbe assegnato; intanto i GTIN si possono scrivere in ogni cella.",
+    "nothing": "Nessuno SKU attende un GTIN da questo intervallo.",
+    "previewTitle_one": "{count} GTIN da assegnare",
+    "previewTitle_other": "{count} GTIN da assegnare",
+    "previewAgain": "Rifai l'anteprima",
+    "confirm_one": "Assegna {count} GTIN",
+    "confirm_other": "Assegna {count} GTIN",
+    "skipped_one": "{count} numero saltato (già su uno SKU): {gtins}",
+    "skipped_other": "{count} numeri saltati (già su uno SKU): {gtins}",
+    "short_one": "L'intervallo non ha più numeri per {count} SKU.",
+    "short_other": "L'intervallo non ha più numeri per {count} SKU.",
+    "notNumbered_one": "{count} SKU non riceve un numero:",
+    "notNumbered_other": "{count} SKU non ricevono un numero:",
+    "given_one": "È stato assegnato {count} GTIN.",
+    "given_other": "Sono stati assegnati {count} GTIN.",
+    "givenTitle": "GTIN assegnati",
+    "leftAfter": "Restano {left} numeri nell'intervallo.",
+    "col": {
+      "sku": "SKU",
+      "cell": "Variante colore · taglia",
+      "gtin": "GTIN"
+    },
+    "why": {
+      "has": "{sku} ha già un GTIN.",
+      "off": "{sku} è spento.",
+      "other": "{sku} non è uno SKU di questo modello."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non assegna GTIN (product.gtins.manage).",
+      "none": "Ogni SKU attivo ha un GTIN.",
+      "preview": "Prima viene l'anteprima.",
+      "gate": "Non attivo qui (prima il prefisso GS1).",
+      "nothing": "Nulla da assegnare."
+    },
+    "problem": {
+      "again": "L'intervallo o gli SKU sono cambiati nel frattempo: l'anteprima è stata rifatta. Controllala e conferma.",
+      "range": "Questo modello prende GTIN solo dagli intervalli della propria azienda."
+    },
+    "notice": {
+      "given_one": "È stato assegnato {count} GTIN.",
+      "given_other": "Sono stati assegnati {count} GTIN."
+    }
+  },
+  "column": {
+    "release": {
+      "column": "Rilascio",
+      "noRevision": "Nessuna revisione",
+      "atRelease": "rilascio rev {revision}",
+      "nothingOpen": "Nulla di aperto",
+      "firstOpen_one": "{count} aperta · {item}",
+      "firstOpen_other": "{count} aperte · prima {item}"
+    }
+  },
+  "season": {
+    "bulk": "Imposta stagione ({count})",
+    "title_one": "Imposta la stagione di {count} modello",
+    "title_other": "Imposta la stagione di {count} modelli",
+    "intro": "Il testo della stagione di ogni modello (al massimo 20 caratteri). Vuoto la toglie.",
+    "field": "Stagione",
+    "hint": "Come \"SS27\" o \"FW26\"; al massimo {max} caratteri.",
+    "inUse": "Usate in questo elenco:",
+    "none": "nessuna stagione",
+    "apply_one": "Imposta per {count} modello",
+    "apply_other": "Imposta per {count} modelli",
+    "clear_one": "Togli per {count} modello",
+    "clear_other": "Togli per {count} modelli",
+    "same_one": "{count} modello è già in questa stagione.",
+    "same_other": "{count} modelli sono già in questa stagione.",
+    "archived_one": "{count} modello archiviato resta fuori (riattivalo prima):",
+    "archived_other": "{count} modelli archiviati restano fuori (riattivali prima):",
+    "done_one": "La stagione è stata impostata per {count} modello.",
+    "done_other": "La stagione è stata impostata per {count} modelli.",
+    "refused_one": "{count} modello non è stato cambiato:",
+    "refused_other": "{count} modelli non sono stati cambiati:",
+    "held": {
+      "nothing": "Nulla cambia: ogni modello scelto è già in questa stagione, o archiviato.",
+      "allArchived": "Ogni modello scelto è archiviato.",
+      "empty": "Scrivi la stagione, oppure scegli di toglierla."
+    },
+    "problem": {
+      "long": "Al massimo {max} caratteri.",
+      "oneLine": "Una riga, senza tabulazioni."
+    },
+    "clearHint": "Toglie la stagione dai modelli scelti.",
+    "clearToggle": "Togli la stagione"
+  }
+}

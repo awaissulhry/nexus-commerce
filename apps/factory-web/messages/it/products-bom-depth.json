@@ -1,0 +1,385 @@
+{
+  "common": {
+    "back": "Indietro",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "view": {
+    "tree": "Albero"
+  },
+  "depth": {
+    "failed": "Impossibile leggere struttura e alternative della distinta: le righe si vedono senza."
+  },
+  "hold": {
+    "noManage": "Il tuo ruolo legge questa distinta; per cambiarla serve il diritto di modifica della distinta.",
+    "loading": "Attendi che la struttura della distinta sia letta.",
+    "archived": "Il modello è archiviato: riattivalo per cambiarne la distinta.",
+    "frozen": "Questa revisione non è una bozza: avvia una nuova revisione per cambiarla.",
+    "offline": "Offline — non si invia nulla finché la connessione non torna.",
+    "busy": "Attendi il salvataggio in corso."
+  },
+  "mark": {
+    "refused": "Non salvato: resta il valore registrato (l'avviso dice perché)."
+  },
+  "done": {
+    "saved": "Salvato.",
+    "filed_one": "{count} riga archiviata nella sezione.",
+    "filed_other": "{count} righe archiviate nella sezione.",
+    "grouped_one": "{count} riga raggruppata.",
+    "grouped_other": "{count} righe raggruppate.",
+    "ungrouped_one": "{count} riga tolta dal gruppo.",
+    "ungrouped_other": "{count} righe tolte dal gruppo.",
+    "supply_one": "Fornitura di {count} riga salvata.",
+    "supply_other": "Fornitura di {count} righe salvata.",
+    "option": "Ora la riga vale solo per quell'opzione.",
+    "optionOff": "La riga vale di nuovo per ogni capo.",
+    "alternateAdded": "Alternativa aggiunta dopo l'ultima.",
+    "alternateRemoved": "Alternativa tolta: quelle dopo salgono di un posto.",
+    "alternateMoved": "Ordine delle alternative salvato.",
+    "filled_one": "{count} taglia riempita dalla base.",
+    "filled_other": "{count} taglie riempite dalla base."
+  },
+  "section": {
+    "SHELL": "Esterno",
+    "LINING": "Fodera",
+    "INSULATION": "Membrane e imbottiture",
+    "PROTECTION": "Protezioni",
+    "TRIMS": "Accessori e minuteria",
+    "THREAD": "Filo",
+    "LABELS": "Etichette",
+    "PACKAGING": "Imballo",
+    "OTHER": "Altro"
+  },
+  "revisionStatus": {
+    "DRAFT": "bozza",
+    "RELEASED": "rilasciata",
+    "OBSOLETE": "superata"
+  },
+  "approval": {
+    "PENDING": "Approvazione in attesa",
+    "APPROVED": "Approvato",
+    "CONDITIONAL": "Approvato con condizioni",
+    "BLOCKED": "Bloccato"
+  },
+  "materialStatus": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato",
+    "BLOCKED": "Bloccato"
+  },
+  "col": {
+    "section": "Sezione",
+    "alternates": "Alternative",
+    "supply": "Chi lo fornisce",
+    "option": "Opzione",
+    "more": "Altro"
+  },
+  "lines": {
+    "table": "Righe della distinta",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "countSections_one": "{count} riga · {sections} sezioni",
+    "countSections_other": "{count} righe · {sections} sezioni",
+    "groupedUnder": "Raggruppata sotto la riga sopra",
+    "group_one": "Riga di gruppo di {count} riga",
+    "group_other": "Riga di gruppo di {count} righe",
+    "sub": "Sottoassieme {code} revisione {revision} ({status})",
+    "fromKind": "dal suo materiale",
+    "wastage": "{pct} % di sfrido · {gross} con lo sfrido",
+    "same": "Uguale in ogni capo",
+    "removeGroupHeld": "Ci sono righe raggruppate sotto: toglile prima dal gruppo."
+  },
+  "alt": {
+    "count_one": "{count} alternativa",
+    "count_other": "{count} alternative",
+    "none": "Nessuna",
+    "use": {
+      "ALWAYS": "Sempre ammessa",
+      "WHEN_SHORT": "Solo se manca",
+      "WITH_APPROVAL": "Con approvazione"
+    },
+    "needs": {
+      "none": "Si usa come il materiale della riga",
+      "ONLY_WHEN_SHORT": "solo quando manca il materiale della riga",
+      "NEEDS_APPROVAL": "ogni uso va approvato da una persona",
+      "NEEDS_CERTIFICATE_CHECK": "prima va fatto il controllo del certificato"
+    },
+    "intro": "Si usano in quest'ordine quando {code} non si può usare: si prova prima la prima.",
+    "empty": "Nessuna alternativa: si usa solo il materiale della riga.",
+    "label": "Alternativa {priority}: {code}",
+    "ppe": "Componente DPI",
+    "when": "Quando si può usare",
+    "qty": "Quantità",
+    "qtyHint": "Per capo, nell'unità della riga; vuota: quella della riga ({qty}).",
+    "qtyLine": "Quella della riga",
+    "qtyLineRead": "la quantità della riga ({qty})",
+    "qtyBad": "Scrivi un numero sopra 0 (1,9 o 1.9), oppure lascia vuoto.",
+    "colour": "Colore",
+    "colourLoading": "Lettura dei colori del materiale…",
+    "noColour": "Nessun colore",
+    "certificate": "Controllo del certificato prima dell'uso",
+    "certificateHint": "Attivalo quando l'organismo notificato potrebbe dover approvare il cambio.",
+    "certificateOn": "prima il controllo del certificato",
+    "certificateOff": "senza controllo del certificato",
+    "certificateRequired": "C'è di mezzo un componente DPI: il controllo resta attivo.",
+    "covered": "Coperta dal certificato {number} ({standard}), valido fino al {to}.",
+    "notCovered": "Nessun certificato del registro la copre: l'organismo notificato potrebbe dover approvare.",
+    "note": "Nota",
+    "up": "Sposta su {code}",
+    "down": "Sposta giù {code}",
+    "remove": "Togli {code}",
+    "removeTitle": "Togliere l'alternativa {code} dalla riga {line}?",
+    "removeBody": "Le alternative dopo salgono di un posto. Il materiale della riga resta.",
+    "removeConfirm": "Togli l'alternativa",
+    "add": "Aggiungi un'alternativa",
+    "search": "Materiale",
+    "searchHint": "Cerca nella libreria materiali; va dopo l'ultima alternativa, con approvazione finché non la cambi.",
+    "held": {
+      "first": "È già la prima.",
+      "last": "È già l'ultima.",
+      "sub": "Una riga di sottoassieme non ha alternative: il sottoassieme si fa qui.",
+      "max": "Questa riga ha già il massimo di alternative (10)."
+    }
+  },
+  "supply": {
+    "weBuy": "Lo compriamo noi",
+    "weMake": "Lo facciamo noi (sottoassieme)",
+    "sentBy": "Lo manda {name}",
+    "boughtFrom": "Lo compriamo da {name}",
+    "from": "da {name}",
+    "workshop": "Va nel kit del laboratorio",
+    "workshopCut": "Va al laboratorio già tagliato, a pacchi"
+  },
+  "option": {
+    "every": "Ogni capo"
+  },
+  "menu": {
+    "more": "Altro per la riga {line}",
+    "open": "Apri la riga in dettaglio",
+    "alternates_one": "Alternative ({count})",
+    "alternates_other": "Alternative ({count})"
+  },
+  "bulk": {
+    "section_one": "Sezione… {count}",
+    "section_other": "Sezione… {count}",
+    "group_one": "Gruppo… {count}",
+    "group_other": "Gruppo… {count}",
+    "supply_one": "Fornitura… {count}",
+    "supply_other": "Fornitura… {count}",
+    "sectionTitle_one": "Metti {count} riga in una sezione",
+    "sectionTitle_other": "Metti {count} righe in una sezione",
+    "sectionHint": "La sezione sotto cui la distinta le mostra; con «dal loro materiale» ogni riga torna nella sezione del suo tipo.",
+    "sectionKind": "Dal loro materiale",
+    "groupTitle_one": "Raggruppa {count} riga",
+    "groupTitle_other": "Raggruppa {count} righe",
+    "groupHint": "Sotto una riga di questa distinta (un kit, una tasca, un inserto); «Non raggruppata» le toglie dal gruppo.",
+    "groupApply_one": "Raggruppa {count} riga",
+    "groupApply_other": "Raggruppa {count} righe",
+    "ungroupApply_one": "Togli dal gruppo {count} riga",
+    "ungroupApply_other": "Togli dal gruppo {count} righe",
+    "supplyTitle_one": "Chi fornisce {count} riga, e il laboratorio",
+    "supplyTitle_other": "Chi fornisce {count} righe, e il laboratorio",
+    "who": {
+      "keep": "Lascia com'è",
+      "we": "Le compriamo noi",
+      "customer": "Le manda un cliente (nessun costo, nessun acquisto)"
+    },
+    "workshop": {
+      "keep": "Lascia com'è",
+      "yes": "Vanno nel kit del laboratorio",
+      "no": "Restano qui"
+    },
+    "supplyNothing": "Scegli cosa cambia.",
+    "supplyChoose": "Scegli il cliente che le manda.",
+    "supplyBlocked": "Un cliente non può mandare {lines}: una riga comprata da un fornitore, o un sottoassieme che facciamo noi.",
+    "apply_one": "Applica a {count} riga",
+    "apply_other": "Applica a {count} righe"
+  },
+  "findings": {
+    "title_one": "{count} cosa blocca il rilascio",
+    "title_other": "{count} cose bloccano il rilascio",
+    "titleWarnings_one": "{count} cosa da guardare (il rilascio può andare avanti)",
+    "titleWarnings_other": "{count} cose da guardare (il rilascio può andare avanti)",
+    "intro": "In tempo reale: Mostrami porta alla cella da correggere.",
+    "warningPasses": "il rilascio può andare avanti",
+    "showMe": "Mostrami",
+    "addFirst": "Aggiungi il primo materiale",
+    "MATERIAL_BLOCKED": "Riga {line}: il materiale {material} è bloccato (non si può usare). Scegli un altro materiale.",
+    "ALTERNATE_BLOCKED": "Riga {line}: l'alternativa {alternate} è bloccata. Toglila o scegline un'altra.",
+    "SUB_ASSEMBLY_NOT_RELEASED": "Riga {line}: il sottoassieme {sub} non è rilasciato. Rilascialo, o prendi la sua revisione rilasciata.",
+    "SUB_ASSEMBLY_NOT_MADE": "Riga {line}: {material} non è più un componente che facciamo a pezzi, paia o set (oppure lo manda un cliente). Cambia la riga o togli il sottoassieme.",
+    "SUB_ASSEMBLY_CIRCLE": "Riga {line}: il sottoassieme {sub} contiene di nuovo questo modello (un cerchio). Prendi un altro sottoassieme.",
+    "SUB_ASSEMBLY_TOO_DEEP": "Riga {line}: i sottoassiemi vanno oltre 10 livelli.",
+    "SUB_ASSEMBLY_UNIT": "Riga {line}: la sua unità non conta ciò che fa il sottoassieme {sub}.",
+    "SUB_ASSEMBLY_SIZE_MISSING": "Riga {line}: il sottoassieme {sub} non ha una taglia per la taglia {size}.",
+    "SUB_ASSEMBLY_COLOURWAY_MISSING": "Riga {line}: il sottoassieme {sub} non ha una variante colore per una variante che usa la riga.",
+    "GROUP_CIRCLE": "Riga {line}: raggruppata sotto una riga raggruppata sotto di lei (un cerchio). Togline una dal gruppo.",
+    "PPE_MATERIAL_NOT_APPROVED": "Riga {line}: {material} serve alla protezione e non è ancora approvato.",
+    "ALTERNATE_ARCHIVED": "Riga {line}: l'alternativa {alternate} è archiviata: non si prende mai.",
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Riga {line}: il modello del sottoassieme {sub} è archiviato."
+  },
+  "keyHint": {
+    "open": "Apri la riga in dettaglio",
+    "add": "Aggiungi un materiale",
+    "views": "Vista successiva (Righe, Per taglia, Per variante, Albero)",
+    "move": "Sposta la riga su o giù (Alt+↑ / Alt+↓)",
+    "openSub": "Apri la distinta del sottoassieme"
+  },
+  "line": {
+    "title": "Riga {line}",
+    "parts": "Parte della riga",
+    "part": {
+      "structure": "Struttura e fornitura",
+      "alternates_one": "Alternative ({count})",
+      "alternates_other": "Alternative ({count})"
+    },
+    "autosave": "Ogni modifica si salva da sola.",
+    "loading": "Lettura di struttura e alternative della riga…",
+    "previous": "Riga precedente",
+    "next": "Riga successiva",
+    "held": {
+      "first": "È già la prima riga.",
+      "last": "È già l'ultima riga."
+    },
+    "editW1": "Modifica quantità, colori e operazione…",
+    "w1Fields": "Materiale, quantità, sfrido, colori e operazione sono in Modifica (⋯ sulla riga).",
+    "close": "Chiudi",
+    "section": "Sezione",
+    "sectionKind": "Dal suo materiale: {section}",
+    "sectionKindHint": "Si vede nella sezione del suo materiale ({kind}) finché non la scegli.",
+    "sectionFiled": "Scelta a mano.",
+    "group": "Raggruppata sotto",
+    "groupHint": "Una riga di questa distinta a cui appartiene (un kit, una tasca, un inserto).",
+    "groupRow": "Le righe {lines} sono raggruppate sotto di lei.",
+    "notGrouped": "Non raggruppata",
+    "sub": {
+      "title": "Sottoassieme",
+      "none": "Nessun sottoassieme.",
+      "remove": "Toglilo",
+      "another": "Prendi un'altra revisione o un altro modello",
+      "change": "Scegli un altro",
+      "search": "Modello del sottoassieme",
+      "searchHint": "La distinta di un altro modello che la riga {line} usa (una fodera staccabile, un inserto protettivo).",
+      "placeholder": "Fodera, inserto, polsino…",
+      "reading": "Lettura delle revisioni del modello…",
+      "failed": "Impossibile leggere le revisioni di quel modello.",
+      "revision": "Revisione",
+      "revisionHint": "Prima le rilasciate; una bozza blocca il rilascio di questa distinta finché non è rilasciata.",
+      "noRevision": "Quel modello non ha ancora una revisione.",
+      "take": "Prendi la revisione {revision}",
+      "held": {
+        "notComponent": "La riga {line} usa un materiale comprato: una riga di sottoassieme usa il componente che facciamo noi. Scegli prima quel componente come materiale della riga.",
+        "unit": "La riga {line} non si conta a pezzi, paia o set: cambia prima la sua unità.",
+        "customer": "La riga {line} la manda un cliente: un sottoassieme lo facciamo noi.",
+        "revision": "Scegli una revisione."
+      }
+    },
+    "supply": {
+      "title": "Chi lo fornisce",
+      "weBuyInstead": "Lo compriamo noi",
+      "search": "Cliente che lo manda",
+      "searchHint": "Un cliente o un marchio: la riga allora non ha costo e non si compra.",
+      "placeholder": "Cliente o marchio…",
+      "searchFailed": "Impossibile cercare i clienti (il tuo ruolo potrebbe non leggerli)."
+    },
+    "customer": {
+      "held": {
+        "supplier": "La riga si compra da un fornitore indicato: togli prima il fornitore (Modifica).",
+        "sub": "La riga è un sottoassieme che facciamo noi: il cliente non lo manda."
+      }
+    },
+    "workshop": "Va al laboratorio",
+    "workshopHint": "Quando un lavoro va a un laboratorio, le righe segnate formano il suo kit.",
+    "workshopKit": "Va nel kit del laboratorio.",
+    "workshopCut": "Pelle tracciata per pelle: va già tagliata, a pacchi.",
+    "option": {
+      "title": "Solo per un'opzione",
+      "hint": "Una riga solo per un'opzione si prende solo quando quell'opzione è scelta.",
+      "none": "Il modello non offre ancora opzioni.",
+      "failed": "Impossibile leggere le opzioni del modello.",
+      "link": "Opzioni e regole di questo modello"
+    }
+  },
+  "search": {
+    "type": "Scrivi per cercare",
+    "searching": "Ricerca in corso…",
+    "none": "Nessun risultato.",
+    "found_one": "{count} trovato",
+    "found_other": "{count} trovati",
+    "failed": "Ricerca non riuscita: riprova."
+  },
+  "sizes": {
+    "group": "Per taglia",
+    "fill": "Riempi…",
+    "fillCol": "Riempi",
+    "fillOne": "Riempi la riga {line} dalla taglia base",
+    "totalSub": "con lo sfrido",
+    "offline_one": "Offline: {count} taglia aspetta su questa pagina e parte quando torna la connessione.",
+    "offline_other": "Offline: {count} taglie aspettano su questa pagina e partono quando torna la connessione.",
+    "hint": "Scrivi o incolla una quantità (6,35 o 6.35); ogni cella si salva da sola; Riempi… imposta ogni taglia dalla base con un passo.",
+    "hintRead": "Quantità per capo, nell'unità della riga."
+  },
+  "fill": {
+    "title": "Riempi la riga {line} dalla taglia base",
+    "intro": "Ogni taglia = la quantità della taglia base + i suoi passi dalla base × l'incremento, in {unit}. Le taglie scritte a mano restano."
+  },
+  "tree": {
+    "table": "Sottoassiemi",
+    "loading": "Lettura dei sottoassiemi…",
+    "failed": "Impossibile leggere i sottoassiemi",
+    "count_one": "{count} sottoassieme · {levels} livelli",
+    "count_other": "{count} sottoassiemi · {levels} livelli",
+    "inside": "Dentro il sottoassieme sopra",
+    "level": "Livello {level} · riga {seq}",
+    "makes": "la sua distinta fa {qty} {unit}",
+    "revision": "Revisione {revision} ({status})",
+    "itsBom": "{lines} righe · {subs} sottoassiemi",
+    "open": "Apri la sua distinta",
+    "openOne": "Apri la distinta di {code} revisione {revision}",
+    "col": {
+      "part": "Parte",
+      "qty": "Quantità",
+      "sub": "Sottoassieme",
+      "revision": "Revisione",
+      "bom": "La sua distinta",
+      "open": "Apri"
+    },
+    "empty": {
+      "title": "Nessun sottoassieme",
+      "body": "Un componente che facciamo noi (una fodera, un inserto protettivo) può usare la revisione di un altro modello: apri la sua riga e scegli il sottoassieme."
+    }
+  },
+  "usedIn": {
+    "title": "Usato come sottoassieme in",
+    "intro": "Le revisioni di altri modelli che usano {code} come sottoassieme.",
+    "loading": "Lettura di dove è usato…",
+    "failed": "Impossibile leggere dove è usato.",
+    "none": "Nessun altro modello lo usa come sottoassieme.",
+    "line": "Riga {seq} · {qty} {unit}",
+    "col": {
+      "style": "Modello",
+      "revision": "Sua revisione",
+      "line": "Riga",
+      "takes": "Usa"
+    }
+  },
+  "grades": {
+    "loading": "Lettura dei pezzi del cartamodello…",
+    "failed": "Impossibile leggere i pezzi del cartamodello.",
+    "none": "Da questa riga non si taglia ancora nessun pezzo del cartamodello.",
+    "edit": "Pezzi del cartamodello",
+    "mix": "Mix di scelte",
+    "orBetter": "{grade} o migliore",
+    "any": "Qualsiasi scelta",
+    "share_one": "{count} di {total} pezzi ({pct} %)",
+    "share_other": "{count} di {total} pezzi ({pct} %)",
+    "table": "Scelta minima per pezzo del cartamodello",
+    "everySize": "Ogni taglia",
+    "rule": "Il taglio rifiuta una pelle sotto la scelta minima di un pezzo.",
+    "col": {
+      "piece": "Pezzo",
+      "qty": "Per capo",
+      "min": "Scelta minima",
+      "sizes": "Taglie"
+    }
+  }
+}

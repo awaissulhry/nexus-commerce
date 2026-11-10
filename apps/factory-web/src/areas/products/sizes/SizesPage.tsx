@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useT } from '../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLiveChanges } from '../../../record-panels/live'
@@ -10,6 +10,10 @@ import { downloadCsv, libraryCan, readProblem, writeProblem, type Notice } from 
 import { archiveScale, createScale, listScales } from './api'
 import { parseSizes, scalesCsv, viewOf, viewQuery, type ScaleFilters } from './model'
 import { SizesListView, type NewScaleModel, type SizesListViewModel } from './view/SizesListView'
+// B-W2b-240: the view switch (Points of measure, Grade rules), Import (W2b).
+import { depthSearch, libraryOf, NO_DEPTH_FILTERS } from './depth/model'
+import { SizesDepth } from './depth/SizesDepth'
+import { useLibraryImport } from './depth/use-library-import'
 
 const filtersOf = (params: URLSearchParams | null): ScaleFilters => ({ view: viewOf(params?.get('view')), q: params?.get('q') ?? '' })
 
@@ -27,11 +31,9 @@ function searchOf(filters: ScaleFilters): string {
  * their versions.
  */
 export function SizesPage() {
-  return (
-    <WithMessages namespaces={['library']}>
-      <Container />
-    </WithMessages>
-  )
+  // B-W2b-240: `?view=poms|rules` shows Points of measure or Grade rules (SCR-345); anything else, the size scales.
+  const library = libraryOf(useSearchParams()?.get('view'))
+  return <WithMessages namespaces={['library']}>{library === 'scales' ? <Container /> : <SizesDepth library={library} />}</WithMessages>
 }
 
 function Container() {
@@ -53,6 +55,9 @@ function Container() {
   const [busy, setBusy] = useState(false)
   const [newScale, setNewScale] = useState<NewScaleModel | null>(null)
   const readSeq = useRef(0)
+  // B-W2b-240: the view switch and Import (W2b).
+  const locale = useLocale()
+  const imports = useLibraryImport({ api, permissions: session.permissions, companyId, companies: session.companies.map((company) => ({ id: company.id, name: company.name })), locale, onApplied: () => undefined })
 
   const load = useCallback(async () => {
     const mine = ++readSeq.current
@@ -146,23 +151,28 @@ function Container() {
     }
   }
 
-  const model: SizesListViewModel = { prefix, can, filters, rows, asOf, updates, newScale, busy, notice }
+  const model: SizesListViewModel = { prefix, can, filters, rows, asOf, updates, newScale, busy, notice, /* B-W2b-240 */ library: { library: 'scales', importHeld: imports.held } }
   return (
-    <SizesListView
-      model={model}
-      actions={{
-        onFilters: setFilters,
-        onRetry: () => void load(),
-        onMore: () => void more(),
-        onShowUpdates: () => void load(),
-        onOpen: (id) => router.push(`${prefix}/products/sizes/${id}`),
-        onExport: exportCsv,
-        onArchiveMany: archiveMany,
-        onNew: openNew,
-        onDraft: (draft) => setNewScale((current) => (current ? { ...current, draft, refused: [] } : current)),
-        onCreate: () => void create(),
-        onDismissNotice: () => setNotice(null),
-      }}
-    />
+    <>
+      <SizesListView
+        model={model}
+        actions={{
+          onFilters: setFilters,
+          onRetry: () => void load(),
+          onMore: () => void more(),
+          onShowUpdates: () => void load(),
+          onOpen: (id) => router.push(`${prefix}/products/sizes/${id}`),
+          onExport: exportCsv,
+          onArchiveMany: archiveMany,
+          onNew: openNew,
+          onDraft: (draft) => setNewScale((current) => (current ? { ...current, draft, refused: [] } : current)),
+          onCreate: () => void create(),
+          onDismissNotice: () => setNotice(null),
+          // B-W2b-240
+          library: { onLibrary: (next) => router.push(`${pathname}${depthSearch(next, NO_DEPTH_FILTERS)}`), onImport: imports.open },
+        }}
+      />
+      {imports.dialog}
+    </>
   )
 }

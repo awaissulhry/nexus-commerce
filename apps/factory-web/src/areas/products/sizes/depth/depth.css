@@ -1,0 +1,196 @@
+/*
+ * Sizes & measurements in depth (B-W2b-240, SCR-345): the view switch, the points of measure and grade rules lists, the
+ * Grade rule pop-up, the scale's Grade rules tab. LAYOUT only, with semantic tokens: every control is the design
+ * system's. No page max-width (Owner rule 2026-10-29): the lists fill the shell's main area.
+ */
+.fw-szd-page,
+.fw-szd,
+.fw-szd-stack,
+.fw-szd-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+.fw-szd-dialog,
+.fw-szd-stack {
+  gap: var(--nds-space-10);
+}
+.fw-szd-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+.fw-szd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+.fw-szd-headtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.fw-szd-actions,
+.fw-szd-inline,
+.fw-szd-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-szd-chips {
+  display: flex;
+}
+.fw-szd-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+.fw-szd-warn {
+  color: var(--nds-warning-text);
+}
+.fw-szd-cell {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+.fw-szd-cell > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-szd-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  width: 100%;
+}
+.fw-szd-edit > input,
+.fw-szd-edit > select,
+.fw-szd-edit > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.fw-szd-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.fw-szd-refused {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--nds-radius-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.fw-szd-rowlink,
+.fw-szd-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+.fw-szd-link {
+  font-weight: inherit;
+}
+.fw-szd-rowlink:hover,
+.fw-szd-rowlink:focus-visible,
+.fw-szd-link:hover,
+.fw-szd-link:focus-visible {
+  text-decoration: underline;
+}
+.fw-szd-picbtn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--nds-text-2);
+}
+.fw-szd-howto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-width: 320px;
+}
+.fw-szd-howto-img {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+}
+.fw-szd-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+.fw-szd-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-10) var(--nds-space-14);
+}
+.fw-szd-span {
+  grid-column: 1 / -1;
+}
+.fw-szd-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-szd-picture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.fw-szd-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.fw-szd-grid {
+  min-width: 0;
+  overflow-x: auto;
+}
+.fw-szd-adders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-10) var(--nds-space-20);
+}
+.fw-szd-keys {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+.fw-szd-keys > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--nds-space-10);
+  align-items: center;
+}
+.fw-szd-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+.fw-szd-keys dd {
+  margin: 0;
+}
