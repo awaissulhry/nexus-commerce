@@ -180,6 +180,8 @@ import { events as salesSampleDecisions } from '../sales-sample-decisions/events
 import { events as complianceRecall } from '../compliance-recall/events'
 // B-W2b-258: the user information builder (a generated leaflet draft changed, a translation moved).
 import { events as complianceUserInformation } from '../compliance-user-information/events'
+// B-W2b-256: material profiles, supplier declarations and test plans.
+import { events as complianceMaterialTests } from '../compliance-material-tests/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -426,7 +428,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-260
   ...complianceRecall,
   // B-W2b-258
-  ...complianceUserInformation] as const satisfies readonly EventDefinition[]
+  ...complianceUserInformation,
+  // B-W2b-256
+  ...complianceMaterialTests] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
