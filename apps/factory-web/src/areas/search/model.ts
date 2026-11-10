@@ -18,7 +18,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   // B-W2b-119: a CAPA or an 8D (B-W2b-108's indexer).
   'Capa',
   // B-W2b-129: a cut order (B-W2b-112's indexer).
-  'CutOrder'] as const
+  'CutOrder',
+  // B-W2b-261: a sample round (its indexer comes with its page).
+  'SampleRound'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -38,6 +40,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'PLAN', 'ACT', 'CHECK', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8',
   // B-W2b-129: a cut order's (PLANNED, RELEASED, IN_PROGRESS and CANCELLED are above).
   'CUT', 'RECONCILED',
+  // B-W2b-261: a sample round's stages (REQUESTED, SENT, DECIDED and CANCELLED are above).
+  'IN_MAKING', 'UNDER_REVIEW',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -137,6 +141,7 @@ export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['partie
   /* B-W2b-149 */ 'safety.incidents.view',
   /* B-W2b-104 */ 'quality.plans.view',
   /* B-W2b-119 */ 'quality.capa.view',
-  /* B-W2b-129 */ 'production.cutting.view'])
+  /* B-W2b-129 */ 'production.cutting.view',
+  /* B-W2b-261 */ 'sales.samples.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

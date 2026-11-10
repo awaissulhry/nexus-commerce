@@ -89,6 +89,7 @@
     "InspectionPlan": "Piano di controllo",
     "Capa": "Azione correttiva",
     "CutOrder": "Ordine di taglio",
+    "SampleRound": "Giro di campionatura",
     "other": "Record"
   },
   "chip": {
@@ -128,6 +129,7 @@
     "InspectionPlan": "Piani di controllo",
     "Capa": "Azioni correttive",
     "CutOrder": "Ordini di taglio",
+    "SampleRound": "Campionature",
     "other": "Altri record"
   },
   "status": {
@@ -214,6 +216,8 @@
     "D7": "D7 prevenzione",
     "D8": "D8 chiusura",
     "CUT": "Tagliato",
-    "RECONCILED": "Riconciliato"
+    "RECONCILED": "Riconciliato",
+    "IN_MAKING": "In lavorazione",
+    "UNDER_REVIEW": "In valutazione"
   }
 }

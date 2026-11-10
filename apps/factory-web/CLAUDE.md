@@ -173,6 +173,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
   role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
   container, `view/`, `record/`, `fixtures.ts` (made-up data).
+- `src/areas/products/samples/` — Products › Development › Samples & prototypes (B-W2b-261 on B-W2b-246/-252's API; SCR-110
+  `/products/samples?mode=table|calendar&tile=&kind=&party=&internal=1&style=&revision=&q=&new=1` — the board by stage is the page,
+  the list frame's `modes`; SCR-110-record `/products/samples/<id>?tab=request|sample|fit|approval|shipments|activity&panel=`;
+  catalogue `products-samples`, CSS prefix `fw-smp-`): `view/DecideDialog.tsx` is THE "Decide on the sample" (a round or a swatch;
+  the Approval is read first), "Ask the customer" = Activity › Approvals (`&panel=approvals`). `RECORD_PAGES.SampleRound`.
 - `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check; B-W2a-66: the
   Renewals tab `?tab=renewals&act=renew|applied|link` in `renewals/` — api, model, `use-renewals.ts` container hook, view, made-up
   fixtures — and the register's "Change waiting" column and `?view=changes`; the style compliance tab's "Changes that may need the

@@ -426,6 +426,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/instructions/[id]/sheet',
   // B-W2b-243: Products › Styles › Tech pack PDF (SCR-306, a window page; also where a scanned QR lands).
   '/products/styles/tech-pack',
+  // B-W2b-261: Products › Development › Samples & prototypes (SCR-110) and a sample round (SCR-110-record).
+  '/products/samples',
+  '/products/samples/[id]',
 ])
 
 /**

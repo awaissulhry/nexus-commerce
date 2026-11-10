@@ -22,7 +22,9 @@
       "materials": "Materials & trims",
       "libraries": "Libraries",
       "operations": "Operations",
-      "sizes": "Sizes & measurements"
+      "sizes": "Sizes & measurements",
+      "development": "Development",
+      "samples": "Samples & prototypes"
     },
     "sales": {
       "area": "Sales",

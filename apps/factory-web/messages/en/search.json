@@ -89,6 +89,7 @@
     "InspectionPlan": "Inspection plan",
     "Capa": "Corrective action",
     "CutOrder": "Cut order",
+    "SampleRound": "Sample round",
     "other": "Record"
   },
   "chip": {
@@ -128,6 +129,7 @@
     "InspectionPlan": "Inspection plans",
     "Capa": "Corrective actions",
     "CutOrder": "Cut orders",
+    "SampleRound": "Sample rounds",
     "other": "Other records"
   },
   "status": {
@@ -214,6 +216,8 @@
     "D7": "D7 prevention",
     "D8": "D8 closure",
     "CUT": "Cut",
-    "RECONCILED": "Reconciled"
+    "RECONCILED": "Reconciled",
+    "IN_MAKING": "In making",
+    "UNDER_REVIEW": "Under review"
   }
 }
