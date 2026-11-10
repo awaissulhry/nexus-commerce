@@ -161,6 +161,8 @@ import { events as productMeasures } from '../product-measures/events'
 import { events as productOptions } from '../product-options/events'
 // B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
 import { events as complianceRules } from '../compliance-rules/events'
+// B-W2b-254: requirements and gates (a requirement changed, a gate refused, a refusal overridden).
+import { events as complianceGates } from '../compliance-gates/events'
 // B-W2b-233: prepacks (a prepack changed) and protector placement (a draft revision's placement changed).
 import { events as productPrepacks } from '../product-prepacks/events'
 import { events as productProtectors } from '../product-protectors/events'
@@ -398,6 +400,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...materialsDepth,
   // B-W2b-249
   ...complianceRules,
+  // B-W2b-254
+  ...complianceGates,
   // B-W2b-230
   ...productTechpack,
   // B-W2b-233
