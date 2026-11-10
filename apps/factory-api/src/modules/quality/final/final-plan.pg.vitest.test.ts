@@ -457,3 +457,61 @@ describe('the decision on a plan (W1 computes from the checklist written from th
     await admin(`UPDATE "QualitySettings" SET "stopAtRejectNumber" = false WHERE id = $1`, [A.tenant])
   })
 })
+
+describe('the graded spec of the work order revision (B-W2b-224, SZ1:01), planted', () => {
+  it("a point outside the plan takes the approved spec's nominal ± tolerance of its size; a typed nominal is refused; the chart shows it", async () => {
+    // Planted: an APPROVED measurement spec on SEED-WO-0001's (released) revision, and an OPEN inspection of it on FIN-JACKET v1.
+    const [wo] = await admin<{ styleId: string; styleRevisionId: string }>(`SELECT "styleId", "styleRevisionId" FROM "WorkOrder" WHERE id = $1`, [A.wo1])
+    const point = async (code: string) => (await admin<{ id: string }>(`SELECT id FROM "PointOfMeasure" WHERE "tenantId" = $1 AND code = $2`, [A.tenant, code]))[0]!.id
+    const back = await point('BACK_LEN')
+    const sleeve = await point('SLEEVE_LEN')
+    const specId = newId()
+    const cell = (pointId: string, size: string, seq: number, nominal: string, minus: string, plus: string) =>
+      `INSERT INTO "MeasurementSpecValue" (id, "tenantId", "revisionId", "specId", "pointOfMeasureId", size, seq, nominal, "toleranceMinus", "tolerancePlus", source) VALUES ('${newId()}', '${A.tenant}', '${wo!.styleRevisionId}', '${specId}', '${pointId}', '${size}', ${seq}, ${nominal}, ${minus}, ${plus}, 'GRADED')`
+    await force(
+      [
+        `INSERT INTO "MeasurementSpec" (id, "tenantId", "styleId", "revisionId", "baseSize", status, "approvedAt", "approvedById") VALUES ('${specId}', '${A.tenant}', '${wo!.styleId}', '${wo!.styleRevisionId}', '52', 'APPROVED', now(), '${A.approver}')`,
+        cell(back, '52', 1, '72', '1', '1'),
+        cell(back, '54', 1, '73', '1', '1'),
+        cell(sleeve, '52', 2, '64', '0.5', '1.5'),
+        cell(sleeve, '54', 2, '64.5', '0.5', '1.5'),
+      ].join('; '),
+    )
+    const inspectionId = newId()
+    await admin(
+      `INSERT INTO "Inspection" (id, "tenantId", "companyId", "siteId", "workOrderId", number, "lotSize", "sampleSize", "inspectionLevel", "aqlMajor", "aqlMinor", "acceptMajor", "acceptMinor", "inspectorUserId", "createdById", "planVersionId", checklist)
+       VALUES ($1, $2, $3, $4, $5, $6, 2, 2, 'II', 2.5, 4.0, 0, 0, $7, $7, $8, '[{"code":"AQL_SAMPLE","ok":null,"note":"0 of 2 inspected","inspected":0}]'::jsonb)`,
+      [inspectionId, A.tenant, A.companyA, A.siteA1, A.wo1, `T-INS-SPEC-${inspectionId.slice(-8)}`, inspectorId, A.vFinal1],
+    )
+    let sheet = await sheetOf('inspector', inspectionId)
+    expect(sheet.chart.gradedSpec).toMatchObject({ approved: true, revision: 1 })
+    expect(sheet.chart.points.find((entry: Json) => entry.checkCode === 'CHEST')).toMatchObject({ source: 'PLAN', bySize: [] })
+    const backPoint = sheet.chart.points.find((entry: Json) => entry.pointCode === 'BACK_LEN')
+    expect(backPoint).toMatchObject({ source: 'SPEC', checkCode: null, label: expect.any(String) })
+    expect(backPoint.bySize.map((entry: Json) => [entry.size, entry.words])).toEqual(expect.arrayContaining([['52', '72 ± 1 cm']]))
+    // The inspector reads Italian (no language asked, no locale set).
+    expect(backPoint.spec).toMatch(/^Dalla specifica di misura approvata, revisione 1: .*52 72 ± 1 cm/)
+    // A typed nominal the spec sets otherwise is refused in words; none typed takes the spec's.
+    const typed = await refused('inspector', 'PUT', `/quality/inspections/${inspectionId}/measurements`, { version: sheet.inspection.version, measurements: [{ pointCode: 'BACK_LEN', size: '52', measured: '72.4', nominal: '70', tolerance: '1' }] }, 400)
+    expect(typed.message).toBe('The measurement spec of revision 1 sets BACK_LEN of size 52 at 72 ± 1 cm: nothing else is typed.')
+    sheet = await ok('inspector', 'PUT', `/quality/inspections/${inspectionId}/measurements`, {
+      version: sheet.inspection.version,
+      measurements: [
+        { pointCode: 'BACK_LEN', size: '52', measured: '72.4' },
+        // The sleeve's band is 63.5 … 65.5 (64 −0.5/+1.5): 65.4 passes although it is more than 1 over the nominal.
+        { pointCode: 'SLEEVE_LEN', size: '52', sampleIndex: 2, measured: '65.4' },
+        { pointCode: 'SLEEVE_LEN', size: '52', sampleIndex: 1, measured: '63.4' },
+      ],
+    })
+    const values = await admin<{ pointCode: string; sampleIndex: number; nominal: string; tolerance: string; pass: boolean }>(
+      `SELECT "pointCode", "sampleIndex", nominal::text, tolerance::text, pass FROM "InspectionMeasurement" WHERE "inspectionId" = $1 ORDER BY "pointCode", "sampleIndex"`,
+      [inspectionId],
+    )
+    expect(values).toEqual([
+      { pointCode: 'BACK_LEN', sampleIndex: 1, nominal: '72.000', tolerance: '1.000', pass: true },
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 1, nominal: '64.500', tolerance: '1.000', pass: false },
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 2, nominal: '64.500', tolerance: '1.000', pass: true },
+    ])
+    expect(sheet.chart.points.find((entry: Json) => entry.pointCode === 'SLEEVE_LEN').values.map((value: Json) => value.words).sort()).toEqual(['under by 0.1 cm', 'within 64.5 ± 1 cm'])
+  })
+})

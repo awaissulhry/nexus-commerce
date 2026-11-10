@@ -21,6 +21,10 @@ import { finalWorkOrder, inspectorOf, mayOn } from './access'
 import { inspectionFor, isOwn } from './inspections'
 import { becauseWords, bindingOf, factsReader, finalPlans, identityFacts, measurementRow, measurementsOf, mtmFacts, photosOf, resultRow, resultsOf, stopRule, workOrderFacts } from './plan'
 import { readDefects, readInspection, type Reader } from './store'
+// B-W2b-224 (SZ1:01): the approved graded spec of the work order's revision on the chart.
+import { sizeSpecFor } from './size-spec'
+import { readCells } from '../../production/serials/store'
+import { gradedPointOf } from '@nexus/factory-domain/quality/final/plan'
 
 /**
  * The bench sheet of a final inspection on its plan (B-W2b-97; design floor.final "serial", "aql", "measure", "photos" and
@@ -56,6 +60,7 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
   const { inspection: seen, header } = await inspectionFor(caller, inspectionId)
   const facts = factsReader(caller)
   const mtm = await facts.withClient((client) => mtmFacts(client, header))
+  const graded = mtm ? null : await facts.withClient((client) => sizeSpecFor(client, header))
   return caller.withClient(async (db) => {
     const row = (await readInspection(db, seen.id))!
     const binding = await bindingOf(db, row)
@@ -90,18 +95,22 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
 
     // The measurement chart: the plan's measurement checks (their values by check), the rider's points of a made-to-measure
     // unit, and every other point measured (by point and size).
-    type Point = { pointCode: string; checkCode: string | null; checkId: string | null; label: string; size: string | null; source: 'PLAN' | 'SIZE_CHART' | 'PROFILE' | 'TYPED'; nominal: string | null; tolerance: string | null; uom: string | null }
+    type Point = { pointCode: string; checkCode: string | null; checkId: string | null; label: string; size: string | null; source: 'PLAN' | 'SIZE_CHART' | 'PROFILE' | 'SPEC' | 'TYPED'; nominal: string | null; tolerance: string | null; uom: string | null }
     const points: Point[] = []
     const same = (a: string, b: string) => a.toUpperCase() === b.toUpperCase()
+    // B-W2b-224: the graded spec's cells of the work order's sizes, per point code.
+    const woSizes = graded?.spec ? [...new Set((await readCells(db, header.id)).map((cell) => cell.size))] : []
+    const specOf = (code: string) => (graded?.spec ? woSizes.flatMap((size) => gradedPointOf(graded.spec, code, size) ?? []) : [])
     for (const check of binding.checks.filter((entry) => entry.type === 'MEASUREMENT')) {
       const mtmPoint = check.nominal === null ? mtm?.points.find((point) => same(point.code, check.code)) : undefined
+      const fromSpec = check.nominal === null && !mtmPoint && specOf(check.code).length > 0
       points.push({
         pointCode: check.code,
         checkCode: check.code,
         checkId: check.id,
         label: labelIn(check, binding.words.get(check.id) ?? {}, language).label,
         size: mtm ? mtm.size : null,
-        source: check.nominal !== null ? 'PLAN' : mtmPoint ? 'PROFILE' : 'SIZE_CHART',
+        source: check.nominal !== null ? 'PLAN' : mtmPoint ? 'PROFILE' : fromSpec ? 'SPEC' : 'SIZE_CHART',
         nominal: check.nominal ?? mtmPoint?.nominal ?? null,
         tolerance: check.tolerance,
         uom: check.uom ?? mtmPoint?.uom ?? null,
@@ -110,6 +119,11 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
     for (const point of mtm?.points ?? []) {
       if (points.some((entry) => entry.source === 'PROFILE' && same(entry.pointCode, point.code))) continue
       points.push({ pointCode: point.code, checkCode: null, checkId: null, label: point.name, size: mtm!.size, source: 'PROFILE', nominal: point.nominal, tolerance: null, uom: point.uom })
+    }
+    // B-W2b-224: the spec's other points (no check of the plan names them), measured by point and size against the spec.
+    for (const cell of graded?.spec?.points ?? []) {
+      if (!woSizes.includes(cell.size) || points.some((entry) => same(entry.pointCode, cell.code))) continue
+      points.push({ pointCode: cell.code, checkCode: null, checkId: null, label: cell.name, size: null, source: 'SPEC', nominal: null, tolerance: null, uom: cell.uom })
     }
     const valuesOf = (point: Point) =>
       measurements.filter((value) => (point.checkId ? value.planCheckId === point.checkId : value.planCheckId === null && same(value.pointCode, point.pointCode) && (point.size === null || value.size === point.size)))
@@ -123,7 +137,13 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
     const chartPoints = points.map((point) => {
       const values = valuesOf(point)
       const { nominal, tolerance, uom } = point
+      const bySize = point.source === 'SPEC' ? specOf(point.pointCode).map((cell) => ({ size: cell.size, nominal: cell.nominal, tolerance: cell.tolerance, words: cell.words })) : []
+      if (point.source === 'SPEC') {
+        const head = lang(language) === 'it' ? `Dalla specifica di misura approvata, revisione ${graded!.spec!.revision}` : `From the approved measurement spec, revision ${graded!.spec!.revision}`
+        return { pointCode: point.pointCode, checkCode: point.checkCode, label: point.label, size: point.size, source: point.source, nominal, tolerance, uom, bySize, spec: `${head}: ${bySize.map((cell) => `${cell.size} ${cell.words}`).join(' · ')}`, values: values.map((value) => ({ id: value.id, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, pass: value.pass, words: deviationWords(value.measured, value.nominal, value.tolerance, value.uom) })) }
+      }
       return {
+        bySize,
         pointCode: point.pointCode,
         checkCode: point.checkCode,
         label: point.label,
@@ -202,6 +222,8 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
         outOfTolerance: out,
         words: chartPoints.length === 0 ? 'This plan takes no measurements.' : `${out} of ${measurements.length} values out of tolerance`,
         madeToMeasure: mtm ? { garmentType: mtm.profile.garmentType, revision: mtm.profile.revision, size: mtm.size, points: mtm.points.map((point) => ({ ...point })), pointsWithout: [...mtm.pointsWithout] } : null,
+        // B-W2b-224: the graded spec the size check reads (null: made to measure).
+        gradedSpec: graded ? { revision: graded.spec?.revision ?? null, approved: graded.spec !== null, words: graded.words } : null,
       },
       identity: { ...identity.summary, missing: [...identity.summary.missing], unknown: [...identity.summary.unknown], scans: identity.scans.length, batchNumber: identity.mode === 'BATCH' ? header.batchNumber : null },
       photos: { slots: photoState.slots.map((slot) => ({ ...slot })), waiting: [...photoState.waiting], mandatoryMissing: [...photoState.mandatoryMissing], words: photoState.words },

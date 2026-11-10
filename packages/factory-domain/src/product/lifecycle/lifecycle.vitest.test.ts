@@ -73,7 +73,10 @@ describe('the edit rule per state (PRD-182)', () => {
     expect(editRefusal('NEW_REVISION', 'NEW_REVISION', closed)).toBeNull()
     expect(editRefusal('CHANGE_ORDER', 'DETAILS', closed)).toBeNull()
     expect(editRefusal('CHANGE_ORDER', 'SPEC', closed)).toMatchObject({ code: 'NEEDS_CHANGE_ORDER' })
-    expect(editRefusal('CHANGE_ORDER', 'NEW_REVISION', closed)).toMatchObject({ code: 'NEEDS_CHANGE_ORDER', message: expect.stringContaining('change orders are not available yet') })
+    // B-W2b-226: the words lead to a change order, whose own route passes its number.
+    expect(editRefusal('CHANGE_ORDER', 'NEW_REVISION', closed)).toMatchObject({ code: 'NEEDS_CHANGE_ORDER', message: expect.stringContaining('New change order') })
+    expect(editRefusal('CHANGE_ORDER', 'NEW_REVISION', { ...closed, changeOrder: 'ECO-2026-0001' })).toBeNull()
+    expect(editRefusal('FREE', 'DRAFT', { ...closed, draftRevision: 2, draftHeldBy: { number: 'ECO-2026-0001', status: 'SUBMITTED' } })).toMatchObject({ code: 'DRAFT_UNDER_CHANGE_ORDER' })
     expect(editRefusal('CHANGE_ORDER', 'DRAFT', open)).toBeNull()
     expect(editRefusal('CHANGE_ORDER', 'RELEASE', open)).toBeNull()
   })

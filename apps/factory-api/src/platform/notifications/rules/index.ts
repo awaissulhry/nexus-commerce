@@ -23,6 +23,8 @@ import { INCIDENT_RULES } from '../../../modules/safety/incidents/notices'
 import { EXPIRY_RULES } from '../../files/expiry/notices'
 // B-W2b-F17: the holder of a dead link with no renewer asked for a new one (SYSTEM to the person who made the link).
 import { LINK_RULES } from '../../links/notices'
+// B-W2b-226: change requests and change orders (PRD-175: who triages, the style's owner, approvers, the author, supervisors).
+import { CHANGE_RULES } from '../../../modules/product/changes/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -49,4 +51,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-177: a document expires within 30, then 7 days (SYSTEM to who added it and the record's followers).
   ...EXPIRY_RULES,
   // B-W2b-F17: a dead link with no renewer asked for again (SYSTEM to who made the link, with the reader's note).
-  ...LINK_RULES])
+  ...LINK_RULES,
+  // B-W2b-226: a change request raised or decided; a change order's approval asked or decided, its release (SYSTEM / APPROVAL).
+  ...CHANGE_RULES])

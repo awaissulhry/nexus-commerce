@@ -105,7 +105,8 @@ describe('a size scale (PRD-047)', () => {
 
 describe('the size scale contracts', () => {
   it('upper-cases codes and refuses unknown keys', () => {
-    expect(createScaleBody.parse({ code: 'eu-46-58', name: 'EU', sizes: [{ code: 'xl' }] })).toEqual({ code: 'EU-46-58', name: 'EU', sizes: [{ code: 'XL' }] })
+    // B-W2b-224: a scale has one dimension unless it says two (size and fit).
+    expect(createScaleBody.parse({ code: 'eu-46-58', name: 'EU', sizes: [{ code: 'xl' }] })).toEqual({ code: 'EU-46-58', name: 'EU', dimensions: 1, sizes: [{ code: 'XL' }] })
     expect(sizeBody.safeParse({ code: '52', colour: 'x' }).success).toBe(false)
     expect(sizeBody.safeParse({ code: '52', bodyMeasures: { chest: { min: '100,5', max: null, unit: 'cm' } } }).success).toBe(false)
     expect(addSizesBody.safeParse({ version: 1, sizes: [] }).success).toBe(false)

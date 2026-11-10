@@ -135,7 +135,7 @@ describe('every W1 write asks the edit rule (PRD-182)', () => {
     expect(refusal(await refused('manager', 'POST', `/product/styles/${style}/colourways`, { code: 'GRN', name: 'Green' }, 409))).toBe('refusal/NEEDS_CHANGE_ORDER')
     const revision = await refused('manager', 'POST', `/product/styles/${style}/revisions`, { changeNote: 'A new zip' }, 409)
     expect(refusal(revision)).toBe('refusal/NEEDS_CHANGE_ORDER')
-    expect(revision.message).toContain('change orders are not available yet')
+    expect(revision.message).toContain('New change order')
     const copy = await refused('manager', 'POST', `/product/styles/${style}/revisions/${(await lifecycleOf(style)).releasedRevision.id}/copy`, {}, 409)
     expect(refusal(copy)).toBe('refusal/NEEDS_CHANGE_ORDER')
     const tracking = await refused('manager', 'PUT', `/product/styles/${style}/garment-tracking`, { version: await versionOf(style), tracking: 'SERIAL' }, 409)

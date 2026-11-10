@@ -254,6 +254,15 @@
       "links": {
         "renewAsked": "The link you sent for {record} no longer opens: its holder asks for a new one",
         "renewAskedNote": "The link you sent for {record} no longer opens: its holder asks for a new one (\"{title}\")"
+      },
+      "changes": {
+        "requestRaised": "New change request {record}: {title}",
+        "requestAccepted": "{actor} accepted your change request {record}",
+        "requestRejected": "{actor} rejected your change request {record}: {title}",
+        "approvalAsked": "{actor} asks you to approve change order {record}: {title}",
+        "orderDecided": "{actor} {status} change order {record}",
+        "orderReleased": "Change order {record} was released: {title}",
+        "workInProgress": "Change order {record} was released: {title}. It decides what happens to work orders {kind}"
       }
     },
     "fallback": "News on {record}",
