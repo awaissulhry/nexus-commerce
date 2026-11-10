@@ -119,6 +119,12 @@ export const publicDocPage = output({
    * (empty: no notice, the section is not drawn); optional only so pages written before it still read.
    */
   notices: z.array(publicSafetyNotice).optional(),
+  /**
+   * B-W2b-236 (SY3:03): the style's main picture, shown through a copy stripped of camera and location data (never the
+   * office's file): `GET /public/doc/<code>/picture/<fileId>`. null: the style has no main picture that can be shown (none,
+   * not available yet, or a type that cannot be stripped). Optional only so pages written before it still read.
+   */
+  picture: output({ fileId: id(), contentType: z.string(), caption: z.string().nullable() }).nullable().optional(),
 })
 export type PublicDocPage = z.infer<typeof publicDocPage>
 

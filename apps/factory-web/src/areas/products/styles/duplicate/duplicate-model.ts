@@ -90,7 +90,9 @@ export function togglePart(draft: DuplicateDraft, offer: Offer, part: CopyPart):
  */
 export function partWords(part: OfferPart, offer: Pick<Offer, 'source' | 'revision'>): Words {
   const revision = offer.revision?.revision ?? 0
-  if (part.part === 'PICTURES' || part.part === 'OPTIONS') return { key: `duplicate.reason.${part.part}` }
+  // B-W2b-236 (SY3:01): the pictures are copied now (their count, or the style has none); options still wait for their page.
+  if (part.part === 'PICTURES') return part.available ? { key: 'duplicate.holds.pictures', params: { count: part.count ?? 0 } } : /needs /.test(part.reason ?? '') ? { key: 'duplicate.reason.other' } : { key: 'duplicate.reason.noPictures', params: { code: offer.source.code } }
+  if (part.part === 'OPTIONS') return { key: `duplicate.reason.${part.part}` }
   if (part.available) {
     if (part.part === 'BOM') return part.count === null ? { key: 'duplicate.holds.bomHidden' } : { key: 'duplicate.holds.bom', params: { count: part.count, revision } }
     if (part.part === 'ROUTING') return part.count === null ? { key: 'duplicate.holds.routingHidden' } : { key: 'duplicate.holds.routing', params: { count: part.count, revision } }
@@ -117,6 +119,9 @@ export function noteWords(note: string): Words {
   const colourways = /^(\d+) archived colourway\(s\) are not copied/.exec(note)
   if (colourways) return { key: 'duplicate.note.colourways', params: { count: Number(colourways[1]) } }
   const colour = /^Colourway (\S+): its library colour/.exec(note)
+  // B-W2b-236: pictures of another revision or of an archived colourway stay behind.
+  const pictures = /^(\d+) picture\(s\) of another revision/.exec(note)
+  if (pictures) return { key: 'duplicate.note.pictures', params: { count: Number(pictures[1]) } }
   if (colour) return { key: 'duplicate.note.colour', params: { code: colour[1]! } }
   const lines = /^(\d+) BOM line\(s\) of archived colourways/.exec(note)
   if (lines) return { key: 'duplicate.note.lines', params: { count: Number(lines[1]) } }
