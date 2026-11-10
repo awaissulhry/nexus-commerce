@@ -133,7 +133,12 @@
     "suspended": "Sospesi o ritirati",
     "drafts": "Bozze non registrate",
     "expired": "Scaduti",
-    "changes": "Modifiche in attesa dell'organismo notificato"
+    "changes": "Modifiche in attesa dell'organismo notificato",
+    "garment": "Capi (EN 17092)",
+    "protectors": "Protezioni (EN 1621)",
+    "gloves": "Guanti (EN 13594)",
+    "expiring90": "In scadenza entro 90 giorni",
+    "privateLabel": "Private label"
   },
   "tile": {
     "valid": "Validi",

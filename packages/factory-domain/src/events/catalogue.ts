@@ -159,6 +159,13 @@ import { events as productMeasures } from '../product-measures/events'
 import { events as productOptions } from '../product-options/events'
 // B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
 import { events as complianceRules } from '../compliance-rules/events'
+// B-W2b-233: prepacks (a prepack changed) and protector placement (a draft revision's placement changed).
+import { events as productPrepacks } from '../product-prepacks/events'
+import { events as productProtectors } from '../product-protectors/events'
+// B-W2b-250: restricted substances (the list, its rules, the Candidate List versions, the evaluated material profiles).
+import { events as complianceSubstances } from '../compliance-substances/events'
+// B-W2b-255: certificates in depth (the notified body directory, a certificate's body, levels, base and bought-in suppliers).
+import { events as certificatesDepth } from '../certificates-depth/events'
 // B-W2b-251: technical files (a file, an Annex III item, a risk assessment, a production-control test, an evidence pack changed).
 import { events as complianceTechfiles } from '../compliance-techfiles/events'
 import type { EventDefinition } from './define'
@@ -387,6 +394,13 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...complianceRules,
   // B-W2b-230
   ...productTechpack,
+  // B-W2b-233
+  ...productPrepacks,
+  ...productProtectors,
+  // B-W2b-250
+  ...complianceSubstances,
+  // B-W2b-255
+  ...certificatesDepth,
   // B-W2b-251
   ...complianceTechfiles] as const satisfies readonly EventDefinition[]
 

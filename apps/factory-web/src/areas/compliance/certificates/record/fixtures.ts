@@ -10,6 +10,8 @@ import { BRANDS, byNumber, CERTIFICATES, COMPANIES, COVERAGE_0001, coveredBy, de
 import { blankCheck, blankCoverage, certCan, defaultLapseDate, draftOf, lapseSummary, type CertificateRecordModel, type LapseAnswer, type LapseModel, type RecordTab } from '../model'
 import { EXPIRED_RENEWAL, renewalsModel, RENEWAL_STATES, REVIEWS, TOURING_RENEWAL, URBAN_RENEWAL, URBAN_RENEWED } from '../renewals/fixtures'
 import { CertificateRecordView } from './view/CertificateRecordView'
+import { DEPTH_GARMENT, DEPTH_GARMENT_TYPED, DEPTH_GLOVE, DEPTH_GLOVE_DRAFT, DEPTH_OWN, DEPTH_OWN_NO_BASE, DEPTH_OWN_SUSPENDED, DEPTH_PROTECTOR, DEPTH_STATES, depthModel, GLOVE_DRAFT } from '../depth/demo/fixtures'
+import { BODY_0000, BODY_9990, bodiesModel, SUPPLIERS } from '../depth/bodies-demo/fixtures'
 
 /**
  * SCR-051 — the certificate record, made-up data only (the CERT-DEMO-… register of SCR-050; "Demo Test Lab" 0000). Each
@@ -137,6 +139,17 @@ const urban = demoDetail(byNumber('CERT-DEMO-0002'), [demoCoverage(21, byNumber(
 const renewalsTab = (detail: CertificateDetail, over: Parameters<typeof renewalsModel>[0] = {}, role: RoleCase = 'owner') => recordCase(detail, { tab: 'renewals', renewals: renewalsModel(over) }, role)
 const answerDraft = (over: Partial<ReturnType<typeof renewalsModel>['draft']> = {}) => ({ ...renewalsModel().draft, ...over })
 
+// W2b (B-W2b-255): certificates in depth — the body from the directory, the levels, the own-brand base, the parts' suppliers.
+const protectorCertificate = byNumber('CERT-DEMO-0003')
+const protector = demoDetail(protectorCertificate, [
+  demoCoverage(31, protectorCertificate.id, { itemId: PROTECTOR.id, item: PROTECTOR, note: 'Shoulder protectors of the touring jackets.', version: 2 }),
+  demoCoverage(32, protectorCertificate.id, { itemId: uid('5505', 2), item: { id: uid('5505', 2), code: 'DEMO-PROT-GOMITO', name: 'Demo elbow protector level 2' } }),
+])
+const own = demoDetail(byNumber('CERT-DEMO-0008'), [demoCoverage(33, byNumber('CERT-DEMO-0008').id, { styleId: JACKET.id, style: { id: JACKET.id, code: JACKET.code, name: JACKET.name }, colourwayIds: [JACKET.colourways[1]!.id] })])
+const ownDraft = { ...own, status: 'DRAFT' as const, version: 1, nextStatuses: ['VALID' as const, 'WITHDRAWN' as const] }
+const gloveDraft = demoDetail(GLOVE_DRAFT, [], false)
+const depthCase = (detail: CertificateDetail, depth: Parameters<typeof depthModel>[0], over: Partial<CertificateRecordModel> = {}, role: RoleCase = 'owner', depthOver: Parameters<typeof depthModel>[1] = {}) => recordCase(detail, { depth: depthModel(depth, depthOver), ...over }, role)
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-051',
   title: 'Certificate record (coverage, lapse check, status)',
@@ -201,5 +214,32 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-product', label: 'W2a Product developer: reads, every renewal step held', model: renewalsTab(urban, {}, 'production') },
     { id: 'w2a-loading', label: 'W2a Renewals loading', model: recordCase(urban, { tab: 'renewals', renewals: RENEWAL_STATES.loading }) },
     { id: 'w2a-error', label: 'W2a Renewals could not be read', model: recordCase(urban, { tab: 'renewals', renewals: RENEWAL_STATES.error }) },
+    { id: 'w2b-body', label: 'W2b Notified body: from the directory, listed for protective motorcycle clothing ✓, NANDO', model: depthCase(valid, DEPTH_GARMENT, { tab: 'body' }), note: 'Name, number, address, contact, what it is notified for; NANDO opens the Commission’s site in a new tab; the other certificates from 0000.' },
+    { id: 'w2b-body-typed', label: 'W2b Notified body: typed only, the directory has 0000 — pick it', model: depthCase(valid, DEPTH_GARMENT_TYPED, { tab: 'body' }) },
+    { id: 'w2b-body-not-listed', label: 'W2b Notified body 9990: not listed for protective clothing (a warning)', model: depthCase(valid, { ...DEPTH_GARMENT, body: { ...DEPTH_GARMENT.body, directory: BODY_9990, scope: BODY_9990.clothing } }, { tab: 'body' }), note: 'A warning to open the NANDO entry, never a refusal: NANDO’s own list wins.' },
+    { id: 'w2b-pick', label: 'W2b Pick from the directory (a draft: the number fills in)', model: depthCase(gloveDraft, DEPTH_GLOVE_DRAFT, { tab: 'body' }, 'owner', { dialog: { kind: 'pickBody' }, draft: { ...depthModel(null).draft, bodyId: BODY_0000.id } }) },
+    { id: 'w2b-pick-registered', label: 'W2b Pick on a registered certificate: only its own body, once', model: depthCase(valid, DEPTH_GARMENT_TYPED, { tab: 'body' }, 'owner', { dialog: { kind: 'pickBody' }, draft: { ...depthModel(null).draft, bodyId: BODY_0000.id } }) },
+    {
+      id: 'w2b-pick-refused',
+      label: 'W2b Pick refused by the API (its words under ours)',
+      model: depthCase(valid, DEPTH_GARMENT_TYPED, { tab: 'body' }, 'owner', { dialog: { kind: 'pickBody' }, draft: { ...depthModel(null).draft, bodyId: BODY_0000.id }, problem: 'write.refused', lines: ["Certificate CERT-DEMO-0001 was issued by notified body 0000 (as typed from it): the directory's body 9990 is another one."] }),
+    },
+    { id: 'w2b-five-years', label: 'W2b Coverage: the five-year check ✓ beside the details', model: depthCase(valid, DEPTH_GARMENT), note: 'The brand certificate CERT-DEMO-0008 rests on this one.' },
+    { id: 'w2b-glove', label: 'W2b A glove certificate: level 1 KP, the marking "1KP"', model: depthCase(expired, DEPTH_GLOVE), note: 'Gloves stay off until the Owner says they are made (the rule is switched off).' },
+    { id: 'w2b-glove-draft', label: 'W2b A glove draft: no levels yet', model: depthCase(gloveDraft, DEPTH_GLOVE_DRAFT) },
+    { id: 'w2b-levels', label: 'W2b Glove levels dialog: level 2 with knuckle protection', model: depthCase(gloveDraft, DEPTH_GLOVE_DRAFT, {}, 'owner', { dialog: { kind: 'levels' }, draft: { ...depthModel(null).draft, levels: { level: '2', knuckle: 'KP' } } }) },
+    { id: 'w2b-levels-held', label: 'W2b Glove levels dialog: held without the level', model: depthCase(gloveDraft, DEPTH_GLOVE_DRAFT, {}, 'owner', { dialog: { kind: 'levels' }, draft: { ...depthModel(null).draft, levels: { knuckle: 'KP' } } }) },
+    { id: 'w2b-parts', label: 'W2b Protector: zones and the parts with their supplier and article code', model: depthCase(protector, DEPTH_PROTECTOR), note: 'A lot from another supplier is not covered at incoming; the elbow protector names no supplier yet (any supplier).' },
+    { id: 'w2b-supplier', label: 'W2b Name the supplier of a part', model: depthCase(protector, DEPTH_PROTECTOR, {}, 'owner', { dialog: { kind: 'supplier', coverageId: uid('5506', 32) }, draft: { ...depthModel(null).draft, supplierId: SUPPLIERS[1]!.id, articleCode: 'FD2-GOM-L2' } }) },
+    { id: 'w2b-supplier-named', label: 'W2b A named supplier: only its article code changes', model: depthCase(protector, DEPTH_PROTECTOR, {}, 'owner', { dialog: { kind: 'supplier', coverageId: uid('5506', 31) }, draft: { ...depthModel(null).draft, supplierId: SUPPLIERS[0]!.id, articleCode: 'DA-SH-L2-B' } }) },
+    { id: 'w2b-own', label: 'W2b Own brand: the brand’s certificate on CERT-DEMO-0001, both valid', model: depthCase(own, DEPTH_OWN), note: 'It outlives its base by 446 days: from the base’s end the gate refuses.' },
+    { id: 'w2b-own-suspended', label: 'W2b Own brand: the base suspended — the gate refuses', model: depthCase(own, DEPTH_OWN_SUSPENDED) },
+    { id: 'w2b-own-draft', label: 'W2b Own brand draft: no base yet', model: depthCase(ownDraft, DEPTH_OWN_NO_BASE) },
+    { id: 'w2b-base', label: 'W2b Pick the base certificate', model: depthCase(ownDraft, DEPTH_OWN_NO_BASE, {}, 'owner', { dialog: { kind: 'base' }, draft: { ...depthModel(null).draft, baseId: valid.id } }) },
+    { id: 'w2b-bodies', label: 'W2b Notified bodies… from the tab (the directory pop-up)', model: depthCase(valid, DEPTH_GARMENT, { tab: 'body', bodies: bodiesModel() }) },
+    { id: 'w2b-product', label: 'W2b Product developer: reads, every depth write held', model: depthCase(valid, { ...DEPTH_GARMENT_TYPED, mayManage: false }, { tab: 'body' }, 'production'), note: 'Pick from the directory says why it is held.' },
+    { id: 'w2b-depth-loading', label: 'W2b Depth loading (Notified body tab)', model: recordCase(valid, { tab: 'body', depth: DEPTH_STATES.loading }) },
+    { id: 'w2b-depth-error', label: 'W2b Depth could not be read', model: recordCase(valid, { tab: 'body', depth: DEPTH_STATES.error }), note: 'Said in words with Try again; the rest of the record stays usable.' },
+    { id: 'w2b-depth-error-coverage', label: 'W2b Depth could not be read (Coverage tab)', model: recordCase(valid, { depth: DEPTH_STATES.error }) },
   ],
 })

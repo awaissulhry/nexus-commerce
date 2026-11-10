@@ -38,6 +38,12 @@ import { certificateHref } from '../../view/CertificatesListView'
 import { AddCoverageDialog, EndCoverageDialog, RegisterDialog, StatusDialog, useRegisterLines } from './dialogs'
 import type { RenewalsActions } from '../../renewals/use-renewals'
 import { RenewalsTab } from '../../renewals/view/RenewalsTab'
+import type { DepthActions } from '../../depth/use-depth'
+import type { BodiesActions } from '../../bodies/use-bodies'
+import { BodyPanel } from '../../depth/view/BodyPanel'
+import { BoughtInSection, DepthSections } from '../../depth/view/DepthSections'
+import { DepthDialogs } from '../../depth/view/dialogs'
+import { BodiesDialog } from '../../bodies/view/BodiesDialog'
 
 export interface CertificateRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void
@@ -76,6 +82,9 @@ export interface CertificateRecordActions {
   onCheckRun?: () => void
   /** W2a (B-W2a-66): the Renewals tab. */
   renewals?: RenewalsActions
+  /** W2b (B-W2b-255): the certificate in depth and the Notified bodies pop-up. */
+  depth?: DepthActions
+  bodies?: BodiesActions
 }
 
 /**
@@ -131,9 +140,11 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
   ]
 
   // k: Check a garment, r: Register (a draft), ?: the keys; never while typing or in a dialog.
+  const overlay = !!model.depth?.dialog || !!model.bodies?.open
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (dialog || !isPageKey(event)) return
+      // W2b (B-W2b-255): silent too while a depth dialog or the Notified bodies pop-up is open.
+      if (dialog || overlay || !isPageKey(event)) return
       if (event.key === 'k') {
         event.preventDefault()
         actions?.onDialog?.({ kind: 'check' })
@@ -147,7 +158,7 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [actions, certificate.status, dialog])
+  }, [actions, certificate.status, dialog, overlay])
 
   const primary =
     certificate.status === 'DRAFT' ? (
@@ -207,7 +218,8 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
       case 'renewals':
         return model.renewals ? <RenewalsTab model={model.renewals} can={can} prefix={model.prefix} actions={actions?.renewals} /> : null
       case 'body':
-        return <BodyTab certificate={certificate} model={model} />
+        // W2b (B-W2b-255): the directory's body, the scope check, NANDO, Pick from the directory (W1's typed view before it).
+        return model.depth ? <BodyPanel model={model.depth} can={can} prefix={model.prefix} actions={actions?.depth} onDirectory={() => actions?.bodies?.onOpen?.()} /> : <BodyTab certificate={certificate} model={model} />
       case 'files':
         return <FilesTab certificate={certificate} model={model} actions={actions} />
       case 'activity':
@@ -242,6 +254,8 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
         </div>
       </RecordFrame>
 
+      {model.depth && <DepthDialogs model={model.depth} can={can} actions={actions?.depth} />}
+      {model.bodies && <BodiesDialog model={model.bodies} can={can} actions={actions?.bodies} />}
       {dialog?.kind === 'register' && <RegisterDialog certificate={certificate} model={model} actions={actions} />}
       {dialog?.kind === 'status' && <StatusDialog certificate={certificate} move={dialog.move} model={model} actions={actions} />}
       {dialog?.kind === 'coverage' && <AddCoverageDialog certificate={certificate} model={model} actions={actions} />}
@@ -321,6 +335,8 @@ function CoverageTab({ certificate, model, actions }: { certificate: Certificate
         <DetailsCard certificate={certificate} model={model} actions={actions} />
         {certificate.status === 'DRAFT' ? <RegisterCard certificate={certificate} model={model} actions={actions} /> : <LapseCard certificate={certificate} model={model} actions={actions} />}
       </div>
+      {/* W2b (B-W2b-255): the five-year check, the performance levels, the own-brand base. */}
+      {model.depth && <DepthSections model={model.depth} can={can} prefix={model.prefix} actions={actions?.depth} />}
       <Section
         title={t('coverage.title')}
         sub={t('coverage.intro')}
@@ -337,7 +353,11 @@ function CoverageTab({ certificate, model, actions }: { certificate: Certificate
             {styles.map((coverage) => (
               <StyleCoverage key={coverage.id} coverage={coverage} style={coverage.styleId ? model.styles[coverage.styleId] : undefined} model={model} actions={actions} />
             ))}
-            {items.length > 0 && (
+            {/* W2b (B-W2b-255; QHS-106): the parts with their supplier and article code, once the depth is read. */}
+            {items.length > 0 && model.depth?.depth.value && (
+              <BoughtInSection model={model.depth} can={can} prefix={model.prefix} actions={actions?.depth} onEnd={(coverageId) => actions?.onDialog?.({ kind: 'endCoverage', coverageId })} endHeld={can.manage ? null : t('held.manage')} />
+            )}
+            {items.length > 0 && !model.depth?.depth.value && (
               <div className="fw-ce-items">
                 <h3 className="fw-ce-h3">{t('coverage.items')}</h3>
                 <SummaryTable

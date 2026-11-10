@@ -9,6 +9,9 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { BrandOption, StyleOption } from '../api'
 import { checkHeld, draftProblems, draftSpan, firstProblem, grantedClass, kindOf, STANDARD_SUGGESTIONS, type AddModel, type CertCan, type CertificateDraft, type CheckModel, type DraftField } from '../model'
 import { dateLocale, GateAnswer, PdfChooser, useDay, useProblemWords } from './parts'
+import type { NotifiedBody } from '../depth/api'
+import { DEPTH_NS, fiveYearWords } from '../depth/model'
+import { useSpanText } from '../depth/view/parts'
 
 // ---- the certificate's fields (Add certificate and a draft's Details) ------------------------------------------------
 
@@ -18,14 +21,19 @@ export interface FieldsModel {
   refused?: readonly DraftField[]
   companies: ReadonlyArray<{ id: string; name: string }>
   brands: readonly BrandOption[] | null
+  /** W2b (B-W2b-255): the directory's active bodies to pick from (null: not offered), and the one picked. */
+  directory?: readonly NotifiedBody[] | null
+  bodyId?: string | null
 }
 
 /**
  * The fields a person types from the notified body's certificate, each checked as they leave it with the domain's own
  * rules (the class an EN 17092 part grants, an EN 1621 level, the 4-digit notified body number, five years at most).
  */
-export function CertificateFields({ model, onDraft, onTouch, autoFocus }: { model: FieldsModel; onDraft?: (draft: CertificateDraft) => void; onTouch?: (field: DraftField) => void; autoFocus?: boolean }) {
+export function CertificateFields({ model, onDraft, onTouch, onBody, autoFocus }: { model: FieldsModel; onDraft?: (draft: CertificateDraft) => void; onTouch?: (field: DraftField) => void; onBody?: (body: NotifiedBody | null) => void; autoFocus?: boolean }) {
   const t = useT('certificates')
+  const d = useT(DEPTH_NS)
+  const spanText = useSpanText()
   const locale = useLocale()
   const day = useDay()
   const words = useProblemWords()
@@ -35,7 +43,10 @@ export function CertificateFields({ model, onDraft, onTouch, autoFocus }: { mode
   const error = (field: DraftField): string | undefined => {
     if (model.refused?.includes(field)) return t('add.problem.refused')
     const problem = problems[field]
-    return problem && model.touched.includes(field) ? words(problem) : undefined
+    if (!problem || !model.touched.includes(field)) return undefined
+    // B-W2b-255 (PRD-282): the five-year rule says by how much ("Valid to is 5 years and 2 months after Valid from").
+    const five = field === 'validTo' && problem.key === 'add.problem.fiveYears' ? fiveYearWords(draft.validFrom, draft.validTo) : null
+    return five ? d('five.tooLong', { span: spanText(five.span), years: five.years }) : words(problem)
   }
   const leave = (field: DraftField) => () => onTouch?.(field)
   const suggested = (STANDARD_SUGGESTIONS as readonly string[]).includes(draft.standard)
@@ -99,6 +110,25 @@ export function CertificateFields({ model, onDraft, onTouch, autoFocus }: { mode
           ))}
         </Select>
       </Field>
+      {model.directory && model.directory.length > 0 && (
+        <Field label={d('add.directory')} hint={d('add.directoryHint')}>
+          <Select
+            value={model.bodyId ?? ''}
+            onChange={(event) => {
+              const body = model.directory?.find((entry) => entry.id === event.target.value) ?? null
+              onBody?.(body)
+              if (body) set({ notifiedBodyName: body.name, notifiedBodyNumber: body.number })
+            }}
+          >
+            <option value="">{d('add.directoryNone')}</option>
+            {model.directory.map((body) => (
+              <option key={body.id} value={body.id}>
+                {d('pick.option', { number: body.number, name: body.name, country: body.country })}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
       <Field label={t('field.bodyName')} required error={error('notifiedBodyName')}>
         <Input value={draft.notifiedBodyName} maxLength={200} onChange={(event) => set({ notifiedBodyName: event.target.value })} onBlur={leave('notifiedBodyName')} />
       </Field>
@@ -147,6 +177,8 @@ export function CertificateFields({ model, onDraft, onTouch, autoFocus }: { mode
 
 export interface AddActions {
   onDraft?: (draft: CertificateDraft) => void
+  /** W2b (B-W2b-255): a body picked from the directory (null: typed by hand). */
+  onBody?: (body: NotifiedBody | null) => void
   onTouch?: (field: DraftField) => void
   onFile?: (file: File) => void
   onCreate?: () => void
@@ -157,7 +189,7 @@ export interface AddActions {
  * Add certificate: the fields from the notified body's certificate (checked as you leave each one) and, optionally, its
  * PDF; Create makes a DRAFT and opens its Coverage. The draft is registered later, once it has its PDF and coverage.
  */
-export function AddCertificateDialog({ model, can, companies, brands, actions }: { model: AddModel; can: CertCan; companies: ReadonlyArray<{ id: string; name: string }>; brands: readonly BrandOption[] | null; actions?: AddActions }) {
+export function AddCertificateDialog({ model, can, companies, brands, directory, actions }: { model: AddModel; can: CertCan; companies: ReadonlyArray<{ id: string; name: string }>; brands: readonly BrandOption[] | null; directory?: readonly NotifiedBody[] | null; actions?: AddActions }) {
   const t = useT('certificates')
   const words = useProblemWords()
   const problems = draftProblems(model.draft)
@@ -195,7 +227,7 @@ export function AddCertificateDialog({ model, can, companies, brands, actions }:
         }}
       >
         <p className="fw-q-hint">{t('add.intro')}</p>
-        <CertificateFields model={{ draft: model.draft, touched: model.touched, refused: model.refused, companies, brands }} onDraft={actions?.onDraft} onTouch={actions?.onTouch} autoFocus />
+        <CertificateFields model={{ draft: model.draft, touched: model.touched, refused: model.refused, companies, brands, directory, bodyId: model.bodyId ?? null }} onDraft={actions?.onDraft} onTouch={actions?.onTouch} onBody={actions?.onBody} autoFocus />
         <PdfChooser name={model.fileName} onFile={actions?.onFile} label={t('add.pdf')} hint={t('add.pdfHint')} held={can.upload ? null : t('held.upload')} />
         <p className="fw-q-hint">{t('add.after')}</p>
         {model.problem && (

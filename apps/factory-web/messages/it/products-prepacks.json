@@ -1,0 +1,263 @@
+{
+  "prepacks": {
+    "title": "Assortimenti prepack",
+    "loading": "Caricamento degli assortimenti…",
+    "failed": "Impossibile caricare gli assortimenti",
+    "intro": "Mix fissi di taglie che i rivenditori ordinano come un'unica confezione: quelli di questo modello e quelli di tutti i modelli della scala taglie {scale}.",
+    "rule": "Un assortimento non fa parte di una revisione: rilasciare o avviare una revisione non lo cambia. Una taglia senza capi si legge “—”.",
+    "add": "Nuovo assortimento",
+    "table": "Assortimenti prepack",
+    "count": "{count} attivi · {usable} vendibili per questo modello",
+    "showArchived": "Mostra archiviati ({count})",
+    "unit": "pz",
+    "cell": "{code}, capi della taglia {size}",
+    "ratio": "rapporto {ratio}",
+    "byColour": "Per variante colore",
+    "offline": "Non in linea: {count} modifica/e in attesa su questa pagina, inviate al ritorno della connessione.",
+    "col": {
+      "prepack": "Assortimento",
+      "for": "Per",
+      "pieces": "Capi per confezione",
+      "fit": "Questo modello",
+      "more": "Altro",
+      "code": "Codice",
+      "name": "Nome"
+    },
+    "for": {
+      "style": "Questo modello",
+      "scale": "Scala {scale}",
+      "styleLong": "Solo questo modello ({style})",
+      "scaleLong": "Tutti i modelli della scala taglie {scale}"
+    },
+    "fit": {
+      "usable": "Vendibile",
+      "outside": "Non prodotto in {sizes}",
+      "archived": "Archiviato"
+    },
+    "row": {
+      "open": "Apri",
+      "edit": "Modifica",
+      "archive": "Archivia",
+      "restore": "Ripristina",
+      "more": "Altro per {code}"
+    },
+    "bulk": {
+      "archive": "Archivia {count}",
+      "restore": "Ripristina {count}",
+      "noneActive": "Nessuno degli assortimenti selezionati è attivo.",
+      "noneArchived": "Nessuno degli assortimenti selezionati è archiviato."
+    },
+    "keys": {
+      "add": "Nuovo assortimento",
+      "open": "Apri l'assortimento"
+    },
+    "held": {
+      "noManage": "Il tuo ruolo può vedere gli assortimenti, non modificarli.",
+      "archivedStyle": "Questo modello è archiviato: riattivalo prima di modificarne gli assortimenti.",
+      "rule": "Lo stato del ciclo di vita del modello blocca ogni modifica: i suoi assortimenti attendono (quelli della scala si modificano ancora).",
+      "archived": "Questo assortimento è archiviato: ripristinalo per modificarlo."
+    },
+    "readOnly": {
+      "noManage": "Sola lettura: il tuo ruolo può vedere gli assortimenti, non modificarli.",
+      "rule": "Lo stato del ciclo di vita del modello blocca ogni modifica: gli assortimenti di questo modello sono in sola lettura; quelli della scala si modificano ancora."
+    },
+    "empty": {
+      "title": "Nessun assortimento",
+      "body": "Aggiungi un mix fisso di taglie che i rivenditori possono ordinare come una confezione, per questo modello o per tutti i modelli della sua scala."
+    },
+    "problem": {
+      "write": "La modifica non è stata salvata.",
+      "quantity": "Scrivi capi interi da 1 a 10.000 (vuoto: nessun capo di quella taglia).",
+      "lastSize": "Un assortimento tiene almeno una taglia: archivialo invece.",
+      "codeMissing": "Dai un codice all'assortimento.",
+      "codeShape": "Il codice non ha spazi e ha al massimo 40 caratteri.",
+      "codeTaken": "Un altro assortimento di questa scala taglie ha questo codice.",
+      "nameMissing": "Dai un nome all'assortimento.",
+      "noLine": "Scrivi i capi di almeno una taglia.",
+      "moved": "Qualcuno ha modificato questo assortimento nel frattempo: è stato riletto.",
+      "state": "Questo assortimento non si può modificare ora: è stato riletto.",
+      "invalid": "L'assortimento è stato rifiutato: controlla taglie e capi."
+    },
+    "dialog": {
+      "addTitle": "Nuovo assortimento",
+      "editTitle": "Assortimento {code}",
+      "add": "Aggiungi assortimento",
+      "save": "Salva",
+      "codeHint": "Unico nella scala taglie, senza spazi (“PP-7”).",
+      "forHint": "Un assortimento della scala serve ogni modello prodotto in tutte le sue taglie.",
+      "forFixed": "A chi è destinato un assortimento non cambia: creane uno nuovo.",
+      "byColour": "Capi per variante colore",
+      "grid": "Capi per taglia",
+      "colourway": "Variante colore",
+      "pieces": "Capi",
+      "anyColour": "Qualsiasi variante",
+      "cell": "{row}, taglia {size}",
+      "totals": "{pieces} capi per confezione · rapporto {ratio}"
+    },
+    "status": {
+      "archiveTitle": "Archivia {count} assortimento/i",
+      "restoreTitle": "Ripristina {count} assortimento/i",
+      "archive": "Archivia {count}",
+      "restore": "Ripristina {count}",
+      "archiveBody": "Un assortimento archiviato mantiene le sue taglie come sono e nessuna nuova riga d'ordine lo usa. Puoi ripristinarlo in seguito.",
+      "restoreBody": "Un assortimento ripristinato si può ordinare di nuovo e modificarne le taglie."
+    },
+    "notice": {
+      "added": "Assortimento {code} aggiunto.",
+      "saved": "Assortimento {code} salvato.",
+      "archived": "{count} assortimento/i archiviato/i.",
+      "restored": "{count} assortimento/i ripristinato/i."
+    }
+  },
+  "protectors": {
+    "title": "Posizionamento protezioni",
+    "loading": "Caricamento del posizionamento protezioni…",
+    "failed": "Impossibile caricare il posizionamento protezioni",
+    "noRevision": "Il modello non ha ancora una revisione: avvia la revisione 1 per posizionare le protezioni.",
+    "intro": "Quale protezione va in quale tasca della revisione {revision}, per quali taglie, con la norma e il livello richiesti dal tipo certificato.",
+    "rule": "Ogni tasca accoglie una protezione per taglia. L'elenco è confrontato con la distinta base della revisione e con i certificati; ciò che non concorda è segnalato qui, senza mai bloccare.",
+    "add": "Aggiungi posizionamento",
+    "table": "Posizionamento protezioni",
+    "count": "{count} posizionamento/i in {pockets} tasca/he",
+    "inBom": "in distinta",
+    "level": "Livello {level}",
+    "offline": "Non in linea: {count} modifica/e in attesa su questa pagina, inviate al ritorno della connessione.",
+    "position": {
+      "placeholder": "es. destra e sinistra, 2 cm sopra la cucitura del gomito"
+    },
+    "col": {
+      "seq": "N.",
+      "pocket": "Tasca",
+      "protector": "Protezione",
+      "standard": "Norma",
+      "level": "Livello",
+      "sizes": "Taglie",
+      "position": "Posizione della tasca",
+      "more": "Altro"
+    },
+    "cell": {
+      "pocket": "Tasca del posizionamento {seq}",
+      "protector": "Protezione del posizionamento {seq}",
+      "standard": "Norma del posizionamento {seq}",
+      "level": "Livello del posizionamento {seq}",
+      "position": "Posizione della tasca del posizionamento {seq}"
+    },
+    "pocket": {
+      "SHOULDER": "Spalla",
+      "ELBOW": "Gomito",
+      "BACK": "Schiena",
+      "CHEST": "Petto",
+      "HIP": "Anca",
+      "KNEE": "Ginocchio"
+    },
+    "pocketWord": {
+      "SHOULDER": "spalla",
+      "ELBOW": "gomito",
+      "BACK": "schiena",
+      "CHEST": "petto",
+      "HIP": "anca",
+      "KNEE": "ginocchio"
+    },
+    "sizes": {
+      "all": "Tutte le taglie",
+      "run": "{from}–{to}",
+      "some": "{sizes}",
+      "every": "Ogni taglia (segue la gamma del modello)",
+      "only": "Solo queste taglie",
+      "hint": "Due posizionamenti della stessa tasca non condividono mai una taglia.",
+      "pickOne": "Seleziona almeno una taglia.",
+      "change": "Cambia le taglie del posizionamento {seq}",
+      "changeShort": "Cambia…",
+      "title": "Taglie del posizionamento {seq} ({pocket})",
+      "apply": "Applica"
+    },
+    "row": {
+      "edit": "Modifica",
+      "open": "Apri",
+      "up": "Sposta su",
+      "down": "Sposta giù",
+      "remove": "Rimuovi",
+      "more": "Altro per il posizionamento {seq}"
+    },
+    "bulk": {
+      "remove": "Rimuovi {count}"
+    },
+    "keys": {
+      "add": "Aggiungi un posizionamento",
+      "open": "Apri il posizionamento"
+    },
+    "frozen": {
+      "released": "La revisione {revision} è rilasciata e congelata: il posizionamento protezioni è in sola lettura.",
+      "obsolete": "La revisione {revision} è obsoleta: conservata per archivio, in sola lettura."
+    },
+    "held": {
+      "noManage": "Il tuo ruolo può vedere il posizionamento protezioni, non modificarlo.",
+      "frozen": "La revisione visualizzata è congelata: modifica il posizionamento in una revisione bozza.",
+      "archived": "Questo modello è archiviato: riattivalo prima di modificarne il posizionamento protezioni.",
+      "rule": "Lo stato del ciclo di vita del modello non consente ora modifiche alla bozza (vedi Panoramica).",
+      "noChoice": "Nessun materiale protezione posizionabile: aggiungi prima un materiale PROTEZIONE in Materiali e accessori."
+    },
+    "readOnly": {
+      "noManage": "Sola lettura: il tuo ruolo può vedere il posizionamento protezioni, non modificarlo.",
+      "rule": "Sola lettura: lo stato del ciclo di vita del modello non consente ora modifiche alla bozza (vedi Panoramica)."
+    },
+    "findings": {
+      "title": "{count} punto/i da verificare",
+      "none": "Il posizionamento concorda con la distinta base e con i certificati."
+    },
+    "finding": {
+      "POCKET_STANDARD": "La tasca {pocket} accoglie una protezione provata secondo {expected}; il posizionamento {seq} indica {standard}.",
+      "ITEM_BLOCKED": "{item} è bloccato per l'uso: il posizionamento {seq} ({pocket}) richiede un'altra protezione.",
+      "ITEM_STANDARD": "{item} è provato secondo {itemStandard}; il posizionamento {seq} ({pocket}) richiede {standard}.",
+      "ITEM_LEVEL": "{item} è una protezione di livello {level}; la tasca {pocket} richiede il livello {asked}.",
+      "NOT_IN_BOM": "{item} ({pocket}) non è nella distinta base di questa revisione.",
+      "NOT_IN_BOM_SIZES": "La distinta base non ha {item} per le taglie {sizes}, dove la tasca {pocket} lo posiziona.",
+      "NO_ITEM_CERTIFICATE": "Nessun certificato valido copre {item} (posizionamento {seq}, {pocket}).",
+      "ITEM_CERTIFICATE_LEVEL": "Il certificato {certificate} copre {item} secondo {certificateStandard} livello {level}; la tasca {pocket} richiede il livello {asked}.",
+      "BOM_NOT_PLACED": "{item} è in distinta per le taglie {sizes}, ma nessuna tasca lo posiziona lì.",
+      "BOM_NOT_PLACED_ALL": "{item} è in distinta (riga {seq}), ma nessuna tasca lo posiziona.",
+      "STYLE_CERTIFICATE_LEVEL": "Il certificato {certificate} è stato rilasciato con una protezione {pocket} di livello {level}; il posizionamento {seq} richiede il livello {asked}.",
+      "STYLE_CERTIFICATE_POCKET": "Il certificato {certificate} è stato rilasciato con una protezione {pocket} (livello {level}); nessuna tasca ne posiziona una."
+    },
+    "empty": {
+      "title": "Nessuna protezione posizionata",
+      "body": "Aggiungi ogni tasca con la protezione che vi va inserita.",
+      "frozen": "In questa revisione non è stato posizionato nulla."
+    },
+    "problem": {
+      "write": "La modifica non è stata salvata.",
+      "pocket": "Scegli una tasca.",
+      "overlap": "Quella tasca ha già una protezione per una di queste taglie.",
+      "protector": "Scegli un materiale protezione attivo dell'azienda del modello.",
+      "standard": "Scrivi la norma con la sua edizione (“EN 1621-1:2012”), al massimo 60 caratteri.",
+      "level": "Il livello è 1 o 2.",
+      "size": "Solo una taglia della gamma del modello.",
+      "note": "Al massimo 500 caratteri.",
+      "moved": "Qualcuno ha modificato questo posizionamento nel frattempo: è stato riletto.",
+      "state": "Il posizionamento non si può modificare ora: è stato riletto.",
+      "invalid": "Il posizionamento è stato rifiutato: controlla i campi."
+    },
+    "dialog": {
+      "addTitle": "Aggiungi un posizionamento alla revisione {revision}",
+      "editTitle": "Posizionamento {seq}",
+      "add": "Aggiungi posizionamento",
+      "save": "Salva",
+      "pick": "Scegli una protezione",
+      "inBom": "Questa protezione è nella distinta base della revisione.",
+      "notInBom": "Questa protezione non è ancora nella distinta base della revisione: sarà segnalato.",
+      "standardHint": "Come la richiede il tipo certificato, con la sua edizione. Compilata dalla protezione quando la indica.",
+      "levelHint": "Il livello 2 protegge di più; una protezione di livello 1 non serve dove è richiesto il 2.",
+      "positionHint": "Dove si trova la tasca, come la leggono il reparto cucito e la nota informativa."
+    },
+    "remove": {
+      "title": "Rimuovi {count} posizionamento/i",
+      "confirm": "Rimuovi {count}",
+      "body": "Escono dalla revisione bozza {revision}; aggiungili di nuovo per riaverli."
+    },
+    "notice": {
+      "added": "Posizionamento aggiunto.",
+      "saved": "Posizionamento salvato.",
+      "removed": "{count} posizionamento/i rimosso/i."
+    }
+  }
+}

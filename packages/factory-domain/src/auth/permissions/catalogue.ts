@@ -146,6 +146,10 @@ import { RULES_LIBRARY_DEFINITIONS, RULES_LIBRARY_PERMISSIONS } from '../../comp
 import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phrases/permissions'
 // B-W2b-230: the tech pack PDF per audience (product.techpacks.make).
 import { PRODUCT_TECHPACKS_DEFINITIONS, PRODUCT_TECHPACKS_PERMISSIONS } from '../../product/techpack/permissions'
+// B-W2b-233: prepacks (product.prepacks.manage; reading is product.styles.view).
+import { PRODUCT_PREPACKS_DEFINITIONS, PRODUCT_PREPACKS_PERMISSIONS } from '../../product/prepacks/permissions'
+// B-W2b-250: restricted substances and their rules (compliance.substances.manage); reading is compliance.certificates.view.
+import { SUBSTANCES_DEFINITIONS, SUBSTANCES_PERMISSIONS } from '../../compliance/substances/permissions'
 // B-W2b-251: technical files (compliance.techfiles.manage | sign | share); reading is compliance.certificates.view.
 import { TECHFILES_DEFINITIONS, TECHFILES_PERMISSIONS } from '../../compliance/techfiles/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -806,6 +810,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PHRASES_DEFINITIONS,
   // B-W2b-230: the tech pack PDF (area `product`, declared above).
   PRODUCT_TECHPACKS_DEFINITIONS,
+  // B-W2b-233: prepacks (area `product`, declared above).
+  PRODUCT_PREPACKS_DEFINITIONS,
+  // B-W2b-250: restricted substances and their rules (area `compliance`, declared above).
+  SUBSTANCES_DEFINITIONS,
   // B-W2b-251: technical files (area `compliance`, declared above).
   TECHFILES_DEFINITIONS,
 ])
@@ -1070,6 +1078,10 @@ for (const name of PRODUCT_MATERIALS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-230: the tech pack PDF.
 for (const name of PRODUCT_TECHPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-233: prepacks.
+for (const name of PRODUCT_PREPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-250: restricted substances and their rules.
+for (const name of SUBSTANCES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-251: technical files.
 for (const name of TECHFILES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

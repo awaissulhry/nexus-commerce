@@ -1,0 +1,359 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close"
+  },
+  "depth": {
+    "failed": "The certificate's details could not be read."
+  },
+  "span": {
+    "years_one": "{count} year",
+    "years_other": "{count} years",
+    "months_one": "{count} month",
+    "months_other": "{count} months",
+    "days_one": "{count} day",
+    "days_other": "{count} days"
+  },
+  "five": {
+    "title": "Five-year check",
+    "intro": "An EU type-examination certificate, new or renewed, is valid for at most five years.",
+    "ok": "Valid for {span}: within the {years}-year limit.",
+    "tooLong": "Valid to is {span} after Valid from: a certificate is valid at most {years} years (Annex V 6.1).",
+    "incomplete": "Type the first and last valid day to check the five years.",
+    "latest": "The last valid day can be {date} at the latest."
+  },
+  "scope": {
+    "LISTED": {
+      "GARMENT": "Listed for protective motorcycle clothing",
+      "PROTECTOR": "Listed for impact protectors",
+      "GLOVE": "Listed for protective gloves",
+      "OTHER": "Listed under the PPE Regulation"
+    },
+    "NOT_LISTED": {
+      "GARMENT": "Not listed for protective clothing: check its NANDO entry",
+      "PROTECTOR": "Not listed for impact protectors: check its NANDO entry",
+      "GLOVE": "Not listed for protective gloves: check its NANDO entry",
+      "OTHER": "Not listed under the PPE Regulation: check its NANDO entry"
+    },
+    "NO_SCOPES": {
+      "GARMENT": "No scope recorded yet: copy it from its NANDO entry",
+      "PROTECTOR": "No scope recorded yet: copy it from its NANDO entry",
+      "GLOVE": "No scope recorded yet: copy it from its NANDO entry",
+      "OTHER": "No scope recorded yet: copy it from its NANDO entry"
+    },
+    "lookAgain": "NANDO's own list wins: this check reads only the scopes typed here.",
+    "short": {
+      "LISTED": "Listed",
+      "NOT_LISTED": "Not listed",
+      "NO_SCOPES": "No scope yet"
+    }
+  },
+  "nando": {
+    "none": "No NANDO link recorded.",
+    "open": "NANDO entry of {number}",
+    "newTab": "opens the European Commission's site in a new tab",
+    "short": "Open",
+    "noneShort": "None"
+  },
+  "law": {
+    "ppe": "Reg. (EU) 2016/425 {point}",
+    "annexII": "The CE marking and the user information name the notified body that examined the type, by its identification number.",
+    "annexV": "An EU type-examination certificate, new or renewed, is valid for at most five years.",
+    "ownBrand": "A brand that places PPE on the market under its own name is its manufacturer and holds a certificate in its own name.",
+    "bodies": "Notified bodies are the conformity assessment bodies the Member States notify; each has a four-digit number in NANDO."
+  },
+  "held": {
+    "manage": "Needs the right to keep certificates (compliance lead).",
+    "final": "The certificate is withdrawn or expired: nothing is added to it.",
+    "filledOnce": "Registered: this is filled in once and never changes. A correction is a new certificate.",
+    "busy": "Saving…",
+    "long": "Too long."
+  },
+  "write": {
+    "refused": "Refused: the rule below says why.",
+    "conflict": "Someone changed it meanwhile: it was read again, try once more.",
+    "invalid": "Not saved: check the values.",
+    "notFound": "Not found any more.",
+    "failed": "Not saved: the server did not answer. Try again."
+  },
+  "body": {
+    "title": "Notified body",
+    "intro": "Who examined the type and issued the certificate, and whether they may.",
+    "name": "Name",
+    "number": "Identification number",
+    "numberHint": "Four digits, as NANDO lists it.",
+    "address": "Address",
+    "contact": "Contact",
+    "scopes": "Notified for",
+    "typed": "As typed from the certificate",
+    "pick": "Pick from the directory",
+    "change": "Change body",
+    "clear": "Clear",
+    "notPicked": "Body {number} is in the directory: pick it to see its address, scope and NANDO entry.",
+    "notPickedHint": "The certificate keeps the name and number as typed.",
+    "notInDirectory": "Body {number} is not in the directory yet.",
+    "notInDirectoryHint": "Add it under Notified bodies (from its NANDO entry), then pick it here.",
+    "others": "Other certificates from this body",
+    "noOthers": "None in the register.",
+    "held": {
+      "noMatch": "No active body of the directory has this number: add it first.",
+      "pick": "Pick a body.",
+      "same": "This body is picked already."
+    }
+  },
+  "pick": {
+    "title": "Notified body of {number}",
+    "introDraft": "A draft takes the body's number and name as its own (now {number}).",
+    "introRegistered": "Registered under body {number}: only that body can be linked, once.",
+    "body": "Body",
+    "choose": "Choose a body",
+    "option": "{number} · {name} ({country})",
+    "fills": "The number {typed} becomes {number}, and the name the body's.",
+    "once": "Once linked it never changes.",
+    "confirm": "Pick body",
+    "failed": "The directory could not be read.",
+    "none": "No active body numbered {number} in the directory.",
+    "noneHint": "Add it under Notified bodies first."
+  },
+  "levels": {
+    "title": {
+      "EN13594": "Glove levels (EN 13594)",
+      "EN1621-1": "Protector zones (EN 1621-1)",
+      "EN1621-2": "Back protector (EN 1621-2)",
+      "EN1621-3": "Chest protector (EN 1621-3)"
+    },
+    "intro": {
+      "EN13594": "The level the glove reaches (1 or 2) and knuckle protection (KP) when it was tested.",
+      "EN1621-1": "The level of each zone the protector covers, and its size type.",
+      "EN1621-2": "The back protector's level and the area it covers.",
+      "EN1621-3": "The chest protector's level and whether it is one piece or divided."
+    },
+    "property": {
+      "level": "Level",
+      "knuckle": "Knuckle protection",
+      "shoulder": "Shoulder",
+      "elbow": "Elbow",
+      "hip": "Hip",
+      "knee": "Knee",
+      "leg": "Lower leg",
+      "kneeLeg": "Knee and lower leg",
+      "type": "Size type",
+      "back": "Back level",
+      "backArea": "Back area",
+      "chest": "Chest level",
+      "chestArea": "Chest piece"
+    },
+    "value": {
+      "level": "Level {level}",
+      "kp": "Yes (KP)",
+      "type": {
+        "A": "Type A (smaller)",
+        "B": "Type B (larger)"
+      },
+      "backArea": {
+        "FB": "Full back",
+        "CB": "Central back",
+        "LB": "Lower back"
+      },
+      "chestArea": {
+        "FULL": "One piece",
+        "DIVIDED": "Divided"
+      }
+    },
+    "add": "Add levels",
+    "edit": "Edit levels",
+    "none": "No levels recorded yet.",
+    "marking": "Marking beside the pictogram:",
+    "stale": "The stored levels do not fit the standard's list any more:",
+    "gloveSwitch": "Gloves are made only if the Owner says so: the glove-level rule stays switched off until then.",
+    "dialog": "Performance levels of {number}",
+    "choose": "Choose",
+    "notStated": "Not stated",
+    "save": "Save levels",
+    "once": "Registered: the levels are filled in once.",
+    "held": {
+      "none": "This standard takes no levels here.",
+      "invalid": "Fix the levels first.",
+      "same": "Nothing changed."
+    }
+  },
+  "own": {
+    "title": "Own brand (private label)",
+    "introBrand": "A brand's own certificate rests on the factory's certificate of the same type.",
+    "introFactory": "Brands' own certificates that rest on this one.",
+    "pick": "Pick the base certificate",
+    "change": "Change base",
+    "noBase": "No base certificate yet.",
+    "noBaseHint": "Pick the factory's certificate this brand's certificate rests on: the gate then checks both.",
+    "base": "Base certificate",
+    "baseValid": "Base valid",
+    "range": "{from} – {to}",
+    "holds": "{number} holds today: both are valid.",
+    "standing": {
+      "NOT_REGISTERED": "The base {number} is a draft, not registered yet.",
+      "SUSPENDED": "The base {number} is suspended.",
+      "WITHDRAWN": "The base {number} was withdrawn.",
+      "EXPIRED": "The base {number} expired on {date}.",
+      "NOT_YET": "The base {number} is valid from {from}."
+    },
+    "gateRefuses": "Until the base holds, the gate refuses what this certificate covers: no label, release or shipment.",
+    "outlives_one": "Valid {count} day after its base ends on {date}: from then the gate refuses.",
+    "outlives_other": "Valid {count} days after its base ends on {date}: from then the gate refuses.",
+    "otherStandard": "The base names another standard ({base}).",
+    "resting_one": "{count} brand certificate rests on this one",
+    "resting_other": "{count} brand certificates rest on this one",
+    "dialog": "Base certificate of {number}",
+    "dialogIntro": "The factory's own certificates in force, the same standard first.",
+    "choose": "Choose a certificate",
+    "option": "{number} · {standard} · to {to}",
+    "confirm": "Rest on this certificate",
+    "noCandidates": "No certificate of ours can be the base.",
+    "noCandidatesHint": "The base is held by one of our companies, rests on nothing itself, and is not withdrawn or expired.",
+    "once": "Registered: the base is filled in once."
+  },
+  "base": {
+    "held": {
+      "notBrand": "Only a brand's certificate rests on a base.",
+      "pick": "Choose a certificate.",
+      "same": "This certificate is the base already."
+    }
+  },
+  "parts": {
+    "intro": "Bought-in parts with the supplier and its article code, as the certificate names them; the incoming check reads them.",
+    "col": {
+      "supplier": "Supplier",
+      "article": "Supplier's article code"
+    },
+    "noSupplier": "Any supplier",
+    "name": "Name supplier",
+    "code": "Article code"
+  },
+  "supplier": {
+    "title": "Supplier of {code}",
+    "intro": "A lot of this part from another supplier is not covered by this certificate.",
+    "fixed": "Named once: a part from another supplier is another coverage.",
+    "once": "Named once; it never changes after.",
+    "choose": "Choose a supplier",
+    "articleHint": "As the certificate names the part.",
+    "confirm": "Save",
+    "held": {
+      "parties": "Needs the right to see parties.",
+      "pick": "Choose a supplier.",
+      "once": "The supplier is named already.",
+      "same": "Nothing changed."
+    }
+  },
+  "bodies": {
+    "open": "Notified bodies",
+    "title": "Notified bodies",
+    "intro": "The bodies that examine our types, with their number, address, what they are notified for and their NANDO entry.",
+    "add": "Add notified body",
+    "search": "Search number, name, country",
+    "filter": "Status",
+    "filterValue": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived",
+      "ALL": "All"
+    },
+    "count_one": "{count} body",
+    "count_other": "{count} bodies",
+    "countOf": "{count} of {total}",
+    "noScopes": "No scope recorded",
+    "certificates_one": "{count} certificate",
+    "certificates_other": "{count} certificates",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "status": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived"
+    },
+    "col": {
+      "number": "Number",
+      "name": "Name",
+      "scope": "Protective clothing",
+      "certificates": "Certificates",
+      "nando": "NANDO",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "row": {
+      "edit": "Edit",
+      "archive": "Archive",
+      "restore": "Restore",
+      "menu": "Actions for body {number}"
+    },
+    "failed": "The directory could not be read.",
+    "noMatch": "No body matches.",
+    "clear": "Clear filters",
+    "empty": {
+      "title": "No notified body yet.",
+      "body": "Add the body that issued your certificates, from its NANDO entry."
+    },
+    "held": {
+      "manage": "Needs the right to keep certificates over every company."
+    },
+    "write": {
+      "conflict": "Not saved: the rule below says why."
+    },
+    "done": {
+      "added": "Body {number} added.",
+      "saved": "Body {number} saved.",
+      "archived": "Body {number} archived.",
+      "restored": "Body {number} restored.",
+      "exported_one": "{count} body exported.",
+      "exported_other": "{count} bodies exported."
+    }
+  },
+  "bodyForm": {
+    "titleNew": "Add notified body",
+    "titleEdit": "Edit body {number}",
+    "intro": "Copy it from the body's NANDO entry on the European Commission's site.",
+    "number": "Identification number",
+    "numberHint": "Four digits.",
+    "numberFixed_one": "Fixed: {count} certificate names this body.",
+    "numberFixed_other": "Fixed: {count} certificates name this body.",
+    "country": "Country",
+    "countryHint": "Two letters (IT, DE …).",
+    "name": "Name",
+    "address": "Postal address",
+    "nando": "NANDO entry",
+    "nandoHint": "The https address of its NANDO page.",
+    "scopes": "Notified for",
+    "scopesHint": "One line each, as NANDO says it.",
+    "email": "E-mail",
+    "phone": "Phone",
+    "note": "Note",
+    "back": "Back to the list",
+    "add": "Add body",
+    "save": "Save body",
+    "problem": {
+      "number": "Four digits, as NANDO lists it.",
+      "name": "The body's name (at most 300 characters).",
+      "address": "The postal address (at most 500 characters).",
+      "country": "Two capital letters.",
+      "nandoUrl": "An https address, or none.",
+      "scopes": "Each line at most 300 characters, each once, at most 50.",
+      "contactEmail": "An e-mail address, or none.",
+      "contactPhone": "At most 40 characters.",
+      "note": "At most 2000 characters."
+    }
+  },
+  "add": {
+    "directory": "From the directory",
+    "directoryHint": "Fills in the body's name and number.",
+    "directoryNone": "Typed by hand"
+  },
+  "csv": {
+    "number": "Number",
+    "name": "Name",
+    "country": "Country",
+    "address": "Address",
+    "scopes": "Notified for",
+    "clothing": "Protective clothing",
+    "nando": "NANDO",
+    "email": "E-mail",
+    "phone": "Phone",
+    "certificates": "Certificates",
+    "status": "Status"
+  }
+}
