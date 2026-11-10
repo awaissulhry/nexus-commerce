@@ -40,6 +40,8 @@ import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
 import { PRODUCT_MATERIALS_DEPTH_ADDS } from '../../product/materials-depth/permissions'
+// B-W2b-230: the tech pack PDF (the production manager and the buyer make one).
+import { PRODUCT_TECHPACKS_ADDS } from '../../product/techpack/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -829,7 +831,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-229
   ...(audience === 'office' ? (PRODUCT_OPTIONS_ADDS[key] ?? []) : []),
   // B-W2b-238
-  ...(audience === 'office' ? (PRODUCT_MATERIALS_DEPTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PRODUCT_MATERIALS_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-230
+  ...(audience === 'office' ? (PRODUCT_TECHPACKS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

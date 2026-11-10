@@ -133,6 +133,8 @@ import { events as stylesDepth } from '../styles-depth/events'
 import { events as productChanges } from '../product-changes/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
+// B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
+import { events as productTechpack } from '../product-techpack/events'
 // B-W2b-112: cut orders and cut tickets (a cut order changed, a ticket made, printed, scanned or voided, a ply sticker run).
 import { events as productionCutorders } from '../production-cutorders/events'
 // B-W2b-116: lays at the table (spread, counted), the fabric used at cut finish, a cut order reconciled.
@@ -376,7 +378,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-229
   ...productOptions,
   // B-W2b-238
-  ...materialsDepth] as const satisfies readonly EventDefinition[]
+  ...materialsDepth,
+  // B-W2b-230
+  ...productTechpack] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
