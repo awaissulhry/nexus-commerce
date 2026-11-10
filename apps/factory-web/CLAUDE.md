@@ -173,6 +173,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
   role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
   container, `view/`, `record/`, `fixtures.ts` (made-up data).
+- `src/areas/products/colours/` — Products › Libraries › Colours & artwork (B-W2b-247, SCR-118, `/products/colours?view=&q=&system=&family=&sets=&open=<set>&new=colour|set`; catalogue `products-colours`, CSS prefix `fw-col-`): the colour library on the list frame (tiles, notices kept dismissed by value in localStorage, inline edit of name / system / reference / family / hex through the bulk target `products.colours`, Archive N / Restore N / Export N, New and Edit colour with its photo) and the branding sets (list frame `products.colours.2`, Archive N; the DetailModal `?open=<id>`: files, packaging rules, brand colours, styles; New branding set). `src/areas/products/_shared/Swatch.tsx` — the area's colour chip (`Swatch`, `SwatchRow`; only a plain #RRGGBB drawn), for every product screen.
 - `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check; B-W2a-66: the
   Renewals tab `?tab=renewals&act=renew|applied|link` in `renewals/` — api, model, `use-renewals.ts` container hook, view, made-up
   fixtures — and the register's "Change waiting" column and `?view=changes`; the style compliance tab's "Changes that may need the

@@ -148,6 +148,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'products.operations', title: 'Operations', titleIt: 'Operazioni', wave: 'W1', href: '/products/operations' },
           { id: 'products.sizes', title: 'Sizes & measurements', titleIt: 'Taglie e misure', wave: 'W1', href: '/products/sizes' },
+          // W2b: B-W2b-247 Colours & artwork (SCR-118), after Sizes (the design's order).
+          { id: 'products.colours', title: 'Colours & artwork', titleIt: 'Colori e grafiche', wave: 'W2b', href: '/products/colours' },
         ],
       },
     ],

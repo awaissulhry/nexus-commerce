@@ -89,6 +89,8 @@
     "InspectionPlan": "Inspection plan",
     "Capa": "Corrective action",
     "CutOrder": "Cut order",
+    "Colour": "Colour",
+    "BrandingSet": "Branding set",
     "other": "Record"
   },
   "chip": {
@@ -128,6 +130,8 @@
     "InspectionPlan": "Inspection plans",
     "Capa": "Corrective actions",
     "CutOrder": "Cut orders",
+    "Colour": "Colours",
+    "BrandingSet": "Branding sets",
     "other": "Other records"
   },
   "status": {

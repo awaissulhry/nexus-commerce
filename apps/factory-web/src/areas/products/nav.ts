@@ -1,4 +1,4 @@
-import { Clock, Layers, Ruler, Shirt } from 'lucide-react'
+import { Clock, Layers, Palette, Ruler, Shirt } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -37,6 +37,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'products-operations', label: 'shell:nav.products.operations', href: '/products/operations', icon: Clock, permission: 'product.routing.view' },
           // SCR-049: size scales with each size's body measures (the size scale routes read with product.styles.view).
           { id: 'products-sizes', label: 'shell:nav.products.sizes', href: '/products/sizes', icon: Ruler, permission: 'product.styles.view' },
+          // B-W2b-247 SCR-118: the colour library and the private-label brands' branding sets (read with product.styles.view).
+          { id: 'products-colours', label: 'shell:nav.products.colours', href: '/products/colours', icon: Palette, permission: 'product.styles.view' },
         ],
       },
     ],

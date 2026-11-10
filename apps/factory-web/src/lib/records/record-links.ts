@@ -28,6 +28,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Item: '/products/materials/[id]',
   Operation: '/products/operations/[id]',
   SizeScale: '/products/sizes/[id]',
+  // B-W2b-247: a private-label brand's branding set opens in its DetailModal on Colours & artwork (SCR-118); a library colour
+  // has no page of its own (its row is edited in the list) and opens in its panels (its photo, history, thread).
+  BrandingSet: '/products/colours?open=[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',

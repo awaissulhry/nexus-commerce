@@ -61,6 +61,9 @@ import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
 // B-W2b-263: Time & action (pre-production gates).
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
+// B-W2b-247: the colour library and the brands' branding sets.
+import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
+import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -891,7 +894,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-272
   ...(audience === 'office' ? (COMPLIANCE_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-263
-  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : []),
+  // B-W2b-247
+  ...(audience === 'office' ? (PRODUCT_COLOURS_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PRODUCT_BRANDING_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

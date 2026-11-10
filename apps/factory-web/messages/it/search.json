@@ -89,6 +89,8 @@
     "InspectionPlan": "Piano di controllo",
     "Capa": "Azione correttiva",
     "CutOrder": "Ordine di taglio",
+    "Colour": "Colore",
+    "BrandingSet": "Kit di marca",
     "other": "Record"
   },
   "chip": {
@@ -128,6 +130,8 @@
     "InspectionPlan": "Piani di controllo",
     "Capa": "Azioni correttive",
     "CutOrder": "Ordini di taglio",
+    "Colour": "Colori",
+    "BrandingSet": "Kit di marca",
     "other": "Altri record"
   },
   "status": {
