@@ -1684,6 +1684,8 @@
     "product_changes_request": "Raise a change request",
     "product_changes_manage": "Triage change requests and write, submit and release change orders",
     "product_changes_approve": "Approve or reject change orders (never one’s own)",
+    "product_options_manage": "Keep the option library: groups, values, rules and effects",
+    "product_options_price": "Set the price surcharge of an option",
     "product_bom_view": "See bills of materials",
     "product_bom_manage": "Edit a draft bill of materials",
     "product_bom_release": "Release a revision (freezes BOM, routing and label)",

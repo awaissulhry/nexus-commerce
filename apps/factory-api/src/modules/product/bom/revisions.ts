@@ -25,6 +25,8 @@ import { copyStructureInCommand, emptyCopy } from '../bom-structure/copy'
 import { copyMeasuresInCommand, emptyMeasuresCopy } from '../measures/copy'
 // B-W2b-226: a change order starts its draft revision with the copy and is released with the draft.
 import { changeOrderAtReleaseInCommand, linkDraftInCommand, releaseChangeOrderInCommand, type DraftFor } from '../changes/hooks'
+// B-W2b-231: the release gate (scope, score, what the person released over) in the release.
+import { releaseGateInCommand } from '../release/gate'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -259,6 +261,8 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     // or alternate, a circle, a size or colourway its sub-assembly lacks) refused in words with W1's, before the database.
     assertStructureReleasable(blockers, await structureBlockersInCommand(tools, { styleId, revisionId }))
     if (blockers.length > 0) throw releaseBlocked(blockers)
+    // B-W2b-231 (PRD-190, PRD-191, PRD-232): the whole release gate; its blockers refused in words, its score and scope kept.
+    const gate = await releaseGateInCommand(tools, { styleId, revisionId, companyId: locked.companyId })
 
     const previous = await tx.styleRevision.findFirst({ where: { styleId, status: 'RELEASED' }, select: { id: true, revision: true, version: true } })
     if (previous) {
@@ -269,7 +273,7 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     const releasedById = tools.context.audience === 'office' ? tools.context.actorId : null
     await tx.styleRevision.update({
       where: { id: revisionId },
-      data: { status: 'RELEASED', releasedAt: now, releasedById, ...(body.changeNote === undefined ? {} : { changeNote: body.changeNote }) },
+      data: { status: 'RELEASED', releasedAt: now, releasedById, ...(body.changeNote === undefined ? {} : { changeNote: body.changeNote }), completenessPct: gate.completenessPct },
       select: { id: true },
     })
     // B-W2b-225 (PRD-124): it takes effect today (a draft planned for another day is refused); the old revision's days end.
@@ -302,7 +306,18 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
       type: 'style.revision_released',
       subject: styleId,
       companyId: locked.companyId,
-      payload: { styleId, code: locked.code, revisionId, revision: row.revision, obsoletedRevisionId: previous?.id ?? null },
+      payload: {
+        styleId,
+        code: locked.code,
+        revisionId,
+        revision: row.revision,
+        obsoletedRevisionId: previous?.id ?? null,
+        // B-W2b-231 (PRD-197): what it is released for and its score.
+        releasedColourwayIds: [...gate.scope.colourwayIds],
+        releasedSizes: [...gate.scope.sizes],
+        completenessPct: gate.completenessPct,
+        widened: false,
+      },
     })
     if (changeOrder) await releaseChangeOrderInCommand(tools, changeOrder)
     return bomViewInTx(tx, styleId, revisionId)

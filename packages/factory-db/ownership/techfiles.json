@@ -1,0 +1,79 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/techfiles.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps which declaration went with which batch and shipment, the technical files with their Annex III evidence, the product risk assessments, the production-control tests, the evidence packs and the label artwork through apps/factory-api's modules/compliance (B-W2b-251, B-W2b-257, B-W2b-258, B-W2b-259), always through command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The floor (factory_floor_runtime) reads only the APPROVED artwork versions (only an approved artwork prints, PRD-347: label print runs at the station) and writes and reads its own site's spoiled and returned labels (MES-140); it reads no declaration, technical file, test or pack. Portal and link sessions read nothing here: a pack reaches an authority or a customer as a file through a link (W2b-3). No column here is money, so no @grain and no wall on one; no personal data beyond who wrote, reviewed, signed or approved a row (as everywhere). Kept 10 years (PPE Reg. art. 8(3), QHS-110): no runtime role removes a batch record or a technical file, and the …_techfiles_labels_w2b_guards triggers refuse removing a recorded test or a built pack before its retainUntil, a signed assessment or an approved artwork ever, for every login; the spoiled labels are append-only. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ComplianceDocumentBatch": {
+      "about": "The office records which revision of a DoC or of the user information went with which batch (a work order's, or a batch number typed) and with which shipment (PRD-295, PRD-352). Written once; only its note and a later retainUntil change; never removed by a runtime role (kept 10 years). Office only: the public DoC page and the customer documents read it through the API.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "TechnicalFile": {
+      "about": "The office opens a style's technical file (PRD-296), completes it once every Annex III point is reviewed or not applicable, reopens it when something changes and archives it when the style leaves the market (kept 10 years). Office only; never removed by a runtime role.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "TechnicalFileItem": {
+      "about": "The office links the evidence of each Annex III point (a record or a file, never a copy), reviews it (signed) or marks the point not applicable, and removes a wrong link, only while the file is OPEN (the trigger). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ProductRiskAssessment": {
+      "about": "The office drafts a style's product risk assessment (PRD-301), signs it, and supersedes it with a later signed revision; a draft nobody wants is removed (the trigger refuses removing a signed one). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ProductRiskRow": {
+      "about": "The office writes the hazards of a risk assessment, changes and removes them while it is a DRAFT (the trigger). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ProductionControlTest": {
+      "about": "The office plans production-control tests by their frequency, records their result, day, tester and lab report (QHS-048, PRD-302), and removes a planned test that is not needed; a recorded test changes no more but its note and a later retainUntil and is not removed before it (QHS-110: 10 years; the trigger). Office only: the tests are done by a lab or the quality office, not at the station.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "EvidencePack": {
+      "about": "The office (or its build job, in the tenant's office context) starts an evidence pack of a technical file or a shipment for an authority, a customer or a shipment, records it BUILT with its contents, fingerprints and files or FAILED, and removes a pack that never built; a built pack is not removed before its retainUntil (the trigger). Office only: the recipient opens it through a link.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "LabelArtworkVersion": {
+      "about": "The office adds artwork versions of a label template revision, has a second person approve one, retires it when replaced, and removes a draft nobody wants (PRD-347). The floor reads only the APPROVED versions: label print at the station asks for one (B-W2b-259).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "onlyValues": { "status": ["APPROVED"] } }
+      }
+    },
+    "GarmentLabelSpoil": {
+      "about": "The labels of a print that did not end on a garment, spoiled or handed back (MES-140). The site's floor logs them at the station and reads its site's; the office logs and reads every site's. Append-only: nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

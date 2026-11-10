@@ -114,6 +114,8 @@ model Party {
   certificatesHeld    Certificate[]
   labelTemplates      LabelTemplate[]
   complianceDocuments ComplianceDocument[]
+  // W2b-4 techfiles.prisma (wave 32/33): as a customer, the evidence packs built for it.
+  evidencePacks       EvidencePack[]       @relation("EvidencePackRecipient")
   // email-in.prisma: the mail received from this party's contacts (or its company domain).
   inboundEmails       InboundEmail[]
   // W2b links-depth.prisma (wave 19/22): the records shared with it, the approvals asked of it.
@@ -142,6 +144,9 @@ model Party {
   lots                 Lot[]
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // W2b-4 recall.prisma (wave 33/33): as a customer or distributor, its progress in recalls and the notices it was sent.
+  recallProgress       RecallProgress[]    @relation("RecallProgressParty")
+  distributorNotices   DistributorNotice[] @relation("DistributorNoticeParty")
   // W2b capa.prisma, ncr.prisma (wave 11/16): the 8Ds written for it and the concessions it was asked.
   capas                Capa[]
   ncrConcessions       NcrConcession[]

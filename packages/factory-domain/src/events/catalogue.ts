@@ -153,6 +153,8 @@ import { events as productionCuttingRules } from '../production-cutting-rules/ev
 import { events as routingDepth } from '../routing-depth/events'
 // B-W2b-224: points of measure, grade rules and the measurement spec (a point or a rule changed, a spec changed).
 import { events as productMeasures } from '../product-measures/events'
+// B-W2b-229: the option library (a group, its values, rules, effects or prices changed).
+import { events as productOptions } from '../product-options/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -371,6 +373,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productMeasures,
   // B-W2b-226
   ...productChanges,
+  // B-W2b-229
+  ...productOptions,
   // B-W2b-238
   ...materialsDepth] as const satisfies readonly EventDefinition[]
 

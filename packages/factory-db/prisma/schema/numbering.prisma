@@ -152,6 +152,14 @@ enum NumberKind {
   /// W2b-4 wave 31/33: a declaration asked of a supplier (SD-…; substances.prisma SupplierDeclarationRequest.number). An
   /// office document kind: the API numbers it when it is sent.
   SUPPLIER_DECLARATION
+  /// W2b-4 wave 32/33: a technical file's number (TF-…; techfiles.prisma TechnicalFile.number) and an evidence pack's
+  /// (EP-…; EvidencePack.number). Office document kinds.
+  TECHNICAL_FILE
+  EVIDENCE_PACK
+  /// W2b-4 wave 33/33: a recall's or withdrawal's number (RCL-…; recall.prisma RecallAction.number) and an authority
+  /// request's (AR-…; AuthorityRequest.number). Office document kinds: the API numbers them when they are made.
+  RECALL
+  AUTHORITY_REQUEST
 }
 
 enum NumberReset {

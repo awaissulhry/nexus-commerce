@@ -94,4 +94,13 @@ enum GeneratedDocumentKind {
   DVR_FROZEN
   /// The receipt of PPE handed to a person.
   PPE_RECEIPT
+  /// W2b-4 (schema wave 32/33, B-W2b-218): a shipment's compliance pack (PRD-300): its DoC, user information and certificate
+  /// summary, of a Shipment.
+  COMPLIANCE_PACK
+  /// An evidence pack's PDF bundle (PRD-299), of an EvidencePack.
+  EVIDENCE_PACK
+  /// A tech pack per audience (B-W2b-230), of a StyleRevision: a partner's copy has no cost, margin or pay figure.
+  TECH_PACK
+  /// A generated user-information leaflet (B-W2b-258), of a ComplianceDocument of kind USER_INFORMATION.
+  USER_INFORMATION
 }

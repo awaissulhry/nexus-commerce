@@ -191,9 +191,10 @@ export interface ColourwayRow {
 export const readColourwaysOf = (db: Db, styleId: string): Promise<ColourwayRow[]> =>
   db.colourway.findMany({ where: { styleId }, select: { id: true, code: true, name: true }, orderBy: { code: 'asc' } })
 
-export function variantsViewOf(variants: StepVariants, sizeLabels: ReadonlyMap<string, string>, colourways: readonly ColourwayRow[]) {
+export function variantsViewOf(variants: StepVariants, sizeLabels: ReadonlyMap<string, string>, colourways: readonly ColourwayRow[], optionLabels?: ReadonlyMap<string, string>) {
   const colourwayOf = new Map(colourways.map((row) => [row.id, row]))
-  const words = variantWords(variants, (id) => colourwayOf.get(id)?.code ?? '?')
+  // B-W2b-229: the options by their words ("PERF: FRONT") when the caller read them.
+  const words = variantWords(variants, (id) => colourwayOf.get(id)?.code ?? '?', optionLabels ? (id) => optionLabels.get(id) ?? '?' : undefined)
   return {
     sizes: variants.sizes.map((code) => ({ code, label: sizeLabels.get(code) ?? code })),
     colourways: variants.colourwayIds.map((id) => colourwayOf.get(id) ?? { id, code: '?', name: '' }),
