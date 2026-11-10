@@ -1,0 +1,670 @@
+{
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "clearFilters": "Clear filters",
+    "dismiss": "Dismiss",
+    "loading": "Reading…",
+    "notYet": "Not read yet",
+    "retry": "Try again",
+    "save": "Save",
+    "updated": "Updated at {time}",
+    "working": "Working…"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "noAccess": {
+    "title": "You don't have access to changes",
+    "body": "Production managers, quality inspectors, sales, planners, buyers and floor supervisors read changes; ask your administrator for one of those roles."
+  },
+  "kind": {
+    "request": "Change request",
+    "order": "Change order",
+    "smv": "SMV change"
+  },
+  "request": {
+    "OPEN": "To triage",
+    "IN_REVIEW": "In review",
+    "ACCEPTED": "Accepted",
+    "REJECTED": "Rejected",
+    "DONE": "Done",
+    "noOrder": "In no change order yet",
+    "priorityOnly": "Accepted: only its priority still changes",
+    "decide": "Accept or reject…",
+    "writeOrder": "Write a change order"
+  },
+  "order": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Waiting for approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "RELEASED": "Released",
+    "CANCELLED": "Cancelled",
+    "requestsCarried": "Requests carried",
+    "changeRequests": "Change requests",
+    "noRequests": "It carries no request.",
+    "redline": "Redlines",
+    "openDraft": "Open draft revision {revision}",
+    "startDraft": "Start the draft revision",
+    "noteHeld": "The description changes only while it is a draft",
+    "lines": "Change lines",
+    "line": {
+      "record": "Record",
+      "field": "Field",
+      "before": "Before",
+      "after": "After",
+      "note": "Note"
+    },
+    "submit": "Submit for approval",
+    "decide": "Approve…",
+    "release": "Release revision {revision}"
+  },
+  "smv": {
+    "PROPOSED": "Waiting for approval",
+    "operation": "Operation",
+    "source": "From",
+    "proposedBy": "Proposed by",
+    "now": "Now",
+    "version": "Version {number}",
+    "own": "The operation’s own",
+    "noRoutings": "No routing uses this operation.",
+    "step": "step {seq}",
+    "field": {
+      "basic": "Basic minutes",
+      "personal": "Personal %",
+      "fatigue": "Fatigue %",
+      "delay": "Delay %",
+      "smv": "Standard minutes",
+      "from": "From"
+    },
+    "pieceRates_one": "{count} piece rate is made on its SMV.",
+    "pieceRates_other": "{count} piece rates are made on its SMV."
+  },
+  "source": {
+    "OFFICE": "Office",
+    "FLOOR": "Floor",
+    "CUSTOMER": "Customer",
+    "SAMPLE": "Sample round",
+    "SUPPLIER": "Supplier"
+  },
+  "priority": {
+    "LOW": "Low",
+    "NORMAL": "Normal",
+    "HIGH": "High",
+    "URGENT": "Urgent"
+  },
+  "effect": {
+    "NEXT_ORDER": "From the next order",
+    "DATE": "From a date",
+    "AT_ONCE": "At once",
+    "on": "From {day}"
+  },
+  "decision": {
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected"
+  },
+  "revision": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "OBSOLETE": "Obsolete",
+    "label": "Revision {revision}",
+    "move": "Revision {from} → {to}",
+    "noDraft": "From revision {from} (no draft yet)",
+    "asItIs": "The style as it is",
+    "option": "Revision {revision} ({status})",
+    "none": "Not started yet"
+  },
+  "disposition": {
+    "FINISH_OLD": "Finish on the old spec",
+    "REWORK": "Rework to the new spec",
+    "SCRAP": "Scrap what is made",
+    "HOLD": "Hold until someone decides",
+    "none": "Not decided yet"
+  },
+  "document": {
+    "QUOTE": "Quote",
+    "ORDER": "Order",
+    "WORK_ORDER": "Work order"
+  },
+  "section": {
+    "revision": "Revision",
+    "bom": "Bill of materials",
+    "routing": "Routing and minutes",
+    "measurements": "Measurement spec",
+    "protectors": "Protector placement",
+    "pieces": "Pattern pieces"
+  },
+  "cmp": {
+    "revision": {
+      "labelTemplate": "Garment label",
+      "plannedHideYieldPct": "Planned hide yield %",
+      "output": "Makes",
+      "releasedColourways": "Released colourways",
+      "releasedSizes": "Released sizes"
+    },
+    "bom": {
+      "seq": "Line",
+      "qty": "Quantity",
+      "uom": "Unit",
+      "wastagePct": "Wastage %",
+      "colour": "Colour",
+      "supplier": "Supplier",
+      "section": "Section",
+      "group": "Under line",
+      "subAssembly": "Sub-assembly",
+      "customerSupplied": "Supplied by the customer",
+      "issueToSubcontract": "In the workshop kit",
+      "sourceKey": "Source",
+      "option": "Only with option",
+      "step": "Used at step",
+      "mtm": "Made-to-measure scaling",
+      "alternates": "Alternates",
+      "note": "Note"
+    },
+    "routing": {
+      "seq": "Place",
+      "code": "Code",
+      "name": "Name",
+      "workCentreKind": "Work centre",
+      "standardMinutes": "Standard minutes",
+      "allowances": "Basic minutes + allowances",
+      "timeVersion": "SMV version",
+      "setupMinutes": "Set-up minutes",
+      "waitMinutes": "Wait minutes",
+      "moveMinutes": "Move minutes",
+      "scanRequired": "Scanned",
+      "parallelGroup": "Side by side group",
+      "cells": "Only for",
+      "checkpoint": "Quality checkpoint",
+      "settings": "Machine settings",
+      "workshop": "Workshop",
+      "transitDays": "Transit days",
+      "instructions": "Instructions"
+    },
+    "measurements": {
+      "uom": "Unit",
+      "tolerance": "Tolerance (− / +)"
+    },
+    "protectors": {
+      "item": "Protector",
+      "standard": "Standard",
+      "level": "Level",
+      "sizes": "Sizes",
+      "positionNote": "Position"
+    },
+    "pieces": {
+      "seq": "Place",
+      "quantity": "Per garment",
+      "line": "BOM line",
+      "minGrade": "Lowest leather grade",
+      "grain": "Grain",
+      "sizes": "Sizes",
+      "note": "Note"
+    },
+    "total": {
+      "lines": "Lines",
+      "minutesPerGarment": "Minutes per garment",
+      "steps": "Steps",
+      "spec": "Spec",
+      "points": "Points of measure",
+      "pieces": "Pieces",
+      "perGarment": "Pieces per garment"
+    }
+  },
+  "view": {
+    "label": "Show",
+    "changes": "Changes",
+    "released": "Released versions"
+  },
+  "tile": {
+    "TO_TRIAGE": "New requests to triage",
+    "hint": {
+      "TO_TRIAGE": "Change requests not decided yet, most urgent first.",
+      "MINE_TO_APPROVE": "Change orders and SMV changes you are asked to decide.",
+      "TO_RELEASE": "Approved change orders whose revision is not released yet.",
+      "RELEASED_THIS_MONTH": "Change orders released since the first of the month."
+    },
+    "MINE_TO_APPROVE": "Waiting for my approval",
+    "TO_RELEASE": "Approved — to release",
+    "RELEASED_THIS_MONTH": "Released this month",
+    "failed": "Couldn't count"
+  },
+  "rows": {
+    "TO_TRIAGE": "To triage",
+    "MINE_TO_APPROVE": "Mine to approve",
+    "TO_RELEASE": "Approved",
+    "RELEASED_THIS_MONTH": "Released this month",
+    "RELEASED": "Released",
+    "REJECTED": "Rejected",
+    "ALL": "All changes"
+  },
+  "notice": {
+    "fewer": "Show one notice",
+    "smvFailed": "Couldn't read the SMV changes waiting from Operations: the requests and change orders are shown.",
+    "smvRole": "SMV changes waiting from Operations are not in this list: your role does not read operations.",
+    "smvStyle": "The style filter does not apply to SMV changes (they belong to an operation): they are left out.",
+    "incomplete": "Only the first 100 requests and 100 change orders are shown: narrow the filters to see the rest.",
+    "more_one": "{count} more notice",
+    "more_other": "{count} more notices"
+  },
+  "list": {
+    "intro": "Change requests from the office, the floor, customers, sample rounds and suppliers; change orders that carry them to a new revision; the SMV changes waiting from Operations.",
+    "new": "New change request",
+    "newOrder": "New change order",
+    "more": "More actions",
+    "tableLabel": "Changes",
+    "search": "Search number, title or style",
+    "rowsLabel": "Rows",
+    "kindLabel": "Kind",
+    "allKinds": "Every kind",
+    "styleChip": "Style {style}",
+    "clearStyle": "Clear the style filter {style}",
+    "thisStyle": "this style",
+    "countReading": "Reading…",
+    "failed": "Couldn't load changes",
+    "empty": "No changes yet",
+    "emptyBody": "No change requests: raise the first one when a style should change.",
+    "noMatch": "No rows match these filters",
+    "noMatchBody": "Clear the filters or try another search.",
+    "foot": "A change order is approved by someone other than its author; releasing it releases the new revision and makes the old one obsolete.",
+    "approveOne": "Approve…",
+    "rejectOne": "Reject…",
+    "pickOne": "Pick one change to decide it",
+    "count_one": "{count} change",
+    "countMore_one": "The first {count} change",
+    "copyMany_one": "Copy {count} number",
+    "copied_one": "{count} number copied",
+    "count_other": "{count} changes",
+    "countMore_other": "The first {count} changes",
+    "copyMany_other": "Copy {count} numbers",
+    "copied_other": "{count} numbers copied"
+  },
+  "col": {
+    "number": "Number",
+    "kind": "Kind",
+    "title": "Title",
+    "styles": "Styles affected",
+    "raisedBy": "Raised by",
+    "reason": "Reason",
+    "status": "Status",
+    "approvals": "Approvals",
+    "effective": "Effective date",
+    "priority": "Priority",
+    "more": "Actions",
+    "style": "Style",
+    "revision": "Revision",
+    "released": "Released by, when",
+    "changed": "What changed",
+    "change": "Change"
+  },
+  "row": {
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "reject": "Reject…",
+    "copy": "Copy number",
+    "menu": "Actions for {number}",
+    "number": "{number}",
+    "floorNoNumber": "From the floor (no number yet)"
+  },
+  "keys": {
+    "new": "New change request",
+    "approve": "Approve (in Approve change)",
+    "reject": "Reject (in Approve change)",
+    "walk": "Next / previous change (in Approve change)"
+  },
+  "person": {
+    "me": "You",
+    "other": "A colleague",
+    "none": "—"
+  },
+  "raised": {
+    "party": "{source} · {party}",
+    "round": "Sample round · {round}",
+    "office": "Office · {person}"
+  },
+  "approvals": {
+    "count": "{approved} of {required}",
+    "none": "No approver yet",
+    "triage": "The triage",
+    "decidedBy": "Decided by",
+    "decidedAt": "Decided on",
+    "note": "Why",
+    "order": "Approval of the change",
+    "orderHint": "The change order carries it to approval; its approvers decide there.",
+    "notSent": "Not sent for approval"
+  },
+  "released": {
+    "tableLabel": "Released versions",
+    "search": "Search style or change order",
+    "noOrder": "Released without a change order",
+    "failed": "Couldn't load released versions",
+    "empty": "No released versions yet",
+    "emptyBody": "A style revision appears here once it is released.",
+    "foot": "Style revisions released, newest first; the change order that released each, when there is one."
+  },
+  "held": {
+    "offline": "Offline — this waits until the connection is back",
+    "offlineKept": "Offline — your changes are kept on this page",
+    "noRequest": "Your role does not raise change requests",
+    "noManage": "Your role does not write change orders",
+    "noTriage": "Your role does not triage change requests",
+    "noApprove": "Your role does not approve change orders",
+    "noSmvApprove": "Your role does not approve SMV changes",
+    "ownSmv": "You proposed this SMV change: someone else approves it (four eyes)",
+    "requestDecided": "This request is {status}: it is no longer triaged",
+    "orderNotWaiting": "This change order is {status}: it is decided only while it waits for approval",
+    "viewOnly": "You can view, not change",
+    "needs": "Needs the right: {right}",
+    "needsRight": "Needs the right: {right}"
+  },
+  "right": {
+    "parties": {
+      "view": "see customers and suppliers"
+    },
+    "sales": {
+      "samples": {
+        "view": "see sample rounds"
+      }
+    },
+    "product": {
+      "styles": {
+        "view": "see styles"
+      },
+      "bom": {
+        "view": "see bills of materials"
+      }
+    },
+    "files": {
+      "upload": "add files"
+    }
+  },
+  "new": {
+    "title": "New change request",
+    "submit": "Raise request",
+    "style": "Style",
+    "styleHint": "Search by code or name, then pick it.",
+    "styleSearch": "Search styles",
+    "pickStyle": "Pick a style",
+    "noStyles": "No style matches",
+    "revision": "Revision it is about",
+    "revisionHint": "The style as it is unless a revision is named.",
+    "source": "Asked by",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "pickCustomer": "Pick the customer",
+    "pickSupplier": "Pick the supplier",
+    "round": "Sample round",
+    "pickRound": "Pick the sample round",
+    "noRounds": "No sample round of this style",
+    "roundOption": "{number} · round {n}",
+    "what": "What should change",
+    "whatPlaceholder": "Collar 52: open the neck by 1 cm",
+    "why": "Why",
+    "whyPlaceholder": "What was seen, where, and why it matters.",
+    "photosHint": "Photos are sent once the request is raised.",
+    "photosAdd": "Drop photos here or pick them",
+    "photosClear": "Remove them",
+    "heldStyle": "Pick the style first",
+    "heldCustomer": "Pick the customer who asked",
+    "heldSupplier": "Pick the supplier who asked",
+    "heldRound": "Pick the sample round that raised it",
+    "heldTitle": "Say what should change",
+    "heldTitleLong": "Say it in at most {max} characters",
+    "heldReason": "Say why",
+    "photosAdded_one": "{count} photo to send",
+    "photosAdded_other": "{count} photos to send"
+  },
+  "newOrder": {
+    "title": "New change order",
+    "submit": "Write change order",
+    "from": "From the released revision",
+    "fromHint": "The change order starts from the style’s released revision.",
+    "effectHint": "When the new revision takes effect.",
+    "requests": "Requests it carries",
+    "requestsHint": "Open, in review or accepted requests of the style in no other live change order; an open one goes into review.",
+    "noRequests": "No request of this style is free to carry",
+    "carries_one": "Carries {count} request",
+    "carries_other": "Carries {count} requests"
+  },
+  "decide": {
+    "title": "Approve change",
+    "noun": "change",
+    "approve": "Approve",
+    "accept": "Accept",
+    "reject": "Reject",
+    "review": "Into review",
+    "reason": "Why",
+    "reasonHint": "Needed to reject: whoever wrote or raised it reads it.",
+    "heldReading": "Reading the change…",
+    "keys": "A approves, R rejects, J / K the next and previous change.",
+    "redline": "Redline",
+    "openRecord": "Open {number}",
+    "doneApproved": "{number} approved",
+    "doneRejected": "{number} rejected",
+    "doneRequest": {
+      "ACCEPTED": "{number} accepted",
+      "REJECTED": "{number} rejected",
+      "IN_REVIEW": "{number} is in review"
+    }
+  },
+  "redline": {
+    "none": "No draft revision yet: start it from the released revision, make the change there, and the redline shows it.",
+    "failed": "Couldn't read the redline",
+    "reading": "Reading the redline…",
+    "rev": "Rev {revision}",
+    "same": "Revision {to} holds the same spec as revision {from} so far.",
+    "differs": "{section}: {added} added, {removed} removed, {changed} changed",
+    "unchanged": "Unchanged: {parts}"
+  },
+  "impact": {
+    "nothingMade": "Nothing made yet",
+    "made": "{cut} bundles cut ({cutPieces} pieces), {worked} worked ({workedPieces} pieces)",
+    "driftFailed": "Couldn't read the open quotes and orders",
+    "noDrift": "No open quote or order is on an older revision.",
+    "held": "Not in your role: {kinds}",
+    "revisionMove": "Revision {from}, now {to}",
+    "same": "The same spec",
+    "col": {
+      "record": "Record",
+      "line": "Line",
+      "pieces": "Pieces",
+      "revision": "Revision",
+      "differs": "What differs"
+    },
+    "workOrders": "Work in progress",
+    "noWorkOrderRight": "Work orders are not in your role.",
+    "noWorkOrders": "No open work order of this style.",
+    "notAssessed": "Not assessed yet",
+    "dispositionOf": "What happens to {number}",
+    "drift": "Open quotes and orders on older revisions",
+    "requestNone": "Nothing open uses the affected styles: the request names no work order.",
+    "workOrder": "Work order",
+    "alreadyMade": "Already made",
+    "requestHint": "The change order that carries it says what happens to each work in progress.",
+    "intro": "What each open work order of the style does when the change is released, and the quotes and orders still on an older revision."
+  },
+  "smvSource": {
+    "TIME_STUDY": "Time study",
+    "PREDETERMINED": "Predetermined times",
+    "ESTIMATE": "Estimate"
+  },
+  "smvRun": {
+    "VERSION": "From the approved version",
+    "ALLOWANCES": "Its own allowances",
+    "TYPED": "Typed on the step"
+  },
+  "field": {
+    "kind": "Kind",
+    "style": "Style",
+    "photos": "Photos",
+    "raisedAt": "Raised on",
+    "author": "Written by",
+    "changeOrder": "Change order",
+    "description": "Description",
+    "descriptionHint": "What the draft revision changes, part by part (\"Use as change note\" writes it from the redline).",
+    "effect": "Takes effect",
+    "effectiveDate": "From the day",
+    "title": "What should change",
+    "reason": "Why",
+    "priority": "Priority",
+    "partyId": "Customer or supplier",
+    "sampleRoundId": "Sample round",
+    "revisionId": "Revision",
+    "styleId": "Style",
+    "companyId": "Company",
+    "requestIds": "Requests",
+    "approvers": "Approvers",
+    "lines": "Lines",
+    "note": "Note",
+    "other": "A field"
+  },
+  "tab": {
+    "change": "Change",
+    "impact": "Impact",
+    "approvals": "Approvals",
+    "affected": "Affected records",
+    "activity": "Activity"
+  },
+  "record": {
+    "back": "Changes & versions",
+    "backToList": "Back to changes",
+    "tabs": "Change sections",
+    "more": "More actions",
+    "loading": "Reading the change…",
+    "notFoundTitle": "Change not found",
+    "notFoundBody": "It may belong to another company, or the address is wrong.",
+    "failedTitle": "Couldn't load the change",
+    "offline": "Offline — the change as last read; every step waits for the connection.",
+    "stale": "Someone changed this at {time}. Read it again before saving.",
+    "reload": "Read it again",
+    "cancelledBanner": "Cancelled: {reason}",
+    "rejectedBanner": "Rejected by an approver: see Approvals for the reason. Write a new change order to try again.",
+    "requestRejected": "Rejected: {note}",
+    "readOnly": "Read-only: {reason}",
+    "priorityOnly": "{status}: only its priority still changes.",
+    "what": "What and why",
+    "facts": "About",
+    "openStyle": "Open style {style}",
+    "styleChanges": "Changes of {style}",
+    "copyNumber": "Copy number",
+    "copied": "{number} copied",
+    "cancel": "Cancel change order…",
+    "saved": "Saved",
+    "submitted": "Sent for approval: the approvers are told",
+    "cancelled": "{number} cancelled",
+    "released": "{number} released: revision {revision} is in force",
+    "draftStarted": "Draft revision {revision} started: make the change there",
+    "wipSaved": "Work in progress saved",
+    "approversSaved": "Approvers saved",
+    "requestsSaved": "Requests saved"
+  },
+  "approvers": {
+    "change": "Change approvers",
+    "col": {
+      "approver": "Approver",
+      "required": "Required",
+      "decision": "Decision",
+      "when": "When",
+      "why": "Why"
+    },
+    "required": "Required",
+    "optional": "Optional",
+    "waiting": "Waiting",
+    "youName": "You ({name})",
+    "none": "No approver named yet.",
+    "decidedStays": "A decided approval stays",
+    "remove": "Remove {name}",
+    "add": "Add an approver",
+    "addHint": "People whose role approves change orders for this company; never its author.",
+    "pick": "Pick a person",
+    "noneLeft": "Nobody else may approve",
+    "pickFirst": "Pick a person first",
+    "addButton": "Add",
+    "fourEyes": "Four eyes: the author never approves their own change order; every required approver approves, and one rejection rejects it.",
+    "tooMany": "At most {max} approvers"
+  },
+  "affected": {
+    "old": "Old revision",
+    "new": "New revision",
+    "releasedAt": "Released on",
+    "choiceLater": "The choice of revision per order comes later; for now open orders keep the revision they were made on.",
+    "requestHint": "The change order that carries it names the new revision."
+  },
+  "photos": {
+    "none": "No photos yet.",
+    "sending": "Sending the photos…",
+    "inActivity": "They are also in Activity › Files.",
+    "count_one": "{count} photo",
+    "failed_one": "{count} photo could not be sent: add it again.",
+    "added_one": "{count} photo added",
+    "count_other": "{count} photos",
+    "failed_other": "{count} photos could not be sent: add them again.",
+    "added_other": "{count} photos added"
+  },
+  "activity": {
+    "none": "Nothing yet. The first change or message appears here.",
+    "noRight": "Your role does not read the thread and history."
+  },
+  "dialog": {
+    "cancelTitle": "Cancel {number}?",
+    "cancelBody": "Its draft revision stays a draft; the requests it carries can go into another change order.",
+    "cancelWhy": "Why",
+    "cancelSubmit": "Cancel change order",
+    "releaseTitle": "Release revision {revision}?",
+    "releaseBody": "Revision {to} becomes the released one and revision {from} obsolete, through the release check; the requests it carries are done.",
+    "releaseSubmit": "Release",
+    "startTitle": "Start the draft revision",
+    "startBody": "A copy of revision {from} becomes the draft that holds this change; edit its BOM, spec and routing in the Style studio.",
+    "startSubmit": "Start draft",
+    "changeNote": "Change note",
+    "changeNoteHint": "What the revision changes (kept with the revision)."
+  },
+  "problem": {
+    "unavailable": "The factory server did not answer. Try again in a moment.",
+    "forbidden": "Your role does not read this.",
+    "notFound": "Not found: it may have been removed or belong to another company.",
+    "signedOut": "You were signed out. Sign in again.",
+    "contract": "The answer was not what this page expects. Reload the page.",
+    "rateLimited": "Too many tries in a short time. Wait a moment.",
+    "stale": "Someone changed it first: it was read again.",
+    "invalid": "Some fields need a look:",
+    "writeForbidden": "Your role does not do this here.",
+    "stepUp": "Confirm it is you first."
+  },
+  "refusal": {
+    "REQUEST_DECIDED": "This request is decided: what, why and the revision no longer change.",
+    "REQUEST_MOVE": "This request cannot move that way now.",
+    "REASON_NEEDED": "Say why: whoever wrote or raised it reads the reason.",
+    "REQUEST_NOT_LINKABLE": "A request is carried only if it is of the same style, not rejected or done, and in no other live change order.",
+    "ORDER_NOT_DRAFT": "What the change order changes was fixed when it was submitted.",
+    "ORDER_MOVE": "The change order is not in a state that allows this.",
+    "NO_RELEASED_REVISION": "The style has no released revision: a change order starts from one.",
+    "REVISION_NOT_DRAFT": "The proposed revision is no longer a draft.",
+    "DRAFT_EXISTS": "The style already has a draft revision: use it, or finish it first.",
+    "NO_DRAFT_REVISION": "Start the draft revision first, make the change there, then submit.",
+    "NO_APPROVER": "Name at least one required approver other than the author.",
+    "OWN_APPROVAL": "The author cannot approve their own change order (four eyes).",
+    "APPROVER_CANNOT": "That person’s role does not approve change orders for this company.",
+    "NOT_APPROVER": "You are not an approver of this change order.",
+    "ALREADY_DECIDED": "You already decided it: a decision is given once.",
+    "NOT_APPROVED": "Its revision is released once the change order is approved.",
+    "NOT_YET_EFFECTIVE": "It takes effect on a later day: release it on that day.",
+    "EFFECT_DATE": "Say the day it takes effect (only with \"From a date\").",
+    "WORK_ORDER_NOT_OPEN": "That work order is not open: nothing of it is in progress.",
+    "LINE_INVALID": "That change line is not complete.",
+    "CANCEL_REASON": "Say why it is cancelled.",
+    "EDIT_BLOCKED": "The style’s lifecycle state does not allow this change.",
+    "NEEDS_NEW_REVISION": "Start a new revision to change it.",
+    "NEEDS_CHANGE_ORDER": "This style changes only through a change order.",
+    "DRAFT_UNDER_CHANGE_ORDER": "The draft revision is held by a change order waiting for approval: it is frozen until decided.",
+    "REVISION_LOCKED": "The revision is released and locked: it does not change.",
+    "other": "The factory refused it."
+  },
+  "style": {
+    "changes": "Changes of this style",
+    "newRequest": "New change request…"
+  }
+}

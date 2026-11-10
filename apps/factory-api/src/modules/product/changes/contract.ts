@@ -32,6 +32,7 @@ import {
   workOrderChangesView,
   workOrderParams,
 } from '@nexus/factory-domain/product/changes/contracts'
+import { approverOptionsView, releasedList, releasedQuery } from '@nexus/factory-domain/product/changes/screens'
 import { fileView, presignedView } from '../../../platform/files/contract'
 
 /** The change requests' and change orders' contracts (B-W2b-226): the bodies and answers are factory-domain's product/changes/contracts. */
@@ -65,3 +66,7 @@ export const submitContract = defineContract({ params: orderParams, body: versio
 export const decideContract = defineContract({ params: orderParams, body: decideBody, response: order })
 export const cancelContract = defineContract({ params: orderParams, body: cancelBody, response: order })
 export const releaseContract = defineContract({ params: orderParams, body: releaseOrderBody, response: order })
+
+// B-W2b-244 (Changes & versions): the released versions list and the approver picker (./screens.ts).
+export const releasedContract = defineContract({ querystring: releasedQuery, response: { 200: releasedList } })
+export const approverOptionsContract = defineContract({ params: orderParams, response: { 200: approverOptionsView } })

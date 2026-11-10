@@ -119,6 +119,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/products/samples': 'sales.samples.view', // GET /sales/samples/rounds (B-W2b-261)
+      '/products/changes': 'product.changes.view', // GET /product/change-requests (B-W2b-244)
       '/products/colours': 'product.styles.view', // GET /product/colours/library (B-W2b-247)
       '/products/options': 'product.styles.view', // GET /product/option-groups (B-W2b-242)
       '/products/settings': 'product.styles.view', // GET /product/settings (B-W2b-239)
