@@ -25,7 +25,9 @@
       "sizes": "Taglie e misure",
       "development": "Sviluppo",
       "samples": "Campionature e prototipi",
-      "colours": "Colori e grafiche"
+      "colours": "Colori e grafiche",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni prodotto"
     },
     "sales": {
       "area": "Vendite",
