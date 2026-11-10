@@ -57,6 +57,8 @@ import { SALES_SAMPLES_ADDS } from '../../sales/samples/permissions'
 import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 // B-W2b-257: the DoC generator (quality generates, checks a translation and builds packs; the warehouse builds packs).
 import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
+// B-W2b-252: sample decisions (sales and the production manager decide; the production manager and quality measure the fit).
+import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -863,7 +865,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-251
   ...(audience === 'office' ? (TECHFILES_ADDS[key] ?? []) : []),
   // B-W2b-257
-  ...(audience === 'office' ? (DECLARATIONS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (DECLARATIONS_ADDS[key] ?? []) : []),
+  // B-W2b-252
+  ...(audience === 'office' ? (SALES_SAMPLE_DECISIONS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
