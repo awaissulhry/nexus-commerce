@@ -71,6 +71,8 @@ import { SUPPLIER_DECLARATIONS_ADDS } from '../../compliance/declarations-asked/
 import { LABEL_ARTWORK_ADDS } from '../../compliance/label-artwork/permissions'
 // B-W2b-272: compliance reports (the quality inspector and the production manager read them).
 import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
+// B-W2b-264: sourcing & claims (the quality inspector keeps the claims register and approves a claim with a fresh code).
+import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -891,7 +893,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-272
   ...(audience === 'office' ? (COMPLIANCE_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-263
-  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : []),
+  // B-W2b-264
+  ...(audience === 'office' ? (CLAIMS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
