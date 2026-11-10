@@ -1,5 +1,5 @@
 import { REGISTER_VIEW } from '@nexus/factory-domain/compliance/register/permissions'
-import type { RegisterKind, RegisterRisk } from '@nexus/factory-domain/compliance/register/rules'
+import { REGISTER_KINDS, type RegisterKind, type RegisterRisk } from '@nexus/factory-domain/compliance/register/rules'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { EXPORT_LIMITS } from '@nexus/factory-domain/views/exports'
 import { listEntries, type ListQuery } from '../../../modules/compliance/register/register'
@@ -35,7 +35,8 @@ export const register = defineExportSource<Query, Row>({
     const status = address.get('status')
     const riskTerm = address.get('risk')
     const kindTerm = address.get('kind')
-    const kind: RegisterKind | undefined = kindTerm === 'COMPLAINT' || kindTerm === 'NON_CONFORMITY' || kindTerm === 'RECALL' ? kindTerm : undefined
+    // B-W2b-260: every kind of the register (REGISTER_KINDS), the withdrawal and the authority request among them.
+    const kind: RegisterKind | undefined = kindTerm !== null && (REGISTER_KINDS as readonly string[]).includes(kindTerm) ? (kindTerm as RegisterKind) : undefined
     const risk: RegisterRisk | undefined = riskTerm === 'NO' || riskTerm === 'ASSESSING' || riskTerm === 'YES' ? riskTerm : undefined
     let view: View = 'all'
     let filterRisk = risk
@@ -89,6 +90,9 @@ export const register = defineExportSource<Query, Row>({
       'kind.COMPLAINT': 'Reclamo',
       'kind.NON_CONFORMITY': 'Non conformità',
       'kind.RECALL': 'Richiamo',
+      // B-W2b-260
+      'kind.WITHDRAWAL': 'Ritiro dal mercato',
+      'kind.AUTHORITY_REQUEST': "Richiesta dell'autorità",
       'risk.NO': 'Nessun rischio',
       'risk.ASSESSING': 'In valutazione',
       'risk.YES': 'Possibile rischio',
@@ -102,6 +106,8 @@ export const register = defineExportSource<Query, Row>({
       'source.LabResult': 'Un risultato di laboratorio (Cr VI)',
       'source.Nonconformance': 'Una non conformità (NCR)',
       'source.Complaint': 'Un reclamo del cliente',
+      // B-W2b-260
+      'source.AuthorityRequest': "Una richiesta dell'autorità",
       'list.noGarments': 'Nessun lotto o matricola indicati',
       'list.concern.batch': 'Numeri di lotto',
       'list.concern.serial': 'Matricole',
@@ -111,6 +117,9 @@ export const register = defineExportSource<Query, Row>({
       'kind.COMPLAINT': 'Complaint',
       'kind.NON_CONFORMITY': 'Non-conformity',
       'kind.RECALL': 'Recall',
+      // B-W2b-260
+      'kind.WITHDRAWAL': 'Withdrawal',
+      'kind.AUTHORITY_REQUEST': 'Authority request',
       'risk.NO': 'No risk',
       'risk.ASSESSING': 'Being assessed',
       'risk.YES': 'May present a risk',
@@ -124,6 +133,8 @@ export const register = defineExportSource<Query, Row>({
       'source.LabResult': 'A lab result (Cr VI)',
       'source.Nonconformance': 'A nonconformance (NCR)',
       'source.Complaint': 'A customer complaint',
+      // B-W2b-260
+      'source.AuthorityRequest': 'An authority request',
       'list.noGarments': 'No batch or serial named',
       'list.concern.batch': 'Batch numbers',
       'list.concern.serial': 'Serials',
