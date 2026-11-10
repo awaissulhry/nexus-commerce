@@ -65,7 +65,9 @@ describe('Materials & trims rules (SCR-047/048)', () => {
     expect(viewQuery('crvi')).toEqual({ requiresCrViTest: true })
     expect(viewQuery('archived')).toEqual({ status: 'ARCHIVED' })
     expect(viewsFor({ seesCost: false })).not.toContain('missingCost')
-    expect(tilesFor({ seesCost: false })).toEqual(['leather', 'crvi', 'ppe'])
+    // B-W2b-238: + Not used in any BOM.
+    expect(tilesFor({ seesCost: false })).toEqual(['leather', 'crvi', 'ppe', 'unused'])
+    expect(viewQuery('unused')).toEqual({ used: false })
     expect(tilesFor({ seesCost: true })).toEqual([...MATERIAL_TILES])
     // A kind picked inside a view narrows it; a kind outside the view's kinds keeps the view.
     expect(listQuery({ view: 'textiles', q: 'rete', kind: 'LINING' }, null)).toMatchObject({ kind: ['LINING'], q: 'rete' })
@@ -225,10 +227,12 @@ describe('navigation, pages and record links', () => {
 
 const AREA = fileURLToPath(new URL('..', import.meta.url))
 const FOLDERS = ['library', 'materials', 'operations', 'sizes']
+// B-W2b-238: materials in depth speak their own catalogue (products-materials-depth; its own key test in materials/approval).
+const OWN_CATALOGUE = new Set(['approval', 'properties', 'whereused'])
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return sources(path)
+    if (entry.isDirectory()) return OWN_CATALOGUE.has(entry.name) && dir.endsWith('materials') ? [] : sources(path)
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.') ? [path] : []
   })
 }
@@ -248,8 +252,9 @@ const built = [
   ...UOMS.map((uom) => `uom.${uom}`),
   ...WORK_CENTRE_KINDS.map((kind) => `department.${kind}`),
   ...MATERIAL_WARNINGS.map((code) => `material.warning.${code}`),
-  ...MATERIAL_VIEWS.map((view) => `materials.view.${view}`),
-  ...MATERIAL_TILES.flatMap((tile) => [`materials.tile.${tile}`, `materials.tileHint.${tile}`]),
+  // B-W2b-238: `unused` (Not used in any BOM) is said by products-materials-depth (materialsList.*).
+  ...MATERIAL_VIEWS.filter((view) => view !== 'unused').map((view) => `materials.view.${view}`),
+  ...MATERIAL_TILES.filter((tile) => tile !== 'unused').flatMap((tile) => [`materials.tile.${tile}`, `materials.tileHint.${tile}`]),
   ...OPERATION_VIEWS.map((view) => `operations.view.${view}`),
   ...OPERATION_TILES.flatMap((tile) => [`operations.tile.${tile}`, `operations.tileHint.${tile}`]),
   ...SCALE_VIEWS.map((view) => `sizes.view.${view}`),

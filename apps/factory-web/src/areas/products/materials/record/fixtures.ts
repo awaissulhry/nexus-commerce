@@ -8,6 +8,9 @@ import type { MaterialRecordViewModel } from './record-model'
 import { MaterialRecordView } from './view/MaterialRecordView'
 import { GRADE_ROWS, GRADES_VIEW, gradesModel, REFUSED_MARKS, SAVING_MARKS, WAITING_MARKS } from './grades/demo'
 import { NO_GRADES } from './grades/grades-model'
+// B-W2b-238: materials in depth (properties of its kind, fibres, approval, where used).
+import { depthModel, LEATHER_DEPTH, PROTECTOR_DEPTH, WHERE_USED } from '../approval/demo'
+import type { MaterialDepthModel } from '../approval/depth-model'
 
 /**
  * SCR-048 the material record — made-up data only: a chrome-tanned leather bought by the hide (52.5 ft²), stocked in
@@ -39,6 +42,7 @@ const base: MaterialRecordViewModel = {
   refused: null,
   supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier }),
   grades: gradesModel(),
+  depth: depthModel('owner', { depth: { status: 'ready', value: LEATHER_DEPTH } }),
 }
 const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewModel): MaterialRecordViewModel => {
   const sources = sourcesCan(ROLE_PERMISSIONS[role])
@@ -49,11 +53,14 @@ const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewMo
     lots: canFor(role).lots ? model.lots : null,
     stock: canFor(role).stock ? model.stock : null,
     supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, can: { view: sources.view, cost: sources.cost } }),
+    depth: model.depth ? { ...model.depth, can: depthModel(role).can } : model.depth,
   }
 }
 const prices = (over: Parameters<typeof pricesModel>[1]): MaterialRecordViewModel => ({ ...base, tab: 'suppliers', supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, ...over }) })
-const protector: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: PROTECTOR }, certificates: ready(CERTIFICATES), lots: ready({ lots: [], capped: false }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES }
-const textile: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: TEXTILE }, lots: ready({ lots: [], capped: true }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES }
+const protector: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: PROTECTOR }, certificates: ready(CERTIFICATES), lots: ready({ lots: [], capped: false }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES, depth: depthModel('owner', { depth: { status: 'ready', value: PROTECTOR_DEPTH } }) }
+const textile: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: TEXTILE }, lots: ready({ lots: [], capped: true }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES, depth: depthModel('owner') }
+/** B-W2b-238: a tab of a material with its depth model as given. */
+const deep = (model: MaterialRecordViewModel, tab: MaterialRecordViewModel['tab'], over: Partial<MaterialDepthModel> = {}): MaterialRecordViewModel => ({ ...model, tab, depth: { ...(model.depth ?? depthModel('owner')), ...over } })
 /** B-W2b-131: the Properties & grades tab of the leather with its grades section as given. */
 const grades = (over: Parameters<typeof gradesModel>[0] = {}, view = GRADES_VIEW, model: MaterialRecordViewModel = base): MaterialRecordViewModel => ({ ...model, tab: 'properties', grades: gradesModel(over, view) })
 
@@ -96,6 +103,54 @@ export const designScreen = defineDesignScreen<MaterialRecordViewModel>({
     { id: 'grades-empty', label: 'B-W2b-131 — Grades: no grade set up yet', model: grades({}, { ...GRADES_VIEW, grades: [] }) },
     { id: 'grades-loading', label: 'B-W2b-131 — Grades: loading (the rest of the tab is usable)', model: grades({ part: { status: 'loading' } }) },
     { id: 'grades-error', label: "B-W2b-131 — Grades: couldn't load + Try again (the rest of the record stays usable)", model: grades({ part: { status: 'error', problem: 'problem.read.unavailable' } }) },
+    {
+      id: 'w2b238-props-textile',
+      label: 'B-W2b-238 — Properties of its kind: the lining typed as a fabric (220 g/m², 150 cm, knitted); its fibres as the label reads them',
+      model: deep(textile, 'properties'),
+      note: '"nylon" is not the official name: the label says polyamide (poliammide). Saved together with Discard / Save properties.',
+    },
+    { id: 'w2b238-props-protector', label: 'B-W2b-238 — Properties of its kind: a protector (EN 1621-1:2012, shoulder, level 2, size A)', model: deep(protector, 'properties') },
+    { id: 'w2b238-props-draft', label: 'B-W2b-238 — Properties: a weight typed wrong — Save held with the reason', model: deep(textile, 'properties', { propertiesDraft: { weightGsm: '22o', widthCm: '150', construction: 'knitted' } }) },
+    { id: 'w2b238-props-offline', label: 'B-W2b-238 — Properties offline: the change stays on the page, Save held', model: deep(textile, 'properties', { offline: true, propertiesDraft: { weightGsm: '240', widthCm: '150', construction: 'knitted' } }) },
+    { id: 'w2b238-props-saved', label: 'B-W2b-238 — Properties saved (notice)', model: deep(textile, 'properties', { notice: { key: 'properties.notice.saved', tone: 'success' } }) },
+    {
+      id: 'w2b238-props-refused',
+      label: 'B-W2b-238 — Properties refused by the server: the field marked, its sentence kept as data',
+      model: deep(textile, 'properties', { notice: { key: 'problem.write.invalid', tone: 'danger' }, refused: { key: 'problem.write.invalid', reload: false, paths: ['properties/widthCm'], messages: ['Expected a number above 0 with at most 8 digits and 4 decimals.'] } }),
+    },
+    { id: 'w2b238-props-read-only', label: 'B-W2b-238 — Properties read only (quality: no product.materials.manage): drawn as text', model: as('quality', deep(textile, 'properties')) },
+    { id: 'w2b238-props-archived', label: 'B-W2b-238 — Properties of an archived material: read only, said why', model: deep({ ...textile, material: { status: 'ready', value: { ...TEXTILE, status: 'ARCHIVED' } } }, 'properties') },
+    { id: 'w2b238-props-loading', label: 'B-W2b-238 — Properties loading (the rest of the tab is usable)', model: deep(textile, 'properties', { depth: { status: 'loading' } }) },
+    { id: 'w2b238-props-error', label: "B-W2b-238 — Properties couldn't load + Try again", model: deep(textile, 'properties', { depth: { status: 'error', problem: 'problem.read.unavailable' } }) },
+    { id: 'w2b238-approval', label: 'B-W2b-238 — Approval status (Owner): approved on a condition, by whom and when, what it reaches', model: deep(textile, 'compliance'), note: 'Four RadioCards; the condition is required; "See where it is used" opens the tab.' },
+    { id: 'w2b238-approval-quality', label: 'B-W2b-238 — Approval status (quality decides)', model: as('quality', deep(textile, 'compliance')) },
+    { id: 'w2b238-approval-block-held', label: 'B-W2b-238 — Blocked picked without why: Block material held with the reason', model: deep(textile, 'compliance', { approvalDraft: { approval: 'BLOCKED', note: '' } }) },
+    { id: 'w2b238-approval-block-confirm', label: 'B-W2b-238 — Block material: what it does, asked once more', model: deep(textile, 'compliance', { approvalDraft: { approval: 'BLOCKED', note: 'Lab test failed: nickel above the limit (made-up).' }, confirmBlock: true }), note: 'No new BOM line; 1 draft revision held at release; 2 released ones keep it; 2 open work orders go on.' },
+    { id: 'w2b238-approval-decided', label: 'B-W2b-238 — Decided (notice)', model: deep(protector, 'compliance', { depth: { status: 'ready', value: PROTECTOR_DEPTH }, notice: { key: 'approval.notice.decided', tone: 'success', params: { approval: 'APPROVED' } } }) },
+    { id: 'w2b238-approval-pending', label: 'B-W2b-238 — A leather not reviewed yet (pending, nobody decided)', model: deep(base, 'compliance') },
+    { id: 'w2b238-approval-sales', label: 'B-W2b-238 — Approval read only (sales: no product.materials.approve): drawn as text', model: as('sales', deep(textile, 'compliance')) },
+    { id: 'w2b238-approval-archived', label: 'B-W2b-238 — Approval of an archived material: read only, said why', model: deep({ ...textile, material: { status: 'ready', value: { ...TEXTILE, status: 'ARCHIVED' } } }, 'compliance') },
+    { id: 'w2b238-approval-offline', label: 'B-W2b-238 — Approval offline: Apply held, the choice stays on the page', model: deep(textile, 'compliance', { offline: true, approvalDraft: { approval: 'APPROVED', note: '' } }) },
+    {
+      id: 'w2b238-approval-refused',
+      label: 'B-W2b-238 — Decision refused (changed meanwhile): read again, said in our words',
+      model: deep(textile, 'compliance', { notice: { key: 'problem.write.moved', tone: 'danger' }, refused: { key: 'problem.write.moved', reload: true, paths: [], messages: [] } }),
+    },
+    { id: 'w2b238-approval-loading', label: 'B-W2b-238 — Approval loading', model: deep(textile, 'compliance', { depth: { status: 'loading' } }) },
+    { id: 'w2b238-approval-error', label: "B-W2b-238 — Approval couldn't load + Try again (the rest of the tab stays usable)", model: deep(textile, 'compliance', { depth: { status: 'error', problem: 'problem.read.unavailable' } }) },
+    { id: 'w2b238-where-used', label: 'B-W2b-238 — Where used (Owner): every style, revision and open work order', model: deep(base, 'whereused'), note: 'A line per revision (draft, released, obsolete) and the line it is an alternate on; colours per colourway; work orders link to their record.' },
+    { id: 'w2b238-where-used-colour', label: 'B-W2b-238 — Where used: only the red colour', model: deep(base, 'whereused', { colourId: LEATHER.colours[1]!.id, whereUsed: { status: 'ready', value: { ...WHERE_USED, itemColourId: LEATHER.colours[1]!.id, rows: WHERE_USED.rows.slice(0, 2) } } }) },
+    { id: 'w2b238-where-used-selected', label: 'B-W2b-238 — Where used: two rows selected — Export 2', model: deep(base, 'whereused', { selected: WHERE_USED.rows.slice(0, 2).map((row) => `${row.lineId}:${row.priority ?? 0}`) }) },
+    {
+      id: 'w2b238-where-used-no-orders',
+      label: 'B-W2b-238 — Where used without workorders.view (sales): work orders "Not in your role", never 0',
+      model: as('sales', deep(base, 'whereused', { whereUsed: { status: 'ready', value: { ...WHERE_USED, workOrdersAllowed: false, summary: { ...WHERE_USED.summary, openWorkOrders: null }, rows: WHERE_USED.rows.map((row) => ({ ...row, openWorkOrders: null })) } } })),
+    },
+    { id: 'w2b238-where-used-no-styles', label: 'B-W2b-238 — Where used without product.styles.view: said why', model: deep(base, 'whereused', { whereUsed: { status: 'ready', value: { ...WHERE_USED, stylesAllowed: false, rows: [], summary: { ...WHERE_USED.summary, styles: 0 } } } }) },
+    { id: 'w2b238-where-used-empty', label: 'B-W2b-238 — Where used: not used in any BOM', model: deep(protector, 'whereused', { whereUsed: { status: 'ready', value: { ...WHERE_USED, material: PROTECTOR_DEPTH.material, rows: [], colours: [], summary: { styles: 0, draftRevisions: 0, releasedRevisions: 0, obsoleteRevisions: 0, lines: 0, alternates: 0, openWorkOrders: 0 } } } }) },
+    { id: 'w2b238-where-used-more', label: 'B-W2b-238 — Where used: more lines than one answer holds', model: deep(base, 'whereused', { whereUsed: { status: 'ready', value: { ...WHERE_USED, more: true } } }) },
+    { id: 'w2b238-where-used-loading', label: 'B-W2b-238 — Where used loading', model: deep(base, 'whereused', { whereUsed: { status: 'loading' } }) },
+    { id: 'w2b238-where-used-error', label: "B-W2b-238 — Where used couldn't load + Try again", model: deep(base, 'whereused', { whereUsed: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'suppliers', label: 'Suppliers & prices (Owner)', model: { ...base, tab: 'suppliers' }, note: 'The standard cost per ft², per hide and per dm²; set with a reason for the audit row.' },
     { id: 'suppliers-developer', label: 'Suppliers & prices: no cost grain', model: { ...as('developer', base), tab: 'suppliers' }, note: 'The production manager reads no purchasing either: Supplier prices says what is missing.' },
     { id: 'supplier-prices', label: 'Supplier prices (Owner)', model: prices({}), note: 'Purchasing\u2019s approved sources of the leather: primary first; Open the supplier goes to its Items & prices.' },

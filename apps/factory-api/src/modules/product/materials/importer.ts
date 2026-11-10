@@ -5,6 +5,7 @@ import { markValues } from '@nexus/factory-domain/imports/importer'
 import { coloursOf, importRecordValues, materialImporter, materialInputOf, patchOfRow } from '@nexus/factory-domain/product/materials/importer'
 import { PRODUCT_MATERIALS_COST, PRODUCT_MATERIALS_MANAGE, PRODUCT_MATERIALS_VIEW } from '@nexus/factory-domain/product/materials/permissions'
 import { changeMaterial, newMaterial, type MaterialFields } from '@nexus/factory-domain/product/materials/rules'
+import { kindChangeProblem } from '@nexus/factory-domain/product/materials-depth/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { ApiError } from '../../../core/errors'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
@@ -86,12 +87,15 @@ export const materialsImportAdapter = Object.freeze({
 
     const { tx } = tools
     const recordId = row.recordId!
-    const current = await tx.item.findUniqueOrThrow({ where: { id: recordId }, select: { ...MATERIAL_COLUMNS_WITH_COST } })
+    const current = await tx.item.findUniqueOrThrow({ where: { id: recordId }, select: { ...MATERIAL_COLUMNS_WITH_COST, properties: true } })
     if (current.status !== 'ACTIVE' || current.companyId !== scope.companyId) throw new ImportRowRefused(code, 'it was archived or moved')
     const before = fieldsOf(current)
     const change = changeMaterial(before, patchOfRow(values))
     if (!change.ok) throw new ImportRowRefused(code, change.issues.map((issue) => issue.message).join(' '))
     const changed = change.changed
+    // B-W2b-238: a new kind keeps no typed properties of the old one (the database would refuse it): said for the row.
+    const kindProblem = changed.includes('kind') ? kindChangeProblem(code, current.properties, change.material.kind) : null
+    if (kindProblem) throw new ImportRowRefused(code, kindProblem)
     const changes = Object.fromEntries(changed.map((field) => [field, change.material[field]])) as Partial<MaterialFields>
     // command() bumps only the record it guards (the import job): the material's version moves here, so an open edit
     // of it sees the import as a newer version.

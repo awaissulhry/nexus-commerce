@@ -4,6 +4,8 @@ import { ROWS, SUPPLIER_ROWS, withoutCost } from './demo'
 import type { MaterialsListViewModel, NewMaterialModel } from './list-model'
 import { draftFor } from './model'
 import { MaterialsListView } from './view/MaterialsListView'
+// B-W2b-238: the Approval and Used in columns, the "Not used in any BOM" tile.
+import { ROWS_IN_DEPTH } from './approval/demo'
 
 /**
  * SCR-047 Materials & trims — made-up data only (PLAN §3.1): an invented factory's leathers, textiles, thread, hardware,
@@ -90,6 +92,27 @@ export const designScreen = defineDesignScreen<MaterialsListViewModel>({
     { id: 'empty-sales', label: 'No materials yet (sales)', model: { ...noCost(base, 'sales'), rows: { items: [], more: false, count: 0, problem: null }, tiles: { leather: 0, crvi: 0, ppe: 0 } } },
     { id: 'loading', label: 'Loading', model: { ...base, rows: { items: null, more: false, count: null, problem: null }, tiles: { leather: null, missingCost: null, crvi: null, ppe: null }, asOf: null } },
     { id: 'error', label: 'Could not load', model: { ...base, rows: { items: null, more: false, count: null, problem: 'problem.read.unavailable' }, tiles: { leather: null, missingCost: null, crvi: null, ppe: null } }, note: 'Never drawn as an empty list; the tiles say "—", not 0.' },
+    {
+      id: 'w2b238-columns',
+      label: 'B-W2b-238 — Approval and Used in (Owner): each material’s approval, the styles whose BOM names it',
+      model: { ...base, rows: { items: ROWS_IN_DEPTH.filter((row) => row.status !== 'ARCHIVED'), more: false, count: 8, problem: null }, tiles: { leather: 2, missingCost: 2, crvi: 2, ppe: 1, unused: 2 } },
+      note: '"3 styles" opens the record’s Where used; "Not used" for a material no draft or released BOM names.',
+    },
+    {
+      id: 'w2b238-tile-unused',
+      label: 'B-W2b-238 — Tile: Not used in any BOM (pressed: its chip in the filter row)',
+      model: { ...base, filters: { ...base.filters, view: 'unused' }, rows: { items: ROWS_IN_DEPTH.filter((row) => row.usedInStyles === 0 && row.status !== 'ARCHIVED'), more: false, count: 2, problem: null }, tiles: { leather: 2, missingCost: 2, crvi: 2, ppe: 1, unused: 2 } },
+    },
+    {
+      id: 'w2b238-columns-developer',
+      label: 'B-W2b-238 — Approval and Used in, product developer (no money)',
+      model: { ...noCost({ ...base, rows: { items: ROWS_IN_DEPTH.filter((row) => row.status !== 'ARCHIVED'), more: false, count: 8, problem: null } }, 'developer'), tiles: { leather: 2, crvi: 2, ppe: 1, unused: 2 } },
+    },
+    {
+      id: 'w2b238-tile-unknown',
+      label: 'B-W2b-238 — Tile not counted yet: "—", never 0',
+      model: { ...base, rows: { items: ROWS_IN_DEPTH.filter((row) => row.status !== 'ARCHIVED'), more: false, count: 8, problem: null }, tiles: { leather: 2, missingCost: 2, crvi: 2, ppe: 1, unused: null } },
+    },
     { id: 'no-permission', label: 'No access', model: { ...base, can: { ...canFor('sales'), materials: false }, rows: { items: null, more: false, count: null, problem: 'problem.read.forbidden' }, tiles: {} } },
   ],
 })

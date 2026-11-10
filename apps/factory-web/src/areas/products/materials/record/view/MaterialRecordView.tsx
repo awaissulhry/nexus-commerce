@@ -18,6 +18,9 @@ import { OverviewTab } from './OverviewTab'
 import { PropertiesTab } from './PropertiesTab'
 import { StockTab } from './StockTab'
 import { SuppliersTab } from './SuppliersTab'
+// B-W2b-238: Where used (PRD-036), the approval in the band (PRD-035).
+import { WhereUsedTab } from '../../whereused/view/WhereUsedTab'
+import { APPROVAL_TONE, NO_DEPTH } from '../../approval/depth-model'
 
 export type { MaterialRecordViewModel, MaterialRecordActions } from '../record-model'
 
@@ -53,6 +56,7 @@ function Record({ model, actions }: { model: MaterialRecordViewModel; actions?: 
 
 function Ready({ material, model, actions }: { material: MaterialView; model: MaterialRecordViewModel; actions?: MaterialRecordActions }) {
   const t = useT('library')
+  const td = useT('products-materials-depth')
   const locale = useLocale()
   const href = `${model.prefix}/products/materials/${material.id}`
   const tabs = tabsFor(model.can)
@@ -116,11 +120,12 @@ function Ready({ material, model, actions }: { material: MaterialView; model: Ma
             {material.tracking !== 'NONE' && <Tag tone="info">{t(`tracking.${material.tracking}`)}</Tag>}
             {crvi && <Tag tone="info">{t('materials.list.crvi', { limit: crvi })}</Tag>}
             {material.isPpeComponent && <Tag tone="warning">{t('materials.list.ppe')}</Tag>}
+            {material.approval && <Pill tone={APPROVAL_TONE[material.approval]}>{td(`approval.state.${material.approval}`)}</Pill>}
           </span>
           <SaveWords state={model.save.state} at={model.save.at} />
         </>
       }
-      tabs={tabs.map((tab) => ({ id: tab, label: t(`material.tab.${tab}`), count: tab === 'colours' ? material.colours.filter((colour) => colour.status === 'ACTIVE').length : null }))}
+      tabs={tabs.map((tab) => ({ id: tab, label: tab === 'whereused' ? td('tab.whereused') : t(`material.tab.${tab}`), count: tab === 'colours' ? material.colours.filter((colour) => colour.status === 'ACTIVE').length : null }))}
       active={model.tab}
       tabHref={(tab) => `${href}?tab=${tab}`}
     >
@@ -166,6 +171,8 @@ function Body({ tab, material, model, actions }: { tab: MaterialTab; material: M
       return <ComplianceTab key={`${material.id}-${material.version}`} material={material} model={model} actions={actions} />
     case 'stock':
       return <StockTab material={material} model={model} />
+    case 'whereused':
+      return <WhereUsedTab model={model.depth ?? NO_DEPTH} actions={actions?.depth} prefix={model.prefix} />
     default:
       return <OverviewTab key={`${material.id}-${material.version}`} material={material} model={model} actions={actions} />
   }

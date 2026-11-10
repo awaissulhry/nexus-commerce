@@ -1,0 +1,249 @@
+{
+  "loading": "Loading…",
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "discard": "Discard",
+  "back": "Back",
+  "yes": "Yes",
+  "no": "No",
+  "notInRole": "Not in your role",
+  "tab": {
+    "whereused": "Where used"
+  },
+  "revisionStatus": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "OBSOLETE": "Obsolete"
+  },
+  "role": {
+    "LINE": "Its material",
+    "ALTERNATE": "Alternate {priority}"
+  },
+  "csv": {
+    "style": "Style",
+    "revision": "Revision",
+    "status": "Status",
+    "line": "Line",
+    "role": "As",
+    "placement": "Placement",
+    "colours": "Colours",
+    "workOrders": "Open work orders"
+  },
+  "approval": {
+    "title": "Approval status",
+    "failed": "Couldn't load the approval",
+    "intro": "Whether the material may go into a garment. A released BOM can't hold a blocked one.",
+    "viewOnly": "You can view, not change: deciding needs the material approval right.",
+    "readOnlyArchived": "Read-only: the material is archived. Reactivate it to decide.",
+    "decided": "{name} · {time}",
+    "byRelease": "its first release",
+    "notDecided": "Not reviewed yet",
+    "decidedLabel": "Decided by",
+    "whyLabel": "Why it is blocked",
+    "conditionLabel": "The condition",
+    "noteLabel": "Note",
+    "stateLabel": "Status",
+    "pick": "Approval status",
+    "state": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "CONDITIONAL": "Conditional",
+      "BLOCKED": "Blocked"
+    },
+    "means": {
+      "PENDING": "In development: not reviewed yet.",
+      "APPROVED": "Approved for use in garments.",
+      "CONDITIONAL": "Approved on a condition the people using it read.",
+      "BLOCKED": "Not to be used: no new BOM line, no release of a revision naming it."
+    },
+    "noteHint": "Optional, one line: the people who use the material read it.",
+    "noteHintRequired": "Required, one line of up to 1000 characters: the people who use the material read it.",
+    "noteRefused": "The server refused this text: check it.",
+    "apply": "Apply decision",
+    "applyBlock": "Block material",
+    "held": {
+      "unchanged": "Nothing changed yet.",
+      "whyBlocked": "Say why the material is blocked.",
+      "whyCondition": "Say the condition it is approved on.",
+      "noteLong": "One line of up to 1000 characters."
+    },
+    "reach": {
+      "noStyles": "Where it is used is not in your role.",
+      "none": "No BOM names it now: a decision changes no style.",
+      "words": "Used now in {styles} style(s): {drafts} draft and {released} released revision(s).",
+      "noWorkOrders": "Open work orders are not in your role.",
+      "workOrders_one": "{count} open work order makes a released one.",
+      "workOrders_other": "{count} open work orders make released ones.",
+      "open": "See where it is used"
+    },
+    "block": {
+      "title": "Block {code}?",
+      "noLine": "No new BOM line takes it.",
+      "drafts_one": "{count} draft revision naming it cannot be released until the material is replaced or approved again.",
+      "drafts_other": "{count} draft revisions naming it cannot be released until the material is replaced or approved again.",
+      "released_one": "{count} released revision keeps it as it is (a released BOM is frozen).",
+      "released_other": "{count} released revisions keep it as they are (a released BOM is frozen).",
+      "workOrders_one": "{count} open work order goes on.",
+      "workOrders_other": "{count} open work orders go on.",
+      "back": "You can approve it again later; the reason stays in its history."
+    },
+    "notice": {
+      "decided": "Decision saved: {approval}."
+    }
+  },
+  "properties": {
+    "title": "Properties of its kind",
+    "failed": "Couldn't load the properties",
+    "viewOnly": "You can view, not change: your role does not change this library.",
+    "readOnlyArchived": "Read-only: the material is archived. Reactivate it to change it.",
+    "intro": {
+      "TEXTILE": "Weight, width and construction of the fabric: the garment's composition is weighed with them.",
+      "PROTECTOR": "What the protector is: its EN 1621 standard, type, level and size.",
+      "TRIM": "What the trim is made of, its finish and size, and whether it is nickel free."
+    },
+    "field": {
+      "weightGsm": "Weight (g/m²)",
+      "widthCm": "Width (cm)",
+      "construction": "Construction",
+      "standard": "Standard",
+      "type": "Type",
+      "level": "Level",
+      "size": "Size",
+      "material": "Material",
+      "finish": "Finish",
+      "nickelFree": "Nickel free"
+    },
+    "hint": {
+      "weightGsm": "Grams per square metre, above 0 (e.g. 180).",
+      "widthCm": "The usable width of the roll, in centimetres.",
+      "construction": "Woven, knitted, laminate…",
+      "standard": "e.g. EN 1621-1:2012.",
+      "type": "Where it protects: shoulder, elbow, back…",
+      "level": "The EN 1621 performance level.",
+      "size": "The protector's size as the supplier names it.",
+      "material": "e.g. brass, nylon.",
+      "finish": "e.g. matte black.",
+      "nickelFree": "Metal parts in contact with the skin."
+    },
+    "none": "Not set",
+    "notSaid": "Not said",
+    "level": "Level {level}",
+    "gsm": "{value} g/m²",
+    "cm": "{value} cm",
+    "held": {
+      "unchanged": "Nothing changed yet.",
+      "number": "A number above 0 with at most 4 decimals."
+    },
+    "refused": "The server refused this value.",
+    "badNumber": "A number above 0 with at most 4 decimals.",
+    "save": "Save properties",
+    "notice": {
+      "saved": "Properties saved."
+    }
+  },
+  "fibres": {
+    "title": "Fibres on the label",
+    "allOfficial": "Each fibre is an official name of Reg. (EU) 1007/2011 Annex I.",
+    "problems_one": "{count} fibre needs another name before it goes on a label.",
+    "problems_other": "{count} fibres need another name before they go on a label.",
+    "finding": {
+      "NOT_OFFICIAL": "Not the official name",
+      "TRADE_MARK": "Trade mark",
+      "NOT_TEXTILE": "Not a textile fibre",
+      "UNKNOWN": "Unknown fibre"
+    },
+    "official": "Official name",
+    "names": "Italian: {it} · English: {en}",
+    "noItalian": "check the wording",
+    "notTextile": "Leave it out of the composition and mark the material as of animal origin (the label's phrase).",
+    "unknown": "Check it against Reg. (EU) 1007/2011 Annex I."
+  },
+  "whereUsed": {
+    "title": "Where used",
+    "tableLabel": "BOM lines that use the material",
+    "revision": "Rev. {revision}",
+    "line": "Line {seq}",
+    "everyColourway": "{name}, every colourway",
+    "noColour": "No colour",
+    "noOrders": "None open",
+    "moreOrders": "+{count}",
+    "col": {
+      "style": "Style",
+      "revision": "Revision and status",
+      "line": "Line",
+      "placement": "Placement",
+      "colours": "Colours used",
+      "orders": "Open work orders"
+    },
+    "failed": "Couldn't load where used",
+    "noStyles": {
+      "title": "Styles are not in your role",
+      "body": "Where the material is used is shown to people who read styles."
+    },
+    "empty": "Not used in any BOM",
+    "emptyBody": "No revision of any style names this material, as a line or an alternate.",
+    "emptyColour": "No BOM uses this colour",
+    "emptyColourBody": "Pick another colour, or every colour.",
+    "more": "Showing the first {count} lines.",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "colourFilter": "Colour",
+    "allColours": "Every colour",
+    "colourOption": "{code} · {name} ({count})",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "tile": {
+      "styles": "Styles",
+      "drafts": "Draft revisions",
+      "released": "Released revisions",
+      "orders": "Open work orders"
+    },
+    "tileHint": {
+      "styles": "Styles whose draft or released BOM names it",
+      "drafts": "A block holds their release",
+      "released": "They keep it as it is",
+      "orders": "Of the released revisions"
+    }
+  },
+  "styleChecks": {
+    "title": "Blocked or unapproved materials",
+    "failed": "Couldn't load the material approvals",
+    "intro": "The materials of revision {revision}'s BOM that are blocked, approved on a condition or not reviewed yet.",
+    "blockedDraft_one": "{count} blocked material: this revision cannot be released until it is replaced or approved again.",
+    "blockedDraft_other": "{count} blocked materials: this revision cannot be released until they are replaced or approved again.",
+    "blockedReleased_one": "{count} material of this released revision was blocked later: the revision keeps it; a new revision must replace it.",
+    "blockedReleased_other": "{count} materials of this released revision were blocked later: the revision keeps them; a new revision must replace them.",
+    "none_one": "Nothing to check: its {count} material is approved.",
+    "none_other": "Nothing to check: its {count} materials are approved.",
+    "col": {
+      "material": "Material",
+      "lines": "Lines",
+      "approval": "Approval",
+      "why": "Why or condition"
+    },
+    "alternateOn": "Alternate on {lines}",
+    "pendingWhy": "Not reviewed yet"
+  },
+  "wait": {
+    "offline": "Offline — your changes are kept on this page.",
+    "busy": "Wait: the last change is still being saved."
+  },
+  "materialsList": {
+    "view": {
+      "unused": "Not used in any BOM"
+    },
+    "tile": {
+      "unused": "Not used in any BOM"
+    },
+    "tileHint": {
+      "unused": "No draft or released BOM names it"
+    },
+    "notUsed": "Not used",
+    "usedIn_one": "{count} style",
+    "usedIn_other": "{count} styles",
+    "col": {
+      "approval": "Approval",
+      "usedIn": "Used in"
+    }
+  }
+}

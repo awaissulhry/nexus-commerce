@@ -12,6 +12,7 @@ import { TaskNewDialog } from '../../../../../record-panels/view/TaskNewDialog'
 import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleTypeChanges, StyleView } from '../../api'
 import { CELL_TONE, CHECK_TONE, documentFileProblem, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
+import { MaterialApprovalsCard } from '../materials'
 
 const DOC_TONE = { CURRENT: 'success', OLDER_REVISION: 'warning', MISSING: 'danger' } as const
 
@@ -44,6 +45,7 @@ export function ComplianceTab({ style, model, actions }: { style: StyleView; mod
         <ClassCard compliance={compliance} style={style} model={model} />
       </div>
       <CoverageCard compliance={compliance} model={model} />
+      <MaterialApprovalsCard read={model.materialApprovals} prefix={model.prefix} onRetry={actions?.onRetryMaterialApprovals} />
       <TypeChangesCard model={model} actions={actions} />
       <DocumentsCard compliance={compliance} model={model} actions={actions} />
       <div className="fw-st-pair">

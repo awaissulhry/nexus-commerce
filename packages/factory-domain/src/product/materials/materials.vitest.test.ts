@@ -274,7 +274,8 @@ describe('the material permissions and events', () => {
 
   it('declares the material events with ids and codes only, never a cost', () => {
     const types = EVENT_CATALOGUE.types().filter((type) => type.startsWith('material.'))
-    expect(types).toEqual(['material.colours_changed', 'material.created', 'material.standard_cost_changed', 'material.status_changed', 'material.updated'])
+    // B-W2b-238: material.approval_changed (materials in depth) joins W1's five.
+    expect(types).toEqual(['material.approval_changed', 'material.colours_changed', 'material.created', 'material.standard_cost_changed', 'material.status_changed', 'material.updated'])
     for (const type of types) {
       const keys = Object.keys(EVENT_CATALOGUE.get(type, 1).payload.shape)
       expect(keys.some((key) => /cost|price|amount/i.test(key))).toBe(false)
