@@ -155,6 +155,8 @@ import { events as routingDepth } from '../routing-depth/events'
 import { events as productMeasures } from '../product-measures/events'
 // B-W2b-229: the option library (a group, its values, rules, effects or prices changed).
 import { events as productOptions } from '../product-options/events'
+// B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
+import { events as complianceRules } from '../compliance-rules/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -376,7 +378,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-229
   ...productOptions,
   // B-W2b-238
-  ...materialsDepth] as const satisfies readonly EventDefinition[]
+  ...materialsDepth,
+  // B-W2b-249
+  ...complianceRules] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
