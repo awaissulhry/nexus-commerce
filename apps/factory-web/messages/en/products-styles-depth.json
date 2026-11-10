@@ -1,0 +1,501 @@
+{
+  "base": {
+    "retry": "Try again",
+    "loading": "Loading…",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "close": "Close",
+    "reason": "Reason",
+    "reasonHint": "Optional: kept in the style's history."
+  },
+  "hold": {
+    "loading": "Still loading.",
+    "busy": "A change is being saved: wait a moment.",
+    "offline": "Offline: this waits until the connection is back.",
+    "noManage": "Your role does not change styles (product.styles.manage).",
+    "archived": "The style is archived: reactivate it first.",
+    "long": "At most 500 characters."
+  },
+  "fault": {
+    "internal": "Something went wrong on our side. Try again.",
+    "moved": "Someone changed this style meanwhile: it was read again. Check and try again.",
+    "state": "The style's state no longer allows this: it was read again.",
+    "invalid": "This was not accepted as it is: check the fields.",
+    "forbidden": "Your role does not allow this.",
+    "signed_out": "You were signed out. Sign in again.",
+    "not_found": "This style is no longer here.",
+    "rate_limited": "Too many tries: wait a moment.",
+    "unavailable": "The server does not answer right now. Try again.",
+    "step_up": "Confirm it's you first.",
+    "read": {
+      "forbidden": "Your role does not read this."
+    }
+  },
+  "refusal": {
+    "SAME_STATE": "It is in this state already.",
+    "MOVE_NOT_ALLOWED": "This move is not allowed from its state.",
+    "NEEDS_RELEASED_REVISION": "Release a revision first: production needs a released revision.",
+    "REASON_NEEDED": "A move back needs the reason.",
+    "STYLE_ARCHIVED": "The style is archived: reactivate it first.",
+    "REPLACEMENT_NOT_HERE": "Only a style being phased out or discontinued names the style that replaces it.",
+    "REPLACEMENT_SELF": "A style does not replace itself.",
+    "REPLACEMENT_UNUSABLE": "That style cannot replace it: it is archived, discontinued or of another company.",
+    "REPLACEMENT_CIRCLE": "That style is itself replaced by this one: no circle of replacements.",
+    "EDIT_BLOCKED": "Nothing of it changes in this state: move it to another state first.",
+    "NEEDS_NEW_REVISION": "Its spec changes only with a new revision: start one first.",
+    "NEEDS_CHANGE_ORDER": "Only through an approved change order, with a new revision.",
+    "DRAFT_UNDER_CHANGE_ORDER": "Its draft is the change a change order proposes: it does not change now.",
+    "other": "The style's rules do not allow this now."
+  },
+  "lifecycle": {
+    "title": "Lifecycle",
+    "move": "Move to…",
+    "moveTo": "Move to {state}",
+    "moveBack": "Move back to {state}",
+    "since": "since {date}",
+    "allows": "What may change now",
+    "replacedBy": "Replaced by",
+    "replaces": "Replaces",
+    "nameReplacement": "Name the replacing style…",
+    "changeReplacement": "Change the replacing style…",
+    "rulesLink": "Edit rules per state (Product settings)",
+    "state": {
+      "CONCEPT": "Concept",
+      "DEVELOPMENT": "In development",
+      "SAMPLING": "Sampling",
+      "APPROVED": "Approved",
+      "IN_PRODUCTION": "In production",
+      "PHASE_OUT": "Phasing out",
+      "DISCONTINUED": "Discontinued"
+    },
+    "means": {
+      "CONCEPT": "An idea, before development.",
+      "DEVELOPMENT": "Being developed: pattern, BOM and routing take shape.",
+      "SAMPLING": "Samples are being made and reviewed.",
+      "APPROVED": "Approved: it goes into production once a revision is released.",
+      "IN_PRODUCTION": "In production: work orders use its released revision.",
+      "PHASE_OUT": "Being phased out: open work finishes; name the style that replaces it.",
+      "DISCONTINUED": "Discontinued: nothing of it changes in this state."
+    },
+    "rule": {
+      "FREE": "Edit freely",
+      "NEW_REVISION": "Needs a new revision",
+      "CHANGE_ORDER": "Needs a change order",
+      "BLOCKED": "Blocked"
+    },
+    "source": {
+      "COMPANY": "set for this company",
+      "TENANT": "set for every company",
+      "DEFAULT": "the default"
+    },
+    "kind": {
+      "DETAILS": "Name, names per language, description, season, GTINs",
+      "SPEC": "The spec: sizes, colourways, PPE, product type, private label",
+      "NEW_REVISION": "Start a new revision",
+      "DRAFT": "Change the draft revision (BOM, routing, pieces)",
+      "RELEASE": "Release a revision"
+    },
+    "held": {
+      "noRight": "Your role does not move styles through their lifecycle (product.styles.lifecycle).",
+      "archived": "The style is archived: reactivate it before moving it.",
+      "noMove": "No move from this state."
+    },
+    "notice": {
+      "moved": "Moved to {state}.",
+      "replacement": "The replacing style was saved."
+    }
+  },
+  "move": {
+    "title": "Move {code} to {state}",
+    "confirm": "Move to {state}",
+    "after": "After the move its edit rule is: {rule}.",
+    "production": "From now on its work orders use the released revision.",
+    "reasonBack": "A move back needs the reason: it is kept in the style's history.",
+    "held": {
+      "reason": "Write why it moves back."
+    }
+  },
+  "replacement": {
+    "title": "The style that replaces {code}",
+    "intro": "Offered instead of this style while it is phased out or discontinued.",
+    "find": "Find a style",
+    "findHint": "Its code or name, at least 2 letters.",
+    "field": "Replaced by",
+    "none": "No replacing style",
+    "noneFound": "No style found.",
+    "save": "Save",
+    "held": {
+      "same": "Nothing changed yet."
+    }
+  },
+  "type": {
+    "title": "Product type",
+    "intro": "What the type asks before release, and its defaults; the types live in Product settings.",
+    "change": "Change…",
+    "none": "No product type: no required fields or defaults apply.",
+    "under": "under {code}",
+    "everyCompany": "Every company",
+    "ownCompany": "This company",
+    "archived": "Archived type",
+    "missing_one": "{count} required field missing",
+    "missing_other": "{count} required fields missing",
+    "missingHint": "The release check names them.",
+    "allFilled": "Every required field is filled",
+    "noneRequired": "The type asks for no field",
+    "differs": "Differs from the type's defaults (its own values are kept): {fields}.",
+    "dialogTitle": "Product type of {code}",
+    "dialogIntro": "The types of this kind of garment that this style's company may use.",
+    "field": "Product type",
+    "fieldHint": "Its required fields count in the release check.",
+    "noType": "No type",
+    "rule": "A new type does not change the style's own values: its defaults filled a new style only.",
+    "save": "Save",
+    "held": {
+      "same": "Nothing changed yet."
+    },
+    "notice": {
+      "set": "The product type was saved.",
+      "cleared": "The style has no product type now."
+    },
+    "default": {
+      "sizeScaleId": "size scale",
+      "measurementTemplateId": "measurement template",
+      "ppeCategory": "PPE category",
+      "ppeStandard": "PPE standard",
+      "ppeClass": "PPE class",
+      "other": "another default"
+    }
+  },
+  "attr": {
+    "nameI18n": "Names in other languages",
+    "description": "Description",
+    "season": "Season",
+    "brandPartyId": "Brand",
+    "sizes": "Sizes",
+    "baseSize": "Base size",
+    "ppeStandard": "PPE standard",
+    "ppeClass": "PPE class",
+    "measurementTemplateId": "Measurement template",
+    "hsCode": "Commodity code",
+    "originCountry": "Country of origin",
+    "netMassKg": "Net mass",
+    "gender": "Cut for",
+    "other": "Another field"
+  },
+  "names": {
+    "title": "Names per language",
+    "intro": "Labels, the tech pack, the portal and search read these. A language without its own name gets {language}, then the style's name.",
+    "introShort": "Labels, the tech pack, the portal and search read these.",
+    "add": "Add a language",
+    "refused": "Names cannot change now: {why}",
+    "companyLanguage": "the company's language",
+    "fromStyle": "From the style's names (not written here yet)",
+    "editOne": "Change the {language} names",
+    "removeOne": "Remove the {language} names",
+    "write": "Write it here",
+    "empty": {
+      "title": "No names in other languages yet",
+      "body": "Every reader gets the style's name, {name}, until a language is added."
+    },
+    "col": {
+      "language": "Language",
+      "name": "Name",
+      "short": "Short description",
+      "actions": "Actions"
+    }
+  },
+  "text": {
+    "titleNew": "Add a language",
+    "titleEdit": "Names in {language}",
+    "save": "Save",
+    "language": "Language",
+    "languageHint": "Each language once.",
+    "pickLanguage": "Choose a language",
+    "otherLanguage": "Another language…",
+    "tag": "Language code",
+    "tagHint": "As \"de\", \"fr-CH\" or \"pt-BR\".",
+    "name": "Name",
+    "short": "Short description",
+    "shortHint": "One line: catalogue cards and labels.",
+    "long": "Long description",
+    "longHint": "Paragraphs: the portal's page and the tech pack.",
+    "readers": "Labels, the tech pack and the portal read this language's words from the next time they are made or opened.",
+    "held": {
+      "same": "Nothing changed yet.",
+      "gone": "This language was removed meanwhile."
+    },
+    "problem": {
+      "languageEmpty": "Choose the language.",
+      "languageTag": "Not a language code: two or three letters, then parts like \"-CH\".",
+      "languageTaken": "This language is written already: change it instead.",
+      "nameEmpty": "Write the name.",
+      "long": "Too long: at most {max} characters.",
+      "oneLine": "One line, without line breaks or tabs.",
+      "control": "Remove the hidden control characters.",
+      "meanwhile": "Someone changed these names meanwhile: they were read again."
+    },
+    "remove": {
+      "title": "Remove the names in {language}?",
+      "confirm": "Remove",
+      "toStyleName": "A reader in this language then gets the style's own name in it: {name}.",
+      "toStyle": "A reader in this language then gets the style's name: {name}.",
+      "toCompany": "A reader in this language then gets {language}, then the style's name."
+    },
+    "notice": {
+      "added": "The {language} names were added.",
+      "saved": "The {language} names were saved.",
+      "removed": "The {language} names were removed."
+    }
+  },
+  "label": {
+    "title": "Private label",
+    "intro": "Who sees the style, under whose name it is sold, who sends its declaration.",
+    "mark": "Private label · {brand}",
+    "own": "Our own collection",
+    "shownToLabel": "Who sees it in the portal",
+    "shown": {
+      "BRAND_ONLY": "Only {brand}'s people",
+      "EVERY_CUSTOMER": "Every customer the catalogue offers it to"
+    },
+    "soldUnder": "Sold under our name",
+    "soldToggle": "Sold under our name",
+    "sold": {
+      "ours": "Yes: our name on its label",
+      "theirs": "No: the brand's name on its label",
+      "ownCollection": "Our own collection"
+    },
+    "declarationLabel": "Declaration of conformity sent by",
+    "declares": {
+      "BRAND": "{brand}",
+      "COMPANY": "Our company"
+    },
+    "others": "Other customers' open quotes ({quotes}) and orders ({orders}) name this style: they keep going, while the portal offers it to its brand only.",
+    "brandInIdentity": "The brand is chosen in Identity above.",
+    "makeForBrand": "To make it for a brand, choose the brand in Identity above.",
+    "held": {
+      "noBrand": "Sold under our name only as a brand's style: choose the brand in Identity first.",
+      "same": "Nothing changed yet."
+    },
+    "dialog": {
+      "oursTitle": "Sell {code} under our name?",
+      "theirsTitle": "Sell {code} under its brand's name?",
+      "ours": "Sell under our name",
+      "theirs": "Sell under the brand's name",
+      "oursLabel": "Its labels carry our name, not {brand}'s.",
+      "theirsLabel": "Its labels carry {brand}'s name.",
+      "oursDoc": "We send its declaration of conformity.",
+      "theirsDoc": "{brand} sends its declaration of conformity.",
+      "portal": "The portal keeps offering it to {brand} only."
+    },
+    "notice": {
+      "ours": "It is sold under our name now.",
+      "theirs": "It is sold under its brand's name now."
+    },
+    "problem": {
+      "thread": "Its conversation is shared with its brand: the brand stays. It was read again."
+    }
+  },
+  "score": {
+    "completeness": "Completeness",
+    "atRelease": "Score at release of revision {revision}",
+    "completenessOf": "Completeness {value}",
+    "nothingOpen": "Nothing open before release.",
+    "open_one": "{count} thing before release ({blockers} blocking)",
+    "open_other": "{count} things before release ({blockers} blocking)",
+    "first": "first: {item} — {state}",
+    "fix": "Fix",
+    "item": {
+      "BOM": "Materials (BOM)",
+      "ROUTING": "Operations (routing)",
+      "SMV": "Standard minutes",
+      "MATERIALS": "Materials approved",
+      "PRICES": "Every material priced",
+      "LABEL": "Garment label",
+      "CERTIFICATE": "Certificate coverage",
+      "MEASUREMENTS": "Measurement spec",
+      "ATTRIBUTES": "Required fields of the type",
+      "CHANGE_ORDERS": "Change orders",
+      "SCOPE": "What the release takes",
+      "DRIFT": "Work already using it",
+      "other": "Another check"
+    },
+    "state": {
+      "OK": "done",
+      "WARNING": "to check",
+      "BLOCKED": "blocking",
+      "NOT_REQUIRED": "not needed"
+    }
+  },
+  "whereUsed": {
+    "title": "Used by",
+    "showAll": "Show all",
+    "none": "Not used in any record you can see yet.",
+    "count": "{open} open of {count}",
+    "onHand_one": "{count} garment on hand",
+    "onHand_other": "{count} garments on hand",
+    "hidden_one": "{count} kind of record is not in your role.",
+    "hidden_other": "{count} kinds of record are not in your role.",
+    "dialogTitle": "Where {code} is used",
+    "kinds": "Kind of record",
+    "more": "The newest {shown} of {count} are shown.",
+    "kind": {
+      "QUOTES": "Quotes",
+      "SALES_ORDERS": "Sales orders",
+      "WORK_ORDERS": "Work orders",
+      "STOCK": "Stock",
+      "PRICE_LISTS": "Price lists",
+      "SAMPLE_ROUNDS": "Sample rounds",
+      "CERTIFICATES": "Certificates"
+    },
+    "col": {
+      "record": "Record",
+      "state": "State",
+      "date": "Date",
+      "party": "Party",
+      "detail": "What of it",
+      "pieces": "Garments"
+    },
+    "state": {
+      "DRAFT": "Draft",
+      "PENDING_APPROVAL": "Waiting for approval",
+      "APPROVED": "Approved",
+      "SENT": "Sent",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "EXPIRED": "Expired",
+      "CANCELLED": "Cancelled",
+      "CONFIRMED": "Confirmed",
+      "IN_PRODUCTION": "In production",
+      "READY": "Ready",
+      "PARTLY_SHIPPED": "Partly shipped",
+      "SHIPPED": "Shipped",
+      "CLOSED": "Closed",
+      "RELEASED": "Released",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "ON_HOLD": "On hold",
+      "ACTIVE": "Active",
+      "REQUESTED": "Requested",
+      "IN_MAKING": "Being made",
+      "UNDER_REVIEW": "Under review",
+      "DECIDED": "Decided",
+      "VALID": "Valid",
+      "SUSPENDED": "Suspended",
+      "WITHDRAWN": "Withdrawn",
+      "ON_HAND": "On hand",
+      "otherOpen": "Open",
+      "otherClosed": "Closed"
+    }
+  },
+  "cells": {
+    "noGtin": "no GTIN",
+    "show": {
+      "label": "What the cells show",
+      "state": "On / off",
+      "sku": "SKU",
+      "gtin": "GTIN"
+    }
+  },
+  "gtin": {
+    "assign": "Assign GTINs",
+    "assignCount_one": "Assign {count} GTIN…",
+    "assignCount_other": "Assign {count} GTINs…",
+    "title": "Assign GTINs to {code}",
+    "intro": "The SKUs switched on without a GTIN get the next free numbers of the company's GS1 range. Nothing is given until you confirm.",
+    "range": "GS1 range",
+    "rangeOption": "{name} · prefix {prefix} · {left} left",
+    "prefix": "GS1 prefix",
+    "next": "Next free GTIN",
+    "usedUp": "None left",
+    "left": "Numbers left",
+    "neverReused": "A GTIN, once given, is never given again: a number already on a SKU is passed over.",
+    "noRange": "This company has no GS1 range yet.",
+    "noRangeHint": "A range is the company's GS1 prefix with its numbers; an administrator with the right to keep GTINs adds it. GTINs can still be typed in each cell.",
+    "gate": "Giving GTINs from a range is not switched on here.",
+    "gateHint": "The company's GS1 prefix comes first (a yearly GS1 fee): the preview shows what would be given; GTINs can be typed in each cell meanwhile.",
+    "nothing": "No SKU waits for a GTIN from this range.",
+    "previewTitle_one": "{count} GTIN to give",
+    "previewTitle_other": "{count} GTINs to give",
+    "previewAgain": "Preview again",
+    "confirm_one": "Assign {count} GTIN",
+    "confirm_other": "Assign {count} GTINs",
+    "skipped_one": "{count} number passed over (already on a SKU): {gtins}",
+    "skipped_other": "{count} numbers passed over (already on a SKU): {gtins}",
+    "short_one": "The range has no number left for {count} SKU.",
+    "short_other": "The range has no number left for {count} SKUs.",
+    "notNumbered_one": "{count} SKU gets no number:",
+    "notNumbered_other": "{count} SKUs get no number:",
+    "given_one": "{count} GTIN was given.",
+    "given_other": "{count} GTINs were given.",
+    "givenTitle": "GTINs given",
+    "leftAfter": "{left} numbers left in the range.",
+    "col": {
+      "sku": "SKU",
+      "cell": "Colourway · size",
+      "gtin": "GTIN"
+    },
+    "why": {
+      "has": "{sku} has a GTIN already.",
+      "off": "{sku} is switched off.",
+      "other": "{sku} is not one of this style's SKUs."
+    },
+    "held": {
+      "noRight": "Your role does not give GTINs (product.gtins.manage).",
+      "none": "Every SKU switched on has a GTIN.",
+      "preview": "The preview comes first.",
+      "gate": "Not switched on here (the GS1 prefix first).",
+      "nothing": "Nothing to give."
+    },
+    "problem": {
+      "again": "The range or the SKUs changed meanwhile: the preview was made again. Check it and confirm.",
+      "range": "This style takes GTINs only from its own company's ranges."
+    },
+    "notice": {
+      "given_one": "{count} GTIN was given.",
+      "given_other": "{count} GTINs were given."
+    }
+  },
+  "column": {
+    "release": {
+      "column": "Release",
+      "noRevision": "No revision",
+      "atRelease": "rev {revision} release",
+      "nothingOpen": "Nothing open",
+      "firstOpen_one": "{count} open · {item}",
+      "firstOpen_other": "{count} open · first {item}"
+    }
+  },
+  "season": {
+    "bulk": "Set season ({count})",
+    "title_one": "Set the season of {count} style",
+    "title_other": "Set the season of {count} styles",
+    "intro": "The season text of each style (at most 20 characters). Empty clears it.",
+    "field": "Season",
+    "hint": "As \"SS27\" or \"FW26\"; at most {max} characters.",
+    "inUse": "Used in this list:",
+    "none": "no season",
+    "apply_one": "Set for {count} style",
+    "apply_other": "Set for {count} styles",
+    "clear_one": "Clear for {count} style",
+    "clear_other": "Clear for {count} styles",
+    "same_one": "{count} style is in this season already.",
+    "same_other": "{count} styles are in this season already.",
+    "archived_one": "{count} archived style is left out (reactivate it first):",
+    "archived_other": "{count} archived styles are left out (reactivate them first):",
+    "done_one": "The season was set for {count} style.",
+    "done_other": "The season was set for {count} styles.",
+    "refused_one": "{count} style was not changed:",
+    "refused_other": "{count} styles were not changed:",
+    "held": {
+      "nothing": "Nothing changes: every style chosen is in this season already, or archived.",
+      "allArchived": "Every style chosen is archived.",
+      "empty": "Write the season, or choose to clear it."
+    },
+    "problem": {
+      "long": "At most {max} characters.",
+      "oneLine": "One line, without tabs."
+    },
+    "clearHint": "Removes the season from the styles chosen.",
+    "clearToggle": "Clear the season"
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Archive, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Archive, CalendarRange, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, RadioCard, Select, Tag, Toggle, TokenChip } from '@nexus/ui/primitives'
@@ -25,6 +25,8 @@ import { StyleCards } from './StyleCards'
 // B-W2b-236 (SCR-303): List · Gallery.
 import { StylesGallery, ViewSwitch } from '../../gallery/view/StylesGallery'
 import { cardsOf } from '../../gallery/gallery-model'
+// B-W2b-237 (SCR-343): the release column's completeness and Set season.
+import { ReleaseCell, SetSeasonDialog } from '../depth/view/ListDepth'
 import '../../styles.css'
 
 export type { StylesListViewModel, StylesListActions } from '../list-model'
@@ -41,7 +43,7 @@ const PPE_CATEGORIES: StyleRow['ppeCategory'][] = ['NOT_PPE', 'CATEGORY_I', 'CAT
  */
 export function StylesListView({ model, actions }: { model: StylesListViewModel; actions?: StylesListActions }) {
   return (
-    <WithMessages namespaces={['products', 'lists']}>
+    <WithMessages namespaces={['products', 'lists', /* B-W2b-237 */ 'products-styles-depth']}>
       <StylesList model={model} actions={actions} />
     </WithMessages>
   )
@@ -50,6 +52,8 @@ export function StylesListView({ model, actions }: { model: StylesListViewModel;
 function StylesList({ model, actions }: { model: StylesListViewModel; actions?: StylesListActions }) {
   const t = useT('products')
   const lists = useT('lists')
+  // B-W2b-237: the release column and Set season speak the depth's catalogue.
+  const td = useT('products-styles-depth')
   const locale = useLocale()
   const [query, setQuery] = useState(model.filters.q)
   useEffect(() => setQuery(model.filters.q), [model.filters.q])
@@ -62,7 +66,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
     return () => clearTimeout(timer)
   }, [query])
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
-  const [dialog, setDialog] = useState<'archive' | 'help' | 'filters' | null>(model.phoneFilters ? 'filters' : null)
+  const [dialog, setDialog] = useState<'archive' | 'help' | 'filters' | 'season' | null>(model.phoneFilters ? 'filters' : model.season?.open ? 'season' : null)
   const phoneWidth = usePhoneList()
   const phone = model.phone === true || phoneWidth
   const rowsKey = model.rows.items?.map((row) => row.id).join(',') ?? ''
@@ -96,6 +100,9 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
   const showPrice = model.can.prices && model.grains.price && model.prices.state !== 'hidden'
   const showMargin = model.can.prices && model.grains.margin && model.prices.state !== 'hidden'
   const prices = model.prices
+  // B-W2b-237
+  const gate = model.gate
+  const seasonHeld = !model.can.manage ? t('held.noManage') : picked.length > 0 && archived === picked.length ? td('season.held.allArchived') : null
 
   const columns = useMemo<ColDef<StyleRow>[]>(() => {
     const CodeCell = ({ data }: ICellRendererParams<StyleRow>) =>
@@ -144,12 +151,14 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
     const ReadyCell = ({ data }: ICellRendererParams<StyleRow>) => {
       if (!data) return null
       const done = completenessOf(data)
-      return (
+      const w1 = (
         <span className="fw-st-cell" title={done.missing.map((key) => t(`completeness.${key}`)).join(' · ')}>
           <span>{t('list.ready', { done: done.done, of: done.of })}</span>
           {done.missing[0] && <span className="fw-st-row-sub">{t(`completeness.${done.missing[0]}`)}</span>}
         </span>
       )
+      // B-W2b-237: the release gate's completeness when it was read; W1's readiness otherwise.
+      return <ReleaseCell row={data} gate={gate} fallback={w1} />
     }
     const MoreCell = ({ data }: ICellRendererParams<StyleRow>) =>
       data ? (
@@ -215,13 +224,13 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
       { colId: 'range', headerName: t('list.col.range'), field: 'baseSize', cellDataType: false, minWidth: 100, flex: 1, cellRenderer: RangeCell },
       { colId: 'skus', headerName: t('list.col.skus'), field: 'skuCount', minWidth: 125, flex: 1, type: 'rightAligned', cellRenderer: SkusCell },
       { colId: 'ppe', headerName: t('list.col.ppe'), field: 'ppeCategory', minWidth: 150, flex: 1, cellRenderer: PpeCell },
-      { colId: 'ready', headerName: t('list.col.ready'), field: 'skuCount', cellDataType: false, minWidth: 110, flex: 1, cellRenderer: ReadyCell },
+      { colId: 'ready', headerName: gate ? td('column.release.column') : t('list.col.ready'), field: 'skuCount', cellDataType: false, minWidth: 140, flex: 1, cellRenderer: ReadyCell },
       ...(showPrice ? [{ colId: 'price', headerName: t('list.col.price'), field: 'id' as const, cellDataType: false, minWidth: 130, flex: 1, type: 'rightAligned', sortable: false, cellRenderer: PriceCell }] : []),
       ...(showMargin ? [{ colId: 'margin', headerName: t('list.col.margin'), field: 'id' as const, cellDataType: false, minWidth: 130, flex: 0.8, type: 'rightAligned', sortable: false, cellRenderer: MarginCell }] : []),
       { colId: 'updated', headerName: t('list.col.updated'), field: 'updatedAt', minWidth: 100, flex: 1, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') },
       { colId: 'more', headerName: t('list.col.more'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, recordHref, prices, showPrice, showMargin, duplicateHeld, techPackHref])
+  }, [t, td, locale, recordHref, prices, showPrice, showMargin, duplicateHeld, techPackHref, gate])
 
   const filtered = model.filters.view !== 'open' || extraFilterCount(model.filters) > 0
   const state = model.rows.problem === 'problem.read.forbidden' ? (
@@ -260,6 +269,12 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
       >
         <Archive size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.archive', { count: picked.length })}</SelectionLabel>
       </Button>
+      {/* B-W2b-237: Set season (design sec:styles.grid selection row). */}
+      {actions?.onSetSeason && (
+        <Button size="sm" aria-label={td('season.bulk', { count: picked.length })} heldReason={seasonHeld} onClick={() => setDialog('season')}>
+          <CalendarRange size={13} aria-hidden /> <SelectionLabel>{td('season.bulk', { count: picked.length })}</SelectionLabel>
+        </Button>
+      )}
     </>
   )
   const countWords = items ? t(model.rows.more ? 'list.countMore' : 'list.count', { count: items.length, total: model.rows.count ?? items.length }) : '—'
@@ -422,6 +437,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           techPackHref={techPackHref}
           more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
           selectMode={model.phoneSelect}
+          release={gate ? (row) => <ReleaseCell row={row} gate={gate} fallback={null} /> : undefined /* B-W2b-237 */}
         />
       ) : (
       <ListFrame<StyleRow>
@@ -477,6 +493,21 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
         </Modal>
       )}
       {dialog === 'archive' && <ArchiveManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
+      {/* B-W2b-237 */}
+      {dialog === 'season' && (
+        <SetSeasonDialog
+          rows={picked}
+          inUse={items ?? []}
+          busy={model.busy}
+          result={model.season?.result ?? null}
+          onApply={(ids, season) => void actions?.onSetSeason?.(ids, season)}
+          onClose={() => {
+            if (model.season?.result) setSelected([])
+            actions?.onSeasonClosed?.()
+            setDialog(null)
+          }}
+        />
+      )}
       {dialog === 'help' && (
         <Modal open onClose={() => setDialog(null)} title={t('keys.title')} size="sm">
           <ul className="fw-st-list">

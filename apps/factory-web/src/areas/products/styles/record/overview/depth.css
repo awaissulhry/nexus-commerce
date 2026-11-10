@@ -1,0 +1,115 @@
+/* B-W2b-237 — the Style studio's depth (SCR-342): layout only, DS tokens, prefix fw-sdp-. */
+
+.fw-sdp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.fw-sdp-wrap {
+  flex-wrap: wrap;
+}
+
+/* ---- the lifecycle: what each kind of change may do now ---- */
+.fw-sdp-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sdp-checks > li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  align-items: start;
+}
+
+.fw-sdp-checks > li > svg {
+  margin-top: 2px;
+}
+
+.fw-sdp-checks > li.is-ok > svg {
+  color: var(--nds-success-text);
+}
+
+.fw-sdp-checks > li.is-held > svg {
+  color: var(--nds-text-3);
+}
+
+.fw-sdp-why {
+  color: var(--nds-text-2);
+}
+
+/* ---- completeness inside the release check ---- */
+.fw-sdp-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-bottom: var(--nds-space-8);
+  margin-bottom: var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-sdp-meter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: center;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sdp-meter-label {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* ---- where-used ---- */
+.fw-sdp-used {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-sdp-used > li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the matrix: what a cell says, the tools in the card's header ---- */
+.fw-sdp-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-sdp-cell {
+  font-family: var(--nds-font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+.fw-sdp-cell.is-missing {
+  font-family: inherit;
+  color: var(--nds-warning-text);
+}
+
+.fw-sdp-mono {
+  font-family: var(--nds-font-mono);
+}
