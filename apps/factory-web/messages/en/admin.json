@@ -1681,6 +1681,8 @@
     "compliance_declarations_generate": "Make generated declaration drafts and their translations",
     "compliance_declarations_check": "Check a generated declaration's translation (never one's own)",
     "compliance_declarations_pack": "Build a shipment's compliance pack",
+    "compliance_userInformation_generate": "Make generated user-information drafts and their translations for each market",
+    "compliance_userInformation_check": "Check a generated leaflet's translation (never one's own)",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",

@@ -1681,6 +1681,8 @@
     "compliance_declarations_generate": "Generare bozze di dichiarazione e le loro traduzioni",
     "compliance_declarations_check": "Verificare la traduzione di una dichiarazione generata (mai la propria)",
     "compliance_declarations_pack": "Preparare il pacchetto di conformità di una spedizione",
+    "compliance_userInformation_generate": "Preparare le bozze generate delle istruzioni per l'utilizzatore e le loro traduzioni per ogni mercato",
+    "compliance_userInformation_check": "Verificare la traduzione di una nota informativa generata (mai la propria)",
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
     "product_materials_cost": "Impostare il prezzo standard di un materiale",
