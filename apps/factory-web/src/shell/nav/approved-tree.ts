@@ -163,6 +163,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.colours', title: 'Colours & artwork', titleIt: 'Colori e grafiche', wave: 'W2b', href: '/products/colours' },
         ],
       },
+      // W2b: B-W2b-239 Product settings (SCR-251), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'products.settings', title: 'Product settings', titleIt: 'Impostazioni prodotto', wave: 'W2b', href: '/products/settings' }] },
     ],
   },
   {
