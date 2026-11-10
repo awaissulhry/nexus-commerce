@@ -1,4 +1,4 @@
-import { BadgeCheck, FlaskConical, ScrollText, ShieldCheck, Tag } from 'lucide-react'
+import { BadgeCheck, BarChart3, FlaskConical, ScrollText, ShieldCheck, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -38,6 +38,13 @@ export const officeArea: OfficeAreaNav = {
           // SCR-113: the legal register of complaints, non-conformities and recalls (Reg. 2016/425 art. 8).
           { id: 'compliance-register', label: 'shell:nav.compliance.register', href: '/compliance/register', icon: ScrollText, permission: 'compliance.register.view' },
         ],
+      },
+      // B-W2b-272 SCR-261: Compliance › Reports › Compliance reports (GET /compliance/reports/kpis, compliance.reports.view); after
+      // Product safety (the tree's order: Sustainability and Settings join with their steps).
+      {
+        id: 'compliance-reports',
+        label: 'shell:nav.compliance.reportsGroup',
+        items: [{ id: 'compliance-reports', label: 'shell:nav.compliance.reports', href: '/compliance/reports', icon: BarChart3, permission: 'compliance.reports.view' }],
       },
     ],
   },

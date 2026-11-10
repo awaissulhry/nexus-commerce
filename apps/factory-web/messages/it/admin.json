@@ -1689,6 +1689,7 @@
     "compliance_userInformation_generate": "Preparare le bozze generate delle istruzioni per l'utilizzatore e le loro traduzioni per ogni mercato",
     "compliance_userInformation_check": "Verificare la traduzione di una nota informativa generata (mai la propria)",
     "compliance_supplierDeclarations_manage": "Chiedere dichiarazioni ai fornitori (SVHC REACH, RSL, senza PFAS, rilascio di nichel, cromo VI), sollecitarli, registrare e decidere le risposte",
+    "compliance_reports_view": "Vedere i report conformità di un'azienda: copertura dei certificati per modello e mercato, modelli spediti coperti, lacune aperte per tipo, blocchi dei controlli, calendario delle scadenze, cromo VI per fornitore, riepilogo del registro e riesame annuale (solo dai record che si possono vedere)",
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
     "product_materials_cost": "Impostare il prezzo standard di un materiale",

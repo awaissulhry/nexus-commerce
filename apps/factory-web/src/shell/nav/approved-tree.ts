@@ -397,6 +397,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'compliance.register', title: 'PPE register & recalls', titleIt: 'Registro DPI e richiami', wave: 'W1', href: '/compliance/register' }],
       },
+      // W2b: B-W2b-272 Compliance reports (SCR-261). The tree's Reports group, after Product safety (Sustainability joins with its step).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'compliance.reports', title: 'Compliance reports', titleIt: 'Report conformità', wave: 'W2b', href: '/compliance/reports' }] },
     ],
   },
   {

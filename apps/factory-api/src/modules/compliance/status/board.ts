@@ -80,8 +80,8 @@ function cellView(marketCode: string, cell: CellSummary) {
   return { marketCode, state: cell.state, words: cellWords(cell), missing: cell.missing, blocking: cell.blocking, expiring: cell.expiring, manual: cell.manual, blockedGates: [...cell.blockedGates], first: cell.first }
 }
 
-/** The matrix and its tiles (shared by the board and the actions list). */
-async function readMatrix(db: Reader, context: OfficeContext, query: BoardQuery) {
+/** The matrix and its tiles (shared by the board and the actions list; B-W2b-272's compliance reports read it too). */
+export async function readMatrix(db: Reader, context: OfficeContext, query: BoardQuery) {
   const now = rulesClock().now()
   const day = businessDate(now)
   const markets = await boardMarkets(db, marketCodesOf(query.markets))
@@ -94,6 +94,8 @@ async function readMatrix(db: Reader, context: OfficeContext, query: BoardQuery)
   const requirements = await gateRequirements(db)
   const rows = []
   const actions: ActionInput[] = []
+  // B-W2b-272 (compliance reports): every cell's lines, for the coverage KPI (ANA-025) and the gaps by type.
+  const cellLines: { readonly styleId: string; readonly marketCode: string; readonly lines: readonly GateLine[] }[] = []
   let missingLanguages = 0
   for (const style of page) {
     const facts = await readGateStyle(db, style.id)
@@ -104,6 +106,7 @@ async function readMatrix(db: Reader, context: OfficeContext, query: BoardQuery)
       const cell = cellOf(marketLines)
       if (marketLines.some((line) => line.state === 'MISSING' && (line.check === 'doc.languages' || line.check === 'userInfo.languages' || line.check === 'label.languages'))) missingLanguages += 1
       actions.push({ styleId: style.id, styleCode: style.code, marketCode: market.code, marketName: market.name, cell })
+      cellLines.push({ styleId: style.id, marketCode: market.code, lines: marketLines })
       return cellView(market.code, cell)
     })
     const brand = style.brandPartyId ? brands.get(style.brandPartyId) : undefined
@@ -114,7 +117,7 @@ async function readMatrix(db: Reader, context: OfficeContext, query: BoardQuery)
       blocked: cells.some((cell) => cell.state === 'BLOCKED'),
     })
   }
-  return { now, day, markets, rows, actions, missingLanguages, more }
+  return { now, day, markets, rows, actions, missingLanguages, more, cellLines }
 }
 
 /** Shipments not gone yet with a shipment refusal of the last 30 days and no override in force (the "held by a gate" tile). */
