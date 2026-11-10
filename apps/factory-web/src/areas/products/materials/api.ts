@@ -27,6 +27,8 @@ export interface MaterialQuery {
   requiresCrViTest?: boolean
   ppeComponent?: boolean
   missingCost?: boolean
+  /** B-W2b-238: named by a draft or released BOM (false: the "Not used in any BOM" tile). */
+  used?: boolean
   supplierId?: string
   limit?: number
   cursor?: string | null
@@ -44,6 +46,7 @@ export function listMaterials(api: ApiClient, query: MaterialQuery): Promise<Mat
       requiresCrViTest: query.requiresCrViTest === undefined ? undefined : String(query.requiresCrViTest),
       ppeComponent: query.ppeComponent === undefined ? undefined : String(query.ppeComponent),
       missingCost: query.missingCost === undefined ? undefined : String(query.missingCost),
+      used: query.used === undefined ? undefined : String(query.used),
       supplierId: query.supplierId,
       limit: query.limit ?? 50,
       cursor: query.cursor ?? undefined,

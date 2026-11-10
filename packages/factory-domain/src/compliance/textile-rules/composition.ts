@@ -2,6 +2,8 @@ import { Decimal } from 'decimal.js'
 import type { CompositionPart } from '../labels/rules'
 import { baseFactor, decimalText, fixedRatio, type ItemUnits, type Uom } from '../../product/units/units'
 import { normalisedWords, readFibre } from './fibres'
+// B-W2b-238: the typed weight of a textile (Item.properties).
+import { shapeOf, typedWeight } from '../../product/materials-depth/rules'
 
 /**
  * The fibre composition of a garment computed from its BOM (B-W2b-208; PRD-338, PRD-340; Reg. (EU) 1007/2011 arts. 2, 9,
@@ -60,6 +62,8 @@ export interface MaterialFacts {
   readonly composition: unknown
   readonly animalOrigin: boolean
   readonly attributes: Readonly<Record<string, string>> | null
+  /** B-W2b-238: Item.properties as stored; a textile's typed weight (weightGsm, widthCm) is read before the attribute. */
+  readonly properties?: unknown
   readonly units: ItemUnits
 }
 
@@ -122,10 +126,15 @@ export interface MaterialWeight {
   readonly gramsPer: Decimal
   readonly per: Uom
   readonly text: string
+  /** B-W2b-238: the typed width (cm) of a fabric weighed per m², so a line in metres weighs metres × width × g/m². */
+  readonly widthCm?: string
 }
 
 /** The `weight` attribute read ("180 g/m2", "0.25 kg/m", "120 g"); null when none; a problem when it cannot be read. */
-export function weightOf(material: Pick<MaterialFacts, 'attributes' | 'units'>): MaterialWeight | { readonly problem: string } | null {
+export function weightOf(material: Pick<MaterialFacts, 'attributes' | 'units' | 'properties'>): MaterialWeight | { readonly problem: string } | null {
+  // B-W2b-238: the typed weight of its kind first (grams per m², with the width when known); the attribute stays the fallback.
+  const typed = typedWeight(material.properties)
+  if (typed) return { gramsPer: new Decimal(typed.gsm), per: 'M2', text: `${typed.gsm} g/m2`, ...(typed.widthCm === null ? {} : { widthCm: typed.widthCm }) }
   for (const [key, raw] of Object.entries(material.attributes ?? {})) {
     const name = key.trim().toLowerCase()
     if (!WEIGHT_KEY.test(name)) continue
@@ -165,9 +174,18 @@ export function lineWeight(line: LineFacts): LineWeight {
   const gramFactor = baseFactor('G', units)
   if (lineFactor && gramFactor) return { grams: qty.times(lineFactor).div(gramFactor), how: `the material's units convert ${line.uom} to grams` }
   const weight = weightOf(line.material)
-  if (weight === null) return { grams: null, why: `material ${line.material.code} has no weight: add the attribute "weight" (e.g. "180 g/m2")` }
+  if (weight === null) {
+    // B-W2b-238: a textile's weight is typed on its Properties & grades; any other kind keeps the attribute.
+    const where = shapeOf(line.material.kind) === 'TEXTILE' ? 'type its weight (g/m²) on Properties & grades, or add the attribute "weight" (e.g. "180 g/m2")' : 'add the attribute "weight" (e.g. "180 g/m2")'
+    return { grams: null, why: `material ${line.material.code} has no weight: ${where}` }
+  }
   if ('problem' in weight) return { grams: null, why: weight.problem }
   const perFactor = baseFactor(weight.per, units)
+  // B-W2b-238: a fabric weighed per m² with its typed width: a line in a length (M, CM) weighs length × width × g/m².
+  const metres = weight.per === 'M2' && weight.widthCm !== undefined && (!lineFactor || !perFactor) ? fixedRatio(line.uom, 'M') : null
+  if (metres) {
+    return { grams: qty.times(metres).times(new Decimal(weight.widthCm!).div(100)).times(weight.gramsPer), how: `${weight.text} × ${weight.widthCm} cm wide × ${decimalText(qty)} ${line.uom}` }
+  }
   if (!lineFactor || !perFactor) {
     return { grams: null, why: `material ${line.material.code} weighs ${weight.text}, and its units do not convert ${line.uom} to ${weight.per}: give the weight per ${line.uom}` }
   }

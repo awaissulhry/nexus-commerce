@@ -29,6 +29,7 @@ import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
 import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
+import type { StyleMaterialApprovals } from '../compliance/materials'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -128,6 +129,8 @@ export interface StyleRecordViewModel {
   exporting?: BomExportFormat | null
   /** B-W2b-95: the Files & patterns tab's Pattern pieces (absent: not read, like idle). */
   pieces?: PiecesModel
+  /** B-W2b-238: Compliance › Material checks — the approvals of the revision's materials (absent: not read). */
+  materialApprovals?: StyleMaterialApprovals
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -195,4 +198,6 @@ export interface StyleRecordActions {
   onGarmentTracking?: (tracking: StyleView['garmentTracking']) => Promise<boolean>
   /** B-W2b-95: the Pattern pieces section. */
   pieces?: PiecesActions
+  /** B-W2b-238: read the revision's material approvals again after a failed read. */
+  onRetryMaterialApprovals?: () => void
 }

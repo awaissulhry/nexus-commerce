@@ -1674,6 +1674,7 @@
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",
+    "product_materials_approve": "Decide a material's approval (approve, on a condition, block)",
     "product_styles_view": "See the styles",
     "product_styles_manage": "Create and edit styles",
     "product_styles_lifecycle": "Move a style through its lifecycle",

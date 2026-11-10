@@ -21,7 +21,8 @@ import './library.css'
 
 /** The libraries' catalogue plus the list frame's words (`lists`). */
 export function LibraryMessages({ children }: { children?: ReactNode }) {
-  return <WithMessages namespaces={['library', 'lists']}>{children}</WithMessages>
+  // B-W2b-238: materials in depth (its own catalogue, on the material list and record).
+  return <WithMessages namespaces={['library', 'lists', 'products-materials-depth']}>{children}</WithMessages>
 }
 
 /** "Updated 10:42" (or "Not read yet"), announced politely. */
