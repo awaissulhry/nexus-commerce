@@ -174,6 +174,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.exceptions', title: 'Exceptions', titleIt: 'Eccezioni', wave: 'W2a', href: '/planning/exceptions' },
         ],
       },
+      // W2b: B-W2b-263 Time & action (SCR-253), the design's group "Dates".
+      {
+        label: 'Dates',
+        labelIt: 'Date',
+        hideLabel: false,
+        pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
+      },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',

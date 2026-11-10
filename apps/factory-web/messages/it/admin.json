@@ -1876,6 +1876,8 @@
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
     "planning_schedule_publish": "Pubblicare il programma al reparto",
     "planning_leather_manage": "Cambiare la perdita di taglio di un modello dai suoi tagli",
+    "planning_milestones_manage": "Gestire i gate di pre-produzione di un ordine di vendita e segnarli fatti",
+    "planning_milestones_override": "Far partire il lavoro di un ordine prima di un gate, con un motivo (non il pianificatore del gate)",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
     "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",

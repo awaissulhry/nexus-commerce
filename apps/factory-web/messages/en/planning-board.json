@@ -189,6 +189,7 @@
     "PART_LANE": "A part of an order goes to a line or a workshop.",
     "OPERATION_DONE": "That operation is done: nothing to place.",
     "NOTHING_TO_PLACE": "Nothing to place: every operation with work left is on the board.",
+    "GATE_NOT_PASSED": "Not moved: the order waits on a pre-production gate not passed. Pass it, or start before it with a reason (Planning › Time & action).",
     "NOTHING_CHANGED": "Nothing changed since the last published version.",
     "CONFLICT": "The board refused this change as the plan is now: it was read again.",
     "FORBIDDEN": "You may not change the working plan at this site.",

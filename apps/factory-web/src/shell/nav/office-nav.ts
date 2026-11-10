@@ -172,6 +172,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
   '/planning/settings',
   '/planning/settings/calendar-print',
+  // B-W2b-263: Time & action (SCR-253).
+  '/planning/milestones',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',

@@ -170,6 +170,8 @@ import { SUPPLIER_DECLARATIONS_DEFINITIONS, SUPPLIER_DECLARATIONS_PERMISSIONS } 
 import { LABEL_ARTWORK_DEFINITIONS, LABEL_ARTWORK_PERMISSIONS } from '../../compliance/label-artwork/permissions'
 // B-W2b-272: compliance reports (compliance.reports.view); each figure also needs its records' own view permission.
 import { COMPLIANCE_REPORTS_DEFINITIONS, COMPLIANCE_REPORTS_PERMISSIONS } from '../../compliance/reports/permissions'
+// B-W2b-263: Time & action (pre-production gates).
+import { PLANNING_MILESTONES_DEFINITIONS, PLANNING_MILESTONES_PERMISSIONS } from '../../planning/milestones/permissions'
 // B-W2b-248: made-to-measure rules (product.mtm.switch, the Owner's; reading and keeping them is product.styles.view | manage).
 import { PRODUCT_MTM_DEFINITIONS, PRODUCT_MTM_PERMISSIONS } from '../../product/mtm-rules/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -854,6 +856,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   LABEL_ARTWORK_DEFINITIONS,
   // B-W2b-272: compliance reports (area `compliance`, declared above).
   COMPLIANCE_REPORTS_DEFINITIONS,
+  // B-W2b-263
+  PLANNING_MILESTONES_DEFINITIONS,
   // B-W2b-248: made-to-measure rules (area `product`, declared above).
   PRODUCT_MTM_DEFINITIONS,
 ])
@@ -1142,6 +1146,8 @@ for (const name of SUPPLIER_DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.i
 for (const name of LABEL_ARTWORK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-272: compliance reports.
 for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-263: Time & action.
+for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-248: made-to-measure rules.
 for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
