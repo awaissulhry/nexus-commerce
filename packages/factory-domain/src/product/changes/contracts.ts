@@ -276,6 +276,8 @@ export const orderRow = output({
   fromRevision: revisionRef,
   toRevision: revisionRef.nullable(),
   title: z.string(),
+  /** B-W2b-244: why, for the list's Reason column (Changes & versions). */
+  reason: z.string(),
   priority: z.enum(CHANGE_PRIORITIES),
   effect: z.enum(CHANGE_EFFECTS),
   effectiveDate: businessDate().nullable(),

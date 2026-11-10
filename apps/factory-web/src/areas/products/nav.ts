@@ -1,4 +1,6 @@
 import { Clock, FlaskConical, Layers, Palette, Ruler, Shirt } from 'lucide-react'
+// B-W2b-244: Changes & versions' row icon.
+import { GitPullRequestArrow } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -36,6 +38,8 @@ export const officeArea: OfficeAreaNav = {
         items: [
           // SCR-110: proto, fit, salesman, pre-production and CE test sample rounds on one board (sales.samples.view).
           { id: 'products-samples', label: 'shell:nav.products.samples', href: '/products/samples', icon: FlaskConical, permission: 'sales.samples.view' },
+          // B-W2b-244 SCR-117: change requests and orders, the SMV changes waiting, released versions (product.changes.view).
+          { id: 'products-changes', label: 'shell:nav.products.changes', href: '/products/changes', icon: GitPullRequestArrow, permission: 'product.changes.view' },
         ],
       },
       {

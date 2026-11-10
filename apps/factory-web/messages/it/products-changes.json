@@ -1,0 +1,670 @@
+{
+  "common": {
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "clearFilters": "Togli i filtri",
+    "dismiss": "Chiudi",
+    "loading": "Lettura…",
+    "notYet": "Non ancora letto",
+    "retry": "Riprova",
+    "save": "Salva",
+    "updated": "Aggiornato alle {time}",
+    "working": "In corso…"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In tempo reale",
+    "offline": "Offline"
+  },
+  "noAccess": {
+    "title": "Non hai accesso alle modifiche",
+    "body": "Responsabili di produzione, controllo qualità, commerciali, pianificatori, buyer e capireparto leggono le modifiche; chiedi all’amministratore uno di questi ruoli."
+  },
+  "kind": {
+    "request": "Richiesta di modifica",
+    "order": "Ordine di modifica",
+    "smv": "Modifica del tempo standard"
+  },
+  "request": {
+    "OPEN": "Da valutare",
+    "IN_REVIEW": "In valutazione",
+    "ACCEPTED": "Accettata",
+    "REJECTED": "Respinta",
+    "DONE": "Fatta",
+    "noOrder": "Ancora in nessun ordine di modifica",
+    "priorityOnly": "Accettata: cambia ancora solo la priorità",
+    "decide": "Accetta o respingi…",
+    "writeOrder": "Scrivi un ordine di modifica"
+  },
+  "order": {
+    "DRAFT": "Bozza",
+    "SUBMITTED": "In approvazione",
+    "APPROVED": "Approvato",
+    "REJECTED": "Respinto",
+    "RELEASED": "Rilasciato",
+    "CANCELLED": "Annullato",
+    "requestsCarried": "Richieste portate",
+    "changeRequests": "Cambia richieste",
+    "noRequests": "Non porta richieste.",
+    "redline": "Confronto",
+    "openDraft": "Apri la revisione in bozza {revision}",
+    "startDraft": "Avvia la revisione in bozza",
+    "noteHeld": "La descrizione cambia solo finché è una bozza",
+    "lines": "Righe di modifica",
+    "line": {
+      "record": "Record",
+      "field": "Campo",
+      "before": "Prima",
+      "after": "Dopo",
+      "note": "Nota"
+    },
+    "submit": "Invia in approvazione",
+    "decide": "Approva…",
+    "release": "Rilascia la revisione {revision}"
+  },
+  "smv": {
+    "PROPOSED": "In approvazione",
+    "operation": "Operazione",
+    "source": "Da",
+    "proposedBy": "Proposta da",
+    "now": "Ora",
+    "version": "Versione {number}",
+    "own": "Quello dell’operazione",
+    "noRoutings": "Nessun ciclo usa questa operazione.",
+    "step": "fase {seq}",
+    "field": {
+      "basic": "Minuti base",
+      "personal": "Personali %",
+      "fatigue": "Fatica %",
+      "delay": "Attese %",
+      "smv": "Minuti standard",
+      "from": "Dal"
+    },
+    "pieceRates_one": "{count} tariffa a cottimo è calcolata sul suo tempo standard.",
+    "pieceRates_other": "{count} tariffe a cottimo sono calcolate sul suo tempo standard."
+  },
+  "source": {
+    "OFFICE": "Ufficio",
+    "FLOOR": "Reparto",
+    "CUSTOMER": "Cliente",
+    "SAMPLE": "Campionatura",
+    "SUPPLIER": "Fornitore"
+  },
+  "priority": {
+    "LOW": "Bassa",
+    "NORMAL": "Normale",
+    "HIGH": "Alta",
+    "URGENT": "Urgente"
+  },
+  "effect": {
+    "NEXT_ORDER": "Dal prossimo ordine",
+    "DATE": "Da una data",
+    "AT_ONCE": "Subito",
+    "on": "Dal {day}"
+  },
+  "decision": {
+    "APPROVED": "Approvata",
+    "REJECTED": "Respinta"
+  },
+  "revision": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciata",
+    "OBSOLETE": "Superata",
+    "label": "Revisione {revision}",
+    "move": "Revisione {from} → {to}",
+    "noDraft": "Dalla revisione {from} (nessuna bozza ancora)",
+    "asItIs": "Il modello così com’è",
+    "option": "Revisione {revision} ({status})",
+    "none": "Non ancora iniziata"
+  },
+  "disposition": {
+    "FINISH_OLD": "Finire con la scheda vecchia",
+    "REWORK": "Rilavorare secondo la nuova scheda",
+    "SCRAP": "Scartare quanto fatto",
+    "HOLD": "Fermare finché qualcuno decide",
+    "none": "Non ancora deciso"
+  },
+  "document": {
+    "QUOTE": "Preventivo",
+    "ORDER": "Ordine",
+    "WORK_ORDER": "Ordine di lavoro"
+  },
+  "section": {
+    "revision": "Revisione",
+    "bom": "Distinta base",
+    "routing": "Ciclo e minuti",
+    "measurements": "Scheda misure",
+    "protectors": "Posizione delle protezioni",
+    "pieces": "Pezzi del cartamodello"
+  },
+  "cmp": {
+    "revision": {
+      "labelTemplate": "Etichetta del capo",
+      "plannedHideYieldPct": "Resa pelle prevista %",
+      "output": "Produce",
+      "releasedColourways": "Varianti colore rilasciate",
+      "releasedSizes": "Taglie rilasciate"
+    },
+    "bom": {
+      "seq": "Riga",
+      "qty": "Quantità",
+      "uom": "Unità",
+      "wastagePct": "Sfrido %",
+      "colour": "Colore",
+      "supplier": "Fornitore",
+      "section": "Sezione",
+      "group": "Sotto la riga",
+      "subAssembly": "Semilavorato",
+      "customerSupplied": "Fornito dal cliente",
+      "issueToSubcontract": "Nel kit del laboratorio",
+      "sourceKey": "Origine",
+      "option": "Solo con l’opzione",
+      "step": "Usato alla fase",
+      "mtm": "Scala su misura",
+      "alternates": "Alternative",
+      "note": "Nota"
+    },
+    "routing": {
+      "seq": "Posizione",
+      "code": "Codice",
+      "name": "Nome",
+      "workCentreKind": "Centro di lavoro",
+      "standardMinutes": "Minuti standard",
+      "allowances": "Minuti base + maggiorazioni",
+      "timeVersion": "Versione del tempo standard",
+      "setupMinutes": "Minuti di attrezzaggio",
+      "waitMinutes": "Minuti di attesa",
+      "moveMinutes": "Minuti di movimento",
+      "scanRequired": "Scansionata",
+      "parallelGroup": "Gruppo in parallelo",
+      "cells": "Solo per",
+      "checkpoint": "Punto di controllo qualità",
+      "settings": "Impostazioni macchina",
+      "workshop": "Laboratorio",
+      "transitDays": "Giorni di transito",
+      "instructions": "Istruzioni"
+    },
+    "measurements": {
+      "uom": "Unità",
+      "tolerance": "Tolleranza (− / +)"
+    },
+    "protectors": {
+      "item": "Protezione",
+      "standard": "Norma",
+      "level": "Livello",
+      "sizes": "Taglie",
+      "positionNote": "Posizione"
+    },
+    "pieces": {
+      "seq": "Posizione",
+      "quantity": "Per capo",
+      "line": "Riga di distinta",
+      "minGrade": "Scelta minima della pelle",
+      "grain": "Verso",
+      "sizes": "Taglie",
+      "note": "Nota"
+    },
+    "total": {
+      "lines": "Righe",
+      "minutesPerGarment": "Minuti per capo",
+      "steps": "Fasi",
+      "spec": "Scheda",
+      "points": "Punti di misura",
+      "pieces": "Pezzi",
+      "perGarment": "Pezzi per capo"
+    }
+  },
+  "view": {
+    "label": "Mostra",
+    "changes": "Modifiche",
+    "released": "Versioni rilasciate"
+  },
+  "tile": {
+    "TO_TRIAGE": "Nuove richieste da valutare",
+    "hint": {
+      "TO_TRIAGE": "Richieste non ancora decise, le più urgenti per prime.",
+      "MINE_TO_APPROVE": "Ordini di modifica e tempi standard che devi decidere tu.",
+      "TO_RELEASE": "Ordini approvati la cui revisione non è ancora rilasciata.",
+      "RELEASED_THIS_MONTH": "Ordini di modifica rilasciati dal primo del mese."
+    },
+    "MINE_TO_APPROVE": "In attesa della mia approvazione",
+    "TO_RELEASE": "Approvate — da rilasciare",
+    "RELEASED_THIS_MONTH": "Rilasciate questo mese",
+    "failed": "Conteggio non riuscito"
+  },
+  "rows": {
+    "TO_TRIAGE": "Da valutare",
+    "MINE_TO_APPROVE": "Da approvare da me",
+    "TO_RELEASE": "Approvate",
+    "RELEASED_THIS_MONTH": "Rilasciate questo mese",
+    "RELEASED": "Rilasciate",
+    "REJECTED": "Respinte",
+    "ALL": "Tutte le modifiche"
+  },
+  "notice": {
+    "fewer": "Mostra un solo avviso",
+    "smvFailed": "Non è stato possibile leggere le modifiche dei tempi standard da Operazioni: sono mostrate le richieste e gli ordini di modifica.",
+    "smvRole": "Le modifiche dei tempi standard da Operazioni non sono in questo elenco: il tuo ruolo non legge le operazioni.",
+    "smvStyle": "Il filtro per modello non vale per le modifiche dei tempi standard (riguardano un’operazione): sono escluse.",
+    "incomplete": "Sono mostrate solo le prime 100 richieste e i primi 100 ordini di modifica: restringi i filtri per vedere il resto.",
+    "more_one": "{count} altro avviso",
+    "more_other": "Altri {count} avvisi"
+  },
+  "list": {
+    "intro": "Richieste di modifica da ufficio, reparto, clienti, campionature e fornitori; ordini di modifica che le portano a una nuova revisione; le modifiche dei tempi standard in attesa da Operazioni.",
+    "new": "Nuova richiesta di modifica",
+    "newOrder": "Nuovo ordine di modifica",
+    "more": "Altre azioni",
+    "tableLabel": "Modifiche",
+    "search": "Cerca numero, titolo o modello",
+    "rowsLabel": "Righe",
+    "kindLabel": "Tipo",
+    "allKinds": "Ogni tipo",
+    "styleChip": "Modello {style}",
+    "clearStyle": "Togli il filtro modello {style}",
+    "thisStyle": "questo modello",
+    "countReading": "Lettura…",
+    "failed": "Non è stato possibile caricare le modifiche",
+    "empty": "Ancora nessuna modifica",
+    "emptyBody": "Nessuna richiesta di modifica: apri la prima quando un modello deve cambiare.",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "noMatchBody": "Togli i filtri o prova un’altra ricerca.",
+    "foot": "Un ordine di modifica è approvato da una persona diversa dall’autore; rilasciarlo rilascia la nuova revisione e rende superata la vecchia.",
+    "approveOne": "Approva…",
+    "rejectOne": "Respingi…",
+    "pickOne": "Scegli una sola modifica per deciderla",
+    "count_one": "{count} modifica",
+    "countMore_one": "La prima {count} modifica",
+    "copyMany_one": "Copia {count} numero",
+    "copied_one": "{count} numero copiato",
+    "count_other": "{count} modifiche",
+    "countMore_other": "Le prime {count} modifiche",
+    "copyMany_other": "Copia {count} numeri",
+    "copied_other": "{count} numeri copiati"
+  },
+  "col": {
+    "number": "Numero",
+    "kind": "Tipo",
+    "title": "Titolo",
+    "styles": "Modelli coinvolti",
+    "raisedBy": "Aperta da",
+    "reason": "Motivo",
+    "status": "Stato",
+    "approvals": "Approvazioni",
+    "effective": "In vigore",
+    "priority": "Priorità",
+    "more": "Azioni",
+    "style": "Modello",
+    "revision": "Revisione",
+    "released": "Rilasciata da, quando",
+    "changed": "Cosa è cambiato",
+    "change": "Modifica"
+  },
+  "row": {
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "reject": "Respingi…",
+    "copy": "Copia il numero",
+    "menu": "Azioni per {number}",
+    "number": "{number}",
+    "floorNoNumber": "Dal reparto (senza numero)"
+  },
+  "keys": {
+    "new": "Nuova richiesta di modifica",
+    "approve": "Approva (in Approva modifica)",
+    "reject": "Respingi (in Approva modifica)",
+    "walk": "Modifica successiva / precedente (in Approva modifica)"
+  },
+  "person": {
+    "me": "Tu",
+    "other": "Un collega",
+    "none": "—"
+  },
+  "raised": {
+    "party": "{source} · {party}",
+    "round": "Campionatura · {round}",
+    "office": "Ufficio · {person}"
+  },
+  "approvals": {
+    "count": "{approved} di {required}",
+    "none": "Ancora nessun approvatore",
+    "triage": "La valutazione",
+    "decidedBy": "Decisa da",
+    "decidedAt": "Decisa il",
+    "note": "Perché",
+    "order": "Approvazione della modifica",
+    "orderHint": "L’ordine di modifica la porta in approvazione; lì decidono i suoi approvatori.",
+    "notSent": "Non inviata in approvazione"
+  },
+  "released": {
+    "tableLabel": "Versioni rilasciate",
+    "search": "Cerca modello o ordine di modifica",
+    "noOrder": "Rilasciata senza ordine di modifica",
+    "failed": "Non è stato possibile caricare le versioni rilasciate",
+    "empty": "Ancora nessuna versione rilasciata",
+    "emptyBody": "Una revisione di modello compare qui quando è rilasciata.",
+    "foot": "Revisioni di modello rilasciate, le più recenti per prime; l’ordine di modifica che le ha rilasciate, quando c’è."
+  },
+  "held": {
+    "offline": "Offline — aspetta che torni la connessione",
+    "offlineKept": "Offline — le modifiche restano su questa pagina",
+    "noRequest": "Il tuo ruolo non apre richieste di modifica",
+    "noManage": "Il tuo ruolo non scrive ordini di modifica",
+    "noTriage": "Il tuo ruolo non valuta le richieste di modifica",
+    "noApprove": "Il tuo ruolo non approva ordini di modifica",
+    "noSmvApprove": "Il tuo ruolo non approva le modifiche dei tempi standard",
+    "ownSmv": "Hai proposto tu questa modifica del tempo standard: la approva un’altra persona (quattro occhi)",
+    "requestDecided": "Questa richiesta è {status}: non si valuta più",
+    "orderNotWaiting": "Questo ordine di modifica è {status}: si decide solo mentre è in approvazione",
+    "viewOnly": "Puoi vedere, non modificare",
+    "needs": "Serve il permesso: {right}",
+    "needsRight": "Serve il permesso: {right}"
+  },
+  "right": {
+    "parties": {
+      "view": "vedere clienti e fornitori"
+    },
+    "sales": {
+      "samples": {
+        "view": "vedere le campionature"
+      }
+    },
+    "product": {
+      "styles": {
+        "view": "vedere i modelli"
+      },
+      "bom": {
+        "view": "vedere le distinte base"
+      }
+    },
+    "files": {
+      "upload": "aggiungere file"
+    }
+  },
+  "new": {
+    "title": "Nuova richiesta di modifica",
+    "submit": "Apri la richiesta",
+    "style": "Modello",
+    "styleHint": "Cerca per codice o nome, poi sceglilo.",
+    "styleSearch": "Cerca modelli",
+    "pickStyle": "Scegli un modello",
+    "noStyles": "Nessun modello corrisponde",
+    "revision": "Revisione interessata",
+    "revisionHint": "Il modello così com’è, salvo indicare una revisione.",
+    "source": "Chiesta da",
+    "customer": "Cliente",
+    "supplier": "Fornitore",
+    "pickCustomer": "Scegli il cliente",
+    "pickSupplier": "Scegli il fornitore",
+    "round": "Campionatura",
+    "pickRound": "Scegli la campionatura",
+    "noRounds": "Nessuna campionatura di questo modello",
+    "roundOption": "{number} · giro {n}",
+    "what": "Cosa deve cambiare",
+    "whatPlaceholder": "Collo 52: aprire il giro collo di 1 cm",
+    "why": "Perché",
+    "whyPlaceholder": "Cosa è stato visto, dove, e perché conta.",
+    "photosHint": "Le foto sono inviate quando la richiesta è aperta.",
+    "photosAdd": "Trascina qui le foto o sceglile",
+    "photosClear": "Toglile",
+    "heldStyle": "Scegli prima il modello",
+    "heldCustomer": "Scegli il cliente che l’ha chiesta",
+    "heldSupplier": "Scegli il fornitore che l’ha chiesta",
+    "heldRound": "Scegli la campionatura da cui nasce",
+    "heldTitle": "Scrivi cosa deve cambiare",
+    "heldTitleLong": "Scrivilo in al massimo {max} caratteri",
+    "heldReason": "Scrivi il perché",
+    "photosAdded_one": "{count} foto da inviare",
+    "photosAdded_other": "{count} foto da inviare"
+  },
+  "newOrder": {
+    "title": "Nuovo ordine di modifica",
+    "submit": "Scrivi l’ordine di modifica",
+    "from": "Dalla revisione rilasciata",
+    "fromHint": "L’ordine di modifica parte dalla revisione rilasciata del modello.",
+    "effectHint": "Quando entra in vigore la nuova revisione.",
+    "requests": "Richieste che porta",
+    "requestsHint": "Richieste del modello aperte, in valutazione o accettate e in nessun altro ordine attivo; una aperta passa in valutazione.",
+    "noRequests": "Nessuna richiesta di questo modello è libera",
+    "carries_one": "Porta {count} richiesta",
+    "carries_other": "Porta {count} richieste"
+  },
+  "decide": {
+    "title": "Approva modifica",
+    "noun": "modifica",
+    "approve": "Approva",
+    "accept": "Accetta",
+    "reject": "Respingi",
+    "review": "In valutazione",
+    "reason": "Perché",
+    "reasonHint": "Serve per respingere: lo legge chi l’ha scritta o aperta.",
+    "heldReading": "Lettura della modifica…",
+    "keys": "A approva, R respinge, J / K la modifica successiva e precedente.",
+    "redline": "Confronto",
+    "openRecord": "Apri {number}",
+    "doneApproved": "{number} approvata",
+    "doneRejected": "{number} respinta",
+    "doneRequest": {
+      "ACCEPTED": "{number} accettata",
+      "REJECTED": "{number} respinta",
+      "IN_REVIEW": "{number} è in valutazione"
+    }
+  },
+  "redline": {
+    "none": "Ancora nessuna revisione in bozza: avviala dalla revisione rilasciata, fai lì la modifica e il confronto la mostra.",
+    "failed": "Non è stato possibile leggere il confronto",
+    "reading": "Lettura del confronto…",
+    "rev": "Rev {revision}",
+    "same": "Finora la revisione {to} ha la stessa scheda della revisione {from}.",
+    "differs": "{section}: {added} aggiunte, {removed} tolte, {changed} cambiate",
+    "unchanged": "Invariati: {parts}"
+  },
+  "impact": {
+    "nothingMade": "Ancora niente prodotto",
+    "made": "{cut} mazzette tagliate ({cutPieces} pezzi), {worked} lavorate ({workedPieces} pezzi)",
+    "driftFailed": "Non è stato possibile leggere preventivi e ordini aperti",
+    "noDrift": "Nessun preventivo o ordine aperto è su una revisione più vecchia.",
+    "held": "Non nel tuo ruolo: {kinds}",
+    "revisionMove": "Revisione {from}, ora {to}",
+    "same": "La stessa scheda",
+    "col": {
+      "record": "Documento",
+      "line": "Riga",
+      "pieces": "Pezzi",
+      "revision": "Revisione",
+      "differs": "Cosa cambia"
+    },
+    "workOrders": "Lavori in corso",
+    "noWorkOrderRight": "Gli ordini di lavoro non sono nel tuo ruolo.",
+    "noWorkOrders": "Nessun ordine di lavoro aperto di questo modello.",
+    "notAssessed": "Non ancora valutato",
+    "dispositionOf": "Cosa succede a {number}",
+    "drift": "Preventivi e ordini aperti su revisioni più vecchie",
+    "requestNone": "Nulla di aperto usa i modelli coinvolti: la richiesta non indica un ordine di lavoro.",
+    "workOrder": "Ordine di lavoro",
+    "alreadyMade": "Già prodotto",
+    "requestHint": "L’ordine di modifica che la porta dice cosa succede a ogni lavoro in corso.",
+    "intro": "Cosa fa ogni ordine di lavoro aperto del modello quando la modifica è rilasciata, e i preventivi e ordini ancora su una revisione più vecchia."
+  },
+  "smvSource": {
+    "TIME_STUDY": "Rilevazione tempi",
+    "PREDETERMINED": "Tempi predeterminati",
+    "ESTIMATE": "Stima"
+  },
+  "smvRun": {
+    "VERSION": "Dalla versione approvata",
+    "ALLOWANCES": "Maggiorazioni proprie",
+    "TYPED": "Scritto sulla fase"
+  },
+  "field": {
+    "kind": "Tipo",
+    "style": "Modello",
+    "photos": "Foto",
+    "raisedAt": "Aperta il",
+    "author": "Scritto da",
+    "changeOrder": "Ordine di modifica",
+    "description": "Descrizione",
+    "descriptionHint": "Cosa cambia la revisione in bozza, parte per parte (\"Usa come nota di modifica\" la scrive dal confronto).",
+    "effect": "Entra in vigore",
+    "effectiveDate": "Dal giorno",
+    "title": "Cosa deve cambiare",
+    "reason": "Perché",
+    "priority": "Priorità",
+    "partyId": "Cliente o fornitore",
+    "sampleRoundId": "Campionatura",
+    "revisionId": "Revisione",
+    "styleId": "Modello",
+    "companyId": "Società",
+    "requestIds": "Richieste",
+    "approvers": "Approvatori",
+    "lines": "Righe",
+    "note": "Nota",
+    "other": "Un campo"
+  },
+  "tab": {
+    "change": "Modifica",
+    "impact": "Impatto",
+    "approvals": "Approvazioni",
+    "affected": "Record coinvolti",
+    "activity": "Attività"
+  },
+  "record": {
+    "back": "Modifiche e versioni",
+    "backToList": "Torna alle modifiche",
+    "tabs": "Sezioni della modifica",
+    "more": "Altre azioni",
+    "loading": "Lettura della modifica…",
+    "notFoundTitle": "Modifica non trovata",
+    "notFoundBody": "Può essere di un’altra società, o l’indirizzo è sbagliato.",
+    "failedTitle": "Non è stato possibile caricare la modifica",
+    "offline": "Offline — la modifica come letta l’ultima volta; ogni passo aspetta la connessione.",
+    "stale": "Qualcuno l’ha cambiata alle {time}. Rileggila prima di salvare.",
+    "reload": "Rileggi",
+    "cancelledBanner": "Annullato: {reason}",
+    "rejectedBanner": "Respinto da un approvatore: il motivo è in Approvazioni. Scrivi un nuovo ordine di modifica per riprovare.",
+    "requestRejected": "Respinta: {note}",
+    "readOnly": "Sola lettura: {reason}",
+    "priorityOnly": "{status}: cambia ancora solo la priorità.",
+    "what": "Cosa e perché",
+    "facts": "Dati",
+    "openStyle": "Apri il modello {style}",
+    "styleChanges": "Modifiche di {style}",
+    "copyNumber": "Copia il numero",
+    "copied": "{number} copiato",
+    "cancel": "Annulla l’ordine di modifica…",
+    "saved": "Salvato",
+    "submitted": "Inviato in approvazione: gli approvatori sono avvisati",
+    "cancelled": "{number} annullato",
+    "released": "{number} rilasciato: è in vigore la revisione {revision}",
+    "draftStarted": "Avviata la revisione in bozza {revision}: fai lì la modifica",
+    "wipSaved": "Lavori in corso salvati",
+    "approversSaved": "Approvatori salvati",
+    "requestsSaved": "Richieste salvate"
+  },
+  "approvers": {
+    "change": "Cambia approvatori",
+    "col": {
+      "approver": "Approvatore",
+      "required": "Obbligatorio",
+      "decision": "Decisione",
+      "when": "Quando",
+      "why": "Perché"
+    },
+    "required": "Obbligatorio",
+    "optional": "Facoltativo",
+    "waiting": "In attesa",
+    "youName": "Tu ({name})",
+    "none": "Ancora nessun approvatore indicato.",
+    "decidedStays": "Un’approvazione decisa resta",
+    "remove": "Togli {name}",
+    "add": "Aggiungi un approvatore",
+    "addHint": "Persone il cui ruolo approva gli ordini di modifica di questa società; mai l’autore.",
+    "pick": "Scegli una persona",
+    "noneLeft": "Nessun altro può approvare",
+    "pickFirst": "Scegli prima una persona",
+    "addButton": "Aggiungi",
+    "fourEyes": "Quattro occhi: l’autore non approva mai il proprio ordine; approvano tutti gli obbligatori, e un rifiuto lo respinge.",
+    "tooMany": "Al massimo {max} approvatori"
+  },
+  "affected": {
+    "old": "Revisione vecchia",
+    "new": "Revisione nuova",
+    "releasedAt": "Rilasciata il",
+    "choiceLater": "La scelta della revisione per ordine arriverà più avanti; per ora gli ordini aperti restano sulla revisione con cui sono nati.",
+    "requestHint": "L’ordine di modifica che la porta indica la nuova revisione."
+  },
+  "photos": {
+    "none": "Ancora nessuna foto.",
+    "sending": "Invio delle foto…",
+    "inActivity": "Sono anche in Attività › File.",
+    "count_one": "{count} foto",
+    "failed_one": "{count} foto non è stata inviata: aggiungila di nuovo.",
+    "added_one": "{count} foto aggiunta",
+    "count_other": "{count} foto",
+    "failed_other": "{count} foto non sono state inviate: aggiungile di nuovo.",
+    "added_other": "{count} foto aggiunte"
+  },
+  "activity": {
+    "none": "Ancora niente. La prima modifica o il primo messaggio compaiono qui.",
+    "noRight": "Il tuo ruolo non legge la conversazione e la cronologia."
+  },
+  "dialog": {
+    "cancelTitle": "Annullare {number}?",
+    "cancelBody": "La sua revisione in bozza resta in bozza; le richieste che porta possono entrare in un altro ordine.",
+    "cancelWhy": "Perché",
+    "cancelSubmit": "Annulla l’ordine di modifica",
+    "releaseTitle": "Rilasciare la revisione {revision}?",
+    "releaseBody": "La revisione {to} diventa quella rilasciata e la {from} superata, passando dal controllo di rilascio; le richieste che porta sono fatte.",
+    "releaseSubmit": "Rilascia",
+    "startTitle": "Avvia la revisione in bozza",
+    "startBody": "Una copia della revisione {from} diventa la bozza con questa modifica; modifica distinta, scheda e ciclo nello studio del modello.",
+    "startSubmit": "Avvia la bozza",
+    "changeNote": "Nota di modifica",
+    "changeNoteHint": "Cosa cambia la revisione (resta con la revisione)."
+  },
+  "problem": {
+    "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",
+    "forbidden": "Il tuo ruolo non legge questo.",
+    "notFound": "Non trovato: può essere stato tolto o essere di un’altra società.",
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "contract": "La risposta non è quella attesa da questa pagina. Ricarica la pagina.",
+    "rateLimited": "Troppi tentativi in poco tempo. Aspetta un momento.",
+    "stale": "Qualcuno l’ha cambiata prima: è stata riletta.",
+    "invalid": "Alcuni campi vanno controllati:",
+    "writeForbidden": "Il tuo ruolo non può farlo qui.",
+    "stepUp": "Conferma prima la tua identità."
+  },
+  "refusal": {
+    "REQUEST_DECIDED": "Questa richiesta è decisa: cosa, perché e revisione non cambiano più.",
+    "REQUEST_MOVE": "Questa richiesta ora non può passare a quello stato.",
+    "REASON_NEEDED": "Scrivi il perché: lo legge chi l’ha scritta o aperta.",
+    "REQUEST_NOT_LINKABLE": "Una richiesta si porta solo se è dello stesso modello, non respinta o fatta, e in nessun altro ordine attivo.",
+    "ORDER_NOT_DRAFT": "Ciò che l’ordine di modifica cambia è stato fissato all’invio.",
+    "ORDER_MOVE": "L’ordine di modifica non è in uno stato che lo consente.",
+    "NO_RELEASED_REVISION": "Il modello non ha una revisione rilasciata: un ordine di modifica parte da una.",
+    "REVISION_NOT_DRAFT": "La revisione proposta non è più in bozza.",
+    "DRAFT_EXISTS": "Il modello ha già una revisione in bozza: usala, o finiscila prima.",
+    "NO_DRAFT_REVISION": "Avvia prima la revisione in bozza, fai lì la modifica, poi invia.",
+    "NO_APPROVER": "Indica almeno un approvatore obbligatorio diverso dall’autore.",
+    "OWN_APPROVAL": "L’autore non può approvare il proprio ordine di modifica (quattro occhi).",
+    "APPROVER_CANNOT": "Il ruolo di quella persona non approva ordini di modifica per questa società.",
+    "NOT_APPROVER": "Non sei un approvatore di questo ordine di modifica.",
+    "ALREADY_DECIDED": "L’hai già decisa: una decisione si dà una volta.",
+    "NOT_APPROVED": "La sua revisione si rilascia quando l’ordine di modifica è approvato.",
+    "NOT_YET_EFFECTIVE": "Entra in vigore in un giorno successivo: rilascialo quel giorno.",
+    "EFFECT_DATE": "Indica il giorno in cui entra in vigore (solo con \"Da una data\").",
+    "WORK_ORDER_NOT_OPEN": "Quell’ordine di lavoro non è aperto: niente è in corso.",
+    "LINE_INVALID": "Quella riga di modifica non è completa.",
+    "CANCEL_REASON": "Scrivi perché viene annullato.",
+    "EDIT_BLOCKED": "Lo stato del ciclo di vita del modello non consente questa modifica.",
+    "NEEDS_NEW_REVISION": "Avvia una nuova revisione per cambiarlo.",
+    "NEEDS_CHANGE_ORDER": "Questo modello cambia solo con un ordine di modifica.",
+    "DRAFT_UNDER_CHANGE_ORDER": "La revisione in bozza è legata a un ordine in approvazione: resta ferma finché non è deciso.",
+    "REVISION_LOCKED": "La revisione è rilasciata e bloccata: non cambia.",
+    "other": "La fabbrica l’ha rifiutato."
+  },
+  "style": {
+    "changes": "Modifiche di questo modello",
+    "newRequest": "Nuova richiesta di modifica…"
+  }
+}

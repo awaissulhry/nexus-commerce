@@ -178,6 +178,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the list frame's `modes`; SCR-110-record `/products/samples/<id>?tab=request|sample|fit|approval|shipments|activity&panel=`;
   catalogue `products-samples`, CSS prefix `fw-smp-`): `view/DecideDialog.tsx` is THE "Decide on the sample" (a round or a swatch;
   the Approval is read first), "Ask the customer" = Activity › Approvals (`&panel=approvals`). `RECORD_PAGES.SampleRound`.
+- `src/areas/products/changes/` — Products › Development › Changes & versions (B-W2b-244 on B-W2b-226/-215/-220's API; SCR-117
+  `/products/changes?view=released&tile=&kind=&style=&q=&new=1&newOrder=1&request=&decide=<kind>:<id>` — change requests, change orders
+  and the SMV changes waiting as ONE list (factory-domain product/changes/screens.ts `changeListsOf`), or the released versions;
+  SCR-117-record `/products/changes/requests/<id>` and `/orders/<id>` `?tab=change|impact|approvals|affected|activity`; catalogue
+  `products-changes`, CSS prefix `fw-chg-`): `view/DecideDialog.tsx` + `use-decide.ts` are THE "Approve change" (A / R, J / K),
+  `view/Redline.tsx` the redline (B-W2b-220's compare, one VersionCompare per part), `view/Impact.tsx` the work in progress and the
+  drift. `RECORD_PAGES.ChangeRequest` / `.ChangeOrder` open the records.
 - `src/areas/products/colours/` — Products › Libraries › Colours & artwork (B-W2b-247, SCR-118, `/products/colours?view=&q=&system=&family=&sets=&open=<set>&new=colour|set`; catalogue `products-colours`, CSS prefix `fw-col-`): the colour library on the list frame (tiles, notices kept dismissed by value in localStorage, inline edit of name / system / reference / family / hex through the bulk target `products.colours`, Archive N / Restore N / Export N, New and Edit colour with its photo) and the branding sets (list frame `products.colours.2`, Archive N; the DetailModal `?open=<id>`: files, packaging rules, brand colours, styles; New branding set). `src/areas/products/_shared/Swatch.tsx` — the area's colour chip (`Swatch`, `SwatchRow`; only a plain #RRGGBB drawn), for every product screen.
 - `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check; B-W2a-66: the
   Renewals tab `?tab=renewals&act=renew|applied|link` in `renewals/` — api, model, `use-renewals.ts` container hook, view, made-up

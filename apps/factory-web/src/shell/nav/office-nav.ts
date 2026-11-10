@@ -444,6 +444,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-261: Products › Development › Samples & prototypes (SCR-110) and a sample round (SCR-110-record).
   '/products/samples',
   '/products/samples/[id]',
+  // B-W2b-244: Products › Development › Changes & versions (SCR-117), a change request and a change order (SCR-117-record).
+  '/products/changes',
+  '/products/changes/requests/[id]',
+  '/products/changes/orders/[id]',
 ])
 
 /**

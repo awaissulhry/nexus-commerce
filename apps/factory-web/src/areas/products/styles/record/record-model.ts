@@ -147,6 +147,8 @@ export interface StyleRecordViewModel {
   patternFiles?: PatternsModel
   /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
   samples?: { view: boolean; manage: boolean }
+  /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
+  changes?: { view: boolean; request: boolean }
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
