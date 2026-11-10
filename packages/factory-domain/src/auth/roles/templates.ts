@@ -1262,6 +1262,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     permissions: [
       'audit.read',
       'files.read',
+      // B-W2b-F23 (Owner 2026-11-10, W2b-5 question 2 = A): the names, addresses and contacts of customers, suppliers and
+      // workshops (who sends a customer-supplied material, a workshop found by name); prices, terms, credit and bank details
+      // stay behind their own permissions.
+      'parties.view',
       'files.upload',
       'devices.view',
       'workers.view',
