@@ -86,6 +86,7 @@
     "techpack": "Tech pack",
     "compliance": "Compliance",
     "files": "Files & patterns",
+    "versions": "Versions & changes",
     "activity": "Activity",
     "problems_one": "{count} problem before release",
     "problems_other": "{count} problems before release"
@@ -194,6 +195,7 @@
     "skusSaved_one": "{count} SKU saved.",
     "skusSaved_other": "{count} SKUs saved.",
     "released": "Revision {revision} is released: new work orders use it.",
+    "widened": "Revision {revision} is now released for more colourways or sizes: work orders may take them.",
     "revisionStarted": "The new draft revision is open.",
     "abandoned": "The draft revision is abandoned.",
     "archived": "The style is archived.",

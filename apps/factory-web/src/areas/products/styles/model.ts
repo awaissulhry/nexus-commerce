@@ -92,6 +92,8 @@ export type StyleTab =
   | 'techpack'
   | 'compliance'
   | 'files'
+  // B-W2b-245: Versions & changes, the design's tab before Activity.
+  | 'versions'
   | 'activity'
 /**
  * The studio's tabs, in the band's order (B-W2b-95: Files & patterns, the design's tab before Activity; B-W2b-233: Sizes &
@@ -108,6 +110,8 @@ export const STYLE_TABS: readonly StyleTab[] = [
   'techpack',
   'compliance',
   'files',
+  // B-W2b-245
+  'versions',
   'activity',
 ]
 
@@ -128,6 +132,8 @@ export function tabsFor(can: StyleAbilities): StyleTab[] {
     if (tab === 'sizes') return can.view
     // B-W2b-243: the live tech pack reads with the BOM's right (its sections ask theirs).
     if (tab === 'techpack') return can.bomView
+    // B-W2b-245: Versions & changes reads the revisions, the compare and the drift with the BOM's right (its changes ask theirs).
+    if (tab === 'versions') return can.bomView
     if (tab === 'activity') return can.thread
     return true
   })

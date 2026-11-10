@@ -308,7 +308,8 @@
     },
     "CELLS": {
       "OK": "{cells} size cells to make.",
-      "BLOCKED": "Some sizes are not in the style any more."
+      "BLOCKED": "Some sizes are not in the style any more.",
+      "scope": "Some cells wait for a later release of the style's revision."
     },
     "DEPOSIT": {
       "OK": "Every order's deposit is paid or waived.",
@@ -334,6 +335,7 @@
     "certificate": "{cell}: no valid certificate covers it today",
     "bom": "{cell}: the BOM does not cover it",
     "size": "{cell}: the size is not in the style any more",
+    "scope": "{cell}: not released yet — release more of the revision (Products › Styles › Versions & changes), or take it out of the work order",
     "deposit": "{order} waits for its deposit",
     "material": {
       "short": "{material}: {short} {uom} short ({needed} needed, {available} available)",

@@ -22,7 +22,8 @@ const RANGE = view.sizes.map((size) => size.code)
 
 describe('the tab and who may change the list', () => {
   it('is the tab before Activity, read with the BOM', () => {
-    expect(STYLE_TABS.slice(-2)).toEqual(['files', 'activity'])
+    // B-W2b-245: Versions & changes sits between Files & patterns and Activity (the design's order).
+    expect(STYLE_TABS.slice(-3)).toEqual(['files', 'versions', 'activity'])
     expect(tabsFor(abilitiesOf(['product.styles.view', 'product.bom.view']))).toContain('files')
     expect(tabsFor(abilitiesOf(['product.styles.view']))).not.toContain('files')
   })

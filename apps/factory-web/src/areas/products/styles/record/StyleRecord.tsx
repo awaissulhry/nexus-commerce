@@ -84,6 +84,10 @@ import { TechPackTab } from '../techpack/TechPackTab'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import { useGallery } from './gallery/use-gallery'
 import { usePatternFiles } from './files-w2b/use-pattern-files'
+// B-W2b-245: Versions & changes (the tab, Compare revisions) and the Release modal on B-W2b-231's gate.
+import { useVersions } from '../versions/use-versions'
+import { versionsCan } from '../versions/model'
+import { useReleaseGate } from '../release/use-release'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.products.dock.Style'
@@ -296,12 +300,16 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const sizesReload = useRef<() => void>(() => undefined)
   // B-W2b-235: the routing in depth.
   const routingDepthReload = useRef<() => void>(() => undefined)
+  // B-W2b-245: the Versions & changes tab.
+  const versionsReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
     piecesReload.current()
     sizesReload.current()
     routingDepthReload.current()
+    // B-W2b-245
+    versionsReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -422,6 +430,57 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     onChanged: () => afterBom(),
   })
   routingDepthReload.current = routingDepth.reload
+
+  // B-W2b-245: Versions & changes — read while the tab (or Compare revisions) shows, again when a revision moves. The Release
+  // modal reads B-W2b-231's gate while it is open (the draft in view: release; the released revision: "Release more…") and
+  // writes through the one queue above (the scope first when it changes, then W1's release).
+  const [widenOpen, setWidenOpen] = useState(false)
+  const versionsRights = useMemo(() => versionsCan(session.permissions), [session.permissions])
+  const versions = useVersions({
+    api,
+    styleId,
+    companyId,
+    tenantWide: value ? value.companyId === null : false,
+    me: session.user.id,
+    can: versionsRights,
+    enabled: tab === 'versions',
+    loadKey: versionKey,
+    onWiden: () => setWidenOpen(true),
+  })
+  versionsReload.current = versions.reload
+  const releasedNow = value ? releasedOf(value.revisions) : null
+  const releaseOpen =
+    dialog?.kind === 'release' && revision?.status === 'DRAFT' && can.bomView
+      ? { revisionId: revision.id, mode: 'release' as const }
+      : widenOpen && releasedNow && can.bomView
+        ? { revisionId: releasedNow.id, mode: 'widen' as const }
+        : null
+  const releaseGate = useReleaseGate({
+    api,
+    styleId,
+    open: releaseOpen,
+    write: (work) =>
+      run(
+        work,
+        releaseOpen?.mode === 'widen'
+          ? { key: 'notice.widened', tone: 'success', params: { revision: releasedNow?.revision ?? 0 } }
+          : { key: 'notice.released', tone: 'success', params: { revision: revision?.revision ?? 0 } },
+      ),
+    versionOf: revisionVersion,
+    onReleased: async (next) => {
+      setBomValue(next)
+      await loadStyle()
+      loadParts(revisionId)
+    },
+    onWidened: () => {
+      void loadStyle()
+      versions.reload()
+    },
+    onClose: () => {
+      setWidenOpen(false)
+      if (dialog?.kind === 'release') setDialog(null)
+    },
+  })
 
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
@@ -546,6 +605,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
     // B-W2b-244: the style's changes (Products › Changes & versions), read and raised with their own rights.
     changes: { view: session.permissions.includes('product.changes.view'), request: session.permissions.includes('product.changes.request') },
+    // B-W2b-245
+    versions: versions.model,
+    release: releaseGate.model,
   }
 
   return (
@@ -554,6 +616,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       techPack={value && tab === 'techpack' ? <TechPackTab style={value} revisionId={revisionId} prefix={prefix} /> : null}
       actions={{
+        // B-W2b-245
+        versions: versions.actions,
+        release: releaseGate.actions,
         pieces: pieces.actions,
         onRetryMaterialApprovals: approvals.reload,
         onRetryComposition: composition.reload,

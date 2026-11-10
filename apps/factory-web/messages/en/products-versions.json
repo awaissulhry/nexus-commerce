@@ -1,0 +1,297 @@
+{
+  "base": {
+    "retry": "Try again",
+    "reading": "Reading…",
+    "close": "Close"
+  },
+  "ver": {
+    "title": "Revisions",
+    "intro": "Every revision of the BOM, routing, size spec and label. A released revision is locked: a change is a new revision.",
+    "failed": "Couldn't read the revisions",
+    "option": "Rev {revision} · {status}",
+    "rev": "Rev {revision}",
+    "notInRole": "Not in your role",
+    "locked": "Locked: released revisions never change",
+    "inView": "In view",
+    "noNote": "No note",
+    "someone": "A colleague",
+    "notReleased": "Not released",
+    "compareWith": "Compare revision {revision} with revision {before}",
+    "compareBefore": "Against rev {before}"
+  },
+  "cmp": {
+    "title": "Compare revisions",
+    "intro": "What changed between two revisions, part by part: BOM, routing and minutes, measurement spec, protectors, pattern pieces and the label.",
+    "open": "Compare revisions…",
+    "openWide": "Open wide"
+  },
+  "pair": {
+    "from": "From",
+    "to": "To",
+    "swap": "Swap the two revisions",
+    "onlyOne": "Only one revision so far: nothing to compare yet.",
+    "pick": "Pick two revisions.",
+    "same": "Pick two different revisions."
+  },
+  "costCmp": {
+    "title": "Cost difference",
+    "how": "Both revisions priced with today's standard prices and rates (as of {day}): the cost per garment of each size, per colourway.",
+    "notInRole": "Cost difference: not in your role.",
+    "held": "Cost difference: it needs the right to read costs for the style's company.",
+    "incomplete_one": "{count} input has no price yet: the cost is incomplete.",
+    "incomplete_other": "{count} inputs have no price yet: the cost is incomplete.",
+    "total": "Cost per garment (base size)",
+    "field": {
+      "material": "Material (base size)",
+      "labour": "Labour (base size)",
+      "overhead": "Overhead (base size)"
+    }
+  },
+  "failed": {
+    "versions": "Couldn't read the revisions",
+    "changes": "Couldn't read the style's changes",
+    "drift": "Couldn't read the quotes and orders on older revisions",
+    "released": "Couldn't read what the released revision is released for"
+  },
+  "col": {
+    "revision": "Revision",
+    "status": "Status",
+    "why": "What changed",
+    "released": "Released",
+    "workOrders": "Work orders",
+    "quotes": "Quote lines",
+    "orders": "Order lines",
+    "compare": "Compare",
+    "change": "Change",
+    "kind": "Kind",
+    "raisedBy": "Raised by",
+    "raisedOn": "Raised on"
+  },
+  "released": {
+    "whole": "Revision {revision} is released for every colourway and size.",
+    "part_one": "Revision {revision} is released for {colourways} in {sizes} ({count} cell).",
+    "part_other": "Revision {revision} is released for {colourways} in {sizes} ({count} cells).",
+    "waits": "The other colourways and sizes wait for a later release of the same revision: work orders refuse them until then.",
+    "more": "Release more…"
+  },
+  "chg": {
+    "title": "Change requests and orders",
+    "intro": "Changes raised against this style (Products › Changes & versions).",
+    "raise": "Raise a change request",
+    "all": "All changes of this style",
+    "none": "No changes raised.",
+    "more": "Only the newest are listed here: All changes of this style shows every one."
+  },
+  "drift": {
+    "title": "Orders on older revisions",
+    "intro": "Open quotes and orders whose lines are on another revision than the one in force, and how the spec differs.",
+    "cost": "Cost difference",
+    "perGarment": "per garment",
+    "incomplete": "an input has no price",
+    "noCost": "No revision to cost from",
+    "costNotInRole": "Cost difference: not in your role."
+  },
+  "gateCheck": {
+    "reading": "Reading the release check…",
+    "failed": "Couldn't read the release check",
+    "more_one": "and {count} more",
+    "more_other": "and {count} more",
+    "score": "Completeness",
+    "noScore": "No score yet",
+    "open": "Stops the release: {blockers} · warnings: {warnings}"
+  },
+  "gateItem": {
+    "BOM": "BOM complete",
+    "ROUTING": "Routing",
+    "SMV": "Approved minutes",
+    "MATERIALS": "Materials approved",
+    "PRICES": "Materials priced",
+    "LABEL": "Garment label",
+    "CERTIFICATE": "Certificate coverage",
+    "MEASUREMENTS": "Size spec",
+    "ATTRIBUTES": "Product type attributes",
+    "CHANGE_ORDERS": "Change orders",
+    "SCOPE": "Release scope",
+    "DRIFT": "Open quotes and orders"
+  },
+  "gateWhat": {
+    "BOM": "Quantities, colours per colourway and sizes; groups and sub-assemblies.",
+    "ROUTING": "Operations with minutes above 0 and a scanned step.",
+    "SMV": "Each governed operation uses its approved SMV; no SMV change waits for approval.",
+    "MATERIALS": "Every material is approved for use; a blocked one stops the release.",
+    "PRICES": "Every material the factory buys has a standard cost.",
+    "LABEL": "The revision names an active garment label template.",
+    "CERTIFICATE": "A valid certificate covers every switched-on colourway × size the release takes (PPE).",
+    "MEASUREMENTS": "The revision's measurement spec is approved.",
+    "ATTRIBUTES": "Every attribute the product type requires is filled.",
+    "CHANGE_ORDERS": "The change order that proposes this draft is approved and in effect.",
+    "SCOPE": "The colourways and sizes this release takes.",
+    "DRIFT": "Quotes and orders on the revision that becomes obsolete keep it."
+  },
+  "gateState": {
+    "OK": "Done",
+    "WARNING": "Warning, does not stop it",
+    "BLOCKED": "Stops the release",
+    "NOT_REQUIRED": "Not needed"
+  },
+  "finding": {
+    "MATERIAL_BLOCKED": "Line {line}: its material is blocked for use; choose another one.",
+    "ALTERNATE_BLOCKED": "Line {line}: an alternate is a blocked material; remove it or take another one.",
+    "SUB_ASSEMBLY_NOT_RELEASED": "Line {line}: its sub-assembly is a draft or obsolete; take its released revision.",
+    "SUB_ASSEMBLY_NOT_MADE": "Line {line}: its sub-assembly is not a part we make (pieces, pairs or sets).",
+    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the style is inside its own sub-assemblies.",
+    "SUB_ASSEMBLY_TOO_DEEP": "Line {line}: too many levels of sub-assemblies.",
+    "SUB_ASSEMBLY_UNIT": "Line {line}: its unit does not convert to what the sub-assembly makes.",
+    "SUB_ASSEMBLY_SIZE_MISSING": "Line {line}: the sub-assembly has no size {size}.",
+    "SUB_ASSEMBLY_COLOURWAY_MISSING": "Line {line}: the sub-assembly has no colourway {colourway}.",
+    "GROUP_CIRCLE": "Line {line}: it is grouped under a line grouped under it.",
+    "PPE_MATERIAL_NOT_APPROVED": "Line {line}: a PPE line whose material is not approved yet.",
+    "ALTERNATE_ARCHIVED": "Line {line}: an alternate is archived, so it is never taken.",
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: its sub-assembly is an archived style.",
+    "SCOPE_REPEATED": "A colourway or size is named twice.",
+    "SCOPE_COLOURWAY_UNKNOWN": "A colourway is not the style's.",
+    "SCOPE_COLOURWAY_ARCHIVED": "Colourway {colourway} is archived: it is not made, so it is not released.",
+    "SCOPE_SIZE_OUTSIDE": "Size {size} is not in the style's range.",
+    "SCOPE_EMPTY": "The release leaves nothing to make: release at least one active colourway in one size.",
+    "SCOPE_NARROWS": "A later release only adds colourways or sizes: what is released stays released.",
+    "SCOPE_NOT_WIDER": "It is released for these already: add a colourway or a size.",
+    "SMV_NOT_APPROVED": "Operation {step}: its minutes differ from the approved SMV in force.",
+    "SMV_CHANGE_WAITING": "Operation {step}: an SMV change waits for approval.",
+    "MATERIAL_PENDING": "Line {line}: the material is not approved for use yet.",
+    "MATERIAL_NO_STANDARD_COST": "Line {line}: the material has no standard cost yet.",
+    "LABEL_MISSING": "The revision names no garment label template.",
+    "LABEL_NOT_ACTIVE": "The garment label template is not active.",
+    "CELL_NOT_COVERED": "{colourway} {size}: no valid certificate covers it.",
+    "CERTIFICATE_NO_CELLS": "No colourway in a size to check against a certificate yet.",
+    "SPEC_MISSING": "The revision has no measurement spec.",
+    "SPEC_NOT_APPROVED": "The measurement spec is not approved yet.",
+    "ATTRIBUTE_MISSING": "The product type requires a value: {field}.",
+    "CHANGE_ORDER_NOT_APPROVED": "The change order that proposes this draft is not approved yet.",
+    "CHANGE_ORDER_NOT_EFFECTIVE": "The change order is approved but takes effect on a later day.",
+    "CHANGE_ORDER_OPEN": "Another change order is open on this style: releasing outside it leaves it to be decided again.",
+    "OPEN_QUOTES": "Open quotes were costed from the revision that becomes obsolete: they keep their price.",
+    "OPEN_ORDERS": "Open orders were taken on the revision that becomes obsolete."
+  },
+  "scope": {
+    "title": "Release only some colourways or sizes",
+    "widenTitle": "What to add to the release",
+    "only": "Release only some colourways or sizes (the others wait for a later release)",
+    "colourways": "Colourways",
+    "sizes": "Sizes",
+    "fixed": "Already released: it stays released",
+    "fixedHint": "A later release only adds colourways or sizes; what is released stays released.",
+    "useSuggested": "Use the suggested scope",
+    "suggestedIs": "Leaves out what no certificate covers: {colourways} in {sizes}.",
+    "everyColourway": "every colourway",
+    "everySize": "every size",
+    "whole": "It is released for every colourway and size.",
+    "both": "It is released for {colourways} in {sizes}.",
+    "colourwaysOnly": "It is released for {colourways} in every size.",
+    "sizesOnly": "It is released for every colourway in {sizes}.",
+    "bothWaiting": "It is released for {colourways} in {sizes}; {waiting} wait for a later release.",
+    "colourwaysOnlyWaiting": "It is released for {colourways} in every size; {waiting} wait for a later release.",
+    "sizesOnlyWaiting": "It is released for every colourway in {sizes}; {waiting} wait for a later release."
+  },
+  "hold": {
+    "reading": "Wait: the release check is being read.",
+    "unread": "The release check could not be read: try again.",
+    "notReleased": "Only a released revision is released for more.",
+    "scopeEmpty": "Pick at least one colourway and one size.",
+    "mayNot": "Your role does not release this style's revisions, or the style does not allow it now.",
+    "notWider": "Add a colourway or a size first.",
+    "scope": "The release scope has a problem: see Release scope.",
+    "blocked": "Fix first: {item}.",
+    "notReleasable": "The release check does not pass yet.",
+    "noRequest": "Your role does not raise change requests."
+  },
+  "effect": {
+    "drift": "Open quotes and orders on revision {revision} keep it: see Orders on older revisions.",
+    "widen": "Revision {revision} stays the one in force; only what it is released for grows.",
+    "widenNever": "A later release only adds: what is released stays released."
+  },
+  "widen": {
+    "title": "Release more of revision {revision}",
+    "go": "Release more of revision {revision}",
+    "checkTitle": "Check of what is added"
+  },
+  "fault": {
+    "unavailable": "The factory server did not answer. Try again in a moment.",
+    "forbidden": "Your role does not read this.",
+    "notFound": "Not found: it may have been removed or belong to another company.",
+    "signedOut": "You were signed out. Sign in again.",
+    "contract": "The answer was not what this page expects. Reload the page.",
+    "rateLimited": "Too many tries in a short time. Wait a moment.",
+    "moved": "Someone changed the revision first: the check was read again.",
+    "refused": "The release was refused: the check changed since it was read. It was read again.",
+    "scope": "The release scope was refused: see Release scope.",
+    "writeForbidden": "Your role does not release this style's revisions."
+  },
+  "wo": {
+    "specFailed": "Couldn't read the spec against the master",
+    "current": "Made to revision {revision}, the spec in force.",
+    "noBanner": "No newer spec to report.",
+    "compare": "Compare with the current master",
+    "changeOpen": "Change request…",
+    "differentSpec": "A different spec is a new work order or a change request.",
+    "sizeFrozen": "Frozen at release: a change needs a change request.",
+    "newer": {
+      "NEWER_RELEASED": "A newer spec exists: revision {newer} (released {day}). This work order is made to revision {revision}.",
+      "WITHDRAWN": "Revision {revision} was withdrawn and no revision replaces it."
+    },
+    "decision": {
+      "none": "Keep to revision {revision} until the office decides.",
+      "FINISH_OLD": "Decided in {order}: finish this work order on revision {revision}.",
+      "REWORK": "Decided in {order}: rework to revision {newer}; the new pages apply.",
+      "SCRAP": "Decided in {order}: the work in progress is scrapped.",
+      "HOLD": "Decided in {order}: the work order is held."
+    },
+    "held": {
+      "reading": "Wait: the spec is being read.",
+      "unread": "The spec could not be read: try again.",
+      "noRevision": "The work order has no revision.",
+      "noReleased": "The style has no released revision to compare with.",
+      "noRequest": "Your role does not raise change requests.",
+      "title": "Say what changes.",
+      "reason": "Say why.",
+      "long": "Too long: shorten what changes or why.",
+      "busy": "Wait: it is being sent."
+    },
+    "diff": {
+      "title": "Spec differences",
+      "start": "Start a change request",
+      "facts": "{number} is made to revision {revision}, frozen at its release. The style's master is revision {released} now.",
+      "noReleased": "{number} is made to revision {revision}; the style has no released revision now.",
+      "noRevision": "{number} has no revision.",
+      "same": "Nothing changed: the master is still revision {revision}.",
+      "nothing": "No part differs.",
+      "noBomRight": "The line by line needs the right to read the BOM.",
+      "orders": "Order lines quoted or ordered on another revision"
+    },
+    "change": {
+      "title": "Change request",
+      "ask": "Ask for approval",
+      "about": "About {number} · {style}, revision {revision}.",
+      "raised": "Change request {number} raised: the product office decides it.",
+      "raisedPlain": "Change request raised: the product office decides it.",
+      "openIt": "Open it",
+      "what": "What changes",
+      "whatHint": "One line, as the product office will read it.",
+      "why": "Why",
+      "whyHint": "What was seen and why the spec should change.",
+      "priority": "Priority",
+      "made": "Already made",
+      "madeNoRight": "What is already made needs the right to read changes.",
+      "madeFailed": "Couldn't read what is already made",
+      "madeHint": "These bundles are touched if the change applies to this work order.",
+      "already": "Requests already about this work order",
+      "noneYet": "None yet.",
+      "approval": "The product office accepts or rejects it; an accepted change comes through a change order with its own approvers."
+    },
+    "col": {
+      "request": "Request",
+      "what": "What changes",
+      "status": "Status",
+      "raisedOn": "Raised on"
+    }
+  }
+}

@@ -21,7 +21,8 @@ export function StyleDialogs({ style, model, actions }: { style: StyleView; mode
   const close = () => actions?.onDialog?.(null)
   switch (dialog.kind) {
     case 'release':
-      return <ReleaseDialog style={style} model={model} actions={actions} onClose={close} />
+      // B-W2b-245: while the gate's Release modal is open (styles/release) it is the release check; W1's otherwise.
+      return model.release ? null : <ReleaseDialog style={style} model={model} actions={actions} onClose={close} />
     case 'startRevision':
       return <StartRevisionDialog style={style} model={model} actions={actions} onClose={close} />
     case 'abandon':

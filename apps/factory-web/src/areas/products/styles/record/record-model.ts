@@ -38,6 +38,9 @@ import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
 import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 // B-W2b-235: the routing in depth (Operations tab).
 import type { RoutingDepthActions, RoutingDepthModel } from '../routing/depth/model'
+// B-W2b-245: Versions & changes (the tab, Compare revisions) and the Release modal on the release gate.
+import type { VersionsActions, VersionsModel } from '../versions/model'
+import type { ReleaseActions, ReleaseModel } from '../release/use-release'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -153,6 +156,10 @@ export interface StyleRecordViewModel {
   samples?: { view: boolean; manage: boolean }
   /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
   changes?: { view: boolean; request: boolean }
+  /** B-W2b-245: the Versions & changes tab and Compare revisions (absent: not in the role). */
+  versions?: VersionsModel
+  /** B-W2b-245: the Release modal on B-W2b-231's gate while it is open (absent: W1's release check). */
+  release?: ReleaseModel
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -232,4 +239,7 @@ export interface StyleRecordActions {
   patternFiles?: PatternsActions
   /** B-W2b-235: the routing in depth. */
   routingDepth?: RoutingDepthActions
+  /** B-W2b-245: the Versions & changes tab and the Release modal on the gate. */
+  versions?: VersionsActions
+  release?: ReleaseActions
 }

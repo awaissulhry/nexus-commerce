@@ -157,8 +157,9 @@ export function approverOptions(api: ApiClient, id: string, signal?: AbortSignal
 
 // ---- the redline and the impact (B-W2b-220's reads) ---------------------------------------------------------------------------
 
-export function readCompare(api: ApiClient, compare: { styleId: string; from: string; to: string }, signal?: AbortSignal): Promise<VersionsCompareView> {
-  return api.get(`/product/styles/${enc(compare.styleId)}/versions/compare`, { query: { from: compare.from, to: compare.to }, schema: z.object({ compare: versionsCompareView }), signal }).then((answer) => answer.compare)
+/** B-W2b-245: `companyId` prices a tenant-wide style's cost section for the company the page works in (cost grain only). */
+export function readCompare(api: ApiClient, compare: { styleId: string; from: string; to: string; companyId?: string | null }, signal?: AbortSignal): Promise<VersionsCompareView> {
+  return api.get(`/product/styles/${enc(compare.styleId)}/versions/compare`, { query: { from: compare.from, to: compare.to, companyId: compare.companyId ?? undefined }, schema: z.object({ compare: versionsCompareView }), signal }).then((answer) => answer.compare)
 }
 
 export function readDrift(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<StyleDriftView> {
