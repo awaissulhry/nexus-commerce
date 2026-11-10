@@ -141,6 +141,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.materials', title: 'Materials & trims', titleIt: 'Materiali e accessori', wave: 'W1', href: '/products/materials' },
         ],
       },
+      // W2b: B-W2b-261 Development › Samples & prototypes (SCR-110); Changes & versions joins the group with its page.
+      {
+        label: 'Development',
+        labelIt: 'Sviluppo',
+        hideLabel: false,
+        pages: [{ id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' }],
+      },
       {
         label: 'Libraries',
         labelIt: 'Librerie',
@@ -148,6 +155,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'products.operations', title: 'Operations', titleIt: 'Operazioni', wave: 'W1', href: '/products/operations' },
           { id: 'products.sizes', title: 'Sizes & measurements', titleIt: 'Taglie e misure', wave: 'W1', href: '/products/sizes' },
+          // W2b: B-W2b-247 Colours & artwork (SCR-118), after Sizes (the design's order).
+          { id: 'products.colours', title: 'Colours & artwork', titleIt: 'Colori e grafiche', wave: 'W2b', href: '/products/colours' },
         ],
       },
     ],
@@ -389,6 +398,8 @@ export const OFFICE: readonly TreeArea[] = [
           // W2b: B-W2b-266 Status board (SCR-119), first of Main (design compliance.status group "Pages: Status board · Certificates · …").
           { id: 'compliance.status', title: 'Status board', titleIt: 'Stato conformità', wave: 'W2b', href: '/compliance/status' },
           { id: 'compliance.certificates', title: 'Certificates', titleIt: 'Certificati', wave: 'W1', href: '/compliance/certificates' },
+          // W2b: B-W2b-268 Declarations & instructions (SCR-052), after Certificates (design compliance group Main).
+          { id: 'compliance.declarations', title: 'Declarations & instructions', titleIt: 'Dichiarazioni e istruzioni', wave: 'W2b', href: '/compliance/declarations' },
           // W2b: B-W2b-269 Technical files (SCR-120), after Certificates (design compliance group Main; Declarations joins before it).
           { id: 'compliance.techfiles', title: 'Technical files', titleIt: 'Fascicoli tecnici', wave: 'W2b', href: '/compliance/techfiles' },
           { id: 'compliance.labels', title: 'Labels & marking', titleIt: 'Etichette e marcature', wave: 'W1', href: '/compliance/labels' },

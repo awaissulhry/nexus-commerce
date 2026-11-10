@@ -30,6 +30,7 @@ import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
 import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
 import type { StyleMaterialApprovals } from '../compliance/materials'
+import type { StyleComposition } from '../compliance/composition'
 import type { PrepacksActions, PrepacksModel } from './prepacks/prepacks-model'
 import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors-model'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
@@ -136,12 +137,16 @@ export interface StyleRecordViewModel {
   pieces?: PiecesModel
   /** B-W2b-238: Compliance › Material checks — the approvals of the revision's materials (absent: not read). */
   materialApprovals?: StyleMaterialApprovals
+  /** B-W2b-270: Compliance › Garment label › Composition computed from the BOM (absent: not read). */
+  composition?: StyleComposition
   /** B-W2b-233: the Sizes & measurements tab's Prepacks and Protector placement (absent: not read, like idle). */
   prepacks?: PrepacksModel
   protectors?: ProtectorsModel
   /** B-W2b-236: Overview › Sketches and pictures and Files & patterns › Pattern files (absent: not read, like idle). */
   gallery?: GalleryModel
   patternFiles?: PatternsModel
+  /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
+  samples?: { view: boolean; manage: boolean }
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -211,6 +216,8 @@ export interface StyleRecordActions {
   pieces?: PiecesActions
   /** B-W2b-238: read the revision's material approvals again after a failed read. */
   onRetryMaterialApprovals?: () => void
+  /** B-W2b-270: read the composition computed from the BOM again. */
+  onRetryComposition?: () => void
   /** B-W2b-233: the Prepacks and Protector placement sections. */
   prepacks?: PrepacksActions
   protectors?: ProtectorsActions

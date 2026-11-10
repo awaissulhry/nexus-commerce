@@ -30,6 +30,8 @@ import {
   type TileId,
 } from './model'
 import { RegisterMessages } from './view/parts'
+// B-W2b-271: the tiles "Authority notices due or sent" and "Recalls in progress" (B-W2b-260's reads).
+import { activeRecalls, noticeTiles, type NoticeTiles, type RecallTiles } from './depth/api'
 import { RegisterListView } from './view/RegisterListView'
 
 /**
@@ -48,7 +50,8 @@ export function RegisterPage() {
   )
 }
 
-const LIVE_TYPES = ['compliance.register_entry_']
+// B-W2b-271: a notice or a recall changes the tiles and the two views.
+const LIVE_TYPES = ['compliance.register_entry_', 'authority_notice.changed', 'recall.changed']
 
 function RegisterContainer() {
   const api = useOfficeApi()
@@ -69,6 +72,8 @@ function RegisterContainer() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [pageFull, setPageFull] = useState(false)
   const [tiles, setTiles] = useState<Partial<Record<TileId, TileCount | null>>>({})
+  // B-W2b-271: the API's own tiles for authority notices and recalls (null: could not be read).
+  const [depthTiles, setDepthTiles] = useState<{ notices: NoticeTiles | null; recalls: RecallTiles | null } | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [selected, setSelected] = useState<readonly string[]>([])
@@ -92,9 +97,13 @@ function RegisterContainer() {
     const controller = new AbortController()
     request.current = controller
     try {
-      const answer = await listEntries(api, viewQuery(view, filters, query, limit), controller.signal)
+      // B-W2b-271: "Recalls in progress" keeps the entries an ACTIVE recall names (the list's rows carry no recall).
+      const [answer, recalls] = await Promise.all([
+        listEntries(api, viewQuery(view, filters, query, limit), controller.signal),
+        view === 'recalls' ? activeRecalls(api, controller.signal) : Promise.resolve(null),
+      ])
       if (controller.signal.aborted) return
-      const shown = viewRows(view, answer)
+      const shown = viewRows(view, answer, recalls ? new Set(recalls.recalls.map((recall) => recall.entryId)) : null)
       setRows(ready(shown))
       setPageFull(answer.length >= limit)
       setAsOf(new Date().toISOString())
@@ -110,11 +119,14 @@ function RegisterContainer() {
 
   const loadTiles = useCallback(async () => {
     if (!can.registerView) return
-    const [open, closed] = await Promise.all([
+    const [open, closed, recalls, notices] = await Promise.all([
       listEntries(api, { status: 'OPEN', limit: LIST_MAX }).catch(() => null),
       listEntries(api, { status: 'CLOSED', limit: LIST_MAX }).catch(() => null),
+      activeRecalls(api).catch(() => null),
+      noticeTiles(api).catch(() => null),
     ])
-    setTiles(tileCounts(open, closed))
+    setTiles(tileCounts(open, closed, LIST_MAX, recalls ? recalls.tiles.active : null))
+    setDepthTiles({ notices, recalls: recalls?.tiles ?? null })
   }, [api, can.registerView])
 
   // The search waits for a pause in typing (250 ms); a view or filter change reads at once.
@@ -279,6 +291,7 @@ function RegisterContainer() {
         query,
         limit,
         tiles,
+        depthTiles,
         asOf,
         live,
         updates,

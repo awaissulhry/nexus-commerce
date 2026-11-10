@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ColDef } from '@nexus/ui/grid'
 import type { BoardCard, BoardLane } from '@nexus/ui/grid/views/board/index'
 import type { CardFieldOverride, CardSort } from '@nexus/ui/grid/card-list/index'
@@ -49,6 +50,10 @@ export interface ListBoardMode<T> {
   readonly moveHeld?: (row: T, laneId: string) => string | null
   /** Why nothing moves on this board (read-only), or null. */
   readonly heldReason?: string | null
+  /** B-W2b-261: a small part at a card's top right (a due-date countdown); the DS BoardView's `renderAside`. */
+  readonly aside?: (row: T) => ReactNode
+  /** B-W2b-261: a part under a card's face that may hold its own control ("Decide…"); the DS BoardView's `renderFooter`. */
+  readonly footer?: (row: T) => ReactNode
 }
 
 export interface ListCalendarMode<T> {

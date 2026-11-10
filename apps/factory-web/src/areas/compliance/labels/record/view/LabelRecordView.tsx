@@ -10,13 +10,19 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { isPageKey } from '../../../../quality/_shared/hooks'
 import { NoAccess, NoticeBanner, RecordFrame, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
 import type { LabelDetail } from '../../api'
-import { activateHeld, classWords, isDirty, localActivation, localRender, newestRevision, patchOf, retireHeld, reviseHeld, saveHeld, testPrintHeld } from '../../model'
+import { activateHeld, classWords, isDirty, localActivation, localRender, newestRevision, patchOf, qrOfLabel, retireHeld, reviseHeld, saveHeld, testPrintHeld } from '../../model'
 import { LabelsMessages, ShortcutsDialog, StatusPill } from '../../view/parts'
 import type { LabelRecordActions, LabelRecordModel, RecordTab } from '../../view-model'
 import { Builder, ContentFacts } from './Builder'
 import { RecordDialogs } from './dialogs'
 import { PrintsTab, VersionsTab } from './OtherTabs'
 import { PreviewPanel } from './PreviewPanel'
+import { markingDirty, markingPatch, markingProblem } from '../../depth/model'
+import { AddProofDialog, ApproveProofDialog, ArtworkTab, RetireProofDialog } from '../../depth/view/ArtworkTab'
+import { BomCompositionCard } from '../../depth/view/BomComposition'
+import { LanguagesTab } from '../../depth/view/LanguagesTab'
+import { MarkingCard } from '../../depth/view/MarkingCard'
+import { RulesCard } from '../../depth/view/RulesCard'
 
 export type { LabelRecordActions, LabelRecordModel } from '../../view-model'
 
@@ -54,22 +60,32 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
   const q = useT('quality')
   const locale = useLocale()
   const can = model.can
+  const d = useT('compliance-labels-depth')
   const editable = detail.status === 'DRAFT' && can.manage
   const draft = editable ? model.draft : null
-  const dirty = isDirty(detail, draft)
-  const changes = draft ? Object.keys(patchOf(detail, draft)).length : 0
+  const depth = model.depth
+  // B-W2b-270: the marking (kind, GPSR contact, QR target) saves with the builder's Save.
+  const marking = editable ? (depth?.marking ?? null) : null
+  const contentDirty = isDirty(detail, draft)
+  const dirty = contentDirty || markingDirty(detail, marking)
+  const changes = (draft ? Object.keys(patchOf(detail, draft)).length : 0) + Object.keys(markingPatch(detail, marking)).length
   const values = model.preview.value?.values ?? null
   const local = dirty && !!draft && !!values
-  const label = useMemo(() => (local && draft ? localRender(detail, draft, values) : (model.preview.value?.label ?? null)), [local, draft, detail, values, model.preview.value])
-  const activation = useMemo(() => (dirty && draft ? localActivation(detail, draft, values, model.today) : detail.problems), [dirty, draft, detail, values, model.today])
+  // The browser's render while anything is unsaved (content or marking), with the QR the server drew (B-W2b-270).
+  const label = useMemo(
+    () => (local && draft ? localRender(detail, draft, values, { marking, qr: qrOfLabel(model.preview.value?.label ?? null) }) : (model.preview.value?.label ?? null)),
+    [local, draft, detail, values, marking, model.preview.value],
+  )
+  const activation = useMemo(() => (dirty && draft ? localActivation(detail, draft, values, model.today, marking) : detail.problems), [dirty, draft, detail, values, model.today, marking])
   const warnings = detail.warnings
 
   const activate = activateHeld(detail, can, activation.length, dirty)
   const revise = reviseHeld(detail, can)
   const retire = retireHeld(detail, can)
   const test = testPrintHeld(can, model.printers.value)
-  const save = saveHeld(can, dirty, model.save.state === 'saving')
-  const words = (held: { key: string; params?: Record<string, string | number> } | null) => (held ? t(held.key, held.params) : null)
+  const markingWrong = markingProblem(marking)
+  const save = saveHeld(can, dirty, model.save.state === 'saving') ?? (markingWrong ? { key: markingWrong } : null)
+  const words = (held: { key: string; params?: Record<string, string | number> } | null) => (held ? (held.key.startsWith('marking.') ? d(held.key) : t(held.key, held.params)) : null)
 
   // Keys: ⌘S saves the draft, t prints a test label, ? the keys (never while typing or in a dialog; ⌘S works in a field).
   useEffect(() => {
@@ -95,6 +111,8 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
 
   const tabs: { id: RecordTab; label: string; count?: number | null }[] = [
     { id: 'content', label: t('tab.content') },
+    // B-W2b-270: Languages and Artwork & approval (the artwork count: its proofs).
+    ...(depth ? [{ id: 'languages' as const, label: d('tab.languages') }, { id: 'artwork' as const, label: d('tab.artwork'), count: depth.artwork.value?.versions.length ?? null }] : []),
     { id: 'versions', label: t('tab.versions'), count: detail.revisions.length },
     ...(can.printView ? [{ id: 'prints' as const, label: t('tab.prints'), count: model.prints.value?.length ?? null }] : []),
   ]
@@ -115,6 +133,8 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
     ...(detail.status === 'RETIRED' ? [{ id: 'revise', label: t('action.revise', { revision: newestRevision(detail) + 1 }), disabled: !!revise, description: words(revise) ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'revise' }) }] : []),
     { id: 'retire', label: t('action.retire'), tone: 'danger' as const, disabled: !!retire, description: words(retire) ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'retire', reason: '' }) },
     { id: 'sheet', label: t('action.sheet'), disabled: !model.preview.value, description: model.preview.value ? t('action.sheetHint') : t('held.noPreview'), onSelect: () => actions?.onPrintSheet?.() },
+    // B-W2b-270 (design tab lb-proof): the label proof in a new tab — the approved proof, else the sample label PDF.
+    ...(depth ? [{ id: 'proof', label: d('action.proof'), description: depth.artwork.value?.approvedId ? d('action.proofApproved') : d('action.proofSample'), onSelect: () => actions?.onOpenProof?.(null) }] : []),
     { id: 'copy', label: t('action.copy'), onSelect: () => actions?.onCopy?.(detail.code) },
     { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onDialog?.({ kind: 'shortcuts' }) },
   ]
@@ -139,6 +159,22 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
     ) : null
 
   const classes = classWords(detail.style)
+  // B-W2b-270: the builder's W2b cards (the marking after the maker; the BOM's composition after the label's).
+  const slots = depth
+    ? {
+        afterMaker: <MarkingCard detail={detail} depth={depth} editable={editable} prefix={model.prefix} onMarking={actions?.onMarking} onRetry={actions?.onRetryChecks} />,
+        afterComposition: (
+          <BomCompositionCard
+            depth={depth}
+            labelId={detail.id}
+            current={draft?.composition ?? detail.composition}
+            language={(draft?.languages ?? detail.languages)[0] ?? 'it'}
+            onUse={draft ? (composition) => actions?.onDraft?.({ ...draft, composition }) : undefined}
+            onRetry={actions?.onRetryTextile}
+          />
+        ),
+      }
+    : undefined
   return (
     <>
       <RecordFrame
@@ -198,7 +234,7 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
             {dirty ? t('record.changedDirty') : undefined}
           </Banner>
         )}
-        <NoticeBanner notice={model.notice} namespace="labels" onDismiss={actions?.onDismissNotice} />
+        <NoticeBanner notice={model.notice} namespace={model.notice?.key.startsWith('depth.') ? 'compliance-labels-depth' : 'labels'} onDismiss={actions?.onDismissNotice} />
         {detail.status !== 'DRAFT' && (
           <Banner
             tone="info"
@@ -232,15 +268,29 @@ function Ready({ detail, model, actions }: { detail: LabelDetail; model: LabelRe
                   </span>
                 </Card>
               )}
-              {draft ? <Builder detail={detail} draft={draft} problems={activation} onDraft={(next) => actions?.onDraft?.(next)} /> : <ContentFacts detail={detail} />}
+              {draft ? <Builder detail={detail} draft={draft} problems={activation} onDraft={(next) => actions?.onDraft?.(next)} slots={slots} /> : <ContentFacts detail={detail} slots={slots} />}
             </div>
-            <PreviewPanel detail={detail} model={model} actions={actions} label={label} activation={detail.status === 'DRAFT' ? activation : []} warnings={warnings} local={local} />
+            <PreviewPanel
+              detail={detail}
+              model={model}
+              actions={actions}
+              label={label}
+              activation={detail.status === 'DRAFT' ? activation : []}
+              warnings={warnings}
+              local={local}
+              extra={depth ? <RulesCard depth={depth} labelId={detail.id} prefix={model.prefix} onMarket={actions?.onMarket} onRetryChecks={actions?.onRetryChecks} onRetryTextile={actions?.onRetryTextile} /> : undefined}
+            />
           </div>
         )}
+        {tab === 'languages' && depth && <LanguagesTab detail={detail} draft={draft} depth={depth} prefix={model.prefix} dialog={model.dialog} actions={actions} />}
+        {tab === 'artwork' && depth && <ArtworkTab detail={detail} depth={depth} prefix={model.prefix} workOrders={can.workOrders} actions={actions} />}
         {tab === 'versions' && <VersionsTab detail={detail} model={model} />}
         {tab === 'prints' && <PrintsTab model={model} actions={actions} />}
       </RecordFrame>
       <RecordDialogs detail={detail} model={model} actions={actions} activation={activation} />
+      {depth && model.dialog?.kind === 'approveProof' && <ApproveProofDialog detail={detail} depth={depth} dialog={model.dialog} busy={model.busy} actions={actions} />}
+      {depth && model.dialog?.kind === 'addProof' && <AddProofDialog detail={detail} depth={depth} dialog={model.dialog} busy={model.busy} actions={actions} />}
+      {depth && model.dialog?.kind === 'retireProof' && <RetireProofDialog depth={depth} dialog={model.dialog} busy={model.busy} actions={actions} />}
       <ShortcutsDialog
         open={model.dialog?.kind === 'shortcuts'}
         onClose={() => actions?.onDialog?.(null)}

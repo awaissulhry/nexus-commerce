@@ -22,7 +22,10 @@
       "materials": "Materials & trims",
       "libraries": "Libraries",
       "operations": "Operations",
-      "sizes": "Sizes & measurements"
+      "sizes": "Sizes & measurements",
+      "development": "Development",
+      "samples": "Samples & prototypes",
+      "colours": "Colours & artwork"
     },
     "sales": {
       "area": "Sales",
@@ -144,6 +147,7 @@
       "safety": "Product safety",
       "register": "PPE register & recalls",
       "certificates": "Certificates",
+      "declarations": "Declarations & instructions",
       "techfiles": "Technical files",
       "labels": "Labels & marking",
       "sustainability": "Sustainability",

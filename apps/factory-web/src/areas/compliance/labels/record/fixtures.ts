@@ -2,6 +2,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { failedRead, reading, ready } from '../../../quality/_shared/model'
 import { CAN, CHOICES, detailOf, GLOVES_R1, JACKET_R1, JACKET_R2, job, NOW, OLD_R1, PREFIX, previewOf, PRINTERS, SHARED_R1, TODAY, TSHIRT_R1, valuesFor, VEST_R1 } from '../demo'
 import { draftOf } from '../model'
+import { DEPTH_CAN, demoArtwork, demoChecks, demoDepth, demoTextile, gloveChecks, ME, PROOF_PICTURE, tshirtChecks } from '../depth/demo'
 import type { LabelRecordModel } from '../view-model'
 import { LabelRecordView } from './view/LabelRecordView'
 
@@ -35,6 +36,8 @@ const base: LabelRecordModel = {
   test: { job: null, label: null, printer: null },
   busy: false,
   problem: null,
+  // B-W2b-270: the label's W2b parts (marking, rules, languages, artwork) in every case.
+  depth: demoDepth(),
 }
 
 const of = (row: typeof JACKET_R1, key: Parameters<typeof valuesFor>[0], extra: Partial<LabelRecordModel> = {}): LabelRecordModel => ({
@@ -89,6 +92,56 @@ export const designScreen = defineDesignScreen<LabelRecordModel>({
     { id: 'error', label: 'Could not load', model: { ...base, detail: failedRead('problem.unavailable'), draft: null } },
     { id: 'not-found', label: 'Not found', model: { ...base, detail: failedRead('problem.notFound'), draft: null } },
     { id: 'no-permission', label: 'Sales: no access', model: { ...base, can: CAN.sales, draft: null } },
+    // ---- B-W2b-270: Labels & marking in depth ----
+    {
+      id: 'w2b-builder',
+      label: 'W2b: builder with marking, BOM composition and the rules',
+      model: base,
+      note: 'Kind and marking after the maker (QR to the batch, GPSR contact with "Fill from operator roles", the removable-protectors warning waiting for the PPE consultant); the BOM’s composition after the label’s (Use for the label); Marking and textile rules beside the preview: DE cannot print (no de warning), textile share 82 % applies, Made in Italy allowed — each with its laws.',
+    },
+    {
+      id: 'w2b-marking-edited',
+      label: 'W2b: marking changed, not saved',
+      model: { ...base, depth: demoDepth({ marking: { kind: 'PPE_GARMENT', qrTarget: 'STYLE_DOC', gpsrContact: 'Officina Demo S.r.l.\nVia dell’Esempio 12, 00000 Borgo Demo (XX)\nassistenza@example.com' } }) },
+      note: 'The save bar counts the marking’s changes with the content’s; Save sends the content, then the marking.',
+    },
+    { id: 'w2b-rules-ch', label: 'W2b: the rules for Switzerland', model: { ...base, depth: demoDepth({ market: 'CH' }) }, note: 'A market needing de, fr and it: the class warning has no approved de or fr words.' },
+    { id: 'w2b-glove', label: 'W2b: glove marking, level 1 KP granted', model: of(GLOVES_R1, 'gloves', { depth: demoDepth({ checks: ready(gloveChecks()), textile: ready(demoTextile(GLOVES_R1)), artwork: ready(demoArtwork(GLOVES_R1)) }) }) },
+    { id: 'w2b-fibre-care-gpsr', label: 'W2b: fibre & care label of a non-PPE line with its GPSR contact', model: of(TSHIRT_R1, 'tshirt', { depth: demoDepth({ checks: ready(tshirtChecks()), artwork: ready(demoArtwork(TSHIRT_R1, { versions: [], approvedId: null, workOrders: [] })) }) }) },
+    { id: 'w2b-active-facts', label: 'W2b: active label — marking as text', model: { ...active, depth: demoDepth({ checks: ready(demoChecks(JACKET_R1)), artwork: ready(demoArtwork(JACKET_R1)) }) }, note: 'An active label is never edited: kind, QR and contact read as text; the rules still show.' },
+    { id: 'w2b-checks-loading', label: 'W2b: rules being read', model: { ...base, depth: demoDepth({ checks: reading(), textile: reading() }) } },
+    { id: 'w2b-checks-failed', label: 'W2b: rules could not be read', model: { ...base, depth: demoDepth({ checks: failedRead('problem.unavailable'), textile: failedRead('problem.unavailable') }) }, note: 'Each panel says what failed with Try again; the builder stays usable.' },
+    { id: 'w2b-no-style', label: 'W2b: a shared label no style names', model: of(OLD_R1, 'jacket', { preview: failedRead('preview.needStyle'), depth: demoDepth({ checks: failedRead('depth.needStyle'), textile: null, artwork: ready(demoArtwork(OLD_R1, { versions: [], approvedId: null, workOrders: [] })) }) }) },
+    { id: 'w2b-languages', label: 'W2b: Languages', model: { ...base, tab: 'languages' }, note: 'Columns: it, en, nl on the label; de and fr needed by DE, FR, CH and missing → the label cannot print there. The warning’s de cell is missing ✕ and blocks DE and CH; fr waits for approval.' },
+    { id: 'w2b-languages-selected', label: 'W2b: two phrases selected, approve their proposals', model: { ...base, tab: 'languages', depth: demoDepth({ selectedPhrases: ['warning.protectors-removable', 'marking.animal-origin'] }) }, note: 'Approve 1 translation: the nl proposal is yours (held), the fr one is someone else’s.' },
+    { id: 'w2b-languages-translate', label: 'W2b: Translate the warning', model: { ...base, tab: 'languages', dialog: { kind: 'translate', key: 'warning.protectors-removable', texts: { de: 'Die Protektoren sind herausnehmbar.' } } }, note: 'Each language: approved words, the waiting proposal with Approve, a field that proposes when left.' },
+    { id: 'w2b-languages-saving', label: 'W2b: a proposal being saved', model: { ...base, tab: 'languages', dialog: { kind: 'translate', key: 'warning.protectors-removable', texts: { de: 'Die Protektoren sind herausnehmbar.' } }, depth: demoDepth({ writing: 'warning.protectors-removable|de' }) } },
+    { id: 'w2b-languages-refused', label: 'W2b: a proposal refused', model: { ...base, tab: 'languages', dialog: { kind: 'translate', key: 'warning.protectors-removable', texts: { de: 'x' } }, depth: demoDepth({ cellProblem: { at: 'warning.protectors-removable|de', key: 'problem.conflict' } }) } },
+    { id: 'w2b-languages-developer', label: 'W2b: Languages, product developer (reads)', model: { ...base, tab: 'languages', can: CAN.developer, draft: null, depth: demoDepth({ can: DEPTH_CAN.developer, phrases: ready({ ...demoDepth().phrases.value!, mayManage: false, mayApprove: false }) }) }, note: 'Fill from the library and the approvals held with their reasons.' },
+    { id: 'w2b-languages-loading', label: 'W2b: Languages being read', model: { ...base, tab: 'languages', depth: demoDepth({ phrases: reading() }) } },
+    { id: 'w2b-languages-failed', label: 'W2b: phrase library could not be read', model: { ...base, tab: 'languages', depth: demoDepth({ phrases: failedRead('problem.unavailable') }) } },
+    { id: 'w2b-artwork', label: 'W2b: Artwork & approval', model: { ...base, tab: 'artwork' }, note: 'v3 waits for a second person (SignOffPanel), v2 prints, v1 retired; the work orders follow the proof in force at their first print. Send to the brand is held: the portal approval comes later.' },
+    { id: 'w2b-artwork-own', label: 'W2b: your own proof', model: { ...base, tab: 'artwork', depth: demoDepth({ artwork: ready(demoArtwork(undefined, { versions: demoArtwork().versions.map((version) => (version.versionNo === 3 ? { ...version, byYou: true, author: { id: ME, name: 'Tu (demo)' } } : version)) })) }) }, note: 'Approve is held: "You made this proof: a second person approves it."' },
+    { id: 'w2b-artwork-empty', label: 'W2b: no proof yet', model: { ...base, tab: 'artwork', depth: demoDepth({ artwork: ready(demoArtwork(undefined, { versions: [], approvedId: null })) }) } },
+    { id: 'w2b-artwork-view', label: 'W2b: artwork, product developer (reads)', model: { ...base, tab: 'artwork', can: CAN.developer, draft: null, depth: demoDepth({ can: DEPTH_CAN.developer, artwork: ready(demoArtwork(undefined, { mayManage: false, mayApprove: false })) }) } },
+    { id: 'w2b-artwork-loading', label: 'W2b: artwork being read', model: { ...base, tab: 'artwork', depth: demoDepth({ artwork: reading() }) } },
+    { id: 'w2b-artwork-failed', label: 'W2b: artwork could not be read', model: { ...base, tab: 'artwork', depth: demoDepth({ artwork: failedRead('problem.unavailable') }) } },
+    {
+      id: 'w2b-approve',
+      label: 'W2b: Approve artwork (pop:lb-approve)',
+      model: { ...base, tab: 'artwork', dialog: { kind: 'approveProof', versionId: demoArtwork().versions[0]!.id, reason: '' }, depth: demoDepth({ proof: { versionId: demoArtwork().versions[0]!.id, src: ready(PROOF_PICTURE) } }) },
+      note: 'The proof beside its sign-off; approving retires v2 (one proof prints per label revision).',
+    },
+    { id: 'w2b-approve-loading', label: 'W2b: Approve, proof being read', model: { ...base, tab: 'artwork', dialog: { kind: 'approveProof', versionId: demoArtwork().versions[0]!.id, reason: '' }, depth: demoDepth({ proof: { versionId: demoArtwork().versions[0]!.id, src: reading() } }) } },
+    {
+      id: 'w2b-approve-refused',
+      label: 'W2b: Approve refused by the server',
+      model: { ...base, tab: 'artwork', busy: false, dialog: { kind: 'approveProof', versionId: demoArtwork().versions[0]!.id, reason: 'Va bene.' }, depth: demoDepth({ proof: { versionId: demoArtwork().versions[0]!.id, src: ready(PROOF_PICTURE) }, cellProblem: { at: `proof|${demoArtwork().versions[0]!.id}`, key: 'problem.conflict', lines: ['Artwork v3 changed meanwhile.'] } }) },
+    },
+    { id: 'w2b-add-proof', label: 'W2b: Add a proof', model: { ...base, tab: 'artwork', dialog: { kind: 'addProof', note: 'Nuovo indirizzo (demo).' }, depth: demoDepth({ picked: { name: 'LBL-DEMO-JKT-01-r2-v4.pdf', contentType: 'application/pdf', size: 182_000, bytes: new ArrayBuffer(0) } }) } },
+    { id: 'w2b-add-proof-wrong', label: 'W2b: Add a proof, not a PDF or picture', model: { ...base, tab: 'artwork', dialog: { kind: 'addProof', note: '' }, depth: demoDepth({ picked: { name: 'notes.txt', contentType: 'text/plain', size: 1200, bytes: new ArrayBuffer(0) } }) } },
+    { id: 'w2b-retire-proof', label: 'W2b: Retire the approved proof', model: { ...base, tab: 'artwork', dialog: { kind: 'retireProof', versionId: demoArtwork().versions[1]!.id, reason: '' } } },
+    { id: 'w2b-approved-notice', label: 'W2b: after approving', model: { ...base, tab: 'artwork', notice: { key: 'depth.done.proofApproved', params: { n: 3 }, tone: 'success' } } },
   ],
 })
 

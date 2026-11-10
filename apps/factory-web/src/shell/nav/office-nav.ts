@@ -186,6 +186,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/products/operations/[id]',
   '/products/sizes',
   '/products/sizes/[id]',
+  // B-W2b-247: Products › Libraries › Colours & artwork (SCR-118), the colour library and the brands' branding sets.
+  '/products/colours',
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',
@@ -235,12 +237,20 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/tests/[id]',
   '/compliance/register',
   '/compliance/register/[id]',
+  // B-W2b-271: a recall or withdrawal (SCR-328, the Builder in page mode) and an authority notice's PDF (SCR-329, a new tab).
+  '/compliance/register/recall/[id]',
+  '/compliance/register/notice',
   '/compliance/evidence/[kind]/[subject]',
   // B-W2b-266: Compliance › Status board (SCR-119) and its print window (SCR-314, a new tab).
   '/compliance/status',
   '/compliance/status/print',
   // B-W2b-264: Compliance › Sustainability › Sourcing & claims (SCR-215).
   '/compliance/sourcing',
+  // B-W2b-268: Compliance › Declarations & instructions (SCR-052), a declaration or leaflet, the PDF and pack windows.
+  '/compliance/declarations',
+  '/compliance/declarations/[id]',
+  '/compliance/declarations/pdf',
+  '/compliance/declarations/pack',
   // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
   '/compliance/reports',
   '/compliance/reports/print',
@@ -431,6 +441,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/instructions/[id]/sheet',
   // B-W2b-243: Products › Styles › Tech pack PDF (SCR-306, a window page; also where a scanned QR lands).
   '/products/styles/tech-pack',
+  // B-W2b-261: Products › Development › Samples & prototypes (SCR-110) and a sample round (SCR-110-record).
+  '/products/samples',
+  '/products/samples/[id]',
 ])
 
 /**
@@ -470,6 +483,8 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
 export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due', /* B-W2b-136 */ '/plant/machines/wall', /* B-W2b-104 */ '/quality/plans/print', /* B-W2b-119 */ '/quality/capa/report', /* B-W2b-127 */ '/quality/inspections/report', '/quality/inspections/reports',
   /* B-W2b-129 */ '/production/cutting/sheet',
   /* B-W2b-243 */ '/products/styles/tech-pack',
+  /* B-W2b-268 */ '/compliance/declarations/pdf', '/compliance/declarations/pack',
+  /* B-W2b-271 */ '/compliance/register/notice',
   /* B-W2b-269 */ '/compliance/techfiles/pack', '/compliance/techfiles/pack/link'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */

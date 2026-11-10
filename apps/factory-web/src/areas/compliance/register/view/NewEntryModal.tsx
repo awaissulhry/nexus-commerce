@@ -35,7 +35,7 @@ export function NewEntryModal({ open, model, actions }: { open: boolean; model: 
   const draft = model?.draft
   const set = (patch: Partial<NewEntryDraft>) => draft && actions?.onDraft?.({ ...draft, ...patch })
   const problems = draft ? draftProblems(draft) : []
-  const held = !model ? null : model.busy ? t('new.adding') : problems.length > 0 ? t(problems[0]!) : null
+  const held = !model ? null : model.busy ? t('new.adding') : problems.length > 0 ? s(problems[0]!) : null
 
   useEffect(() => {
     if (!open) return
@@ -76,7 +76,7 @@ export function NewEntryModal({ open, model, actions }: { open: boolean; model: 
           <Banner tone="warning" title={t('new.problemsTitle')}>
             <ul className="fw-q-lines">
               {problems.map((key) => (
-                <li key={key}>{t(key)}</li>
+                <li key={key}>{s(key)}</li>
               ))}
             </ul>
           </Banner>

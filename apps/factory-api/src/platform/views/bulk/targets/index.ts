@@ -1,6 +1,8 @@
 import type { AnyBulkTarget } from '../target'
 import { workOrders } from './work-orders'
 import { workOrderRelease } from './work-order-release'
+// B-W2b-247: Products › Libraries › Colours & artwork.
+import { colours } from './colours'
 
 /**
  * The lists edited in bulk and cell by cell (B-W2b-13): one file per list beside this one, one line here (a merge
@@ -11,4 +13,6 @@ export const BULK_TARGETS: readonly AnyBulkTarget[] = [
   workOrders,
   // B-W2b-51: Production › Work orders, "Release N work orders" (per-row blockers).
   workOrderRelease,
+  // B-W2b-247: Products › Colours & artwork (name, system, reference, family, hex).
+  colours,
 ]

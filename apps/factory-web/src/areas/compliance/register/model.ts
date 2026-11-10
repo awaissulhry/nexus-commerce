@@ -1,6 +1,6 @@
 import { csvLine } from '../../quality/_shared/hooks'
 import type { LiveState, Notice, QualityCan, Read } from '../../quality/_shared/model'
-import type { Entry, EntryDetail, EntryQuery, PartyOption, RegisterKind, RegisterRisk, ReversedRelease, StyleOption, Trace } from './api'
+import { REGISTER_KINDS, type Entry, type EntryDetail, type EntryQuery, type PartyOption, type RegisterKind, type RegisterRisk, type ReversedRelease, type StyleOption, type Trace } from './api'
 
 /**
  * The PPE register's rules without React or the API (SCR-113; design compliance.register; Reg. (EU) 2016/425 art. 8(4),
@@ -11,11 +11,13 @@ import type { Entry, EntryDetail, EntryQuery, PartyOption, RegisterKind, Registe
 
 // ---- views and filters ----------------------------------------------------------------------------------------------------
 
-export const VIEWS = ['all', 'open', 'risk', 'assessing', 'uninformed', 'closed'] as const
+// B-W2b-271: `notices` (open, risk yes, the authority not told yet) and `recalls` (an entry with a recall in progress).
+export const VIEWS = ['all', 'open', 'risk', 'assessing', 'uninformed', 'notices', 'recalls', 'closed'] as const
 export type RegisterView = (typeof VIEWS)[number]
 
 /** The tiles (each a saved view; pressing one again goes back to every entry). */
-export const TILES = ['open', 'risk', 'assessing', 'uninformed', 'closed'] as const
+// B-W2b-271 (design rg-metrics W2b): "Authority notices due or sent" and "Recalls in progress", in the design's order.
+export const TILES = ['open', 'risk', 'notices', 'recalls', 'assessing', 'uninformed', 'closed'] as const
 export type TileId = (typeof TILES)[number]
 
 export interface RegisterFilters {
@@ -36,7 +38,8 @@ export function addressState(params: { get(name: string): string | null } | null
   const status = params?.get('status')
   const risk = params?.get('risk')
   const kind = params?.get('kind')
-  const kindFilter = kind === 'COMPLAINT' || kind === 'NON_CONFORMITY' || kind === 'RECALL' ? kind : null
+  // B-W2b-271: every kind of the register (B-W2b-260 added WITHDRAWAL and AUTHORITY_REQUEST).
+  const kindFilter = kind && (REGISTER_KINDS as readonly string[]).includes(kind) ? (kind as RegisterKind) : null
   const riskValue = risk === 'NO' || risk === 'ASSESSING' || risk === 'YES' ? risk : null
   if ((VIEWS as readonly string[]).includes(view)) return { view: view as RegisterView, filters: { kind: kindFilter, risk: riskValue } }
   if (status === 'OPEN' && riskValue === 'YES') return { view: 'risk', filters: { kind: kindFilter } }
@@ -54,6 +57,7 @@ export function viewQuery(view: RegisterView, filters: RegisterFilters, q: strin
     case 'uninformed':
       return { ...base, status: 'OPEN' }
     case 'risk':
+    case 'notices':
       return { ...base, status: 'OPEN', risk: 'YES' }
     case 'assessing':
       return { ...base, status: 'OPEN', risk: 'ASSESSING' }
@@ -68,9 +72,17 @@ export function viewQuery(view: RegisterView, filters: RegisterFilters, q: strin
  * The rows a view shows from what the API answered. "Distributors not yet informed" has no API filter (the list rows
  * carry no duties): it keeps the OPEN entries not marked as informed, which is what the row fields prove.
  */
-export function viewRows(view: RegisterView, rows: readonly Entry[]): Entry[] {
-  return view === 'uninformed' ? rows.filter((row) => row.status === 'OPEN' && row.distributorsInformedAt === null) : [...rows]
+export function viewRows(view: RegisterView, rows: readonly Entry[], recallEntryIds: ReadonlySet<string> | null = null): Entry[] {
+  if (view === 'uninformed') return rows.filter((row) => row.status === 'OPEN' && row.distributorsInformedAt === null)
+  // B-W2b-271: the authority must be told (risk yes) and no notice was sent (W1's date is filled by the first one sent).
+  if (view === 'notices') return rows.filter(noticeDue)
+  // B-W2b-271: the entries with a recall or withdrawal in progress (GET /compliance/recalls?status=ACTIVE names them).
+  if (view === 'recalls') return recallEntryIds === null ? [] : rows.filter((row) => recallEntryIds.has(row.id))
+  return [...rows]
 }
+
+/** B-W2b-271: an open entry whose risk is yes and whose authority notice has not been sent (the API's `risksWithoutNotice`). */
+export const noticeDue = (row: Pick<Entry, 'status' | 'risk' | 'authorityNotifiedAt'>): boolean => row.status === 'OPEN' && row.risk === 'YES' && row.authorityNotifiedAt === null
 
 /** A tile's count, or "at least N" when the read stopped at the API's limit. */
 export interface TileCount {
@@ -82,7 +94,7 @@ export interface TileCount {
  * The tile counts from two reads (every OPEN entry and every CLOSED one, up to 500 each): the counts and the lists agree
  * because both come from the same rows and the same rules (`viewRows`).
  */
-export function tileCounts(open: readonly Entry[] | null, closed: readonly Entry[] | null, limit = LIST_MAX): Partial<Record<TileId, TileCount | null>> {
+export function tileCounts(open: readonly Entry[] | null, closed: readonly Entry[] | null, limit = LIST_MAX, activeRecalls: number | null = null): Partial<Record<TileId, TileCount | null>> {
   const openComplete = open !== null && open.length < limit
   const of = (rows: readonly Entry[] | null, complete: boolean, keep: (row: Entry) => boolean): TileCount | null => (rows === null ? null : { count: rows.filter(keep).length, complete })
   return {
@@ -90,6 +102,9 @@ export function tileCounts(open: readonly Entry[] | null, closed: readonly Entry
     risk: of(open, openComplete, (row) => row.risk === 'YES'),
     assessing: of(open, openComplete, (row) => row.risk === 'ASSESSING'),
     uninformed: of(open, openComplete, (row) => row.distributorsInformedAt === null),
+    // B-W2b-271: notices due counted from the open rows; recalls in progress as the API counts them (ACTIVE recalls).
+    notices: of(open, openComplete, noticeDue),
+    recalls: activeRecalls === null ? null : { count: activeRecalls, complete: true },
     closed: of(closed, closed !== null && closed.length < limit, () => true),
   }
 }
@@ -266,6 +281,8 @@ export function draftProblems(draft: NewEntryDraft): string[] {
   if (!draft.styleId) problems.push('new.problem.style')
   if (!draft.description.trim()) problems.push('new.problem.description')
   if (draft.kind === 'RECALL' && draft.batchNumbers.length === 0 && draft.serials.length === 0) problems.push('new.problem.recallNeedsGarments')
+  // B-W2b-271: a withdrawal names its garments like a recall (the API asks it: 400 body/batchNumbers).
+  if (draft.kind === 'WITHDRAWAL' && draft.batchNumbers.length === 0 && draft.serials.length === 0) problems.push('compliance-register-depth:new.withdrawalNeedsGarments')
   if (draft.batchNumbers.length > 50) problems.push('new.problem.tooManyBatches')
   if (draft.serials.length > 500) problems.push('new.problem.tooManySerials')
   return problems
@@ -290,6 +307,8 @@ export interface RegisterListModel {
   readonly query: string
   readonly limit: number
   readonly tiles: Partial<Record<TileId, TileCount | null>>
+  /** B-W2b-271: the API's tiles behind "Authority notices due or sent" and "Recalls in progress" (null: could not be read). */
+  readonly depthTiles?: { readonly notices: { drafts: number; sentThisYear: number } | null; readonly recalls: { unitsStillOut: number } | null } | null
   readonly asOf: string | null
   readonly live: LiveState
   readonly updates: number
@@ -341,5 +360,6 @@ export interface EntryRecordModel {
   readonly today: string
 }
 
-export const RECORD_TABS = ['event', 'affected', 'actions', 'activity'] as const
+// B-W2b-271: Authority notices (notices sent, requests received), after Affected units (design rec:Register entry tabs).
+export const RECORD_TABS = ['event', 'affected', 'authority', 'actions', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]

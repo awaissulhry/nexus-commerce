@@ -62,6 +62,23 @@ export async function pictureBytes(request: FastifyRequest, fileId: string): Pro
   if (!found || !can(actorOf(context), PRODUCT_STYLES_VIEW, { companyId: found.companyId }) || found.file.status !== 'AVAILABLE' || !isPictureType(found.file.contentType)) {
     throw new NotFoundError('Picture not found.')
   }
+  return storedPictureBytes(request, found)
+}
+
+/** A stored picture the caller was found to see, AVAILABLE and a picture type: from this process's cache, else read once from the store. */
+export interface StoredPicture {
+  readonly companyId: string | null
+  readonly file: { readonly id: string; readonly contentType: string; readonly originalName: string; readonly storeAccountId: string; readonly storageKey: string; readonly sizeBytes: number }
+}
+
+/**
+ * The bytes of a picture the caller's module has checked (B-W2b-247: a library colour's photo and a branding set's logo or
+ * artwork reuse it): kept in this process; read through the gateway as the tenant's system holding files.read over the
+ * file's company. A store refusal is a 503 in words, never a 500.
+ */
+export async function storedPictureBytes(request: FastifyRequest, found: StoredPicture): Promise<{ bytes: Buffer; contentType: string; name: string }> {
+  const context = contextOf(request)
+  const fileId = found.file.id
   const key = `${'tenantId' in context ? context.tenantId : ''}:${fileId}`
   const kept = cache.get(key)
   if (kept) return { ...remember(key, kept), name: found.file.originalName }

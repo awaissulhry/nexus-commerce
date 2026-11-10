@@ -28,6 +28,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Item: '/products/materials/[id]',
   Operation: '/products/operations/[id]',
   SizeScale: '/products/sizes/[id]',
+  // B-W2b-247: a private-label brand's branding set opens in its DetailModal on Colours & artwork (SCR-118); a library colour
+  // has no page of its own (its row is edited in the list) and opens in its panels (its photo, history, thread).
+  BrandingSet: '/products/colours?open=[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
@@ -64,6 +67,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   StockCount: '/warehouse/counts/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
+  RecallAction: '/compliance/register/recall/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
   Payment: '/finance/payments/[id]',
@@ -160,6 +165,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
   StandardChange: '/compliance/settings?tab=regulations&change=[id]',
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
+  // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
+  ComplianceDocument: '/compliance/declarations/[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
@@ -179,6 +186,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
   // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
   WorkInstruction: '/production/instructions/[id]',
+  // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
+  SampleRound: '/products/samples/[id]',
   // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
   TechnicalFile: '/compliance/techfiles/[id]',
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
@@ -313,6 +322,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/chemicals': '/plant/chemicals',
   // B-W2b-264: the claims (SCR-215) read `?state=`, `?kind=`, `?scope=`, `?q=`.
   '/compliance/claims': '/compliance/sourcing',
+  // B-W2b-268: the declarations (SCR-052) read `?kind=`, `?status=`, `?origin=`, `?language=`, `?q=`.
+  '/compliance/declarations': '/compliance/declarations',
   // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
   '/safety/incidents': '/plant/incidents',
   // B-W2b-148: the health page's frame (the tiles) and its plans per role.
@@ -327,6 +338,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
+  '/sales/samples/rounds': '/products/samples',
 })
 
 export interface RecordRef {

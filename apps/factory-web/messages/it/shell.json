@@ -22,7 +22,10 @@
       "materials": "Materiali e accessori",
       "libraries": "Librerie",
       "operations": "Operazioni",
-      "sizes": "Taglie e misure"
+      "sizes": "Taglie e misure",
+      "development": "Sviluppo",
+      "samples": "Campionature e prototipi",
+      "colours": "Colori e grafiche"
     },
     "sales": {
       "area": "Vendite",
@@ -144,6 +147,7 @@
       "safety": "Sicurezza prodotto",
       "register": "Registro DPI e richiami",
       "certificates": "Certificati",
+      "declarations": "Dichiarazioni e istruzioni",
       "techfiles": "Fascicoli tecnici",
       "labels": "Etichette e marcature",
       "sustainability": "Sostenibilità",
