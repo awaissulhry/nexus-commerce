@@ -74,6 +74,9 @@ import { loadTrolley, receiveTrolley, sendTrolley, unloadTrolley } from '../../m
 // B-W2b-214: Seen of a work instruction's version from the floor's queue.
 import { acknowledge } from '../../modules/production/instructions/acks'
 import { seenBody } from '../../modules/production/instructions/contract'
+// B-W2b-226: a spec problem reported from the floor's queue.
+import { floorRequestBody } from '@nexus/factory-domain/product/changes/contracts'
+import { reportFromFloor as reportChangeFromFloor } from '../../modules/product/changes/floor'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -130,6 +133,9 @@ import { seenBody } from '../../modules/production/instructions/contract'
  *   production.instruction.ack            modules/production/instructions acknowledge (B-W2b-214: Seen of a work instruction's
  *                                         version, the tablet's time kept; once per worker and version: a second Seen
  *                                         answers the first as a duplicate)
+ *   product.change.report                 modules/product/changes reportFromFloor (B-W2b-226: a spec problem as a change request
+ *                                         of the site, the tablet's time of the tap kept; the queue answers the request's id,
+ *                                         then the tablet sends its photo online)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -419,6 +425,14 @@ async function applyInstructionAck(caller: CommandCaller, event: QueuedEvent): P
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'InstructionAcknowledgement', id: result.acknowledgement.id } }
 }
 
+/** B-W2b-226: a queued spec problem, through the change requests' own command (its key: `<device>.<client event id>`). */
+async function applyChangeReport(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const body = parsed(floorRequestBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await reportChangeFromFloor(caller, body.value)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'ChangeRequest', id: result.changeRequest.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -485,6 +499,9 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       // B-W2b-214
       case 'production.instruction.ack':
         return await applyInstructionAck(caller, event)
+      // B-W2b-226
+      case 'product.change.report':
+        return await applyChangeReport(caller, event)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

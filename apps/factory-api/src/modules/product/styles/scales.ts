@@ -25,6 +25,8 @@ import {
   type SizeFields,
 } from '@nexus/factory-domain/product/sizes/rules'
 import { PRODUCT_STYLES_MANAGE, PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
+// B-W2b-224 (PRD-049): a scale of two dimensions (size and fit): every size names its fit, refused in words before the database does.
+import { fitProblems, normaliseFit } from '@nexus/factory-domain/product/grading/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { afterCursor, decodeCursor, encodeCursor } from './cursor'
@@ -99,6 +101,7 @@ function scaleRowView(row: ScaleRowData, sizes: readonly Pick<SizeRowData, 'code
     companyId: row.companyId,
     code: row.code,
     name: row.name,
+    dimensions: row.dimensions,
     codes: scaleOrder(sizes.filter((size) => size.status === 'ACTIVE')),
     styleCount,
     status: row.status,
@@ -117,6 +120,7 @@ function scaleViewOf(row: ScaleRowData, sizes: readonly SizeRowData[], styleCoun
       label: size.label,
       seq: size.seq,
       bodyMeasures: (size.bodyMeasures as BodyMeasures | null) ?? null,
+      fitCode: size.fitCode,
       status: size.status,
       version: size.version,
       inUse: inUse.has(size.code),
@@ -181,16 +185,17 @@ function changed(tools: CommandTools, scale: { id: string; code: string; company
   tools.emit({ type: 'size_scale.changed', subject: scale.id, companyId: scale.companyId, payload: { sizeScaleId: scale.id, code: scale.code } })
 }
 
-async function insertSizeRows(tools: CommandTools, scale: { id: string; companyId: string | null }, sizes: readonly SizeFields[], seqOf: ReadonlyMap<string, number>): Promise<void> {
+async function insertSizeRows(tools: CommandTools, scale: { id: string; companyId: string | null }, sizes: readonly SizeFields[], seqOf: ReadonlyMap<string, number>, fits: readonly (string | null)[] = []): Promise<void> {
   const { tx, now, context } = tools
   const createdById = context.audience === 'office' ? context.actorId : null
   const rows = sizes.map((size) => ({ id: newId(), size }))
   await tx.size.createMany({
-    data: rows.map(({ id, size }) => ({
+    data: rows.map(({ id, size }, index) => ({
       id,
       scaleId: scale.id,
       code: size.code,
       label: size.label,
+      fitCode: fits[index] ?? null,
       ...(size.bodyMeasures === null ? {} : { bodyMeasures: size.bodyMeasures as unknown as Prisma.InputJsonValue }),
       seq: seqOf.get(size.code)!,
       createdAt: now,
@@ -198,7 +203,7 @@ async function insertSizeRows(tools: CommandTools, scale: { id: string; companyI
       createdById,
     })),
   })
-  for (const { id, size } of rows) tools.audit({ recordType: 'Size', recordId: id, companyId: scale.companyId, after: { ...audited(size), seq: seqOf.get(size.code), status: 'ACTIVE' } })
+  for (const [index, { id, size }] of rows.entries()) tools.audit({ recordType: 'Size', recordId: id, companyId: scale.companyId, after: { ...audited(size), seq: seqOf.get(size.code), status: 'ACTIVE', ...(fits[index] ? { fitCode: fits[index] } : {}) } })
 }
 
 /** product.styles.createScale: a scale with its sizes, from small to large. */
@@ -208,7 +213,12 @@ export async function createScale(caller: CommandCaller, body: CreateScaleBody, 
   assertMayWrite(context, PRODUCT_STYLES_MANAGE, companyId, SCALE_NOUN)
   const fields = normaliseScale(body)
   const sizes = body.sizes.map(normaliseSize)
-  const issues = [...prefixed(scaleProblems(fields)), ...prefixed(sizeListProblems(sizes))]
+  const fits = body.sizes.map((size) => normaliseFit(size.fitCode))
+  const issues = [
+    ...prefixed(scaleProblems(fields)),
+    ...prefixed(sizeListProblems(sizes)),
+    ...prefixed(fitProblems(body.dimensions, sizes.map((size, index) => ({ code: size.code, fitCode: fits[index] ?? null })), 'sizes', `Size scale ${fields.code}`)),
+  ]
   if (issues.length > 0) throw invalid(issues, SCALE_NOUN)
 
   const { result } = await command(caller, { name: 'product.styles.createScale', idempotencyKey, input: body }, async (tools) => {
@@ -219,11 +229,11 @@ export async function createScale(caller: CommandCaller, body: CreateScaleBody, 
     if (await tx.sizeScale.findFirst({ where: { code: fields.code }, select: { id: true } })) throw codeConflict(fields.code)
     const id = newId()
     await tx.sizeScale.create({
-      data: { id, companyId, ...fields, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+      data: { id, companyId, ...fields, dimensions: body.dimensions, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
       select: { id: true },
     })
-    await insertSizeRows(tools, { id, companyId }, sizes, sequenceOf(sizes.map((size) => size.code)))
-    tools.audit({ recordType: 'SizeScale', recordId: id, companyId, after: { ...fields, status: 'ACTIVE', sizes: sizes.map(audited) } })
+    await insertSizeRows(tools, { id, companyId }, sizes, sequenceOf(sizes.map((size) => size.code)), fits)
+    tools.audit({ recordType: 'SizeScale', recordId: id, companyId, after: { ...fields, dimensions: body.dimensions, status: 'ACTIVE', sizes: sizes.map(audited) } })
     tools.emit({ type: 'size_scale.created', subject: id, companyId, payload: { sizeScaleId: id, code: fields.code } })
     return viewWith(tx, id)
   }).catch((error: unknown) => {
@@ -274,7 +284,8 @@ export async function addSizes(caller: CommandCaller, scaleId: string, body: Add
   assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId, SCALE_NOUN)
   openScale(seen.status)
   const sizes = body.sizes.map(normaliseSize)
-  const issues = prefixed(sizeListProblems(sizes))
+  const fits = body.sizes.map((size) => normaliseFit(size.fitCode))
+  const issues = [...prefixed(sizeListProblems(sizes)), ...prefixed(fitProblems(seen.dimensions, sizes.map((size, index) => ({ code: size.code, fitCode: fits[index] ?? null })), 'sizes', `Size scale ${seen.code}`))]
   if (issues.length > 0) throw invalid(issues, SCALE_NOUN)
 
   const { result } = await command(
@@ -296,7 +307,7 @@ export async function addSizes(caller: CommandCaller, scaleId: string, body: Add
         const seq = seqOf.get(entry.code)!
         if (seq !== entry.seq) await tx.size.update({ where: { id: entry.id }, data: { seq }, select: { id: true } })
       }
-      await insertSizeRows(tools, row, sizes, seqOf)
+      await insertSizeRows(tools, row, sizes, seqOf, fits)
       tools.audit({ recordType: 'SizeScale', recordId: scaleId, companyId: row.companyId, before: { order: scaleOrder(current) }, after: { order: order.order, added: sizes.map(audited) } })
       changed(tools, row)
       return viewWith(tx, scaleId)
@@ -381,16 +392,23 @@ export async function updateSize(caller: CommandCaller, scaleId: string, sizeId:
       if (refusal) throw new ConflictError(refusal)
       if (others.some((entry) => entry.code === next.code)) throw new ConflictError(`The scale has size ${next.code} already.`)
     }
+    // B-W2b-224 (PRD-049): the fit, as the code, only while nothing names the size; one on a two-dimension scale, none on one.
+    const fit = body.fitCode === undefined ? current.fitCode : normaliseFit(body.fitCode)
+    if (fit !== current.fitCode) {
+      const fitIssues = fitProblems(seen.dimensions, [{ code: next.code, fitCode: fit }], 'body', `Size scale ${scale.code}`).map((issue) => ({ ...issue, path: 'body/fitCode' }))
+      if (fitIssues.length > 0) throw invalid(fitIssues, 'size')
+      if ((await sizeCodesInUse(tx, scaleId)).has(current.code)) throw new ConflictError(`Size ${current.code} is in use (a style's range, a SKU, a BOM, a certificate or an order names it): its fit never changes.`)
+    }
     const move = body.status !== undefined && body.status !== current.status ? body.status : undefined
     if (move) assertTransition(sizeMachine, current.status, move)
     await tx.size.update({
       where: { id: sizeId },
-      data: { code: next.code, label: next.label, ...(next.bodyMeasures === null ? {} : { bodyMeasures: next.bodyMeasures as unknown as Prisma.InputJsonValue }), ...(move ? { status: move } : {}) },
+      data: { code: next.code, label: next.label, ...(next.bodyMeasures === null ? {} : { bodyMeasures: next.bodyMeasures as unknown as Prisma.InputJsonValue }), ...(move ? { status: move } : {}), ...(fit !== current.fitCode ? { fitCode: fit } : {}) },
       select: { id: true },
     })
     if (next.bodyMeasures === null && before.bodyMeasures !== null) await clearBodyMeasures(tx, sizeId)
-    const after = { ...audited(next), status: move ?? current.status }
-    tools.audit({ recordType: 'Size', recordId: sizeId, companyId: scale.companyId, before: { ...audited(before), status: current.status }, after })
+    const after = { ...audited(next), status: move ?? current.status, ...(fit !== current.fitCode ? { fitCode: fit } : {}) }
+    tools.audit({ recordType: 'Size', recordId: sizeId, companyId: scale.companyId, before: { ...audited(before), status: current.status, ...(fit !== current.fitCode ? { fitCode: current.fitCode } : {}) }, after })
     tools.audit({ recordType: 'SizeScale', recordId: scaleId, companyId: scale.companyId, after: { size: { id: sizeId, ...after } } })
     changed(tools, { id: scaleId, code: scale.code, companyId: scale.companyId })
     return viewWith(tx, scaleId)

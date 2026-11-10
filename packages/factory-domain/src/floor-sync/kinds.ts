@@ -80,6 +80,9 @@ export const FLOOR_SYNC_KINDS = [
   // B-W2b-214: Seen of a work instruction's version (MES-119; design floor.instructions "Works offline": Seen is queued), once
   // per worker and version.
   'production.instruction.ack',
+  // B-W2b-226: a spec problem reported from the floor (PRD-259; design floor.instructions "Report a spec problem"): the request
+  // waits on the tablet when offline; its photo goes up once the queue answered with the request's id.
+  'product.change.report',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -148,6 +151,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.trolley.receive': { kind: 'production.trolley.receive', permission: 'production.trolleys', numbers: null, what: 'Confirm a trolley at the line' },
   // B-W2b-214: the scans' right (the instruction of the operation in hand); the module checks again the version and the worker.
   'production.instruction.ack': { kind: 'production.instruction.ack', permission: 'production.scan', numbers: null, what: 'Say a work instruction was seen' },
+  // B-W2b-226: every floor role reports a spec problem.
+  'product.change.report': { kind: 'product.change.report', permission: 'floor.work', numbers: null, what: 'Report a spec problem' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

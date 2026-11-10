@@ -30,8 +30,9 @@ import { STYLE_FIELDS, type StyleField } from '../styles/rules'
  *
  * "With a draft open": the style's own fields that define what is made change only while a new revision is being prepared,
  * so the change goes out with it (W1 freezes the spec on the work order: a typo needs no change order). A released revision
- * never changes (W1's database guard). Change orders (B-W2b-212's schema) have no route yet: CHANGE_ORDER refuses a new
- * revision in words that say so.
+ * never changes (W1's database guard). Under CHANGE_ORDER a new revision is started from a change order (B-W2b-226,
+ * modules/product/changes: its "Start the draft revision" passes the change order as a fact); under every rule the draft a
+ * change order proposes is frozen while that order waits for approval or is approved (DRAFT_UNDER_CHANGE_ORDER).
  */
 
 export const STYLE_LIFECYCLES = ['CONCEPT', 'DEVELOPMENT', 'SAMPLING', 'APPROVED', 'IN_PRODUCTION', 'PHASE_OUT', 'DISCONTINUED'] as const
@@ -225,7 +226,9 @@ export const editKindOfFields = (fields: readonly string[]): EditKind => (fields
 /** Every style field that is spec (the rest of STYLE_FIELDS). */
 export const SPEC_FIELDS: readonly StyleField[] = Object.freeze(STYLE_FIELDS.filter((field) => !DETAIL_FIELDS.includes(field)))
 
-export const EDIT_REFUSALS = ['EDIT_BLOCKED', 'NEEDS_NEW_REVISION', 'NEEDS_CHANGE_ORDER'] as const
+export const EDIT_REFUSALS = ['EDIT_BLOCKED', 'NEEDS_NEW_REVISION', 'NEEDS_CHANGE_ORDER',
+  // B-W2b-226: the draft revision a submitted or approved change order proposes is frozen (the approver approves what it holds).
+  'DRAFT_UNDER_CHANGE_ORDER'] as const
 export type EditRefusalCode = (typeof EDIT_REFUSALS)[number]
 export interface EditRefusal {
   readonly code: EditRefusalCode
@@ -238,6 +241,10 @@ export interface EditFacts {
   readonly lifecycle: StyleLifecycle
   /** The style has an open DRAFT revision (its number), or null. */
   readonly draftRevision: number | null
+  /** B-W2b-226: the write is done for this change order (its number): a new revision under the CHANGE_ORDER rule passes. */
+  readonly changeOrder?: string | null
+  /** B-W2b-226: the open draft is the proposed revision of a change order waiting for approval or approved. */
+  readonly draftHeldBy?: { readonly number: string; readonly status: 'SUBMITTED' | 'APPROVED' } | null
 }
 
 const WHAT: Readonly<Record<EditKind, string>> = Object.freeze({
@@ -254,6 +261,16 @@ const WHAT: Readonly<Record<EditKind, string>> = Object.freeze({
  */
 export function editRefusal(rule: EditRule, kind: EditKind, facts: EditFacts): EditRefusal | null {
   const state = LIFECYCLE_WORDS[facts.lifecycle]
+  // B-W2b-226: under every rule, the draft of a change order that waits for approval or is approved does not change.
+  if ((kind === 'DRAFT' || kind === 'SPEC') && facts.draftHeldBy) {
+    const held = facts.draftHeldBy
+    const draft = facts.draftRevision === null ? 'The draft revision' : `Revision ${facts.draftRevision}`
+    const next = held.status === 'SUBMITTED' ? 'Wait for the decision, or cancel the change order,' : 'Release it, or cancel the change order,'
+    return {
+      code: 'DRAFT_UNDER_CHANGE_ORDER',
+      message: `${draft} of style ${facts.code} is the change proposed by change order ${held.number}, which is ${held.status === 'SUBMITTED' ? 'waiting for approval' : 'approved'}: it does not change now. ${next} to change it again.`,
+    }
+  }
   if (rule === 'FREE') return null
   if (rule === 'BLOCKED') {
     return { code: 'EDIT_BLOCKED', message: `Style ${facts.code} is ${state}: nothing of it changes in this state (its edit rule is "blocked"). Move it to another state first.` }
@@ -265,11 +282,11 @@ export function editRefusal(rule: EditRule, kind: EditKind, facts: EditFacts): E
       ? { code: 'NEEDS_NEW_REVISION', message: `Style ${facts.code} is ${state}: its spec changes only with a new revision. Start a new revision first; the change goes out with it.` }
       : { code: 'NEEDS_CHANGE_ORDER', message: `Style ${facts.code} is ${state}: its spec changes only through a change order approved by someone other than its author, with a new revision.` }
   }
-  // NEW_REVISION
-  if (rule === 'NEW_REVISION') return null
+  // NEW_REVISION (B-W2b-226: under CHANGE_ORDER, the change order's own "Start the draft revision" passes its number)
+  if (rule === 'NEW_REVISION' || facts.changeOrder) return null
   return {
     code: 'NEEDS_CHANGE_ORDER',
-    message: `Style ${facts.code} is ${state}: ${WHAT[kind]} needs a change order approved by someone other than its author, and change orders are not available yet. An administrator can set the rule of this state to "needs a new revision" in Product settings.`,
+    message: `Style ${facts.code} is ${state}: ${WHAT[kind]} is started from a change order, approved by someone other than its author. Write one in Products › Changes (New change order) and start its draft revision there.`,
   }
 }
 

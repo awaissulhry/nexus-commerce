@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { FactoryClient } from '@nexus/factory-db'
-import { DEFAULT_PHOTO_RULE, PHOTO_RULES, zoneOf, type MeasurePoint, type PhotoRule, type PhotoView } from '@nexus/factory-domain/sales/measure-link/rules'
+import { DEFAULT_PHOTO_RULE, PHOTO_RULES, zoneOf, type BodyZone, type MeasurePoint, type PhotoRule, type PhotoView } from '@nexus/factory-domain/sales/measure-link/rules'
 import type { CommandTx } from '../../../core/command'
 import { noticeInForce, type InForce } from '../../../platform/privacy/read'
 
@@ -63,7 +63,7 @@ export interface TemplateFacts {
   readonly code: string
   readonly name: string
   readonly nameI18n: Record<string, string>
-  readonly points: Array<MeasurePoint & { readonly nameI18n: Record<string, string> }>
+  readonly points: Array<MeasurePoint & { readonly nameI18n: Record<string, string>; readonly zone: BodyZone | null }>
 }
 
 /** The garment type's template and its ACTIVE points in order (none: the type has no template, only the basics are asked). */
@@ -72,17 +72,20 @@ export async function pointsOf(db: Reader, garmentType: string): Promise<Templat
   if (!template) return { code: garmentType, name: garmentType, nameI18n: {}, points: [] }
   const rows = await db.measurementPoint.findMany({
     where: { templateId: template.id, status: 'ACTIVE' },
-    select: { code: true, name: true, nameI18n: true, seq: true, required: true, minValue: true, maxValue: true, howTo: true, uom: true },
+    select: { code: true, name: true, nameI18n: true, seq: true, required: true, minValue: true, maxValue: true, howTo: true, uom: true, pointOfMeasureId: true },
     orderBy: [{ seq: 'asc' }, { code: 'asc' }],
   })
+  // B-W2b-224 (SZ1:02): each point's body zone is its library point of measure's; a point with none falls back to its code.
+  const libraryIds = [...new Set(rows.flatMap((row) => (row.pointOfMeasureId ? [row.pointOfMeasureId] : [])))]
+  const zones = new Map((libraryIds.length === 0 ? [] : await db.pointOfMeasure.findMany({ where: { id: { in: libraryIds } }, select: { id: true, bodyZone: true } })).map((row) => [row.id, row.bodyZone as BodyZone]))
   // Only lengths in centimetres are asked by link (a template's other units are the office's).
   const points = rows
     .filter((row) => row.uom === 'CM')
-    .map((row) => ({ code: row.code, name: row.name, nameI18n: text(row.nameI18n), seq: row.seq, required: row.required, minCm: row.minValue?.toFixed(2) ?? null, maxCm: row.maxValue?.toFixed(2) ?? null, howTo: row.howTo }))
+    .map((row) => ({ code: row.code, name: row.name, nameI18n: text(row.nameI18n), seq: row.seq, required: row.required, minCm: row.minValue?.toFixed(2) ?? null, maxCm: row.maxValue?.toFixed(2) ?? null, howTo: row.howTo, zone: (row.pointOfMeasureId && zones.get(row.pointOfMeasureId)) || null }))
   return { code: template.code, name: template.name, nameI18n: text(template.nameI18n), points }
 }
 
-export const zoned = <P extends { readonly code: string }>(point: P) => ({ ...point, zone: zoneOf(point.code) })
+export const zoned = <P extends { readonly code: string; readonly zone?: BodyZone | null }>(point: P) => ({ ...point, zone: point.zone ?? zoneOf(point.code) })
 
 export interface LinkTerms {
   readonly photos: PhotoRule
