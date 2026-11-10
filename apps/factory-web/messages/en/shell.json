@@ -175,6 +175,8 @@
       "allocation": "Lines & subcontractors",
       "capacity": "Capacity & load",
       "exceptions": "Exceptions",
+      "dates": "Dates",
+      "milestones": "Time & action",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

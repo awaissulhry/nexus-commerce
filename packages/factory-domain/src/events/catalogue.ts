@@ -186,6 +186,8 @@ import { events as complianceMaterialTests } from '../compliance-material-tests/
 import { events as complianceLabelArtwork } from '../compliance-label-artwork/events'
 // B-W2b-236: a style's pictures and its revisions' pattern files changed.
 import { events as productImages } from '../product-images/events'
+// B-W2b-263: Time & action (order_gate.changed).
+import { events as planningMilestones } from '../planning-milestones/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -438,7 +440,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-259
   ...complianceLabelArtwork,
   // B-W2b-236
-  ...productImages] as const satisfies readonly EventDefinition[]
+  ...productImages,
+  // B-W2b-263
+  ...planningMilestones] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
