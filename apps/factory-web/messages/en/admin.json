@@ -1674,6 +1674,8 @@
     "compliance_rules_manage": "Keep the register of laws and standards, the change watch, the markets and the economic operators",
     "compliance_phrases_manage": "Add phrases and propose their translations",
     "compliance_phrases_approve": "Approve translations proposed by someone else",
+    "compliance_requirements_manage": "Keep the compliance requirements and which gates they block (loosening asks for step-up)",
+    "compliance_gates_override": "Override a compliance gate for one work order or shipment, where the requirement names your role",
     "compliance_substances_manage": "Keep the restricted substance list and its rules, and run the substance checks on materials",
     "compliance_techfiles_manage": "Keep technical files: link and review each Annex III point's evidence, draft the risk assessment, plan and record production-control tests, build evidence packs",
     "compliance_techfiles_sign": "Sign a product risk assessment yourself (with a fresh code)",
