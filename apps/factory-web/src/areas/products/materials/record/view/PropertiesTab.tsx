@@ -14,6 +14,9 @@ import { compositionSum, numberText, plain } from '../../model'
 import type { MaterialRecordActions, MaterialRecordViewModel } from '../record-model'
 import { NO_GRADES } from '../grades/grades-model'
 import { GradesSection } from '../grades/view/GradesSection'
+// B-W2b-238 (PRD-029, PRD-033): the typed properties of its kind and its fibres as the label reads them.
+import { KindPropertiesCard } from '../../properties/view/KindPropertiesCard'
+import { NO_DEPTH } from '../../approval/depth-model'
 
 interface Properties {
   animalSpecies: string
@@ -77,6 +80,7 @@ export function PropertiesTab({ material, model, actions }: { material: Material
   const held = sum !== null && sum !== 100 ? t('material.props.held.sum', { sum: numberText(sum, locale, 2) }) : null
   // B-W2b-131 (PRD-031): a leather's grades and usable area, below the properties (its own reads and saves per cell).
   const grades = <GradesSection model={model.grades ?? NO_GRADES} actions={actions?.grades} libraryManage={model.can.materialsManage} />
+  const kindProperties = <KindPropertiesCard kind={material.kind} model={model.depth ?? NO_DEPTH} actions={actions?.depth} archived={material.status === 'ARCHIVED'} />
 
   if (!editable)
     return (
@@ -110,6 +114,7 @@ export function PropertiesTab({ material, model, actions }: { material: Material
             )}
           </Card>
         </div>
+        {kindProperties}
         {grades}
       </div>
     )
@@ -197,6 +202,7 @@ export function PropertiesTab({ material, model, actions }: { material: Material
           </Button>
         </div>
       </Card>
+      {kindProperties}
       {grades}
       {count > 0 && <SaveBar count={count} onDiscard={() => setDraft(base)} onSave={() => void actions?.onSave?.(patch)} held={held} busy={model.busy} saveLabel={t('material.save')} />}
     </div>

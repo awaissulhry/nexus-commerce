@@ -1674,6 +1674,7 @@
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
     "product_materials_cost": "Impostare il prezzo standard di un materiale",
+    "product_materials_approve": "Decidere l'approvazione di un materiale (approvare, con una condizione, bloccare)",
     "product_styles_view": "Vedere gli articoli",
     "product_styles_manage": "Creare e modificare articoli",
     "product_styles_lifecycle": "Spostare un articolo nel suo ciclo di vita",

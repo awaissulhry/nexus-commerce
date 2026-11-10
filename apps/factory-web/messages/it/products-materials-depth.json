@@ -1,0 +1,249 @@
+{
+  "loading": "Caricamento…",
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "discard": "Annulla modifiche",
+  "back": "Indietro",
+  "yes": "Sì",
+  "no": "No",
+  "notInRole": "Non nel tuo ruolo",
+  "tab": {
+    "whereused": "Dove è usato"
+  },
+  "revisionStatus": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciata",
+    "OBSOLETE": "Obsoleta"
+  },
+  "role": {
+    "LINE": "Suo materiale",
+    "ALTERNATE": "Alternativa {priority}"
+  },
+  "csv": {
+    "style": "Modello",
+    "revision": "Revisione",
+    "status": "Stato",
+    "line": "Riga",
+    "role": "Come",
+    "placement": "Posizione",
+    "colours": "Colori",
+    "workOrders": "Ordini di lavoro aperti"
+  },
+  "approval": {
+    "title": "Stato di approvazione",
+    "failed": "Impossibile caricare l'approvazione",
+    "intro": "Se il materiale può entrare in un capo. Una distinta base rilasciata non può contenerne uno bloccato.",
+    "viewOnly": "Puoi vedere, non modificare: decidere richiede il diritto di approvare i materiali.",
+    "readOnlyArchived": "Sola lettura: il materiale è archiviato. Riattivalo per decidere.",
+    "decided": "{name} · {time}",
+    "byRelease": "il suo primo rilascio",
+    "notDecided": "Non ancora esaminato",
+    "decidedLabel": "Deciso da",
+    "whyLabel": "Perché è bloccato",
+    "conditionLabel": "La condizione",
+    "noteLabel": "Nota",
+    "stateLabel": "Stato",
+    "pick": "Stato di approvazione",
+    "state": {
+      "PENDING": "In attesa",
+      "APPROVED": "Approvato",
+      "CONDITIONAL": "Con condizione",
+      "BLOCKED": "Bloccato"
+    },
+    "means": {
+      "PENDING": "In sviluppo: non ancora esaminato.",
+      "APPROVED": "Approvato per l'uso nei capi.",
+      "CONDITIONAL": "Approvato con una condizione che chi lo usa legge.",
+      "BLOCKED": "Da non usare: nessuna nuova riga di distinta, nessun rilascio di una revisione che lo contiene."
+    },
+    "noteHint": "Facoltativa, una riga: chi usa il materiale la legge.",
+    "noteHintRequired": "Obbligatoria, una riga fino a 1000 caratteri: chi usa il materiale la legge.",
+    "noteRefused": "Il server ha rifiutato questo testo: controllalo.",
+    "apply": "Applica decisione",
+    "applyBlock": "Blocca materiale",
+    "held": {
+      "unchanged": "Ancora nessuna modifica.",
+      "whyBlocked": "Indica perché il materiale è bloccato.",
+      "whyCondition": "Indica la condizione dell'approvazione.",
+      "noteLong": "Una riga fino a 1000 caratteri."
+    },
+    "reach": {
+      "noStyles": "Dove è usato non è nel tuo ruolo.",
+      "none": "Nessuna distinta lo contiene ora: una decisione non cambia nessun modello.",
+      "words": "Usato ora in {styles} modello/i: {drafts} revisione/i in bozza e {released} rilasciata/e.",
+      "noWorkOrders": "Gli ordini di lavoro aperti non sono nel tuo ruolo.",
+      "workOrders_one": "{count} ordine di lavoro aperto produce una revisione rilasciata.",
+      "workOrders_other": "{count} ordini di lavoro aperti producono revisioni rilasciate.",
+      "open": "Vedi dove è usato"
+    },
+    "block": {
+      "title": "Bloccare {code}?",
+      "noLine": "Nessuna nuova riga di distinta lo accetta.",
+      "drafts_one": "{count} revisione in bozza che lo contiene non può essere rilasciata finché il materiale non è sostituito o di nuovo approvato.",
+      "drafts_other": "{count} revisioni in bozza che lo contengono non possono essere rilasciate finché il materiale non è sostituito o di nuovo approvato.",
+      "released_one": "{count} revisione rilasciata lo mantiene com'è (una distinta rilasciata è congelata).",
+      "released_other": "{count} revisioni rilasciate lo mantengono come sono (una distinta rilasciata è congelata).",
+      "workOrders_one": "{count} ordine di lavoro aperto continua.",
+      "workOrders_other": "{count} ordini di lavoro aperti continuano.",
+      "back": "Puoi approvarlo di nuovo in seguito; il motivo resta nella sua cronologia."
+    },
+    "notice": {
+      "decided": "Decisione salvata: {approval}."
+    }
+  },
+  "properties": {
+    "title": "Proprietà del suo tipo",
+    "failed": "Impossibile caricare le proprietà",
+    "viewOnly": "Puoi vedere, non modificare: il tuo ruolo non modifica questa libreria.",
+    "readOnlyArchived": "Sola lettura: il materiale è archiviato. Riattivalo per modificarlo.",
+    "intro": {
+      "TEXTILE": "Grammatura, altezza e costruzione del tessuto: la composizione del capo si pesa con queste.",
+      "PROTECTOR": "Cos'è la protezione: norma EN 1621, tipo, livello e taglia.",
+      "TRIM": "Di cosa è fatto l'accessorio, finitura e misura, e se è senza nichel."
+    },
+    "field": {
+      "weightGsm": "Grammatura (g/m²)",
+      "widthCm": "Altezza (cm)",
+      "construction": "Costruzione",
+      "standard": "Norma",
+      "type": "Tipo",
+      "level": "Livello",
+      "size": "Taglia",
+      "material": "Materiale",
+      "finish": "Finitura",
+      "nickelFree": "Senza nichel"
+    },
+    "hint": {
+      "weightGsm": "Grammi per metro quadro, sopra 0 (es. 180).",
+      "widthCm": "L'altezza utile del rotolo, in centimetri.",
+      "construction": "Tessuto ortogonale, maglia, laminato…",
+      "standard": "es. EN 1621-1:2012.",
+      "type": "Dove protegge: spalla, gomito, schiena…",
+      "level": "Il livello di prestazione EN 1621.",
+      "size": "La taglia della protezione come la chiama il fornitore.",
+      "material": "es. ottone, nylon.",
+      "finish": "es. nero opaco.",
+      "nickelFree": "Parti metalliche a contatto con la pelle."
+    },
+    "none": "Non indicato",
+    "notSaid": "Non detto",
+    "level": "Livello {level}",
+    "gsm": "{value} g/m²",
+    "cm": "{value} cm",
+    "held": {
+      "unchanged": "Ancora nessuna modifica.",
+      "number": "Un numero sopra 0 con al massimo 4 decimali."
+    },
+    "refused": "Il server ha rifiutato questo valore.",
+    "badNumber": "Un numero sopra 0 con al massimo 4 decimali.",
+    "save": "Salva proprietà",
+    "notice": {
+      "saved": "Proprietà salvate."
+    }
+  },
+  "fibres": {
+    "title": "Fibre in etichetta",
+    "allOfficial": "Ogni fibra ha un nome ufficiale del Reg. (UE) 1007/2011, allegato I.",
+    "problems_one": "{count} fibra va chiamata in altro modo prima di finire in etichetta.",
+    "problems_other": "{count} fibre vanno chiamate in altro modo prima di finire in etichetta.",
+    "finding": {
+      "NOT_OFFICIAL": "Non è il nome ufficiale",
+      "TRADE_MARK": "Marchio commerciale",
+      "NOT_TEXTILE": "Non è una fibra tessile",
+      "UNKNOWN": "Fibra sconosciuta"
+    },
+    "official": "Nome ufficiale",
+    "names": "Italiano: {it} · Inglese: {en}",
+    "noItalian": "verifica la dicitura",
+    "notTextile": "Toglila dalla composizione e indica il materiale come di origine animale (la frase dell'etichetta).",
+    "unknown": "Verificala con il Reg. (UE) 1007/2011, allegato I."
+  },
+  "whereUsed": {
+    "title": "Dove è usato",
+    "tableLabel": "Righe di distinta che usano il materiale",
+    "revision": "Rev. {revision}",
+    "line": "Riga {seq}",
+    "everyColourway": "{name}, ogni variante colore",
+    "noColour": "Nessun colore",
+    "noOrders": "Nessuno aperto",
+    "moreOrders": "+{count}",
+    "col": {
+      "style": "Modello",
+      "revision": "Revisione e stato",
+      "line": "Riga",
+      "placement": "Posizione",
+      "colours": "Colori usati",
+      "orders": "Ordini di lavoro aperti"
+    },
+    "failed": "Impossibile caricare dove è usato",
+    "noStyles": {
+      "title": "I modelli non sono nel tuo ruolo",
+      "body": "Dove è usato il materiale lo vede chi legge i modelli."
+    },
+    "empty": "Non usato in nessuna distinta",
+    "emptyBody": "Nessuna revisione di nessun modello contiene questo materiale, come riga o come alternativa.",
+    "emptyColour": "Nessuna distinta usa questo colore",
+    "emptyColourBody": "Scegli un altro colore, o tutti i colori.",
+    "more": "Sono mostrate le prime {count} righe.",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "colourFilter": "Colore",
+    "allColours": "Tutti i colori",
+    "colourOption": "{code} · {name} ({count})",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "tile": {
+      "styles": "Modelli",
+      "drafts": "Revisioni in bozza",
+      "released": "Revisioni rilasciate",
+      "orders": "Ordini di lavoro aperti"
+    },
+    "tileHint": {
+      "styles": "Modelli la cui distinta in bozza o rilasciata lo contiene",
+      "drafts": "Un blocco ne ferma il rilascio",
+      "released": "Lo mantengono com'è",
+      "orders": "Delle revisioni rilasciate"
+    }
+  },
+  "styleChecks": {
+    "title": "Materiali bloccati o non approvati",
+    "failed": "Impossibile caricare le approvazioni dei materiali",
+    "intro": "I materiali della distinta della revisione {revision} bloccati, approvati con condizione o non ancora esaminati.",
+    "blockedDraft_one": "{count} materiale bloccato: questa revisione non può essere rilasciata finché non è sostituito o di nuovo approvato.",
+    "blockedDraft_other": "{count} materiali bloccati: questa revisione non può essere rilasciata finché non sono sostituiti o di nuovo approvati.",
+    "blockedReleased_one": "{count} materiale di questa revisione rilasciata è stato bloccato dopo: la revisione lo mantiene; una nuova revisione deve sostituirlo.",
+    "blockedReleased_other": "{count} materiali di questa revisione rilasciata sono stati bloccati dopo: la revisione li mantiene; una nuova revisione deve sostituirli.",
+    "none_one": "Niente da verificare: il suo {count} materiale è approvato.",
+    "none_other": "Niente da verificare: i suoi {count} materiali sono approvati.",
+    "col": {
+      "material": "Materiale",
+      "lines": "Righe",
+      "approval": "Approvazione",
+      "why": "Motivo o condizione"
+    },
+    "alternateOn": "Alternativa sulla riga {lines}",
+    "pendingWhy": "Non ancora esaminato"
+  },
+  "wait": {
+    "offline": "Offline — le modifiche restano su questa pagina.",
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio."
+  },
+  "materialsList": {
+    "view": {
+      "unused": "Non usati in nessuna distinta"
+    },
+    "tile": {
+      "unused": "Non usati in nessuna distinta"
+    },
+    "tileHint": {
+      "unused": "Nessuna distinta in bozza o rilasciata li contiene"
+    },
+    "notUsed": "Non usato",
+    "usedIn_one": "{count} modello",
+    "usedIn_other": "{count} modelli",
+    "col": {
+      "approval": "Approvazione",
+      "usedIn": "Usato in"
+    }
+  }
+}

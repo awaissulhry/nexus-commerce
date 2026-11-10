@@ -14,6 +14,9 @@ import { ReadField, SaveBar } from '../../../library/parts'
 import { LOTS_READ, type MaterialView } from '../../api'
 import { numberText, plain } from '../../model'
 import type { MaterialRecordActions, MaterialRecordViewModel } from '../record-model'
+// B-W2b-238 (PRD-035): Approval status.
+import { ApprovalCard } from '../../approval/view/ApprovalCard'
+import { NO_DEPTH } from '../../approval/depth-model'
 
 /** A Cr VI limit as typed: '' (none), a plain decimal ≤ 3, or why not (REACH Annex XVII entry 47). */
 export function limitProblem(text: string): 'empty' | 'number' | 'law' | null {
@@ -89,6 +92,7 @@ export function ComplianceTab({ material, model, actions }: { material: Material
         <CertificatesCard material={material} model={model} />
       </div>
       <TestsCard material={material} model={model} />
+      <ApprovalCard model={model.depth ?? NO_DEPTH} actions={actions?.depth} archived={material.status === 'ARCHIVED'} whereUsedHref={`${model.prefix}/products/materials/${material.id}?tab=whereused`} />
     </div>
   )
 }

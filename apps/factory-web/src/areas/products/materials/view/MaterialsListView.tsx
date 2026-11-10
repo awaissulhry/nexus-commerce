@@ -17,6 +17,8 @@ import type { MaterialRow } from '../api'
 import type { MaterialsListActions, MaterialsListViewModel } from '../list-model'
 import { archiveHeld, costHeld, costInput, costOf, crViText, isFiltered, ITEM_KINDS, NO_FILTERS, STATUS_TONE, tilesFor, viewsFor } from '../model'
 import { NewMaterialDialog } from './NewMaterialDialog'
+// B-W2b-238: the Approval and Used in columns and the "Not used in any BOM" tile.
+import { APPROVAL_TONE } from '../approval/depth-model'
 
 export type { MaterialsListViewModel, MaterialsListActions } from '../list-model'
 
@@ -39,6 +41,9 @@ export function MaterialsListView({ model, actions }: { model: MaterialsListView
 function MaterialsList({ model, actions }: { model: MaterialsListViewModel; actions?: MaterialsListActions }) {
   const t = useT('library')
   const locale = useLocale()
+  // B-W2b-238: the words of the W2b view and columns (products-materials-depth).
+  const td = useT('products-materials-depth')
+  const viewWord = (view: string) => (view === 'unused' ? td('materialsList.view.unused') : t(`materials.view.${view}`))
   const [query, setQuery] = useState(model.filters.q)
   useEffect(() => setQuery(model.filters.q), [model.filters.q])
   const typed = useRef(false)
@@ -138,6 +143,18 @@ function MaterialsList({ model, actions }: { model: MaterialsListViewModel; acti
       )
     }
     const StatusCell = ({ data }: ICellRendererParams<MaterialRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
+    // B-W2b-238 (PRD-035, PRD-036): its approval for use, and the styles whose draft or released BOM names it.
+    const ApprovalCell = ({ data }: ICellRendererParams<MaterialRow>) => (data?.approval ? <Pill tone={APPROVAL_TONE[data.approval]}>{td(`approval.state.${data.approval}`)}</Pill> : null)
+    const UsedInCell = ({ data }: ICellRendererParams<MaterialRow>) =>
+      !data ? null : data.usedInStyles === null || data.usedInStyles === undefined ? (
+        <span className="fw-lib-hint">—</span>
+      ) : data.usedInStyles === 0 ? (
+        <span className="fw-lib-hint">{td('materialsList.notUsed')}</span>
+      ) : (
+        <Link className="fw-lib-link" href={`${recordHref(data)}?tab=whereused`}>
+          {td('materialsList.usedIn', { count: data.usedInStyles })}
+        </Link>
+      )
     const MoreCell = ({ data }: ICellRendererParams<MaterialRow>) =>
       data ? (
         <Menu
@@ -166,10 +183,12 @@ function MaterialsList({ model, actions }: { model: MaterialsListViewModel; acti
       { colId: 'colours', headerName: t('materials.col.colours'), field: 'colourCount', minWidth: 90, maxWidth: 120, type: 'rightAligned' },
       ...(seesCost ? [{ colId: 'cost', headerName: t('materials.col.cost'), field: 'standardCost', cellDataType: false, minWidth: 130, flex: 1, type: 'rightAligned', cellRenderer: CostCell } as ColDef<MaterialRow>] : []),
       { colId: 'compliance', headerName: t('materials.col.compliance'), field: 'requiresCrViTest', cellDataType: false, minWidth: 150, flex: 1, cellRenderer: ComplianceCell },
+      { colId: 'approval', headerName: td('materialsList.col.approval'), field: 'approval', cellDataType: false, minWidth: 110, flex: 0.8, cellRenderer: ApprovalCell },
+      { colId: 'usedIn', headerName: td('materialsList.col.usedIn'), field: 'usedInStyles', cellDataType: false, minWidth: 96, flex: 0.7, cellRenderer: UsedInCell },
       { colId: 'status', headerName: t('materials.col.status'), field: 'status', minWidth: 100, maxWidth: 130, cellRenderer: StatusCell },
       { colId: 'more', headerName: t('list.col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, recordHref, seesCost])
+  }, [t, td, locale, recordHref, seesCost])
 
   const filtered = isFiltered(model.filters)
   const state = showsState(model.rows.problem, items)
@@ -214,9 +233,9 @@ function MaterialsList({ model, actions }: { model: MaterialsListViewModel; acti
         metrics={tilesFor(model.can).map((tile) => {
           const count = model.tiles[tile]
           return {
-            label: t(`materials.tile.${tile}`),
+            label: tile === 'unused' ? td('materialsList.tile.unused') : t(`materials.tile.${tile}`),
             value: count === null || count === undefined ? '—' : String(count),
-            hint: t(`materials.tileHint.${tile}`),
+            hint: tile === 'unused' ? td('materialsList.tileHint.unused') : t(`materials.tileHint.${tile}`),
             onClick: () => actions?.onFilters?.({ ...model.filters, view: model.filters.view === tile ? 'open' : tile }),
             active: model.filters.view === tile,
           }
@@ -227,7 +246,7 @@ function MaterialsList({ model, actions }: { model: MaterialsListViewModel; acti
         <div className="fw-lib-chips" aria-label={t('list.activeFilters')}>
           {model.filters.view !== 'open' && (
             <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, view: 'open' })}>
-              {t(`materials.view.${model.filters.view}`)}
+              {viewWord(model.filters.view)}
             </TokenChip>
           )}
           {model.filters.kind && (
@@ -271,7 +290,7 @@ function MaterialsList({ model, actions }: { model: MaterialsListViewModel; acti
             <Select size="sm" aria-label={t('list.viewFilter')} value={model.filters.view} onChange={(event) => actions?.onFilters?.({ ...model.filters, view: event.target.value as MaterialsListViewModel['filters']['view'] })}>
               {views.map((view) => (
                 <option key={view} value={view}>
-                  {t(`materials.view.${view}`)}
+                  {viewWord(view)}
                 </option>
               ))}
             </Select>

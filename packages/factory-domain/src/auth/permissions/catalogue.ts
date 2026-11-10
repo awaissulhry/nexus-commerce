@@ -137,6 +137,8 @@ import { PRODUCT_LIFECYCLE_DEFINITIONS, PRODUCT_LIFECYCLE_PERMISSIONS } from '..
 import { PRODUCT_GTINS_DEFINITIONS, PRODUCT_GTINS_PERMISSIONS } from '../../product/gtin/permissions'
 // B-W2b-226: change requests and change orders (product.changes.view | request | manage | approve).
 import { PRODUCT_CHANGES_DEFINITIONS, PRODUCT_CHANGES_PERMISSIONS } from '../../product/changes/permissions'
+// B-W2b-238: materials in depth (product.materials.approve).
+import { PRODUCT_MATERIALS_DEPTH_DEFINITIONS, PRODUCT_MATERIALS_DEPTH_PERMISSIONS } from '../../product/materials-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -786,6 +788,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_GTINS_DEFINITIONS,
   // B-W2b-226: change requests and change orders (area `product`, declared above).
   PRODUCT_CHANGES_DEFINITIONS,
+  // B-W2b-238: materials in depth (area `product`, declared above).
+  PRODUCT_MATERIALS_DEPTH_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1040,6 +1044,8 @@ for (const name of PRODUCT_LIFECYCLE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PRODUCT_GTINS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-226: change requests and change orders.
 for (const name of PRODUCT_CHANGES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-238: materials in depth.
+for (const name of PRODUCT_MATERIALS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
