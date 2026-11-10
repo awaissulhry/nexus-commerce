@@ -1,4 +1,4 @@
-import { BadgeCheck, BarChart3, FlaskConical, LayoutGrid, Leaf, ScrollText, ShieldCheck, SlidersHorizontal, Tag } from 'lucide-react'
+import { BadgeCheck, BarChart3, FileCheck, FlaskConical, LayoutGrid, Leaf, ScrollText, ShieldCheck, SlidersHorizontal, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'compliance-status', label: 'shell:nav.compliance.status', href: '/compliance/status', icon: LayoutGrid, permission: 'compliance.certificates.view' },
           // SCR-050/051: EN 17092 garment and EN 1621 protector certificates with their coverage (compliance.certificates.view).
           { id: 'compliance-certificates', label: 'shell:nav.compliance.certificates', href: '/compliance/certificates', icon: BadgeCheck, permission: 'compliance.certificates.view' },
+          // B-W2b-268 SCR-052: every DoC and user-information leaflet per style, language and revision (GET /compliance/declarations).
+          { id: 'compliance-declarations', label: 'shell:nav.compliance.declarations', href: '/compliance/declarations', icon: FileCheck, permission: 'compliance.certificates.view' },
           // SCR-053: the PPE garment label builder, preview and activation (reading labels is compliance.certificates.view).
           { id: 'compliance-labels', label: 'shell:nav.compliance.labels', href: '/compliance/labels', icon: Tag, permission: 'compliance.certificates.view' },
           // SCR-054: lots with their Cr VI results, supplier documents and the lot release (quality.lots.view).

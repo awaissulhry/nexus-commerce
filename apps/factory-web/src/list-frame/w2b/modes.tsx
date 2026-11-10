@@ -98,6 +98,9 @@ export function BoardMode<T>({ label, rows, rowId, columns, board, hrefOf, onOpe
             }
           : {})}
         heldReason={board.heldReason ?? null}
+        /* B-W2b-261: a card's aside (a countdown) and footer (its own control), when the list gives them. */
+        {...(board.aside ? { renderAside: (card: { id: string }) => { const row = byId.get(card.id); return row ? board.aside!(row) : null } } : {})}
+        {...(board.footer ? { renderFooter: (card: { id: string }) => { const row = byId.get(card.id); return row ? board.footer!(row) : null } } : {})}
         words={words}
         locale={INTL_LOCALE[locale]}
       />

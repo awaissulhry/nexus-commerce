@@ -1,0 +1,60 @@
+/*
+ * Swatch (areas/products/_shared): a colour chip. Layout only with semantic tokens; the chip's own colour is the colour
+ * library's value, set inline. The ring is --nds-text-3 (at least 3:1 against the page in light and dark), so a white or a
+ * near-black chip keeps its edge in both themes.
+ */
+.fw-swatch {
+  display: inline-block;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid var(--nds-text-3);
+  vertical-align: middle;
+}
+
+.fw-swatch-sm {
+  width: 14px;
+  height: 14px;
+}
+
+.fw-swatch-md {
+  width: 20px;
+  height: 20px;
+}
+
+.fw-swatch-lg {
+  width: 40px;
+  height: 40px;
+}
+
+.fw-swatch.is-empty {
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--nds-border-strong) 3px 5px);
+}
+
+.fw-swatch-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-swatch-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-swatch-nohex {
+  color: var(--nds-text-3);
+}
+
+.fw-swatch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-swatch-more {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-sm);
+}
