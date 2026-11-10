@@ -1,0 +1,152 @@
+/* Operations in depth (B-W2b-235): the Minutes tab's W2b parts, Propose SMV change, Machine & settings, the waiting list.
+   Layout only; every control is the DS's. */
+.fw-opd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-opd-stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+/* Two cards side by side on a wide screen, stacked below 1100 px (the page fills the main area). */
+.fw-opd-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .fw-opd-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.fw-opd-pair > * {
+  min-width: 0;
+}
+.fw-opd-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+.fw-opd-form > * {
+  min-width: 0;
+}
+.fw-opd-span {
+  grid-column: 1 / -1;
+}
+.fw-opd-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+.fw-opd-warn {
+  color: var(--nds-warning-text);
+}
+.fw-opd-danger {
+  color: var(--nds-danger-text);
+}
+.fw-opd-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-opd-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-opd-grow {
+  flex: 1 1 auto;
+}
+/* The SMV and how it is built: "12 + 5 % + 4 % + 3 % = 13.44". */
+.fw-opd-sum {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  font-variant-numeric: tabular-nums;
+}
+.fw-opd-big {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-opd-num {
+  font-variant-numeric: tabular-nums;
+}
+.fw-opd-list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.fw-opd-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-opd-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fw-opd-cell {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.fw-opd-cell > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-opd-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+/* The settings list: one card per setting, numbered. */
+.fw-opd-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-opd-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+.fw-opd-setting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.fw-opd-static {
+  display: block;
+  padding: var(--nds-space-6) 0;
+  min-height: 32px;
+}
+.fw-opd-reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

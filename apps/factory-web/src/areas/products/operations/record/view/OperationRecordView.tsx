@@ -16,6 +16,11 @@ import { KeysDialog, LibraryMessages, NoticeBanner, ReadField, RecordFrame, Reco
 import type { OperationInput, OperationView, WhereUsed } from '../../api'
 import { codeFrozen, createHeld, differenceText, minutesInput, namesOf, OPERATION_TABS, STATUS_TONE, updateHeld, type OperationDraft, type OperationTab } from '../../model'
 import { OperationFields } from '../../view/OperationsListView'
+// B-W2b-235: Minutes in depth (allowances, versions, Propose SMV change, what it reaches) and Machine & settings.
+import { WithMessages } from '../../../../../record-panels/i18n'
+import type { MinutesActions, MinutesModel, SettingsActions, SettingsModel } from '../../depth/model'
+import { MachineSettingsTab } from '../../depth/view/MachineSettingsTab'
+import { MinutesSection } from '../../depth/view/MinutesSection'
 
 export type OperationLoad = { status: 'loading' } | { status: 'ready'; value: OperationView } | { status: 'error'; problem: string } | { status: 'notFound' } | { status: 'forbidden' }
 
@@ -33,6 +38,9 @@ export interface OperationRecordViewModel {
   /** Design cases: Where used rows already selected, the update dialog open. */
   selected?: string[]
   updateOpen?: boolean
+  /** B-W2b-235: the Minutes tab's W2b parts (absent: W1's tab alone) and the Machine & settings tab. */
+  minutes?: MinutesModel
+  settings?: SettingsModel
 }
 
 export interface OperationRecordActions {
@@ -45,6 +53,9 @@ export interface OperationRecordActions {
   onUpdateRoutings?: (stepIds: string[]) => Promise<boolean>
   onDialog?: (dialog: 'archive' | 'help' | null) => void
   onDismissNotice?: () => void
+  /** B-W2b-235 */
+  minutes?: MinutesActions
+  settings?: SettingsActions
 }
 
 const KEYS = [
@@ -62,7 +73,10 @@ const KEYS = [
 export function OperationRecordView({ model, actions }: { model: OperationRecordViewModel; actions?: OperationRecordActions }) {
   return (
     <LibraryMessages>
-      <Record model={model} actions={actions} />
+      {/* B-W2b-235: the W2b words (the Machine & settings tab). */}
+      <WithMessages namespaces={['products-operations-depth']}>
+        <Record model={model} actions={actions} />
+      </WithMessages>
     </LibraryMessages>
   )
 }
@@ -76,6 +90,8 @@ function Record({ model, actions }: { model: OperationRecordViewModel; actions?:
 
 function Ready({ operation, model, actions }: { operation: OperationView; model: OperationRecordViewModel; actions?: OperationRecordActions }) {
   const t = useT('library')
+  // B-W2b-235: the Machine & settings tab's label.
+  const td = useT('products-operations-depth')
   const locale = useLocale()
   const href = `${model.prefix}/products/operations/${operation.id}`
   const archived = operation.status === 'ARCHIVED'
@@ -127,7 +143,7 @@ function Ready({ operation, model, actions }: { operation: OperationView; model:
           <SaveWords state={model.save.state} at={model.save.at} />
         </>
       }
-      tabs={OPERATION_TABS.map((tab) => ({ id: tab, label: t(`operation.tab.${tab}`), count: tab === 'whereused' ? operation.whereUsed.length : null }))}
+      tabs={OPERATION_TABS.map((tab) => ({ id: tab, label: tab === 'machine' ? td('tab.machine') : t(`operation.tab.${tab}`), count: tab === 'whereused' ? operation.whereUsed.length : null }))}
       active={model.tab}
       tabHref={(tab) => `${href}?tab=${tab}`}
     >
@@ -155,6 +171,9 @@ function Ready({ operation, model, actions }: { operation: OperationView; model:
       )}
       {model.tab === 'minutes' ? (
         <MinutesTab key={`${operation.id}-${operation.version}`} operation={operation} model={model} actions={actions} />
+      ) : model.tab === 'machine' && model.settings ? (
+        // B-W2b-235: Operation › Machine & settings (design operation.machine).
+        <MachineSettingsTab model={model.settings} actions={actions?.settings} />
       ) : model.tab === 'whereused' ? (
         <WhereUsedTab operation={operation} model={model} actions={actions} />
       ) : (
@@ -240,47 +259,54 @@ function MinutesTab({ operation, model, actions }: { operation: OperationView; m
   const changed = typed.ok && typed.minutes !== operation.standardMinutes
   const editable = model.can.operationsManage && operation.status === 'ACTIVE'
   const drafts = operation.whereUsed.filter((use) => use.revision.status === 'DRAFT').length
+  // W1: the SMV typed straight on the operation (B-W2b-235 shows it only while no approval governs it).
+  const typedEditor = editable ? (
+    <div className="fw-lib-stack">
+      <div className="fw-lib-form-grid">
+        <Field label={t('operation.smv')} required hint={t('operation.smvHint')} error={!typed.ok && text.trim() !== '' ? t('newOperation.held.minutesInvalid') : undefined}>
+          <Input inputMode="decimal" value={text} onChange={(event) => setText(event.target.value)} />
+        </Field>
+      </div>
+      {changed && (
+        <SaveBar
+          count={1}
+          onDiscard={() => setText(editText(operation.standardMinutes, locale))}
+          onSave={() => typed.ok && void actions?.onSave?.({ standardMinutes: typed.minutes })}
+          held={typed.ok ? null : t('newOperation.held.minutesInvalid')}
+          busy={model.busy}
+          saveLabel={t('operation.minutes.save')}
+        />
+      )}
+      <p className="fw-lib-hint">{t('operation.minutes.newOnly', { count: drafts })}</p>
+    </div>
+  ) : (
+    <ReadField label={t('operation.smv')} value={t('operations.list.minutes', { minutes: minutesText(operation.standardMinutes, locale) })} />
+  )
+  const routings = (
+    <Card header={t('operation.minutes.routings')}>
+      <KeyValue
+        columns={1}
+        labelCase="sentence"
+        items={[
+          { label: t('operation.minutes.used'), value: t('operations.list.usedIn', { count: operation.usedIn }) },
+          { label: t('operation.minutes.differing'), value: operation.differing > 0 ? t('operations.list.differing', { count: operation.differing }) : t('operations.list.allSame') },
+        ]}
+      />
+      {operation.differing > 0 && (
+        <Link className="fw-lib-link" href={`${model.prefix}/products/operations/${operation.id}?tab=whereused`}>
+          {t('operation.minutes.see')}
+        </Link>
+      )}
+    </Card>
+  )
+  // B-W2b-235: the W2b Minutes (allowances, versions, Propose SMV change, what it reaches); W1's parts are its slots.
+  if (model.minutes) return <MinutesSection model={model.minutes} actions={actions?.minutes} typed={typedEditor} routings={routings} />
   return (
     <div className="fw-lib-pair">
       <Card header={t('operation.minutes.title')} description={t('operation.minutes.intro')}>
-        {editable ? (
-          <div className="fw-lib-stack">
-            <div className="fw-lib-form-grid">
-              <Field label={t('operation.smv')} required hint={t('operation.smvHint')} error={!typed.ok && text.trim() !== '' ? t('newOperation.held.minutesInvalid') : undefined}>
-                <Input inputMode="decimal" value={text} onChange={(event) => setText(event.target.value)} />
-              </Field>
-            </div>
-            {changed && (
-              <SaveBar
-                count={1}
-                onDiscard={() => setText(editText(operation.standardMinutes, locale))}
-                onSave={() => typed.ok && void actions?.onSave?.({ standardMinutes: typed.minutes })}
-                held={typed.ok ? null : t('newOperation.held.minutesInvalid')}
-                busy={model.busy}
-                saveLabel={t('operation.minutes.save')}
-              />
-            )}
-            <p className="fw-lib-hint">{t('operation.minutes.newOnly', { count: drafts })}</p>
-          </div>
-        ) : (
-          <ReadField label={t('operation.smv')} value={t('operations.list.minutes', { minutes: minutesText(operation.standardMinutes, locale) })} />
-        )}
+        {typedEditor}
       </Card>
-      <Card header={t('operation.minutes.routings')}>
-        <KeyValue
-          columns={1}
-          labelCase="sentence"
-          items={[
-            { label: t('operation.minutes.used'), value: t('operations.list.usedIn', { count: operation.usedIn }) },
-            { label: t('operation.minutes.differing'), value: operation.differing > 0 ? t('operations.list.differing', { count: operation.differing }) : t('operations.list.allSame') },
-          ]}
-        />
-        {operation.differing > 0 && (
-          <Link className="fw-lib-link" href={`${model.prefix}/products/operations/${operation.id}?tab=whereused`}>
-            {t('operation.minutes.see')}
-          </Link>
-        )}
-      </Card>
+      {routings}
     </div>
   )
 }

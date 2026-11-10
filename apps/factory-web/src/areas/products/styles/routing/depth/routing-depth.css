@@ -1,0 +1,126 @@
+/* The Routing tab in depth (B-W2b-235, SCR-043): layout only; every control is the DS's. */
+.fw-rtd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-rtd-hint,
+.fw-rtd-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+.fw-rtd-warn {
+  color: var(--nds-warning-text);
+}
+.fw-rtd-danger {
+  color: var(--nds-danger-text);
+}
+.fw-rtd-sum {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  font-variant-numeric: tabular-nums;
+}
+.fw-rtd-cell {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.25;
+}
+.fw-rtd-cell > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-rtd-num {
+  font-variant-numeric: tabular-nums;
+}
+.fw-rtd-sizecell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.fw-rtd-refused {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--nds-radius-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.fw-rtd-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+.fw-rtd-form > * {
+  min-width: 0;
+}
+.fw-rtd-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rtd-legend {
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-rtd-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-rtd-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+.fw-rtd-radios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+/* The extra minutes per size: one small field per size of the range, wrapping. */
+.fw-rtd-sizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+.fw-rtd-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.fw-rtd-grow {
+  flex: 1 1 240px;
+}
+.fw-rtd-list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+/* The W1 routing table's minutes cell: where the run comes from, under the input. */
+.fw-rtd-run {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}

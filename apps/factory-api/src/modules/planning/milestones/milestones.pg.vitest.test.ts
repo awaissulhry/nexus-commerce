@@ -173,6 +173,52 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     expect(preview.skipped).toEqual(expect.arrayContaining([expect.objectContaining({ workOrderId: wo2, code: 'GATE_NOT_PASSED' })]))
   })
 
+  it("B-W2b-F22: the sample work order of the order's pre-production round is never held; its production work order still is", async () => {
+    const wo2 = workOrders['SEED-WO-0002']!
+    const so2 = orders['SEED-SO-0002']!
+    // SEED-WO-0001 and SEED-WO-0002 already take every size of SO-0002's lines: the samples are made on a made-up line 30 of
+    // the same order (a copy of line 10, BLK 50/52/54), as the samples test makes them on a copy of that line.
+    const line30 = newId()
+    await admin(
+      `INSERT INTO "SalesOrderLine" SELECT (jsonb_populate_record(NULL::"SalesOrderLine", to_jsonb(l) || jsonb_build_object('id', $2::uuid, 'seq', 30, 'version', 1))).* FROM "SalesOrderLine" l WHERE l."orderId" = $1 AND l.seq = 10`,
+      [so2, line30],
+    )
+    await admin(
+      `INSERT INTO "SalesOrderLineSize" SELECT (jsonb_populate_record(NULL::"SalesOrderLineSize", to_jsonb(z) || jsonb_build_object('id', gen_random_uuid(), 'lineId', $2::uuid, 'version', 1))).* FROM "SalesOrderLineSize" z JOIN "SalesOrderLine" l ON l.id = z."lineId" WHERE l."orderId" = $1 AND l.seq = 10`,
+      [so2, line30],
+    )
+    // The production manager keeps sample rounds and makes work orders (sales.samples.manage + workorders.manage): the
+    // pre-production round SEED-SR-0003 that the PP gate waits for gets its SAMPLE work order through the real route.
+    const made = await as(manager, 'POST', `/sales/samples/rounds/${samples.roundIds.pp}/work-orders`, { lines: [{ salesOrderLineId: line30 }] }, 201)
+    const sample = made.workOrder.id as string
+    const row = await one<{ kind: string; sampleRoundId: string; siteId: string }>('SELECT kind::text AS kind, "sampleRoundId", "siteId" FROM "WorkOrder" WHERE id = $1', [sample])
+    expect(row).toMatchObject({ kind: 'SAMPLE', sampleRoundId: samples.roundIds.pp })
+    // The gate's count holds SEED-WO-0002 only (the sample is not the order's production).
+    expect(gateIn(await read(), samples.gateIds.pp)).toMatchObject({ state: 'WAITING', holds: 1 })
+    // W1's create stores no operation on a draft (its release writes them, and this harness has no certificate to release
+    // it): like the seed's SEED-WO-0002, the sample draft gets its four operations stored (a copy of SEED-WO-0002's), so the
+    // board has work of it to place.
+    await admin(
+      `INSERT INTO "WorkOrderOperation" SELECT (jsonb_populate_record(NULL::"WorkOrderOperation", to_jsonb(o) || jsonb_build_object('id', gen_random_uuid(), 'workOrderId', $2::uuid, 'version', 1))).* FROM "WorkOrderOperation" o WHERE o."workOrderId" = $1`,
+      [wo2, sample],
+    )
+
+    // Place all by due date: the gate holds SEED-WO-0002, never the sample work order.
+    const siteId = row.siteId
+    const preview = await as(planner, 'POST', '/planning/schedule/place-by-due-date', { siteId, workOrderIds: [sample, wo2], apply: false })
+    expect(preview.skipped).toEqual(expect.arrayContaining([expect.objectContaining({ workOrderId: wo2, code: 'GATE_NOT_PASSED' })]))
+    expect(preview.skipped.filter((row: Json) => row.workOrderId === sample && row.code === 'GATE_NOT_PASSED')).toEqual([])
+    expect(preview.slots.some((row: Json) => row.workOrderId === sample), JSON.stringify(preview.skipped)).toBe(true)
+
+    // Placed by hand while the gate waits: 201; SEED-WO-0002 still answers 409.
+    const line = await one<{ id: string }>('SELECT id FROM "Line" WHERE "tenantId" = $1 AND "siteId" = $2 ORDER BY code, id LIMIT 1', [tenant, siteId])
+    const startAt = new Date(Date.now() + 86_400_000).toISOString()
+    const placed = await as(planner, 'POST', '/planning/schedule/slots', { workOrderId: sample, operationId: null, lane: { kind: 'LINE', id: line.id }, startAt, overloadReason: 'Made-up: the samples go first.' }, 201)
+    expect(placed.slot).toMatchObject({ workOrderId: sample })
+    expect(refusalOf(await as(planner, 'POST', '/planning/schedule/slots', { workOrderId: wo2, operationId: null, lane: { kind: 'LINE', id: line.id }, startAt }, 409))).toBe('refusal/GATE_NOT_PASSED')
+    expect(gateIn(await read(), samples.gateIds.pp)).toMatchObject({ state: 'WAITING', holds: 1 })
+  })
+
   it('starts before the gate only by someone other than its planner and maker, with a reason', async () => {
     const world = await read(manager)
     const pp = gateIn(world, samples.gateIds.pp)

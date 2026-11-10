@@ -36,6 +36,8 @@ import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
 import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
+// B-W2b-235: the routing in depth (Operations tab).
+import type { RoutingDepthActions, RoutingDepthModel } from '../routing/depth/model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -145,6 +147,8 @@ export interface StyleRecordViewModel {
   /** B-W2b-236: Overview › Sketches and pictures and Files & patterns › Pattern files (absent: not read, like idle). */
   gallery?: GalleryModel
   patternFiles?: PatternsModel
+  /** B-W2b-235: the Operations tab's routing in depth — times, sizes, variants, checkpoints, settings (absent: not read). */
+  routingDepth?: RoutingDepthModel
   /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
   samples?: { view: boolean; manage: boolean }
   /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
@@ -226,4 +230,6 @@ export interface StyleRecordActions {
   /** B-W2b-236: the Sketches and pictures and Pattern files sections. */
   gallery?: GalleryActions
   patternFiles?: PatternsActions
+  /** B-W2b-235: the routing in depth. */
+  routingDepth?: RoutingDepthActions
 }

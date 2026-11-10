@@ -12,7 +12,8 @@ import type { OperationQuery, OperationRow, OperationView, WhereUsed } from './a
 export { WORK_CENTRE_KINDS }
 export type WorkCentreKind = (typeof WORK_CENTRE_KINDS)[number]
 
-export const OPERATION_VIEWS = ['open', 'unused', 'differs', 'archived', 'all'] as const
+// B-W2b-235: 'smv' = the SMV changes waiting for approval (the W2b tile; its rows are the waiting proposals, not operations).
+export const OPERATION_VIEWS = ['open', 'unused', 'differs', 'archived', 'all', 'smv'] as const
 export type OperationListView = (typeof OPERATION_VIEWS)[number]
 export const OPERATION_TILES = ['unused', 'differs'] as const satisfies readonly OperationListView[]
 export type OperationTile = (typeof OPERATION_TILES)[number]
@@ -141,7 +142,8 @@ export function updateHeld(row: WhereUsed, operation: Pick<OperationView, 'stand
 
 export const STATUS_TONE = { ACTIVE: 'success', ARCHIVED: 'neutral' } as const
 
-export const OPERATION_TABS = ['definition', 'minutes', 'whereused'] as const
+// B-W2b-235: Machine & settings (design operation.machine) after Minutes.
+export const OPERATION_TABS = ['definition', 'minutes', 'machine', 'whereused'] as const
 export type OperationTab = (typeof OPERATION_TABS)[number]
 export const tabOf = (value: string | null | undefined): OperationTab => ((OPERATION_TABS as readonly string[]).includes(value ?? '') ? (value as OperationTab) : 'definition')
 

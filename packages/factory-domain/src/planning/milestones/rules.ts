@@ -15,7 +15,8 @@ import type { BusinessDate } from '../../core/time'
  * names a round passes when that round is approved — `sample_round.decided`; a LEATHER_APPROVED gate passes when every
  * leather lot reserved for the order is released — `lot.released`) or started before (the override: someone who is
  * neither its owner nor its maker, with a reason; the database holds the same rule). While a gate WAITS, the planning
- * board holds a drop of the order's work orders that have not started (apps/factory-api modules/planning/schedule/gates.ts).
+ * board holds a drop of the order's work orders that have not started (apps/factory-api modules/planning/schedule/gates.ts);
+ * only its production work orders, never a sample or a repair (B-W2b-F22, HELD_WORK_ORDER_KINDS).
  * Templates (milestones made from an order type's offsets) stay Later (design).
  *
  * This is a planning milestone, NOT a compliance gate: the one compliance gate at work-order release, label print and
@@ -249,6 +250,12 @@ export const existsRefusal = (number: string, kind: GateKind): GateRefusal =>
   refusal('GATE_EXISTS', `Order ${number} already has a gate of this kind (${kind.toLowerCase().replace(/_/g, ' ')}): change that one.`)
 
 // ---- the board's hold ---------------------------------------------------------------------------------------------------
+
+/**
+ * B-W2b-F22: the work orders a waiting gate holds, the order's production. A SAMPLE work order makes the sample that passes
+ * the gate, and a REPAIR mends a garment already made: neither is held.
+ */
+export const HELD_WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
 
 /** What the planning board says when it holds a drop: the order and the gates it waits on (the API's English, for logs). */
 export function holdWords(workOrder: string, gates: readonly { readonly orderNumber: string; readonly kind: GateKind; readonly label: string | null }[]): string {
