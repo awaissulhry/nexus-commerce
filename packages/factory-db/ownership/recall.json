@@ -1,0 +1,61 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/recall.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-4, schema wave 33/33 (B-W2b-222): recall, authority and claims. The office (factory_runtime) reads and writes through apps/factory-api's modules/compliance/recall and claims (B-W2b-260, -264), always with command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key). The public DoC page reads a published recall notice in the tenant's system scope (the office role), as it reads the DoC. The floor, portal and link sessions read nothing here: no screen of theirs shows a recall, a notice, a request or a claim, and a distributor is told by e-mail, the portal's own messages or a link, never by reading these rows (a partyId here is the party told or followed: the party key, with no partner grant). No money column, no personal data beyond who wrote a row and the contact a distributor was reached at. Nothing is deleted but a recall progress row while its action is a DRAFT (the …_recall_claims_w2b_guards triggers); the rest is cancelled, closed, withdrawn or ended. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "AuthorityNotice": {
+      "about": "The office drafts a notice to a market surveillance authority from a register entry, sends it (a person), records the authority's reference and the copy sent, or cancels a draft; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RecallAction": {
+      "about": "The office sets up a recall or withdrawal of a register entry (its scope from the trace, its public notice), starts it, publishes and takes down the notice, widens the scope and closes it, or cancels a draft; never deleted. The public DoC page reads the published notices in the tenant's system scope.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RecallProgress": {
+      "about": "The office records, per customer (and shipment), the garments of a recall's scope sent and what became of them while the recall runs, and removes a row while the recall is a DRAFT.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "DistributorNotice": {
+      "about": "The office writes a notice to a distributor or B2B customer about a register entry (and its recall), sends it (a person; an e-mail through the outbox), records the answer or the failure, or cancels a draft; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AuthorityRequest": {
+      "about": "The office logs a request from a market surveillance authority, corrects it while open, names its register entry and evidence, records the answer (a person), or cancels it; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SustainabilityClaim": {
+      "about": "The office drafts a sustainability claim with its words, scope and evidence, approves it before use and withdraws it; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ClaimUse": {
+      "about": "The office records where an approved claim is used (a label, a style, a catalogue, web shop texts) and ends a use that stops; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

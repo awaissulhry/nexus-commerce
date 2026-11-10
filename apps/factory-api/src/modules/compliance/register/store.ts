@@ -1,6 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import type { RegisterKind, RegisterRisk, RegisterSourceType, RegisterStatus } from '@nexus/factory-domain/compliance/register/rules'
+import { REGISTER_KINDS, type RegisterKind, type RegisterRisk, type RegisterSourceType, type RegisterStatus } from '@nexus/factory-domain/compliance/register/rules'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { StaleVersionError, type CommandTools, type CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
@@ -119,8 +119,15 @@ const COLUMNS = {
 } as const satisfies Prisma.PpeRegisterEntrySelect
 type Row = Prisma.PpeRegisterEntryGetPayload<{ select: typeof COLUMNS }>
 
+/**
+ * W2b-4 (B-W2b-222): PpeRegisterKind grew WITHDRAWAL and AUTHORITY_REQUEST, which this register does not show yet (B-W2b-260
+ * and -271 widen REGISTER_KINDS). Every read here keeps to the W1 kinds, so an entry of a new kind reads as not found.
+ */
+const W1_KINDS = { kind: { in: [...REGISTER_KINDS] } } satisfies Prisma.PpeRegisterEntryWhereInput
+
 const recordOf = (row: Row): EntryRecord => ({
   ...row,
+  kind: row.kind as RegisterKind,
   // The lists are never NULL in practice (default empty); a NULL reads as empty.
   batchNumbers: row.batchNumbers ?? [],
   serials: row.serials ?? [],
@@ -133,13 +140,13 @@ const recordOf = (row: Row): EntryRecord => ({
 // ---- reads ---------------------------------------------------------------------------------------------------------------
 
 export async function readEntry(client: Client, entryId: string): Promise<EntryRecord | null> {
-  const row = await client.ppeRegisterEntry.findUnique({ where: { id: entryId }, select: COLUMNS })
+  const row = await client.ppeRegisterEntry.findFirst({ where: { id: entryId, ...W1_KINDS }, select: COLUMNS })
   return row ? recordOf(row) : null
 }
 
 /** The entry another record opened, if any (one per source record: the partial unique index). */
 export async function readEntryBySource(client: Client, sourceType: RegisterSourceType, sourceId: string): Promise<EntryRecord | null> {
-  const row = await client.ppeRegisterEntry.findFirst({ where: { sourceType, sourceId }, select: COLUMNS })
+  const row = await client.ppeRegisterEntry.findFirst({ where: { sourceType, sourceId, ...W1_KINDS }, select: COLUMNS })
   return row ? recordOf(row) : null
 }
 
@@ -164,6 +171,7 @@ export async function readEntries(client: Client, filter: EntryFilter): Promise<
   const where: Prisma.PpeRegisterEntryWhereInput = {
     AND: [
       filter.scope,
+      W1_KINDS,
       filter.kind ? { kind: filter.kind } : {},
       filter.status ? { status: filter.status } : {},
       filter.risk ? { risk: filter.risk } : {},
@@ -187,7 +195,9 @@ export async function lockEntry(tx: CommandTx, entryId: string, expectedVersion?
   const locked = await tx.$queryRaw<{ version: number }[]>`SELECT version FROM "PpeRegisterEntry" WHERE id = ${entryId}::uuid FOR UPDATE`
   if (!locked[0]) throw new NotFoundError('Register entry not found.')
   if (expectedVersion !== undefined && expectedVersion !== locked[0].version) throw new StaleVersionError('PpeRegisterEntry', entryId, locked[0].version, expectedVersion)
-  return (await readEntry(tx, entryId))!
+  const entry = await readEntry(tx, entryId)
+  if (!entry) throw new NotFoundError('Register entry not found.')
+  return entry
 }
 
 /** What the audit rows record of an entry: the whole record. */

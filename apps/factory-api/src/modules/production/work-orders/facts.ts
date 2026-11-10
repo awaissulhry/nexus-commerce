@@ -24,6 +24,9 @@ import { repairNotRequired, repairWorkCentreCheck } from '@nexus/factory-domain/
 // B-W2a-46 (MES-004): the release's W2a blockers, holds and the plan's readiness.
 import { holdsCheck, materialReadinessCheck } from '@nexus/factory-domain/production/work-orders/blockers'
 import { materialReadinessOf, readReleaseBlockers, type PlanCache, type ReleaseBlockerFacts } from './release/blockers'
+// B-W2b-231 (PRD-191): a cell outside what the revision is released for waits for a later release of it.
+import { scopedCellsCheck, type WorkOrderScope } from '@nexus/factory-domain/product/release/work-orders'
+import { workOrderScopeOf } from '../../product/release/scope'
 import { ORDER_DEPOSIT_ONLY } from '../../sales/deposits/deposits'
 import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
 import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
@@ -275,6 +278,8 @@ export interface ReleaseFacts extends Basics {
   readonly batchSeries: boolean
   /** B-W2a-46: the holds naming the work order and the plan's readiness (./release/blockers). */
   readonly blockers: ReleaseBlockerFacts
+  /** B-W2b-231: what its revision is released for (null: every colourway and size). */
+  readonly scope: WorkOrderScope | null
 }
 
 /**
@@ -319,7 +324,7 @@ export async function readReleaseFacts(db: Reader, basics: Basics, date: Busines
     // B-W2a-12: a repair checks no certificate, deposit, BOM or material (factory-domain production/work-orders/repair).
     const spec = await repairSpecOf(db, workOrder.id, parts)
     const batchSeries = await hasSeries(db, workOrder.companyId, 'BATCH')
-    return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries, blockers: await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness: 'whenShort', short: false }) }
+    return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries, blockers: await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness: 'whenShort', short: false }), scope: null }
   }
   const spec = planSpec(parts, cells)
   const gates = await readGates(db, style.id, cells, date)
@@ -328,7 +333,8 @@ export async function readReleaseFacts(db: Reader, basics: Basics, date: Busines
   const batchSeries = await hasSeries(db, workOrder.companyId, 'BATCH')
   const short = material.some((line) => decimalOf(line.short).gt(0))
   const blockers = await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness, short })
-  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries, blockers }
+  const scope = await workOrderScopeOf(db, revision?.styleId === style.id ? revision : null, style.sizes)
+  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries, blockers, scope }
 }
 
 /** THE release check: the record's checklist and the release's refusal are this one answer. */
@@ -359,7 +365,11 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
     certificateCheck(facts.gates),
     workCentresCheck(site.code, parts.steps, parts.variants, cells.map((cell) => ({ colourwayId: cell.colourwayId, size: cell.size, label: cellLabel(cell) })), spec.missing),
     bomCheck(revision, spec.gaps),
-    cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
+    scopedCellsCheck(
+      cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
+      facts.scope,
+      cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), colourwayId: cell.colourwayId, size: cell.size })),
+    ),
     depositCheck(facts.deposits),
     materialReadinessCheck(facts.material, materialReadinessOf(facts.blockers.readiness), override),
     batchCheck(facts.batchSeries),

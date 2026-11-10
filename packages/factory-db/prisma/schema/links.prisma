@@ -86,6 +86,8 @@ model OneOffLink {
   approvalAnswers ApprovalRequest[]
   // sales.prisma: the quote acceptances made through it.
   quoteAcceptances QuoteAcceptance[]
+  // W2b-4 recall.prisma (wave 33/33): the distributor notices sent through it.
+  distributorNotices DistributorNotice[] @relation("DistributorNoticeLink")
   // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM), and those it proposed changes to.
   purchaseOrderConfirmations PurchaseOrder[] @relation("PurchaseOrderConfirmLink")
   purchaseOrderProposals     PurchaseOrder[] @relation("PurchaseOrderProposalLink")

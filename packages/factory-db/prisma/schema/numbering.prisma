@@ -156,6 +156,10 @@ enum NumberKind {
   /// (EP-…; EvidencePack.number). Office document kinds.
   TECHNICAL_FILE
   EVIDENCE_PACK
+  /// W2b-4 wave 33/33: a recall's or withdrawal's number (RCL-…; recall.prisma RecallAction.number) and an authority
+  /// request's (AR-…; AuthorityRequest.number). Office document kinds: the API numbers them when they are made.
+  RECALL
+  AUTHORITY_REQUEST
 }
 
 enum NumberReset {
