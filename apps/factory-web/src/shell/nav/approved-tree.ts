@@ -386,6 +386,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Principali',
         hideLabel: true,
         pages: [
+          // W2b: B-W2b-266 Status board (SCR-119), first of Main (design compliance.status group "Pages: Status board · Certificates · …").
+          { id: 'compliance.status', title: 'Status board', titleIt: 'Stato conformità', wave: 'W2b', href: '/compliance/status' },
           { id: 'compliance.certificates', title: 'Certificates', titleIt: 'Certificati', wave: 'W1', href: '/compliance/certificates' },
           { id: 'compliance.labels', title: 'Labels & marking', titleIt: 'Etichette e marcature', wave: 'W1', href: '/compliance/labels' },
           { id: 'compliance.tests', title: 'Tests & substances', titleIt: 'Test e sostanze', wave: 'W1', href: '/compliance/tests' },
