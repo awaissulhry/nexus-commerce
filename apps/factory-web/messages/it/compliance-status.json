@@ -1,0 +1,456 @@
+{
+  "common": {
+    "loading": "Lettura…",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "noAccess": {
+    "title": "Lo stato conformità non è nel tuo ruolo",
+    "body": "Chiedi all'amministratore la lettura del registro certificati (compliance.certificates.view)."
+  },
+  "band": {
+    "label": "Azioni dello stato conformità",
+    "reading": "Lettura dello stato…",
+    "evidence": "Mostra evidenze per…",
+    "arrange": "Disponi",
+    "more": "Altre azioni",
+    "csv": "Esporta stato (CSV)",
+    "csvHeld": "Lo stato non è ancora stato letto.",
+    "print": "Stampa stato (apre una nuova scheda)",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In diretta",
+    "offline": "Offline: lo stato può essere vecchio"
+  },
+  "offline": {
+    "title": "Offline: questa è l'ultima copia letta",
+    "body": "La sua ora è indicata sopra. Le deroghe attendono il ritorno della connessione."
+  },
+  "scope": {
+    "label": "Ambito dello stato",
+    "markets": "Mercati",
+    "marketsAll": "Mercati attivi",
+    "marketsChosen_one": "1 mercato: {codes}",
+    "marketsChosen_other": "{count} mercati: {codes}",
+    "brand": "Marchio",
+    "allBrands": "Tutti i marchi",
+    "thisBrand": "Questo marchio",
+    "brandOnly": "Solo i modelli di {brand}",
+    "rows": "Righe",
+    "rowsStyles": "Righe: modelli",
+    "rowsOrders": "Ordini in produzione (in arrivo)",
+    "rowsLots": "Lotti di materiale (in arrivo)",
+    "gapChip": "Lacuna: {gap}",
+    "gapClear": "Togli il filtro lacuna",
+    "every": "Ogni azienda raggiunta dal tuo ruolo (i suoi modelli e quelli comuni a tutte le aziende)"
+  },
+  "section": {
+    "kpi": "Indicatori di prontezza",
+    "actions": "Da fare",
+    "matrix": "Modello × mercato",
+    "gates": "Blocchi ai controlli",
+    "expiry": "Prossime scadenze"
+  },
+  "kpi": {
+    "hint": "Cosa blocca la vendita. Un indicatore filtra la matrice o i blocchi qui sotto; certificati e lotti aprono le loro liste.",
+    "empty": "— finché il primo modello non ha un mercato.",
+    "failed": "Non è stato possibile leggere gli indicatori"
+  },
+  "tile": {
+    "stylesReady": "Modelli pronti in ogni mercato mostrato",
+    "stylesBlocked": "Modelli bloccati",
+    "certificatesExpiring90": "Certificati in scadenza entro 90 giorni",
+    "lotsWithoutCrVi": "Lotti a magazzino senza prova Cr VI",
+    "missingLanguages": "Lingue mancanti di DoC o nota informativa",
+    "shipmentsHeld": "Spedizioni ferme a un controllo",
+    "hint": {
+      "stylesReady": "Ogni mercato pronto",
+      "stylesBlocked": "Almeno un requisito bloccante",
+      "certificatesExpiring90": "Certificati validi in scadenza",
+      "lotsWithoutCrVi": "Lotti fermi senza esito conforme",
+      "missingLanguages": "Celle modello × mercato",
+      "shipmentsHeld": "Rifiutate negli ultimi 30 giorni, senza deroga"
+    },
+    "notInRole": "Non nel tuo ruolo",
+    "held": {
+      "noList": "La sua lista non è ancora pronta",
+      "role": "La sua lista non è nel tuo ruolo"
+    }
+  },
+  "severity": {
+    "BLOCKED": "Bloccato",
+    "MISSING": "Mancante",
+    "EXPIRING": "In scadenza"
+  },
+  "who": {
+    "COMPLIANCE": "Conformità",
+    "QUALITY": "Qualità",
+    "PRODUCTION": "Produzione",
+    "SALES": "Vendite"
+  },
+  "fixPlace": {
+    "certificates": "Correggi in Certificati",
+    "declarations": "Correggi in Dichiarazioni",
+    "labels": "Correggi in Etichette e marcature",
+    "operators": "Correggi gli operatori economici",
+    "tests": "Correggi in Test e sostanze",
+    "markets": "Correggi i mercati",
+    "requirements": "Correggi i requisiti"
+  },
+  "fix": {
+    "held": {
+      "declarations": "Dichiarazioni e istruzioni arrivano con il loro passo.",
+      "settings": "Regole e mercati arrivano con il loro passo.",
+      "role": "Quella pagina non è nel tuo ruolo."
+    }
+  },
+  "gate": {
+    "WORK_ORDER_RELEASE": "Rilascio dell'ordine di lavoro",
+    "LABEL_PRINT": "Stampa etichette",
+    "FINAL_RELEASE": "Rilascio finale",
+    "SHIPMENT": "Spedizione"
+  },
+  "gap": {
+    "certificate": "Certificato",
+    "docLanguage": "Lingua di DoC e nota informativa",
+    "label": "Etichetta",
+    "crVi": "Prova Cr VI",
+    "operator": "Operatore economico",
+    "other": "Altri requisiti",
+    "crViNote": "La prova Cr VI riguarda i lotti, non una cella modello × mercato: la matrice resta intera.",
+    "crViOpen": "Apri i lotti in attesa di prova"
+  },
+  "actions": {
+    "hint": "I primi cinque blocchi, dal più grave, ciascuno con chi può risolverlo e il pulsante che lo fa.",
+    "hintGap": "Solo le lacune di un tipo: {gap}.",
+    "seeAll": "Vedi tutti ({count})",
+    "listLabel": "Cosa blocca la vendita",
+    "empty": "Al momento nulla blocca la vendita",
+    "emptyBody": "Ogni modello mostrato è pronto in ogni mercato mostrato.",
+    "failed": "Non è stato possibile leggere le cose da fare",
+    "head": {
+      "WORK_ORDER_RELEASE": "{style} non può essere rilasciato per {market}",
+      "LABEL_PRINT": "{style} non può stampare etichette per {market}",
+      "FINAL_RELEASE": "{style} non può avere il rilascio qualità per {market}",
+      "SHIPMENT": "{style} non può essere spedito in {market}",
+      "other": "{style} per {market}"
+    }
+  },
+  "all": {
+    "title_one": "Da fare: 1 riga",
+    "title_other": "Da fare: {count} righe",
+    "intro": "Ogni blocco dei modelli mostrati, dal più grave. Invio apre la lista di controllo della riga.",
+    "count_one": "1 di {total}",
+    "count_other": "{count} di {total}",
+    "export": "Esporta righe (CSV)",
+    "exportHeld": "Nessuna riga da esportare.",
+    "failed": "Non è stato possibile leggere le righe",
+    "col": {
+      "severity": "Stato",
+      "line": "Cosa blocca",
+      "who": "Chi lo risolve",
+      "fix": "Dove"
+    }
+  },
+  "cell": {
+    "READY": "Pronto",
+    "MISSING": "Mancante",
+    "BLOCKED": "Bloccato",
+    "EXPIRING": "In scadenza",
+    "missingCount_one": "Manca 1",
+    "missingCount_other": "Mancano {count}",
+    "title": "{style} × {market}",
+    "failed": "Non è stato possibile leggere la lista di controllo",
+    "noun": "mercato",
+    "intro": "Cosa deve esistere prima di produrre e spedire questo modello in {market}.",
+    "listLabel": "Requisiti di {style} per {market}",
+    "blockedAt": "Il lavoro si ferma a: {gates}.",
+    "who": "Chi: {who}",
+    "blocks": "Blocca: {gates}",
+    "blocksNone": "Non blocca nessun controllo",
+    "locked": "Bloccato per legge a: {gates}",
+    "evidence": "Evidenza: {label}",
+    "lawPlain": "La norma da cui viene questo requisito.",
+    "how": "Come: {how}",
+    "fixFirst": "Correggi il primo mancante",
+    "nothingMissing": "Qui non manca nulla.",
+    "keys": "J / K mercato successivo · ⇧J / ⇧K modello successivo · Esc chiude",
+    "marketOff": "Questo mercato è disattivato: le sue regole attendono.",
+    "notSold": "Ogni mercato è controllato come se il modello vi fosse venduto: i mercati di vendita di un modello non sono ancora registrati."
+  },
+  "line": {
+    "OK": "Presente",
+    "MISSING": "Mancante",
+    "EXPIRING": "In scadenza",
+    "NOT_NEEDED": "Non serve",
+    "MANUAL": "Lo verifica una persona"
+  },
+  "matrix": {
+    "hint": "Ogni modello per ogni mercato mostrato: pronto, mancante o bloccato. Una cella apre la sua lista di controllo; Invio apre la cella peggiore della riga.",
+    "legend": "Cosa dicono le celle",
+    "notSold": "— non venduto lì (non ancora registrato)",
+    "col": {
+      "style": "Modello"
+    },
+    "brand": "Marchio: {brand}",
+    "ownName": "Venduto con il nostro nome",
+    "cellLabel": "{style} per {market}: {state}. Apri la lista di controllo",
+    "search": "Cerca modelli",
+    "statusFilter": "Stato delle righe",
+    "statusAll": "Ogni riga",
+    "status": {
+      "ready": "Pronti in ogni mercato",
+      "missing": "Con qualcosa di mancante",
+      "blocked": "Bloccati da qualche parte",
+      "expiring": "Con qualcosa in scadenza"
+    },
+    "count_one": "1 modello",
+    "count_other": "{count} modelli",
+    "countOf_one": "1 di {total} modelli",
+    "countOf_other": "{count} di {total} modelli",
+    "export_one": "Esporta 1 (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "more_one": "È mostrato solo il primo modello: restringi per marchio, mercato o ricerca.",
+    "more_other": "Sono mostrati solo i primi {count} modelli: restringi per marchio, mercato o ricerca.",
+    "failed": "Non è stato possibile leggere la matrice",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "clear": "Togli i filtri",
+    "empty": {
+      "title": "Nessun modello è ancora impostato per un mercato",
+      "body": "Imposta i mercati sul modello (Prodotti › Modelli › Conformità) e attiva i mercati in Regole e mercati."
+    }
+  },
+  "feed": {
+    "hint_one": "Ogni volta che un controllo ha fermato il lavoro nell'ultimo giorno.",
+    "hint_other": "Ogni volta che un controllo ha fermato il lavoro negli ultimi {count} giorni.",
+    "count_one": "1 blocco",
+    "count_other": "{count} blocchi",
+    "countOf_one": "1 di {total}",
+    "countOf_other": "{count} di {total}",
+    "export_one": "Esporta 1 (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "failed": "Non è stato possibile leggere i blocchi",
+    "noMatch": "Nessun blocco corrisponde a questi filtri",
+    "empty_one": "Nessun blocco in 1 giorno",
+    "empty_other": "Nessun blocco in {count} giorni",
+    "gateFilter": "Controllo",
+    "gateAll": "Ogni controllo",
+    "stateFilter": "Stato",
+    "daysFilter": "Giorni",
+    "days_one": "Ultimo giorno",
+    "days_other": "Ultimi {count} giorni",
+    "filter": {
+      "all": "Ogni stato",
+      "blocked": "Ancora bloccati",
+      "cleared": "Superati da allora",
+      "overridden": "In deroga"
+    },
+    "state": {
+      "BLOCKED": "Ancora bloccato",
+      "CLEARED": "Superato da allora",
+      "OVERRIDDEN": "In deroga",
+      "OVERRIDE": "Deroga"
+    },
+    "col": {
+      "when": "Quando",
+      "where": "Dove",
+      "what": "Cosa",
+      "reason": "Perché",
+      "state": "Superato o bloccato",
+      "actions": "Azioni"
+    },
+    "subjectNoNumber": "(senza numero)",
+    "noMarket": "Nessun mercato",
+    "overrideReason": "Deroga: {reason}",
+    "overriddenBy": "Da {who} fino al {until}",
+    "overrideUntil": "Da {who} fino al {until}",
+    "someone": "una persona dell'ufficio",
+    "open": "Apri {number}",
+    "override": "Deroga…",
+    "nothing": "Niente da fare qui",
+    "menu": "Azioni per {number}"
+  },
+  "subject": {
+    "WorkOrder": "Ordine di lavoro",
+    "Shipment": "Spedizione"
+  },
+  "subjectInText": {
+    "WorkOrder": "questo ordine di lavoro",
+    "Shipment": "questa spedizione"
+  },
+  "override": {
+    "title": "Deroga a un controllo per {number}",
+    "gate": "{gate}: {subject} {number}",
+    "what": "Per {what}",
+    "lawPlain": "La norma da cui viene questo requisito; le parole del requisito sono nella sua lista di controllo.",
+    "scope": "Una deroga fa passare {subject} ({number}) da questo controllo solo per questo requisito, fino al giorno scelto.",
+    "how_one": "Un motivo scritto e un codice nuovo; al massimo 1 giorno.",
+    "how_other": "Un motivo scritto e un codice nuovo; al massimo {count} giorni.",
+    "reason": "Perché si deroga",
+    "reasonHint": "Da 10 a {max} caratteri. Va nella vista di controllo del registro DPI.",
+    "until": "Vale fino a (fine del giorno)",
+    "untilHint_one": "Al massimo 1 giorno: fino al {latest} al più tardi.",
+    "untilHint_other": "Al massimo {count} giorni: fino al {latest} al più tardi.",
+    "scopeLine": "Ambito: solo {subject} ({number}).",
+    "listed": "Le deroghe sono elencate nella vista di controllo del registro DPI e nella catena delle evidenze di ogni capo prodotto con esse.",
+    "refusedAt": "Bloccato il {at}.",
+    "send": "Deroga per {number} fino al {until}",
+    "sendPlain": "Deroga per {number}",
+    "done": "{number} può passare il controllo: deroga di {code} registrata.",
+    "problem": {
+      "reasonShort": "Scrivi il motivo (almeno 10 caratteri).",
+      "reasonLong": "Il motivo è troppo lungo (al massimo 2000 caratteri).",
+      "day": "Scegli l'ultimo giorno di validità.",
+      "past": "La deroga deve finire nel futuro.",
+      "tooLong": "È più lungo di quanto questo requisito consente."
+    },
+    "held": {
+      "busy": "Invio…",
+      "notRefusal": "Questa riga è una deroga, non un blocco.",
+      "state": {
+        "CLEARED": "Il lavoro ha superato questo controllo da allora: niente da derogare.",
+        "OVERRIDDEN": "Una deroga è già in vigore.",
+        "OVERRIDE": "Questa riga è una deroga, non un blocco."
+      },
+      "locked": "La legge blocca questo controllo: non si deroga mai.",
+      "noRole": "Nessun ruolo può derogare questo requisito.",
+      "role": "Solo i ruoli indicati dal requisito possono derogarlo.",
+      "offline": "Offline: le deroghe attendono il ritorno della connessione."
+    },
+    "refused": {
+      "role": "Il tuo ruolo non può derogare questo requisito.",
+      "conflict": "Ora non si può derogare il controllo (bloccato per legge, già derogato o superato nel frattempo). I blocchi sono stati riletti.",
+      "invalid": "La deroga è stata rifiutata così com'è: controlla motivo e giorno.",
+      "gone": "Il blocco non c'è più. I blocchi sono stati riletti.",
+      "unavailable": "Il servizio della fabbrica non ha risposto. Riprova tra poco."
+    }
+  },
+  "stepUp": {
+    "title": "Conferma con l'app di autenticazione",
+    "sentence": "Il codice conferma la deroga per {number}.",
+    "confirm": "Conferma e deroga",
+    "problem": {
+      "wrong": "Codice non accettato. Inserisci il codice più recente.",
+      "locked": "Troppi tentativi. Attendi un minuto.",
+      "unavailable": "Non è stato possibile verificare il codice. Riprova tra poco."
+    }
+  },
+  "expiry": {
+    "hint": "Certificati, dichiarazioni dei fornitori e prove delle dichiarazioni ambientali in scadenza nei prossimi 12 mesi.",
+    "hintRange": "Certificati, dichiarazioni dei fornitori e prove delle dichiarazioni ambientali in scadenza dal {from} al {to}.",
+    "failed": "Non è stato possibile leggere le prossime scadenze",
+    "empty": "Nulla scade nei prossimi 12 mesi",
+    "emptyBody": "Nessun certificato in vigore, dichiarazione accettata o dichiarazione ambientale approvata scade nei prossimi 12 mesi.",
+    "monthsLabel": "Mesi",
+    "count_one": "1 voce",
+    "count_other": "{count} voci",
+    "kindCertificate": "Certificato",
+    "kindDeclaration": "Dichiarazione",
+    "kindOther": "Documento",
+    "what": "Cosa",
+    "validFrom": "Valido dal",
+    "validTo": "Valido fino al",
+    "left": "Rimane",
+    "status": "Nota",
+    "suspended": "Sospeso dall'organismo notificato",
+    "endsWithBase": "Scade con il certificato di base",
+    "chipLabel": "{kind} {what}, valido fino al {date}, {left}",
+    "later": "Le prove LWG entrano in questo calendario con il passo della catena di custodia.",
+    "kindClaim": "Dichiarazione ambientale"
+  },
+  "validity": {
+    "span": "Valido {from} – {to}",
+    "until": "Valido fino al {to}",
+    "left": "mancano {parts}",
+    "years_one": "1 anno",
+    "years_other": "{count} anni",
+    "months_one": "1 mese",
+    "months_other": "{count} mesi",
+    "days_one": "1 giorno",
+    "days_other": "{count} giorni",
+    "daysLeft_one": "1 giorno",
+    "daysLeft_other": "{count} giorni",
+    "endsToday": "Scade oggi",
+    "ended_one": "Scaduto da 1 giorno",
+    "ended_other": "Scaduto da {count} giorni",
+    "alertAt": "{days} giorni prima della scadenza",
+    "inAlert": "Entro {days} giorni",
+    "stage": {
+      "ok": "In vigore",
+      "d180": "Entro 180 giorni",
+      "d90": "Entro 90 giorni",
+      "d30": "Entro 30 giorni",
+      "ended": "Scaduto",
+      "notYet": "Non ancora valido"
+    }
+  },
+  "finder": {
+    "title": "Mostra evidenze per…",
+    "kind": "Cos'è",
+    "kinds": {
+      "serial": "Matricola del capo",
+      "batch": "Partita"
+    },
+    "number": "Numero",
+    "hint": "Scansionalo o scrivilo. La catena delle evidenze si apre in una nuova scheda.",
+    "open": "Apri la catena delle evidenze (nuova scheda)",
+    "held": "Prima scrivi o scansiona un numero."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "evidence": "Mostra evidenze per…",
+    "arrange": "Disponi i pannelli",
+    "print": "Stampa stato (nuova scheda)",
+    "cells": "Nella lista di una cella: mercato successivo o precedente",
+    "rows": "Nella lista di una cella: modello successivo o precedente",
+    "help": "Questo elenco"
+  },
+  "csv": {
+    "style": "Modello",
+    "name": "Nome",
+    "brand": "Marchio",
+    "at": "Quando",
+    "gate": "Controllo",
+    "subject": "Ordine di lavoro o spedizione",
+    "colourway": "Variante colore",
+    "size": "Taglia",
+    "market": "Mercato",
+    "requirement": "Requisito",
+    "state": "Stato",
+    "reason": "Motivo",
+    "severity": "Stato",
+    "who": "Chi lo risolve",
+    "words": "In parole",
+    "month": "Mese"
+  },
+  "print": {
+    "title": "Stato conformità",
+    "back": "Torna allo stato",
+    "held": "Lo stato è ancora in lettura.",
+    "failed": "Non è stato possibile leggere lo stato",
+    "note": "Come letto il {at}.",
+    "markets": "Mercati",
+    "brand": "Marchio",
+    "gap": "Lacuna",
+    "none": "Nessuna",
+    "status": "Righe",
+    "search": "Ricerca",
+    "scope": "Ambito",
+    "figure": "Indicatore",
+    "value": "Valore",
+    "actionsTitle_one": "Da fare (1 riga)",
+    "actionsTitle_other": "Da fare ({count} righe)",
+    "gatesTitle_one": "Blocchi ai controlli dell'ultimo giorno",
+    "gatesTitle_other": "Blocchi ai controlli degli ultimi {count} giorni",
+    "expiryTitle": "Cosa scade dal {from} al {to}"
+  },
+  "ppe": {
+    "NOT_PPE": "Non DPI",
+    "CATEGORY_I": "DPI di categoria I",
+    "CATEGORY_II": "DPI di categoria II",
+    "CATEGORY_III": "DPI di categoria III"
+  }
+}

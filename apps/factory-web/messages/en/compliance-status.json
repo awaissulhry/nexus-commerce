@@ -1,0 +1,456 @@
+{
+  "common": {
+    "loading": "Reading…",
+    "retry": "Try again",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "noAccess": {
+    "title": "The status board is not in your role",
+    "body": "Ask the administrator for the certificate register's view (compliance.certificates.view)."
+  },
+  "band": {
+    "label": "Status board actions",
+    "reading": "Reading the board…",
+    "evidence": "Show evidence for…",
+    "arrange": "Arrange",
+    "more": "More actions",
+    "csv": "Export board (CSV)",
+    "csvHeld": "The board has not been read yet.",
+    "print": "Print board (opens a new tab)",
+    "keys": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: the board may be old"
+  },
+  "offline": {
+    "title": "Offline: this is the last copy read",
+    "body": "Its time is shown above. Overrides wait until the connection is back."
+  },
+  "scope": {
+    "label": "Board scope",
+    "markets": "Markets",
+    "marketsAll": "Markets switched on",
+    "marketsChosen_one": "1 market: {codes}",
+    "marketsChosen_other": "{count} markets: {codes}",
+    "brand": "Brand",
+    "allBrands": "All brands",
+    "thisBrand": "This brand",
+    "brandOnly": "Only the styles of {brand}",
+    "rows": "Rows",
+    "rowsStyles": "Rows: styles",
+    "rowsOrders": "Orders in production (comes later)",
+    "rowsLots": "Material lots (comes later)",
+    "gapChip": "Gap: {gap}",
+    "gapClear": "Clear the gap filter",
+    "every": "Every company your role reaches (its styles and those shared by every company)"
+  },
+  "section": {
+    "kpi": "Readiness tiles",
+    "actions": "Needs action",
+    "matrix": "Style × market",
+    "gates": "Gate refusals",
+    "expiry": "What expires next"
+  },
+  "kpi": {
+    "hint": "What blocks selling. A tile filters the matrix or the refusals below; certificates and lots open their lists.",
+    "empty": "— until the first style has a market.",
+    "failed": "The tiles could not be read"
+  },
+  "tile": {
+    "stylesReady": "Styles ready in every market shown",
+    "stylesBlocked": "Styles blocked",
+    "certificatesExpiring90": "Certificates expiring in 90 days",
+    "lotsWithoutCrVi": "Lots in stock without Cr VI evidence",
+    "missingLanguages": "Missing DoC or user-information languages",
+    "shipmentsHeld": "Shipments held by a gate",
+    "hint": {
+      "stylesReady": "Every market ready",
+      "stylesBlocked": "At least one blocking requirement",
+      "certificatesExpiring90": "Valid certificates ending soon",
+      "lotsWithoutCrVi": "Held lots with no passing result",
+      "missingLanguages": "Style × market cells",
+      "shipmentsHeld": "Refused in the last 30 days, not overridden"
+    },
+    "notInRole": "Not in your role",
+    "held": {
+      "noList": "Its list is not built yet",
+      "role": "Its list is not in your role"
+    }
+  },
+  "severity": {
+    "BLOCKED": "Blocked",
+    "MISSING": "Missing",
+    "EXPIRING": "Expiring"
+  },
+  "who": {
+    "COMPLIANCE": "Compliance",
+    "QUALITY": "Quality",
+    "PRODUCTION": "Production",
+    "SALES": "Sales"
+  },
+  "fixPlace": {
+    "certificates": "Fix in Certificates",
+    "declarations": "Fix in Declarations",
+    "labels": "Fix in Labels & marking",
+    "operators": "Fix the economic operators",
+    "tests": "Fix in Tests & substances",
+    "markets": "Fix the markets",
+    "requirements": "Fix the requirements"
+  },
+  "fix": {
+    "held": {
+      "declarations": "Declarations & instructions come with their own step.",
+      "settings": "Rules & markets come with their own step.",
+      "role": "That page is not in your role."
+    }
+  },
+  "gate": {
+    "WORK_ORDER_RELEASE": "Work-order release",
+    "LABEL_PRINT": "Label print",
+    "FINAL_RELEASE": "Final release",
+    "SHIPMENT": "Shipment"
+  },
+  "gap": {
+    "certificate": "Certificate",
+    "docLanguage": "DoC and user-information language",
+    "label": "Label",
+    "crVi": "Cr VI evidence",
+    "operator": "Economic operator",
+    "other": "Other requirements",
+    "crViNote": "Cr VI evidence belongs to lots, not to a style × market cell: the matrix stays whole.",
+    "crViOpen": "Open the lots waiting for evidence"
+  },
+  "actions": {
+    "hint": "The top five blockers, worst first, each with who can clear it and the button that does.",
+    "hintGap": "Only the gaps of one type: {gap}.",
+    "seeAll": "See all {count}",
+    "listLabel": "What blocks selling",
+    "empty": "Nothing blocks selling right now",
+    "emptyBody": "Every style shown is ready in every market shown.",
+    "failed": "Needs action could not be read",
+    "head": {
+      "WORK_ORDER_RELEASE": "{style} cannot be released for {market}",
+      "LABEL_PRINT": "{style} cannot have labels printed for {market}",
+      "FINAL_RELEASE": "{style} cannot be released by quality for {market}",
+      "SHIPMENT": "{style} cannot ship to {market}",
+      "other": "{style} for {market}"
+    }
+  },
+  "all": {
+    "title_one": "Needs action: 1 line",
+    "title_other": "Needs action: {count} lines",
+    "intro": "Every blocker of the styles shown, worst first. Enter opens a line's checklist.",
+    "count_one": "1 of {total}",
+    "count_other": "{count} of {total}",
+    "export": "Export lines (CSV)",
+    "exportHeld": "No line to export.",
+    "failed": "The lines could not be read",
+    "col": {
+      "severity": "State",
+      "line": "What blocks",
+      "who": "Who clears it",
+      "fix": "Where"
+    }
+  },
+  "cell": {
+    "READY": "Ready",
+    "MISSING": "Missing",
+    "BLOCKED": "Blocked",
+    "EXPIRING": "Expiring",
+    "missingCount_one": "Missing 1",
+    "missingCount_other": "Missing {count}",
+    "title": "{style} × {market}",
+    "failed": "The checklist could not be read",
+    "noun": "market",
+    "intro": "What must exist before making and shipping this style to {market}.",
+    "listLabel": "Requirements of {style} for {market}",
+    "blockedAt": "Work stops at: {gates}.",
+    "who": "Who: {who}",
+    "blocks": "Blocks: {gates}",
+    "blocksNone": "Blocks no gate",
+    "locked": "Locked by the law at: {gates}",
+    "evidence": "Evidence: {label}",
+    "lawPlain": "The law this requirement comes from.",
+    "how": "How: {how}",
+    "fixFirst": "Fix the first missing item",
+    "nothingMissing": "Nothing is missing here.",
+    "keys": "J / K next market · ⇧J / ⇧K next style · Esc closes",
+    "marketOff": "This market is switched off: its own rules wait.",
+    "notSold": "Every market is checked as if the style sold there: the markets a style sells in are not recorded yet."
+  },
+  "line": {
+    "OK": "Present",
+    "MISSING": "Missing",
+    "EXPIRING": "Expiring",
+    "NOT_NEEDED": "Not needed",
+    "MANUAL": "A person checks"
+  },
+  "matrix": {
+    "hint": "Each style against each market shown: ready, missing or blocked. A cell opens its checklist; Enter opens a row's worst cell.",
+    "legend": "What the cells say",
+    "notSold": "— not sold there (not recorded yet)",
+    "col": {
+      "style": "Style"
+    },
+    "brand": "Brand: {brand}",
+    "ownName": "Sold under our name",
+    "cellLabel": "{style} for {market}: {state}. Open the checklist",
+    "search": "Search styles",
+    "statusFilter": "State of the rows",
+    "statusAll": "Every row",
+    "status": {
+      "ready": "Ready in every market",
+      "missing": "With something missing",
+      "blocked": "Blocked somewhere",
+      "expiring": "With something expiring"
+    },
+    "count_one": "1 style",
+    "count_other": "{count} styles",
+    "countOf_one": "1 of {total} styles",
+    "countOf_other": "{count} of {total} styles",
+    "export_one": "Export 1 (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "more_one": "Only the first style is shown: narrow by brand, market or search.",
+    "more_other": "Only the first {count} styles are shown: narrow by brand, market or search.",
+    "failed": "The matrix could not be read",
+    "noMatch": "No rows match these filters",
+    "clear": "Clear filters",
+    "empty": {
+      "title": "No style is set to sell in a market yet",
+      "body": "Set markets on the style (Products › Styles › Compliance) and switch the markets on in Rules & markets."
+    }
+  },
+  "feed": {
+    "hint_one": "Every time a gate stopped work in the last day.",
+    "hint_other": "Every time a gate stopped work in the last {count} days.",
+    "count_one": "1 refusal",
+    "count_other": "{count} refusals",
+    "countOf_one": "1 of {total}",
+    "countOf_other": "{count} of {total}",
+    "export_one": "Export 1 (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "failed": "The refusals could not be read",
+    "noMatch": "No refusals match these filters",
+    "empty_one": "No refusals in 1 day",
+    "empty_other": "No refusals in {count} days",
+    "gateFilter": "Gate",
+    "gateAll": "Every gate",
+    "stateFilter": "State",
+    "daysFilter": "Days",
+    "days_one": "Last day",
+    "days_other": "Last {count} days",
+    "filter": {
+      "all": "Every state",
+      "blocked": "Still blocked",
+      "cleared": "Cleared since",
+      "overridden": "Overridden"
+    },
+    "state": {
+      "BLOCKED": "Still blocked",
+      "CLEARED": "Cleared since",
+      "OVERRIDDEN": "Overridden",
+      "OVERRIDE": "Override"
+    },
+    "col": {
+      "when": "When",
+      "where": "Where",
+      "what": "What",
+      "reason": "Why",
+      "state": "Cleared or blocked",
+      "actions": "Actions"
+    },
+    "subjectNoNumber": "(no number)",
+    "noMarket": "No market",
+    "overrideReason": "Override: {reason}",
+    "overriddenBy": "By {who} until {until}",
+    "overrideUntil": "By {who} until {until}",
+    "someone": "an office person",
+    "open": "Open {number}",
+    "override": "Override…",
+    "nothing": "Nothing to do here",
+    "menu": "Actions for {number}"
+  },
+  "subject": {
+    "WorkOrder": "Work order",
+    "Shipment": "Shipment"
+  },
+  "subjectInText": {
+    "WorkOrder": "this work order",
+    "Shipment": "this shipment"
+  },
+  "override": {
+    "title": "Override a gate for {number}",
+    "gate": "{gate}: {subject} {number}",
+    "what": "For {what}",
+    "lawPlain": "The law this requirement comes from; the requirement's own words are in its checklist.",
+    "scope": "An override lets {subject} ({number}) pass this gate for this requirement only, until the day you pick.",
+    "how_one": "A written reason and a fresh code; at most 1 day.",
+    "how_other": "A written reason and a fresh code; at most {count} days.",
+    "reason": "Why it is overridden",
+    "reasonHint": "10 to {max} characters. It goes in the PPE register's audit view.",
+    "until": "Holds until (the end of the day)",
+    "untilHint_one": "At most 1 day: until {latest} at the latest.",
+    "untilHint_other": "At most {count} days: until {latest} at the latest.",
+    "scopeLine": "Scope: {subject} only ({number}).",
+    "listed": "Overrides are listed in the PPE register's audit view and on the evidence trail of every garment made under them.",
+    "refusedAt": "Refused on {at}.",
+    "send": "Override for {number} until {until}",
+    "sendPlain": "Override for {number}",
+    "done": "{number} may pass the gate: override of {code} recorded.",
+    "problem": {
+      "reasonShort": "Write why (at least 10 characters).",
+      "reasonLong": "The reason is too long (at most 2000 characters).",
+      "day": "Pick the last day it holds.",
+      "past": "The override must end in the future.",
+      "tooLong": "That is longer than this requirement allows."
+    },
+    "held": {
+      "busy": "Sending…",
+      "notRefusal": "This line is an override, not a refusal.",
+      "state": {
+        "CLEARED": "The work passed this gate since: nothing to override.",
+        "OVERRIDDEN": "An override is in force already.",
+        "OVERRIDE": "This line is an override, not a refusal."
+      },
+      "locked": "The law locks this gate: it is never overridden.",
+      "noRole": "No role may override this requirement.",
+      "role": "Only the roles the requirement names may override it.",
+      "offline": "Offline: overrides wait until the connection is back."
+    },
+    "refused": {
+      "role": "Your role may not override this requirement.",
+      "conflict": "The gate cannot be overridden now (locked, overridden or cleared meanwhile). The refusals were read again.",
+      "invalid": "The override was refused as it is: check the reason and the day.",
+      "gone": "The refusal is not there any more. The refusals were read again.",
+      "unavailable": "The factory service did not answer. Try again in a moment."
+    }
+  },
+  "stepUp": {
+    "title": "Confirm with your authenticator app",
+    "sentence": "The code confirms the override for {number}.",
+    "confirm": "Confirm and override",
+    "problem": {
+      "wrong": "That code was not accepted. Type the newest code.",
+      "locked": "Too many tries. Wait a minute.",
+      "unavailable": "The code could not be checked. Try again in a moment."
+    }
+  },
+  "expiry": {
+    "hint": "Certificates, supplier declarations and claims evidence ending in the next 12 months.",
+    "hintRange": "Certificates, supplier declarations and claims evidence ending from {from} to {to}.",
+    "failed": "What expires next could not be read",
+    "empty": "Nothing expires in 12 months",
+    "emptyBody": "No certificate in force, accepted supplier declaration or approved claim ends in the next 12 months.",
+    "monthsLabel": "Months",
+    "count_one": "1 item",
+    "count_other": "{count} items",
+    "kindCertificate": "Certificate",
+    "kindDeclaration": "Declaration",
+    "kindOther": "Record",
+    "what": "What",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "left": "Left",
+    "status": "Note",
+    "suspended": "Suspended by the notified body",
+    "endsWithBase": "Ends with its base certificate",
+    "chipLabel": "{kind} {what}, valid to {date}, {left}",
+    "later": "LWG evidence joins this calendar with the chain-of-custody step.",
+    "kindClaim": "Claim"
+  },
+  "validity": {
+    "span": "Valid {from} – {to}",
+    "until": "Valid to {to}",
+    "left": "{parts} left",
+    "years_one": "1 year",
+    "years_other": "{count} years",
+    "months_one": "1 month",
+    "months_other": "{count} months",
+    "days_one": "1 day",
+    "days_other": "{count} days",
+    "daysLeft_one": "1 day",
+    "daysLeft_other": "{count} days",
+    "endsToday": "Ends today",
+    "ended_one": "Ended 1 day ago",
+    "ended_other": "Ended {count} days ago",
+    "alertAt": "{days} days before the end",
+    "inAlert": "Within {days} days",
+    "stage": {
+      "ok": "In force",
+      "d180": "Within 180 days",
+      "d90": "Within 90 days",
+      "d30": "Within 30 days",
+      "ended": "Ended",
+      "notYet": "Not valid yet"
+    }
+  },
+  "finder": {
+    "title": "Show evidence for…",
+    "kind": "What it is",
+    "kinds": {
+      "serial": "Garment serial",
+      "batch": "Batch"
+    },
+    "number": "Number",
+    "hint": "Scan or type it. The evidence trail opens in a new tab.",
+    "open": "Open evidence trail (new tab)",
+    "held": "Type or scan a number first."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "evidence": "Show evidence for…",
+    "arrange": "Arrange the panels",
+    "print": "Print board (new tab)",
+    "cells": "In a cell's checklist: next or previous market",
+    "rows": "In a cell's checklist: next or previous style",
+    "help": "This list"
+  },
+  "csv": {
+    "style": "Style",
+    "name": "Name",
+    "brand": "Brand",
+    "at": "When",
+    "gate": "Gate",
+    "subject": "Work order or shipment",
+    "colourway": "Colourway",
+    "size": "Size",
+    "market": "Market",
+    "requirement": "Requirement",
+    "state": "State",
+    "reason": "Reason",
+    "severity": "State",
+    "who": "Who clears it",
+    "words": "In words",
+    "month": "Month"
+  },
+  "print": {
+    "title": "Compliance status board",
+    "back": "Back to the board",
+    "held": "The board is still being read.",
+    "failed": "The board could not be read",
+    "note": "As read on {at}.",
+    "markets": "Markets",
+    "brand": "Brand",
+    "gap": "Gap",
+    "none": "None",
+    "status": "Rows",
+    "search": "Search",
+    "scope": "Scope",
+    "figure": "Figure",
+    "value": "Value",
+    "actionsTitle_one": "Needs action (1 line)",
+    "actionsTitle_other": "Needs action ({count} lines)",
+    "gatesTitle_one": "Gate refusals of the last day",
+    "gatesTitle_other": "Gate refusals of the last {count} days",
+    "expiryTitle": "What expires from {from} to {to}"
+  },
+  "ppe": {
+    "NOT_PPE": "Not PPE",
+    "CATEGORY_I": "PPE category I",
+    "CATEGORY_II": "PPE category II",
+    "CATEGORY_III": "PPE category III"
+  }
+}

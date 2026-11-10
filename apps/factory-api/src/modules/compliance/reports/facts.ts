@@ -7,7 +7,7 @@ import { coverageCellOf, type CoverageCell, type CrViResult, type MissingLine, t
 import type { ComplianceGate } from '@nexus/factory-domain/compliance/requirements/rules'
 import { expiryMonths, windowEnd, type ExpiryItem } from '@nexus/factory-domain/compliance/status/board'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
-import type { BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { countryOf, marketOfCountry, readMarkets } from '../gates/facts'
@@ -170,7 +170,8 @@ export async function requestsOf(db: Reader, place: Place, brandStyles: Readonly
 
 // ---- lots and chromium VI ---------------------------------------------------------------------------------------------------------
 
-const lotWhere = (place: Place): Prisma.LotWhereInput => AND(scopeWhere(place.actor, QUALITY_LOTS_VIEW, { company: 'companyId', site: 'siteId' }), companyWhere(place)) as Prisma.LotWhereInput
+// B-W2b-266: the status board counts the same lots for its tile (lotsWithoutCrVi): only the reader and the company are read.
+const lotWhere = (place: Pick<Place, 'actor' | 'company'>): Prisma.LotWhereInput => AND(scopeWhere(place.actor, QUALITY_LOTS_VIEW, { company: 'companyId', site: 'siteId' }), companyWhere(place)) as Prisma.LotWhereInput
 
 /** Lots that need a Cr VI test issued to production in the period (an issue not reversed), and those with a passing result. */
 export async function crViLotsUsed(db: Reader, place: Place): Promise<{ lots: number; withEvidence: number }> {
@@ -182,7 +183,7 @@ export async function crViLotsUsed(db: Reader, place: Place): Promise<{ lots: nu
 }
 
 /** Lots that need a Cr VI result and have none that passes, still held (quarantine or blocked): the open Cr VI gaps. */
-export async function crViGapLots(db: Reader, place: Place): Promise<number> {
+export async function crViGapLots(db: Reader, place: Pick<Place, 'actor' | 'company'>): Promise<number> {
   return db.lot.count({ where: AND(lotWhere(place), { requiresCrViTest: true, crViStatus: { in: ['PENDING', 'FAIL'] }, qualityStatus: { in: ['QUARANTINE', 'BLOCKED'] } }) as Prisma.LotWhereInput })
 }
 
@@ -210,6 +211,8 @@ export async function crViResults(db: Reader, place: Place): Promise<{ results: 
 
 export interface Expiry extends ExpiryItem {
   readonly recordType: 'Certificate' | 'SupplierDeclarationRequest'
+  /** B-W2b-266: the first valid day (the status board's ValidityBar); a declaration's is the day it was accepted (else answered). */
+  readonly validFrom: BusinessDate | null
   readonly status: string
   readonly detail: string | null
   readonly party: string | null
@@ -221,7 +224,8 @@ export interface Expiry extends ExpiryItem {
  * stops with its base when the base ends first — B-W2b-255) and accepted supplier declarations (B-W2b-256). With a brand, the
  * certificates that cover its styles or that it holds; declarations are per material (no brand).
  */
-export async function expiriesOf(db: Reader, place: Place, months: number, brandStyles: ReadonlySet<string> | null) {
+// B-W2b-266: the status board's "What expires next" reads the same calendar (the place's reader, company, brand, today, sight only).
+export async function expiriesOf(db: Reader, place: Pick<Place, 'actor' | 'company' | 'brand' | 'today' | 'sight'>, months: number, brandStyles: ReadonlySet<string> | null) {
   const end = windowEnd(place.today, months)
   const window = { gte: dayOf(place.today), lte: dayOf(end) }
   const items: Expiry[] = []
@@ -229,7 +233,7 @@ export async function expiriesOf(db: Reader, place: Place, months: number, brand
     const brandWhere = place.brand ? { OR: [{ holderPartyId: place.brand.id }, { coverage: { some: { status: 'ACTIVE', styleId: { in: [...(brandStyles ?? [])] } } } }] } : {}
     const certificates = await db.certificate.findMany({
       where: AND(scopeWhere(place.actor, CERTIFICATES_VIEW, { company: { field: 'companyId', nullable: true } }), companyWhere(place, true), brandWhere, { status: { in: ['VALID', 'SUSPENDED'] } }, { OR: [{ validTo: window }, { baseCertificate: { validTo: window } }] }) as Prisma.CertificateWhereInput,
-      select: { id: true, number: true, standard: true, status: true, validTo: true, baseCertificate: { select: { validTo: true } } },
+      select: { id: true, number: true, standard: true, status: true, validFrom: true, validTo: true, baseCertificate: { select: { validTo: true } } },
       orderBy: [{ validTo: 'asc' }, { number: 'asc' }],
       take: 500,
     })
@@ -238,17 +242,18 @@ export async function expiriesOf(db: Reader, place: Place, months: number, brand
       const base = row.baseCertificate ? dayText(row.baseCertificate.validTo) : null
       const stops = base && base < own ? base : own
       if (stops < place.today || stops > end) continue
-      items.push({ recordType: 'Certificate', recordId: row.id, label: row.number, validTo: stops, status: row.status, detail: row.standard, party: null, endsWithBase: stops !== own })
+      items.push({ recordType: 'Certificate', recordId: row.id, label: row.number, validFrom: dayText(row.validFrom), validTo: stops, status: row.status, detail: row.standard, party: null, endsWithBase: stops !== own })
     }
     const declarations = await db.supplierDeclarationRequest.findMany({
       where: AND(scopeWhere(place.actor, CERTIFICATES_VIEW, { company: 'companyId' }), companyWhere(place), { status: 'ACCEPTED', validTo: window }) as Prisma.SupplierDeclarationRequestWhereInput,
-      select: { id: true, number: true, kind: true, status: true, validTo: true, party: { select: { legalName: true, tradeName: true } } },
+      select: { id: true, number: true, kind: true, status: true, validTo: true, decidedAt: true, answeredAt: true, party: { select: { legalName: true, tradeName: true } } },
       orderBy: [{ validTo: 'asc' }, { number: 'asc' }],
       take: 500,
     })
     for (const row of declarations) {
       if (!row.validTo) continue
-      items.push({ recordType: 'SupplierDeclarationRequest', recordId: row.id, label: row.number, validTo: dayText(row.validTo), status: row.status, detail: row.kind, party: row.party.tradeName ?? row.party.legalName, endsWithBase: false })
+      const from = row.decidedAt ?? row.answeredAt
+      items.push({ recordType: 'SupplierDeclarationRequest', recordId: row.id, label: row.number, validFrom: from ? businessDate(from) : null, validTo: dayText(row.validTo), status: row.status, detail: row.kind, party: row.party.tradeName ?? row.party.legalName, endsWithBase: false })
     }
   }
   return { end, months: expiryMonths(items, place.today, months) as { month: string; count: number; items: Expiry[] }[], count: items.length }

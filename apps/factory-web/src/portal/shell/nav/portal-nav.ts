@@ -6,7 +6,8 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
  * of every portal page: a step that builds a page sets its `built` here (and a record page its line in RECORD_PAGES), nothing
  * else. Addresses are the portal's own, without `/p/<party code>` (the frame adds it).
  *
- *   Customer       Home · Orders (Orders & tracking, New order & reorder) · Quotes & samples (Quotes & requests, Catalogue)
+ *   Customer       Home · Orders (Orders & tracking, New order & reorder) · Quotes & samples (Quotes & requests, Samples &
+ *                  tech packs, Catalogue)
  *                  · Documents · Returns & claims · Account
  *   Supplier       Home · Orders & jobs (Purchase orders for a supplier, Jobs for a workshop) · Deliveries · Documents · Profile
  *   Subcontractor  Home · Jobs · Documents · Profile
@@ -100,11 +101,13 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     badge: 'quotes',
     // B-W2b-203: quotes to accept and approvals are answered on Quotes & requests (W3) or Samples & tech packs (W2b-4); the
     // Catalogue alone shows neither, so it carries no badge until one of them is built (Home lists them).
-    badgePages: ['quotes.list'],
+    badgePages: ['quotes.list', 'quotes.samples'],
     phone: 'more',
     built: false,
     pages: [
       { id: 'quotes.list', label: 'nav.quotes', href: '/quotes', permission: 'portal.quotes.view', built: false },
+      // B-W2b-262: the brand's Samples & tech packs (SCR-225): what waits for its decision, its styles, its rounds.
+      { id: 'quotes.samples', label: 'nav.samples', href: '/samples', permission: 'portal.samples.view', built: true },
       // B-W2b-194: the Catalogue (SCR-226).
       { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: true },
     ],
@@ -197,6 +200,12 @@ const collapse = (area: AreaNavArea): AreaNavArea => {
   return { ...rest, label: items[0].label, href: items[0].href }
 }
 
+/** B-W2b-262: an area whose own address is a page the person does not keep (not built, or not theirs) opens its first page. */
+const firstPage = (area: AreaNavArea): AreaNavArea => {
+  const items = area.sections?.flatMap((section) => section.items) ?? []
+  return items.length === 0 || items.some((item) => item.href === area.href) ? area : { ...area, href: items[0].href }
+}
+
 /** B-W2b-203: an area keeps its badge only while the person keeps a page that shows what it counts (`badgePages`). */
 const badgeLeads = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavArea => {
   if (!area.badge || !def?.badgePages) return area
@@ -219,7 +228,7 @@ export function portalNavFor(access: PortalAccess, defs: readonly PortalAreaDef[
   const ids = new Set<string>()
   const hrefs = new Set<string>()
   const defOf = new Map(defs.map((def) => [def.id, def]))
-  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map((area) => collapse(badgeLeads(area, defOf.get(area.id)))))
+  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map((area) => firstPage(collapse(badgeLeads(area, defOf.get(area.id))))))
   return {
     view: 'portal',
     areas: areas.filter((area) => {

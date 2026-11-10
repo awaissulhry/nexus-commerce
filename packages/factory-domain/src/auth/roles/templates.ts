@@ -73,6 +73,8 @@ import { LABEL_ARTWORK_ADDS } from '../../compliance/label-artwork/permissions'
 import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 // B-W2b-264: sourcing & claims (the quality inspector keeps the claims register and approves a claim with a fresh code).
 import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
+// B-W2b-262: the brand's samples and tech packs (the customer Buyer, Quality, Designer and Viewer; the Admin follows).
+import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1541,6 +1543,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PORTAL_APPROVALS_READERS,
   // B-W2b-201: the accountant's room (FIN-158): the handed-over months' exports, e-invoices and registers, files only.
   { 'guest-accountant': ['portal.accounting.view' as Permission] },
+  // B-W2b-262: the brand's samples and tech packs (rounds, its styles in development, the BRAND tech pack PDF); not Finance.
+  PORTAL_SAMPLES_READERS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

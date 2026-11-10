@@ -1,0 +1,265 @@
+{
+  "title": "Samples & tech packs",
+  "band": {
+    "updated": "Updated {time}",
+    "decide_one": "Decide the waiting sample",
+    "decide_other": "Decide {count} waiting samples"
+  },
+  "keys": {
+    "rows": "Move through the rows",
+    "open": "Open the row",
+    "nextSample": "Next or previous waiting sample (in the decision)",
+    "approve": "Approve (in the decision, not while typing)",
+    "reject": "Reject (in the decision, not while typing)",
+    "close": "Close the decision",
+    "styleRounds": "Show the style's rounds",
+    "openRound": "Decide the round, or open it"
+  },
+  "state": {
+    "retry": "Try again",
+    "failed": "We could not read your samples. Nothing is lost: try again.",
+    "failedBody": "The list could not be read; it is not empty.",
+    "loading": "Loading your samples…",
+    "slow": "Still loading…",
+    "hide": "Hide"
+  },
+  "held": {
+    "preview": "This is a preview of the portal: nothing is sent.",
+    "mayApprove": "Your access lets you read this sample, not decide it: ask your admin for the right to approve.",
+    "mayApproveAsk": "Your access lets you read this sample, not decide it: ask {admins} for the right to approve.",
+    "offline": "No connection: try again when you are back online.",
+    "busy": "Sending your decision…",
+    "reading": "The request is still being read.",
+    "answered": "This sample has been decided already.",
+    "closed": "This request no longer waits for an answer."
+  },
+  "noAccess": {
+    "title": "This page is not part of your access",
+    "body": "Ask your admin if you need to see the samples and tech packs.",
+    "bodyAsk": "Ask {admins} if you need to see the samples and tech packs.",
+    "home": "Go to Home"
+  },
+  "waiting": {
+    "title": "Waiting for your decision",
+    "hint": "Sample rounds, colours, leathers and artworks we asked you to decide. The oldest due first.",
+    "group": "Samples to decide",
+    "rowTitle": "Decide on {what}",
+    "style": "{code} · {name}",
+    "received": "Received on {date}",
+    "asked": "Asked on {date}",
+    "decide": "Decide",
+    "empty": "No samples wait for you.",
+    "noAccess": "Your access does not show what we ask you to approve. Ask your admin.",
+    "noAccessAsk": "Your access does not show what we ask you to approve. Ask {admins}."
+  },
+  "kind": {
+    "SAMPLE": "Sample",
+    "COLOUR": "Colour",
+    "LEATHER": "Leather",
+    "ARTWORK": "Artwork",
+    "PROTO": "Proto",
+    "FIT": "Fit",
+    "SALESMAN": "Salesman",
+    "PRE_PRODUCTION": "Pre-production",
+    "CERTIFICATION": "CE test sample",
+    "BRAND": "Brand sample"
+  },
+  "round": {
+    "label": "{kind} · round {n}"
+  },
+  "stage": {
+    "IN_DEVELOPMENT": "In development",
+    "PROTO": "Proto",
+    "FIT": "Fit",
+    "SALESMAN": "Salesman",
+    "PRE_PRODUCTION": "Pre-production",
+    "CERTIFICATION": "CE test",
+    "BRAND": "Brand sample",
+    "APPROVED": "Approved for production"
+  },
+  "status": {
+    "BEING_MADE": "Being made",
+    "SENT": "Sent",
+    "RECEIVED": "Received, under review",
+    "WAITING": "Waiting for you",
+    "APPROVED": "Approved",
+    "APPROVED_WITH_COMMENTS": "Approved with comments",
+    "REJECTED": "Rejected",
+    "CANCELLED": "Cancelled"
+  },
+  "styles": {
+    "title": "Your styles in development",
+    "hint": "Your own styles only, their stage and the tech pack we shared. Select styles to download their tech packs.",
+    "label": "Your styles in development",
+    "count_one": "{count} style",
+    "count_other": "{count} styles",
+    "col": {
+      "style": "Style",
+      "season": "Season",
+      "stage": "Stage",
+      "round": "Latest round",
+      "next": "Next date",
+      "pack": "Tech pack PDF"
+    },
+    "noRound": "No round yet",
+    "bulk_one": "Download {count} tech pack",
+    "bulk_other": "Download {count} tech packs",
+    "bulkNone": "None of the selected styles has a tech pack yet.",
+    "noPackToSelect": "No tech pack has been shared for this style yet.",
+    "failed": "We could not read your styles.",
+    "empty": "No styles in development.",
+    "emptyBody": "Your private-label styles show here while we develop them."
+  },
+  "pack": {
+    "none": "Not shared yet",
+    "opening": "Opening the tech pack…",
+    "openOf": "Open the tech pack of {code}, revision {revision} version {version}, in a new tab",
+    "version": "Rev. {revision} · v{version} · {language}",
+    "state": {
+      "CURRENT": "Current",
+      "DRAFT": "Draft",
+      "NEWER_VERSION": "Superseded",
+      "NEWER_REVISION": "Old revision",
+      "OBSOLETE": "Obsolete"
+    },
+    "gone": "The tech pack of {code} is no longer shared with you. The list is read again.",
+    "failed": "The tech pack of {code} could not be opened. Try again.",
+    "someFailed_one": "{count} tech pack could not be downloaded. Try again.",
+    "someFailed_other": "{count} tech packs could not be downloaded. Try again.",
+    "downloaded_one": "{count} tech pack downloaded.",
+    "downloaded_other": "{count} tech packs downloaded.",
+    "stateHint": {
+      "CURRENT": "The newest copy of the revision in force.",
+      "DRAFT": "The revision is still a draft: it may change before release.",
+      "NEWER_VERSION": "A newer version of this revision exists.",
+      "NEWER_REVISION": "A newer revision is in force.",
+      "OBSOLETE": "The revision is obsolete and nothing is in force."
+    }
+  },
+  "rounds": {
+    "title": "Sample rounds",
+    "hint": "Every round we make for you, with its status and shipment. A round waiting for you opens its decision.",
+    "label": "Sample rounds",
+    "count_one": "{count} round",
+    "count_other": "{count} rounds",
+    "countOf": "{count} of {total} rounds · {code}",
+    "col": {
+      "round": "Round",
+      "style": "Style",
+      "pieces": "Pieces",
+      "sent": "Sent on",
+      "received": "Received on",
+      "tracking": "Tracking",
+      "status": "Status"
+    },
+    "noTracking": "No tracking yet",
+    "trackOf": "Track shipment {tracking} (new tab)",
+    "decidedOn": "Decided on {date}",
+    "dueOn": "Due {date}",
+    "bulk_one": "Decide {count} waiting round",
+    "bulk_other": "Decide {count} waiting rounds",
+    "bulkNone": "None of the selected rounds waits for your decision.",
+    "failed": "We could not read your sample rounds.",
+    "noneOf": "No rounds of {code} yet.",
+    "showAll": "Show every round",
+    "empty": "No sample rounds yet.",
+    "emptyBody": "When we make a sample for you, it shows here with its shipment.",
+    "only": "Rounds of {code}"
+  },
+  "decide": {
+    "loading": "Reading the sample…",
+    "title": "Decide on {what}",
+    "previous": "Previous sample",
+    "next": "Next sample",
+    "first": "This is the first waiting sample.",
+    "last": "This is the last waiting sample.",
+    "nav": "{index} of {count} waiting",
+    "failed": "We could not read this request.",
+    "gone": "This request no longer waits for you: it was answered, withdrawn or has expired.",
+    "what": "What we ask",
+    "due": "Answer by",
+    "dueIn": "in {left}",
+    "dueNow": "due now",
+    "from": "From",
+    "received": "Received on",
+    "photos": "Photos",
+    "photosNone": "No photos came with this request.",
+    "photoOpen": "Open {name} in a new tab",
+    "photoAlt": "Photo {name}",
+    "photoFailed": "This photo did not load.",
+    "spec": "The sample",
+    "files": "Documents",
+    "fileOpen": "Open {name}",
+    "fileLoading": "Opening {name}…",
+    "fileFailed": "{name} could not be opened.",
+    "decision": "Your decision",
+    "legend": "Choose one",
+    "option": {
+      "approve": "Approve",
+      "approve_body": "The sample is right: we go ahead.",
+      "comments": "Approve with comments",
+      "comments_body": "We go ahead with the changes you write.",
+      "reject": "Reject",
+      "reject_body": "The sample is not right: say why, we make a new round."
+    },
+    "comment": {
+      "why": "Why do you reject it?",
+      "what": "What should change?",
+      "optional": "A comment (optional)",
+      "needed": "Needed for this decision.",
+      "hint": "Point, size and what you saw, so the sample room can act on it."
+    },
+    "sign": {
+      "title": "Sign your decision",
+      "summary": {
+        "approve": "You approve {what} for {company}.",
+        "comments": "You approve {what} for {company} with the changes you wrote.",
+        "reject": "You reject {what} for {company}.",
+        "none": "Choose a decision first."
+      },
+      "legal": "Your typed name signs this decision. {company} keeps it with the sample and sends you a receipt.",
+      "name": "Your full name",
+      "nameHint": "As you sign your documents.",
+      "nameEmpty": "Type your name to sign.",
+      "go": {
+        "approve": "Sign and approve",
+        "comments": "Sign and approve with comments",
+        "reject": "Sign and reject"
+      },
+      "choose": "Choose a decision",
+      "busy": "Sending…"
+    },
+    "problem": {
+      "choose": "Choose Approve, Approve with comments or Reject.",
+      "why": "Say why you reject the sample.",
+      "what": "Say what should change.",
+      "long": "The comment is too long (at most 4000 characters).",
+      "gone": "This request no longer waits for you.",
+      "forbidden": "Your access does not let you decide this sample.",
+      "changed": "The request changed meanwhile: it was read again, check it and sign again.",
+      "invalid": "The decision is not valid: check the comment and your name.",
+      "unavailable": "The portal is busy: try again in a moment.",
+      "failed": "Your decision was not sent. Try again."
+    },
+    "done": {
+      "next": "Next sample",
+      "close": "Close",
+      "body": "Your decision is with us: the sample room sees it now.",
+      "name": "Signed by",
+      "at": "At",
+      "words": "Your words",
+      "receiptSent": "A receipt is on its way to your e-mail.",
+      "receiptFailed": "The receipt e-mail could not be sent; your decision is kept.",
+      "reference": "Sample",
+      "contact": "Write to us from the sample's page if anything changes."
+    }
+  },
+  "decided": {
+    "OPEN": "Waiting",
+    "APPROVED": "Approved",
+    "APPROVED_WITH_CHANGES": "Approved with comments",
+    "REFUSED": "Rejected",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired"
+  }
+}
