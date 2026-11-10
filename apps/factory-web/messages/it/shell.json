@@ -144,7 +144,9 @@
       "safety": "Sicurezza prodotto",
       "register": "Registro DPI e richiami",
       "certificates": "Certificati",
-      "labels": "Etichette e marcature"
+      "labels": "Etichette e marcature",
+      "reportsGroup": "Report",
+      "reports": "Report conformità"
     },
     "finance": {
       "area": "Amministrazione",
