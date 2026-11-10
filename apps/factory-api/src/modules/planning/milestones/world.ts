@@ -7,6 +7,7 @@ import {
   editRefusal,
   gateStateOf,
   GATE_LIMITS,
+  HELD_WORK_ORDER_KINDS,
   isSampleGate,
   lateDays,
   leatherStateOf,
@@ -52,7 +53,7 @@ export interface WorldFilter {
 }
 
 interface OrderFacts {
-  readonly workOrders: { id: string; status: string; startedAt: Date | null }[]
+  readonly workOrders: { id: string; kind: string; status: string; startedAt: Date | null }[]
   readonly firstBar: Date | null
   readonly shippedAt: Date | null
   readonly leather: LeatherState
@@ -68,13 +69,13 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
   const ids = [...orderIds]
   const workOrders = await db.workOrder.findMany({
     where: { sizes: { some: { salesOrderLine: { orderId: { in: ids } } } } },
-    select: { id: true, status: true, startedAt: true, sizes: { select: { salesOrderLine: { select: { orderId: true } } } } },
+    select: { id: true, kind: true, status: true, startedAt: true, sizes: { select: { salesOrderLine: { select: { orderId: true } } } } },
   })
   const ordersOfWorkOrder = new Map<string, Set<string>>()
   for (const workOrder of workOrders) {
     const of = new Set(workOrder.sizes.map((size) => size.salesOrderLine.orderId).filter((id) => facts.has(id)))
     ordersOfWorkOrder.set(workOrder.id, of)
-    for (const orderId of of) facts.get(orderId)!.workOrders.push({ id: workOrder.id, status: workOrder.status, startedAt: workOrder.startedAt })
+    for (const orderId of of) facts.get(orderId)!.workOrders.push({ id: workOrder.id, kind: workOrder.kind, status: workOrder.status, startedAt: workOrder.startedAt })
   }
   const workOrderIds = workOrders.map((row) => row.id)
   const [slots, shipments, reservations] = await Promise.all([
@@ -114,6 +115,8 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
 }
 
 const notStarted = (workOrders: OrderFacts['workOrders']) => workOrders.filter((row) => row.startedAt === null && !DONE_WORK_ORDERS.includes(row.status)).length
+/** B-W2b-F22: what a waiting gate holds on the board (schedule/gates.ts): production work orders not started, never a sample or a repair. */
+const held = (workOrders: OrderFacts['workOrders']) => notStarted(workOrders.filter((row) => (HELD_WORK_ORDER_KINDS as readonly string[]).includes(row.kind)))
 
 export interface WorldContext {
   readonly actor: Actor
@@ -154,7 +157,7 @@ export function gateViewOf(gate: GateRow, order: OrderRow, round: { id: string; 
     via: gate.passedAt === null ? null : byEvent ? (isSampleGate(kind) ? 'SAMPLE' : 'LOT') : 'OFFICE',
     startedBefore: gate.overriddenAt && gate.overrideReason ? { at: toUtcIso(gate.overriddenAt), by: person(gate.overriddenById), reason: gate.overrideReason } : null,
     leather: kind === 'LEATHER_APPROVED' ? facts.leather : null,
-    holds: notStarted(facts.workOrders),
+    holds: held(facts.workOrders), // B-W2b-F22
     version: gate.version,
     actions: {
       pass: action(lacking(world.actor, PLANNING_MILESTONES_MANAGE, order), passRefusal(gateFacts, today, today)),

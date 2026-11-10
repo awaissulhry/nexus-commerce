@@ -1,4 +1,4 @@
-import { holdWords, OPEN_ORDER_STATUSES, type GateKind } from '@nexus/factory-domain/planning/milestones/rules'
+import { HELD_WORK_ORDER_KINDS, holdWords, OPEN_ORDER_STATUSES, type GateKind } from '@nexus/factory-domain/planning/milestones/rules'
 import { ScheduleRefusal } from '@nexus/factory-domain/planning/schedule/refusals'
 import type { Reader } from '../store'
 
@@ -10,6 +10,9 @@ import type { Reader } from '../store'
  * `refusal/GATE_NOT_PASSED` with one issue `gate/<gate id>` per gate (its message the gate's kind), and "Place all by due date"
  * skips it with the code GATE_NOT_PASSED. Sending a bar back to the tray is never held. The way on: pass the gate, or start
  * before it with a reason in Time & action (someone other than its planner).
+ *
+ * B-W2b-F22: only the order's production work orders are held (SIZE_GRID and MADE_TO_MEASURE). A sample work order makes the
+ * sample that passes the gate, and a repair mends a garment already made: both are placed while the gate waits.
  *
  * This is a planning milestone, not a compliance gate: the one compliance gate at work-order release stays B-W2b-254's; a work
  * order's release by W1's route is not held here.
@@ -25,12 +28,13 @@ export interface GateHold {
 
 const DONE = ['COMPLETED', 'CLOSED', 'CANCELLED']
 
-/** Per work order (among `workOrderIds`) that has not started: the WAITING gates of the open orders it makes. */
+/** Per production work order (among `workOrderIds`) that has not started: the WAITING gates of the open orders it makes. */
 export async function gateHoldsOf(db: Reader, workOrderIds: readonly string[]): Promise<Map<string, GateHold[]>> {
   const holds = new Map<string, GateHold[]>()
   if (workOrderIds.length === 0) return holds
   const workOrders = await db.workOrder.findMany({
-    where: { id: { in: [...workOrderIds] }, startedAt: null, status: { notIn: DONE as ('COMPLETED' | 'CLOSED' | 'CANCELLED')[] } },
+    // B-W2b-F22: production work orders only, never a SAMPLE or a REPAIR.
+    where: { id: { in: [...workOrderIds] }, kind: { in: [...HELD_WORK_ORDER_KINDS] }, startedAt: null, status: { notIn: DONE as ('COMPLETED' | 'CLOSED' | 'CANCELLED')[] } },
     select: { id: true, sizes: { select: { salesOrderLine: { select: { orderId: true } } } } },
   })
   const ordersOf = new Map(workOrders.map((row) => [row.id, [...new Set(row.sizes.map((size) => size.salesOrderLine.orderId))]]))
