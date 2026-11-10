@@ -1,0 +1,415 @@
+{
+  "head": {
+    "intro": "What every style follows: its product type with the fields it must have and the defaults it starts with, what may change in each state of its life, and how far the fabric used may differ from the estimate.",
+    "reload": "Read again",
+    "more": "More"
+  },
+  "live": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline",
+    "changedTitle": "Someone else changed these settings",
+    "changedBody": "Your changes on this page are kept until you read again; saving now is refused because the settings moved on.",
+    "reload": "Read again"
+  },
+  "scope": {
+    "label": "Whose settings",
+    "company": "{company}",
+    "all": "Every company",
+    "companyHint": "The settings of {company}. Where it keeps no rule of its own, it follows every company’s, then the default.",
+    "allHint": "The settings every company follows where it keeps none of its own. Where these say nothing, the default applies."
+  },
+  "noAccess": {
+    "title": "Product settings are not in your role",
+    "body": "Reading them needs the right to see styles (product.styles.view). An administrator gives it in Admin › Roles & permissions."
+  },
+  "card": {
+    "neverChanged": "Never changed here: it follows what is in force above.",
+    "changedBy": "Changed by {name} · {time}",
+    "changedAt": "Changed {time}",
+    "history": "History",
+    "viewOnly": "You can view, not change"
+  },
+  "source": {
+    "COMPANY": "This company",
+    "TENANT": "Every company",
+    "DEFAULT": "Default"
+  },
+  "common": {
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "loading": "Loading…"
+  },
+  "loosen": {
+    "title": "Confirm a looser rule",
+    "intro": "From the moment you save, more may change in styles in these states:",
+    "line": "{state}: from “{from}” to “{to}”",
+    "reason": "Why",
+    "reasonHint": "Kept with the change in the audit trail.",
+    "reasonNeeded": "Say why first.",
+    "confirm": "Save the looser rule"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "newType": "New product type",
+    "save": "Save the card you changed",
+    "saveType": "Save the product type (in its window)",
+    "close": "Close the window"
+  },
+  "state": {
+    "CONCEPT": "Concept",
+    "DEVELOPMENT": "Development",
+    "SAMPLING": "Sampling",
+    "APPROVED": "Approved",
+    "IN_PRODUCTION": "In production",
+    "PHASE_OUT": "Phase-out",
+    "DISCONTINUED": "Discontinued"
+  },
+  "rule": {
+    "FREE": "Edit freely",
+    "NEW_REVISION": "Needs a new revision",
+    "CHANGE_ORDER": "Needs a change order",
+    "BLOCKED": "Blocked"
+  },
+  "rules": {
+    "title": "Edit rules per lifecycle state",
+    "description": "What may change in a style in each state of its life. Every product write asks the rule of its style’s state.",
+    "table": "Edit rule per state",
+    "unknown": "Not known yet",
+    "failed": "Couldn’t load the edit rules",
+    "col": {
+      "state": "State",
+      "follow": "Follow every company",
+      "default": "Default",
+      "inForce": "In force once saved",
+      "rule": "Rule in force",
+      "from": "Where it comes from"
+    },
+    "changed": "Changed",
+    "choose": "{state}: {rule}",
+    "followOf": "{state}: follow every company ({rule})",
+    "defaultOf": "{state}: the default ({rule})",
+    "followUnknown": "{state}: follow every company",
+    "companyHint": "A state set to “Follow every company” takes every company’s rule, and the default where that says nothing.",
+    "allHint": "A state set to “Default” takes the product module’s own rule: free until approved, a new revision from approved to phase-out, blocked when discontinued.",
+    "loosens_one": "1 state lets more through than today: you will be asked why before it is saved.",
+    "loosens_other": "{count} states let more through than today: you will be asked why before they are saved.",
+    "apply": "Save edit rules",
+    "applyLoosen": "Save… (looser)"
+  },
+  "lets": {
+    "title": "What each rule lets through",
+    "intro": "The same check every product write runs. A released revision never changes: a change goes out with a new one.",
+    "col": {
+      "write": "What changes"
+    },
+    "yes": "Yes",
+    "withDraft": "Yes, while a new revision is open",
+    "changeOrder": "Only from an approved change order",
+    "no": "No"
+  },
+  "kind": {
+    "DETAILS": "Its words",
+    "SPEC": "Its spec",
+    "NEW_REVISION": "A new revision",
+    "DRAFT": "Its draft revision",
+    "RELEASE": "A release"
+  },
+  "kindHint": {
+    "DETAILS": "Name, names in other languages, description, season",
+    "SPEC": "Every other field of the style, its colourways and its type",
+    "NEW_REVISION": "Start a revision or copy one into a new draft",
+    "DRAFT": "The BOM, routing and pieces of an open draft",
+    "RELEASE": "Release a draft revision"
+  },
+  "tolerance": {
+    "title": "Consumption tolerance",
+    "description": "How far the material really used at the cutting table may differ from the marker’s estimate.",
+    "failed": "Couldn’t load the tolerances",
+    "generalLabel": "The general rule",
+    "rule": {
+      "MATCH": "Must match",
+      "MAY_DIFFER": "May differ",
+      "WARN_ABOVE": "Warn above a percent"
+    },
+    "ruleHint": {
+      "MATCH": "A figure different from the estimate is refused until a note explains it.",
+      "MAY_DIFFER": "The figure typed is kept as it is.",
+      "WARN_ABOVE": "The figure is kept; a difference above the percent, more or less, shows a warning."
+    },
+    "warnAbove": "Warns above {percent} %",
+    "general": "the general rule",
+    "follow": "Follow every company",
+    "followNow": "Now: {rule}",
+    "default": "The default",
+    "defaultHint": "May differ: the figure typed is kept.",
+    "percent": "Warn above",
+    "percentHint": "A percent above 0 and at most 100, as 3 or 2,5.",
+    "applies": "Applies once saved:",
+    "table": "Tolerance per material kind",
+    "col": {
+      "kind": "Material kind",
+      "own": "Its own rule",
+      "percent": "Percent",
+      "inForce": "In force"
+    },
+    "ownOf": "Own rule for {kind}",
+    "percentOf": "Warn above, for {kind}",
+    "none": "No rule of its own",
+    "problem": {
+      "percent": "Write a percent above 0 and at most 100, with at most 4 decimals."
+    },
+    "where": "The cutting table reads the rule of the cut order’s material: its kind’s own rule, else the general rule, then every company’s.",
+    "apply": "Save tolerance"
+  },
+  "itemKind": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Fabric",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trim",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protector",
+    "LABEL": "Label",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Component"
+  },
+  "costing": {
+    "title": "Costing defaults",
+    "description": "Cost per minute, planned efficiency and overhead: kept in Finance settings, their one home, and shown here as read.",
+    "open": "Open Finance settings",
+    "noRight": "Your role does not read the costing values.",
+    "failed": "Couldn’t load the costing defaults",
+    "notInRole": "Not in your role",
+    "perMinute": "{amount} a minute",
+    "efficiency": "Planned efficiency {percent} %",
+    "everyCompany": "Every company",
+    "thisCompany": "This company",
+    "overhead": "Overhead",
+    "overheadPct": "{percent} % on material and labour",
+    "noOverhead": "No overhead set",
+    "noRates": "No labour rate is in force yet: a cost sheet counts no labour until Finance sets one.",
+    "noGrain": "The cost per minute is shown only to roles that see costs.",
+    "where": "Change them in Finance settings: a change there reaches every cost sheet.",
+    "whereNoRight": "They are changed in Finance settings, by the accountant or the owner."
+  },
+  "workCentre": {
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "ASSEMBLY": "Assembly",
+    "FINISHING": "Finishing",
+    "INSPECTION": "Inspection",
+    "PACKING": "Packing",
+    "SUBCONTRACT": "Subcontract"
+  },
+  "types": {
+    "title": "Product types",
+    "description": "Jacket, trousers, suit, gloves, vest: the fields a style of each must have before release and the defaults a new style starts with. A child type inherits its parent’s.",
+    "table": "Product types",
+    "failed": "Couldn’t load the product types",
+    "add": "New product type",
+    "count_one": "1 type",
+    "count_other": "{count} types",
+    "childOf": "Under {parent}",
+    "top": "Top type",
+    "archived": "Archived",
+    "noneRequired": "None",
+    "inherited_one": "1 from a parent type",
+    "inherited_other": "{count} from parent types",
+    "from": "From {code}",
+    "everyCompany": "Every company",
+    "thisCompany": "This company",
+    "col": {
+      "type": "Type",
+      "kind": "Garment",
+      "whose": "Whose",
+      "required": "Required before release",
+      "scale": "Size scale",
+      "ppe": "PPE",
+      "styles": "Styles",
+      "actions": "Actions"
+    },
+    "status": {
+      "label": "Which types",
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived",
+      "ALL": "All"
+    },
+    "empty": {
+      "title": "No product type yet",
+      "body": "A type says what a style of it must have and what it starts with. Styles work without one."
+    },
+    "emptyArchived": {
+      "title": "No archived type",
+      "body": "An archived type stays on the styles that have it; a new style no longer takes it."
+    },
+    "how": "A new style takes its type’s defaults where it leaves a field empty; the release check asks the required fields."
+  },
+  "row": {
+    "edit": "Open and change",
+    "view": "Open",
+    "archive": "Archive",
+    "archiveHint": "Its styles keep it; a new style no longer takes it.",
+    "restore": "Restore",
+    "menu": "Actions for {code}"
+  },
+  "bulk": {
+    "archive_one": "Archive 1",
+    "archive_other": "Archive {count}",
+    "restore_one": "Restore 1",
+    "restore_other": "Restore {count}"
+  },
+  "held": {
+    "reading": "Still reading the settings.",
+    "noRight": "Changing product settings needs the product settings right (product.settings.manage) over this company.",
+    "noRightAll": "Every company’s settings are changed only by a role over every company with product.settings.manage.",
+    "offline": "Offline: your changes are kept on this page until the connection is back.",
+    "offlineTitle": "Offline",
+    "offlineBody": "What you see is the last copy read. Saving is held until the connection is back; your changes are kept on this page.",
+    "busy": "Saving…",
+    "noneActive": "None of the ticked types is active.",
+    "noneArchived": "None of the ticked types is archived."
+  },
+  "garment": {
+    "JACKET": "Jacket",
+    "TROUSERS": "Trousers",
+    "SUIT": "Suit",
+    "GLOVES": "Gloves",
+    "VEST": "Vest",
+    "OTHER": "Other"
+  },
+  "ppe": {
+    "NOT_PPE": "Not PPE",
+    "CATEGORY_I": "Category I",
+    "CATEGORY_II": "Category II",
+    "CATEGORY_III": "Category III"
+  },
+  "attr": {
+    "nameI18n": "Names in other languages",
+    "description": "Description",
+    "season": "Season",
+    "brandPartyId": "Brand",
+    "sizes": "Sizes",
+    "baseSize": "Base size",
+    "ppeStandard": "PPE standard",
+    "ppeClass": "PPE class",
+    "measurementTemplateId": "Measurement template",
+    "hsCode": "Commodity code",
+    "originCountry": "Country of origin",
+    "netMassKg": "Net mass",
+    "gender": "Cut for"
+  },
+  "type": {
+    "titleNew": "New product type",
+    "titleOf": "{code} · {name}",
+    "code": "Code",
+    "codeHint": "Up to 60 characters, no spaces. Unique.",
+    "name": "Name",
+    "kind": "Kind of garment",
+    "kindHint": "A parent type is of the same kind.",
+    "whose": "Whose",
+    "whoseFixed": "Stays as made.",
+    "whoseHint": "A type of every company may be taken by every company’s styles.",
+    "whoseCompany": "Only {company}",
+    "parent": "Parent type",
+    "parentHint": "It inherits the parent’s required fields and every default it does not set.",
+    "noParent": "No parent (a top type)",
+    "required": "Required before release",
+    "requiredHint": "The style fields a style of this type must have filled before it is released. A parent’s come on top.",
+    "requiredFrom": "{field} (from {code})",
+    "requiredInherited": "Required by the parent type {code}",
+    "defaults": "What a new style starts with",
+    "defaultsHint": "A new style of this type takes these where it leaves the field empty. Empty here: the parent’s.",
+    "scale": "Size scale",
+    "label": "Garment label template",
+    "labelNoRight": "Picking a label template needs the right to read certificates and labels.",
+    "labelOption": "{code} · {name} (rev. {revision})",
+    "template": "Measurement template",
+    "templateHint": "Used only for a style made to measure. Templates are picked with made-to-measure, not here.",
+    "clear": "Clear",
+    "ppeCategory": "PPE category",
+    "standard": "PPE standard",
+    "standardHint": "With its edition, as EN 17092-4:2020.",
+    "ppeClass": "PPE class",
+    "ppeClassHint": "As AA, A or B.",
+    "inherits": "Inherits {value} from {code}",
+    "noneOwn": "None set here or above.",
+    "inheritOption": "The parent’s",
+    "noneOption": "None",
+    "unknownRef": "one you cannot see",
+    "save": "Save type",
+    "add": "Add type",
+    "archivedTitle": "This type is archived",
+    "archivedBody": "Its styles keep it; a new style no longer takes it. Restore it to change it.",
+    "styles": "Styles with this type",
+    "stylesCount_one": "1 style",
+    "stylesCount_other": "{count} styles",
+    "children": "Child types",
+    "held": {
+      "kindInUse": "The kind of garment stays while styles or child types use this type: another kind is a new type.",
+      "archived": "Archived: restore it to change it.",
+      "nothing": "Nothing changed yet."
+    },
+    "problem": {
+      "code": "Write a code of 1 to 60 characters without spaces.",
+      "codeTaken": "This code is taken by another type.",
+      "name": "Write a name of 1 to 200 characters.",
+      "standard": "A standard is at most 60 characters.",
+      "ppeClass": "A class is at most 10 characters.",
+      "ppeCategory": "Pick the PPE category the standard and class go with (here or on the parent).",
+      "ppe": "This PPE category, standard and class do not go together for this kind of garment (EN 17092 never on gloves; protective gear is at least Category II).",
+      "kindInUse": "Styles or child types use this type: its kind of garment stays.",
+      "parent": "This parent cannot be taken: it must be active, of the same kind of garment, of this type’s company or every company, and not one of its children.",
+      "required": "One of the required fields cannot be required.",
+      "scale": "This size scale cannot be taken: it must be active and of this type’s company or every company.",
+      "label": "This label template cannot be taken: it must not be retired and be of this type’s company or every company.",
+      "template": "This measurement template cannot be taken here."
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You were signed out. Sign in again.",
+      "forbidden": "Your role does not read these settings.",
+      "not_found": "This company is not one you can see.",
+      "unavailable": "The server did not answer. Try again in a moment.",
+      "rate_limited": "Too many requests just now. Wait a moment and try again.",
+      "contract": "The answer was not what this page expects. Reload the page.",
+      "internal": "Something went wrong on the server. Try again."
+    },
+    "write": {
+      "moved": "Someone changed this meanwhile: read again, then make your change again.",
+      "codeTaken": "This code is taken by another type.",
+      "kindInUse": "Styles or child types use this type: its kind of garment stays.",
+      "state": "This is not possible in its present state: read again.",
+      "archived": "Archived: restore it first (a type under an archived parent: restore the parent first).",
+      "invalid": "Something is not right: see the fields.",
+      "forbidden": "Your role does not change these settings.",
+      "forbiddenAll": "Every company’s settings are changed only by a role over every company.",
+      "signed_out": "You were signed out. Sign in again; your changes are kept on this page.",
+      "not_found": "It is no longer there: read again.",
+      "rate_limited": "Too many requests just now. Wait a moment and save again.",
+      "unavailable": "The server did not answer: nothing was saved. Try again.",
+      "internal": "Something went wrong on the server: nothing was saved."
+    },
+    "typeGone": "That product type is not here any more."
+  },
+  "done": {
+    "rules": "Edit rules saved.",
+    "rulesLoosened": "Edit rules saved: the looser rule and its reason are in the audit trail.",
+    "tolerance": "Consumption tolerance saved.",
+    "typeSaved": "Product type {code} saved.",
+    "typeAdded": "Product type {code} added.",
+    "archived_one": "1 type archived. Its styles keep it.",
+    "archived_other": "{count} types archived. Their styles keep them.",
+    "restored_one": "1 type restored.",
+    "restored_other": "{count} types restored.",
+    "archivedSome": "{count} of {total} types archived; the others were refused (read the list again).",
+    "restoredSome": "{count} of {total} types restored; the others were refused (a type under an archived parent: restore the parent first)."
+  }
+}
