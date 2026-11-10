@@ -1,0 +1,385 @@
+{
+  "common": {
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "view": {
+    "tree": "Tree"
+  },
+  "depth": {
+    "failed": "Couldn't load the BOM's structure and alternates: the lines show without them."
+  },
+  "hold": {
+    "noManage": "Your role reads this BOM; changing it needs the BOM edit right.",
+    "loading": "Wait until the BOM's structure is read.",
+    "archived": "The style is archived: reactivate it to change its BOM.",
+    "frozen": "This revision is not a draft: start a new revision to change it.",
+    "offline": "Offline — nothing is sent until the connection is back.",
+    "busy": "Wait for the change being saved."
+  },
+  "mark": {
+    "refused": "Not saved: the stored value stays (the notice says why)."
+  },
+  "done": {
+    "saved": "Saved.",
+    "filed_one": "{count} line filed.",
+    "filed_other": "{count} lines filed.",
+    "grouped_one": "{count} line grouped.",
+    "grouped_other": "{count} lines grouped.",
+    "ungrouped_one": "{count} line ungrouped.",
+    "ungrouped_other": "{count} lines ungrouped.",
+    "supply_one": "Supply of {count} line saved.",
+    "supply_other": "Supply of {count} lines saved.",
+    "option": "The line is now only for that option.",
+    "optionOff": "The line is for every garment again.",
+    "alternateAdded": "Alternate added after the last one.",
+    "alternateRemoved": "Alternate removed: the ones after it moved up.",
+    "alternateMoved": "Order of the alternates saved.",
+    "filled_one": "{count} size filled from the base.",
+    "filled_other": "{count} sizes filled from the base."
+  },
+  "section": {
+    "SHELL": "Shell",
+    "LINING": "Lining",
+    "INSULATION": "Membranes and padding",
+    "PROTECTION": "Protectors",
+    "TRIMS": "Trims and hardware",
+    "THREAD": "Thread",
+    "LABELS": "Labels",
+    "PACKAGING": "Packaging",
+    "OTHER": "Other"
+  },
+  "revisionStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "OBSOLETE": "obsolete"
+  },
+  "approval": {
+    "PENDING": "Approval pending",
+    "APPROVED": "Approved",
+    "CONDITIONAL": "Approved with conditions",
+    "BLOCKED": "Blocked"
+  },
+  "materialStatus": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived",
+    "BLOCKED": "Blocked"
+  },
+  "col": {
+    "section": "Section",
+    "alternates": "Alternates",
+    "supply": "Who sends it",
+    "option": "Option",
+    "more": "More"
+  },
+  "lines": {
+    "table": "Lines of the BOM",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "countSections_one": "{count} line · {sections} sections",
+    "countSections_other": "{count} lines · {sections} sections",
+    "groupedUnder": "Grouped under the line above",
+    "group_one": "Group row of {count} line",
+    "group_other": "Group row of {count} lines",
+    "sub": "Sub-assembly {code} revision {revision} ({status})",
+    "fromKind": "from its material",
+    "wastage": "{pct} % wastage · {gross} with it",
+    "same": "Same in every garment",
+    "removeGroupHeld": "Lines are grouped under it: ungroup them first."
+  },
+  "alt": {
+    "count_one": "{count} alternate",
+    "count_other": "{count} alternates",
+    "none": "None",
+    "use": {
+      "ALWAYS": "Always allowed",
+      "WHEN_SHORT": "Only when short",
+      "WITH_APPROVAL": "With approval"
+    },
+    "needs": {
+      "none": "Used like the line's own material",
+      "ONLY_WHEN_SHORT": "only when the line's own material is short",
+      "NEEDS_APPROVAL": "each use needs a person's approval",
+      "NEEDS_CERTIFICATE_CHECK": "the certificate check comes first"
+    },
+    "intro": "Used in this order when {code} cannot be: the first is tried first.",
+    "empty": "No alternates: only the line's own material is used.",
+    "label": "Alternate {priority}: {code}",
+    "ppe": "PPE component",
+    "when": "When it may be used",
+    "qty": "Quantity",
+    "qtyHint": "Per garment, in the line's unit; empty: the line's own ({qty}).",
+    "qtyLine": "The line's own",
+    "qtyLineRead": "the line's own quantity ({qty})",
+    "qtyBad": "Type a number above 0 (1,9 or 1.9), or leave it empty.",
+    "colour": "Colour",
+    "colourLoading": "Reading the material's colours…",
+    "noColour": "No colour",
+    "certificate": "Certificate check before use",
+    "certificateHint": "Switch it on when the notified body may have to agree to the change.",
+    "certificateOn": "certificate check first",
+    "certificateOff": "no certificate check",
+    "certificateRequired": "A PPE component is involved: the check stays on.",
+    "covered": "Covered by certificate {number} ({standard}), valid to {to}.",
+    "notCovered": "No certificate in the register covers it: the notified body may have to agree.",
+    "note": "Note",
+    "up": "Move {code} up",
+    "down": "Move {code} down",
+    "remove": "Remove {code}",
+    "removeTitle": "Remove alternate {code} from line {line}?",
+    "removeBody": "The alternates after it move up one place. The line's own material stays.",
+    "removeConfirm": "Remove the alternate",
+    "add": "Add an alternate",
+    "search": "Material",
+    "searchHint": "Search the materials library; it goes after the last alternate, with approval needed until you change it.",
+    "held": {
+      "first": "Already the first.",
+      "last": "Already the last.",
+      "sub": "A sub-assembly line takes no alternates: its sub-assembly is made here.",
+      "max": "This line has the most alternates a line may have (10)."
+    }
+  },
+  "supply": {
+    "weBuy": "We buy it",
+    "weMake": "We make it (sub-assembly)",
+    "sentBy": "Sent by {name}",
+    "boughtFrom": "We buy it from {name}",
+    "from": "from {name}",
+    "workshop": "Goes in the workshop's kit",
+    "workshopCut": "Goes to the workshop cut, as bundles"
+  },
+  "option": {
+    "every": "Every garment"
+  },
+  "menu": {
+    "more": "More for line {line}",
+    "open": "Open the line in depth",
+    "alternates_one": "Alternates ({count})",
+    "alternates_other": "Alternates ({count})"
+  },
+  "bulk": {
+    "section_one": "Section… {count}",
+    "section_other": "Section… {count}",
+    "group_one": "Group… {count}",
+    "group_other": "Group… {count}",
+    "supply_one": "Supply… {count}",
+    "supply_other": "Supply… {count}",
+    "sectionTitle_one": "File {count} line under a section",
+    "sectionTitle_other": "File {count} lines under a section",
+    "sectionHint": "The section the BOM shows them under; from their material, each line goes back to its kind's section.",
+    "sectionKind": "From their material",
+    "groupTitle_one": "Group {count} line",
+    "groupTitle_other": "Group {count} lines",
+    "groupHint": "Under a line of this BOM (a kit, a pocket, an insert); Not grouped takes them out of their group.",
+    "groupApply_one": "Group {count} line",
+    "groupApply_other": "Group {count} lines",
+    "ungroupApply_one": "Ungroup {count} line",
+    "ungroupApply_other": "Ungroup {count} lines",
+    "supplyTitle_one": "Who sends {count} line, and the workshop",
+    "supplyTitle_other": "Who sends {count} lines, and the workshop",
+    "who": {
+      "keep": "Leave as it is",
+      "we": "We buy them",
+      "customer": "A customer sends them (no cost, no purchase)"
+    },
+    "workshop": {
+      "keep": "Leave as it is",
+      "yes": "They go in the workshop's kit",
+      "no": "They stay here"
+    },
+    "supplyNothing": "Choose what changes.",
+    "supplyChoose": "Choose the customer that sends them.",
+    "supplyBlocked": "A customer cannot send {lines}: a line bought from a supplier, or a sub-assembly we make.",
+    "apply_one": "Apply to {count} line",
+    "apply_other": "Apply to {count} lines"
+  },
+  "findings": {
+    "title_one": "{count} thing stops the release",
+    "title_other": "{count} things stop the release",
+    "titleWarnings_one": "{count} thing to look at (the release can go ahead)",
+    "titleWarnings_other": "{count} things to look at (the release can go ahead)",
+    "intro": "Live: Show me lands on the cell to fix.",
+    "warningPasses": "the release can go ahead",
+    "showMe": "Show me",
+    "addFirst": "Add the first material",
+    "MATERIAL_BLOCKED": "Line {line}: the material {material} is blocked (refused for use). Choose another material.",
+    "ALTERNATE_BLOCKED": "Line {line}: the alternate {alternate} is blocked. Remove it or choose another.",
+    "SUB_ASSEMBLY_NOT_RELEASED": "Line {line}: the sub-assembly {sub} is not released. Release it, or take its released revision.",
+    "SUB_ASSEMBLY_NOT_MADE": "Line {line}: {material} is no longer a component we make in pieces, pairs or sets (or a customer sends it). Change the line or take the sub-assembly off.",
+    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the sub-assembly {sub} contains this style again (a circle). Take another sub-assembly.",
+    "SUB_ASSEMBLY_TOO_DEEP": "Line {line}: the sub-assemblies go deeper than 10 levels.",
+    "SUB_ASSEMBLY_UNIT": "Line {line}: its unit does not count what the sub-assembly {sub} makes.",
+    "SUB_ASSEMBLY_SIZE_MISSING": "Line {line}: the sub-assembly {sub} has no size for size {size}.",
+    "SUB_ASSEMBLY_COLOURWAY_MISSING": "Line {line}: the sub-assembly {sub} has no colourway for a colourway that uses the line.",
+    "GROUP_CIRCLE": "Line {line}: grouped under a line that is grouped under it (a circle). Ungroup one of them.",
+    "PPE_MATERIAL_NOT_APPROVED": "Line {line}: {material} is used for protection and is not approved yet.",
+    "ALTERNATE_ARCHIVED": "Line {line}: the alternate {alternate} is archived: it is never taken.",
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: the style of the sub-assembly {sub} is archived."
+  },
+  "keyHint": {
+    "open": "Open the line in depth",
+    "add": "Add a material",
+    "views": "Next view (Lines, By size, By colourway, Tree)",
+    "move": "Move the line up or down (Alt+↑ / Alt+↓)",
+    "openSub": "Open the sub-assembly's BOM"
+  },
+  "line": {
+    "title": "Line {line}",
+    "parts": "Part of the line",
+    "part": {
+      "structure": "Structure and supply",
+      "alternates_one": "Alternates ({count})",
+      "alternates_other": "Alternates ({count})"
+    },
+    "autosave": "Each change saves by itself.",
+    "loading": "Reading the line's structure and alternates…",
+    "previous": "Previous line",
+    "next": "Next line",
+    "held": {
+      "first": "Already the first line.",
+      "last": "Already the last line."
+    },
+    "editW1": "Edit quantity, colours and operation…",
+    "w1Fields": "Material, quantity, wastage, colours and the operation are in Edit (⋯ on the line).",
+    "close": "Close",
+    "section": "Section",
+    "sectionKind": "From its material: {section}",
+    "sectionKindHint": "Shown under its material's section ({kind}) until you file it.",
+    "sectionFiled": "Filed by hand.",
+    "group": "Grouped under",
+    "groupHint": "A line of this BOM it belongs to (a kit, a pocket, an insert).",
+    "groupRow": "Lines {lines} are grouped under it.",
+    "notGrouped": "Not grouped",
+    "sub": {
+      "title": "Sub-assembly",
+      "none": "No sub-assembly.",
+      "remove": "Take it off",
+      "another": "Take another revision or style",
+      "change": "Choose another",
+      "search": "Style of the sub-assembly",
+      "searchHint": "Another style's BOM that line {line} takes (a removable liner, an armour insert).",
+      "placeholder": "Liner, insert, cuff…",
+      "reading": "Reading the style's revisions…",
+      "failed": "Couldn't read that style's revisions.",
+      "revision": "Revision",
+      "revisionHint": "Released first; a draft stops this BOM's release until it is released.",
+      "noRevision": "That style has no revision yet.",
+      "take": "Take revision {revision}",
+      "held": {
+        "notComponent": "Line {line} takes a bought material: a sub-assembly line takes the component we make. Choose that component as the line's material first.",
+        "unit": "Line {line} is not counted in pieces, pairs or sets: change its unit first.",
+        "customer": "A customer sends line {line}: a sub-assembly is one we make.",
+        "revision": "Choose a revision."
+      }
+    },
+    "supply": {
+      "title": "Who sends it",
+      "weBuyInstead": "We buy it",
+      "search": "Customer that sends it",
+      "searchHint": "A customer or a brand: the line then has no cost and is not bought.",
+      "placeholder": "Customer or brand…",
+      "searchFailed": "Couldn't search the customers (your role may not read them)."
+    },
+    "customer": {
+      "held": {
+        "supplier": "The line is bought from a named supplier: clear its supplier (Edit) first.",
+        "sub": "The line is a sub-assembly we make: the customer does not send it."
+      }
+    },
+    "workshop": "Goes to the workshop",
+    "workshopHint": "When a job is sent to a workshop, the marked lines make its kit.",
+    "workshopKit": "It goes in the workshop's kit.",
+    "workshopCut": "Leather tracked by the hide: it goes cut, as bundles.",
+    "option": {
+      "title": "Only for an option",
+      "hint": "A line only for one option is taken only when that option is chosen.",
+      "none": "The style offers no options yet.",
+      "failed": "Couldn't read the style's options.",
+      "link": "Options & rules of this style"
+    }
+  },
+  "search": {
+    "type": "Type to search",
+    "searching": "Searching…",
+    "none": "Nothing matches.",
+    "found_one": "{count} found",
+    "found_other": "{count} found",
+    "failed": "The search failed: try again."
+  },
+  "sizes": {
+    "group": "Per size",
+    "fill": "Fill…",
+    "fillCol": "Fill",
+    "fillOne": "Fill line {line} from the base size",
+    "totalSub": "with wastage",
+    "offline_one": "Offline: {count} size waits on this page and is sent when the connection is back.",
+    "offline_other": "Offline: {count} sizes wait on this page and are sent when the connection is back.",
+    "hint": "Type or paste a quantity (6,35 or 6.35); a cell saves by itself; Fill… sets every size from the base by a step.",
+    "hintRead": "Quantities per garment, in the line's unit."
+  },
+  "fill": {
+    "title": "Fill line {line} from the base size",
+    "intro": "Each size = the base size's quantity + its steps from the base × the increment, in {unit}. Sizes typed by hand stay."
+  },
+  "tree": {
+    "table": "Sub-assemblies",
+    "loading": "Reading the sub-assemblies…",
+    "failed": "Couldn't load sub-assemblies",
+    "count_one": "{count} sub-assembly · {levels} levels",
+    "count_other": "{count} sub-assemblies · {levels} levels",
+    "inside": "Inside the sub-assembly above",
+    "level": "Level {level} · line {seq}",
+    "makes": "its BOM makes {qty} {unit}",
+    "revision": "Revision {revision} ({status})",
+    "itsBom": "{lines} lines · {subs} sub-assemblies",
+    "open": "Open its BOM",
+    "openOne": "Open the BOM of {code} revision {revision}",
+    "col": {
+      "part": "Part",
+      "qty": "Quantity",
+      "sub": "Sub-assembly",
+      "revision": "Revision",
+      "bom": "Its BOM",
+      "open": "Open"
+    },
+    "empty": {
+      "title": "No sub-assemblies",
+      "body": "A component we make (a liner, an armour insert) can take another style's revision: open its line and choose the sub-assembly."
+    }
+  },
+  "usedIn": {
+    "title": "Used as a sub-assembly in",
+    "intro": "The revisions of other styles that take {code} as a sub-assembly.",
+    "loading": "Reading where it is used…",
+    "failed": "Couldn't read where it is used.",
+    "none": "No other style takes it as a sub-assembly.",
+    "line": "Line {seq} · {qty} {unit}",
+    "col": {
+      "style": "Style",
+      "revision": "Its revision",
+      "line": "Line",
+      "takes": "Takes"
+    }
+  },
+  "grades": {
+    "loading": "Reading the pattern pieces…",
+    "failed": "Couldn't read the pattern pieces.",
+    "none": "No pattern pieces are cut from this line yet.",
+    "edit": "Pattern pieces",
+    "mix": "Grade mix",
+    "orBetter": "{grade} or better",
+    "any": "Any grade",
+    "share_one": "{count} of {total} pieces ({pct} %)",
+    "share_other": "{count} of {total} pieces ({pct} %)",
+    "table": "Minimum grade per pattern piece",
+    "everySize": "Every size",
+    "rule": "Cutting refuses a hide below a piece's minimum grade.",
+    "col": {
+      "piece": "Piece",
+      "qty": "Per garment",
+      "min": "Minimum grade",
+      "sizes": "Sizes"
+    }
+  }
+}

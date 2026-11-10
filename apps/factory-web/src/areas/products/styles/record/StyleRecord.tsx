@@ -79,6 +79,8 @@ import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
 // B-W2b-235: the Operations tab's routing in depth.
 import { useRoutingDepth } from '../routing/depth/use-routing-depth'
+// B-W2b-241: the Materials (BOM) tab in depth.
+import { useBomDepth } from '../bom/depth/use-bom-depth'
 // B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
 import { TechPackTab } from '../techpack/TechPackTab'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
@@ -296,12 +298,15 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const sizesReload = useRef<() => void>(() => undefined)
   // B-W2b-235: the routing in depth.
   const routingDepthReload = useRef<() => void>(() => undefined)
+  // B-W2b-241: the BOM in depth.
+  const bomDepthReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
     piecesReload.current()
     sizesReload.current()
     routingDepthReload.current()
+    bomDepthReload.current() // B-W2b-241
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -423,11 +428,32 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   })
   routingDepthReload.current = routingDepth.reload
 
+  // B-W2b-241: the BOM in depth — the structure and its check with the BOM's read (the tab's mark), the lines in depth and
+  // the options while the tab is open; writes through the one queue above, each moving the revision's version; after one
+  // W1's BOM and the cost are read again (a customer's line has no cost).
+  const bomDepth = useBomDepth({
+    api,
+    styleId,
+    revisionId,
+    loadKey: versionKey,
+    enabled: can.bomView,
+    tabOpen: tab === 'bom',
+    canManage: can.bomManage,
+    companyId,
+    write: run,
+    versionOf: revisionVersion,
+    onVersion: onPiecesVersion,
+    onChanged: () => afterRouting(),
+    sizes: (lineId, values) => bomWrite((target) => setBomSizes(api, styleId, target, lineId, values)),
+  })
+  bomDepthReload.current = bomDepth.reload
+
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
     if (!revisionId) return
     pieces.reload()
     protectors.reload()
+    bomDepth.reload() // B-W2b-241
     if (can.routingView) getRouting(api, styleId, revisionId).then(setRoutingValue).catch(() => undefined)
     if (can.costView) loadCost(revisionId)
   }
@@ -542,6 +568,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     patternFiles: patternFiles.model,
     // B-W2b-235
     routingDepth: routingDepth.model,
+    // B-W2b-241
+    bomDepth: bomDepth.model,
     // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
   }
@@ -561,6 +589,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         patternFiles: patternFiles.actions,
         // B-W2b-235
         routingDepth: routingDepth.actions,
+        // B-W2b-241
+        bomDepth: bomDepth.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

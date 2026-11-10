@@ -19,6 +19,8 @@ import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
 import { PrepacksSection } from '../prepacks/view/PrepacksSection'
 import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
+// B-W2b-241: the BOM tab's problem mark from THE check.
+import { bomMarkCount } from '../../bom/depth/model'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import { GallerySection } from '../gallery/view/GallerySection'
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
@@ -156,14 +158,17 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
   })
 
   const issueCount = bom && revision?.status === 'DRAFT' ? bom.issues.length : 0
+  // B-W2b-241: the BOM tab's mark counts THE check (the structure's findings too) once it is read; W1's issues until then.
+  const bomMark = bomMarkCount(model.bomDepth?.structure.status === 'ready' ? model.bomDepth.structure.value : null)
+  const markOf = (tab: 'bom' | 'routing') => (tab === 'bom' && bomMark !== null ? bomMark : issueCount > 0 ? countFor(tab, bom) : 0)
   const tabItems: TabItem[] = tabs.map((tab) => ({
     id: tab,
     href: tabHref(tab),
     label:
-      (tab === 'bom' || tab === 'routing') && issueCount > 0 && countFor(tab, bom) > 0 ? (
+      (tab === 'bom' || tab === 'routing') && markOf(tab) > 0 ? (
         <span className="fw-st-tablabel">
           {t(`tab.${tab}`)}
-          <span className="fw-st-dot" aria-label={t('tab.problems', { count: countFor(tab, bom) })} role="img" />
+          <span className="fw-st-dot" aria-label={t('tab.problems', { count: markOf(tab) })} role="img" />
         </span>
       ) : (
         t(`tab.${tab}`)
