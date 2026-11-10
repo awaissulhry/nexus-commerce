@@ -243,6 +243,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/status/print',
   // B-W2b-264: Compliance › Sustainability › Sourcing & claims (SCR-215).
   '/compliance/sourcing',
+  // B-W2b-268: Compliance › Declarations & instructions (SCR-052), a declaration or leaflet, the PDF and pack windows.
+  '/compliance/declarations',
+  '/compliance/declarations/[id]',
+  '/compliance/declarations/pdf',
+  '/compliance/declarations/pack',
   // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
   '/compliance/reports',
   '/compliance/reports/print',
@@ -469,7 +474,8 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  */
 export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due', /* B-W2b-136 */ '/plant/machines/wall', /* B-W2b-104 */ '/quality/plans/print', /* B-W2b-119 */ '/quality/capa/report', /* B-W2b-127 */ '/quality/inspections/report', '/quality/inspections/reports',
   /* B-W2b-129 */ '/production/cutting/sheet',
-  /* B-W2b-243 */ '/products/styles/tech-pack'])
+  /* B-W2b-243 */ '/products/styles/tech-pack',
+  /* B-W2b-268 */ '/compliance/declarations/pdf', '/compliance/declarations/pack'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

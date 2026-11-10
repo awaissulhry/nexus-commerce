@@ -163,6 +163,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
   StandardChange: '/compliance/settings?tab=regulations&change=[id]',
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
+  // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
+  ComplianceDocument: '/compliance/declarations/[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
@@ -315,6 +317,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/chemicals': '/plant/chemicals',
   // B-W2b-264: the claims (SCR-215) read `?state=`, `?kind=`, `?scope=`, `?q=`.
   '/compliance/claims': '/compliance/sourcing',
+  // B-W2b-268: the declarations (SCR-052) read `?kind=`, `?status=`, `?origin=`, `?language=`, `?q=`.
+  '/compliance/declarations': '/compliance/declarations',
   // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
   '/safety/incidents': '/plant/incidents',
   // B-W2b-148: the health page's frame (the tiles) and its plans per role.

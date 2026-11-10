@@ -49,6 +49,8 @@ import { complianceClaims } from './compliance-claims'
 import { sampleRounds } from './sample-rounds'
 // B-W2b-247: Products › Libraries › Colours & artwork (the colour library).
 import { colours } from './colours'
+// B-W2b-268: Compliance › Declarations & instructions.
+import { complianceDeclarations } from './compliance-declarations'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -110,4 +112,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   sampleRounds,
   // B-W2b-247: Products › Libraries › Colours & artwork.
   colours,
+  // B-W2b-268: Compliance › Declarations & instructions.
+  complianceDeclarations,
 ])
