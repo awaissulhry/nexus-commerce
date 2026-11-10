@@ -38,6 +38,8 @@ import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
 import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 // B-W2b-235: the routing in depth (Operations tab).
 import type { RoutingDepthActions, RoutingDepthModel } from '../routing/depth/model'
+// B-W2b-241: the BOM in depth (Materials (BOM) tab).
+import type { BomDepthActions, BomDepthModel } from '../bom/depth/model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -56,7 +58,7 @@ export interface StyleNotice {
   params?: Record<string, string | number>
 }
 
-export type BomViewMode = 'lines' | 'sizes' | 'colours'
+export type BomViewMode = 'lines' | 'sizes' | 'colours' | /* B-W2b-241: the sub-assembly tree */ 'tree'
 
 /** The pop-ups of the studio (one at a time). */
 export type StyleDialog =
@@ -149,6 +151,8 @@ export interface StyleRecordViewModel {
   patternFiles?: PatternsModel
   /** B-W2b-235: the Operations tab's routing in depth — times, sizes, variants, checkpoints, settings (absent: not read). */
   routingDepth?: RoutingDepthModel
+  /** B-W2b-241: the Materials (BOM) tab in depth — structure, check, alternates, supply, options (absent: not read). */
+  bomDepth?: BomDepthModel
   /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
   samples?: { view: boolean; manage: boolean }
   /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
@@ -232,4 +236,6 @@ export interface StyleRecordActions {
   patternFiles?: PatternsActions
   /** B-W2b-235: the routing in depth. */
   routingDepth?: RoutingDepthActions
+  /** B-W2b-241: the BOM in depth. */
+  bomDepth?: BomDepthActions
 }
