@@ -81,12 +81,35 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
 
 // ---- the studio's tabs ------------------------------------------------------------------------------------------------
 
-export type StyleTab = 'overview' | 'variants' | 'sizes' | 'bom' | 'routing' | 'cost' | 'compliance' | 'files' | 'activity'
+export type StyleTab =
+  | 'overview'
+  | 'variants'
+  | 'sizes'
+  | 'bom'
+  | 'routing'
+  | 'cost'
+  // B-W2b-243: Tech pack, the design's tab after Cost.
+  | 'techpack'
+  | 'compliance'
+  | 'files'
+  | 'activity'
 /**
  * The studio's tabs, in the band's order (B-W2b-95: Files & patterns, the design's tab before Activity; B-W2b-233: Sizes &
  * measurements, the design's tab after Colourways & sizes).
  */
-export const STYLE_TABS: readonly StyleTab[] = ['overview', 'variants', 'sizes', 'bom', 'routing', 'cost', 'compliance', 'files', 'activity']
+export const STYLE_TABS: readonly StyleTab[] = [
+  'overview',
+  'variants',
+  'sizes',
+  'bom',
+  'routing',
+  'cost',
+  // B-W2b-243
+  'techpack',
+  'compliance',
+  'files',
+  'activity',
+]
 
 export function tabOf(value: string | null | undefined): StyleTab {
   return (STYLE_TABS as readonly string[]).includes(value ?? '') ? (value as StyleTab) : 'overview'
@@ -103,6 +126,8 @@ export function tabsFor(can: StyleAbilities): StyleTab[] {
     if (tab === 'files') return can.bomView
     // B-W2b-233: Sizes & measurements opens with the style's read (its prepacks); its revision-bound sections ask the BOM's.
     if (tab === 'sizes') return can.view
+    // B-W2b-243: the live tech pack reads with the BOM's right (its sections ask theirs).
+    if (tab === 'techpack') return can.bomView
     if (tab === 'activity') return can.thread
     return true
   })
