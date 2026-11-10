@@ -34,8 +34,8 @@ const IMPORT = /(?:^|\n)\s*(?:import[\s\S]{0,200}?from\s*|import\s*|export[\s\S]
 
 // The current migration is intentionally local and includes untracked adapters.
 const files = [...new Set([
-  ...execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
-  ...execSync('git ls-files --others --exclude-standard "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\n'),
+  ...execSync('git ls-files --others --exclude-standard "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\n'),
 ])].filter(Boolean)
 
 const offenders = []
@@ -73,8 +73,8 @@ for (const f of files) {
 // route stylesheet are in scope; the engine's own `design-system/grid/theme/grid.css` is the one
 // place those selectors live. Tracked AND untracked, so a sheet a session just wrote counts.
 const cssFiles = [...new Set([
-  ...execSync('git ls-files "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
-  ...execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\n'),
+  ...execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\n'),
 ])].filter(Boolean)
 // `.nds-cell-*` is the cell library; `.nds-grid-{pager,footstrip,card,panel,skel,noRows}` the hosts and
 // toolbars. (`.nds-grid`, `.nds-grid-wrap/-sub/-kid/-empty/-prefsbar` are the RETIRING DS DataGrid's,
