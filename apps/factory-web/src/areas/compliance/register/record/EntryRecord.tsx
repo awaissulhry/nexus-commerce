@@ -14,7 +14,11 @@ import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import { closeEntry, completeAction, getEntry, informDistributors, listReporters, listReversedReleases, notifyAuthority, updateEntry, type EntryDetail, type PartyOption, type ReversedRelease } from '../api'
 import { dayInstant, RECORD_TABS, romeToday, type EntryAction } from '../model'
 import { RegisterMessages } from '../view/parts'
-import { EntryRecordView } from './view/EntryRecordView'
+import { EntryRecordView, type EntryDepth } from './view/EntryRecordView'
+// B-W2b-271: the entry's W2b parts (Authority notices, recall progress, the distributor log) on B-W2b-260's API.
+import type { ReactNode } from 'react'
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useDepth } from '../depth/use-depth'
 
 /**
  * A PPE register entry's container (`/w/<company>/compliance/register/<id>?tab=…`, SCR-113): reads the entry (with its
@@ -167,10 +171,13 @@ function EntryContainer({ entryId }: { entryId: string }) {
   const panels = threads ? <RecordPanels record={{ type: 'PpeRegisterEntry', id: entry.id, companyId: entry.companyId, siteId: null }} title={entry.reference} party={entry.party ? { id: entry.party.id, name: entry.party.name, emails: [] } : null} /> : undefined
 
   return (
+    <WithDepth entry={entry} prefix={prefix} onEntryChanged={() => void load()}>
+      {(depth) => (
     <EntryRecordView
       model={{ prefix, can, tab, entry, releases, asOf, live, notice, dialog, busy, dialogProblem, changedAt, dockOpen, today }}
       panels={panels}
       parties={can.partiesView ? (parties ?? []) : null}
+      depth={depth}
       actions={{
         onDialog: (next) => {
           setDialog(next)
@@ -225,5 +232,37 @@ function EntryContainer({ entryId }: { entryId: string }) {
         onCloseEntry: (reason) => void write((current) => closeEntry(api, current.id, current.version, reason), 'done.closed'),
       }}
     />
+      )}
+    </WithDepth>
   )
+}
+
+/** B-W2b-271: the depth parts' container hook over the loaded entry (a hook needs the entry, so it lives below the reads). */
+function WithDepth({ entry, prefix, onEntryChanged, children }: { entry: EntryDetail; prefix: string; onEntryChanged: () => void; children: (depth: EntryDepth) => ReactNode }) {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const router = useRouter()
+  const locale = useLocale()
+  const depth = useDepth({
+    api,
+    permissions: session.permissions,
+    entry: {
+      id: entry.id,
+      companyId: entry.companyId,
+      reference: entry.reference,
+      kind: entry.kind,
+      status: entry.status,
+      risk: entry.risk,
+      styleId: entry.styleId,
+      styleCode: entry.style.code,
+      batchNumbers: entry.batchNumbers,
+      reportedAt: entry.reportedAt,
+      version: entry.version,
+    },
+    prefix,
+    locale,
+    onEntryChanged,
+    navigate: (address) => router.push(address),
+  })
+  return <>{children({ model: depth.model, actions: depth.actions, notice: depth.notice, onDismissNotice: depth.dismissNotice })}</>
 }
