@@ -144,6 +144,8 @@ import { PRODUCT_MATERIALS_DEPTH_DEFINITIONS, PRODUCT_MATERIALS_DEPTH_PERMISSION
 // B-W2b-249: Rules & markets (compliance.rules.manage) and the phrase library (compliance.phrases.manage | approve); reading is compliance.certificates.view.
 import { RULES_LIBRARY_DEFINITIONS, RULES_LIBRARY_PERMISSIONS } from '../../compliance/register-of-rules/permissions'
 import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phrases/permissions'
+// B-W2b-254: requirements and gates (compliance.requirements.manage, compliance.gates.override); reading is compliance.certificates.view.
+import { REQUIREMENTS_DEFINITIONS, REQUIREMENTS_PERMISSIONS } from '../../compliance/requirements/permissions'
 // B-W2b-230: the tech pack PDF per audience (product.techpacks.make).
 import { PRODUCT_TECHPACKS_DEFINITIONS, PRODUCT_TECHPACKS_PERMISSIONS } from '../../product/techpack/permissions'
 // B-W2b-233: prepacks (product.prepacks.manage; reading is product.styles.view).
@@ -812,6 +814,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-249: Rules & markets and the phrase library (area `compliance`, declared above).
   RULES_LIBRARY_DEFINITIONS,
   PHRASES_DEFINITIONS,
+  // B-W2b-254: requirements and gates (area `compliance`, declared above).
+  REQUIREMENTS_DEFINITIONS,
   // B-W2b-230: the tech pack PDF (area `product`, declared above).
   PRODUCT_TECHPACKS_DEFINITIONS,
   // B-W2b-233: prepacks (area `product`, declared above).
@@ -1084,6 +1088,8 @@ for (const name of PRODUCT_OPTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of PRODUCT_MATERIALS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-249: Rules & markets and the phrase library.
 for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-254
+for (const name of REQUIREMENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-230: the tech pack PDF.
 for (const name of PRODUCT_TECHPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-233: prepacks.

@@ -25,6 +25,9 @@ import { benchHolds } from './bench-hold'
 import { finalWorkOrder, inspectorOf, mayOn, officeOf, postedBy, signerOf } from './access'
 import { cellGate, cellText, documentBlockers, identityOf, inspectorSigner, makerCheck, ReleaseRefusedError, ruleInForce, type Identity } from './facts'
 import { callerIdentity, qualityNumber, signatureOf } from './inspections'
+// B-W2b-254 (PRD-272): the one compliance gate at the final release (QHS-051 as a requirement); refusals become GateEvents.
+import { finalReleaseGate } from '../../compliance/gates/at-steps'
+import { recordRefusals } from '../../compliance/gates/gate'
 import {
   labelsOfCell,
   lockRelease,
@@ -112,7 +115,18 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
     if (error instanceof Error && error.message === 'Not a cell of this work order.') throw new ValidationError('Not a cell of this work order.', [{ path: 'body/workOrderSizeId', message: 'Not a cell of this work order.' }])
     throw error
   })
-  if (openChecks(before.checks).length > 0) throw new ReleaseRefusedError(before.checks)
+  // B-W2b-254: W1's checks keep their words; a certificate refusal is recorded as CERT-COVERAGE's GateEvent, the gate adds the other requirements.
+  const compliance = await finalReleaseGate(caller, { id: header.id, number: header.number, companyId: header.companyId, siteId: header.siteId, styleId: header.styleId, labelTemplateId: header.labelTemplateId }, body.workOrderSizeId, {
+    certificateRefusal: before.certificate.allowed ? null : before.facts.certificate.words,
+  })
+  if (openChecks(before.checks).length > 0) {
+    await recordRefusals(caller, compliance.pending, options.idempotencyKey)
+    throw new ReleaseRefusedError(before.checks)
+  }
+  if (compliance.refusal) {
+    await recordRefusals(caller, compliance.refusal.gateRefusals, options.idempotencyKey)
+    throw compliance.refusal
+  }
   await options.sign()
 
   const { result } = await command(caller, { name: 'quality.garments.release', idempotencyKey: options.idempotencyKey, input: body }, async (tools) => {
