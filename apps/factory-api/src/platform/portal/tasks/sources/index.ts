@@ -10,6 +10,8 @@ import { SUBCONTRACT_JOBS_SOURCE } from './subcontract-jobs'
 import { SUPPLIER_DOCUMENT_SOURCE } from '../../../../modules/purchasing/portal-profile/task-source'
 // B-W2b-184: the request to answer an approval (APPROVE, RECONFIRM_ORDER).
 import { APPROVALS_SOURCE } from '../../../approvals-out/task-source'
+// B-W2b-256: a declaration asked of a supplier in its portal (answered by its upload).
+import { SUPPLIER_DECLARATION_SOURCE } from '../../../../modules/compliance/declarations-asked/task-source'
 
 /**
  * Where partner tasks come from (B-W2b-167, COL-043; plan W2b-3 "Sources"): one file per source in this folder, one line in
@@ -47,6 +49,8 @@ export const TASK_SOURCES: readonly TaskSource[] = Object.freeze([
   SUPPLIER_DOCUMENT_SOURCE,
   // B-W2b-184: a partner's approval to give (a sample, a proof, a concession, a signature) or a revised order to re-confirm.
   APPROVALS_SOURCE,
+  // B-W2b-256: a declaration asked of a supplier (REACH SVHC, RSL, PFAS-free, nickel, Cr VI), closed by its upload.
+  SUPPLIER_DECLARATION_SOURCE,
 ])
 
 const byPrefix = new Map<string, TaskSource>()

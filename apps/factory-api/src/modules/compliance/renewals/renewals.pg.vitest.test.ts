@@ -227,7 +227,7 @@ describe('changes to an approved type (PRD-285, Annex V 7.2)', () => {
     const decided = (await ok('quality', 'POST', `/compliance/type-changes/${state.review3.id}/not-needed`, { version: state.review3.version, reason: 'Same thread as the approved addition of revision 2.' })).review
     expect(decided).toMatchObject({ status: 'NOT_NEEDED', holdsLabel: false, decisionNote: 'Same thread as the approved addition of revision 2.' })
     expect((await labelProblems(state.rev3)).certificate).toBeNull()
-    expect((await admin(`SELECT payload->>'status' AS status FROM "OutboxEvent" WHERE type = 'compliance.type_change_decided' AND "tenantId" = $1 ORDER BY "occurredAt"`, [T])).map((row) => row.status)).toEqual(['NOTIFIED', 'APPROVED', 'NOT_NEEDED'])
+    expect((await admin(`SELECT payload->>'status' AS status FROM "OutboxEvent" WHERE type = 'compliance.type_change_decided' AND "tenantId" = $1 ORDER BY "occurredAt", id`, [T])).map((row) => row.status)).toEqual(['NOTIFIED', 'APPROVED', 'NOT_NEEDED'])
   })
 })
 
@@ -305,7 +305,7 @@ describe('certificate renewals (QHS-105, PRD-283)', () => {
     expect(linked.log.map((entry: Json) => [entry.action, entry.detail])).toEqual([['STARTED', expect.any(String)], ['APPLIED', today], ['RENEWED', 'TEST-CERT-RENEW']])
     expect((await admin(`SELECT "timerKey", status FROM "DueTimer" WHERE "recordId" = $1 ORDER BY "fireAt"`, [ids.cert])).map((row) => `${row.timerKey} ${row.status}`)).toEqual(['CERTIFICATE_EXPIRY:-180d FIRED', 'CERTIFICATE_EXPIRY:-90d CANCELLED'])
     expect(await one(`SELECT state, resolution FROM "Alert" WHERE "recordId" = $1`, [ids.cert])).toEqual({ state: 'RESOLVED', resolution: 'CLEARED' })
-    expect((await admin(`SELECT type FROM "OutboxEvent" WHERE subject = $1 AND type LIKE 'compliance.%' ORDER BY "occurredAt"`, [ids.cert])).map((row) => row.type)).toEqual(['compliance.renewal_started', 'compliance.renewal_applied', 'compliance.certificate_renewed'])
+    expect((await admin(`SELECT type FROM "OutboxEvent" WHERE subject = $1 AND type LIKE 'compliance.%' ORDER BY "occurredAt", id`, [ids.cert])).map((row) => row.type)).toEqual(['compliance.renewal_started', 'compliance.renewal_applied', 'compliance.certificate_renewed'])
     // The engine sets no new timer for a renewed certificate; the successor says what it renews; the link is set once.
     await evaluate()
     expect((await admin(`SELECT count(*)::int AS n FROM "DueTimer" WHERE "recordId" = $1 AND status = 'PENDING'`, [ids.cert]))[0]!.n).toBe(0)
