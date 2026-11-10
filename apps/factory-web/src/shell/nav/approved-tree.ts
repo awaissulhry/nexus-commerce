@@ -141,6 +141,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.materials', title: 'Materials & trims', titleIt: 'Materiali e accessori', wave: 'W1', href: '/products/materials' },
         ],
       },
+      // W2b: B-W2b-261 Development › Samples & prototypes (SCR-110); Changes & versions joins the group with its page.
+      {
+        label: 'Development',
+        labelIt: 'Sviluppo',
+        hideLabel: false,
+        pages: [{ id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' }],
+      },
       {
         label: 'Libraries',
         labelIt: 'Librerie',

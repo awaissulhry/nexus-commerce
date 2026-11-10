@@ -51,7 +51,7 @@ export function StyleRecordView({
   techPack?: ReactNode
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack']}>
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples']}>
       <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} />
     </WithMessages>
   )
@@ -109,6 +109,8 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
   const t = useT('products')
   // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
   const tt = useT('products-techpack')
+  // B-W2b-261: the band's links to the style's sample rounds.
+  const ts = useT('products-samples')
   const locale = useLocale()
   const recordHref = `${model.prefix}/products/styles/${style.id}`
   const revision = revisionInView(style.revisions, model.revisionId)
@@ -189,6 +191,11 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
     { id: 'duplicate', label: t('action.duplicate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicate?.() },
     // B-W2b-243 (design pop:styles.techpackPdf "Tech pack tab · band overflow").
     ...(tabs.includes('techpack') && revision ? [{ id: 'techpack', label: tt('techpack.band.make'), href: `${tabHref('techpack')}&make=1` }] : []),
+    // B-W2b-261 (design products.styles conn "Samples & prototypes (rounds pinned to a revision)"; pop:samples.new "Style record").
+    ...(model.samples?.view
+      ? [{ id: 'samples', label: revision ? ts('style.rounds', { revision: revision.revision }) : ts('style.roundsAll'), href: `${model.prefix}/products/samples?style=${encodeURIComponent(style.id)}${revision ? `&revision=${encodeURIComponent(revision.id)}` : ''}` }]
+      : []),
+    ...(model.samples?.manage ? [{ id: 'sampleNew', label: ts('style.newRequest'), href: `${model.prefix}/products/samples?new=1&style=${encodeURIComponent(style.id)}${revision && revision.status !== 'OBSOLETE' ? `&revision=${encodeURIComponent(revision.id)}` : ''}` }] : []),
     {
       id: 'copy',
       label: t('action.copyCode'),

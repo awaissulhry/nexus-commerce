@@ -174,6 +174,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
   // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
   WorkInstruction: '/production/instructions/[id]',
+  // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
+  SampleRound: '/products/samples/[id]',
 })
 
 /**
@@ -319,6 +321,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
+  '/sales/samples/rounds': '/products/samples',
 })
 
 export interface RecordRef {
