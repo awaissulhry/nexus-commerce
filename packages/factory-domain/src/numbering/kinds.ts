@@ -67,6 +67,13 @@ export const NUMBER_KINDS = [
   'SAMPLE_ROUND',
   // W2b-4 wave 31/33 (factory-db numbering.prisma): a declaration asked of a supplier (SD-…), an office document kind.
   'SUPPLIER_DECLARATION',
+  // W2b-4 wave 32/33 (factory-db numbering.prisma): a technical file (TF-…) and an evidence pack (EP-…), office document kinds.
+  'TECHNICAL_FILE',
+  'EVIDENCE_PACK',
+  // W2b-4 wave 33/33 (factory-db numbering.prisma): a recall or withdrawal (RCL-…) and an authority's request (AR-…), office
+  // document kinds.
+  'RECALL',
+  'AUTHORITY_REQUEST',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -228,6 +235,10 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   CHANGE_ORDER: 'ECO',
   SAMPLE_ROUND: 'SR',
   SUPPLIER_DECLARATION: 'SD',
+  TECHNICAL_FILE: 'TF',
+  EVIDENCE_PACK: 'EP',
+  RECALL: 'RCL',
+  AUTHORITY_REQUEST: 'AR',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

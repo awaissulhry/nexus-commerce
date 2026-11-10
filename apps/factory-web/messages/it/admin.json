@@ -1683,6 +1683,8 @@
     "product_changes_request": "Aprire una richiesta di modifica",
     "product_changes_manage": "Valutare le richieste di modifica e scrivere, inviare e rilasciare gli ordini di modifica",
     "product_changes_approve": "Approvare o rifiutare gli ordini di modifica (mai i propri)",
+    "product_options_manage": "Gestire la libreria delle opzioni: gruppi, valori, regole ed effetti",
+    "product_options_price": "Impostare il supplemento di prezzo di un'opzione",
     "product_bom_view": "Vedere le distinte base",
     "product_bom_manage": "Modificare una distinta base in bozza",
     "product_bom_release": "Rilasciare una revisione (blocca distinta, ciclo ed etichetta)",
