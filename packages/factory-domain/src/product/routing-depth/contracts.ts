@@ -73,7 +73,7 @@ export type LibrarySettingsView = z.infer<typeof librarySettingsView>
 
 // ---- variants and checkpoints of a step ----------------------------------------------------------------------------------------
 
-/** What a draft step is for (PRD-128): every list empty = every cell. No option value exists yet: send none. */
+/** What a draft step is for (PRD-128): every list empty = every cell. Option values: active options of a group the style offers (B-W2b-229). */
 export const stepVariantsBody = input({
   version: version(),
   sizes: z.array(z.string().trim().min(1).max(20)).max(VARIANT_LIMITS.sizes).default([]),
@@ -140,7 +140,7 @@ export const routingDepthView = output({
   sizes: z.array(output({ code: z.string(), label: z.string() })),
   colourways: z.array(output({ id: id(), code: z.string(), name: z.string() })),
   steps: z.array(stepDepthView),
-  /** Options of a style do not exist yet: a step is not limited to one (words for the drawer). */
+  /** The options a step may be limited to (B-W2b-229: the style's offered active options); none offered: unavailable, with the words. */
   options: output({ available: z.boolean(), words: words() }),
   /** A DRAFT revision of a style that is not archived, and the caller may change its routing. */
   editable: z.boolean(),
