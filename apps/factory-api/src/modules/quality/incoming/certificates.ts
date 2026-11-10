@@ -36,7 +36,11 @@ export async function certificatesIn(db: Pick<Reader, 'certificate'>, ids: reado
 }
 
 /** The certificates the record shows and the bench picks from (a tablet: read as the tenant's system caller). */
-export async function certificateExtras(caller: CommandCaller, context: Inspector, input: { readonly companyId: string; readonly itemId: string | null; readonly named: readonly string[] }): Promise<CertificateExtras> {
+export async function certificateExtras(
+  caller: CommandCaller,
+  context: Inspector,
+  input: { readonly companyId: string; readonly itemId: string | null; readonly named: readonly string[]; readonly supplierId?: string | null | undefined },
+): Promise<CertificateExtras> {
   const today = businessDate(serverClock.now())
   const day = new Date(`${today}T00:00:00.000Z`)
   const reader = context.audience === 'floor' ? asTenantSystem(caller, context) : caller
@@ -52,7 +56,14 @@ export async function certificateExtras(caller: CommandCaller, context: Inspecto
     let covering: CertificateFact | null = null
     if (input.itemId) {
       const coverage = await db.certificateCoverage.findMany({
-        where: { itemId: input.itemId, status: 'ACTIVE', certificate: { status: 'VALID', validFrom: { lte: day }, validTo: { gte: day }, OR: [{ companyId: null }, { companyId: input.companyId }] } },
+        where: {
+          itemId: input.itemId,
+          status: 'ACTIVE',
+          // B-W2b-255 (QHS-106): a bought-in part's certificate per supplier part: a coverage naming another supplier never
+          // covers the lot (one naming none still covers the part from any supplier, as W1 recorded it).
+          ...(input.supplierId ? { OR: [{ supplierPartyId: null }, { supplierPartyId: input.supplierId }] } : {}),
+          certificate: { status: 'VALID', validFrom: { lte: day }, validTo: { gte: day }, OR: [{ companyId: null }, { companyId: input.companyId }] },
+        },
         select: { certificate: { select: COLUMNS } },
       })
       const best = coverage.map((row) => row.certificate).sort((a, b) => b.validTo.getTime() - a.validTo.getTime() || (a.id < b.id ? -1 : 1))[0]
