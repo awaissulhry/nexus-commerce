@@ -79,6 +79,8 @@ import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
 // B-W2b-235: the Operations tab's routing in depth.
 import { useRoutingDepth } from '../routing/depth/use-routing-depth'
+// B-W2b-240: Sizes & measurements › Measurement spec.
+import { useSpec } from './spec/use-spec'
 // B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
 import { TechPackTab } from '../techpack/TechPackTab'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
@@ -296,12 +298,16 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const sizesReload = useRef<() => void>(() => undefined)
   // B-W2b-235: the routing in depth.
   const routingDepthReload = useRef<() => void>(() => undefined)
+  // B-W2b-240: the Measurement spec.
+  const specReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
     piecesReload.current()
     sizesReload.current()
     routingDepthReload.current()
+    // B-W2b-240
+    specReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -422,6 +428,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     onChanged: () => afterBom(),
   })
   routingDepthReload.current = routingDepth.reload
+  // B-W2b-240: the Sizes & measurements tab's Measurement spec (the BOM's read; written through the one queue above at the
+  // spec's own version, so a BOM edit of the same draft never clashes with it).
+  const specCan = useMemo(() => ({ manage: can.bomManage, release: session.permissions.includes('product.bom.release'), library: can.view }), [can.bomManage, can.view, session.permissions])
+  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: tab === 'sizes' && can.bomView, can: specCan, write: run })
+  specReload.current = spec.reload
 
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
@@ -542,6 +553,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     patternFiles: patternFiles.model,
     // B-W2b-235
     routingDepth: routingDepth.model,
+    // B-W2b-240
+    spec: spec.model,
     // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
   }
@@ -561,6 +574,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         patternFiles: patternFiles.actions,
         // B-W2b-235
         routingDepth: routingDepth.actions,
+        // B-W2b-240
+        spec: spec.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

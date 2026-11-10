@@ -1,0 +1,703 @@
+{
+  "switch": {
+    "label": "Librerie di Taglie e misure",
+    "scales": "Scale taglie",
+    "poms": "Punti di misura",
+    "rules": "Regole di sviluppo taglie",
+    "key": "Tasto {key}"
+  },
+  "import": {
+    "menu": "Importa",
+    "poms": "Punti di misura da un foglio…",
+    "rules": "Regole di sviluppo da un foglio…",
+    "held": "Per importare servono i permessi di importazione (eseguire importazioni e caricare file): chiedi a un amministratore.",
+    "name": {
+      "poms": "Punti di misura",
+      "rules": "Regole di sviluppo taglie"
+    },
+    "fills": {
+      "poms": "Codice, nome, tipo, zona del corpo, unità, tolleranza predefinita, come misurare e punto del corpo di ogni punto di misura.",
+      "rules": "Una regola per riga: la scala e la taglia base, poi l'incremento di un punto tra due taglie (\"50-52\") o di ogni passo (\"*\")."
+    }
+  },
+  "common": {
+    "activeFilters": "Filtri attivi",
+    "back": "Indietro",
+    "chipSearch": "Ricerca: {q}",
+    "clearAll": "Togli tutti",
+    "clearFilters": "Togli i filtri",
+    "close": "Chiudi",
+    "count_one": "{count} di {total}",
+    "count_other": "{count} di {total}",
+    "countMore_one": "{count} di {total}, altri da mostrare",
+    "countMore_other": "{count} di {total}, altri da mostrare",
+    "dismiss": "Chiudi",
+    "everyCompany": "Tutte le aziende",
+    "keysTitle": "Scorciatoie da tastiera",
+    "more": "Mostra altri",
+    "notYet": "Non ancora letto",
+    "readAgain": "Rileggi",
+    "reading": "Lettura…",
+    "removeFilter": "Togli il filtro",
+    "retry": "Riprova",
+    "save": "Salva",
+    "statusFilter": "Quali",
+    "updated": "Aggiornato alle {time}",
+    "working": "In corso…"
+  },
+  "statusView": {
+    "open": "In uso",
+    "archived": "Archiviati",
+    "all": "Tutti"
+  },
+  "status": {
+    "ACTIVE": "In uso",
+    "ARCHIVED": "Archiviato"
+  },
+  "kind": {
+    "BODY": "Corpo",
+    "GARMENT": "Capo"
+  },
+  "zone": {
+    "UPPER": "Busto",
+    "ARMS": "Braccia",
+    "LEGS": "Gambe",
+    "RIDING": "Posizione in sella",
+    "OTHER": "Altro"
+  },
+  "format": {
+    "RELATIVE": "Relativo (da taglia a taglia)",
+    "ABSOLUTE": "Assoluto (dalla base)",
+    "hint": {
+      "RELATIVE": "Ogni incremento va da una taglia alla successiva; l'incremento standard copre ogni passo che una riga lascia vuoto.",
+      "ABSOLUTE": "Ogni incremento si conta dalla taglia base; l'incremento standard si moltiplica per i posti dalla base."
+    }
+  },
+  "held": {
+    "alreadyActive": "Alcuni sono già in uso.",
+    "alreadyArchived": "Alcuni sono già archiviati.",
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+    "noManage": "Per cambiare le librerie serve product.styles.manage (il ruolo di chi sviluppa il prodotto).",
+    "none": "Scegli almeno una riga.",
+    "nothing": "Non è cambiato ancora nulla."
+  },
+  "problem": {
+    "read": {
+      "forbidden": "Il tuo ruolo non li legge.",
+      "internal": "Qualcosa è andato storto nella lettura. Riprova.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "not_found": "Non esiste più.",
+      "unavailable": "Il server non è raggiungibile ora.",
+      "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+      "contract": "Il server ha risposto in un modo che questa pagina non capisce."
+    },
+    "write": {
+      "codeTaken": "Questo codice è già nella libreria (maiuscole o minuscole che siano).",
+      "internal": "Qualcosa è andato storto nel salvataggio. Non è stato salvato nulla.",
+      "inUse": "È in uso, quindi non può cambiare.",
+      "invalid": "Qualcosa è stato rifiutato. Controlla i campi.",
+      "moved": "Qualcun altro l'ha cambiato nel frattempo: rileggilo, poi fai la tua modifica.",
+      "state": "Non può cambiare nello stato in cui è ora.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "not_found": "Non esiste più.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "unavailable": "Il server non è raggiungibile: non è stato salvato nulla."
+    }
+  },
+  "poms": {
+    "intro": "I punti in cui si misurano ogni scheda misure e ogni regola di sviluppo: un codice che vale lo stesso su ogni modello, come misurarlo, la sua unità e la tolleranza che una scheda prende in automatico.",
+    "new": "Nuovo punto",
+    "search": "Cerca punti",
+    "table": "Punti di misura",
+    "kindFilter": "Tipo",
+    "kindAll": "Corpo e capo",
+    "col": {
+      "code": "Codice",
+      "name": "Nome",
+      "howTo": "Come misurare",
+      "uom": "Unità",
+      "tolerance": "Tolleranza predefinita",
+      "body": "Punto del corpo",
+      "status": "Stato",
+      "more": "Altro"
+    },
+    "cell": {
+      "name": "Nome di {code}",
+      "howTo": "Come misurare {code}",
+      "uom": "Unità di {code}",
+      "tolerance": "Tolleranza predefinita di {code}"
+    },
+    "howToPlaceholder": "Come si misura",
+    "tolerancePlaceholder": "± per scheda",
+    "noHowTo": "Ancora senza istruzioni",
+    "perSpec": "Scritta per scheda",
+    "isBody": "Punto del corpo",
+    "keys": {
+      "new": "Nuovo punto",
+      "open": "Apri il punto"
+    },
+    "menu": {
+      "edit": "Modifica il punto…",
+      "view": "Apri",
+      "archive": "Archivia…",
+      "restore": "Ripristina…",
+      "copyCode": "Copia il codice",
+      "more": "Altro per {code}"
+    },
+    "bulk": {
+      "export_one": "Esporta {count}",
+      "export_other": "Esporta {count}",
+      "archive_one": "Archivia {count}",
+      "archive_other": "Archivia {count}",
+      "restore_one": "Ripristina {count}",
+      "restore_other": "Ripristina {count}"
+    },
+    "status": {
+      "archiveTitle_one": "Archivia {count} punto",
+      "archiveTitle_other": "Archivia {count} punti",
+      "restoreTitle_one": "Ripristina {count} punto",
+      "restoreTitle_other": "Ripristina {count} punti",
+      "archiveBody": "Un punto archiviato non si offre alle nuove schede e regole; le schede e le regole che lo hanno lo tengono.",
+      "restoreBody": "Un punto ripristinato si offre di nuovo alle nuove schede e regole."
+    },
+    "notice": {
+      "created": "{code} aggiunto alla libreria.",
+      "saved": "{code} salvato.",
+      "archived_one": "{count} punto archiviato.",
+      "archived_other": "{count} punti archiviati.",
+      "restored_one": "{count} punto ripristinato.",
+      "restored_other": "{count} punti ripristinati.",
+      "picture": "La foto di {code} è in archivio.",
+      "pictureScan": "La foto di {code} è in controllo: si vede quando risulta pulita."
+    },
+    "offline_one": "Offline: {count} modifica aspetta su questa pagina e parte quando torna la connessione.",
+    "offline_other": "Offline: {count} modifiche aspettano su questa pagina e partono quando torna la connessione.",
+    "empty": {
+      "title": "Ancora nessun punto di misura",
+      "body": "Aggiungi il primo punto (larghezza petto, lunghezza dietro …) o importali da un foglio.",
+      "bodyView": "Li aggiunge chi sviluppa il prodotto."
+    },
+    "filteredEmpty": {
+      "title": "Nessuna riga con questi filtri",
+      "body": "Togli i filtri per vedere ogni punto."
+    },
+    "error": {
+      "title": "Impossibile caricare i punti di misura"
+    },
+    "forbidden": {
+      "title": "Non hai accesso ai punti di misura",
+      "body": "Per leggerli serve product.styles.view (lo hanno sviluppo prodotto, produzione e qualità)."
+    },
+    "dialog": {
+      "newTitle": "Nuovo punto di misura",
+      "editTitle": "Punto di misura",
+      "editTitleOf": "Punto di misura {code}",
+      "create": "Aggiungi punto",
+      "failed": "Impossibile leggere il punto",
+      "inUse": "In uso: {specs} scheda/e con {values} valore/i, {rules} regola/e di sviluppo, {templates} punto/i di modelli di misura. Il tipo e l'unità restano come sono.",
+      "unused": "Nulla lo usa ancora: ogni campo può cambiare."
+    },
+    "field": {
+      "company": "Di chi",
+      "companyHint": "Tutte le aziende condividono un punto; oppure tienilo per un'azienda.",
+      "code": "Codice",
+      "codeHint": "Da 1 a 40 lettere, cifre, punti, trattini o trattini bassi (\"CHEST_W\"): il collaudo finale registra con questo.",
+      "name": "Nome",
+      "kind": "Tipo",
+      "kindHint": "Capo: ciò che misura il capo finito (una scheda, una regola). Corpo: ciò che misura un pilota.",
+      "kindInUse": "In uso: il tipo resta.",
+      "zone": "Zona del corpo",
+      "uom": "Unità",
+      "uomInUse": "In uso: l'unità resta.",
+      "tolerance": "Tolleranza predefinita (±)",
+      "toleranceHint": "La prende una scheda quando la sua non è scritta; vuota: scritta per scheda.",
+      "body": "Punto del corpo a cui risponde",
+      "bodyHint": "La misura del pilota che questo punto del capo segue (petto del capo ↔ petto del corpo).",
+      "bodyNone": "Nessuno",
+      "howTo": "Come misurare",
+      "howToHint": "Parole semplici che segue chi misura o collauda; la foto lo mostra."
+    },
+    "picture": {
+      "section": "Foto",
+      "none": "Ancora nessuna foto.",
+      "onFile": "In archivio",
+      "scanning": "In controllo",
+      "add": "Aggiungi foto",
+      "replace": "Sostituisci la foto",
+      "remove": "Togli la foto",
+      "choose": "Scegli una foto",
+      "open": "Come misurare {code}: guarda la foto",
+      "title": "Come misurare {code}",
+      "alt": "Come misurare {code}",
+      "loading": "Lettura della foto…",
+      "failed": "La foto non si può mostrare ora.",
+      "problem": "L'archivio dei file non ha preso la foto: riprova."
+    },
+    "problem": {
+      "name": "Dagli un nome.",
+      "tooLong": "Troppo lungo.",
+      "uom": "Scegli cm o mm.",
+      "tolerance": "Una tolleranza è un numero da 0 in su, con al massimo 2 decimali.",
+      "code": "Da 1 a 40 lettere, cifre, punti, trattini o trattini bassi, che inizi con una lettera o una cifra.",
+      "codeTaken": "Questo codice è già nella libreria (maiuscole o minuscole che siano).",
+      "inUse": "In uso: resta com'è. Crea invece un nuovo punto.",
+      "invalid": "Rifiutato: controlla il valore.",
+      "moved": "Qualcun altro ha cambiato questo punto nel frattempo: è stato riletto.",
+      "write": "Non salvato: riprova.",
+      "refusedField": "Rifiutato: vedi il motivo sopra."
+    },
+    "held": {
+      "archived": "Questo punto è archiviato: ripristinalo per cambiarlo."
+    },
+    "readOnly": "Puoi guardare questo punto; per cambiarlo serve product.styles.manage.",
+    "csv": {
+      "code": "Codice",
+      "name": "Nome",
+      "kind": "Tipo",
+      "zone": "Zona del corpo",
+      "unit": "Unità",
+      "tolerance": "Tolleranza predefinita",
+      "body": "Punto del corpo",
+      "howTo": "Come misurare",
+      "status": "Stato"
+    }
+  },
+  "rules": {
+    "intro": "Incrementi riutilizzabili per punto di misura tra le taglie di una scala: una scheda si scrive nella taglia base e una regola la sviluppa nelle altre.",
+    "new": "Nuova regola",
+    "search": "Cerca regole",
+    "table": "Regole di sviluppo taglie",
+    "scaleFilter": "Scala",
+    "scaleAll": "Ogni scala",
+    "chipScale": "Scala {scale}",
+    "twoDimensions": "Taglia e vestibilità",
+    "noun": "regola",
+    "col": {
+      "rule": "Regola",
+      "scale": "Scala",
+      "base": "Taglia base",
+      "points": "Punti",
+      "format": "Incrementi",
+      "specs": "Usata da",
+      "status": "Stato",
+      "more": "Altro"
+    },
+    "points_one": "{count} punto",
+    "points_other": "{count} punti",
+    "steps_one": "{count} passo",
+    "steps_other": "{count} passi",
+    "specs_one": "{count} scheda",
+    "specs_other": "{count} schede",
+    "keys": {
+      "new": "Nuova regola",
+      "open": "Apri la regola"
+    },
+    "menu": {
+      "open": "Apri",
+      "newTab": "Apri in una nuova scheda",
+      "archive": "Archivia…",
+      "restore": "Ripristina…",
+      "more": "Altro per {code}"
+    },
+    "bulk": {
+      "export_one": "Esporta {count}",
+      "export_other": "Esporta {count}",
+      "archive_one": "Archivia {count}",
+      "archive_other": "Archivia {count}",
+      "restore_one": "Ripristina {count}",
+      "restore_other": "Ripristina {count}"
+    },
+    "status": {
+      "archiveTitle_one": "Archivia {count} regola",
+      "archiveTitle_other": "Archivia {count} regole",
+      "restoreTitle_one": "Ripristina {count} regola",
+      "restoreTitle_other": "Ripristina {count} regole",
+      "archiveBody": "Una regola archiviata non si offre alle nuove schede; le schede sviluppate con essa tengono i loro valori.",
+      "restoreBody": "Una regola ripristinata si offre di nuovo alle nuove schede."
+    },
+    "notice": {
+      "created": "{code} creata: dagli i suoi incrementi.",
+      "saved": "{code} salvata.",
+      "archived_one": "{count} regola archiviata.",
+      "archived_other": "{count} regole archiviate.",
+      "restored_one": "{count} regola ripristinata.",
+      "restored_other": "{count} regole ripristinate."
+    },
+    "empty": {
+      "title": "Ancora nessuna regola di sviluppo",
+      "body": "Crea la prima regola per una scala o importale da un foglio.",
+      "bodyView": "Le crea chi sviluppa il prodotto."
+    },
+    "filteredEmpty": {
+      "title": "Nessuna riga con questi filtri",
+      "body": "Togli i filtri per vedere ogni regola."
+    },
+    "error": {
+      "title": "Impossibile caricare le regole di sviluppo"
+    },
+    "forbidden": {
+      "title": "Non hai accesso alle regole di sviluppo",
+      "body": "Per leggerle serve product.styles.view (lo hanno sviluppo prodotto, produzione e qualità)."
+    },
+    "newTitle": "Nuova regola di sviluppo",
+    "newIntro": "Una regola appartiene a una scala taglie. I suoi incrementi si scrivono dopo, nella regola stessa.",
+    "create": "Crea la regola",
+    "newAfter": "Poi: gli incrementi per punto e passo di taglia.",
+    "companyHint": "Tutte le aziende condividono una regola; oppure tienila per un'azienda.",
+    "field": {
+      "code": "Codice",
+      "codeHint": "Lettere maiuscole o cifre, con . _ - / all'interno (\"GR-JACKET-EU\").",
+      "name": "Nome",
+      "scale": "Scala taglie",
+      "scalePick": "Scegli una scala",
+      "scaleFirst": "Prima scegli la scala",
+      "base": "Taglia base",
+      "baseHint": "Dove parte lo sviluppo: la taglia in cui si scrive una scheda.",
+      "format": "Come contano gli incrementi"
+    },
+    "problem": {
+      "code": "Da 1 a 60 lettere maiuscole o cifre, con . _ - / all'interno.",
+      "name": "Dagli un nome.",
+      "scale": "Scegli la scala.",
+      "base": "Scegli una taglia della scala.",
+      "refusedField": "Rifiutato: vedi il motivo sopra.",
+      "bothWays": "{code} ha un passo da {from} a {to} e ritorno: scrivilo in un solo verso (l'altro verso toglie l'incremento)."
+    },
+    "dialog": {
+      "title": "Regola di sviluppo",
+      "subtitle": "{scale} · base {base} · {format}"
+    },
+    "readOnly": "Puoi guardare questa regola; per cambiarla serve product.styles.manage.",
+    "held": {
+      "archived": "Questa regola è archiviata: ripristinala per cambiarla."
+    },
+    "dropped_one": "{count} passo non parte dalla taglia base {base}: una regola assoluta lo lascia fuori al salvataggio.",
+    "dropped_other": "{count} passi non partono dalla taglia base {base}: una regola assoluta li lascia fuori al salvataggio.",
+    "grid": {
+      "title": "Incrementi per punto e passo di taglia",
+      "introRelative": "Scrivi l'incremento da una taglia alla successiva (anche negativo). Un passo vuoto prende l'incremento standard.",
+      "introAbsolute": "Scrivi l'incremento di ogni taglia dalla base (anche negativo). Uno vuoto prende l'incremento standard per i posti dalla base.",
+      "point": "Punto",
+      "standard": "Ogni passo",
+      "standardTip": "L'incremento standard: vale per ogni passo che una riga lascia vuoto.",
+      "stepTip": "L'incremento da {step}",
+      "fromBaseTip": "L'incremento dalla base: {step}",
+      "standardCell": "{code}, ogni passo",
+      "stepCell": "{code}, {step}",
+      "remove": "Togli {code} dalla regola",
+      "empty": "Ancora nessun punto: aggiungi il primo qui sotto."
+    },
+    "add": {
+      "point": "Aggiungi un punto…",
+      "pointButton": "Aggiungi punto",
+      "pickPoint": "Prima scegli un punto.",
+      "noPoint": "Ogni punto del capo è già nella regola",
+      "stepLead": "Un passo tra due taglie (anche tra vestibilità):",
+      "from": "Da",
+      "to": "A",
+      "stepButton": "Aggiungi passo",
+      "pick": "Scegli entrambe le taglie.",
+      "same": "Scegli due taglie diverse.",
+      "there": "Questo passo è già una colonna."
+    },
+    "grades": {
+      "title": "Cosa sviluppa",
+      "intro": "Lo scarto di ogni taglia dalla taglia base {base}, come lo sviluppo legge gli incrementi qui sopra.",
+      "base": "{size} · base",
+      "none": "Non sviluppata",
+      "notReached": "Nessun passo arriva a questa taglia: lo sviluppo lascia il suo valore com'è."
+    },
+    "csv": {
+      "code": "Codice",
+      "name": "Nome",
+      "scale": "Scala",
+      "base": "Taglia base",
+      "points": "Punti",
+      "steps": "Passi",
+      "format": "Incrementi",
+      "specs": "Usata da schede",
+      "status": "Stato"
+    }
+  },
+  "scaleTab": {
+    "tab": "Regole di sviluppo",
+    "title": "Regole di sviluppo di questa scala",
+    "intro": "Le regole legate a questa scala. Aprine una per vedere o cambiare i suoi incrementi.",
+    "empty": "Ancora nessuna regola",
+    "emptyBody": "Crea la prima regola di sviluppo per questa scala.",
+    "emptyView": "Le crea chi sviluppa il prodotto.",
+    "failed": "Impossibile caricare le regole di sviluppo"
+  },
+  "spec": {
+    "title": "Scheda misure",
+    "intro": "Punti di misura × taglie della revisione {revision}, sviluppate dalla taglia base.",
+    "loading": "Lettura della scheda misure…",
+    "failed": "Impossibile caricare la scheda misure",
+    "add": "Aggiungi punti",
+    "startButton": "Avvia la scheda",
+    "gradeButton": "Applica regola di sviluppo",
+    "pasteButton": "Incolla da un foglio",
+    "approve": "Approva",
+    "reopen": "Riapri",
+    "status": {
+      "DRAFT": "Bozza",
+      "APPROVED": "Approvata",
+      "ARCHIVED": "Archiviata"
+    },
+    "base": "Taglia base {size}",
+    "rule": "Regola {code}",
+    "ruleNone": "Nessuna regola (scritta a mano)",
+    "ruleBase": "base {size}",
+    "missing_one": "Manca {count} valore",
+    "missing_other": "Mancano {count} valori",
+    "complete": "Non manca nulla",
+    "noPoints": "Ancora nessun punto",
+    "approvedAt": "Approvata il {time}",
+    "missingTitle_one": "Manca ancora {count} valore (per approvare serve ogni punto in ogni taglia)",
+    "missingTitle_other": "Mancano ancora {count} valori (per approvare serve ogni punto in ogni taglia)",
+    "missingLine": "{code}: {sizes}",
+    "table": "Scheda misure",
+    "count_one": "{count} punto × {sizes} taglie",
+    "count_other": "{count} punti × {sizes} taglie",
+    "col": {
+      "point": "Punto di misura",
+      "tolerance": "Tolleranza",
+      "more": "Altro"
+    },
+    "cell": "{code}, taglia {size}",
+    "tolerance": {
+      "varies": "cambia per taglia"
+    },
+    "legend": "La taglia base {base} è segnata; un punto segna un valore scritto a mano tra quelli sviluppati; \"mancante\" è un valore che la gamma ancora chiede.",
+    "keys": {
+      "cell": "Scrivi in una cella"
+    },
+    "menu": {
+      "fill": "Riempi dalla base con un incremento…",
+      "tolerance": "Tolleranza…",
+      "up": "Sposta su",
+      "down": "Sposta giù",
+      "first": "È già il primo.",
+      "last": "È già l'ultimo.",
+      "remove": "Togli…",
+      "more": "Altro per {code}",
+      "settings": "Taglia base e regola di sviluppo…",
+      "archive": "Archivia la scheda…",
+      "specMore": "Altro per la scheda"
+    },
+    "bulk": {
+      "remove_one": "Togli {count}",
+      "remove_other": "Togli {count}"
+    },
+    "frozen": {
+      "released": "La revisione {revision} è rilasciata e congelata: la sua scheda è in sola lettura.",
+      "obsolete": "La revisione {revision} è obsoleta e congelata: la sua scheda è in sola lettura."
+    },
+    "held": {
+      "archived": "Il modello è archiviato: la sua scheda non cambia.",
+      "frozen": "Questa revisione è congelata: la scheda cambia solo in una nuova revisione.",
+      "approved": "La scheda è approvata: riaprila per cambiarla.",
+      "archivedSpec": "Questa scheda è archiviata: non cambia più.",
+      "noManage": "Per cambiare la scheda serve product.bom.manage (il ruolo di chi sviluppa il prodotto).",
+      "rule": "La regola di modifica del modello blocca i cambi in questo stato del ciclo di vita (Impostazioni prodotto).",
+      "noRange": "Il modello non ha ancora una gamma taglie: impostala prima nella Panoramica.",
+      "noRelease": "Per approvare o riaprire serve product.bom.release.",
+      "notDraft": "Si approva solo una scheda in bozza.",
+      "noPoints": "Prima aggiungi i punti.",
+      "missing_one": "Manca ancora {count} valore.",
+      "missing_other": "Mancano ancora {count} valori."
+    },
+    "banner": {
+      "archived": "Il modello è archiviato: la sua scheda misure è in sola lettura.",
+      "approved": "La scheda è approvata: i suoi valori sono in sola lettura. Riaprila per cambiarli.",
+      "archivedSpec": "Questa scheda misure è archiviata: è in sola lettura.",
+      "noManage": "Puoi leggere la scheda; per cambiarla serve product.bom.manage.",
+      "rule": "La regola di modifica del modello blocca i cambi nel suo stato del ciclo di vita: la scheda è in sola lettura (Prodotti › Impostazioni)."
+    },
+    "offline_one": "Offline: {count} valore aspetta su questa pagina e parte quando torna la connessione.",
+    "offline_other": "Offline: {count} valori aspettano su questa pagina e partono quando torna la connessione.",
+    "empty": {
+      "title": "Ancora nessun punto di misura",
+      "body": "Avvia la scheda della revisione {revision}: la taglia base e la regola di sviluppo, o una copia di una scheda precedente.",
+      "held": "Questa revisione non ha una scheda misure.",
+      "points": "Aggiungi i punti in cui si misura questo modello, ciascuno col suo valore nella taglia base.",
+      "frozen": "Questa scheda non ha punti."
+    },
+    "notice": {
+      "started": "La scheda misure è avviata.",
+      "settings": "Taglia base e regola di sviluppo salvate.",
+      "added_one": "{count} punto aggiunto.",
+      "added_other": "{count} punti aggiunti.",
+      "removed_one": "{count} punto tolto.",
+      "removed_other": "{count} punti tolti.",
+      "graded_one": "{count} valore sviluppato.",
+      "graded_other": "{count} valori sviluppati.",
+      "pasted_one": "{count} valore incollato.",
+      "pasted_other": "{count} valori incollati.",
+      "filled": "{code}: {count} taglia/e riempite dalla base.",
+      "tolerance": "La tolleranza di {code} è salvata.",
+      "approve": "La scheda misure è approvata: il collaudo finale misura su di essa.",
+      "reopen": "La scheda è riaperta: la sua approvazione è tolta.",
+      "archive": "La scheda è archiviata: se ne può avviare una nuova."
+    },
+    "problem": {
+      "nominal": "Un valore è sopra 0, con al massimo 2 decimali.",
+      "notNumber": "Non è un numero: il valore resta.",
+      "moved": "La scheda è cambiata nel frattempo: è stata riletta.",
+      "state": "La scheda non può cambiare ora: è stata riletta.",
+      "write": "Non salvato: riprova."
+    },
+    "start": {
+      "title": "Avvia la scheda misure della revisione {revision}",
+      "intro": "Scrivi i valori della taglia base; una regola di sviluppo riempie le altre taglie.",
+      "from": "Parti da",
+      "blank": "Vuota",
+      "copy": "Una copia di una scheda precedente di questa revisione",
+      "copyOf": "Copia di",
+      "archivedSpec": "Scheda con base {base}, avviata il {date}",
+      "go": "Avvia",
+      "held": {
+        "base": "Scegli la taglia base.",
+        "copy": "Scegli la scheda da copiare."
+      }
+    },
+    "field": {
+      "base": "Taglia base",
+      "baseHint": "La taglia in cui si scrivono i valori (la taglia base del modello).",
+      "rule": "Regola di sviluppo",
+      "ruleHint": "Una regola della scala taglie del modello; nessuna: ogni taglia scritta a mano."
+    },
+    "settings": {
+      "title": "Taglia base e regola di sviluppo",
+      "baseHint": "Lo sviluppo parte da qui; i valori già scritti restano.",
+      "ruleHint": "Applica regola di sviluppo propone prima questa regola."
+    },
+    "addDialog": {
+      "title": "Aggiungi punti di misura",
+      "intro": "Punti del capo della libreria; dai a ciascuno il suo valore nella taglia base {base}.",
+      "none": "Ogni punto del capo della libreria è già nella scheda.",
+      "tolerance": "± {tolerance} {unit} predefinita",
+      "noTolerance": "Nessuna tolleranza predefinita: scrivila dopo",
+      "value": "{code} nella taglia {base}",
+      "valuePlaceholder": "Taglia {base}, {unit}",
+      "go_one": "Aggiungi {count} punto",
+      "go_other": "Aggiungi {count} punti",
+      "held": {
+        "none": "Spunta almeno un punto.",
+        "value": "Dai a ogni punto spuntato il suo valore nella taglia base (sopra 0)."
+      }
+    },
+    "grade": {
+      "title": "Applica regola di sviluppo",
+      "intro": "Gli incrementi della regola dalla taglia base {base}: vedi cosa cambia prima che si scriva qualcosa.",
+      "ruleHint": "Le regole della scala taglie del modello.",
+      "pick": "Scegli una regola",
+      "pickFirst": "Scegli una regola per vedere cosa cambia.",
+      "overrides": "Valori scritti a mano",
+      "keep": "Tieni i valori scritti a mano (consigliato)",
+      "overwrite": "Sovrascrivili con i valori sviluppati",
+      "reading": "Lettura di cosa cambia la regola…",
+      "failed": "Impossibile leggere cosa cambia la regola",
+      "review_one": "Cambia {count} valore",
+      "review_other": "Cambiano {count} valori",
+      "empty": "mancante",
+      "action": {
+        "ADD": "Aggiunto",
+        "CHANGE": "Sviluppato di nuovo",
+        "OVERWRITE": "Valore scritto a mano sovrascritto",
+        "KEEP_OVERRIDE": "Valore scritto a mano tenuto",
+        "SAME": "Com'è",
+        "NOT_REACHED": "Non raggiunto",
+        "OUT_OF_RANGE": "Fuori misura"
+      },
+      "overwriteNote": "Prima scritto a mano.",
+      "kept_one": "{count} valore scritto a mano resta.",
+      "kept_other": "{count} valori scritti a mano restano.",
+      "notReached_one": "{count} taglia non è raggiunta dalla regola (resta com'è): {cells}.",
+      "notReached_other": "{count} taglie non sono raggiunte dalla regola (restano come sono): {cells}.",
+      "outOfRange_one": "{count} valore andrebbe a 0 o sotto (resta com'è): {cells}.",
+      "outOfRange_other": "{count} valori andrebbero a 0 o sotto (restano come sono): {cells}.",
+      "notInRule": "Non nella regola (restano come sono): {codes}.",
+      "noBase": "Senza valore nella taglia base {base}, quindi non sviluppati: {codes}.",
+      "go_one": "Applica a {count} valore",
+      "go_other": "Applica a {count} valori",
+      "held": {
+        "rule": "Prima scegli una regola.",
+        "preview": "Attendi l'anteprima.",
+        "nothing": "La regola non cambia nulla."
+      }
+    },
+    "pasteDialog": {
+      "title": "Incolla da un foglio",
+      "intro": "Una riga per punto: il suo codice, poi un valore per taglia nell'ordine della gamma ({sizes}) — oppure una prima riga che nomina le taglie.",
+      "field": "Celle copiate dal foglio",
+      "hint": "Tabulazioni o punti e virgola tra le celle; una cella vuota resta com'è.",
+      "found_one": "{count} valore per {points} punto/i.",
+      "found_other": "{count} valori per {points} punto/i.",
+      "problems_one": "{count} riga da guardare",
+      "problems_other": "{count} righe da guardare",
+      "go_one": "Incolla {count} valore",
+      "go_other": "Incolla {count} valori",
+      "held": {
+        "empty": "Prima incolla le celle.",
+        "nothing": "Nulla di questo si adatta alla scheda.",
+        "tooMany": "Al massimo 3.000 valori alla volta."
+      }
+    },
+    "pasteProblem": {
+      "unknown": "\"{code}\" non è un punto di questa scheda.",
+      "over": "{code}: più valori che taglie (quelli in più restano fuori).",
+      "notNumber": "{code}, taglia {size}: \"{text}\" non è un valore sopra 0."
+    },
+    "fill": {
+      "title": "Riempi {code} dalla base",
+      "intro": "Dalla taglia base {base}: ogni taglia prima o dopo si sposta dell'incremento. I valori scritti a mano restano se non li togli."
+    },
+    "toleranceDialog": {
+      "title": "Tolleranza di {code}",
+      "intro": "Sotto e sopra il valore, in {unit}, per ogni taglia che ha un valore.",
+      "minus": "Sotto (−)",
+      "plus": "Sopra (+)",
+      "go_one": "Salva per {count} taglia",
+      "go_other": "Salva per {count} taglie",
+      "held": {
+        "number": "Un numero da 0 in su, con al massimo 2 decimali.",
+        "noValues": "Questo punto non ha ancora valori."
+      }
+    },
+    "removeDialog": {
+      "title_one": "Togli {count} punto dalla scheda",
+      "title_other": "Togli {count} punti dalla scheda",
+      "body": "I suoi valori in ogni taglia vanno via con esso. La libreria tiene il punto.",
+      "values_one": "{count} valore",
+      "values_other": "{count} valori"
+    },
+    "moveDialog": {
+      "reason": "Perché",
+      "held": {
+        "reason": "Prima scrivi il perché."
+      },
+      "approve": {
+        "title": "Approva la scheda misure della revisione {revision}",
+        "body": "{points} punto/i × {sizes} taglia/e, nessuno mancante. Una volta approvata, il collaudo finale misura su di essa e cambia solo dopo essere riaperta.",
+        "go": "Approva"
+      },
+      "reopen": {
+        "title": "Riapri la scheda misure della revisione {revision}",
+        "body": "La sua approvazione si toglie; il collaudo finale non misura più su di essa finché non è approvata di nuovo.",
+        "go": "Riapri"
+      },
+      "archive": {
+        "title": "Archivia la scheda misure della revisione {revision}",
+        "body": "Si tiene, in sola lettura; poi si può avviare una nuova scheda di questa revisione (anche come sua copia).",
+        "go": "Archivia"
+      }
+    },
+    "word": {
+      "reading": "Lettura…",
+      "save": "Salva",
+      "none": "Scegli almeno una riga.",
+      "nothing": "Non è cambiato ancora nulla."
+    }
+  }
+}

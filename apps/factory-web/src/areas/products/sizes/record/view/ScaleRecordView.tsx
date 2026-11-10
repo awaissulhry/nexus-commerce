@@ -11,6 +11,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { isPageKey, type LibraryCan, type Notice, type Read, type WriteProblem } from '../../../library/model'
 import { KeysDialog, LibraryMessages, NoticeBanner, RecordFrame, RecordState, SaveWords } from '../../../library/parts'
 import type { BodyMeasures, ScaleView, SizeView, StyleRow } from '../../api'
+// B-W2b-240: Size scale › Grade rules (its own catalogue).
+import { WithMessages } from '../../../../../record-panels/i18n'
+import { ScaleRulesTab, type ScaleRulesModel } from '../../depth/view/ScaleRulesTab'
 import {
   BODY_MEASURE_UNITS,
   badSizes,
@@ -22,9 +25,9 @@ import {
   parseSizes,
   pointsOf,
   rangeText,
+  RECORD_TABS,
   reorderHeld,
   rowsOf,
-  SCALE_TABS,
   scaleCodeHeld,
   STATUS_TONE,
   type MeasureRow,
@@ -48,6 +51,8 @@ export interface ScaleRecordViewModel {
   changed: { at: string } | null
   refused: WriteProblem | null
   dialog: ScaleDialog | null
+  /** B-W2b-240: the Grade rules tab (absent: not read). */
+  gradeRules?: ScaleRulesModel
 }
 
 export interface ScaleRecordActions {
@@ -61,6 +66,8 @@ export interface ScaleRecordActions {
   onReactivate?: () => void
   onDialog?: (dialog: ScaleDialog | null) => void
   onDismissNotice?: () => void
+  /** B-W2b-240 */
+  onRetryRules?: () => void
 }
 
 const KEYS = [
@@ -79,7 +86,10 @@ const KEYS = [
 export function ScaleRecordView({ model, actions }: { model: ScaleRecordViewModel; actions?: ScaleRecordActions }) {
   return (
     <LibraryMessages>
-      <Record model={model} actions={actions} />
+      {/* B-W2b-240: the Grade rules tab's label is this step's catalogue's. */}
+      <WithMessages namespaces={['library', 'lists', 'products-sizes-depth']}>
+        <Record model={model} actions={actions} />
+      </WithMessages>
     </LibraryMessages>
   )
 }
@@ -93,6 +103,8 @@ function Record({ model, actions }: { model: ScaleRecordViewModel; actions?: Sca
 
 function Ready({ scale, model, actions }: { scale: ScaleView; model: ScaleRecordViewModel; actions?: ScaleRecordActions }) {
   const t = useT('library')
+  // B-W2b-240
+  const tDepth = useT('products-sizes-depth')
   const locale = useLocale()
   const href = `${model.prefix}/products/sizes/${scale.id}`
   const archived = scale.status === 'ARCHIVED'
@@ -158,7 +170,7 @@ function Ready({ scale, model, actions }: { scale: ScaleView; model: ScaleRecord
           <SaveWords state={model.save.state} at={model.save.at} />
         </>
       }
-      tabs={SCALE_TABS.map((tab) => ({ id: tab, label: t(`scale.tab.${tab}`), count: tab === 'sizes' ? scale.codes.length : tab === 'whereused' ? scale.styleCount : null }))}
+      tabs={RECORD_TABS.map((tab) => ({ id: tab, label: tab === 'graderules' ? tDepth('scaleTab.tab') : t(`scale.tab.${tab}`), count: tab === 'sizes' ? scale.codes.length : tab === 'whereused' ? scale.styleCount : tab === 'graderules' ? (model.gradeRules?.rules?.length ?? null) : null }))}
       active={model.tab}
       tabHref={(tab) => `${href}?tab=${tab}`}
     >
@@ -184,7 +196,10 @@ function Ready({ scale, model, actions }: { scale: ScaleView; model: ScaleRecord
           </ul>
         </Banner>
       )}
-      {model.tab === 'points' ? <PointsTab scale={scale} /> : model.tab === 'whereused' ? <WhereUsedTab scale={scale} model={model} /> : <SizesTab scale={scale} model={model} actions={actions} />}
+      {model.tab === 'graderules' ? (
+        // B-W2b-240
+        <ScaleRulesTab prefix={model.prefix} scaleId={scale.id} model={model.gradeRules ?? { rules: null, problem: null }} canManage={model.can.scalesManage && scale.status === 'ACTIVE'} onRetry={actions?.onRetryRules} />
+      ) : model.tab === 'points' ? <PointsTab scale={scale} /> : model.tab === 'whereused' ? <WhereUsedTab scale={scale} model={model} /> : <SizesTab scale={scale} model={model} actions={actions} />}
       {dialog?.kind === 'rename' && <RenameDialog scale={scale} model={model} actions={actions} />}
       {dialog?.kind === 'add' && <AddSizesDialog scale={scale} model={model} actions={actions} />}
       {sizeOpen && <SizeDialog key={`${sizeOpen.id}-${sizeOpen.version}`} scale={scale} size={sizeOpen} model={model} actions={actions} />}

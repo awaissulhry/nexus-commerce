@@ -14,6 +14,8 @@ import { isPageKey, keepLoaded, type LibraryCan, type Notice } from '../../libra
 import { Freshness, KeysDialog, LibraryMessages, listState, NoticeBanner, PageHead, showsState } from '../../library/parts'
 import type { ScaleRow } from '../api'
 import { archiveHeld, badSizes, createHeld, isFiltered, NO_FILTERS, parseSizes, SCALE_VIEWS, sizesText, STATUS_TONE, type NewScaleDraft, type ScaleFilters } from '../model'
+// B-W2b-240: the view switch (Size scales · Points of measure · Grade rules) and Import (W2b).
+import { LibrarySwitch, type LibrarySwitchActions, type LibrarySwitchModel } from '../depth/view/LibrarySwitch'
 
 export interface NewScaleModel {
   draft: NewScaleDraft
@@ -36,6 +38,8 @@ export interface SizesListViewModel {
   selected?: string[]
   focusRow?: number
   dialog?: 'archive' | 'help' | null
+  /** B-W2b-240: the view switch; absent, none is drawn. */
+  library?: LibrarySwitchModel
 }
 
 export interface SizesListActions {
@@ -50,14 +54,16 @@ export interface SizesListActions {
   onDraft?: (draft: NewScaleDraft) => void
   onCreate?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-240 */
+  library?: LibrarySwitchActions
 }
 
 /**
  * SCR-049 — Sizes & measurements (Products › Libraries; design products.sizes): the size scales the styles draw from
  * (EU 44–64, S–4XL, gloves 7–13 …) on the shared list frame (select-all, shift range, x; Export N, Archive N; keys only in
  * the footer icon), each code a real link to the scale (its sizes and their body measures), and New size scale (`c`:
- * sizes typed or pasted in order). Measurement templates, points of measure and grade rules are not served by the API
- * yet: no view switch is drawn for them. It fetches nothing.
+ * sizes typed or pasted in order). B-W2b-240: the view switch above it (Points of measure, Grade rules: SCR-345) with
+ * Import; the measurement templates have no list on the API yet. It fetches nothing.
  */
 export function SizesListView({ model, actions }: { model: SizesListViewModel; actions?: SizesListActions }) {
   return (
@@ -180,6 +186,7 @@ function SizesList({ model, actions }: { model: SizesListViewModel; actions?: Si
 
   return (
     <div className="fw-lib">
+      {model.library && <LibrarySwitch model={model.library} actions={actions?.library} />}
       <PageHead
         intro={t('sizes.list.intro')}
         status={<Freshness asOf={model.asOf} />}
