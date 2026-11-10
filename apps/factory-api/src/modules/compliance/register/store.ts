@@ -120,8 +120,9 @@ const COLUMNS = {
 type Row = Prisma.PpeRegisterEntryGetPayload<{ select: typeof COLUMNS }>
 
 /**
- * W2b-4 (B-W2b-222): PpeRegisterKind grew WITHDRAWAL and AUTHORITY_REQUEST, which this register does not show yet (B-W2b-260
- * and -271 widen REGISTER_KINDS). Every read here keeps to the W1 kinds, so an entry of a new kind reads as not found.
+ * W2b-4 (B-W2b-222): PpeRegisterKind grew WITHDRAWAL and AUTHORITY_REQUEST. B-W2b-260 widened REGISTER_KINDS to every kind
+ * the database keeps, so this filter now passes every entry (kept: a kind the database grows later stays out until the
+ * register names it).
  */
 const W1_KINDS = { kind: { in: [...REGISTER_KINDS] } } satisfies Prisma.PpeRegisterEntryWhereInput
 

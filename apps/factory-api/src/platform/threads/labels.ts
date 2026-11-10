@@ -48,6 +48,11 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   WorkOrder: async (client, id) => (await client.workOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   Shipment: async (client, id) => (await client.shipment.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   PpeRegisterEntry: async (client, id) => ((await client.ppeRegisterEntry.findUnique({ where: { id }, select: { id: true } })) ? `PPE register entry ${id.slice(-6)}` : null),
+  // modules/compliance/recall (B-W2b-260): a notice to a distributor by its recipient's code.
+  DistributorNotice: async (client, id) => {
+    const notice = await client.distributorNotice.findUnique({ where: { id }, select: { party: { select: { code: true } } } })
+    return notice ? `Distributor notice ${notice.party.code}` : null
+  },
   Lot: async (client, id) => (await client.lot.findUnique({ where: { id }, select: { code: true } }))?.code ?? null,
   GoodsReceipt: async (client, id) => (await client.goodsReceipt.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2a-44 (modules/purchasing/claims): a claim by its number.

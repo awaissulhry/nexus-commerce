@@ -33,12 +33,16 @@
   "kind": {
     "COMPLAINT": "Reclamo",
     "NON_CONFORMITY": "Non conformità",
-    "RECALL": "Richiamo"
+    "RECALL": "Richiamo",
+    "WITHDRAWAL": "Ritiro dal mercato",
+    "AUTHORITY_REQUEST": "Richiesta dell'autorità"
   },
   "kindHint": {
     "COMPLAINT": "Un cliente o un distributore ha segnalato un problema.",
     "NON_CONFORMITY": "Abbiamo trovato capi non conformi.",
-    "RECALL": "I capi vengono richiamati dal mercato."
+    "RECALL": "I capi vengono richiamati dal mercato.",
+    "WITHDRAWAL": "I capi vengono ritirati dalla vendita.",
+    "AUTHORITY_REQUEST": "Un'autorità di vigilanza del mercato chiede informazioni o documenti."
   },
   "risk": {
     "NO": "Nessun rischio",
@@ -63,7 +67,8 @@
     "LabResult": "Un risultato di laboratorio (Cr VI)",
     "Nonconformance": "Una non conformità (NCR)",
     "Complaint": "Un reclamo del cliente",
-    "ReturnAuthorisation": "Un reso del cliente (RMA)"
+    "ReturnAuthorisation": "Un reso del cliente (RMA)",
+    "AuthorityRequest": "Una richiesta dell'autorità"
   },
   "list": {
     "table": "Voci del registro DPI",
