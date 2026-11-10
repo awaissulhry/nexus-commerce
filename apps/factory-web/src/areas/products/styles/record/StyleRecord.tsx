@@ -72,6 +72,8 @@ import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
 import { usePieces } from './pieces/use-pieces'
+import { usePrepacks } from './prepacks/use-prepacks'
+import { useProtectors } from './protectors/use-protectors'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.products.dock.Style'
@@ -280,10 +282,13 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
 
   // ---- live -----------------------------------------------------------------------------------------------------------
   const piecesReload = useRef<() => void>(() => undefined)
+  // B-W2b-233: the Sizes & measurements tab's sections.
+  const sizesReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
     piecesReload.current()
+    sizesReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -366,10 +371,19 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const pieces = usePieces({ api, styleId, revisionId, loadKey: versionKey, enabled: can.bomView, write: run, versionOf: revisionVersion, onVersion: onPiecesVersion })
   piecesReload.current = pieces.reload
 
+  // B-W2b-233: the Sizes & measurements tab's prepacks (the style's read) and protector placement (the BOM's), read while the tab is open.
+  const prepacks = usePrepacks({ api, styleId, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'sizes' && can.view, canManage: session.permissions.includes('product.prepacks.manage'), write: run })
+  const protectors = useProtectors({ api, styleId, revisionId, loadKey: versionKey, enabled: tab === 'sizes' && can.bomView, write: run })
+  sizesReload.current = () => {
+    prepacks.reload()
+    protectors.reload()
+  }
+
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
     if (!revisionId) return
     pieces.reload()
+    protectors.reload()
     if (can.routingView) getRouting(api, styleId, revisionId).then(setRoutingValue).catch(() => undefined)
     if (can.costView) loadCost(revisionId)
   }
@@ -476,6 +490,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     bomImport: bomImport.model,
     exporting,
     pieces: pieces.model,
+    prepacks: prepacks.model,
+    protectors: protectors.model,
   }
 
   return (
@@ -484,6 +500,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       actions={{
         pieces: pieces.actions,
+        prepacks: prepacks.actions,
+        protectors: protectors.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

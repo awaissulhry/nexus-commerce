@@ -153,6 +153,9 @@ import { events as routingDepth } from '../routing-depth/events'
 import { events as productMeasures } from '../product-measures/events'
 // B-W2b-229: the option library (a group, its values, rules, effects or prices changed).
 import { events as productOptions } from '../product-options/events'
+// B-W2b-233: prepacks (a prepack changed) and protector placement (a draft revision's placement changed).
+import { events as productPrepacks } from '../product-prepacks/events'
+import { events as productProtectors } from '../product-protectors/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -372,7 +375,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-226
   ...productChanges,
   // B-W2b-229
-  ...productOptions] as const satisfies readonly EventDefinition[]
+  ...productOptions,
+  // B-W2b-233
+  ...productPrepacks,
+  ...productProtectors] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
