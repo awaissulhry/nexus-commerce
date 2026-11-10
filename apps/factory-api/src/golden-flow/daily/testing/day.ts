@@ -30,6 +30,8 @@ import { sharesNotifyHandler } from '../../../platform/shares/notify'
 import { routingCheckpointHandlers } from '../../../modules/product/routing-depth/checkpoints'
 // B-W2b-251: an evidence pack asked for is built.
 import { buildPackHandlers } from '../../../modules/compliance/techfiles/build'
+// B-W2b-260: a distributor's reply or bounce moves its notice.
+import { distributorHandlers } from '../../../modules/compliance/recall/distributors'
 // B-W2b-256: a portal upload answers its declaration request; material profiles evaluated again.
 import { declarationHandlers } from '../../../modules/compliance/declarations-asked/jobs'
 import { reevaluateHandlers } from '../../../modules/compliance/material-profiles/reevaluate'
@@ -81,6 +83,8 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_225_HANDLERS', ['routingCheckpointHandlers']],
   // B-W2b-251: the evidence pack's build.
   ['W2B_251_HANDLERS', ['buildPackHandlers']],
+  // B-W2b-260: the distributor notices' reply and bounce.
+  ['W2B_260_HANDLERS', ['distributorHandlers']],
   // B-W2b-256: declarations and the material profiles' re-evaluation.
   ['W2B_256_HANDLERS', ['declarationHandlers', 'reevaluateHandlers']],
 ]
@@ -92,7 +96,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...declarationHandlers(), ...reevaluateHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

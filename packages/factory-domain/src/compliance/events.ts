@@ -45,7 +45,8 @@ const labelLive = { permission: 'compliance.certificates.view', fields: ['templa
 const registerEntry = {
   entryId: z.uuid(),
   reference: z.string(),
-  kind: z.enum(['COMPLAINT', 'NON_CONFORMITY', 'RECALL']),
+  // B-W2b-260: the withdrawal and the authority-request entries (PpeRegisterKind of B-W2b-222) too.
+  kind: z.enum(['COMPLAINT', 'NON_CONFORMITY', 'RECALL', 'WITHDRAWAL', 'AUTHORITY_REQUEST']),
   styleId: z.uuid(),
   risk: z.enum(['NO', 'ASSESSING', 'YES']),
 }

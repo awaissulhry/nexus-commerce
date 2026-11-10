@@ -29,7 +29,9 @@ export type HoldSubjectType = (typeof HOLD_SUBJECT_TYPES)[number]
 /** The records a hold may come from (both a type and an id, or neither: placed by hand). */
 // B-W2b-114: IncomingInspection (B-W2b-98's gap: rejected or to-sort hides held from the inspection that found them; the
 // database keeps no list of source types, so no schema change).
-export const HOLD_SOURCE_TYPES = ['Inspection', 'Nonconformance', 'LabResult', 'Certificate', 'QualityReleaseReversal', 'Complaint', 'IncomingInspection'] as const
+export const HOLD_SOURCE_TYPES = ['Inspection', 'Nonconformance', 'LabResult', 'Certificate', 'QualityReleaseReversal', 'Complaint', 'IncomingInspection',
+  // B-W2b-260: a recall or a withdrawal holds what is still here (modules/compliance/recall).
+  'RecallAction'] as const
 export type HoldSourceType = (typeof HOLD_SOURCE_TYPES)[number]
 
 export const HOLD_STATUSES = ['ACTIVE', 'RELEASED', 'CLOSED'] as const
@@ -135,7 +137,7 @@ export function placeProblems(draft: PlaceDraft, today: string): Issue[] {
   else if (draft.subjectIds.length > HOLD_LIMITS.subjects) problems.push({ path: 'subjectIds', message: `At most ${HOLD_LIMITS.subjects} records in one hold.` })
   else if (new Set(draft.subjectIds).size !== draft.subjectIds.length) problems.push({ path: 'subjectIds', message: 'Name each record once.' })
   if (((draft.sourceType ?? null) === null) !== ((draft.sourceId ?? null) === null)) problems.push({ path: 'sourceType', message: 'Name the record that caused the hold as a type and an id, or neither.' })
-  else if (draft.sourceType && !(HOLD_SOURCE_TYPES as readonly string[]).includes(draft.sourceType)) problems.push({ path: 'sourceType', message: 'A hold comes from an inspection, an NCR, a lab result, a certificate, a reversed release, a complaint or an incoming inspection.' })
+  else if (draft.sourceType && !(HOLD_SOURCE_TYPES as readonly string[]).includes(draft.sourceType)) problems.push({ path: 'sourceType', message: 'A hold comes from an inspection, an NCR, a lab result, a certificate, a reversed release, a complaint, an incoming inspection or a recall.' })
   if (draft.expectedReleaseOn && draft.expectedReleaseOn < today) problems.push({ path: 'expectedReleaseOn', message: 'The expected release is today or later.' })
   if (draft.askQuarantine && !STOCK_SUBJECTS.includes(draft.subjectType)) problems.push({ path: 'askQuarantine', message: 'Only stock (lots, hides) moves to quarantine; a work order, a bundle, garments and shipments stay where they are.' })
   if ((draft.reasonNote ?? '').length > HOLD_LIMITS.reasonNote) problems.push({ path: 'reasonNote', message: `At most ${HOLD_LIMITS.reasonNote} characters.` })

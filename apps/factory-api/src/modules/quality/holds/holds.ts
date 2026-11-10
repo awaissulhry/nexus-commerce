@@ -223,6 +223,8 @@ const SOURCE_SITES: Partial<Record<HoldSourceType, (tx: Reader, id: string) => P
   Complaint: async (tx, id) => ((await tx.complaint.findUnique({ where: { id }, select: { id: true } })) ? { siteId: null } : null),
   // B-W2b-114: the incoming inspection that rejected or set aside the hides (B-W2b-98's hold prefill), of the hold's site.
   IncomingInspection: (tx, id) => tx.incomingInspection.findUnique({ where: { id }, select: { siteId: true } }),
+  // B-W2b-260: a recall or withdrawal (company-wide: it holds at every site what is still there).
+  RecallAction: async (tx, id) => ((await tx.recallAction.findUnique({ where: { id }, select: { id: true } })) ? { siteId: null } : null),
 }
 
 /**

@@ -33,12 +33,16 @@
   "kind": {
     "COMPLAINT": "Complaint",
     "NON_CONFORMITY": "Non-conformity",
-    "RECALL": "Recall"
+    "RECALL": "Recall",
+    "WITHDRAWAL": "Withdrawal",
+    "AUTHORITY_REQUEST": "Authority request"
   },
   "kindHint": {
     "COMPLAINT": "A customer or a distributor reported a problem.",
     "NON_CONFORMITY": "We found garments that do not conform.",
-    "RECALL": "Garments are called back from the market."
+    "RECALL": "Garments are called back from the market.",
+    "WITHDRAWAL": "Garments are taken off sale.",
+    "AUTHORITY_REQUEST": "A market surveillance authority asks for information or documents."
   },
   "risk": {
     "NO": "No risk",
@@ -63,7 +67,8 @@
     "LabResult": "A lab result (Cr VI)",
     "Nonconformance": "A nonconformance (NCR)",
     "Complaint": "A customer complaint",
-    "ReturnAuthorisation": "A customer return (RMA)"
+    "ReturnAuthorisation": "A customer return (RMA)",
+    "AuthorityRequest": "An authority request"
   },
   "list": {
     "table": "PPE register entries",
