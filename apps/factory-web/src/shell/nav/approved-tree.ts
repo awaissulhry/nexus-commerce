@@ -389,6 +389,8 @@ export const OFFICE: readonly TreeArea[] = [
           // W2b: B-W2b-266 Status board (SCR-119), first of Main (design compliance.status group "Pages: Status board · Certificates · …").
           { id: 'compliance.status', title: 'Status board', titleIt: 'Stato conformità', wave: 'W2b', href: '/compliance/status' },
           { id: 'compliance.certificates', title: 'Certificates', titleIt: 'Certificati', wave: 'W1', href: '/compliance/certificates' },
+          // W2b: B-W2b-269 Technical files (SCR-120), after Certificates (design compliance group Main; Declarations joins before it).
+          { id: 'compliance.techfiles', title: 'Technical files', titleIt: 'Fascicoli tecnici', wave: 'W2b', href: '/compliance/techfiles' },
           { id: 'compliance.labels', title: 'Labels & marking', titleIt: 'Etichette e marcature', wave: 'W1', href: '/compliance/labels' },
           { id: 'compliance.tests', title: 'Tests & substances', titleIt: 'Test e sostanze', wave: 'W1', href: '/compliance/tests' },
         ],

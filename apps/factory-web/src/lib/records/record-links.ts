@@ -179,6 +179,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
   // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
   WorkInstruction: '/production/instructions/[id]',
+  // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
+  TechnicalFile: '/compliance/techfiles/[id]',
+  EvidencePack: '/compliance/techfiles/pack?pack=[id]',
 })
 
 /**
