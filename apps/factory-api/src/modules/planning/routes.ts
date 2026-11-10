@@ -46,6 +46,10 @@ import { acceptLossContract, dismissLossContract, needContract, protectorsContra
 import { acceptLoss, dismissLoss } from './leather/loss'
 import { certifiedProtectors, leatherNeed } from './leather/need'
 import { leatherYield } from './leather/yield'
+// B-W2b-263: Time & action (the gates of a sales order, its milestones, start before the gate).
+import { addGateContract, choicesContract, editGateContract, milestonesContract, passGatesContract, removeGateContract, startBeforeContract } from './milestones/contract'
+import { addGate, editGate, gateChoices, passGates, removeGate, startBefore } from './milestones/gates'
+import { readMilestones } from './milestones/milestones'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -135,4 +139,13 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/leather/yield', { schema: yieldContract }, async (request) => leatherYield(request, request.query))
   app.post('/planning/leather/styles/:styleId/loss/accept', { schema: acceptLossContract }, async (request) => acceptLoss(request, request.params.styleId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/leather/styles/:styleId/loss/dismiss', { schema: dismissLossContract }, async (request) => dismissLoss(request, request.params.styleId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-263: Time & action.
+  app.get('/planning/milestones', { schema: milestonesContract }, async (request) => readMilestones(request, request.query))
+  app.get('/planning/milestones/orders/:salesOrderId/choices', { schema: choicesContract }, async (request) => gateChoices(request, request.params.salesOrderId))
+  app.post('/planning/milestones/gates', { schema: addGateContract }, async (request, reply) => reply.code(201).send(await addGate(request, request.body, idempotencyKeyFrom(request))))
+  // Before /:gateId (a static path).
+  app.post('/planning/milestones/gates/pass', { schema: passGatesContract }, async (request) => passGates(request, request.body, idempotencyKeyFrom(request)))
+  app.patch('/planning/milestones/gates/:gateId', { schema: editGateContract }, async (request) => editGate(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/milestones/gates/:gateId/remove', { schema: removeGateContract }, async (request) => removeGate(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/milestones/gates/:gateId/start-before', { schema: startBeforeContract }, async (request) => startBefore(request, request.params.gateId, request.body, idempotencyKeyFrom(request)))
 })

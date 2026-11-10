@@ -524,6 +524,8 @@ export type Refusal =
   | { code: 'PLAN_CHANGED' }
   | { code: 'LANE_DOES_NOT' | 'ALREADY_ON_BOARD' | 'PART_THERE' | 'NOT_OPEN' | 'LANE_ARCHIVED' | 'NO_WORKING_TIME' | 'PART_LANE' | 'OPERATION_DONE' | 'NOTHING_TO_PLACE' | 'NOTHING_CHANGED' | 'CONFLICT' }
   | { code: 'FORBIDDEN' | 'NOT_FOUND' | 'INVALID' | 'OFFLINE' | 'SIGNED_OUT' | 'FAILED' }
+  // B-W2b-263: the order waits on a pre-production gate not passed (the API's issues `gate/<id>`): Start before the gate?
+  | { code: 'GATE_NOT_PASSED'; gates: string[] }
 
 const CONFLICTS: ReadonlyArray<[RegExp, Refusal['code']]> = [
   [/ does .*; Op \d+|is done at .*: change its work centre/, 'LANE_DOES_NOT'],
@@ -550,6 +552,7 @@ export function refusalOf(error: unknown): Refusal {
     }
     if (paths.includes('body/overloadReason') || paths.some((path) => path.startsWith('over/'))) return { code: 'OVERLOAD' }
     if (paths.includes('body/version')) return { code: 'PLAN_CHANGED' }
+    if (paths.includes('refusal/GATE_NOT_PASSED')) return { code: 'GATE_NOT_PASSED', gates: paths.filter((path) => path.startsWith('gate/')).map((path) => path.slice('gate/'.length)) } // B-W2b-263
     for (const [pattern, code] of CONFLICTS) if (pattern.test(error.message)) return { code } as Refusal
     return { code: 'CONFLICT' }
   }

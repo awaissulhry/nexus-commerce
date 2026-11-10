@@ -19,6 +19,9 @@ import type { MoveSlotBody, PlaceByDueDateBody, PlaceSlotBody } from './contract
 import { storedSlotView } from './publish'
 import { capacityWith, durationOn, endOf, overDays, scheduleWorld, standardOf, type BoardOperation, type BoardWorkOrder, type OverDay, type PlannedSlot, type ScheduleWorld } from './service'
 import { laneFacts, lockedSlot, lockedWorkingPlan, SLOT_COLUMNS, userNamesOf, type SlotRow } from './store'
+// B-W2b-263: the board holds a drop on a pre-production gate not passed.
+import { holdWords } from '@nexus/factory-domain/planning/milestones/rules'
+import { assertNoGateHold, gateHoldsOf, type GateHold } from './gates'
 
 /**
  * Moves on the planning board (B-W2a-34; PLN-129, PLN-131, PLN-160; design planning.board "Schedule": "Each move
@@ -187,6 +190,7 @@ export async function placeSlot(caller: CommandCaller, body: PlaceSlotBody, idem
     const plan = await lockedWorkingPlan(tx, target.site, context.tenantId, { actorId: context.actorId, now, bump: true })
     const world = await scheduleWorld(tx, target.site, { from: businessDate(start, target.site.timezone), to: businessDate(body.endAt ? instant(body.endAt) : start, target.site.timezone) }, now)
     const workOrder = openWorkOrder(world, target.id)
+    await assertNoGateHold(tx, workOrder) // B-W2b-263
     const operation = body.operationId ? workOrder.operations.find((candidate) => candidate.id === body.operationId) : null
     if (body.operationId && !operation) throw new NotFoundError('Operation not found on this work order.')
     const lane = await laneFacts(tx, target.site, body.lane)
@@ -246,6 +250,7 @@ export async function moveSlot(caller: CommandCaller, slotId: string, body: Move
     const start = body.startAt ? instant(body.startAt) : current.startAt
     const world = await scheduleWorld(tx, target.site, { from: businessDate(start, target.site.timezone), to: businessDate(body.endAt ? instant(body.endAt) : current.endAt, target.site.timezone) }, now)
     const workOrder = openWorkOrder(world, current.workOrderId)
+    if (body.startAt !== undefined || body.endAt !== undefined || body.lane !== undefined || body.pieces !== undefined) await assertNoGateHold(tx, workOrder) // B-W2b-263
     const operation = current.workOrderOperationId ? (workOrder.operations.find((candidate) => candidate.id === current.workOrderOperationId) ?? null) : null
     const lane = body.lane ? await laneFacts(tx, target.site, body.lane) : await laneFacts(tx, target.site, laneOfSlot(current))
     assertFits(world, operation, lane.ref, lane.name)
@@ -311,7 +316,7 @@ interface Proposal {
 }
 
 /** The tray's operations without a bar or part, placed by their due dates (see above), in the tray's order. */
-function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | undefined) {
+function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | undefined, held: ReadonlyMap<string, GateHold[]> = new Map()) {
   const now = world.now.getTime()
   const skipped: { workOrderId: string; operationId: string | null; code: SkipCode; words: string }[] = []
   const wanted = workOrderIds ? new Set(workOrderIds) : null
@@ -326,6 +331,12 @@ function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | und
     if (schedule.status === 'DONE') continue
     const unplaced = schedule.operations.filter((operation) => operation.plannedStart === null)
     if (unplaced.length === 0) continue
+    // B-W2b-263: a work order whose order waits on a pre-production gate is not placed.
+    const gates = held.get(workOrder.id)
+    if (gates) {
+      skipped.push({ workOrderId: workOrder.id, operationId: null, code: 'GATE_NOT_PASSED', words: holdWords(workOrder.number, gates) })
+      continue
+    }
     if (workOrder.status === 'ON_HOLD') {
       skipped.push({ workOrderId: workOrder.id, operationId: null, code: 'ON_HOLD', words: `${workOrder.number} is on hold${workOrder.holdReason ? `: ${workOrder.holdReason}` : ''}; it waits until the hold is lifted.` })
       continue
@@ -378,7 +389,7 @@ export async function placeByDueDate(caller: CommandCaller, body: PlaceByDueDate
     return caller.withClient(async (db) => {
       const today = businessDate(now, site.timezone)
       const world = await scheduleWorld(db, site, { from: today, to: plusDays(today, 1) }, now)
-      const { proposals, skipped } = proposalsOf(world, body.workOrderIds)
+      const { proposals, skipped } = proposalsOf(world, body.workOrderIds, await gateHoldsOf(db, world.workOrders.map((workOrder) => workOrder.id)))
       return { planVersion: world.plan?.version ?? null, applied: false, slots: proposals.map(proposalView), skipped, overbooked: proposals.filter((proposal) => proposal.over.length > 0).length, replayed: false }
     })
   }
@@ -387,7 +398,7 @@ export async function placeByDueDate(caller: CommandCaller, body: PlaceByDueDate
     const plan = await lockedWorkingPlan(tx, site, context.tenantId, { actorId: context.actorId, now, expectedVersion: body.version, bump: true })
     const today = businessDate(now, site.timezone)
     const world = await scheduleWorld(tx, site, { from: today, to: plusDays(today, 1) }, now)
-    const { proposals, skipped } = proposalsOf(world, body.workOrderIds)
+    const { proposals, skipped } = proposalsOf(world, body.workOrderIds, await gateHoldsOf(tx, world.workOrders.map((workOrder) => workOrder.id)))
     if (proposals.length === 0) throw new ScheduleRefusal('NOTHING_TO_PLACE', skipped.length ? `Nothing to place: ${skipped[0]!.words}` : 'Nothing to place: every operation with work left is on the board.')
     const over = proposals.filter((proposal) => proposal.over.length > 0)
     const reason = reasonOf(body.overloadReason)
