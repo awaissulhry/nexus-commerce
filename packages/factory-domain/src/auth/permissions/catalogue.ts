@@ -160,6 +160,8 @@ import { TECHFILES_DEFINITIONS, TECHFILES_PERMISSIONS } from '../../compliance/t
 import { DECLARATIONS_DEFINITIONS, DECLARATIONS_PERMISSIONS } from '../../compliance/declarations/permissions'
 // B-W2b-252: sample decisions (sales.samples.decide | measure); reading is sales.samples.view.
 import { SALES_SAMPLE_DECISIONS_DEFINITIONS, SALES_SAMPLE_DECISIONS_PERMISSIONS } from '../../sales/sample-decisions/permissions'
+// B-W2b-260: recall, withdrawal and authority (compliance.recall.manage | send); reading is compliance.register.view.
+import { RECALL_DEFINITIONS, RECALL_PERMISSIONS } from '../../compliance/recall/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -832,6 +834,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DECLARATIONS_DEFINITIONS,
   // B-W2b-252: sample decisions (area `sales`, declared above).
   SALES_SAMPLE_DECISIONS_DEFINITIONS,
+  // B-W2b-260: recall, withdrawal and authority (area `compliance`, declared above).
+  RECALL_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1108,6 +1112,8 @@ for (const name of TECHFILES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(na
 for (const name of DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-252: sample decisions.
 for (const name of SALES_SAMPLE_DECISIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-260: recall, withdrawal and authority.
+for (const name of RECALL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -176,6 +176,8 @@ import { events as complianceTechfiles } from '../compliance-techfiles/events'
 import { events as complianceDeclarations } from '../compliance-declarations/events'
 // B-W2b-252: sample decisions (a round decided or asked, its fit, a CE test result, a swatch changed).
 import { events as salesSampleDecisions } from '../sales-sample-decisions/events'
+// B-W2b-260: recall, withdrawal and authority (an authority notice, a recall, its progress, a distributor notice, an authority request changed).
+import { events as complianceRecall } from '../compliance-recall/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -418,7 +420,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-257
   ...complianceDeclarations,
   // B-W2b-252
-  ...salesSampleDecisions] as const satisfies readonly EventDefinition[]
+  ...salesSampleDecisions,
+  // B-W2b-260
+  ...complianceRecall] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
