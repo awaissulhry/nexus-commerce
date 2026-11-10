@@ -146,6 +146,8 @@ import { RULES_LIBRARY_DEFINITIONS, RULES_LIBRARY_PERMISSIONS } from '../../comp
 import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phrases/permissions'
 // B-W2b-230: the tech pack PDF per audience (product.techpacks.make).
 import { PRODUCT_TECHPACKS_DEFINITIONS, PRODUCT_TECHPACKS_PERMISSIONS } from '../../product/techpack/permissions'
+// B-W2b-233: prepacks (product.prepacks.manage; reading is product.styles.view).
+import { PRODUCT_PREPACKS_DEFINITIONS, PRODUCT_PREPACKS_PERMISSIONS } from '../../product/prepacks/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -804,6 +806,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PHRASES_DEFINITIONS,
   // B-W2b-230: the tech pack PDF (area `product`, declared above).
   PRODUCT_TECHPACKS_DEFINITIONS,
+  // B-W2b-233: prepacks (area `product`, declared above).
+  PRODUCT_PREPACKS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1066,6 +1070,8 @@ for (const name of PRODUCT_MATERIALS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-230: the tech pack PDF.
 for (const name of PRODUCT_TECHPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-233: prepacks.
+for (const name of PRODUCT_PREPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

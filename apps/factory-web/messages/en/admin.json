@@ -1690,6 +1690,7 @@
     "product_options_manage": "Keep the option library: groups, values, rules and effects",
     "product_options_price": "Set the price surcharge of an option",
     "product_techpacks_make": "Make a tech pack PDF for an audience (a partner copy has no cost, margin or pay)",
+    "product_prepacks_manage": "Keep the prepacks dealers order: fixed size mixes per style or size scale",
     "product_bom_view": "See bills of materials",
     "product_bom_manage": "Edit a draft bill of materials",
     "product_bom_release": "Release a revision (freezes BOM, routing and label)",
