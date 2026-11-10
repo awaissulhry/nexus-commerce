@@ -2,6 +2,8 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { ready, reading, failedRead } from '../../quality/_shared/model'
 import { CAN, GLOVES_R1, JACKET_R1, MANY, NOW, PREFIX, ROWS, SHARED_R1 } from './demo'
 import { NEW_LABEL } from './model'
+import { listDepth } from './depth/demo'
+import { NO_DEPTH } from './depth/model'
 import type { LabelsListModel, NewLabelModel, StyleHit } from './view-model'
 import { LabelsListView } from './view/LabelsListView'
 
@@ -24,6 +26,8 @@ const base: LabelsListModel = {
   selected: [],
   notice: null,
   newLabel: null,
+  // B-W2b-270: the proofs waiting approval and the markets a label cannot print for.
+  depth: listDepth(),
 }
 
 const newLabel = (extra: Partial<NewLabelModel> = {}): NewLabelModel => ({ draft: { ...NEW_LABEL }, styles: null, styleQuery: '', sources: ROWS.filter((row) => row.status !== 'RETIRED'), busy: false, problem: null, ...extra })
@@ -56,5 +60,21 @@ export const designScreen = defineDesignScreen<LabelsListModel>({
     { id: 'loading', label: 'Loading', model: { ...base, rows: reading(), asOf: null, live: 'connecting' } },
     { id: 'error', label: 'Could not load', model: { ...base, rows: failedRead('problem.unavailable'), asOf: null }, note: 'Never drawn as an empty list; the tiles say "—", not 0.' },
     { id: 'no-permission', label: 'Sales: no access', model: { ...base, can: CAN.sales }, note: 'The page names the permission it needs.' },
+    // ---- B-W2b-270: Labels & marking in depth ----
+    {
+      id: 'w2b-kinds-tiles',
+      label: 'W2b: kinds, proofs waiting, missing translations',
+      model: base,
+      note: 'Kind column (PPE garment label / Glove marking / Fibre & care, a GPSR tag on the t-shirt); tiles "Artwork waiting approval" (2) and "Missing translations blocking a market"; the Languages column says which markets a label cannot print for; ⋯ holds Phrase library.',
+    },
+    { id: 'w2b-view-artwork', label: 'W2b: view Artwork waiting approval', model: { ...base, view: 'artwork' }, note: 'The pressed tile is the view: the labels whose proof waits for a second person.' },
+    { id: 'w2b-view-translations', label: 'W2b: view Missing translations', model: { ...base, view: 'translations' }, note: 'Labels a switched-on market cannot print: a language the label lacks (DE) or a warning without approved words.' },
+    { id: 'w2b-depth-loading', label: 'W2b: the tiles being counted', model: { ...base, depth: NO_DEPTH }, note: 'The two W2b tiles show their skeleton while their reads run; the list is already there.' },
+    {
+      id: 'w2b-depth-failed',
+      label: 'W2b: a W2b read failed',
+      model: { ...base, view: 'artwork', depth: { ...NO_DEPTH, waitingFailed: true, gapsFailed: true } },
+      note: 'Tiles say "—" with "Could not count"; the view says what failed with Try again (never an empty list).',
+    },
   ],
 })

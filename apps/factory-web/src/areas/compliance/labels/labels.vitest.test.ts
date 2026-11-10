@@ -48,7 +48,7 @@ import {
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 
-const WORDS = { name: 'Label', ce: 'CE (stand-in)', pictogram: (standard: string, ppeClass: string) => `${standard} ${ppeClass} (stand-in)`, care: (words: string) => `${words} (stand-in)` }
+const WORDS = { name: 'Label', ce: 'CE (stand-in)', pictogram: (standard: string, ppeClass: string) => `${standard} ${ppeClass} (stand-in)`, care: (words: string) => `${words} (stand-in)`, qr: 'QR (stand-in)' }
 
 describe('who may do what (the role templates)', () => {
   it('the owner and quality write and print; the product developer reads; sales has no access', () => {
@@ -68,7 +68,14 @@ describe('the list: views, search, tiles, CSV', () => {
   })
 
   it('a tile counts its view; unknown is null (drawn "—"), being read undefined; 500 read means "500+"', () => {
-    expect(tileCounts(ROWS, false)).toEqual({ active: { count: 2, atLeast: false }, drafts: { count: 4, atLeast: false }, retired: { count: 1, atLeast: false } })
+    // B-W2b-270: the W2b tiles are being read until their own reads land.
+    expect(tileCounts(ROWS, false)).toEqual({
+      active: { count: 2, atLeast: false },
+      drafts: { count: 4, atLeast: false },
+      artwork: { count: undefined, atLeast: false },
+      translations: { count: undefined, atLeast: false },
+      retired: { count: 1, atLeast: false },
+    })
     expect(tileCounts(null, true).active).toEqual({ count: null, atLeast: false })
     expect(tileCounts(null, false).active.count).toBeUndefined()
     const full = Array.from({ length: LIST_CAP }, () => SHARED_R1)

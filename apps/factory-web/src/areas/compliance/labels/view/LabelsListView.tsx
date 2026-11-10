@@ -13,6 +13,7 @@ import { isPageKey } from '../../../quality/_shared/hooks'
 import { Freshness, NoAccess, NoticeBanner, PageHead } from '../../../quality/_shared/parts'
 import type { LabelTemplate } from '../api'
 import { classWords, LABEL_TILES, LABEL_VIEWS, labelHref, LIST_CAP, mmWords, tileCounts, viewRows, type LabelView } from '../model'
+import { carriesGpsr, KIND_TONE, kindOf, NO_DEPTH, phraseLibraryHref } from '../depth/model'
 import type { LabelsListActions, LabelsListModel } from '../view-model'
 import { NewLabelDialog } from './NewLabelDialog'
 import { LabelsMessages, ShortcutsDialog, StatusPill, useListWords } from './parts'
@@ -36,11 +37,13 @@ export function LabelsListView({ model, actions }: { model: LabelsListModel; act
 
 function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsListActions }) {
   const t = useT('labels')
+  const d = useT('compliance-labels-depth')
   const q = useT('quality')
   const lists = useListWords()
   const can = model.can
+  const depth = model.depth ?? NO_DEPTH
   const all = useMemo(() => model.rows.value ?? [], [model.rows.value])
-  const rows = useMemo(() => viewRows(all, model.view, model.query), [all, model.view, model.query])
+  const rows = useMemo(() => viewRows(all, model.view, model.query, depth), [all, model.view, model.query, depth])
   const selectedRows = rows.filter((row) => model.selected.includes(row.id))
   const manageHeld = can.manage ? null : t('held.noManage')
 
@@ -87,7 +90,25 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
           </span>
         )
       ) : null
-    const LanguagesCell = ({ data }: ICellRendererParams<LabelTemplate>) => (data ? <span className="fw-q-code">{data.languages.join(' · ') || '—'}</span> : null)
+    // B-W2b-270: what the label is (PRD-336) and whether it carries the GPSR contact (PRD-346).
+    const KindCell = ({ data }: ICellRendererParams<LabelTemplate>) =>
+      data ? (
+        <span className="fw-q-cell-row">
+          <Tag tone={KIND_TONE[kindOf(data)]}>{d(`kind.${kindOf(data)}`)}</Tag>
+          {carriesGpsr(data) && <Tag tone="neutral">{d('kind.gpsr')}</Tag>}
+        </span>
+      ) : null
+    // B-W2b-270: the markets it cannot print for, for want of a language or an approved warning.
+    const LanguagesCell = ({ data }: ICellRendererParams<LabelTemplate>) => {
+      if (!data) return null
+      const gaps = depth.gaps?.get(data.id) ?? []
+      return (
+        <span className="fw-q-cell">
+          <span className="fw-q-code">{data.languages.join(' · ') || '—'}</span>
+          {gaps.length > 0 && <span className="fw-q-hint">{d('list.blocks', { markets: gaps.map((gap) => gap.market).join(', ') })}</span>}
+        </span>
+      )
+    }
     const MakerCell = ({ data }: ICellRendererParams<LabelTemplate>) =>
       data ? (
         <span className="fw-q-cell">
@@ -98,8 +119,21 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
     const StatusCell = ({ data }: ICellRendererParams<LabelTemplate>) => (data ? <StatusPill status={data.status} /> : null)
     const ChecksCell = ({ data }: ICellRendererParams<LabelTemplate>) => {
       if (!data) return null
-      if (data.status !== 'DRAFT') return <span className="fw-q-hint">{t(data.status === 'ACTIVE' ? 'list.frozen' : 'list.retiredHint')}</span>
-      return data.problems.length === 0 ? <Tag tone="success">{t('list.ready')}</Tag> : <Tag tone="warning">{t('list.problems', { count: data.problems.length })}</Tag>
+      // B-W2b-270: a proof waiting for a second person's approval.
+      const waiting = depth.waiting?.has(data.id) ? <Tag tone="info">{d('list.proofWaiting')}</Tag> : null
+      if (data.status !== 'DRAFT')
+        return (
+          <span className="fw-q-cell-row">
+            <span className="fw-q-hint">{t(data.status === 'ACTIVE' ? 'list.frozen' : 'list.retiredHint')}</span>
+            {waiting}
+          </span>
+        )
+      return (
+        <span className="fw-q-cell-row">
+          {data.problems.length === 0 ? <Tag tone="success">{t('list.ready')}</Tag> : <Tag tone="warning">{t('list.problems', { count: data.problems.length })}</Tag>}
+          {waiting}
+        </span>
+      )
     }
     const ActionsCell = ({ data }: ICellRendererParams<LabelTemplate>) =>
       data ? <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { code: data.code, revision: data.revision }) }} items={rowItems(data)} /> : null
@@ -117,6 +151,7 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
     const column = (colId: string, header: string, cellRenderer: ColDef<LabelTemplate>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number }): ColDef<LabelTemplate> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
     return [
       column('label', t('list.col.label'), LabelCell, { flex: 1.6, minWidth: 190 }),
+      column('kind', d('list.col.kind'), KindCell, { flex: 1, minWidth: 150 }),
       column('style', t('list.col.style'), StyleCell, { flex: 1.4, minWidth: 170 }),
       column('languages', t('list.col.languages'), LanguagesCell, { flex: 0.8, minWidth: 110 }),
       column('maker', t('list.col.maker'), MakerCell, { flex: 1.4, minWidth: 170 }),
@@ -125,26 +160,32 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
       column('checks', t('list.col.checks'), ChecksCell, { flex: 1, minWidth: 140 }),
       { ...column('actions', t('list.col.actions'), ActionsCell, { width: 72, minWidth: 72 }), suppressHeaderMenuButton: true },
     ]
-  }, [t, model.prefix, can.manage, can.styles])
+    // The W2b reads land after the list: new columns redraw the cells that show them.
+  }, [t, d, model.prefix, can.manage, can.styles, depth.waiting, depth.gaps])
 
   if (!can.view) return <NoAccess title={t('noAccess.title')} body={t('noAccess.body')} />
 
   const filtered = model.view !== 'all' || model.query.trim() !== ''
-  const tiles = tileCounts(model.rows.value, !!model.rows.problem)
+  const tiles = tileCounts(model.rows.value, !!model.rows.problem, depth)
+  // B-W2b-270's tiles speak from their own catalogue.
+  const tileWords = (id: (typeof LABEL_TILES)[number], hint = false) => (id === 'artwork' || id === 'translations' ? d(`tile.${id}${hint ? 'Hint' : ''}`) : t(`tile.${id}${hint ? 'Hint' : ''}`))
   const tile = (id: (typeof LABEL_TILES)[number]) => {
     const entry = tiles[id]
     const active = model.view === id
     return {
-      label: t(`tile.${id}`),
+      label: tileWords(id),
       value: entry.count === undefined ? <Skeleton width={36} height={22} /> : entry.count === null ? '—' : entry.atLeast ? t('tile.atLeast', { count: entry.count }) : String(entry.count),
-      hint: entry.count === null ? t('tile.unknown') : t(`tile.${id}Hint`),
+      hint: entry.count === null ? t('tile.unknown') : tileWords(id, true),
       active,
       onClick: () => actions?.onView?.(active ? 'all' : id),
     }
   }
 
-  const viewItems: MenuItemDef[] = [{ id: 'heading', heading: true, label: t('list.rowsHeading') }, ...LABEL_VIEWS.map((view) => ({ id: view, label: t(`view.${view}`), checked: model.view === view, onSelect: () => actions?.onView?.(view) }))]
+  const viewWords = (view: LabelView) => (view === 'artwork' || view === 'translations' ? d(`view.${view}`) : t(`view.${view}`))
+  const viewItems: MenuItemDef[] = [{ id: 'heading', heading: true, label: t('list.rowsHeading') }, ...LABEL_VIEWS.map((view) => ({ id: view, label: viewWords(view), checked: model.view === view, onSelect: () => actions?.onView?.(view) }))]
   const moreItems: MenuItemDef[] = [
+    // B-W2b-270 (design page.h more): the phrase library the labels' warnings, care and marking words come from.
+    { id: 'phrases', label: d('list.phraseLibrary'), href: phraseLibraryHref(model.prefix), description: d('list.phraseLibraryHint') },
     { id: 'export', label: t('list.exportView'), onSelect: () => actions?.onExport?.(rows), disabled: rows.length === 0, description: rows.length === 0 ? t('list.exportNothing') : t('list.exportViewHint', { count: rows.length }) },
     { id: 'sep', separator: true },
     { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onShortcuts?.(true) },
@@ -156,10 +197,10 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
   )
   const tools = (
     <>
-      <Menu label={t('list.rows', { view: t(`view.${model.view}`) })} items={viewItems} />
+      <Menu label={t('list.rows', { view: viewWords(model.view) })} items={viewItems} />
       {filtered && (
         <span className="fw-q-chips" aria-label={t('list.activeFilters')}>
-          {model.view !== 'all' && chip('view', t(`view.${model.view}`), () => actions?.onView?.('all'))}
+          {model.view !== 'all' && chip('view', viewWords(model.view), () => actions?.onView?.('all'))}
           {model.query.trim() !== '' && chip('q', `“${model.query.trim()}”`, () => actions?.onQuery?.(''))}
           <Button size="sm" variant="quiet" onClick={() => actions?.onClearAll?.()}>
             {t('list.clearAll')}
@@ -175,7 +216,19 @@ function Labels({ model, actions }: { model: LabelsListModel; actions?: LabelsLi
     </Button>
   )
 
-  const state = model.rows.problem ? (
+  // B-W2b-270: a W2b view whose own read failed says so (never drawn as an empty list).
+  const depthFailed = (model.view === 'artwork' && depth.waitingFailed) || (model.view === 'translations' && depth.gapsFailed)
+  const state = depthFailed ? (
+    <EmptyState
+      title={d(`list.failed.${model.view}`)}
+      description={d('list.failed.body')}
+      action={
+        <Button size="sm" onClick={() => actions?.onRetry?.()}>
+          {q('common.retry')}
+        </Button>
+      }
+    />
+  ) : model.rows.problem ? (
     <EmptyState
       title={t('list.failedTitle')}
       description={q(model.rows.problem)}

@@ -312,3 +312,29 @@ describe('the label reconciliation (MES-140)', () => {
     expect(String((error as Error).message)).toContain('at most that')
   })
 })
+
+// B-W2b-270 (Labels & marking in depth): the list's tile "Artwork waiting approval" reads the drafts of every label it shows.
+describe('the drafts waiting approval (B-W2b-270)', () => {
+  it('lists each DRAFT proof of the labels the reader sees, says whether the reader made it, and drops it once removed', async () => {
+    const view = await artwork()
+    const proof = view.versions.find((entry: Json) => entry.file)!.file.id
+    const added = (await ok('author', 'POST', `/compliance/label-artwork/templates/${label02}/versions`, { fileId: proof, note: 'Waiting for a second person (made up).' }, 201)).artwork
+    const draft = added.versions.find((entry: Json) => entry.status === 'DRAFT' && entry.byYou)!
+
+    const mine = (await ok('author', 'GET', '/compliance/label-artwork/waiting')).artwork
+    expect(mine.waiting).toContainEqual({ templateId: label02, artworkId: draft.id, versionNo: draft.versionNo, byYou: true, createdAt: draft.createdAt })
+    expect(mine.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    // Every row is a draft of a label that is not retired, oldest first.
+    const states = await admin<{ status: string; template: string }>(`SELECT a.status, t.status AS template FROM "LabelArtworkVersion" a JOIN "LabelTemplate" t ON t.id = a."templateId" WHERE a.id = ANY($1::uuid[])`, [mine.waiting.map((entry: Json) => entry.artworkId)])
+    expect(states.every((row) => row.status === 'DRAFT' && row.template !== 'RETIRED')).toBe(true)
+    expect([...mine.waiting].map((entry: Json) => entry.createdAt)).toEqual([...mine.waiting].map((entry: Json) => entry.createdAt).sort())
+
+    // The second person may approve it; another tenant sees nothing of it.
+    expect((await ok('second', 'GET', '/compliance/label-artwork/waiting')).artwork.waiting).toContainEqual(expect.objectContaining({ artworkId: draft.id, byYou: false }))
+    expect((await ok('otherTenant', 'GET', '/compliance/label-artwork/waiting')).artwork.waiting).toEqual([])
+    await refused('floor', 'GET', '/compliance/label-artwork/waiting', undefined, 403)
+
+    await ok('author', 'DELETE', `/compliance/label-artwork/versions/${draft.id}?version=${draft.version}`)
+    expect((await ok('author', 'GET', '/compliance/label-artwork/waiting')).artwork.waiting.some((entry: Json) => entry.artworkId === draft.id)).toBe(false)
+  })
+})

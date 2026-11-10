@@ -73,6 +73,11 @@ interface Seed {
   importerName?: string | null
   importerAddress?: string | null
   updatedAt?: string
+  // B-W2b-270: the W2b columns (kind, GPSR contact, QR target, origin claim).
+  kind?: LabelTemplate['kind']
+  gpsrContact?: string | null
+  qrTarget?: LabelTemplate['qrTarget']
+  originClaimKey?: string | null
 }
 
 const JACKET_COMPOSITION: LabelTemplate['composition'] = [
@@ -110,6 +115,10 @@ function template(seed: Seed): LabelTemplate {
     version: 3,
     createdAt: at(20),
     updatedAt: seed.updatedAt ?? at(28, 15, 10),
+    kind: seed.kind ?? 'PPE_GARMENT',
+    gpsrContact: seed.gpsrContact ?? null,
+    qrTarget: seed.qrTarget ?? 'NONE',
+    originClaimKey: seed.originClaimKey ?? null,
   }
   const values = seed.style ? valuesOf(valuesFor(seed.style)) : null
   const facts = factsOf(base, draftOf(base))
@@ -118,7 +127,7 @@ function template(seed: Seed): LabelTemplate {
   return { ...base, problems, warnings, activatable: seed.status === 'DRAFT' && problems.length === 0 }
 }
 
-export const JACKET_R1 = template({ id: uid('5310', 1), code: 'LBL-DEMO-JKT-01', revision: 1, name: 'Giacca Touring Demo · etichetta cucita', style: 'jacket', status: 'ACTIVE', animalOriginPhrase: true, updatedAt: at(14, 10) })
+export const JACKET_R1 = template({ id: uid('5310', 1), code: 'LBL-DEMO-JKT-01', revision: 1, name: 'Giacca Touring Demo · etichetta cucita', style: 'jacket', status: 'ACTIVE', animalOriginPhrase: true, updatedAt: at(14, 10), qrTarget: 'BATCH_DOC' })
 export const JACKET_R2 = template({
   id: uid('5310', 2),
   code: 'LBL-DEMO-JKT-01',
@@ -146,11 +155,23 @@ export const GLOVES_R1 = template({
   widthMm: '40.00',
   heightMm: '80.00',
   layout: { preset: 'COMPACT', fields: [], notifiedBodyNumber: null, manufactureDate: 'MONTH', texts: { animalOrigin: {} } },
+  kind: 'GLOVE_MARKING',
 })
 export const SHARED_R1 = template({ id: uid('5310', 4), code: 'LBL-DEMO-STD', revision: 1, name: 'Etichetta aziendale standard', style: null, status: 'ACTIVE', languages: ['it', 'en', 'de', 'fr'], updatedAt: at(2, 11) })
 export const OLD_R1 = template({ id: uid('5310', 5), code: 'LBL-DEMO-OLD', revision: 1, name: 'Etichetta 2025 (superata)', style: null, status: 'RETIRED', updatedAt: at(1, 8) })
 export const VEST_R1 = template({ id: uid('5310', 6), code: 'LBL-DEMO-VST-01', revision: 1, name: 'Gilet Airbag Demo · etichetta', style: 'vest', status: 'DRAFT', heightMm: '60.00' })
-export const TSHIRT_R1 = template({ id: uid('5310', 7), code: 'LBL-DEMO-TSH-01', revision: 1, name: 'Maglia Tecnica Demo · etichetta', style: 'tshirt', status: 'DRAFT', composition: [{ part: 'Tessuto', fibres: [{ fibre: 'poliestere', percent: '92' }, { fibre: 'elastan', percent: '8' }] }], care: [{ symbol: 'wash-40' }, { symbol: 'tumble-not' }] })
+export const TSHIRT_R1 = template({
+  id: uid('5310', 7),
+  code: 'LBL-DEMO-TSH-01',
+  revision: 1,
+  name: 'Maglia Tecnica Demo · etichetta',
+  style: 'tshirt',
+  status: 'DRAFT',
+  composition: [{ part: 'Tessuto', fibres: [{ fibre: 'poliestere', percent: '92' }, { fibre: 'elastan', percent: '8' }] }],
+  care: [{ symbol: 'wash-40' }, { symbol: 'tumble-not' }],
+  kind: 'FIBRE_CARE',
+  gpsrContact: 'Officina Demo S.r.l.\nVia dell’Esempio 12, 00000 Borgo Demo (XX)\nassistenza@example.com',
+})
 
 export const ROWS: LabelTemplate[] = [GLOVES_R1, JACKET_R1, JACKET_R2, OLD_R1, SHARED_R1, TSHIRT_R1, VEST_R1]
 
