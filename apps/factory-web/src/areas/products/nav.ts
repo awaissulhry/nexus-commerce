@@ -1,4 +1,4 @@
-import { Clock, Layers, Palette, Ruler, Shirt } from 'lucide-react'
+import { Clock, FlaskConical, Layers, Palette, Ruler, Shirt } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,15 @@ export const officeArea: OfficeAreaNav = {
           { id: 'products-styles', label: 'shell:nav.products.styles', href: '/products/styles', icon: Shirt, permission: 'product.styles.view' },
           // SCR-047/048: leather, textiles, trims, protectors and labels with units, colours, supplier and standard cost.
           { id: 'products-materials', label: 'shell:nav.products.materials', href: '/products/materials', icon: Layers, permission: 'product.materials.view' },
+        ],
+      },
+      // B-W2b-261: Development (design 01: Products › Development › Samples & prototypes, SCR-110; Changes & versions joins it).
+      {
+        id: 'products-development',
+        label: 'shell:nav.products.development',
+        items: [
+          // SCR-110: proto, fit, salesman, pre-production and CE test sample rounds on one board (sales.samples.view).
+          { id: 'products-samples', label: 'shell:nav.products.samples', href: '/products/samples', icon: FlaskConical, permission: 'sales.samples.view' },
         ],
       },
       {

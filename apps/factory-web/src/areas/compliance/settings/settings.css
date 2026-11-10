@@ -1,0 +1,297 @@
+/*
+ * Compliance › Settings › Rules & markets (SCR-262, B-W2b-265) LAYOUT: the band, the link tabs, each tab's cards and lists, the
+ * dialogs' forms. The page fills the shell's main area (no max-width: Owner rule 2026-10-29); wide screens use two columns of
+ * cards and form fields; the controls are the design system's; semantic tokens only (light and dark follow the theme).
+ */
+.fw-rm,
+.fw-rm-section,
+.fw-rm-panel-body,
+.fw-rm-form,
+.fw-rm-loading,
+.fw-rm-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rm {
+  gap: var(--nds-space-16);
+}
+
+.fw-rm-panel-body {
+  gap: var(--nds-space-20);
+}
+
+.fw-rm-section,
+.fw-rm-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-rm-stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rm-band,
+.fw-rm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rm-status,
+.fw-rm-tools,
+.fw-rm-row,
+.fw-rm-head-title,
+.fw-rm-facts,
+.fw-rm-inforce,
+.fw-rm-cell-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rm-status {
+  font-size: var(--nds-font-size-sm);
+  gap: var(--nds-space-4);
+}
+
+.fw-rm-cell-row {
+  flex-wrap: nowrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-rm-end {
+  justify-content: flex-end;
+}
+
+.fw-rm-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rm-h:focus {
+  outline: none;
+}
+
+.fw-rm-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* Chromium VI: the rule card and the side cards, side by side on wide screens. */
+.fw-rm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-rm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-rm-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-rm-card {
+  min-width: 0;
+}
+
+.fw-rm-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-rm-question {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-rm-ticks,
+.fw-rm-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+
+.fw-rm-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rm-muted,
+.fw-rm-changed {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rm-changed,
+.fw-rm-held,
+.fw-rm-locked {
+  margin: 0;
+}
+
+.fw-rm-held {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-rm-locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rm-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+}
+
+/* Grid cells. */
+.fw-rm-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding: var(--nds-space-4) 0;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.fw-rm-strong {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-rm-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rm-clip {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fw-rm-pre {
+  white-space: pre-line;
+}
+
+.fw-rm-lock {
+  display: inline-flex;
+  align-items: center;
+  white-space: normal;
+  line-height: 1.25;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+}
+
+.fw-rm-refused {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 50%;
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* Dialogs. */
+.fw-rm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-rm-span {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fw-rm-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-rm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-rm-panel.fw-rm-form-grid {
+  display: grid;
+}
+
+.fw-rm-lines,
+.fw-rm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rm-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-rm-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-rm-slow {
+  to {
+    opacity: 1;
+  }
+}

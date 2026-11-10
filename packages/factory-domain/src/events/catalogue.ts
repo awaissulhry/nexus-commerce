@@ -190,6 +190,8 @@ import { events as productImages } from '../product-images/events'
 import { events as planningMilestones } from '../planning-milestones/events'
 // B-W2b-248: made-to-measure rules.
 import { events as productMtm } from '../product-mtm/events'
+// B-W2b-264: sourcing & claims (a claim drafted, approved, withdrawn or replaced; a use recorded or ended; evidence expired).
+import { events as complianceClaims } from '../compliance-claims/events'
 // B-W2b-247: the colour library and the brands' branding sets (colour.changed, branding_set.changed).
 import { events as productColours } from '../product-colours/events'
 import type { EventDefinition } from './define'
@@ -449,6 +451,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...planningMilestones,
   // B-W2b-248
   ...productMtm,
+  // B-W2b-264
+  ...complianceClaims,
   // B-W2b-247
   ...productColours] as const satisfies readonly EventDefinition[]
 

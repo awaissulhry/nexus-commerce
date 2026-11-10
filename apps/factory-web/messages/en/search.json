@@ -89,6 +89,7 @@
     "InspectionPlan": "Inspection plan",
     "Capa": "Corrective action",
     "CutOrder": "Cut order",
+    "SampleRound": "Sample round",
     "Colour": "Colour",
     "BrandingSet": "Branding set",
     "other": "Record"
@@ -130,6 +131,7 @@
     "InspectionPlan": "Inspection plans",
     "Capa": "Corrective actions",
     "CutOrder": "Cut orders",
+    "SampleRound": "Sample rounds",
     "Colour": "Colours",
     "BrandingSet": "Branding sets",
     "other": "Other records"
@@ -218,6 +220,8 @@
     "D7": "D7 prevention",
     "D8": "D8 closure",
     "CUT": "Cut",
-    "RECONCILED": "Reconciled"
+    "RECONCILED": "Reconciled",
+    "IN_MAKING": "In making",
+    "UNDER_REVIEW": "Under review"
   }
 }

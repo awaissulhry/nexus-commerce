@@ -212,7 +212,8 @@ describe('navigation, pages and record links', () => {
     // Sales reads materials and styles, not routings: no Operations row.
     const sales = officeNavFor(permissionCheck(['product.styles.view', 'product.materials.view'])).areas.find((area) => area.id === 'products')!
     expect(sales.sections?.flatMap((section) => section.items.map((item) => item.id))).toEqual(['products-styles', 'products-materials', 'products-sizes', 'products-colours'])
-    expect(OFFICE_NAV.areas.find((area) => area.id === 'compliance')?.sections?.[0]?.items.map((item) => item.id)).toEqual(['compliance-certificates', 'compliance-labels', 'compliance-tests'])
+    // B-W2b-266: the status board heads Compliance › Main (the approved tree's order).
+    expect(OFFICE_NAV.areas.find((area) => area.id === 'compliance')?.sections?.[0]?.items.map((item) => item.id)).toEqual(['compliance-status', 'compliance-certificates', 'compliance-labels', 'compliance-tests'])
   })
 
   it('each record opens its own page, each API list its page', () => {

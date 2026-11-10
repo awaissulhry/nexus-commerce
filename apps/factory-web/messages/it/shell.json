@@ -23,6 +23,8 @@
       "libraries": "Librerie",
       "operations": "Operazioni",
       "sizes": "Taglie e misure",
+      "development": "Sviluppo",
+      "samples": "Campionature e prototipi",
       "colours": "Colori e grafiche"
     },
     "sales": {
@@ -146,8 +148,13 @@
       "register": "Registro DPI e richiami",
       "certificates": "Certificati",
       "labels": "Etichette e marcature",
+      "sustainability": "Sostenibilità",
+      "sourcing": "Filiera e dichiarazioni ambientali",
       "reportsGroup": "Report",
-      "reports": "Report conformità"
+      "reports": "Report conformità",
+      "status": "Stato conformità",
+      "settingsGroup": "Impostazioni",
+      "settings": "Norme e mercati"
     },
     "finance": {
       "area": "Amministrazione",

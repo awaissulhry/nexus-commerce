@@ -156,6 +156,13 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   MachineCheckResult: '/plant/preventive?result=[id]',
   // B-W2b-143 Plant › Chemicals & waste (SCR-213): a chemical opens in its window.
   Chemical: '/plant/chemicals?open=[id]',
+  // B-W2b-264 Compliance › Sourcing & claims (SCR-215): a sustainability claim opens in its window.
+  SustainabilityClaim: '/compliance/sourcing?open=[id]',
+  // B-W2b-265 Compliance › Settings › Rules & markets (SCR-262): a register entry, a change of the watch and an operator row open in
+  // their tab's window.
+  RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
+  StandardChange: '/compliance/settings?tab=regulations&change=[id]',
+  EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
@@ -175,6 +182,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
   // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
   WorkInstruction: '/production/instructions/[id]',
+  // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
+  SampleRound: '/products/samples/[id]',
 })
 
 /**
@@ -304,6 +313,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/checks/results': '/plant/preventive',
   // B-W2b-143: the chemical register (SCR-213) reads `?tile=`, `?status=`, `?use=`, `?cabinet=`, `?q=`.
   '/safety/chemicals': '/plant/chemicals',
+  // B-W2b-264: the claims (SCR-215) read `?state=`, `?kind=`, `?scope=`, `?q=`.
+  '/compliance/claims': '/compliance/sourcing',
   // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
   '/safety/incidents': '/plant/incidents',
   // B-W2b-148: the health page's frame (the tiles) and its plans per role.
@@ -318,6 +329,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
+  '/sales/samples/rounds': '/products/samples',
 })
 
 export interface RecordRef {

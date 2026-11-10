@@ -1,4 +1,4 @@
-import { BadgeCheck, BarChart3, FlaskConical, ScrollText, ShieldCheck, Tag } from 'lucide-react'
+import { BadgeCheck, BarChart3, FlaskConical, LayoutGrid, Leaf, ScrollText, ShieldCheck, SlidersHorizontal, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -23,6 +23,8 @@ export const officeArea: OfficeAreaNav = {
         hideLabel: true,
         noCrumb: true,
         items: [
+          // B-W2b-266 SCR-119: the status board (GET /compliance/status/board, compliance.certificates.view), first of Main (the tree's order).
+          { id: 'compliance-status', label: 'shell:nav.compliance.status', href: '/compliance/status', icon: LayoutGrid, permission: 'compliance.certificates.view' },
           // SCR-050/051: EN 17092 garment and EN 1621 protector certificates with their coverage (compliance.certificates.view).
           { id: 'compliance-certificates', label: 'shell:nav.compliance.certificates', href: '/compliance/certificates', icon: BadgeCheck, permission: 'compliance.certificates.view' },
           // SCR-053: the PPE garment label builder, preview and activation (reading labels is compliance.certificates.view).
@@ -39,12 +41,28 @@ export const officeArea: OfficeAreaNav = {
           { id: 'compliance-register', label: 'shell:nav.compliance.register', href: '/compliance/register', icon: ScrollText, permission: 'compliance.register.view' },
         ],
       },
+      // B-W2b-264: Sustainability (design group "Sustainability"; the digital product passport joins it later).
+      {
+        id: 'compliance-sustainability',
+        label: 'shell:nav.compliance.sustainability',
+        items: [
+          // SCR-215: the sustainability claims register with words, scope, evidence and expiry (Dir. (EU) 2024/825).
+          { id: 'compliance-sourcing', label: 'shell:nav.compliance.sourcing', href: '/compliance/sourcing', icon: Leaf, permission: 'compliance.certificates.view' },
+        ],
+      },
       // B-W2b-272 SCR-261: Compliance › Reports › Compliance reports (GET /compliance/reports/kpis, compliance.reports.view); after
       // Product safety (the tree's order: Sustainability and Settings join with their steps).
       {
         id: 'compliance-reports',
         label: 'shell:nav.compliance.reportsGroup',
         items: [{ id: 'compliance-reports', label: 'shell:nav.compliance.reports', href: '/compliance/reports', icon: BarChart3, permission: 'compliance.reports.view' }],
+      },
+      // B-W2b-265 SCR-262: Compliance › Settings › Rules & markets (the tree's last group): the Cr VI rule, the gates, the
+      // register of laws and standards, markets, phrases and operators (compliance.certificates.view; Cr VI reads quality.lots.view).
+      {
+        id: 'compliance-settings',
+        label: 'shell:nav.compliance.settingsGroup',
+        items: [{ id: 'compliance-settings', label: 'shell:nav.compliance.settings', href: '/compliance/settings', icon: SlidersHorizontal, permission: 'compliance.certificates.view' }],
       },
     ],
   },

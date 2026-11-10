@@ -141,6 +141,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.materials', title: 'Materials & trims', titleIt: 'Materiali e accessori', wave: 'W1', href: '/products/materials' },
         ],
       },
+      // W2b: B-W2b-261 Development › Samples & prototypes (SCR-110); Changes & versions joins the group with its page.
+      {
+        label: 'Development',
+        labelIt: 'Sviluppo',
+        hideLabel: false,
+        pages: [{ id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' }],
+      },
       {
         label: 'Libraries',
         labelIt: 'Librerie',
@@ -388,6 +395,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Principali',
         hideLabel: true,
         pages: [
+          // W2b: B-W2b-266 Status board (SCR-119), first of Main (design compliance.status group "Pages: Status board · Certificates · …").
+          { id: 'compliance.status', title: 'Status board', titleIt: 'Stato conformità', wave: 'W2b', href: '/compliance/status' },
           { id: 'compliance.certificates', title: 'Certificates', titleIt: 'Certificati', wave: 'W1', href: '/compliance/certificates' },
           { id: 'compliance.labels', title: 'Labels & marking', titleIt: 'Etichette e marcature', wave: 'W1', href: '/compliance/labels' },
           { id: 'compliance.tests', title: 'Tests & substances', titleIt: 'Test e sostanze', wave: 'W1', href: '/compliance/tests' },
@@ -399,8 +408,17 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'compliance.register', title: 'PPE register & recalls', titleIt: 'Registro DPI e richiami', wave: 'W1', href: '/compliance/register' }],
       },
+      // W2b: B-W2b-264 Sourcing & claims (SCR-215), the design's group "Sustainability" (the product passport comes later).
+      {
+        label: 'Sustainability',
+        labelIt: 'Sostenibilità',
+        hideLabel: false,
+        pages: [{ id: 'compliance.sourcing', title: 'Sourcing & claims', titleIt: 'Filiera e dichiarazioni ambientali', wave: 'W2b', href: '/compliance/sourcing' }],
+      },
       // W2b: B-W2b-272 Compliance reports (SCR-261). The tree's Reports group, after Product safety (Sustainability joins with its step).
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'compliance.reports', title: 'Compliance reports', titleIt: 'Report conformità', wave: 'W2b', href: '/compliance/reports' }] },
+      // W2b: B-W2b-265 Rules & markets (SCR-262), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'compliance.settings', title: 'Rules & markets', titleIt: 'Norme e mercati', wave: 'W2b', href: '/compliance/settings' }] },
     ],
   },
   {

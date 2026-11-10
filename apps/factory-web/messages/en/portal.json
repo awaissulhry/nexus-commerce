@@ -7,6 +7,7 @@
     "quotesSamples": "Quotes & samples",
     "quotes": "Quotes & requests",
     "catalogue": "Catalogue",
+    "samples": "Samples & tech packs",
     "documents": "Documents",
     "returns": "Returns & claims",
     "account": "Account",
@@ -301,7 +302,8 @@
       "portal_returns_view": "See your returns and complaints",
       "portal_returns_request": "Ask for a return or report a quality problem",
       "portal_complaints_view": "Follow your quality complaints",
-      "portal_approvals_view": "See what we ask you to approve"
+      "portal_approvals_view": "See what we ask you to approve",
+      "portal_samples_view": "See your samples, your styles in development and their tech packs"
     }
   },
   "display": {

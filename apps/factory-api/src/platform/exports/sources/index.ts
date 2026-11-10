@@ -43,6 +43,10 @@ import { incidents } from './incidents'
 import { inspectionPlans } from './inspection-plans'
 // B-W2b-119: Quality › Problems › Corrective actions (B-W2b-108's source, registered with its page).
 import { capas } from './capas'
+// B-W2b-264: Compliance › Sustainability › Sourcing & claims.
+import { complianceClaims } from './compliance-claims'
+// B-W2b-261: Products › Development › Samples & prototypes (B-W2b-246's read, registered with its page).
+import { sampleRounds } from './sample-rounds'
 // B-W2b-247: Products › Libraries › Colours & artwork (the colour library).
 import { colours } from './colours'
 
@@ -100,6 +104,10 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   inspectionPlans,
   // B-W2b-119: Quality › Problems › Corrective actions.
   capas,
+  // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
+  complianceClaims,
+  // B-W2b-261: Products › Development › Samples & prototypes.
+  sampleRounds,
   // B-W2b-247: Products › Libraries › Colours & artwork.
   colours,
 ])
