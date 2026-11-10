@@ -464,7 +464,8 @@
     "QualityReleaseReversal": "Rilascio revocato",
     "manual": "Messo a mano",
     "other": "Un altro record",
-    "IncomingInspection": "Controllo in accettazione"
+    "IncomingInspection": "Controllo in accettazione",
+    "RecallAction": "Richiamo o ritiro"
   },
   "status": {
     "ACTIVE": "Bloccato",

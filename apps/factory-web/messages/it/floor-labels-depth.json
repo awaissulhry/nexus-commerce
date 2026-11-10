@@ -1,0 +1,42 @@
+{
+  "panel": {
+    "title": "Conteggio etichette",
+    "size": "{size}: stampate {printed} · sui capi {used} · scartate {spoiled} · rese {returned}",
+    "total": "Intero ordine: stampate {printed} · sui capi {used} · scartate {spoiled} · rese {returned}",
+    "balanced": "Ogni etichetta stampata è su un capo, scartata o resa.",
+    "missing_one": "{count} etichetta stampata non è giustificata: registrala come scartata o resa.",
+    "missing_other": "{count} etichette stampate non sono giustificate: registrale come scartate o rese.",
+    "over_one": "È stata registrata {count} etichetta in più di quelle stampate oltre i capi etichettati: ristampala o avvisa il capoturno.",
+    "over_other": "Sono state registrate {count} etichette in più di quelle stampate oltre i capi etichettati: ristampale o avvisa il capoturno.",
+    "holds": "La qualità non può rilasciare i capi di questo ordine finché il conteggio delle etichette non torna.",
+    "log": "Registra etichette scartate"
+  },
+  "held": {
+    "offline": "Attende la rete: le etichette scartate vengono registrate subito dall'ufficio.",
+    "busy": "Attendi che l'ultima azione finisca.",
+    "nothingPrinted": "Nessuna etichetta di questa taglia è ancora stata stampata.",
+    "noneLeft": "Ogni etichetta stampata per questa taglia è già registrata come scartata o resa."
+  },
+  "spoil": {
+    "title": "Registra etichette scartate",
+    "question_one": "{size}: {count} etichetta stampata, {used} sui capi, {logged} già registrate come scartate o rese. Quante altre e perché?",
+    "question_other": "{size}: {count} etichette stampate, {used} sui capi, {logged} già registrate come scartate o rese. Quante altre e perché?",
+    "count": "Etichette di {size}",
+    "range": "Da 1 a {max}",
+    "why": "Perché",
+    "reason": {
+      "DAMAGED": "Rovinata o strappata",
+      "MISPRINTED": "Stampata male",
+      "LOST": "Persa",
+      "JAMMED": "Stampante inceppata"
+    },
+    "returned": "Resa inutilizzata",
+    "logged": "Ogni registrazione resta nel registro e non si modifica. Un'etichetta scartata non si ristampa da sola: ristampala dalla taglia."
+  },
+  "note": {
+    "spoiled_one": "Registrata: {count} etichetta di {what} scartata.",
+    "spoiled_other": "Registrate: {count} etichette di {what} scartate.",
+    "returned_one": "Registrata: {count} etichetta di {what} resa.",
+    "returned_other": "Registrate: {count} etichette di {what} rese."
+  }
+}

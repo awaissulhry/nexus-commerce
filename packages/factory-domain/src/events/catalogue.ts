@@ -174,6 +174,16 @@ import { events as certificatesDepth } from '../certificates-depth/events'
 import { events as complianceTechfiles } from '../compliance-techfiles/events'
 // B-W2b-257: the DoC generator (a generated draft changed, a translation moved, batches recorded, a shipment's pack made).
 import { events as complianceDeclarations } from '../compliance-declarations/events'
+// B-W2b-252: sample decisions (a round decided or asked, its fit, a CE test result, a swatch changed).
+import { events as salesSampleDecisions } from '../sales-sample-decisions/events'
+// B-W2b-260: recall, withdrawal and authority (an authority notice, a recall, its progress, a distributor notice, an authority request changed).
+import { events as complianceRecall } from '../compliance-recall/events'
+// B-W2b-258: the user information builder (a generated leaflet draft changed, a translation moved).
+import { events as complianceUserInformation } from '../compliance-user-information/events'
+// B-W2b-256: material profiles, supplier declarations and test plans.
+import { events as complianceMaterialTests } from '../compliance-material-tests/events'
+// B-W2b-259: label artwork (a version added, approved by a second person, retired) and labels logged spoiled or returned.
+import { events as complianceLabelArtwork } from '../compliance-label-artwork/events'
 // B-W2b-236: a style's pictures and its revisions' pattern files changed.
 import { events as productImages } from '../product-images/events'
 import type { EventDefinition } from './define'
@@ -417,6 +427,16 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...complianceTechfiles,
   // B-W2b-257
   ...complianceDeclarations,
+  // B-W2b-252
+  ...salesSampleDecisions,
+  // B-W2b-260
+  ...complianceRecall,
+  // B-W2b-258
+  ...complianceUserInformation,
+  // B-W2b-256
+  ...complianceMaterialTests,
+  // B-W2b-259
+  ...complianceLabelArtwork,
   // B-W2b-236
   ...productImages] as const satisfies readonly EventDefinition[]
 

@@ -18,6 +18,8 @@ import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { CommerceImport, CommerceImportButton } from '../../import/commerce/view/CommerceImport'
 import { completenessOf, decimalText, moneyText, rangeWords, revisionChips, STATUS_TONE, STYLE_TILES, STYLE_VIEWS } from '../../model'
 import { extraFilterCount, NO_FILTERS, START_FROM, type NewStyleModel, type StylesListActions, type StylesListViewModel } from '../list-model'
+// B-W2b-243: the row's ⋯ Tech pack PDF.
+import { windowAddress } from '../../techpack/model'
 import { usePhoneList } from '../use-phone'
 import { StyleCards } from './StyleCards'
 // B-W2b-236 (SCR-303): List · Gallery.
@@ -84,6 +86,8 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
 
   const items = model.rows.items
   const recordHref = useCallback((row: StyleRow) => `${model.prefix}/products/styles/${row.id}`, [model.prefix])
+  // B-W2b-243: ⋯ Tech pack PDF (the PDF window, a new tab) for a person who reads the BOM.
+  const techPackHref = useMemo(() => (model.can.bomView ? (row: StyleRow) => windowAddress(model.prefix, { styleId: row.id }) : null), [model.can.bomView, model.prefix])
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const archived = picked.filter((row) => row.status === 'ARCHIVED').length
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
@@ -158,6 +162,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
             { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=variants` },
             { id: 'duplicate', label: t('list.duplicate'), disabled: !!duplicateHeld, description: duplicateHeld ?? undefined, onSelect: () => latest.current.actions?.onDuplicate?.(data) },
+            ...(techPackHref ? [{ id: 'techpack', label: t('list.techPackPdf'), href: techPackHref(data), target: '_blank' as const }] : []),
           ]}
         />
       ) : null
@@ -216,7 +221,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
       { colId: 'updated', headerName: t('list.col.updated'), field: 'updatedAt', minWidth: 100, flex: 1, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') },
       { colId: 'more', headerName: t('list.col.more'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, recordHref, prices, showPrice, showMargin, duplicateHeld])
+  }, [t, locale, recordHref, prices, showPrice, showMargin, duplicateHeld, techPackHref])
 
   const filtered = model.filters.view !== 'open' || extraFilterCount(model.filters) > 0
   const state = model.rows.problem === 'problem.read.forbidden' ? (
@@ -414,6 +419,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           recordHref={recordHref}
           onDuplicate={(row) => actions?.onDuplicate?.(row)}
           duplicateHeld={duplicateHeld}
+          techPackHref={techPackHref}
           more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
           selectMode={model.phoneSelect}
         />

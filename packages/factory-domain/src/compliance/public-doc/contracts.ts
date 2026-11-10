@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { publicBranding } from '../../branding/contracts'
 import { businessDate, id, input, output } from '../../core/contracts'
 import { PUBLIC_DOC_KINDS } from './code'
+// B-W2b-260 (RG1:01): a recall's or withdrawal's public notice, first on the page.
+import { publicSafetyNotice } from '../recall/public-notice'
 
 /**
  * The public DoC page's contracts (B-W2b-166; design links.doc; PRD-294, PRD-356). The page speaks its own words: the API
@@ -111,6 +113,12 @@ export const publicDocPage = output({
    */
   n: z.number().int(),
   others: z.array(output({ n: z.number().int(), style: output({ code: z.string(), name: z.string() }), batch: z.string().nullable() })),
+  /**
+   * B-W2b-260 (RG1:01; design links.doc › sec:recall): the safety notices of a recall or withdrawal of this batch or style,
+   * published and not taken down, newest first; the page shows them before anything else. The API always sends the list
+   * (empty: no notice, the section is not drawn); optional only so pages written before it still read.
+   */
+  notices: z.array(publicSafetyNotice).optional(),
   /**
    * B-W2b-236 (SY3:03): the style's main picture, shown through a copy stripped of camera and location data (never the
    * office's file): `GET /public/doc/<code>/picture/<fileId>`. null: the style has no main picture that can be shown (none,

@@ -464,7 +464,8 @@
     "QualityReleaseReversal": "Release reversed",
     "manual": "Placed by hand",
     "other": "Another record",
-    "IncomingInspection": "Incoming inspection"
+    "IncomingInspection": "Incoming inspection",
+    "RecallAction": "Recall or withdrawal"
   },
   "status": {
     "ACTIVE": "On hold",

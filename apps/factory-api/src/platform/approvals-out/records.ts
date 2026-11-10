@@ -2,6 +2,8 @@ import { KIND_RULES, type ApprovalKind } from '@nexus/factory-domain/approvals-o
 import { CONCESSION_ADAPTER } from '../../modules/quality/ncr/concession-answer'
 import { SIGNATURE_ADAPTER } from '../../modules/safety/risk/signature-link'
 import { REACCEPTANCE_ADAPTER } from '../../modules/sales/orders/reacceptance'
+// B-W2b-252: a sample round (SAMPLE) and a leather or colour swatch (COLOUR, LEATHER): the brand's answer is their decision.
+import { SAMPLE_DECISION_ADAPTERS } from '../../modules/sales/sample-decisions/approvals'
 import type { RecordAdapter } from './adapter'
 import { PROOF_ADAPTER } from './proof'
 import { SAMPLE_ADAPTERS } from './samples'
@@ -14,7 +16,7 @@ import { SAMPLE_ADAPTERS } from './samples'
  * the kinds allow (factory-domain approvals-out/kinds).
  */
 
-const ADAPTERS: readonly RecordAdapter[] = Object.freeze([CONCESSION_ADAPTER, REACCEPTANCE_ADAPTER, SIGNATURE_ADAPTER, PROOF_ADAPTER, ...SAMPLE_ADAPTERS])
+const ADAPTERS: readonly RecordAdapter[] = Object.freeze([CONCESSION_ADAPTER, REACCEPTANCE_ADAPTER, SIGNATURE_ADAPTER, PROOF_ADAPTER, ...SAMPLE_ADAPTERS, ...SAMPLE_DECISION_ADAPTERS])
 
 const byType = new Map<string, RecordAdapter>()
 for (const adapter of ADAPTERS) {

@@ -23,6 +23,8 @@ import { systemContext } from '../../../platform/outbox/system'
 import { readMatchFacts, type CodeMatch } from './facts'
 // B-W2b-249: the sender follows the economic operators (Owner question 3: the brand for a style sold under its name).
 import { readDocSender } from './sender'
+// B-W2b-260 (RG1:01): a recall's or withdrawal's public notice of the batch or style, first on the page.
+import { readPublicNotices } from './notice'
 // B-W2b-236 (SY3:03): the style's main picture on the page (shown only as its stripped copy: picture.ts).
 import { readPublicPicture } from './picture'
 
@@ -90,7 +92,8 @@ export async function pagesUnder(request: FastifyRequest, code: string): Promise
         if (!read) continue
         const head = await readDocSender(client, match, read.companyId, day)
         if (!head) continue
-        const page = publicDocPage({ ...read.facts, style: { ...read.facts.style, privateLabel: head.makerRole === 'BRAND' } }, head.sender, head.contact)
+        // B-W2b-260: `notices` (the recall notices of this batch or style).
+        const page = publicDocPage({ ...read.facts, style: { ...read.facts.style, privateLabel: head.makerRole === 'BRAND' }, notices: await readPublicNotices(client, match) }, head.sender, head.contact)
         if (match.kind === 'STYLE' && page.declaration === null) continue
         // B-W2b-236: `picture` (the style's main picture, or null).
         own.push({ match, page: { ...page, picture: await readPublicPicture(client, match) } })

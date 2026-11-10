@@ -54,3 +54,11 @@
   color: var(--nds-text-muted);
   font-size: var(--nds-density-font-body);
 }
+
+/* ── B-W2b-259: the picked size's labels accounted for (printed · on garments · spoiled · returned) ──────────────────── */
+.fw-labels-figures {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

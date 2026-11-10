@@ -83,6 +83,7 @@
     "bom": "Distinta base",
     "routing": "Ciclo di lavoro",
     "cost": "Costo",
+    "techpack": "Scheda tecnica",
     "compliance": "Conformità",
     "files": "File e cartamodelli",
     "activity": "Attività",
@@ -655,6 +656,7 @@
       "archiveTitle_other": "Archiviare {count} modelli?"
     },
     "duplicate": "Duplica…",
+    "techPackPdf": "PDF scheda tecnica (nuova scheda)",
     "price": {
       "from": "da {price}",
       "fromShort": "per variante",

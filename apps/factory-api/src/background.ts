@@ -127,6 +127,11 @@ import { officeApprovalsMailCron } from './modules/insights/sources/approvals-ma
 import { smvTakeEffectCron } from './modules/product/minutes/take-effect'
 // B-W2b-251: technical_file.pack_requested → the evidence pack built (its PDF, ZIP and fingerprint) or failed in words.
 import { buildPackHandlers } from './modules/compliance/techfiles/build'
+// B-W2b-260: a distributor's reply on its notice's thread is the notice's answer; a bounced or failed mail fails the notice.
+import { distributorHandlers } from './modules/compliance/recall/distributors'
+// B-W2b-256: supplier declarations (a portal upload answers its request; overdue and reminders hourly) and material profiles evaluated again.
+import { declarationHandlers, declarationsCron } from './modules/compliance/declarations-asked/jobs'
+import { profilesNightlyCron, reevaluateHandlers } from './modules/compliance/material-profiles/reevaluate'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -197,6 +202,10 @@ const W2B_200_HANDLERS: readonly EventHandler[] = [sharesNotifyHandler()]
 const W2B_225_HANDLERS: readonly EventHandler[] = routingCheckpointHandlers()
 // B-W2b-251: an evidence pack asked for → its build job.
 const W2B_251_HANDLERS: readonly EventHandler[] = buildPackHandlers()
+// B-W2b-260: distributor notices: replies recorded as answers, bounces as failures.
+const W2B_260_HANDLERS: readonly EventHandler[] = distributorHandlers()
+// B-W2b-256: a supplier's portal upload answers its declaration request; profiles evaluated again on a rule, a substance, a list version, a lab result, a file.
+const W2B_256_HANDLERS: readonly EventHandler[] = [...declarationHandlers(), ...reevaluateHandlers()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -265,7 +274,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -327,6 +336,9 @@ if (mode === 'worker') {
   crons.push(measurementPhotosCron({ database, log }))
   // B-W2b-215: hourly at minute 7, approved SMV versions whose day came take effect.
   crons.push(smvTakeEffectCron({ database, log }))
+  // B-W2b-256: hourly at minute 35, declaration requests past their due day move overdue and portal requests are reminded by
+  // their own cadence; every night at 03:50, every material profile is evaluated again.
+  crons.push(declarationsCron({ database, log }), profilesNightlyCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

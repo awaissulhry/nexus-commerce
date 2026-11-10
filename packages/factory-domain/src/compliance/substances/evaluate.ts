@@ -147,6 +147,12 @@ export interface EvaluationInput {
   readonly svhcSubstanceIds: ReadonlySet<string>
   readonly saved: SavedSvhc | null
   readonly today: BusinessDate
+  /**
+   * B-W2b-256: what the profile lacks beyond the rules, in words (the composition or a leather's tannage not confirmed, a
+   * PPE material's innocuousness evidence: compliance/material-profiles profileGaps). Each keeps a material that meets its
+   * rules INCOMPLETE, with the gap in the reason; a failure still BLOCKS whatever they say. None: the rules alone.
+   */
+  readonly gaps?: readonly string[]
 }
 
 export type Proof =
@@ -392,14 +398,16 @@ export function evaluateMaterial(input: EvaluationInput): MaterialEvaluation {
   const failed = applicable.filter((verdict) => verdict.status === 'FAILED')
   const missing = applicable.filter((verdict) => verdict.status === 'MISSING')
   const gap = svhcGap(svhc)
+  const gaps = input.gaps ?? []
   let state: ProfileState
   let stateReason: string | null
   if (failed.length > 0) {
     state = 'BLOCKED'
     stateReason = clip(failed.map((verdict) => `${verdict.legalReference}: ${verdict.words}`).join(' '))
-  } else if (missing.length > 0 || gap) {
+  } else if (missing.length > 0 || gap || gaps.length > 0) {
     state = 'INCOMPLETE'
-    stateReason = clip([...missing.map((verdict) => `${verdict.legalReference}: ${verdict.words}`), ...(gap ? [gap] : [])].join(' '))
+    // The profile's gaps before the SVHC answer's, which stays last (what to ask next).
+    stateReason = clip([...missing.map((verdict) => `${verdict.legalReference}: ${verdict.words}`), ...gaps, ...(gap ? [gap] : [])].join(' '))
   } else {
     state = 'COMPLETE'
     stateReason = null
