@@ -146,7 +146,8 @@
       "certificates": "Certificates",
       "labels": "Labels & marking",
       "reportsGroup": "Reports",
-      "reports": "Compliance reports"
+      "reports": "Compliance reports",
+      "status": "Status board"
     },
     "finance": {
       "area": "Finance",

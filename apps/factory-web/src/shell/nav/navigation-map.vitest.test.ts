@@ -165,6 +165,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
       '/compliance/reports': 'compliance.reports.view', // GET /compliance/reports/kpis (B-W2b-272)
+      '/compliance/status': 'compliance.certificates.view', // GET /compliance/status/board (B-W2b-266)
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/receivables': 'receivables.view', // GET /receivables/ageing (B-W2a-81)

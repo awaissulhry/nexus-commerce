@@ -46,6 +46,8 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: office(newId(), [grant([VIEW])]),
   companyB: office(newId(), [grant([VIEW, MANAGE], [ids.companyB])]),
   planner: office(newId(), [grant(['workorders.view', 'workorders.manage', 'workorders.release', VIEW])]),
+  // B-W2b-266: a reader of the board who also reads lots (the Cr VI tile).
+  lots: office(newId(), [grant([VIEW, 'quality.lots.view'])]),
 }
 
 let h: Harness
@@ -299,5 +301,41 @@ describe('the status board (PRD-277)', () => {
     const expiries = await ok(call('viewer', 'GET', '/compliance/status/expiries?months=24'))
     expect(expiries.months).toHaveLength(24)
     await refused(call('viewer', 'GET', `/compliance/status/cell?styleId=${jacket.style.id}&market=NL`), 404)
+  })
+
+  // B-W2b-266 (the board's screen): ?gap= narrows the cells and "Needs action" (the tiles stay whole), ?brandId= the styles, the
+  // Cr VI tile for a reader of lots, the expiries with their first valid day.
+  it('a gap, a brand, the Cr VI tile and the expiries the screen reads (B-W2b-266)', async () => {
+    const whole = await ok(call('viewer', 'GET', '/compliance/status/board'))
+    const docs = await ok(call('viewer', 'GET', '/compliance/status/board?gap=docLanguage'))
+    expect(docs.tiles).toEqual(whole.tiles)
+    const docCodes = (await admin<{ code: string }>(`SELECT code FROM "ComplianceRequirement" WHERE "tenantId" = $1 AND kind::text IN ('DOC_LANGUAGE', 'USER_INFO_LANGUAGE')`, [ids.tenant])).map((row) => row.code)
+    expect(docs.needsAction.lines.length).toBeGreaterThan(0)
+    for (const line of docs.needsAction.lines) expect(docCodes).toContain(line.requirementCode)
+    // The languages tile counts the cells the gap shows.
+    expect(docs.rows.flatMap((row: Json) => row.cells).filter((cell: Json) => cell.state !== 'READY')).toHaveLength(whole.tiles.missingLanguages)
+    const germany = docs.rows.find((row: Json) => row.style.code === 'SEED-JKT-01').cells.find((cell: Json) => cell.marketCode === 'DE')
+    expect(germany.state).toBe('BLOCKED')
+    expect(['DOC-LANGUAGE', 'USER-INFO-LANGUAGE']).toContain(germany.first.code)
+    const all = await ok(call('viewer', 'GET', '/compliance/status/actions?gap=docLanguage'))
+    expect(all.count).toBe(docs.needsAction.count)
+    const certificate = await ok(call('viewer', 'GET', '/compliance/status/board?gap=certificate'))
+    for (const line of certificate.needsAction.lines) expect(line.requirementCode).toMatch(/^CERT-/)
+    await refused(call('viewer', 'GET', '/compliance/status/board?gap=nothing'), 400)
+    const noBrand = await ok(call('viewer', 'GET', `/compliance/status/board?brandId=${newId()}`))
+    expect([noBrand.rows, noBrand.needsAction.count]).toEqual([[], 0])
+    const branded = whole.rows.find((row: Json) => row.style.brand)
+    if (branded) {
+      const one = await ok(call('viewer', 'GET', `/compliance/status/board?brandId=${branded.style.brand.id}`))
+      expect(one.rows.every((row: Json) => row.style.brand?.id === branded.style.brand.id)).toBe(true)
+    }
+    const lots = await ok(call('lots', 'GET', '/compliance/status/board'))
+    const [held] = await admin<{ count: number }>(`SELECT count(*)::int AS count FROM "Lot" WHERE "tenantId" = $1 AND "requiresCrViTest" AND "crViStatus"::text IN ('PENDING', 'FAIL') AND "qualityStatus"::text IN ('QUARANTINE', 'BLOCKED')`, [ids.tenant])
+    expect(lots.tiles.lotsWithoutCrVi).toBe(held!.count)
+    const expiries = await ok(call('viewer', 'GET', '/compliance/status/expiries?months=24'))
+    for (const item of expiries.months.flatMap((month: Json) => month.items)) {
+      expect(Object.keys(item)).toEqual(expect.arrayContaining(['validFrom', 'status', 'detail', 'party', 'endsWithBase']))
+      if (item.validFrom) expect(item.validFrom <= item.validTo).toBe(true)
+    }
   })
 })
