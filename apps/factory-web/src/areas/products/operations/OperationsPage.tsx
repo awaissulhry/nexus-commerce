@@ -11,6 +11,11 @@ import { useSheetImport } from '../styles/import/sheet-import'
 import { archiveOperation, countOperations, createOperation, listOperations, reactivateOperation } from './api'
 import { bodyOf, emptyDraft, listQuery, OPERATION_TILES, operationsCsv, viewOf, viewQuery, WORK_CENTRE_KINDS, type OperationFilters, type WorkCentreKind } from './model'
 import { OperationsListView, type NewOperationModel, type OperationsListViewModel } from './view/OperationsListView'
+// B-W2b-235: the tile "SMV changes waiting for approval" with its rows, and Propose SMV change from the SMV cell.
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { connectionsOf, smvCanOf } from './depth/model'
+import { useOperationMinutes } from './depth/use-minutes'
+import { useWaiting } from './depth/use-waiting'
 
 function filtersOf(params: URLSearchParams | null): OperationFilters {
   const kind = params?.get('kind') ?? ''
@@ -66,6 +71,15 @@ function Container() {
   // W2a: Import (importer product.operations, keyed by code): new operations and changed minutes, names, machines.
   const importHeld = !can.operationsManage ? 'held.noManage' : !importRights.run ? 'operations.import.held' : null
 
+  // B-W2b-235: the SMV changes waiting (the tile always, its rows in its view) and Propose SMV change of one operation.
+  const smvCan = useMemo(() => smvCanOf(session.permissions), [session.permissions])
+  const connections = useMemo(() => connectionsOf(prefix, OFFICE_PAGES, session.permissions), [prefix, session.permissions])
+  const [smvFor, setSmvFor] = useState<string | null>(null)
+  const [smvNotice, setSmvNotice] = useState<Notice | null>(null)
+  const reloadRef = useRef<() => void>(() => undefined)
+  const waiting = useWaiting({ api, companyId, open: filters.view === 'smv', enabled: smvCan.view, onApproved: () => reloadRef.current() })
+  const smv = useOperationMinutes({ api, operationId: smvFor, enabled: smvFor !== null, userId: session.user.id, can: smvCan, connections })
+
   const load = useCallback(async () => {
     const mine = ++readSeq.current
     setRows((current) => ({ ...current, items: null, problem: null }))
@@ -92,6 +106,10 @@ function Container() {
   useEffect(() => {
     void load()
   }, [load])
+  reloadRef.current = () => {
+    void load()
+    loadTiles()
+  }
   useEffect(() => {
     loadTiles()
   }, [loadTiles])
@@ -188,7 +206,26 @@ function Container() {
     },
   })
 
-  const model: OperationsListViewModel = { prefix, can, filters, rows, tiles, asOf, updates, newOperation, busy, notice, importHeld, sheetImport: sheetImport.model }
+  const model: OperationsListViewModel = {
+    prefix,
+    can,
+    filters,
+    rows,
+    tiles,
+    asOf,
+    updates,
+    newOperation,
+    busy,
+    notice,
+    importHeld,
+    sheetImport: sheetImport.model,
+    // B-W2b-235
+    waiting: smvCan.view ? waiting.model : undefined,
+    canPropose: smvCan.propose,
+    smvChange: smvFor ? smv.model : null,
+    smvNotice,
+    userId: session.user.id,
+  }
   return (
     <OperationsListView
       model={model}
@@ -211,6 +248,25 @@ function Container() {
           if (!importHeld) sheetImport.open()
         },
         sheetImport: sheetImport.actions,
+        // B-W2b-235
+        waiting: { ...waiting.actions, onOpen: (href) => router.push(href) },
+        onProposeSmv: (operationId) => {
+          setSmvNotice(null)
+          setSmvFor(operationId)
+        },
+        smvChange: {
+          ...smv.actions,
+          onPropose: async (draft) => {
+            const code = smv.model.part.status === 'ready' ? smv.model.part.value.operation.code : ''
+            const ok = (await smv.actions.onPropose?.(draft)) ?? false
+            if (ok) {
+              setSmvFor(null)
+              setSmvNotice({ key: draft.replace ? 'notice.replaced' : 'notice.proposed', tone: 'success', params: { code } })
+            }
+            return ok
+          },
+        },
+        onDismissSmvNotice: () => setSmvNotice(null),
       }}
     />
   )

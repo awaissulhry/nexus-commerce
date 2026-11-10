@@ -77,6 +77,8 @@ import { useStyleApprovals } from '../../materials/approval/use-style-approvals'
 import { useStyleComposition } from '../compliance/composition'
 import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
+// B-W2b-235: the Operations tab's routing in depth.
+import { useRoutingDepth } from '../routing/depth/use-routing-depth'
 // B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
 import { TechPackTab } from '../techpack/TechPackTab'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
@@ -292,11 +294,14 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const piecesReload = useRef<() => void>(() => undefined)
   // B-W2b-233: the Sizes & measurements tab's sections.
   const sizesReload = useRef<() => void>(() => undefined)
+  // B-W2b-235: the routing in depth.
+  const routingDepthReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
     piecesReload.current()
     sizesReload.current()
+    routingDepthReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -399,6 +404,24 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const pictureStyle = useMemo(() => (value ? { id: value.id, companyId: value.companyId } : null), [value?.id, value?.companyId])
   const gallery = useGallery({ api, style: pictureStyle, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'overview' && can.view, canManage: can.manage && session.permissions.includes('files.upload'), canArrange: can.manage, write: run })
   const patternFiles = usePatternFiles({ api, style: pictureStyle, revisionId, loadKey: versionKey, enabled: tab === 'files' && can.bomView, canManage: can.bomManage && session.permissions.includes('files.upload'), canEdit: can.bomManage, write: run })
+
+  // B-W2b-235: the Operations tab's routing in depth (read while the tab is open; writes through the one queue above, each
+  // moving the revision's version; after one the routing and the cost are read again).
+  const routingDepth = useRoutingDepth({
+    api,
+    styleId,
+    revisionId,
+    loadKey: versionKey,
+    enabled: tab === 'routing' && can.routingView,
+    canManage: can.routingManage,
+    companyId: value?.companyId ?? companyId,
+    readable: { plans: session.permissions.includes('quality.plans.view'), classes: session.permissions.includes('plant.view') },
+    write: run,
+    versionOf: revisionVersion,
+    onVersion: onPiecesVersion,
+    onChanged: () => afterBom(),
+  })
+  routingDepthReload.current = routingDepth.reload
 
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
@@ -517,6 +540,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     protectors: protectors.model,
     gallery: gallery.model,
     patternFiles: patternFiles.model,
+    // B-W2b-235
+    routingDepth: routingDepth.model,
     // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
   }
@@ -534,6 +559,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         protectors: protectors.actions,
         gallery: gallery.actions,
         patternFiles: patternFiles.actions,
+        // B-W2b-235
+        routingDepth: routingDepth.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,
