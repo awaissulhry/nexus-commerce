@@ -83,6 +83,7 @@
     "bom": "Materials (BOM)",
     "routing": "Operations",
     "cost": "Cost",
+    "techpack": "Tech pack",
     "compliance": "Compliance",
     "files": "Files & patterns",
     "activity": "Activity",
@@ -655,6 +656,7 @@
       "archiveTitle_other": "Archive {count} styles?"
     },
     "duplicate": "Duplicate…",
+    "techPackPdf": "Tech pack PDF (new tab)",
     "price": {
       "from": "from {price}",
       "fromShort": "by colourway",

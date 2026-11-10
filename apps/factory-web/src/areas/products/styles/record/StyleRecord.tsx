@@ -76,6 +76,8 @@ import { usePieces } from './pieces/use-pieces'
 import { useStyleApprovals } from '../../materials/approval/use-style-approvals'
 import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
+// B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
+import { TechPackTab } from '../techpack/TechPackTab'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.products.dock.Style'
@@ -507,6 +509,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     <StyleRecordView
       model={model}
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
+      techPack={value && tab === 'techpack' ? <TechPackTab style={value} revisionId={revisionId} prefix={prefix} /> : null}
       actions={{
         pieces: pieces.actions,
         onRetryMaterialApprovals: approvals.reload,

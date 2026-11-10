@@ -1,0 +1,531 @@
+{
+  "techpack": {
+    "common": {
+      "back": "Back",
+      "retry": "Try again",
+      "dismiss": "Dismiss"
+    },
+    "band": {
+      "make": "Make tech pack PDF…"
+    },
+    "audience": {
+      "INTERNAL": "Internal copy",
+      "SUBCONTRACTOR": "Workshop copy",
+      "BRAND": "Customer copy"
+    },
+    "audienceLong": {
+      "INTERNAL": "Internal (full)",
+      "SUBCONTRACTOR": "Subcontractor (no costs, no supplier names)",
+      "BRAND": "Customer (no internal notes)"
+    },
+    "audienceHint": {
+      "INTERNAL": "Everything the office may see. The PDF never carries a cost: a paper travels.",
+      "SUBCONTRACTOR": "No cost, margin or pay figure, no standard minutes, no supplier or workshop names, no alternates, approval states or people's names. What comes with the kit is marked.",
+      "BRAND": "As the workshop copy, and no internal notes and no kit mark. A private-label style's copy goes to its own brand only."
+    },
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "leftOut": {
+      "MONEY": "costs, margins and pay",
+      "MINUTES": "standard minutes",
+      "SUPPLIERS": "supplier and workshop names",
+      "ALTERNATES": "alternate materials",
+      "APPROVALS": "material approval states",
+      "CUSTOMERS": "which customer sends a material",
+      "INTERNAL_NOTES": "internal notes",
+      "PEOPLE": "people's names"
+    },
+    "section": {
+      "COVER": "Cover",
+      "SKETCHES": "Sketches",
+      "BOM": "BOM",
+      "COLOURWAYS": "Colourways",
+      "SIZE_SPEC": "Size spec",
+      "CONSTRUCTION": "Construction",
+      "LABELS": "Labels and packaging",
+      "PROTECTION": "Protection and performance",
+      "COMPLIANCE": "Compliance",
+      "REVISION_LOG": "Revision log"
+    },
+    "why": {
+      "CONSTRUCTION": "Shows the routing: your role does not read it.",
+      "PROTECTION": "Shows the certificates: your role does not read them.",
+      "COMPLIANCE": "Shows the certificates: your role does not read them."
+    },
+    "revisionStatus": {
+      "DRAFT": "draft",
+      "RELEASED": "released",
+      "OBSOLETE": "obsolete"
+    },
+    "held": {
+      "noMake": "Your role does not make tech pack PDFs: the production manager or the buyer does.",
+      "noRevision": "The style has no revision yet.",
+      "offline": "Offline: a PDF is made by the server. Try again when the connection is back.",
+      "busy": "The PDF is being made.",
+      "noSections": "Tick at least one section.",
+      "sectionNotYours": "A section ticked is not one your role may see.",
+      "internalParty": "An internal copy is for nobody outside.",
+      "privateLabel": "This private-label style's customer copy is for its own brand only."
+    },
+    "tab": {
+      "audience": "Who it is for",
+      "language": "Language",
+      "make": "Make tech pack PDF…",
+      "internal": "Internal: everything your role may see. Money and names are left out by the server for the other copies, not hidden on this screen.",
+      "internalCost": "Internal: everything your role may see, with each line's cost (on this screen only: a PDF never carries money). Money and names are left out by the server for the other copies, not hidden here.",
+      "leftOut": "This copy leaves out {list}: the server never sends them, so nothing is hidden on this screen.",
+      "otherLanguage": "The copy's own texts (names, notes, care, settings) show in {language}, as the PDF prints them.",
+      "offline": "Offline: what shows stays readable; making a PDF waits for the connection.",
+      "openPdf": "Open the PDF",
+      "goInForce": "Go to revision {revision} (in force)",
+      "side": "Contents and PDF versions",
+      "loading": "Reading the tech pack…",
+      "failed": "Couldn't read the tech pack",
+      "noRevision": {
+        "title": "No revision yet",
+        "body": "The tech pack is a view of a revision: start the first one on the style."
+      },
+      "nothing": {
+        "title": "No section chosen",
+        "body": "Tick the sections to show in Contents."
+      }
+    },
+    "contents": {
+      "title": "Contents",
+      "intro": "A view of the live style, section by section. Tick what to show and to print.",
+      "all": "Tick all",
+      "none": "Untick all",
+      "livesIn": "Edit in {tab}"
+    },
+    "versions": {
+      "title": "PDF versions",
+      "intro": "Each PDF made of this revision; the QR on every page says whether a paper copy is still current.",
+      "loading": "Reading the versions…",
+      "failed": "Couldn't read the versions.",
+      "none": "No PDF made of this revision yet.",
+      "newTab": "opens in a new tab"
+    },
+    "version": {
+      "line": "v{version} · {audience} · {language}",
+      "lineOther": "v{version} · {language}"
+    },
+    "banner": {
+      "draft": "Revision {revision} is a draft: it can change before it is released.",
+      "obsolete": "Revision {revision} is obsolete.",
+      "obsoleteInForce": "Revision {revision} is obsolete: revision {inForce} is in force."
+    },
+    "notice": {
+      "made": "Version {version} made ({code}): it opened in a new tab.",
+      "same": "Nothing changed since version {version} ({code}): that version opened again."
+    },
+    "make": {
+      "title": "Make tech pack PDF",
+      "subtitle": "{code} · revision {revision} ({status})",
+      "audience": "Who it is for",
+      "language": "Language",
+      "languageHint": "The PDF's words, and the style's own texts where they are typed in it.",
+      "forWorkshop": "Workshop",
+      "forBrand": "Customer or brand",
+      "partyHint": "Printed on the cover. Leave it empty for a copy for anyone of this kind.",
+      "privateLabelHint": "A private-label style: its customer copy is for {brand} only.",
+      "noPartiesRight": "Your role does not read the parties: the copy names nobody.",
+      "partiesLoading": "Reading the parties…",
+      "nobody": "Nobody named",
+      "sections_one": "{count} section",
+      "sections_other": "{count} sections",
+      "noMoneyInternal": "A PDF never carries a cost, even the internal one: a paper travels.",
+      "noMoneyPartner": "The server leaves out of this copy every cost, margin, pay figure, standard minute and supplier name.",
+      "versionRule": "The same contents as the newest copy for this audience and language make no new version: that one opens again.",
+      "go": "Make PDF (opens in a new tab)",
+      "goHere": "Make PDF"
+    },
+    "problem": {
+      "read": {
+        "signed_out": "Your session ended: sign in again.",
+        "forbidden": "Your role cannot read this tech pack.",
+        "not_found": "This style or revision no longer exists.",
+        "unavailable": "The server did not answer. Try again in a moment.",
+        "rate_limited": "Too many requests: wait a moment and try again.",
+        "contract": "The answer did not match this screen: reload the page.",
+        "internal": "Something went wrong. Try again."
+      },
+      "make": {
+        "party": "This copy cannot go to that party: a workshop copy goes to a workshop or a supplier, a customer copy to a customer or a brand, never a blocked or archived one, and a private-label style's copy to its own brand only.",
+        "sections": "A section asked is not one your role may see, or is asked twice.",
+        "company": "Say which company keeps this copy: the style is every company's.",
+        "invalid": "The PDF was refused as it is: check who it is for and the sections.",
+        "meanwhile": "Another version of this revision was made meanwhile: make the PDF again.",
+        "forbidden": "Your role does not make tech pack PDFs for this company.",
+        "notFound": "This style or revision no longer exists.",
+        "signed_out": "Your session ended: sign in again.",
+        "rate_limited": "Too many requests: wait a moment and try again.",
+        "unavailable": "The server did not answer: no PDF was made. Try again in a moment.",
+        "internal": "Something went wrong: no PDF was made. Try again."
+      }
+    },
+    "cover": {
+      "style": "Style",
+      "type": "Product type",
+      "season": "Season",
+      "brand": "Brand",
+      "privateLabel": "Private label",
+      "ownCollection": "Our own collection",
+      "sizes": "Sizes",
+      "sizesValue": "{range} · base {base}",
+      "lifecycle": "Lifecycle",
+      "gender": "Cut for",
+      "customs": "Customs code · origin",
+      "revision": "Revision",
+      "revisionValue": "Revision {revision} · {status}",
+      "released": "Released",
+      "notReleased": "Not released",
+      "effective": "In force from",
+      "scope": "Release takes",
+      "completeness": "Complete",
+      "output": "One make gives",
+      "changeNote": "Change note"
+    },
+    "scope": {
+      "whole": "Every colourway and size",
+      "sizes": "Every colourway in sizes {sizes}",
+      "colourways": "{colourways} in every size",
+      "both": "{colourways} in sizes {sizes}"
+    },
+    "lifecycle": {
+      "CONCEPT": "Concept",
+      "DEVELOPMENT": "Development",
+      "SAMPLING": "Sampling",
+      "APPROVED": "Approved",
+      "IN_PRODUCTION": "In production",
+      "PHASE_OUT": "Phasing out",
+      "DISCONTINUED": "Discontinued"
+    },
+    "gender": {
+      "MEN": "Men",
+      "WOMEN": "Women",
+      "UNISEX": "Unisex"
+    },
+    "pictureKind": {
+      "SKETCH": "Sketch",
+      "PHOTO": "Photo",
+      "PAGE": "Page with callouts"
+    },
+    "patternKind": {
+      "PATTERN": "Pattern",
+      "MARKER": "Marker",
+      "CAD": "CAD drawing",
+      "OTHER": "Other file"
+    },
+    "labelKind": {
+      "PPE_GARMENT": "PPE garment label",
+      "GLOVE_MARKING": "Glove marking",
+      "FIBRE_CARE": "Fibre and care label",
+      "PACKAGING": "Packaging label"
+    },
+    "testKind": {
+      "SEAM_STRENGTH": "Seam strength",
+      "POCKET_RETENTION": "Protector pocket retention",
+      "LABEL_DURABILITY": "Label durability",
+      "ABRASION": "Abrasion",
+      "TEAR_STRENGTH": "Tear strength",
+      "IMPACT": "Impact",
+      "DIMENSIONS": "Dimensions",
+      "COLOUR_FASTNESS": "Colour fastness",
+      "OTHER": "Other test"
+    },
+    "testResult": {
+      "PASS": "Pass",
+      "FAIL": "Fail"
+    },
+    "frequency": {
+      "EVERY_BATCH": "every batch",
+      "MONTHLY": "monthly",
+      "QUARTERLY": "quarterly",
+      "YEARLY": "yearly",
+      "ON_CHANGE": "on a change",
+      "ONCE": "once"
+    },
+    "specStatus": {
+      "DRAFT": "Draft",
+      "APPROVED": "Approved",
+      "ARCHIVED": "Archived"
+    },
+    "docState": {
+      "CURRENT": "Current",
+      "OLDER_REVISION": "Only for an older revision",
+      "MISSING": "Missing"
+    },
+    "docKind": {
+      "DECLARATION_OF_CONFORMITY": "EU declaration of conformity",
+      "USER_INFORMATION": "User information leaflet"
+    },
+    "colourwayStatus": {
+      "ACTIVE": "Active",
+      "ARCHIVED": "Archived"
+    },
+    "approval": {
+      "PENDING": "waiting for approval",
+      "APPROVED": "approved",
+      "CONDITIONAL": "approved with conditions",
+      "BLOCKED": "blocked"
+    },
+    "bomSection": {
+      "SHELL": "Shell",
+      "LINING": "Lining",
+      "INSULATION": "Insulation",
+      "PROTECTION": "Protection",
+      "TRIMS": "Trims",
+      "THREAD": "Thread",
+      "LABELS": "Labels",
+      "PACKAGING": "Packaging",
+      "OTHER": "Other"
+    },
+    "pictures": {
+      "none": "No pictures.",
+      "main": "Main",
+      "ofRevision": "this revision only",
+      "ofStyle": "every revision",
+      "everyColourway": "Every colourway",
+      "col": {
+        "picture": "Picture",
+        "colourway": "Colourway",
+        "callouts": "Callouts"
+      }
+    },
+    "bom": {
+      "lines_one": "{count} line",
+      "lines_other": "{count} lines",
+      "noLines": "No lines.",
+      "bySize": "By size (base {qty} {unit})",
+      "missing": "missing",
+      "wastage": "+{pct} % waste",
+      "byColourway": "By colourway",
+      "kit": "In the kit",
+      "customerSupplied": "Sent by the customer",
+      "customerSuppliedBy": "Sent by {party}",
+      "onlyIn": "Only in {colourway}",
+      "option": "Option {option}",
+      "step": "For step {seq} · {code}",
+      "subAssembly": "Sub-assembly {code} rev {revision}",
+      "supplier": "Supplier {party}",
+      "alternates": "Alternates {list}",
+      "approval": "Material {state}",
+      "unitCost": "{cost} per unit",
+      "col": {
+        "seq": "#",
+        "material": "Material",
+        "placement": "Where",
+        "quantity": "Quantity",
+        "colour": "Colour",
+        "details": "Details",
+        "cost": "Cost at base size"
+      }
+    },
+    "colourways": {
+      "none": "No colourways.",
+      "notUsed": "not used",
+      "col": {
+        "colourway": "Colourway",
+        "colour": "Colour",
+        "materials": "Material colours"
+      }
+    },
+    "spec": {
+      "none": "No measurement spec for this revision.",
+      "missing": "missing",
+      "state": "State",
+      "base": "Base size",
+      "grade": "Grade rule",
+      "missingCount": "Values",
+      "noneMissing": "Every value typed",
+      "missingValues_one": "{count} value missing",
+      "missingValues_other": "{count} values missing",
+      "noPoints": "No points of measure yet.",
+      "baseMark": "{size} · base",
+      "col": {
+        "point": "Point of measure"
+      }
+    },
+    "construction": {
+      "composed": "Drawn from the routing, its machine and stitch settings, checkpoints and work instructions, the pages with callouts and the pattern files: change them where they live.",
+      "steps": "Construction steps",
+      "noSteps": "No routing steps.",
+      "everyCell": "every colourway and option",
+      "subcontracted": "Subcontracted",
+      "subcontractedTo": "Subcontracted to {party}",
+      "instruction": "{number} v{version}",
+      "instructionSteps_one": "{count} step",
+      "instructionSteps_other": "{count} steps",
+      "critical_one": "{count} critical point",
+      "critical_other": "{count} critical points",
+      "safety": "safety notes",
+      "noInstruction": "No instruction in force",
+      "minutes": "{minutes} min",
+      "pages": "Pages with callouts",
+      "patterns": "Pattern files",
+      "noPatterns": "No pattern files.",
+      "everySize": "Every size",
+      "col": {
+        "seq": "#",
+        "operation": "Operation",
+        "settings": "Machine and stitch",
+        "checkpoint": "Checkpoint",
+        "instruction": "Work instruction",
+        "minutes": "Standard minutes",
+        "file": "File",
+        "kind": "Kind",
+        "sizes": "Sizes",
+        "note": "Note"
+      }
+    },
+    "labels": {
+      "template": "Garment label",
+      "label": "Label",
+      "languages": "Languages",
+      "size": "Size",
+      "maker": "Maker",
+      "composition": "Composition",
+      "care": "Care",
+      "animalOrigin": "Animal origin phrase",
+      "yes": "Yes",
+      "no": "No",
+      "qr": "QR leads to",
+      "noTemplate": "No garment label named on this revision.",
+      "lines": "Label and packaging lines of the BOM",
+      "branding": "Brand packing",
+      "brandingSet": "Branding set",
+      "brand": "Brand",
+      "artwork": "Files",
+      "artworkCount": "{logos} logos · {artwork} label artworks",
+      "rules": "Packing rules",
+      "noBranding": "No brand packing set for this style.",
+      "col": {
+        "rule": "Rule",
+        "material": "Material",
+        "quantity": "Quantity"
+      }
+    },
+    "protection": {
+      "composed": "Drawn from the classification, the protector placement, the certificates and the production control tests: no target per test is kept yet.",
+      "class": "Classification",
+      "coverage": "Certificate coverage",
+      "zones": "Protectors per pocket",
+      "noPlacements": "No protector placed.",
+      "protectors": "Protector lines of the BOM",
+      "certificates": "Certificates",
+      "noCertificates": "No certificate covers the style.",
+      "tests": "Production control tests",
+      "noTests": "No production control test.",
+      "notTested": "Not tested yet",
+      "reportOnFile": "report on file",
+      "levelValue": "{standard} · level {level}",
+      "allSizes": "Every size",
+      "everyColourway": "Every colourway",
+      "validRange": "{from} – {to}",
+      "col": {
+        "pocket": "Pocket",
+        "protector": "Protector",
+        "level": "Standard and level",
+        "sizes": "Sizes",
+        "position": "Position",
+        "certificate": "Certificate",
+        "body": "Notified body",
+        "valid": "Valid",
+        "covers": "Covers",
+        "levels": "Performance levels",
+        "test": "Test",
+        "due": "Due",
+        "result": "Result",
+        "report": "Report",
+        "by": "Tested by"
+      }
+    },
+    "coverage": {
+      "notRequired": "No certificate is needed.",
+      "noSkus": "No SKU is switched on yet.",
+      "all_one": "Covered: the {count} switched-on colourway × size.",
+      "all_other": "Covered: every one of the {count} switched-on colourway × size.",
+      "some": "{covered} of {count} switched-on colourway × size covered; {notCovered} not covered."
+    },
+    "compliance": {
+      "class": "Classification",
+      "scope": "Release takes",
+      "blockers": "Before release",
+      "noBlockers": "Nothing stops the release.",
+      "blockersCount_one": "{count} thing stops the release (see Compliance)",
+      "blockersCount_other": "{count} things stop the release (see Compliance)",
+      "noDocuments": "No declaration or leaflet is needed.",
+      "documentsNone": "No declaration or leaflet on record.",
+      "documents": "Declarations and leaflets",
+      "col": {
+        "document": "Document",
+        "language": "Language",
+        "state": "State"
+      }
+    },
+    "log": {
+      "effective": "{from} – {to}",
+      "open": "open",
+      "col": {
+        "revision": "Revision",
+        "released": "Released",
+        "effective": "In force",
+        "note": "Change note",
+        "by": "Released by"
+      }
+    },
+    "window": {
+      "title": "Tech pack {code} · rev {revision} · v{version}",
+      "titleNoVersion": "Tech pack {code} · rev {revision}",
+      "titlePlain": "Tech pack PDF",
+      "reading": "Reading…",
+      "opening": "Opening the PDF…",
+      "revision": "Revision",
+      "revisionOption": "Revision {revision} · {status}",
+      "version": "Version",
+      "make": "Make new version",
+      "print": "Print",
+      "printHeld": "The PDF is not open yet.",
+      "made": "{audience} · {code} · made {at} by {by}",
+      "failed": "Couldn't open the style",
+      "versionsFailed": "Couldn't read the versions",
+      "pdfFailed": "Couldn't open this PDF",
+      "forbidden": {
+        "title": "You don't have access to tech packs",
+        "body": "Tech packs open for the roles that read the BOM: the production manager, the buyer, the product office."
+      },
+      "none": {
+        "title": "No PDF of revision {revision} yet",
+        "body": "Make the first one: say who it is for, its language and its sections.",
+        "bodyNoMake": "The production manager or the buyer makes it."
+      }
+    },
+    "scan": {
+      "scanned": "Scanned page {code}",
+      "CURRENT": "This page is current: version {version} of revision {revision}, the revision in force.",
+      "DRAFT": "This page is the newest copy (version {version} of revision {revision}), but revision {revision} is still a draft: it can change before it is released.",
+      "NEWER_VERSION": "A newer version exists: version {newer} of revision {revision}. This page is version {version}: do not work from it.",
+      "NEWER_REVISION": "A newer tech pack exists: revision {inForce} is in force (its newest copy is version {newer}). This page is version {version} of revision {revision}: do not work from it.",
+      "NEWER_REVISION_NONE": "A newer tech pack exists: revision {inForce} is in force, with no copy of this kind yet. This page is version {version} of revision {revision}: do not work from it.",
+      "OBSOLETE": "This page is version {version} of revision {revision}, which is obsolete, and no revision is in force: ask the office before you work from it.",
+      "nowShowing": "Shown here: version {version} of revision {revision}.",
+      "openNewer": "Open version {version} of revision {revision}",
+      "openRevision": "Open revision {revision}",
+      "failed": "Couldn't check this page",
+      "notFound": {
+        "title": "No tech pack page has this code",
+        "body": "The code may be mistyped, or the page is of a style your role does not see."
+      },
+      "type": {
+        "title": "Check a printed page",
+        "body": "Type the code printed under the QR of a tech pack page.",
+        "label": "Code under the QR",
+        "hint": "Like TP 7K3QM-2XA9B; spaces and dashes do not matter.",
+        "held": "Type the code first.",
+        "go": "Check"
+      }
+    }
+  }
+}
