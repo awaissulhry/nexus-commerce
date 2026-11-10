@@ -1,0 +1,359 @@
+{
+  "common": {
+    "back": "Indietro",
+    "close": "Chiudi"
+  },
+  "depth": {
+    "failed": "Non è stato possibile leggere i dettagli del certificato."
+  },
+  "span": {
+    "years_one": "{count} anno",
+    "years_other": "{count} anni",
+    "months_one": "{count} mese",
+    "months_other": "{count} mesi",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni"
+  },
+  "five": {
+    "title": "Controllo dei cinque anni",
+    "intro": "Un certificato di esame UE del tipo, nuovo o rinnovato, vale al massimo cinque anni.",
+    "ok": "Valido {span}: entro il limite di {years} anni.",
+    "tooLong": "Valido fino a è {span} dopo Valido dal: un certificato vale al massimo {years} anni (Allegato V 6.1).",
+    "incomplete": "Scrivi il primo e l'ultimo giorno di validità per controllare i cinque anni.",
+    "latest": "L'ultimo giorno di validità può essere al più tardi il {date}."
+  },
+  "scope": {
+    "LISTED": {
+      "GARMENT": "Notificato per l'abbigliamento protettivo da moto",
+      "PROTECTOR": "Notificato per le protezioni contro gli urti",
+      "GLOVE": "Notificato per i guanti di protezione",
+      "OTHER": "Notificato per il Regolamento DPI"
+    },
+    "NOT_LISTED": {
+      "GARMENT": "Non notificato per l'abbigliamento protettivo: controlla la sua scheda NANDO",
+      "PROTECTOR": "Non notificato per le protezioni contro gli urti: controlla la sua scheda NANDO",
+      "GLOVE": "Non notificato per i guanti di protezione: controlla la sua scheda NANDO",
+      "OTHER": "Non notificato per il Regolamento DPI: controlla la sua scheda NANDO"
+    },
+    "NO_SCOPES": {
+      "GARMENT": "Nessun ambito registrato: copialo dalla sua scheda NANDO",
+      "PROTECTOR": "Nessun ambito registrato: copialo dalla sua scheda NANDO",
+      "GLOVE": "Nessun ambito registrato: copialo dalla sua scheda NANDO",
+      "OTHER": "Nessun ambito registrato: copialo dalla sua scheda NANDO"
+    },
+    "lookAgain": "Vale l'elenco di NANDO: questo controllo legge solo gli ambiti scritti qui.",
+    "short": {
+      "LISTED": "Notificato",
+      "NOT_LISTED": "Non notificato",
+      "NO_SCOPES": "Nessun ambito"
+    }
+  },
+  "nando": {
+    "none": "Nessun collegamento NANDO registrato.",
+    "open": "Scheda NANDO di {number}",
+    "newTab": "apre il sito della Commissione europea in una nuova scheda",
+    "short": "Apri",
+    "noneShort": "Nessuna"
+  },
+  "law": {
+    "ppe": "Reg. (UE) 2016/425 {point}",
+    "annexII": "La marcatura CE e la nota informativa indicano l'organismo notificato che ha esaminato il tipo, con il suo numero di identificazione.",
+    "annexV": "Un certificato di esame UE del tipo, nuovo o rinnovato, vale al massimo cinque anni.",
+    "ownBrand": "Un marchio che immette DPI sul mercato con il proprio nome ne è il fabbricante e ha un certificato a suo nome.",
+    "bodies": "Gli organismi notificati sono gli organismi di valutazione della conformità notificati dagli Stati membri; ognuno ha un numero di quattro cifre in NANDO."
+  },
+  "held": {
+    "manage": "Serve il permesso di gestire i certificati (responsabile conformità).",
+    "final": "Il certificato è ritirato o scaduto: non gli si aggiunge nulla.",
+    "filledOnce": "Registrato: si compila una volta sola e non cambia più. Una correzione è un nuovo certificato.",
+    "busy": "Salvataggio…",
+    "long": "Troppo lungo."
+  },
+  "write": {
+    "refused": "Rifiutato: la regola qui sotto dice perché.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, riprova.",
+    "invalid": "Non salvato: controlla i valori.",
+    "notFound": "Non si trova più.",
+    "failed": "Non salvato: il server non ha risposto. Riprova."
+  },
+  "body": {
+    "title": "Organismo notificato",
+    "intro": "Chi ha esaminato il tipo e rilasciato il certificato, e se può farlo.",
+    "name": "Nome",
+    "number": "Numero di identificazione",
+    "numberHint": "Quattro cifre, come in NANDO.",
+    "address": "Indirizzo",
+    "contact": "Contatto",
+    "scopes": "Notificato per",
+    "typed": "Come scritto dal certificato",
+    "pick": "Scegli dall'elenco",
+    "change": "Cambia organismo",
+    "clear": "Togli",
+    "notPicked": "L'organismo {number} è nell'elenco: sceglilo per vederne indirizzo, ambito e scheda NANDO.",
+    "notPickedHint": "Il certificato tiene nome e numero come scritti.",
+    "notInDirectory": "L'organismo {number} non è ancora nell'elenco.",
+    "notInDirectoryHint": "Aggiungilo in Organismi notificati (dalla sua scheda NANDO), poi sceglilo qui.",
+    "others": "Altri certificati di questo organismo",
+    "noOthers": "Nessuno nel registro.",
+    "held": {
+      "noMatch": "Nessun organismo attivo dell'elenco ha questo numero: aggiungilo prima.",
+      "pick": "Scegli un organismo.",
+      "same": "Questo organismo è già scelto."
+    }
+  },
+  "pick": {
+    "title": "Organismo notificato di {number}",
+    "introDraft": "Una bozza prende numero e nome dell'organismo (ora {number}).",
+    "introRegistered": "Registrato con l'organismo {number}: si può collegare solo quello, una volta.",
+    "body": "Organismo",
+    "choose": "Scegli un organismo",
+    "option": "{number} · {name} ({country})",
+    "fills": "Il numero {typed} diventa {number}, e il nome quello dell'organismo.",
+    "once": "Una volta collegato non cambia più.",
+    "confirm": "Scegli organismo",
+    "failed": "Non è stato possibile leggere l'elenco.",
+    "none": "Nessun organismo attivo con il numero {number} nell'elenco.",
+    "noneHint": "Aggiungilo prima in Organismi notificati."
+  },
+  "levels": {
+    "title": {
+      "EN13594": "Livelli del guanto (EN 13594)",
+      "EN1621-1": "Zone della protezione (EN 1621-1)",
+      "EN1621-2": "Paraschiena (EN 1621-2)",
+      "EN1621-3": "Protezione per il torace (EN 1621-3)"
+    },
+    "intro": {
+      "EN13594": "Il livello raggiunto dal guanto (1 o 2) e la protezione delle nocche (KP) se provata.",
+      "EN1621-1": "Il livello di ogni zona che la protezione copre, e il suo tipo di taglia.",
+      "EN1621-2": "Il livello del paraschiena e la zona che copre.",
+      "EN1621-3": "Il livello della protezione per il torace e se è intera o divisa."
+    },
+    "property": {
+      "level": "Livello",
+      "knuckle": "Protezione delle nocche",
+      "shoulder": "Spalla",
+      "elbow": "Gomito",
+      "hip": "Anca",
+      "knee": "Ginocchio",
+      "leg": "Gamba",
+      "kneeLeg": "Ginocchio e gamba",
+      "type": "Tipo di taglia",
+      "back": "Livello schiena",
+      "backArea": "Zona della schiena",
+      "chest": "Livello torace",
+      "chestArea": "Pezzo per il torace"
+    },
+    "value": {
+      "level": "Livello {level}",
+      "kp": "Sì (KP)",
+      "type": {
+        "A": "Tipo A (più piccola)",
+        "B": "Tipo B (più grande)"
+      },
+      "backArea": {
+        "FB": "Schiena intera",
+        "CB": "Schiena centrale",
+        "LB": "Schiena bassa"
+      },
+      "chestArea": {
+        "FULL": "Intera",
+        "DIVIDED": "Divisa"
+      }
+    },
+    "add": "Aggiungi livelli",
+    "edit": "Modifica livelli",
+    "none": "Nessun livello registrato.",
+    "marking": "Marcatura accanto al pittogramma:",
+    "stale": "I livelli salvati non corrispondono più all'elenco della norma:",
+    "gloveSwitch": "I guanti si producono solo se il titolare lo dice: la regola dei livelli dei guanti resta spenta fino ad allora.",
+    "dialog": "Livelli di prestazione di {number}",
+    "choose": "Scegli",
+    "notStated": "Non indicato",
+    "save": "Salva livelli",
+    "once": "Registrato: i livelli si compilano una volta sola.",
+    "held": {
+      "none": "Questa norma qui non ha livelli.",
+      "invalid": "Correggi prima i livelli.",
+      "same": "Nulla è cambiato."
+    }
+  },
+  "own": {
+    "title": "Marchio proprio (private label)",
+    "introBrand": "Il certificato proprio di un marchio si basa sul certificato della fabbrica dello stesso tipo.",
+    "introFactory": "I certificati propri dei marchi che si basano su questo.",
+    "pick": "Scegli il certificato di base",
+    "change": "Cambia base",
+    "noBase": "Nessun certificato di base.",
+    "noBaseHint": "Scegli il certificato della fabbrica su cui si basa quello del marchio: il controllo verifica poi entrambi.",
+    "base": "Certificato di base",
+    "baseValid": "Base valida",
+    "range": "{from} – {to}",
+    "holds": "{number} vale oggi: sono validi entrambi.",
+    "standing": {
+      "NOT_REGISTERED": "La base {number} è una bozza, non ancora registrata.",
+      "SUSPENDED": "La base {number} è sospesa.",
+      "WITHDRAWN": "La base {number} è stata ritirata.",
+      "EXPIRED": "La base {number} è scaduta il {date}.",
+      "NOT_YET": "La base {number} vale dal {from}."
+    },
+    "gateRefuses": "Finché la base non vale, il controllo rifiuta ciò che questo certificato copre: niente etichetta, rilascio o spedizione.",
+    "outlives_one": "Valido {count} giorno dopo la fine della base il {date}: da allora il controllo rifiuta.",
+    "outlives_other": "Valido {count} giorni dopo la fine della base il {date}: da allora il controllo rifiuta.",
+    "otherStandard": "La base indica un'altra norma ({base}).",
+    "resting_one": "{count} certificato di marchio si basa su questo",
+    "resting_other": "{count} certificati di marchio si basano su questo",
+    "dialog": "Certificato di base di {number}",
+    "dialogIntro": "I certificati propri della fabbrica in vigore, prima quelli della stessa norma.",
+    "choose": "Scegli un certificato",
+    "option": "{number} · {standard} · fino al {to}",
+    "confirm": "Basa su questo certificato",
+    "noCandidates": "Nessun nostro certificato può essere la base.",
+    "noCandidatesHint": "La base è di una nostra azienda, non si basa a sua volta su altro e non è ritirata né scaduta.",
+    "once": "Registrato: la base si compila una volta sola."
+  },
+  "base": {
+    "held": {
+      "notBrand": "Solo il certificato di un marchio si basa su un altro.",
+      "pick": "Scegli un certificato.",
+      "same": "Questo certificato è già la base."
+    }
+  },
+  "parts": {
+    "intro": "Componenti acquistati con il fornitore e il suo codice articolo, come li indica il certificato; il controllo in accettazione li legge.",
+    "col": {
+      "supplier": "Fornitore",
+      "article": "Codice articolo del fornitore"
+    },
+    "noSupplier": "Qualsiasi fornitore",
+    "name": "Indica fornitore",
+    "code": "Codice articolo"
+  },
+  "supplier": {
+    "title": "Fornitore di {code}",
+    "intro": "Un lotto di questo componente da un altro fornitore non è coperto da questo certificato.",
+    "fixed": "Indicato una volta: un componente da un altro fornitore è un'altra copertura.",
+    "once": "Si indica una volta e non cambia più.",
+    "choose": "Scegli un fornitore",
+    "articleHint": "Come il certificato indica il componente.",
+    "confirm": "Salva",
+    "held": {
+      "parties": "Serve il permesso di vedere le anagrafiche.",
+      "pick": "Scegli un fornitore.",
+      "once": "Il fornitore è già indicato.",
+      "same": "Nulla è cambiato."
+    }
+  },
+  "bodies": {
+    "open": "Organismi notificati",
+    "title": "Organismi notificati",
+    "intro": "Gli organismi che esaminano i nostri tipi, con numero, indirizzo, ambiti di notifica e scheda NANDO.",
+    "add": "Aggiungi organismo notificato",
+    "search": "Cerca numero, nome, paese",
+    "filter": "Stato",
+    "filterValue": {
+      "ACTIVE": "Attivi",
+      "ARCHIVED": "Archiviati",
+      "ALL": "Tutti"
+    },
+    "count_one": "{count} organismo",
+    "count_other": "{count} organismi",
+    "countOf": "{count} di {total}",
+    "noScopes": "Nessun ambito registrato",
+    "certificates_one": "{count} certificato",
+    "certificates_other": "{count} certificati",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "status": {
+      "ACTIVE": "Attivo",
+      "ARCHIVED": "Archiviato"
+    },
+    "col": {
+      "number": "Numero",
+      "name": "Nome",
+      "scope": "Abbigliamento protettivo",
+      "certificates": "Certificati",
+      "nando": "NANDO",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "row": {
+      "edit": "Modifica",
+      "archive": "Archivia",
+      "restore": "Ripristina",
+      "menu": "Azioni per l'organismo {number}"
+    },
+    "failed": "Non è stato possibile leggere l'elenco.",
+    "noMatch": "Nessun organismo corrisponde.",
+    "clear": "Togli i filtri",
+    "empty": {
+      "title": "Nessun organismo notificato.",
+      "body": "Aggiungi l'organismo che ha rilasciato i tuoi certificati, dalla sua scheda NANDO."
+    },
+    "held": {
+      "manage": "Serve il permesso di gestire i certificati su tutte le aziende."
+    },
+    "write": {
+      "conflict": "Non salvato: la regola qui sotto dice perché."
+    },
+    "done": {
+      "added": "Organismo {number} aggiunto.",
+      "saved": "Organismo {number} salvato.",
+      "archived": "Organismo {number} archiviato.",
+      "restored": "Organismo {number} ripristinato.",
+      "exported_one": "{count} organismo esportato.",
+      "exported_other": "{count} organismi esportati."
+    }
+  },
+  "bodyForm": {
+    "titleNew": "Aggiungi organismo notificato",
+    "titleEdit": "Modifica organismo {number}",
+    "intro": "Copialo dalla scheda NANDO dell'organismo sul sito della Commissione europea.",
+    "number": "Numero di identificazione",
+    "numberHint": "Quattro cifre.",
+    "numberFixed_one": "Fisso: {count} certificato indica questo organismo.",
+    "numberFixed_other": "Fisso: {count} certificati indicano questo organismo.",
+    "country": "Paese",
+    "countryHint": "Due lettere (IT, DE …).",
+    "name": "Nome",
+    "address": "Indirizzo postale",
+    "nando": "Scheda NANDO",
+    "nandoHint": "L'indirizzo https della sua pagina NANDO.",
+    "scopes": "Notificato per",
+    "scopesHint": "Una riga ciascuno, come lo dice NANDO.",
+    "email": "E-mail",
+    "phone": "Telefono",
+    "note": "Nota",
+    "back": "Torna all'elenco",
+    "add": "Aggiungi organismo",
+    "save": "Salva organismo",
+    "problem": {
+      "number": "Quattro cifre, come in NANDO.",
+      "name": "Il nome dell'organismo (al massimo 300 caratteri).",
+      "address": "L'indirizzo postale (al massimo 500 caratteri).",
+      "country": "Due lettere maiuscole.",
+      "nandoUrl": "Un indirizzo https, o nessuno.",
+      "scopes": "Ogni riga al massimo 300 caratteri, una volta sola, al massimo 50.",
+      "contactEmail": "Un indirizzo e-mail, o nessuno.",
+      "contactPhone": "Al massimo 40 caratteri.",
+      "note": "Al massimo 2000 caratteri."
+    }
+  },
+  "add": {
+    "directory": "Dall'elenco",
+    "directoryHint": "Compila nome e numero dell'organismo.",
+    "directoryNone": "Scritto a mano"
+  },
+  "csv": {
+    "number": "Numero",
+    "name": "Nome",
+    "country": "Paese",
+    "address": "Indirizzo",
+    "scopes": "Notificato per",
+    "clothing": "Abbigliamento protettivo",
+    "nando": "NANDO",
+    "email": "E-mail",
+    "phone": "Telefono",
+    "certificates": "Certificati",
+    "status": "Stato"
+  }
+}

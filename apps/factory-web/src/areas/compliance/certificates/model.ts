@@ -3,6 +3,8 @@ import { isBusinessDate } from '@nexus/factory-domain/core/time'
 import type { LiveState, Notice, Read } from '../../quality/_shared/model'
 import type { BrandOption, Certificate, CertificateDetail, CertificateFile, CertificateInput, CertificateStatus, Coverage, GateReasonCode, GateResult, MaterialOption, StyleFacts, StyleOption } from './api'
 import type { RenewalsModel } from './renewals/model'
+import type { NotifiedBody } from './depth/api'
+import type { BodiesModel, DepthModel } from './depth/model'
 
 /**
  * The certificate register's rules without a screen (SCR-050, SCR-051; Reg. (EU) 2016/425 Annex V, EN 17092): who may do
@@ -114,7 +116,8 @@ export function leftOf(certificate: Pick<Certificate, 'status' | 'validFrom' | '
 // ---- views and tiles (one filter model) -----------------------------------------------------------------------------------
 
 // W2a (B-W2a-66): `changes` = the certificates with a change to the approved type waiting for the notified body.
-export const CERT_VIEWS = ['all', 'valid', 'expiring', 'suspended', 'drafts', 'expired', 'changes'] as const
+// W2b (B-W2b-255; design ce-grid saved views): Garment · Protectors (EN 1621) · Gloves · Expiring in 90 days · Private label.
+export const CERT_VIEWS = ['all', 'valid', 'expiring', 'suspended', 'drafts', 'expired', 'changes', 'garment', 'protectors', 'gloves', 'expiring90', 'privateLabel'] as const
 export type CertView = (typeof CERT_VIEWS)[number]
 /** The tiles: each one a saved view (pressing it shows that view; its number is that view's count). */
 export const CERT_TILES = ['valid', 'expiring', 'suspended', 'drafts'] as const satisfies readonly CertView[]
@@ -145,6 +148,17 @@ export function inView(certificate: Certificate, view: CertView, waiting: Readon
       return certificate.status === 'DRAFT'
     case 'expired':
       return certificate.status === 'EXPIRED' || ((certificate.status === 'VALID' || certificate.status === 'SUSPENDED') && isPastValidity(certificate))
+    // B-W2b-255: the saved views by kind (the standard), the 90-day horizon and the brand-held (private label) certificates.
+    case 'garment':
+      return kindOf(certificate.standard) === 'GARMENT'
+    case 'protectors':
+      return kindOf(certificate.standard) === 'PROTECTOR'
+    case 'gloves':
+      return kindOf(certificate.standard) === 'GLOVE'
+    case 'expiring90':
+      return certificate.status === 'VALID' && certificate.daysToExpiry >= 0 && certificate.daysToExpiry <= 90
+    case 'privateLabel':
+      return certificate.holderPartyId !== null
   }
 }
 
@@ -583,6 +597,8 @@ export type ListDialog = { kind: 'add' } | { kind: 'check' } | { kind: 'shortcut
 
 export interface AddModel {
   draft: CertificateDraft
+  /** W2b (B-W2b-255): the directory body picked (its number and name filled in); linked once the draft exists. */
+  bodyId?: string | null
   /** The fields left once (their problems show from then on). */
   touched: readonly DraftField[]
   /** The chosen PDF's name (its bytes stay in the container). */
@@ -644,6 +660,9 @@ export interface CertificatesListModel {
   explainerOpen?: boolean
   noticesOpen?: boolean
   focusRow?: number
+  /** W2b (B-W2b-255): the Notified bodies pop-up (⋯ Notified bodies) and the directory Add certificate picks from. */
+  bodies?: BodiesModel | null
+  directory?: readonly NotifiedBody[] | null
 }
 
 // W2a (B-W2a-66): Renewals (the validity, the expiry alerts, the renewal, the changes to the approved type).
@@ -730,4 +749,7 @@ export interface CertificateRecordModel {
   dockOpen: boolean
   /** W2a: the Renewals tab (read while it is open); null: not mounted. */
   renewals: RenewalsModel | null
+  /** W2b (B-W2b-255): the certificate in depth (Coverage and Notified body tabs) and the Notified bodies pop-up. */
+  depth?: DepthModel | null
+  bodies?: BodiesModel | null
 }

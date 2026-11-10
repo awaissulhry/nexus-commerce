@@ -2,6 +2,7 @@ import { Decimal } from 'decimal.js'
 import { isBusinessDate, type BusinessDate } from '../../core/time'
 import type { CertificateStatus } from '../certificates/rules'
 import { isExpiredOn } from '../certificates/rules'
+import { baseGateWords, baseStanding } from '../certificates-depth/own-brand'
 
 /**
  * The certificate gate (QHS-051, PRD-284, PRD-288; Reg. (EU) 2016/425 art. 8 and Annex III (l)(m), Annex V; EN 17092):
@@ -52,6 +53,11 @@ export interface GateCover {
     readonly validFrom: BusinessDate
     readonly validTo: BusinessDate
     readonly status: CertificateStatus
+    /**
+     * B-W2b-255 (PRD-287): an own-brand certificate's base, the factory's certificate it rests on; the brand's
+     * certificate covers nothing on a day its base does not hold ("check both are valid before labelling").
+     */
+    readonly base?: { readonly number: string; readonly status: CertificateStatus; readonly validFrom: BusinessDate; readonly validTo: BusinessDate } | null
   }
 }
 
@@ -192,6 +198,10 @@ function coverReasons(cover: GateCover, request: GateRequest): GateReason[] {
     reasons.push({ code: 'certificate_not_valid', certificateId, message: `${named} ${why}.` })
   } else if (request.date < certificate.validFrom) {
     reasons.push({ code: 'certificate_not_yet_valid', certificateId, message: `${named} is valid from ${certificate.validFrom}.` })
+  } else if (certificate.base) {
+    // B-W2b-255: the brand's own certificate holds only while the factory's base certificate does.
+    const words = baseGateWords(named, baseStanding(certificate.base, request.date))
+    if (words) reasons.push({ code: 'certificate_not_valid', certificateId, message: words })
   }
   if (cover.colourwayIds.length > 0 && !cover.colourwayIds.includes(request.colourwayId)) {
     reasons.push({ code: 'colourway_not_covered', certificateId, message: `${named} does not cover this colourway of style ${request.style.code}.` })
