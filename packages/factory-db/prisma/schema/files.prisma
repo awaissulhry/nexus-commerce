@@ -148,6 +148,8 @@ model StoredFile {
   labelArtworkVersions   LabelArtworkVersion[]   @relation("LabelArtworkVersionFile")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
+  // W2b-4 recall.prisma (wave 33/33): the authority notices it is the sent copy of.
+  authorityNotices AuthorityNotice[] @relation("AuthorityNoticeFile")
   // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.
   invoiceXmlOf   Invoice[]       @relation("InvoiceXml")
   invoicePdfOf   Invoice[]       @relation("InvoicePdf")

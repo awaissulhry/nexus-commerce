@@ -60,6 +60,7 @@ import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedReturns } from '../seed/returns'
 import { seed as seedReasons } from '../seed/reasons'
+import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
@@ -362,6 +363,12 @@ beforeAll(async () => {
   // labels are the plain ones a copy may repeat.
   await seedTechfiles({ db: factory, namespace: 'iso-a' })
   await seedTechfiles({ db: factory, namespace: 'iso-b' })
+  // The recall, authority and claims schema of W2b-4 (wave 33/33): authority notices, recalls and withdrawals with their
+  // progress, distributor notices, authority requests, sustainability claims and their uses; their first rows (DRAFT notices,
+  // recall and claim of OPEN entries, an OPEN request, the DRAFT recall's progress without a shipment, a use of an APPROVED
+  // claim that never expires) are the plain ones a copy may repeat.
+  await seedRecall({ db: factory, namespace: 'iso-a' })
+  await seedRecall({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -389,6 +396,8 @@ it('covers every classified table and every runtime role', () => {
     'AttentionAction',
     'AttentionActionLog',
     'AuditLog',
+    'AuthorityNotice',
+    'AuthorityRequest',
     'Badge',
     'BomLine',
     'BomLineAlternate',
@@ -411,6 +420,7 @@ it('covers every classified table and every runtime role', () => {
     'ChangeOrderItem',
     'ChangeRequest',
     'Chemical',
+    'ClaimUse',
     'ClickingDie',
     'ClockEvent',
     'Colour',
@@ -441,6 +451,7 @@ it('covers every classified table and every runtime role', () => {
     'DeviceEnrolment',
     'DispatchAssignment',
     'DispositionCode',
+    'DistributorNotice',
     'DueTimer',
     'EarningsEntry',
     'EconomicOperatorRole',
@@ -682,6 +693,8 @@ it('covers every classified table and every runtime role', () => {
     'RateAcknowledgement',
     'RatePublication',
     'ReasonCode',
+    'RecallAction',
+    'RecallProgress',
     'ReceiptDiscrepancy',
     'ReceivablesSettings',
     'RecordFollower',
@@ -794,6 +807,7 @@ it('covers every classified table and every runtime role', () => {
     'SupplierQuestionnaire',
     'SupplierQuestionnaireResponse',
     'Suppression',
+    'SustainabilityClaim',
     'SvhcListVersion',
     'Task',
     'Team',
