@@ -2,6 +2,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { CAN, demoBom, demoCompliance, demoStyle, demoTypeChanges, recordModel, REV, REVISIONS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
 import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-W2b-238: Material checks — blocked or unapproved materials.
+import { STYLE_APPROVALS } from '../../materials/approval/demo'
 
 /**
  * SCR-045 Compliance of DEMO-JKT-01 — made-up certificate CERT-DEMO-0001 (EN 17092-4, class A, notified body 0000)
@@ -27,6 +29,24 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'draft', label: 'Draft revision 3: name its label', model: compliance(draft), note: 'A draft names an active label template here; its documents are still missing.' },
     { id: 'production', label: 'Production manager (reads)', model: compliance({}, 'production'), note: 'Upload held with its reason; downloads open.' },
     { id: 'not-ppe', label: 'Not PPE', model: compliance({ style: { status: 'ready', value: demoStyle({ ppe: { ppeCategory: 'NOT_PPE', ppeStandard: null, ppeClass: null } }) }, compliance: { status: 'ready', value: demoCompliance({ notPpe: true }) } }) },
+    {
+      id: 'w2b238-material-approvals',
+      label: 'B-W2b-238 — Draft revision 3: a blocked zip, a lining on a condition, a label not reviewed',
+      model: compliance({ ...draft, materialApprovals: { status: 'ready', value: STYLE_APPROVALS } }),
+      note: 'The blocked one holds the release (the database refuses it); each row links to the material’s Compliance tab.',
+    },
+    {
+      id: 'w2b238-material-approvals-released',
+      label: 'B-W2b-238 — Released revision 2 with a material blocked later: it keeps it',
+      model: compliance({ materialApprovals: { status: 'ready', value: { ...STYLE_APPROVALS, revision: { ...STYLE_APPROVALS.revision, revision: 2, status: 'RELEASED' } } } }),
+    },
+    {
+      id: 'w2b238-material-approvals-none',
+      label: 'B-W2b-238 — Every material approved: nothing to check',
+      model: compliance({ materialApprovals: { status: 'ready', value: { ...STYLE_APPROVALS, materials: STYLE_APPROVALS.materials.filter((material) => material.approval === 'APPROVED'), counts: { blocked: 0, conditional: 0, pending: 0, approved: 2 }, releasable: true } } }),
+    },
+    { id: 'w2b238-material-approvals-loading', label: 'B-W2b-238 — Material approvals loading', model: compliance({ materialApprovals: { status: 'loading' } }) },
+    { id: 'w2b238-material-approvals-error', label: "B-W2b-238 — Material approvals couldn't load", model: compliance({ materialApprovals: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'loading', label: 'Loading', model: compliance({ compliance: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: compliance({ compliance: { status: 'error', problem: 'problem.read.unavailable' } }) },
     // W2a (B-W2a-66): Changes that may need the notified body (design style.cp.change).

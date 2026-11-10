@@ -10,6 +10,9 @@ import { carriedCost, decimalText, unconvertibleUnits, type Uom } from '@nexus/f
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import type { ListMaterialsFilters } from './contract'
+// B-W2b-238: the list's Used in column and "Not used in any BOM" filter; a kind change that would drop typed properties.
+import { kindChangeProblem } from '@nexus/factory-domain/product/materials-depth/rules'
+import { usageCounts, usedFilter } from '../materials-depth/where-used'
 import {
   assertMayWrite,
   auditedFields,
@@ -90,6 +93,7 @@ export async function listMaterials(caller: CommandCaller, query: ListMaterialsF
     query.ppeComponent === undefined ? {} : { isPpeComponent: query.ppeComponent },
     query.missingCost === undefined ? {} : query.missingCost ? { standardCost: null } : { standardCost: { not: null } },
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
+    query.used === undefined ? {} : usedFilter(actorOf(context), query.used),
   ]
   const cursor = decodeCursor(query.cursor)
   const after: Prisma.ItemWhereInput = cursor ? { OR: [{ code: { gt: cursor.code } }, { code: cursor.code, id: { gt: cursor.id } }] } : {}
@@ -101,7 +105,8 @@ export async function listMaterials(caller: CommandCaller, query: ListMaterialsF
   )
   const page = (rows as MaterialRowData[]).slice(0, query.limit)
   const last = page.at(-1)
-  return { materials: page.map(materialRowView), nextCursor: rows.length > query.limit && last ? encodeCursor(last) : null, count }
+  const used = await caller.withClient((client) => usageCounts(client, actorOf(context), page.map((row) => row.id)))
+  return { materials: page.map((row) => ({ ...materialRowView(row), usedInStyles: used === null ? null : (used.get(row.id) ?? 0) })), nextCursor: rows.length > query.limit && last ? encodeCursor(last) : null, count }
 }
 
 /** One material with its colours (SCR-048). */
@@ -195,13 +200,16 @@ export async function updateMaterial(caller: CommandCaller, materialId: string, 
     { name: 'product.materials.update', idempotencyKey, input: { materialId, ...body }, record: { type: 'Item', id: materialId, expectedVersion: version } },
     async (tools) => {
       const { tx } = tools
-      const row = await tx.item.findUniqueOrThrow({ where: { id: materialId }, select: { ...materialColumns(context), standardCost: true } })
+      const row = await tx.item.findUniqueOrThrow({ where: { id: materialId }, select: { ...materialColumns(context), standardCost: true, properties: true } })
       activeOnly(row.status)
       const current = fieldsOf(row)
       const change = changeMaterial(current, patch as MaterialPatch)
       if (!change.ok) throw invalid(prefixed(change.issues))
       const next = change.material
       const changed = change.changed
+      // B-W2b-238: typed properties of the old kind are not dropped silently (the database would refuse the kind).
+      const kindProblem = changed.includes('kind') ? kindChangeProblem(row.code, row.properties, next.kind) : null
+      if (kindProblem) throw new ConflictError(kindProblem)
       const problems: Issue[] = []
       if (changed.includes('defaultSupplierId')) problems.push(...(await supplierProblems(tx, next.defaultSupplierId, row.companyId)))
       if (problems.length > 0) throw invalid(problems)

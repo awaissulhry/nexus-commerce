@@ -1,0 +1,713 @@
+{
+  "common": {
+    "back": "Indietro",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "dismiss": "Chiudi avviso",
+    "loading": "Caricamento…",
+    "no": "No",
+    "yes": "Sì",
+    "notYet": "Non ancora letto",
+    "retry": "Riprova",
+    "updated": "Aggiornato alle {time}",
+    "working": "In corso…"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera"
+  },
+  "dialog": {
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Resta con la modifica nello storico.",
+    "reasonRequired": "Motivo"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "PUBLISHED": "In vigore",
+    "SUPERSEDED": "Sostituita",
+    "DISCARDED": "Scartata"
+  },
+  "version": {
+    "pill": "v{number} · {status}",
+    "author": "Scritta da",
+    "approvedBy": "Approvata da",
+    "seen": "Vista in reparto",
+    "seenDraft": "Non ancora in reparto",
+    "seenCount_one": "{count} persona l’ha vista",
+    "seenCount_other": "{count} persone l’hanno vista"
+  },
+  "revisionStatus": {
+    "DRAFT": "bozza",
+    "RELEASED": "rilasciata",
+    "OBSOLETE": "obsoleta"
+  },
+  "fileStatus": {
+    "PENDING_UPLOAD": "caricamento in corso",
+    "AVAILABLE": "pronto",
+    "QUARANTINED": "trattenuto dal controllo antivirus",
+    "DELETED": "eliminato"
+  },
+  "list": {
+    "title": "Istruzioni di lavoro",
+    "intro": "Istruzioni con foto e video per operazione, con versioni approvate da una seconda persona e chi le ha viste in reparto.",
+    "tableLabel": "Istruzioni di lavoro",
+    "search": "Cerca operazione o numero",
+    "viewFilter": "Vista salvata",
+    "new": "Nuova istruzione",
+    "keyNew": "Nuova istruzione",
+    "count_one": "{count} istruzione",
+    "count_other": "{count} istruzioni",
+    "truncated": "Sono mostrate solo le prime 500 istruzioni: cerca per trovare le altre.",
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli questo filtro",
+    "chipSearch": "Ricerca: {q}",
+    "clearAll": "Togli i filtri",
+    "failed": "Non è stato possibile leggere le istruzioni",
+    "forbidden": {
+      "title": "Nessun accesso alle istruzioni di lavoro",
+      "body": "Questa pagina richiede il permesso production.instructions.view. Chiedilo a un amministratore."
+    },
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Cambia la ricerca o togli i filtri."
+    },
+    "empty": {
+      "title": "Ancora nessuna istruzione",
+      "body": "Scrivi la prima per un’operazione: passi, foto e video che il tablet mostra a quell’operazione.",
+      "bodyView": "Quando l’ufficio produzione ne scrive una, compare qui."
+    },
+    "forRevision": "{code} rev {revision}",
+    "everyStyle": "Tutti gli articoli",
+    "usedIn_one": "Su {count} revisione rilasciata",
+    "usedIn_other": "Su {count} revisioni rilasciate",
+    "inForce": "v{number} in vigore",
+    "noneInForce": "Nessuna in vigore",
+    "draftOpen": "Bozza v{number} aperta",
+    "publishedOn": "Dal {date}",
+    "status": {
+      "ARCHIVED": "Archiviata",
+      "DRAFT": "Bozza in attesa",
+      "IN_FORCE": "In vigore",
+      "NONE": "Non pubblicata"
+    },
+    "seen": {
+      "none": "—",
+      "count_one": "{count} persona",
+      "count_other": "{count} persone"
+    },
+    "rowMenu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "openVersions": "Versioni",
+    "openAcks": "Conferme di lettura",
+    "copyNumber": "Copia il numero"
+  },
+  "col": {
+    "operation": "Operazione",
+    "styles": "Articoli in cui è usata",
+    "languages": "Lingue",
+    "version": "Versione",
+    "status": "Stato",
+    "media": "Foto e video",
+    "seen": "Viste da",
+    "changed": "Ultima modifica",
+    "more": "Altro"
+  },
+  "tile": {
+    "drafts": "Bozze in attesa",
+    "missing": "Lingua di reparto mancante",
+    "unpublished": "Mai pubblicate",
+    "archived": "Archiviate"
+  },
+  "tileHint": {
+    "drafts": "Una bozza attende l’approvazione di una seconda persona.",
+    "missing": "La versione in vigore non ha una lingua che il reparto di un sito legge.",
+    "unpublished": "Ancora niente arriva in reparto.",
+    "archived": "Non più mostrate in reparto."
+  },
+  "view": {
+    "active": "In uso",
+    "drafts": "Bozze in attesa",
+    "missing": "Lingua di reparto mancante",
+    "unpublished": "Mai pubblicate",
+    "archived": "Archiviate"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "restore_one": "Ripristina {count}",
+    "restore_other": "Ripristina {count}"
+  },
+  "archive": {
+    "title_one": "Archiviare {count} istruzione?",
+    "title_other": "Archiviare {count} istruzioni?",
+    "floor": "I tablet smettono subito di mostrarla; al suo posto valgono le righe dei passi scritte nel ciclo, se ci sono.",
+    "kept": "Le sue versioni e chi le ha viste restano registrate (il registro di formazione resta).",
+    "back": "Ripristina la rimette com’era."
+  },
+  "restore": {
+    "title_one": "Ripristinare {count} istruzione?",
+    "title_other": "Ripristinare {count} istruzioni?",
+    "floor": "La sua versione in vigore torna sui tablet.",
+    "twin": "Rifiutato se per la stessa operazione e articolo è già in uso un’altra istruzione."
+  },
+  "archiveOne": {
+    "title": "Archiviare {number}?"
+  },
+  "restoreOne": {
+    "title": "Ripristinare {number}?"
+  },
+  "csv": {
+    "file": "istruzioni-di-lavoro",
+    "number": "Numero",
+    "operation": "Operazione",
+    "operationName": "Nome operazione",
+    "scope": "Articoli",
+    "inForce": "In vigore",
+    "draft": "Bozza",
+    "languages": "Lingue",
+    "missing": "Lingue di reparto mancanti",
+    "steps": "Passi",
+    "media": "Foto e video",
+    "seen": "Persone che l’hanno vista",
+    "usedIn": "Revisioni rilasciate",
+    "status": "Stato",
+    "changed": "Ultima modifica"
+  },
+  "language": {
+    "missingChip": "{code} mancante",
+    "missingTitle": "{language} è una lingua di reparto e non è scritta"
+  },
+  "new": {
+    "title": "Nuova istruzione",
+    "subtitle": "Un’istruzione appartiene a un’operazione della libreria, per tutti gli articoli o per una revisione di un articolo.",
+    "operation": "Operazione",
+    "operationHint": "I tablet la mostrano a questa operazione.",
+    "operationPlaceholder": "Cerca l’operazione",
+    "scope": "Per quali articoli",
+    "every": "Tutti gli articoli",
+    "everyHint": "Mostrata a questa operazione su ogni ordine di produzione.",
+    "revision": "Una revisione di un articolo",
+    "revisionHint": "Mostrata per prima sugli ordini di quella revisione; gli altri usano quella per tutti gli articoli.",
+    "style": "Articolo",
+    "stylePlaceholder": "Cerca l’articolo",
+    "revisionPick": "Revisione",
+    "revisionChoose": "Scegli la revisione",
+    "styleFirst": "Scegli prima l’articolo",
+    "revisionOption": "Revisione {revision} ({status})",
+    "copy": "Parti da",
+    "copyHint": "Una copia prende passi, foto e video di un’istruzione in vigore.",
+    "blank": "Un’istruzione vuota",
+    "copyOption": "Una copia di {number} · {code} (v{version})",
+    "after": "Viene creata con la versione 1 in bozza: niente arriva in reparto finché una seconda persona non la approva.",
+    "create": "Crea l’istruzione"
+  },
+  "typed": {
+    "open": "Importa i passi scritti",
+    "title": "Importa i passi scritti nei cicli",
+    "subtitle": "Le righe “[ ] CODICE parole” scritte in un passo del ciclo diventano la versione 1 di un’istruzione per quell’operazione e revisione: una bozza, quindi in reparto non cambia niente prima che una seconda persona la approvi.",
+    "language": "Le righe sono scritte in",
+    "languageHint": "Le loro parole vanno sotto questa lingua.",
+    "lang": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "none": "Nessun passo di ciclo ha righe di passi scritte senza un’istruzione.",
+    "tableLabel": "Passi di ciclo con righe di passi scritte",
+    "col": {
+      "style": "Revisione articolo",
+      "step": "Passo del ciclo",
+      "lines": "Passi che dà",
+      "instruction": "Istruzione"
+    },
+    "required": "{code} (spunta obbligatoria)",
+    "optional": "{code} (spunta facoltativa)",
+    "existing": "Ha già {number}",
+    "toMake": "Verrà creata",
+    "bring_one": "Importa {count}",
+    "bring_other": "Importa {count}",
+    "held": {
+      "reading": "Sto ancora leggendo i cicli",
+      "nothing": "Niente da importare"
+    },
+    "made_one": "{count} istruzione creata in bozza.",
+    "made_other": "{count} istruzioni create in bozza."
+  },
+  "record": {
+    "back": "Istruzioni di lavoro",
+    "backToList": "Torna alle istruzioni di lavoro",
+    "tabsLabel": "Parti dell’istruzione",
+    "loading": "Lettura dell’istruzione…",
+    "state": {
+      "loading": {
+        "title": "Caricamento",
+        "body": "Lettura dell’istruzione…"
+      },
+      "error": {
+        "title": "Non è stato possibile leggere l’istruzione",
+        "body": "Riprova tra un momento."
+      },
+      "notFound": {
+        "title": "Istruzione non trovata",
+        "body": "Non esiste, oppure appartiene a una società che il tuo ruolo non raggiunge."
+      },
+      "forbidden": {
+        "title": "Nessun accesso alle istruzioni di lavoro",
+        "body": "Questa pagina richiede il permesso production.instructions.view. Chiedilo a un amministratore."
+      }
+    },
+    "everyStyle": "Per tutti gli articoli",
+    "forRevision": "Per {code} · {name}, revisione {revision}",
+    "showing": "Mostra la v{number} ({status})",
+    "inForce": "v{number} in vigore",
+    "saving": "Salvataggio…",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "savedAt": "Salvata alle {time}",
+    "save": "Salva la bozza",
+    "approve": "Approva la versione {number}",
+    "newVersion": "Inizia la versione {number}",
+    "more": "Altre azioni",
+    "preview": "Anteprima reparto",
+    "previewShort": "Anteprima reparto",
+    "previewHint": "Apre una nuova scheda: la versione come la mostra il tablet.",
+    "sheet": "Foglio istruzione PDF",
+    "sheetShort": "Foglio PDF",
+    "sheetHint": "Apre una nuova scheda: il foglio per la postazione.",
+    "discard": "Scarta la bozza v{number}",
+    "discardNone": "Scarta la bozza",
+    "archive": "Archivia",
+    "archiveHint": "I tablet smettono di mostrarla.",
+    "restore": "Ripristina",
+    "archivedBanner": "{number} è archiviata: i tablet non la mostrano. Ripristinala per modificarla o mostrarla di nuovo.",
+    "showingOther": "Stai guardando la v{number} ({status}).",
+    "showLatest": "Mostra l’ultima"
+  },
+  "tab": {
+    "steps": "Passi",
+    "media": "Foto e video",
+    "versions": "Versioni",
+    "acks": "Conferme di lettura"
+  },
+  "live": {
+    "changed": "Qualcun altro ha modificato questa istruzione.",
+    "reload": "Ricarica"
+  },
+  "held": {
+    "noManage": "Scrivere istruzioni richiede il permesso production.instructions.manage.",
+    "noApprove": "Approvare richiede il permesso production.instructions.approve.",
+    "noPeople": "Il registro di formazione per nome richiede il permesso production.instructions.people (Personale).",
+    "noOperations": "Scegliere un’operazione richiede il permesso product.routing.view.",
+    "noStyles": "Scegliere un articolo richiede il permesso product.styles.view.",
+    "archived": "{number} è archiviata: prima ripristinala.",
+    "noVersion": "Ancora nessuna versione.",
+    "noDraft": "Nessuna bozza aperta.",
+    "draftExists": "La versione {number} è già in scrittura: modificala, o prima scartala.",
+    "readOnly": {
+      "PUBLISHED": "La versione {number} è in vigore: una versione pubblicata non cambia mai. Inizia una nuova versione per modificarla.",
+      "SUPERSEDED": "La versione {number} è stata sostituita: non cambia mai.",
+      "DISCARDED": "La versione {number} è stata scartata: non cambia mai."
+    },
+    "ownDraft": "La versione {number} è una tua bozza: la approva un’altra persona (quattro occhi).",
+    "noSteps": "La versione {number} non ha passi: scrivine almeno uno prima.",
+    "noNote": "La versione {number} richiede una nota di modifica: di’ cosa è cambiato, per chi ha visto la versione precedente.",
+    "mediaNotReady_one": "{count} foto o video non è ancora caricato: aspetta o toglilo.",
+    "mediaNotReady_other": "{count} foto o video non sono ancora caricati: aspetta o toglili.",
+    "unsaved_one": "Prima salva la bozza ({count} modifica non salvata).",
+    "unsaved_other": "Prima salva la bozza ({count} modifiche non salvate).",
+    "offline": "Nessuna connessione: riprova quando torna.",
+    "offlineBanner": "Nessuna connessione: ciò che vedi può essere vecchio e ora non si può salvare niente.",
+    "busy": "In corso…",
+    "pickRows": "Prima seleziona le istruzioni.",
+    "allArchived": "Sono già archiviate.",
+    "allActive": "Sono già in uso.",
+    "pickOperation": "Scegli l’operazione.",
+    "pickRevision": "Scegli la revisione dell’articolo.",
+    "notPublished": "Ancora nessuna versione in vigore.",
+    "nobodyNamed": "Qui non si può nominare nessuno: la base giuridica dei siti per nominare i lavoratori non è registrata.",
+    "problems_one": "Prima correggi {count} problema.",
+    "problems_other": "Prima correggi {count} problemi."
+  },
+  "steps": {
+    "language": "Lingua scritta",
+    "addLanguage": "Aggiungi una lingua",
+    "writing": "Scrivi in {language}",
+    "list": "Passi della versione",
+    "itemLabel": "Passo {n}, {code}",
+    "empty": "Ancora nessun passo",
+    "emptyBody": "Aggiungi il primo passo: cosa fa l’operatore, nell’ordine in cui lo fa.",
+    "emptyRead": "Questa versione non ha passi.",
+    "failed": "Non è stato possibile leggere la versione",
+    "noVersion": {
+      "title": "Ancora nessuna versione",
+      "body": "Inizia la versione 1 per scrivere i passi."
+    },
+    "add": "Aggiungi un passo",
+    "openStep": "Apri il passo {n} ({code})",
+    "close": "Chiudi il passo {n} ({code})",
+    "onlyIn": "Solo in {language}: {words}",
+    "noWords": "Ancora nessuna parola in {language}",
+    "critical": "Punto critico",
+    "safety": "Nota di sicurezza",
+    "tickRequired": "Spunta obbligatoria",
+    "tickOptional": "Spunta facoltativa",
+    "mediaCount_one": "{count} foto o video",
+    "mediaCount_other": "{count} foto o video",
+    "refused": "L’ultimo salvataggio ha rifiutato questo passo: aprilo per vedere perché.",
+    "code": "Codice del passo",
+    "codeHint": "Maiuscole, cifre, _ o - (MARGINE_CUCITURA): il tablet spunta il passo con questo codice.",
+    "icon": "Icona sul tablet",
+    "iconHint": "Disegnata accanto al passo per una lettura rapida.",
+    "words": "Cosa fa l’operatore ({language})",
+    "wordsHint": "Frasi brevi, un’azione ciascuna. Il tablet le legge ad alta voce.",
+    "safetyNote": "Nota di sicurezza ({language})",
+    "safetyHint": "Mostrata in un riquadro sul tablet e sul foglio. Lasciala vuota se non c’è.",
+    "criticalLabel": "Punto critico",
+    "criticalHint": "Segnato sul tablet e sul foglio: un errore qui rende il capo non sicuro o da scartare.",
+    "tickLabel": "Il tablet chiede una spunta prima di Fine",
+    "tickHint": "Fine attende finché l’operatore non spunta questo passo.",
+    "missing": "Manca nelle lingue di reparto: {languages}.",
+    "remove": "Togli questo passo",
+    "version": "Versione {number}",
+    "languages": "Lingue",
+    "languageCount": "{count} di {total} passi",
+    "floorLanguages": "Il reparto legge: {languages}.",
+    "problems": "Prima di salvare",
+    "noProblems": "Niente blocca il salvataggio."
+  },
+  "note": {
+    "label": "Nota di modifica",
+    "hint": "Cosa dice di nuovo questa versione, per chi la guarda.",
+    "hintRequired": "Richiesta prima dell’approvazione: cosa è cambiato rispetto alla versione precedente."
+  },
+  "ack": {
+    "required": "Chiedi agli operatori di guardarla di nuovo",
+    "requiredHint": "Al loro prossimo Avvio il tablet apre questa versione finché non toccano Visto. Lascialo spento per una correzione di parole."
+  },
+  "settings": {
+    "title": "Impostazioni macchina dell’operazione",
+    "machine": "Macchina",
+    "stitchType": "Punto",
+    "needle": "Ago",
+    "thread": "Filo",
+    "stitchesPerCm": "Punti per cm",
+    "tension": "Tensione",
+    "foot": "Piedino",
+    "notes": "Note"
+  },
+  "icon": {
+    "none": "Nessuna icona",
+    "needle": "Ago",
+    "thread": "Filo",
+    "scissors": "Forbici",
+    "ruler": "Righello",
+    "check": "Controllo",
+    "eye": "Guarda",
+    "hand": "A mano",
+    "shield": "Protezione",
+    "alert": "Attenzione",
+    "flame": "Calore",
+    "iron": "Ferro da stiro",
+    "glue": "Colla",
+    "zip": "Cerniera",
+    "button": "Bottone",
+    "label": "Etichetta",
+    "layers": "Strati",
+    "tape": "Nastro",
+    "stamp": "Timbro",
+    "package": "Imballo"
+  },
+  "problem": {
+    "steps": {
+      "tooMany": "Al massimo {max} passi."
+    },
+    "code": {
+      "format": "Passo {n}: il codice ha da 1 a 40 maiuscole, cifre, _ o -.",
+      "twice": "Passo {n}: {code} è il codice di un passo precedente; ogni passo ha il suo."
+    },
+    "text": {
+      "missing": "Passo {n}: scrivi cosa fa l’operatore in almeno una lingua.",
+      "tooLong": "Passo {n}: al massimo {max} caratteri in {language}."
+    },
+    "safety": {
+      "tooLong": "Passo {n}: la nota di sicurezza ha al massimo {max} caratteri in {language}."
+    },
+    "languages": {
+      "tooMany": "Passo {n}: al massimo {max} lingue."
+    },
+    "media": {
+      "tooMany": "Passo {n}: al massimo {max} foto o video."
+    },
+    "caption": {
+      "tooLong": "Passo {n}: una didascalia ha al massimo {max} caratteri."
+    },
+    "changeNote": {
+      "tooLong": "La nota di modifica ha al massimo {max} caratteri."
+    },
+    "unavailable": "Il server della fabbrica non ha risposto. Riprova tra un momento.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "writeForbidden": "Il tuo ruolo non consente questa modifica.",
+    "notFound": "Non esiste più, oppure il tuo ruolo non la raggiunge.",
+    "signedOut": "La sessione è finita: accedi di nuovo.",
+    "contract": "Il server ha risposto in una forma che questa pagina non conosce: ricarica la pagina.",
+    "rateLimited": "Troppe richieste: aspetta un minuto e riprova.",
+    "stale": "Qualcuno l’ha modificata prima: ricarica per vederla com’è ora.",
+    "invalid": "Il server ha rifiutato alcuni campi: sono segnati.",
+    "sheetCompany": "Il foglio richiede i dati legali della società (partita IVA, sede legale): compilali in Sistema › Società e stabilimenti."
+  },
+  "refusal": {
+    "ACTIVE_EXISTS": "Per questa operazione e articolo è già in uso un’altra istruzione: aprila, o prima archiviala.",
+    "ALREADY_ACTIVE": "È già in uso.",
+    "ALREADY_ARCHIVED": "È già archiviata.",
+    "ARCHIVED": "L’istruzione è archiviata: prima ripristinala.",
+    "DRAFT_EXISTS": "Una versione è già in scrittura: modificala, o prima scartala.",
+    "NOT_DRAFT": "Questa versione non è più una bozza: non cambia mai. Inizia una nuova versione.",
+    "OWN_DRAFT": "Questa è una tua bozza: la approva un’altra persona (quattro occhi).",
+    "NO_STEPS": "La bozza non ha passi: scrivine almeno uno prima.",
+    "CHANGE_NOTE_MISSING": "La bozza richiede una nota di modifica: di’ cosa è cambiato rispetto alla versione precedente.",
+    "MEDIA_NOT_READY": "Una foto o un video non è ancora caricato: aspetta o toglilo.",
+    "NOT_PUBLISHED": "Questa versione non è in reparto: si conferma solo una versione in vigore.",
+    "SEEN_ALREADY": "Questa persona ha già confermato questa versione: una conferma per versione.",
+    "DATABASE_REFUSED": "Il database ha rifiutato la modifica: ricarica e guarda l’istruzione com’è ora.",
+    "ALREADY_EXISTS": "Qualcuno ha fatto lo stesso nello stesso momento: ricarica e guardala com’è ora.",
+    "other": "La modifica è stata rifiutata da una regola: ricarica e riprova."
+  },
+  "notice": {
+    "saved": "Bozza v{number} salvata.",
+    "published": "La versione {number} è in vigore: i tablet la mostrano da adesso.",
+    "publishedSuperseding": "La versione {number} è in vigore: sostituisce la v{old} sui tablet da adesso.",
+    "newVersion": "Versione {number} iniziata in bozza.",
+    "discarded": "Bozza v{number} scartata.",
+    "archived": "{number} archiviata: i tablet non la mostrano più.",
+    "restored": "{number} ripristinata.",
+    "archivedMany_one": "{count} istruzione archiviata.",
+    "archivedMany_other": "{count} istruzioni archiviate.",
+    "restoredMany_one": "{count} istruzione ripristinata.",
+    "restoredMany_other": "{count} istruzioni ripristinate.",
+    "paper": "Conferma su carta registrata."
+  },
+  "media": {
+    "intro_one": "{count} foto o video sui passi.",
+    "intro_other": "{count} foto o video sui passi.",
+    "noFilesRead": "Il tuo ruolo non può aprire i file (files.read): al loro posto compaiono i nomi.",
+    "noSteps": {
+      "title": "Ancora nessun passo",
+      "body": "Foto e video appartengono a un passo: prima scrivi i passi."
+    },
+    "none": "Nessuna foto o video su questo passo.",
+    "listOf": "Foto e video di {code}",
+    "kind": {
+      "PHOTO": "Foto",
+      "VIDEO": "Video"
+    },
+    "photoOf": "Foto: {name}",
+    "videoOf": "Video: {name}",
+    "unknownFile": "Un file",
+    "notReady": "Non pronto: {status}",
+    "caption": "Didascalia ({language})",
+    "earlier": "Sposta {name} prima",
+    "later": "Sposta {name} dopo",
+    "first": "È già il primo",
+    "last": "È già l’ultimo",
+    "remove": "Togli",
+    "uploading": "Caricamento di {name}…",
+    "failed": "{name} non è stato caricato",
+    "dropHint": "Foto (JPEG, PNG, WebP, HEIC) o brevi video (MP4, WebM, MOV), fino a 25 MB, ancora {max} su questo passo. Mai un volto: mostra le mani e il capo.",
+    "problem": {
+      "empty": "Il file è vuoto.",
+      "tooBig": "Il file supera i 25 MB.",
+      "type": "Solo foto (JPEG, PNG, WebP, HEIC) e video (MP4, WebM, MOV)."
+    },
+    "markupGap": "Disegnare su una foto arriverà più avanti; nel frattempo indica il punto nella didascalia."
+  },
+  "versions": {
+    "revision": "La revisione del ciclo",
+    "everyStyle": "Per tutti gli articoli: gli ordini di qualsiasi articolo la mostrano a questa operazione, a meno che una revisione abbia la sua.",
+    "forRevision": "Per {code} · {name}, revisione {revision} ({status}): gli ordini di quella revisione la mostrano per prima.",
+    "usedInLabel": "Revisioni rilasciate che usano l’operazione",
+    "usedInNone": "Ancora nessuna revisione rilasciata usa questa operazione.",
+    "col": {
+      "style": "Articolo",
+      "revision": "Revisione",
+      "revisionStatus": "Stato",
+      "version": "Versione",
+      "note": "Cosa è cambiato",
+      "people": "Scritta e approvata",
+      "dates": "In reparto",
+      "content": "Contenuto",
+      "seen": "Vista"
+    },
+    "revisionN": "Revisione {revision}",
+    "tableLabel": "Versioni dell’istruzione",
+    "first": "La prima versione",
+    "writtenBy": "Scritta da {name}",
+    "approvedBy": "Approvata da {name}",
+    "notApproved": "Non approvata",
+    "publishedOn": "Dal {date}",
+    "createdOn": "Iniziata il {date}",
+    "supersededOn": "Sostituita il {date}",
+    "content": "{steps} passi · {media} foto e video",
+    "open": "Apri v{number}"
+  },
+  "compare": {
+    "title": "Confronta due versioni",
+    "before": "Prima",
+    "after": "Dopo",
+    "pick": "Scegli una versione",
+    "pickBoth": "Scegli le due versioni da confrontare.",
+    "oneVersion": {
+      "title": "Una sola versione",
+      "body": "Un confronto richiede una seconda versione."
+    },
+    "failed": "Non è stato possibile leggere le versioni",
+    "head": "Versione {number}",
+    "field": {
+      "text": "Parole",
+      "safety": "Nota di sicurezza",
+      "critical": "Punto critico",
+      "icon": "Icona",
+      "tick": "Spunta",
+      "media": "Foto e video"
+    }
+  },
+  "acks": {
+    "privacy": {
+      "counts": "Conteggi per sito · nessun nome",
+      "whoMore": "Il Personale vede il registro di formazione per nome",
+      "people": "Registro di formazione per nome (Personale)",
+      "gate": "Un nome compare solo dove il sito ha registrato la base giuridica; mai un dato per persona"
+    },
+    "failed": "Non è stato possibile leggere le conferme",
+    "remind": "Ricorda (invia al reparto)",
+    "remindHeld": "Non ancora disponibile: il reparto non ha un messaggio per il promemoria. Il tablet apre da solo una nuova versione all’Avvio.",
+    "paper": "Registra una conferma su carta",
+    "current": "Versione {number} in vigore",
+    "noCurrent": "Nessuna versione in vigore",
+    "noCurrentBody": "Quando una versione è approvata, qui si contano le persone che la guardano sul tablet.",
+    "asked": "Questa versione chiede agli operatori di guardarla: il tablet la apre al loro prossimo Avvio.",
+    "notAsked": "Questa versione non chiede di essere guardata di nuovo (una correzione di parole): si chiede solo a chi non ha mai visto l’istruzione.",
+    "noSites": "Ancora nessun sito della società.",
+    "seenOf": "{seen} su {of}",
+    "seenNoSkill": "{seen} l’hanno vista · qui nessuno ha la competenza",
+    "siteBar": "{site}: {seen} su {of} l’hanno vista",
+    "ofMeans": "“su” conta le persone del sito che hanno la competenza di questa operazione.",
+    "versionsLabel": "Quanti hanno visto ogni versione",
+    "col": {
+      "seen": "Persone che l’hanno vista",
+      "person": "Persona",
+      "site": "Sito",
+      "skill": "Competenza",
+      "last": "Ultima vista",
+      "current": "Versione in vigore"
+    },
+    "people": "Registro di formazione",
+    "peopleNone": "Niente da mostrare per nome.",
+    "peopleEmpty": {
+      "title": "Ancora nessuno",
+      "body": "Nessuno ha la competenza di questa operazione o ha visto l’istruzione."
+    },
+    "peopleLabel": "Chi ha visto quale versione",
+    "hidden": "Nome nascosto",
+    "hiddenWhy": "Un nome è nascosto dove il sito non ha registrato la base giuridica per nominare i lavoratori nelle letture d’ufficio (Produzione › Regole di reparto).",
+    "holdsSkill": "Ha la competenza",
+    "noSkill": "L’ha vista, senza competenza",
+    "lastSeen": "v{number} · {date}",
+    "way": {
+      "FLOOR": "Sul tablet, in {language}",
+      "PAPER": "Firmata su carta, in {language}"
+    },
+    "never": "Mai",
+    "seenYes": "Vista",
+    "seenNo": "Non ancora",
+    "namesHR": "I nomi sono un registro di formazione solo per il Personale (production.instructions.people).",
+    "record": "Una conferma è un registro di formazione (D.Lgs. 81/2008 art. 37), mai un registro di rendimento."
+  },
+  "approve": {
+    "title": "Approva la versione {number}",
+    "subtitle": "{number} · {operation}",
+    "floorAsked": "Il reparto mostra la v{number} da adesso; agli operatori si chiede di confermarla al loro prossimo Avvio.",
+    "floorNotAsked": "Il reparto mostra la v{number} da adesso; a chi ha visto una versione precedente non si chiede di nuovo (correzione di parole).",
+    "allNew_one": "La prima versione: {count} passo",
+    "allNew_other": "La prima versione: {count} passi",
+    "changes": "Cosa è cambiato dalla v{from} alla v{to}",
+    "added": "{code} aggiunto",
+    "changed": "{code} modificato",
+    "removed": "{code} tolto",
+    "same": "I passi sono uguali alla versione in vigore.",
+    "note": "Nota di modifica:",
+    "signOff": "Approvazione",
+    "stepWrite": "Versione {number} scritta",
+    "stepApprove": "Versione {number} approvata da una seconda persona",
+    "roleAuthor": "Autore",
+    "roleApprover": "Approvatore",
+    "whoMay": "Responsabile di produzione o qualità, mai l’autore",
+    "ruleMet": "Scritta da {name}: tu sei una seconda persona.",
+    "ruleBroken": "La versione {number} è una tua bozza: la approva un’altra persona.",
+    "do": "Approva la v{number}",
+    "supersedes": "La v{number} in vigore viene sostituita nello stesso momento.",
+    "first": "La prima versione che arriva in reparto."
+  },
+  "newVersion": {
+    "title": "Inizia la versione {number}",
+    "copy": "Una copia della v{number} in vigore: passi, foto e video.",
+    "blank": "Una nuova bozza.",
+    "noteHint": "Cosa cambierà (puoi scriverlo dopo; è richiesto prima dell’approvazione).",
+    "floor": "In reparto non cambia niente finché una seconda persona non la approva.",
+    "do": "Inizia la v{number}"
+  },
+  "discard": {
+    "title": "Scartare la bozza v{number}?",
+    "subtitle": "Non arriva mai in reparto; resta nello storico con il tuo motivo.",
+    "reasonMissing": "Di’ perché viene scartata.",
+    "do": "Scarta la v{number}"
+  },
+  "paper": {
+    "title": "Conferma su carta della v{number}",
+    "subtitle": "Per una persona che ha firmato il foglio stampato della versione in vigore.",
+    "person": "Persona",
+    "personHint": "Persone nominate qui che non hanno visto la versione in vigore.",
+    "nobody": "Tutte le persone nominate qui l’hanno già vista.",
+    "choose": "Scegli la persona",
+    "language": "Lingua del foglio",
+    "date": "Firmata il",
+    "dateHint": "Mai un giorno futuro.",
+    "pickPerson": "Scegli la persona.",
+    "pickDate": "Scegli il giorno della firma.",
+    "do": "Registra"
+  },
+  "preview": {
+    "title": "Anteprima reparto · {number}",
+    "titlePlain": "Anteprima reparto",
+    "note": "Come il tablet la mostra all’operatore. Qui non si registra niente.",
+    "language": "Lingua sul tablet",
+    "version": "Versione",
+    "failed": "Non è stato possibile leggere l’anteprima",
+    "draft": "Bozza v{number}: il reparto non la vede finché non è approvata.",
+    "notInForce": "La v{number} non è in vigore: il reparto mostra la versione in vigore.",
+    "newVersion": "Nuova versione {number}: guarda ogni passo, poi tocca Visto.",
+    "tick": "Spunta prima di Fine",
+    "shownIn": "Non scritto in questa lingua: mostrato in {language}.",
+    "moreMedia_one": "Ancora {count} foto o video sul tablet",
+    "moreMedia_other": "Ancora {count} foto o video sul tablet",
+    "seen": "Visto",
+    "seenHeld": "Un’anteprima: l’operatore tocca Visto sul tablet."
+  },
+  "sheet": {
+    "title": "{number} · v{version}",
+    "titlePlain": "Foglio istruzione",
+    "note": "Il foglio per la postazione, fatto ora e non conservato. Vale come versione in vigore quella del tablet.",
+    "language": "Lingua del foglio",
+    "lang": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "version": "Versione",
+    "print": "Stampa",
+    "held": "Il foglio è ancora in preparazione",
+    "reading": "Preparazione del foglio…",
+    "failed": "Non è stato possibile preparare il foglio",
+    "draft": "Bozza v{number}: il foglio lo dice; il reparto non lo usa.",
+    "notInForce": "La v{number} non è in vigore: il foglio lo dice."
+  }
+}

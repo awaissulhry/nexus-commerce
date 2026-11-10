@@ -38,6 +38,8 @@ import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
+// B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
+import { PRODUCT_MATERIALS_DEPTH_ADDS } from '../../product/materials-depth/permissions'
 // B-W2b-249: Rules & markets (the quality inspector) and the phrase library (quality proposes and approves; the production manager proposes).
 import { RULES_LIBRARY_ADDS } from '../../compliance/register-of-rules/permissions'
 import { PHRASES_ADDS } from '../../compliance/phrases/permissions'
@@ -829,6 +831,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_CHANGES_ADDS[key] ?? []) : []),
   // B-W2b-229
   ...(audience === 'office' ? (PRODUCT_OPTIONS_ADDS[key] ?? []) : []),
+  // B-W2b-238
+  ...(audience === 'office' ? (PRODUCT_MATERIALS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-249
   ...(audience === 'office' ? (RULES_LIBRARY_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (PHRASES_ADDS[key] ?? []) : [])]

@@ -5,6 +5,8 @@ import { LOCALES } from '../../email/rules'
 import { money } from '../../money/marked'
 import { UOMS } from '../units/units'
 import { ITEM_KINDS, ITEM_SOURCINGS, ITEM_TRACKINGS, MATERIAL_CODE, MATERIAL_CODE_RULE, MATERIAL_STATUSES, MATERIAL_WARNINGS, TANNAGES } from './rules'
+// B-W2b-238: a material's approval for use (PRD-035).
+import { MATERIAL_APPROVALS } from '../bom-structure/rules'
 
 /**
  * The material library's contracts (plan A1 D2; A2 SCR-047 "Materials & trims", SCR-048 "Material record"): what
@@ -190,10 +192,16 @@ const summary = {
   status: z.enum(MATERIAL_STATUSES),
   version: z.number().int(),
   updatedAt: instant(),
+  /** B-W2b-238 (PRD-035): its approval for use (the list's Approval column); its depth is modules/product/materials-depth. */
+  approval: z.enum(MATERIAL_APPROVALS).optional(),
 }
 
 /** A row of the material list (SCR-047). */
-export const materialRow = output(summary)
+export const materialRow = output({
+  ...summary,
+  /** B-W2b-238 (PRD-036): the styles whose draft or released BOM names it, among those the reader sees (null: no product.styles.view). */
+  usedInStyles: z.number().int().nullable().optional(),
+})
 export type MaterialRow = z.infer<typeof materialRow>
 
 /** The material record (SCR-048). */

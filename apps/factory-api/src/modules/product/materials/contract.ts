@@ -27,7 +27,12 @@ const flag = () => z.enum(['true', 'false']).transform((value) => value === 'tru
  * (`ppeComponent`), and the materials without a standard purchase price (`missingCost`: a yes/no filter, not an amount —
  * notMoney — that listMaterials refuses to a caller without the cost grain, since the answer tells which have a price).
  */
-export const listMaterialsFilters = listMaterialsQuery.extend({ ppeComponent: flag().optional(), missingCost: notMoney(flag().optional()) })
+export const listMaterialsFilters = listMaterialsQuery.extend({
+  ppeComponent: flag().optional(),
+  missingCost: notMoney(flag().optional()),
+  // B-W2b-238 (PRD-036): named by a draft or released BOM of a style the caller sees (false: the "Not used in any BOM" tile).
+  used: flag().optional(),
+})
 export type ListMaterialsFilters = z.output<typeof listMaterialsFilters>
 
 export const listMaterialsContract = defineContract({
