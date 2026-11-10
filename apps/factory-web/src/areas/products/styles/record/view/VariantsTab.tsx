@@ -12,6 +12,8 @@ import { CELL_TONE, matrixCells, moveCell, rangeEffect, rowToggle, type MatrixCe
 import { ListKeysInfo } from '../../../../../list-frame/ListKeysInfo'
 import '../../../../../list-frame/list-frame.css'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
+// B-W2b-237: GTINs in the matrix (what a cell shows, Assign GTINs).
+import type { StyleDepthSlots } from '../overview/slots'
 
 /**
  * SCR-041 Colourways & sizes: the size range (scale, sizes, base size; Apply says first how many SKUs it adds or
@@ -20,15 +22,16 @@ import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
  * certificate coverage). A cell a valid certificate does not cover carries a mark (it blocks release, labels and
  * shipping of that cell).
  */
-export function VariantsTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+export function VariantsTab({ style, model, actions, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; depth?: StyleDepthSlots }) {
   return (
     <div className="fw-st-stack-lg">
+      {depth?.matrixNotice /* B-W2b-237 */}
       <RangeCard style={style} model={model} actions={actions} />
       <div className="fw-st-pair">
         <ColourwaysCard style={style} model={model} actions={actions} />
         <MeasuresCard style={style} />
       </div>
-      <MatrixCard style={style} model={model} actions={actions} />
+      <MatrixCard style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
     </div>
   )
 }
@@ -172,7 +175,7 @@ function ColourwaysCard({ style, model, actions }: { style: StyleView; model: St
   )
 }
 
-function MatrixCard({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+function MatrixCard({ style, model, actions, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; depth?: StyleDepthSlots }) {
   const t = useT('products')
   const editable = model.can.manage && style.status !== 'ARCHIVED'
   const rows = useMemo(() => matrixCells(style), [style])
@@ -227,9 +230,12 @@ function MatrixCard({ style, model, actions }: { style: StyleView; model: StyleR
       header={t('matrix.title')}
       description={t('matrix.intro')}
       headerAction={
-        <Button size="sm" variant={missing > 0 ? 'primary' : 'secondary'} heldReason={heldWhy ?? (missing === 0 ? t('matrix.nothingToGenerate') : null)} onClick={() => actions?.onDialog?.({ kind: 'generate' })}>
-          {missing > 0 ? t('matrix.generate', { count: missing }) : t('matrix.generateNone')}
-        </Button>
+        <span className="fw-st-inline">
+          {depth?.matrixTools /* B-W2b-237 */}
+          <Button size="sm" variant={missing > 0 ? 'primary' : 'secondary'} heldReason={heldWhy ?? (missing === 0 ? t('matrix.nothingToGenerate') : null)} onClick={() => actions?.onDialog?.({ kind: 'generate' })}>
+            {missing > 0 ? t('matrix.generate', { count: missing }) : t('matrix.generateNone')}
+          </Button>
+        </span>
       }
     >
       {rows.length === 0 || sizes.length === 0 ? (
@@ -285,7 +291,7 @@ function MatrixCard({ style, model, actions }: { style: StyleView; model: StyleR
                               onKeyDown={(event) => onKey(event, rowIndex, col)}
                             >
                               {cell.state === 'on' ? <Check size={14} aria-hidden /> : cell.state === 'none' ? <Plus size={13} aria-hidden /> : <Minus size={13} aria-hidden />}
-                              {cell.sku?.gtin && <span className="fw-st-matrix-mark">GTIN</span>}
+                              {depth ? depth.cell(cell.sku) /* B-W2b-237 */ : cell.sku?.gtin && <span className="fw-st-matrix-mark">GTIN</span>}
                               {uncovered && <span className="fw-st-matrix-flag" aria-hidden />}
                             </button>
                           </td>
