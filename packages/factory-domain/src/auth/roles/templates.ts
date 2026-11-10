@@ -51,6 +51,8 @@ import { PRODUCT_PREPACKS_ADDS } from '../../product/prepacks/permissions'
 import { SUBSTANCES_ADDS } from '../../compliance/substances/permissions'
 // B-W2b-246: sample rounds (sales and the production manager keep them; the planner and quality read them).
 import { SALES_SAMPLES_ADDS } from '../../sales/samples/permissions'
+// B-W2b-251: technical files (the quality inspector keeps them, signs the risk assessment and sends evidence packs).
+import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -851,7 +853,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-250
   ...(audience === 'office' ? (SUBSTANCES_ADDS[key] ?? []) : []),
   // B-W2b-246
-  ...(audience === 'office' ? (SALES_SAMPLES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_SAMPLES_ADDS[key] ?? []) : []),
+  // B-W2b-251
+  ...(audience === 'office' ? (TECHFILES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
