@@ -48,6 +48,10 @@ import { recordLabelLog } from './label-log'
 import { takeSerials } from './numbers'
 import { lockLabelCells, lockSerial, readCells, readHeader, readSerial, readSerials, type LabelHeader, type LabelPrinterRow, type SerialRow } from './store'
 import { cellStateView, serialView } from './views'
+// B-W2b-254 (PRD-272): the one compliance gate at label print (QHS-051 as a requirement); refusals become GateEvents.
+import { labelPrintGate, type LabelGate } from '../../compliance/gates/at-steps'
+import { withGateRecords } from '../../compliance/gates/gate'
+import { LabelRefusedError } from './facts'
 
 /**
  * Batch or serial at the final operation, and the garment labels behind the certificate gate (B-W1-44; MES-076,
@@ -206,6 +210,9 @@ interface PrintResult {
   readonly refused: LabelRefusal[]
 }
 
+/** B-W2b-254: the work order as the compliance gate reads it (its frozen label template). */
+const gatedLabel = (header: LabelHeader) => ({ id: header.id, number: header.number, companyId: header.companyId, siteId: header.siteId, styleId: header.styleId, labelTemplateId: header.labelTemplateId })
+
 /**
  * B-W2a-F1 hook (quality/holds checks.ts): garment labels of a work order ON_HOLD are neither printed nor printed again,
  * in the hold's words (wave 5's GarmentLabelPrint_awaits_hold refuses the same).
@@ -215,7 +222,7 @@ async function refuseHeldLabels(tools: CommandTools, workOrderId: string): Promi
   if (held) refuse({ code: 'WORK_ORDER_NOT_OPEN', message: held, fix: 'Quality lifts the hold in the office (Quality › Holds); then print the labels.', cellId: null })
 }
 
-async function printInCommand(tools: CommandTools, workOrderId: string, body: PrintInput, languages: ReadonlyMap<string, string>): Promise<PrintResult> {
+async function printInCommand(tools: CommandTools, workOrderId: string, body: PrintInput, languages: ReadonlyMap<string, string>, compliance?: LabelGate): Promise<PrintResult> {
   const context = tools.context as FloorContext
   const { tx } = tools
   await scanWorkOrderLock(tx, context.tenantId, workOrderId)
@@ -241,7 +248,8 @@ async function printInCommand(tools: CommandTools, workOrderId: string, body: Pr
   for (const line of plan.lines) {
     const cell = byId.get(line.cellId)!
     const identification = tracking === 'BATCH' ? batchIdentification(header) : probeIdentification(header, context.tenantId)
-    const refusal = gateRefusal(cell, await renderCell(tx, header, cell, identification, date, languages))
+    // B-W2b-254: W1's certificate gate first (its words), then the requirements that block label print.
+    const refusal = gateRefusal(cell, await renderCell(tx, header, cell, identification, date, languages)) ?? compliance?.refusalFor(cell.cellId) ?? null
     if (refusal) refused.push(refusal)
     else printable.push({ cell, count: line.count })
   }
@@ -312,8 +320,14 @@ export async function printLabels(caller: CommandCaller, workOrderId: string, bo
   await assertFloorReady(caller, header.siteId)
   const printer = await labelPrinter(caller, header, body.printerId)
   const languages = await languagesOf(caller, await caller.withClient((client) => readCells(client, header.id)))
-  const outcome = await command(caller, { name: 'production.printGarmentLabels', idempotencyKey, input: { workOrderId, ...body, printerId: printer.id } }, (tools) =>
-    printInCommand(tools, workOrderId, { ...body, printerId: printer.id }, languages),
+  // B-W2b-254: decided before the step with the tenant's system client (the floor role reads less); the refused sizes' GateEvents after it.
+  const compliance = await labelPrintGate(caller, gatedLabel(header))
+  const outcome = await withGateRecords(
+    caller,
+    idempotencyKey,
+    () => command(caller, { name: 'production.printGarmentLabels', idempotencyKey, input: { workOrderId, ...body, printerId: printer.id } }, (tools) => printInCommand(tools, workOrderId, { ...body, printerId: printer.id }, languages, compliance)),
+    (done) => (done.replayed ? [] : compliance.pendingFor(done.result.refused)),
+    (error) => (error instanceof LabelRefusedError ? compliance.pendingFor([error.refusal, ...error.others]) : []),
   )
   const { printed, refused, ...rest } = outcome.result
   return {
@@ -343,7 +357,9 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
   const printer = await labelPrinter(caller, header, body.printerId)
   const languages = await languagesOf(caller, await caller.withClient((client) => readCells(client, header.id)))
   const reason = body.reason.trim()
-  const outcome = await command(caller, { name: 'production.reprintGarmentLabels', idempotencyKey, input: { workOrderId, ...body, reason, printerId: printer.id } }, async (tools) => {
+  // B-W2b-254: a reprint stands before the label gate too.
+  const compliance = await labelPrintGate(caller, gatedLabel(header), [body.workOrderSizeId])
+  const outcome = await withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'production.reprintGarmentLabels', idempotencyKey, input: { workOrderId, ...body, reason, printerId: printer.id } }, async (tools) => {
     const { tx } = tools
     await scanWorkOrderLock(tx, context.tenantId, workOrderId)
     const current = await readHeader(tx, workOrderId)
@@ -355,7 +371,7 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
     const cell = facts.cells.find((row) => row.cellId === body.workOrderSizeId)
     const refusal = batchReprintRefusal({ workOrder: current, tracking: facts.style.tracking, cell, cellId: body.workOrderSizeId, count: body.count })
     if (refusal) refuse(refusal)
-    const gate = gateRefusal(cell!, await renderCell(tx, current, cell!, batchIdentification(current), printDay(tools.now), languages))
+    const gate = gateRefusal(cell!, await renderCell(tx, current, cell!, batchIdentification(current), printDay(tools.now), languages)) ?? compliance.refusalFor(cell!.cellId)
     if (gate) refuse(gate)
     const scope = scopeOf(current)
     const entryId = newId()
@@ -369,7 +385,7 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
     })
     const line: PrintedLine = { entryId, workOrderSizeId: cell!.cellId, colourwayCode: cell!.colourwayCode, size: cell!.size, count: body.count, batchNumber: current.batchNumber!, serials: [] }
     return { workOrder: { id: current.id, number: current.number, status: current.status, batchNumber: current.batchNumber! }, reprinted: line }
-  })
+  }), undefined, (error) => (error instanceof LabelRefusedError ? compliance.pendingFor([error.refusal, ...error.others]) : []))
   const [answer] = await printLines(caller, header, printer, [outcome.result.reprinted])
   return { workOrder: outcome.result.workOrder, printerId: printer.id, reprinted: answer!, cells: await cellStateView(caller, header), replayed: outcome.replayed }
 }
@@ -391,7 +407,9 @@ export async function reprintSerial(caller: CommandCaller, serialId: string, bod
   const printer = await labelPrinter(caller, header, body.printerId)
   const languages = await languagesOf(caller, await caller.withClient((client) => readCells(client, header.id)))
   const reason = body.reason.trim()
-  const outcome = await command(caller, { name: 'production.reprintGarmentSerial', idempotencyKey, input: { serialId, ...body, reason, printerId: printer.id } }, async (tools) => {
+  // B-W2b-254: a reprint stands before the label gate too.
+  const compliance = await labelPrintGate(caller, gatedLabel(header))
+  const outcome = await withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'production.reprintGarmentSerial', idempotencyKey, input: { serialId, ...body, reason, printerId: printer.id } }, async (tools) => {
     const { tx } = tools
     const serial = await lockSerial(tx, serialId)
     if (!serial) throw new NotFoundError('Serial not found.')
@@ -402,7 +420,7 @@ export async function reprintSerial(caller: CommandCaller, serialId: string, bod
     const createdById = await namedBy(tools, current.siteId)
     const facts = await labelFacts(tx, current)
     const cell = facts.cells.find((row) => row.cellId === serial.workOrderSizeId)!
-    const gate = gateRefusal(cell, await renderCell(tx, current, cell, serialIdentification(current, serial), printDay(tools.now), languages))
+    const gate = gateRefusal(cell, await renderCell(tx, current, cell, serialIdentification(current, serial), printDay(tools.now), languages)) ?? compliance.refusalFor(cell.cellId)
     if (gate) refuse(gate)
     const scope = scopeOf(current)
     const entryId = newId()
@@ -417,7 +435,7 @@ export async function reprintSerial(caller: CommandCaller, serialId: string, bod
     })
     const line: PrintedLine = { entryId, workOrderSizeId: cell.cellId, colourwayCode: cell.colourwayCode, size: cell.size, count: 1, batchNumber: current.batchNumber!, serials: [printedSerial] }
     return { reprinted: line }
-  })
+  }), undefined, (error) => (error instanceof LabelRefusedError ? compliance.pendingFor([error.refusal, ...error.others]) : []))
   const [answer] = await printLines(caller, header, printer, [outcome.result.reprinted])
   const serial = (await caller.withClient((client) => readSerial(client, serialId)))!
   return { serial: serialView(serial, null, null), printerId: printer.id, reprinted: answer!, replayed: outcome.replayed }

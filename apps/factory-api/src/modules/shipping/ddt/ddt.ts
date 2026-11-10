@@ -30,6 +30,9 @@ import { whenShipped } from '../shipments/leave'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { isSourceDdt, lockSource, sourceDdtView, sourceIssuedOf, sourceLanguageOf, sourceNumbersOf, type SourceDdtRow } from './sources-store'
 import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readAnyDdt, readDdt, readDdtFacts, type AnyDdtRow, type DdtRow, type DdtView } from './store'
+// B-W2b-254 (PRD-272): the one compliance gate at the shipment (certificate coverage locked by the law, the operator, every requirement that blocks it).
+import { shipmentGate } from '../../compliance/gates/at-steps'
+import { withGateRecords } from '../../compliance/gates/gate'
 
 /**
  * The DDT of a shipment (B-W1-47; LOG-054; DPR 472/1996; A2 SCR-067 Documents tab). Office only.
@@ -143,6 +146,8 @@ async function shipGoods(tools: CommandTools, shipment: ShipmentHeader, periodLo
 async function assertDocumentsTravel(tools: CommandTools, shipmentId: string): Promise<void> {
   const blockers = await shipmentDocumentBlockers(tools.tx, shipmentId)
   if (blockers.length > 0) throw new InvalidStateError(blockers.map((check) => check.message).join(' '))
+  // B-W2b-254: then the requirements that block the shipment (a refusal is a 409 in words; withGateRecords writes its GateEvent).
+  await shipmentGate(tools, shipmentId)
 }
 
 const shipmentState = async (tools: CommandTools, shipmentId: string) => {
@@ -168,7 +173,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_DDT_ISSUE)
   if (body.ship === true && !mayOn(context, SHIPPING_MANAGE, shipment)) throw new ForbiddenError('Shipping the goods with the DDT needs shipping.manage too.')
   const company = await companyLegalOf(caller, shipment.companyId)
-  const { result } = await command(
+  const { result } = await withGateRecords(caller, idempotencyKey, () => command(
     caller,
     { name: 'shipping.issueDdt', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
     async (tools) => {
@@ -237,7 +242,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       tools.emit({ type: 'ddt.issued', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { ddtId: id, shipmentId: current.id, number: number.formatted, documentDate: number.documentDate, replacement, shipped: shipped !== null } })
       return { ddt: ddtView((await readDdt(tools.tx, id))!, null), shipment: await shipmentState(tools, current.id) }
     },
-  )
+  ))
   const printed = await printSafely(files, caller, result.ddt.id, onPdfError)
   return { ...result, ddt: { ...result.ddt, fileId: printed.file?.id ?? null }, ...printed }
 }
@@ -428,7 +433,7 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
  */
 export async function shipShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
-  const { result } = await command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
+  const { result } = await withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'it leaves')
     const facts = { ...(await shipmentFacts(tools.tx, current.id)), ddtRequired: current.ddtRequired }
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
@@ -437,7 +442,7 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     const serials = await shipGoods(tools, current, body.periodLockOverride)
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
-  })
+  }))
   return result
 }
 
