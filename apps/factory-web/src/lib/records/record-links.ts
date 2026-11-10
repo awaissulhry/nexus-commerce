@@ -171,6 +171,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
   // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
   ComplianceDocument: '/compliance/declarations/[id]',
+  // B-W2b-267 Compliance › Tests & substances: a supplier declaration opens in its DetailModal on the Supplier declarations
+  // view (SCR-054-declaration); a material's compliance profile (its id is the material's) on the material's Compliance tab.
+  SupplierDeclarationRequest: '/compliance/tests?view=declarations&open=[id]',
+  MaterialComplianceProfile: '/products/materials/[id]?tab=compliance',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
   Incident: '/plant/incidents/[id]',
   // B-W2b-148 Plant › Health surveillance (SCR-212): a visit and a judgement open in their window (each a recorded read), a plan in its dialog.
