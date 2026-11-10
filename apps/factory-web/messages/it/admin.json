@@ -1668,6 +1668,7 @@
     "compliance_certificates_manage": "Registrare, sospendere e ritirare certificati",
     "compliance_declarations_manage": "Caricare dichiarazioni di conformità e note informative",
     "compliance_labels_manage": "Creare e attivare i modelli delle etichette dei capi",
+    "compliance_artwork_approve": "Approvare la grafica delle etichette fatta da un'altra persona (un secondo controllo)",
     "compliance_register_view": "Vedere il registro DPI",
     "compliance_register_manage": "Registrare reclami, non conformità e richiami",
     "compliance_textileRules_manage": "Attivare o disattivare i controlli tessile, manutenzione e Made in Italy",

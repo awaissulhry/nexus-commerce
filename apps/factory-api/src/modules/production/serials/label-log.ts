@@ -103,3 +103,70 @@ export async function readLabelLog(db: Reader, workOrderId: string): Promise<Lab
     postedBy: row.deviceId ? 'FLOOR' : 'OFFICE',
   }))
 }
+
+// ---- B-W2b-259 (MES-140): labels of a print that did not end on a garment ------------------------------------------------
+
+/**
+ * Spoiled and returned labels (B-W2b-218's append-only GarmentLabelSpoil): rows of a print (its company, site and work
+ * order), SPOILED with the reason in words or RETURNED. Written inside the command that logs them (compliance/label-artwork
+ * reconciliation.ts), each with its audit row; the database keeps a print's spoiled + returned at most its quantity. The
+ * floor reads and writes its own site's rows, the office every site's (row-level security).
+ */
+export interface LabelSpoilDraft {
+  readonly id: string
+  readonly companyId: string
+  readonly siteId: string
+  readonly workOrderId: string
+  readonly printId: string
+  readonly kind: 'SPOILED' | 'RETURNED'
+  readonly quantity: number
+  readonly reason: string | null
+  /** The office user, or the worker where the site names workers; null at a station site. */
+  readonly createdById: string | null
+}
+
+export interface LabelSpoilEntry {
+  readonly id: string
+  readonly printId: string
+  readonly kind: 'SPOILED' | 'RETURNED'
+  readonly quantity: number
+  readonly reason: string | null
+  readonly at: Date
+}
+
+/** Records one row inside the logging command, with its audit row (never who on the floor: the row's createdById says it where the site names workers). */
+export async function recordLabelSpoil(tools: CommandTools, draft: LabelSpoilDraft): Promise<void> {
+  await tools.tx.garmentLabelSpoil.create({
+    data: {
+      id: draft.id,
+      companyId: draft.companyId,
+      siteId: draft.siteId,
+      workOrderId: draft.workOrderId,
+      printId: draft.printId,
+      kind: draft.kind,
+      quantity: draft.quantity,
+      reason: draft.reason,
+      createdAt: tools.now,
+      createdById: draft.createdById,
+    },
+    select: { id: true },
+  })
+  tools.audit({
+    recordType: 'GarmentLabelSpoil',
+    recordId: draft.id,
+    companyId: draft.companyId,
+    siteId: draft.siteId,
+    after: { kind: draft.kind, workOrderId: draft.workOrderId, printId: draft.printId, quantity: draft.quantity },
+    ...(draft.reason ? { reason: draft.reason } : {}),
+  })
+}
+
+/** The work order's spoiled and returned labels the reader may see, oldest first. */
+export async function readLabelSpoils(db: Reader, workOrderId: string): Promise<LabelSpoilEntry[]> {
+  const rows = await db.garmentLabelSpoil.findMany({
+    where: { workOrderId },
+    select: { id: true, printId: true, kind: true, quantity: true, reason: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  return rows.map((row) => ({ id: row.id, printId: row.printId, kind: row.kind, quantity: row.quantity, reason: row.reason, at: row.createdAt }))
+}

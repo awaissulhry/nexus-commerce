@@ -10,6 +10,9 @@ import { useWedgeScans } from '../scans/wedge'
 import { AsOfMemory } from '../shared/as-of'
 import type { TaskProblem } from '../shared/task-api'
 import { freshKey, printLabels, readJob, readLabels, reprintCell, reprintSerial, retryJob, scanCode, type Cell, type LabelsView as LabelsAnswer, type Refusal, type ReprintCellAnswer } from './api'
+// B-W2b-259 (MES-140): the label reconciliation and Log spoiled labels.
+import { logSpoiled, readReconciliation, type Reconciliation } from './api'
+import { reconcileModel, spoilAsk, spoilCount, type SpoilReason } from './reconcile'
 import { allLabelled, firstCell, jobMoving, jobsOf, labelsScan, printerChoice, printerIdOf, problemsOf, type JobModel } from './model'
 import { labelsStepOf, orderOf } from './steps'
 import { LabelsView, type LabelsAction, type LabelsNote, type LabelsStep, type ReprintReason } from './view/LabelsView'
@@ -29,7 +32,7 @@ interface Loaded {
   readonly previewCell: string | null
 }
 
-type Stage = { kind: 'scan' } | { kind: 'labels' } | { kind: 'reprint'; cellId: string; count: number | null } | { kind: 'done' }
+type Stage = { kind: 'scan' } | { kind: 'labels' } | { kind: 'reprint'; cellId: string; count: number | null } | { kind: 'done' } | /* B-W2b-259 */ { kind: 'spoil'; cellId: string; count: number | null }
 
 /** The reason sent with a reprint: fixed words, so the office's label log reads the same in any language. */
 const REASON_TEXT: Readonly<Record<ReprintReason, string>> = {
@@ -70,6 +73,8 @@ export function FloorLabels() {
   const [problem, setProblem] = useState<{ problem: TaskProblem; code?: string | null } | null>(null)
   const [notice, setNotice] = useState<TaskProblem | null>(null)
   const [busy, setBusy] = useState(false)
+  /** B-W2b-259: the work order's label reconciliation (the last read stays while the network is gone). */
+  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null)
   const [reading, setReading] = useState<string | null>(null)
   /** The print on its way: its key is kept while its answer is lost (a resend is answered, never printed twice). */
   const pending = useRef<{ what: string; key: string } | null>(null)
@@ -122,6 +127,15 @@ export function FloorLabels() {
     [api, sessionEnded, keep],
   )
 
+  /** B-W2b-259: the reconciliation read again (a failed read keeps the last one: it never stops the labels). */
+  const reconcileAgain = useCallback(
+    async (workOrderId: string) => {
+      const answer = await readReconciliation(api, workOrderId)
+      if (answer.ok && answer.value.reconciliation.workOrder.id === (current.current?.view.workOrder.id ?? workOrderId)) setReconciliation(answer.value.reconciliation)
+    },
+    [api],
+  )
+
   const open = useCallback(
     async (workOrderId: string, cellId: string | null, code?: string | null) => {
       setProblem(null)
@@ -131,7 +145,9 @@ export function FloorLabels() {
       setProblems([])
       setBusy(true)
       setStage({ kind: 'labels' })
+      if (current.current?.view.workOrder.id !== workOrderId) setReconciliation(null)
       let next = await load(workOrderId, cellId, code)
+      if (next) void reconcileAgain(workOrderId)
       if (next && !next.view.blocked) {
         const first = firstCell(next.view.cells, cellId)
         if (first && first !== next.previewCell) next = (await load(workOrderId, first, code)) ?? next
@@ -139,7 +155,7 @@ export function FloorLabels() {
       } else setPicked(null)
       setBusy(false)
     },
-    [load],
+    [load, reconcileAgain],
   )
 
   // A plain function (not memoised): it reads this render's state.
@@ -263,6 +279,7 @@ export function FloorLabels() {
     setPrintedAt((known) => ({ ...known, ...Object.fromEntries(answer.value.printed.map((line) => [line.workOrderSizeId, now])) }))
     if (!answer.value.replayed) setPrintedTotal((total) => total + count)
     setNote({ kind: 'printed', count, sizes: answer.value.printed.map((line) => `${line.colourwayCode} ${line.size}`).join(', ') })
+    void reconcileAgain(value.view.workOrder.id)
     feedback(count > 0 ? 'success' : 'warning')
   }
 
@@ -286,6 +303,33 @@ export function FloorLabels() {
     setJobs((known) => [...made, ...known.filter((job) => !made.some((entry) => entry.id === job.id))])
     setProblems(problemsOf([answer.value.reprinted]))
     setNote({ kind: 'reprinted', count: answer.value.reprinted.count, what: serialHere ? serialHere.serial : `${cell.colourwayCode} ${cell.size}` })
+    void reconcileAgain(value.view.workOrder.id)
+    setStage({ kind: 'labels' })
+    feedback('success')
+  }
+
+  /** B-W2b-259: Log spoiled labels of the size being logged: one tap on why sends the count (never queued). */
+  const spoil = async (choice: SpoilReason | 'RETURNED') => {
+    const value = current.current
+    if (!value || !online || stage.kind !== 'spoil') return
+    const row = reconciliation?.cells.find((entry) => entry.workOrderSizeId === stage.cellId)
+    if (!row) return
+    const count = spoilCount(stage.count, row.printed - row.spoiled - row.returned)
+    setBusy(true)
+    setNotice(null)
+    const answer = await logSpoiled(api, value.view.workOrder.id, spoilAsk(choice, stage.cellId, count), keyFor(`spoil:${stage.cellId}:${count}:${choice}`))
+    setBusy(false)
+    if (!answer.ok) {
+      if (answer.problem.kind === 'signedOut') return void sessionEnded()
+      feedback('error')
+      if (answer.problem.kind === 'refused' || answer.problem.kind === 'conflict' || answer.problem.kind === 'invalid' || answer.problem.kind === 'forbidden') settled()
+      setNotice(answer.problem)
+      if (answer.problem.kind === 'conflict' || answer.problem.kind === 'refused') void reconcileAgain(value.view.workOrder.id)
+      return
+    }
+    settled()
+    setReconciliation(answer.value.reconciliation)
+    setNote({ kind: 'logged', count, what: `${row.colourwayCode} ${row.size}`, returned: choice === 'RETURNED' })
     setStage({ kind: 'labels' })
     feedback('success')
   }
@@ -305,12 +349,13 @@ export function FloorLabels() {
     setProblem(null)
     setAsOf(null)
     setPrintedTotal(0)
+    setReconciliation(null)
     setStage({ kind: 'scan' })
   }
 
   const back = () => {
     setNotice(null)
-    if (stage.kind === 'reprint') return setStage({ kind: 'labels' })
+    if (stage.kind === 'reprint' || stage.kind === 'spoil') return setStage({ kind: 'labels' })
     if (stage.kind === 'scan' && !problem) return router.push('/floor')
     toScan()
   }
@@ -338,6 +383,17 @@ export function FloorLabels() {
         return stage.kind === 'reprint' ? setStage({ ...stage, count: action.value }) : undefined
       case 'reprint-reason':
         return stage.kind === 'reprint' ? reprint(stage.cellId, stage.count, action.reason) : undefined
+      // B-W2b-259
+      case 'spoil': {
+        const model = reconcileModel(reconciliation, picked, { online, busy })
+        if (!picked || !model || model.held) return
+        setNotice(null)
+        return setStage({ kind: 'spoil', cellId: picked, count: null })
+      }
+      case 'spoil-count':
+        return stage.kind === 'spoil' ? setStage({ ...stage, count: action.value }) : undefined
+      case 'spoil-reason':
+        return spoil(action.choice)
       case 'cancel':
         return setStage({ kind: 'labels' })
       case 'retry-job': {
@@ -366,7 +422,7 @@ export function FloorLabels() {
 
   const view = loaded?.view ?? null
   const order = view ? orderOf(view) : null
-  const labelsStep = view ? labelsStepOf({ view, previewCell: loaded?.previewCell ?? null, picked, printer, serial, online, busy, jobs, refused, problems, note, reading, printedTotal }) : null
+  const labelsStep = view ? { ...labelsStepOf({ view, previewCell: loaded?.previewCell ?? null, picked, printer, serial, online, busy, jobs, refused, problems, note, reading, printedTotal }), reconcile: reconcileModel(reconciliation, picked, { online, busy }) } : null
   const size = labelsStep?.picked ?? null
   const main = labelsStep?.main ?? { kind: 'none' as const, held: 'nothingLeft' as const }
 
@@ -378,7 +434,8 @@ export function FloorLabels() {
         if ((main.kind === 'reprint' || main.kind === 'reprintSerial') && !main.held) return { type: 'reprint' }
         return view && allLabelled(view.cells) && jobs.length > 0 ? { type: 'finish' } : null
       case 'reprint':
-        // design labels.reprint: Enter = Cancel (a reprint is never one key away).
+      case 'spoil':
+        // design labels.reprint: Enter = Cancel (a reprint, or a spoiled label logged, is never one key away).
         return { type: 'cancel' }
       case 'done':
         return { type: 'next' }
@@ -399,6 +456,9 @@ export function FloorLabels() {
   else if (view.blocked) step = { kind: 'blocked', order, refusal: view.blocked }
   else if (stage.kind === 'reprint' && size) {
     step = { kind: 'reprint', order, size: { ...size }, serial: view.tracking === 'SERIAL' && serial?.workOrderSizeId === size.id ? serial.serial : null, count: stage.count ?? size.labelled, printedAt: printedAt[size.id] ?? null, held: main.held }
+  } else if (stage.kind === 'spoil') {
+    const model = reconcileModel(reconciliation, stage.cellId, { online, busy })
+    step = model?.size ? { kind: 'spoil', order, spoil: { size: model.size.label, printed: model.size.printed, used: model.size.used, logged: model.size.spoiled + model.size.returned, room: model.room, count: spoilCount(stage.count, model.room), held: model.held } } : (labelsStep ?? { kind: 'loading' })
   } else step = labelsStep ?? { kind: 'loading' }
 
   return <LabelsView model={{ frame, online, step, asOf, busy, notice }} onFrame={onFrame} onAction={(action) => void onAction(action)} camera={zxingCamera} />

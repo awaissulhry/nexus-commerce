@@ -14,6 +14,9 @@ import { HeldLine, ProblemState, TaskLine } from '../../shared/view/TaskParts'
 import type { JobStatus, Refusal, Tracking } from '../api'
 import { isWorded, type ColourGroup, type GateModel, type HeldKey, type JobModel, type MainAction, type PrinterChoice, type SizeModel } from '../model'
 import type { LabelLayout } from '@nexus/ui/components/LabelPreview/index'
+// B-W2b-259 (MES-140): the label reconciliation and Log spoiled labels.
+import type { ReconcileModel, SpoilReason } from '../reconcile'
+import { ReconcilePanel, SpoilStep, type SpoilStepModel } from './ReconcileParts'
 import '../labels.css'
 
 /**
@@ -42,6 +45,8 @@ export type LabelsNote =
   | { kind: 'notHere'; code: string; why: 'otherLabel' | 'otherFactory' | 'typo' | 'notFound' | 'several' }
   | { kind: 'printed'; count: number; sizes: string }
   | { kind: 'reprinted'; count: number; what: string }
+  /** B-W2b-259: labels logged spoiled or returned. */
+  | { kind: 'logged'; count: number; what: string; returned: boolean }
 
 export type LabelsStep =
   | { kind: 'loading'; code?: string | null }
@@ -71,9 +76,13 @@ export type LabelsStep =
       problems: { what: string; problem: string }[]
       note?: LabelsNote | null
       finished: boolean
+      /** B-W2b-259: printed = used + spoiled + returned (null: not read). */
+      reconcile?: ReconcileModel | null
     }
   | { kind: 'reprint'; order: OrderModel; size: SizeModel; serial: string | null; count: number; printedAt: string | null; held: HeldKey }
   | { kind: 'done'; number: string; labels: number }
+  /** B-W2b-259: Log spoiled labels of the picked size (how many, then why). */
+  | { kind: 'spoil'; order: OrderModel; spoil: SpoilStepModel }
 
 export interface LabelsViewModel {
   frame: FrameModel
@@ -106,6 +115,10 @@ export type LabelsAction =
   | { type: 'retry' }
   | { type: 'finish' }
   | { type: 'next' }
+  // B-W2b-259
+  | { type: 'spoil' }
+  | { type: 'spoil-count'; value: number | null }
+  | { type: 'spoil-reason'; choice: SpoilReason | 'RETURNED' }
 
 export interface LabelsViewProps {
   model: LabelsViewModel
@@ -271,6 +284,7 @@ export function LabelsView({ model, onAction, onFrame, camera }: LabelsViewProps
                 </TaskLine>
               ) : null}
               {picked && picked.labelled > 0 ? <p className="fw-floor-muted">{[t(order.tracking === 'SERIAL' ? 'sizes.labelledSerial' : 'sizes.labelled', { count: picked.labelled, size: cell }), picked.reprinted > 0 ? t('sizes.again', { count: picked.reprinted }) : null].filter(Boolean).join(' · ')}</p> : null}
+              {step.reconcile ? <ReconcilePanel model={step.reconcile} onLog={() => send({ type: 'spoil' })} /> : null}
               {needsPick ? null : <PrinterLine choice={step.printer} t={t} send={send} />}
               {!model.online ? <HeldLine text={t('held.offline')} /> : null}
               {notice}
@@ -383,6 +397,16 @@ export function LabelsView({ model, onAction, onFrame, camera }: LabelsViewProps
       bar = [{ label: t('reprint.cancel'), icon: <ArrowLeft />, onPress: () => send({ type: 'cancel' }) }]
       break
     }
+
+    case 'spoil':
+      body = (
+        <>
+          <OrderStrip order={step.order} t={t} />
+          <SpoilStep model={step.spoil} onCount={(value) => send({ type: 'spoil-count', value })} onChoose={(choice) => send({ type: 'spoil-reason', choice })} notice={notice} />
+        </>
+      )
+      bar = [{ label: t('reprint.cancel'), icon: <ArrowLeft />, onPress: () => send({ type: 'cancel' }) }]
+      break
 
     case 'done':
       body = (
@@ -506,9 +530,20 @@ function NoteLine({ note, t }: { note: LabelsNote; t: Translate }) {
         {t('note.printed', { count: note.count, sizes: note.sizes })}
       </TaskLine>
     )
+  if (note.kind === 'logged') return <LoggedLine note={note} />
   return (
     <TaskLine tone="success" icon={<CircleCheck />}>
       {t('note.reprinted', { count: note.count, what: note.what })}
+    </TaskLine>
+  )
+}
+
+/** B-W2b-259: labels logged spoiled or returned, in this step's catalogue. */
+function LoggedLine({ note }: { note: Extract<LabelsNote, { kind: 'logged' }> }) {
+  const t = useT('floor-labels-depth')
+  return (
+    <TaskLine tone="success" icon={<CircleCheck />}>
+      {t(note.returned ? 'note.returned' : 'note.spoiled', { count: note.count, what: note.what })}
     </TaskLine>
   )
 }
