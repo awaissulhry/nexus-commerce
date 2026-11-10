@@ -17,6 +17,8 @@ import '../public-doc.css'
 // B-W2b-236 (SY3:03): the style's main picture, as its stripped public copy.
 import { PublicDocPicture } from '../picture/view/PublicDocPicture'
 import { publicDocPictureUrl } from '../picture/model'
+// B-W2b-271 (links.doc › sec:recall): a recall's or withdrawal's safety notice comes first on the page.
+import { PublicDocNotices } from '../notice/view/PublicDocNotice'
 
 export type { PublicDocActions, PublicDocViewModel } from '../model'
 
@@ -27,8 +29,8 @@ export type { PublicDocActions, PublicDocViewModel } from '../model'
  * style, the batch from the QR, the legal maker — the brand for private label), the declaration valid for this batch in
  * the reader's language (the PDF read in the page, every published language one choice away, Download, the PDF in a new
  * tab), the certificate summary, the instructions and safety information of the same revision, the earlier versions with
- * the batches they cover, and Type the code when the QR is damaged. No price, no person. The recall notice (W2b-4) and
- * Report a problem (W2b-5) join later.
+ * the batches they cover, and Type the code when the QR is damaged. No price, no person. B-W2b-271: a recall's or withdrawal's
+ * safety notice comes first; Report a problem (W2b-5) joins later.
  */
 export function PublicDocView({ model, actions }: { model: PublicDocViewModel; actions?: PublicDocActions }) {
   return (
@@ -105,6 +107,8 @@ function FoundBody({ page, model, actions }: { page: PublicDocPage; model: Publi
   const t = useT('public-doc')
   return (
     <div className="fw-pd">
+      {/* B-W2b-271: the safety notices first (empty: not drawn). */}
+      <PublicDocNotices notices={page.notices ?? []} chain={model.readerLanguages} batch={page.product.batch?.number ?? null} />
       {page.others.length > 0 && <OthersBanner page={page} actions={actions} />}
       <ProductSection page={page} model={model} />
       <DeclarationSection page={page} model={model} actions={actions} />
