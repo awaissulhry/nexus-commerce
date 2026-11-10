@@ -44,6 +44,8 @@ export const SCHEDULE_REFUSALS = [
   'WORK_ORDER_LOCKED',
   /** Allocation: the work order is already allocated so. */
   'ALREADY_ALLOCATED',
+  /** B-W2b-263: the work order's sales order waits on a pre-production gate not passed (issues `gate/<gate id>`). */
+  'GATE_NOT_PASSED',
 ] as const
 export type ScheduleRefusalCode = (typeof SCHEDULE_REFUSALS)[number]
 
@@ -52,7 +54,7 @@ export const PUBLISH_HOLDS = ['NOTHING_CHANGED', 'NOTHING_ON_DAYS', 'NO_PERMISSI
 export type PublishHoldCode = (typeof PUBLISH_HOLDS)[number]
 
 /** Why "Place all by due date" leaves a work order or an operation out. */
-export const SKIP_CODES = ['NOT_OPEN', 'ON_HOLD', 'NO_DUE_DATE', 'LANE_NOT_ACTIVE', 'NO_WORKING_TIME'] as const
+export const SKIP_CODES = ['NOT_OPEN', 'ON_HOLD', 'NO_DUE_DATE', 'LANE_NOT_ACTIVE', 'NO_WORKING_TIME', /* B-W2b-263 */ 'GATE_NOT_PASSED'] as const
 export type SkipCode = (typeof SKIP_CODES)[number]
 
 /** The issue that carries a refusal's code. */

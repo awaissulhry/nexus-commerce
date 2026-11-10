@@ -10,5 +10,7 @@ import { defineManifest, PUBLIC } from '../../../core/manifest'
 export const manifest = defineManifest({
   'POST /public/doc/lookup': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /public/doc/:code/files/:fileId': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2b-236 (SY3:03): the style's main picture, only as its stripped copy.
+  'GET /public/doc/:code/picture/:fileId': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /compliance/public-doc/address': { audiences: ['office'], permission: 'compliance.certificates.view', scope: 'record' },
 })

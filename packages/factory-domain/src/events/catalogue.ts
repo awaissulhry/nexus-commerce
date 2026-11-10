@@ -184,6 +184,10 @@ import { events as complianceUserInformation } from '../compliance-user-informat
 import { events as complianceMaterialTests } from '../compliance-material-tests/events'
 // B-W2b-259: label artwork (a version added, approved by a second person, retired) and labels logged spoiled or returned.
 import { events as complianceLabelArtwork } from '../compliance-label-artwork/events'
+// B-W2b-236: a style's pictures and its revisions' pattern files changed.
+import { events as productImages } from '../product-images/events'
+// B-W2b-263: Time & action (order_gate.changed).
+import { events as planningMilestones } from '../planning-milestones/events'
 // B-W2b-264: sourcing & claims (a claim drafted, approved, withdrawn or replaced; a use recorded or ended; evidence expired).
 import { events as complianceClaims } from '../compliance-claims/events'
 import type { EventDefinition } from './define'
@@ -437,6 +441,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...complianceMaterialTests,
   // B-W2b-259
   ...complianceLabelArtwork,
+  // B-W2b-236
+  ...productImages,
+  // B-W2b-263
+  ...planningMilestones,
   // B-W2b-264
   ...complianceClaims] as const satisfies readonly EventDefinition[]
 

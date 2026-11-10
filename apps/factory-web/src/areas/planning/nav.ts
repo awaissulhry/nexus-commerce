@@ -1,4 +1,4 @@
-import { CalendarRange, ChartGantt, Gauge, ListChecks, Network, Scissors, Siren, SlidersHorizontal } from 'lucide-react'
+import { CalendarClock, CalendarRange, ChartGantt, Gauge, ListChecks, Network, Scissors, Siren, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -33,6 +33,12 @@ export const officeArea: OfficeAreaNav = {
           // B-W2a-70: Exceptions (SCR-125), after the allocation.
           { id: 'planning-exceptions', label: 'shell:nav.planning.exceptions', href: '/planning/exceptions', icon: Siren, permission: 'planning.view' },
         ],
+      },
+      // B-W2b-263: Dates › Time & action (SCR-253; the design's group "Planning › Dates").
+      {
+        id: 'planning-dates',
+        label: 'shell:nav.planning.dates',
+        items: [{ id: 'planning-milestones', label: 'shell:nav.planning.milestones', href: '/planning/milestones', icon: CalendarClock, permission: 'planning.view' }],
       },
       // B-W2a-59: Settings › Planning settings (SCR-124 calendars & shifts, SCR-127 item planning settings).
       {

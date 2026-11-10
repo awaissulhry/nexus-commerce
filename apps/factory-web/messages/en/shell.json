@@ -146,7 +146,9 @@
       "certificates": "Certificates",
       "labels": "Labels & marking",
       "sustainability": "Sustainability",
-      "sourcing": "Sourcing & claims"
+      "sourcing": "Sourcing & claims",
+      "reportsGroup": "Reports",
+      "reports": "Compliance reports"
     },
     "finance": {
       "area": "Finance",
@@ -175,6 +177,8 @@
       "allocation": "Lines & subcontractors",
       "capacity": "Capacity & load",
       "exceptions": "Exceptions",
+      "dates": "Dates",
+      "milestones": "Time & action",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

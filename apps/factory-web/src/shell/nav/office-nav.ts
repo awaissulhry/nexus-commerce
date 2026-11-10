@@ -172,6 +172,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
   '/planning/settings',
   '/planning/settings/calendar-print',
+  // B-W2b-263: Time & action (SCR-253).
+  '/planning/milestones',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',
@@ -236,6 +238,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/evidence/[kind]/[subject]',
   // B-W2b-264: Compliance › Sustainability › Sourcing & claims (SCR-215).
   '/compliance/sourcing',
+  // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
+  '/compliance/reports',
+  '/compliance/reports/print',
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',

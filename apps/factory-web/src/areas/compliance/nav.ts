@@ -1,4 +1,4 @@
-import { BadgeCheck, FlaskConical, Leaf, ScrollText, ShieldCheck, Tag } from 'lucide-react'
+import { BadgeCheck, BarChart3, FlaskConical, Leaf, ScrollText, ShieldCheck, Tag } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -47,6 +47,13 @@ export const officeArea: OfficeAreaNav = {
           // SCR-215: the sustainability claims register with words, scope, evidence and expiry (Dir. (EU) 2024/825).
           { id: 'compliance-sourcing', label: 'shell:nav.compliance.sourcing', href: '/compliance/sourcing', icon: Leaf, permission: 'compliance.certificates.view' },
         ],
+      },
+      // B-W2b-272 SCR-261: Compliance › Reports › Compliance reports (GET /compliance/reports/kpis, compliance.reports.view); after
+      // Product safety (the tree's order: Sustainability and Settings join with their steps).
+      {
+        id: 'compliance-reports',
+        label: 'shell:nav.compliance.reportsGroup',
+        items: [{ id: 'compliance-reports', label: 'shell:nav.compliance.reports', href: '/compliance/reports', icon: BarChart3, permission: 'compliance.reports.view' }],
       },
     ],
   },

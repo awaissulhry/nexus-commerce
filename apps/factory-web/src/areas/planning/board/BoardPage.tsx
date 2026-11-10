@@ -33,6 +33,8 @@ import {
 } from './model'
 import type { BoardDialog, BoardViewModel, DropChoice, Loaded, PublishRangeKind, SaveState } from './view-model'
 import { BoardView } from './view/BoardView'
+// B-W2b-263: a drop held on a pre-production gate asks "Start before the gate?" (Time & action's dialog).
+import { useStartBeforeGate } from '../milestones/use-start-before'
 
 /**
  * `/w/<company>/planning/board` (SCR-122; Planning › Planning board, planning.view). The company's planning sites
@@ -54,6 +56,7 @@ function BoardContainer() {
   const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
+  const gate = useStartBeforeGate(api, session.company?.id ?? null) // B-W2b-263
   const router = useRouter()
   const pathname = usePathname() ?? ''
   const params = useSearchParams()
@@ -213,12 +216,24 @@ function BoardContainer() {
         reason = choice.reason
       }
       setSave({ state: 'saving' })
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      let started = false
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           await saved(await send(plan, reason))
           return true
         } catch (error) {
           const refusal = refusalOf(error)
+          // B-W2b-263: the order waits on a pre-production gate: Start before the gate? (someone other than its planner), then again.
+          if (refusal.code === 'GATE_NOT_PASSED' && !started) {
+            setSave({ state: 'idle' })
+            started = await gate.ask(refusal.gates)
+            if (!started) {
+              setSave({ state: 'failed', refusal })
+              return false
+            }
+            setSave({ state: 'saving' })
+            continue
+          }
           if (refusal.code === 'OVERLOAD' && reason === null) {
             // The API counts the work not on the board too: its numbers, then the same choice.
             const choice = await askDrop(card?.label ?? '', lane?.label ?? '', overFromIssues(error, move.to.laneId), 'api', false)
@@ -236,7 +251,7 @@ function BoardContainer() {
       }
       return false
     },
-    [askDrop, load, saved, send, session.user.id, t, words],
+    [askDrop, gate, load, saved, send, session.user.id, t, words],
   )
 
   const onDropChoice = useCallback((choice: DropChoice) => {
@@ -443,6 +458,7 @@ function BoardContainer() {
   }
 
   return (
+    <>
     <BoardView
       model={model}
       actions={{
@@ -464,5 +480,7 @@ function BoardContainer() {
         onShowCheck: (target) => showWorkOrder(target.workOrderId, target.slotId, target.laneId, null),
       }}
     />
+    {gate.element}
+    </>
   )
 }

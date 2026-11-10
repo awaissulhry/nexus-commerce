@@ -1,7 +1,6 @@
 import type { FactoryClient } from '@nexus/factory-db'
-import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import type { GateCover, PpeCategory, SizeGateRequest } from '@nexus/factory-domain/compliance/cert-gate/gate'
-import { can, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { can, holds, type Actor } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { costingCurrency } from '@nexus/factory-domain/costing/inputs'
 import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions'
@@ -17,15 +16,16 @@ import { loadCostFacts, type CostingCompany } from '../../costing/store'
 import { REVISION_COLUMNS as COST_REVISION_COLUMNS, type RevisionRow } from '../bom/store'
 import { todayOf } from '../compliance/read'
 import type { StyleRowData } from './store'
+// B-W2b-236: the list's thumbnail is the main picture.
+import { mainPictureThumbnails } from '../images/main-picture'
 
 /**
  * What a style list row shows beside the style (B-W2b-25; design products.styles `styles.grid` columns Thumbnail,
  * Certificate coverage, Cost per garment, and the phone card "thumbnail, coverage mark, cost"; the B-W2a-37 gap): read
  * for one page of rows, each part only for a caller who may see it over the style's company.
  *
- *   thumbnail  the style's first picture: its oldest AVAILABLE image file (StoredFile of the Style, kind PHOTO or
- *              ATTACHMENT, content type image/*), with files.read over the file's company; the gallery (W2b-4) will name
- *              a main picture.
+ *   thumbnail  the style's main picture (B-W2b-236: the gallery's one main picture; none without it), with files.read
+ *              over the file's company.
  *   coverage   the certificate coverage as the style's Compliance tab counts it (factory-domain product/compliance
  *              `coverageCell`, `checkedCells`, `coverageCounts`: the same gate on the same rows, today in Europe/Rome),
  *              with compliance.certificates.view.
@@ -53,20 +53,8 @@ const NONE: RowExtras = { thumbnail: null, coverage: null, cost: asMoney('cost',
 // ---- thumbnails ---------------------------------------------------------------------------------------------------------
 
 async function thumbnails(client: Reader, actor: Actor, styleIds: readonly string[]): Promise<Map<string, NonNullable<StyleRow['thumbnail']>>> {
-  const out = new Map<string, NonNullable<StyleRow['thumbnail']>>()
-  if (styleIds.length === 0 || !holds(actor, FILES_READ)) return out
-  const rows = await client.storedFile.findMany({
-    where: {
-      AND: [
-        scopeWhere(actor, FILES_READ, { company: { field: 'companyId', nullable: true } }) as object,
-        { recordType: 'Style', recordId: { in: [...styleIds] }, status: 'AVAILABLE', kind: { in: ['PHOTO', 'ATTACHMENT'] }, contentType: { startsWith: 'image/' } },
-      ],
-    },
-    select: { id: true, recordId: true, originalName: true, contentType: true },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-  })
-  for (const row of rows) if (!out.has(row.recordId)) out.set(row.recordId, { fileId: row.id, name: row.originalName, contentType: row.contentType })
-  return out
+  // B-W2b-236 (SY3:02): the style's main picture, not its oldest image file (modules/product/images/main-picture.ts).
+  return mainPictureThumbnails(client, actor, styleIds)
 }
 
 // ---- certificate coverage -----------------------------------------------------------------------------------------------

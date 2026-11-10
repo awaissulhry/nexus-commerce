@@ -146,7 +146,9 @@
       "certificates": "Certificati",
       "labels": "Etichette e marcature",
       "sustainability": "Sostenibilità",
-      "sourcing": "Filiera e dichiarazioni ambientali"
+      "sourcing": "Filiera e dichiarazioni ambientali",
+      "reportsGroup": "Report",
+      "reports": "Report conformità"
     },
     "finance": {
       "area": "Amministrazione",
@@ -175,6 +177,8 @@
       "allocation": "Linee e terzisti",
       "capacity": "Capacità e carico",
       "exceptions": "Eccezioni",
+      "dates": "Date",
+      "milestones": "Calendario T&A",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

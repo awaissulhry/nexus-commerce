@@ -125,6 +125,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/capacity': 'planning.view', // GET /planning/capacity (B-W2a-70)
       '/planning/exceptions': 'planning.view', // GET /planning/exceptions (B-W2a-70)
       '/planning/settings': 'planning.view', // GET /planning/settings (B-W2a-59)
+      '/planning/milestones': 'planning.view', // GET /planning/milestones (B-W2b-263)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)
@@ -164,6 +165,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/labels': 'compliance.certificates.view', // GET /compliance/labels
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
+      '/compliance/reports': 'compliance.reports.view', // GET /compliance/reports/kpis (B-W2b-272)
       '/compliance/sourcing': 'compliance.certificates.view', // GET /compliance/claims (B-W2b-264)
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments

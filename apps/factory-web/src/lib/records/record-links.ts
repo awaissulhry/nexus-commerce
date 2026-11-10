@@ -274,6 +274,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/leather/yield': '/planning/leather',
   // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
   '/planning/settings': '/planning/settings',
+  // B-W2b-263: Time & action (SCR-253, `?view=calendar|list|orders` `?tile=` `?q=` `?open=`).
+  '/planning/milestones': '/planning/milestones',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',

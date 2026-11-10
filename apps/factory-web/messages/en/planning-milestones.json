@@ -1,0 +1,368 @@
+{
+  "noAccess": {
+    "title": "You cannot open Time & action",
+    "body": "Time & action is for the people who plan: your role does not read the planning (planning.view). Ask your administrator."
+  },
+  "page": {
+    "today": "Today {day}",
+    "notRead": "Not read yet",
+    "updates_one": "{count} change · Show",
+    "updates_other": "{count} changes · Show",
+    "search": "Order or customer reference",
+    "add": "Add gate",
+    "more": "More",
+    "keys": "Keyboard shortcuts",
+    "truncated": "Only the 400 open orders with the earliest promise dates are shown: search for an order to find the others."
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: what changes is not shown until the connection is back"
+  },
+  "view": {
+    "label": "Show milestones as",
+    "calendar": "Calendar",
+    "list": "List",
+    "orders": "Per order"
+  },
+  "gates": {
+    "title": "Waiting on a gate",
+    "purpose": "Orders that cannot start because a gate is not passed: the planning board holds their work orders until the gate is passed or someone starts before it with a reason.",
+    "error": "Couldn't load waiting on a gate"
+  },
+  "tile": {
+    "SAMPLE": "Sample not approved",
+    "LEATHER_NOT_RECEIVED": "Leather not received",
+    "LEATHER_NOT_PASSED": "Leather not passed",
+    "TRIMS": "Trims not in",
+    "OTHER": "Lab or other",
+    "hint": {
+      "SAMPLE": "Orders waiting for a sample or the pre-production sample to be approved",
+      "LEATHER_NOT_RECEIVED": "Orders waiting on the leather with no leather lot reserved for them yet",
+      "LEATHER_NOT_PASSED": "Orders whose reserved leather is not released by quality yet",
+      "TRIMS": "Orders waiting for their trims to come in",
+      "OTHER": "Orders waiting on the lab or a gate of their own"
+    },
+    "filtering": "Showing only: {tile}."
+  },
+  "calendar": {
+    "title": "Milestones",
+    "purpose": {
+      "calendar": "Milestones by their target date: open a day to see its milestones.",
+      "list": "Every milestone of the open orders, with its target, what happened and how late.",
+      "orders": "One row per order: its milestones as dots, what it waits on, the next one."
+    },
+    "error": "Couldn't load milestones",
+    "label": "Milestones by target date",
+    "kind": {
+      "late": "Late",
+      "waiting": "A gate waits",
+      "due": "Due",
+      "done": "Done",
+      "none": "No milestone"
+    },
+    "count_one": "{count} milestone",
+    "count_other": "{count} milestones",
+    "andMore_one": "and {count} more",
+    "andMore_other": "and {count} more",
+    "dayLabel": "The day's milestones",
+    "dayTitle_one": "{day}: {count} milestone",
+    "dayTitle_other": "{day}: {count} milestones",
+    "empty": "No milestones in this period",
+    "emptyMonth": "No milestones in this period. Pick another month, or a day.",
+    "dayEmpty": "No milestone on this day.",
+    "pick": "Open a day to see its milestones.",
+    "undated_one": "{count} milestone without a target date",
+    "undated_other": "{count} milestones without a target date",
+    "layoutGrid": "Month",
+    "layoutList": "Days with milestones"
+  },
+  "kind": {
+    "SAMPLE_APPROVED": "Sample approved",
+    "LEATHER_APPROVED": "Leather approved",
+    "TRIMS_IN": "Trims in",
+    "PP_SAMPLE": "Pre-production sample approved",
+    "LAB_PASSED": "Lab passed",
+    "OTHER": "Other"
+  },
+  "kindHint": {
+    "SAMPLE_APPROVED": "Passes by itself when the sample round it names is approved.",
+    "LEATHER_APPROVED": "Passes by itself when every leather lot reserved for the order is released by quality.",
+    "TRIMS_IN": "Marked done when the trims are in.",
+    "PP_SAMPLE": "Passes by itself when the pre-production round it names is approved.",
+    "LAB_PASSED": "Marked done when the lab results are in and passed.",
+    "OTHER": "Say what it is: marked done by hand."
+  },
+  "milestone": {
+    "START": "Production start",
+    "SHIP": "Ship"
+  },
+  "milestoneKind": {
+    "GATE": "Pre-production gate",
+    "START": "Follows the planning board and the work orders",
+    "SHIP": "Follows the promise date and the shipments"
+  },
+  "state": {
+    "DONE": "Done",
+    "WAITING": "Waiting",
+    "STARTED_BEFORE": "Started before",
+    "TO_COME": "To come"
+  },
+  "late": {
+    "onTime": "On time",
+    "doneLate_one": "Done {count} day late",
+    "doneLate_other": "Done {count} days late",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late"
+  },
+  "row": {
+    "owner": "planner {name}",
+    "actual": "done {day}",
+    "open": "Open",
+    "orderNewTab": "Open order {order} in a new tab",
+    "orderNewTabShort": "Open the order in a new tab",
+    "round": "Waits for {round}",
+    "openNamed": "Open {name} of {order}",
+    "openHint": "Mark done, start before the gate, change it",
+    "menu": "Actions for {name} of {order}",
+    "done": "Mark done…",
+    "startBefore": "Start before the gate…",
+    "target": "target {day}",
+    "noTarget": "no target date"
+  },
+  "col": {
+    "order": "Order",
+    "milestone": "Milestone",
+    "owner": "Planner",
+    "target": "Target",
+    "actual": "Actual",
+    "state": "State",
+    "late": "Late",
+    "more": "Actions",
+    "ship": "Ship date",
+    "milestones": "Milestones",
+    "waiting": "Waiting on",
+    "lateCount": "Late",
+    "next": "Next"
+  },
+  "list": {
+    "count_one": "{count} milestone",
+    "count_other": "{count} milestones"
+  },
+  "bulk": {
+    "done_one": "Mark {count} done",
+    "done_other": "Mark {count} done"
+  },
+  "empty": {
+    "body": "Add a gate to an order to plan what must be true before its work may start.",
+    "noMatch": {
+      "title": "Nothing matches",
+      "body": "No milestone matches the search or the tile pressed."
+    }
+  },
+  "orders": {
+    "label": "Orders and their milestones",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "steps": "Milestones of order {order}",
+    "noneWaiting": "Nothing",
+    "allDone": "Every milestone done",
+    "menu": "Actions for order {order}",
+    "add": "Add a gate…",
+    "late_one": "{count} late",
+    "late_other": "{count} late",
+    "empty": "No open order",
+    "more_one": "+{count} more",
+    "more_other": "+{count} more"
+  },
+  "tracker": {
+    "target": "Target {date}"
+  },
+  "keys": {
+    "open": "Open the milestone",
+    "openNext": "Open the order's next milestone",
+    "done": "Mark the gate done",
+    "views": "Calendar, List, Per order",
+    "add": "Add a gate",
+    "months": "The month before or after (the calendar)",
+    "today": "Today (the calendar)"
+  },
+  "dialog": {
+    "title": "{name} · {order}",
+    "gone": {
+      "title": "Milestone not found",
+      "body": "This milestone is not among the open orders any more (the gate was removed, or the order shipped or closed)."
+    },
+    "order": "Order",
+    "customerRef": "Customer reference {ref}",
+    "target": "Target",
+    "actual": "Actual",
+    "owner": "Planner",
+    "round": "Sample round",
+    "leather": "Leather",
+    "passed": "Passed",
+    "passedBy": "{name}, {day}",
+    "startedBefore": "Started before",
+    "startedBy": "{name}, {when}",
+    "comesFrom": "Comes from",
+    "follows": {
+      "START": "The earliest bar of the order's work orders on the planning board (target) and the first work order that started (actual).",
+      "SHIP": "The order's promise date (target) and the first shipment that left (actual)."
+    },
+    "openOrder": "Open the order",
+    "remove": "Remove",
+    "edit": "Change",
+    "startBefore": "Start before the gate…",
+    "done": "Mark done…",
+    "holds_one": "While it waits, the planning board holds {count} work order of {order}.",
+    "holds_other": "While it waits, the planning board holds {count} work orders of {order}.",
+    "holdsNone": "While it waits, the planning board will hold the work orders of {order}.",
+    "holdsHow": "Mark it done when it is true, or let the work start before it with a reason (someone other than its planner).",
+    "opened": "Passed: the work orders of {order} may be planned.",
+    "openedEarly": "Started before the gate: the work orders of {order} may be planned; the gate still waits to be passed."
+  },
+  "decision": {
+    "APPROVED": "Approved",
+    "APPROVED_WITH_COMMENTS": "Approved with comments",
+    "REJECTED": "Rejected",
+    "none": "Not decided yet"
+  },
+  "leather": {
+    "NOT_RECEIVED": "No leather lot reserved for the order yet",
+    "NOT_PASSED": "Reserved, not all released by quality yet",
+    "PASSED": "Every leather lot reserved for the order is released"
+  },
+  "via": {
+    "OFFICE": "By hand, {day}",
+    "SAMPLE": "By its sample round's approval, {day}",
+    "LOT": "By the leather's release, {day}"
+  },
+  "roundKind": {
+    "PROTO": "Proto, round {no}",
+    "FIT": "Fit, round {no}",
+    "SALESMAN": "Salesman sample, round {no}",
+    "PRE_PRODUCTION": "Pre-production, round {no}",
+    "CERTIFICATION": "Certification, round {no}",
+    "BRAND": "Brand sample, round {no}"
+  },
+  "form": {
+    "addTitle": "Add a gate",
+    "editTitle": "Change the gate: {name}",
+    "subtitle": "Order {order} · {customer}",
+    "pickSubtitle": "Pick the order first",
+    "add": "Add the gate",
+    "save": "Save",
+    "order": "Order",
+    "noOrders": "No open order whose gates you may keep.",
+    "pickOrder": "Pick an open order",
+    "ships": "ships {day}",
+    "kind": "Gate",
+    "label": "What it is",
+    "labelOptional": "In words (optional)",
+    "labelHint": "Up to {max} characters, one line.",
+    "target": "Target date",
+    "targetHint": "By when it should be passed (optional).",
+    "round": "Sample round",
+    "roundHint": "The round whose approval passes it (optional): a round of the order's styles for its customer, or internal.",
+    "roundHintPp": "The pre-production round whose approval passes it (optional).",
+    "noRound": "No round named",
+    "owner": "Planner",
+    "ownerHint": "Who owns the gate: they may not start the work before it themselves.",
+    "ownerMe": "Me",
+    "choicesFailed": "Couldn't load the rounds and planners: the gate can be saved without them."
+  },
+  "pass": {
+    "title_one": "Mark the gate done",
+    "title_other": "Mark {count} gates done",
+    "gate": "{name} · {order}",
+    "on": "Passed on",
+    "onHint": "Today or a day before.",
+    "opens": "Once passed, the order's work orders may be planned on the board.",
+    "confirm_one": "Mark done",
+    "confirm_other": "Mark {count} done"
+  },
+  "start": {
+    "title_one": "Start before the gate?",
+    "title_other": "Start before {count} gates?",
+    "subtitle": "Order {order}",
+    "gate": "{name} · target {target}",
+    "owner": "Planner {name}",
+    "noOwner": "No planner named",
+    "why": "The order's work waits on this gate: starting before it lets the planning board place its work orders now. The gate still waits to be passed.",
+    "reason": "Why it starts before the gate",
+    "reasonHint": "{min} to {max} characters: what makes it safe to start now.",
+    "audit": "Recorded on the gate with your name, the time and the reason. Only someone who is neither the gate's planner nor the person who added it may do this.",
+    "confirm": "Start before with this reason"
+  },
+  "remove": {
+    "title": "Remove the gate {name} of {order}?",
+    "confirm": "Remove the gate",
+    "what": "The gate is removed from the order; nothing else changes.",
+    "frees_one": "The planning board stops holding {count} work order for it.",
+    "frees_other": "The planning board stops holding {count} work orders for it.",
+    "nothingHeld": "No work order of the order waits on it now.",
+    "back": "Add the gate again"
+  },
+  "notice": {
+    "added": "Gate added.",
+    "addedPassed": "Gate added: its sample round is approved already, so it is passed.",
+    "edited": "Gate changed.",
+    "passed_one": "Gate marked done.",
+    "passed_other": "{count} gates marked done.",
+    "started_one": "Started before the gate: the order's work orders may be planned.",
+    "started_other": "Started before {count} gates: the order's work orders may be planned.",
+    "removed": "Gate removed."
+  },
+  "needs": {
+    "planning": {
+      "milestones": {
+        "manage": "Keeping an order's gates needs the right to keep gates (a planner or a production manager).",
+        "override": "Starting before a gate needs a role that may let work start early (a production manager), and someone other than the gate's planner."
+      },
+      "view": "Your role does not read the planning."
+    }
+  },
+  "held": {
+    "loading": "Reading the orders…",
+    "busy": "Saving…",
+    "unknown": "Not possible now.",
+    "notAGate": "Production start and ship follow the board and the shipments: only a gate is marked done.",
+    "pickOrder": "Pick the order first.",
+    "noGate": "No gate picked.",
+    "reasonShort": "Say why in at least {min} characters.",
+    "reasonLong": "At most {max} characters.",
+    "labelLong": "At most {max} characters."
+  },
+  "refusal": {
+    "ORDER_CLOSED": "The order is shipped, closed or cancelled: its gates are kept as they are.",
+    "GATE_EXISTS": "The order already has a gate of this kind: change that one.",
+    "LABEL_NEEDED": "Say what the gate is: a gate of kind Other needs its words.",
+    "ROUND_ONLY_SAMPLE": "Only a sample gate names a sample round.",
+    "ROUND_NOT_OF_ORDER": "That sample round is not one of the order's styles for its customer, or it was cancelled.",
+    "ROUND_KIND": "A pre-production sample gate waits for a pre-production round.",
+    "ROUND_NOT_APPROVED": "It waits for its sample round to be approved: it passes by itself then.",
+    "PASSED": "The gate is passed already.",
+    "STARTED_BEFORE": "The work started before this gate already.",
+    "OWN_GATE": "You are this gate's planner or added it: someone else must let the work start before it.",
+    "FUTURE_DAY": "A gate is passed today or on a day before, not on a day to come.",
+    "KEPT": "A gate that was passed or started before is kept.",
+    "OWNER_NOT_ALLOWED": "That person may not keep this order's gates.",
+    "changed": "Someone changed it meanwhile: it was read again, try once more.",
+    "forbidden": "Your role may not do this for this order's company or customer.",
+    "notFound": "Not found: it was removed meanwhile.",
+    "reason": "Say why it starts before the gate.",
+    "invalid": "Something in the form is not valid: check it and try again.",
+    "offline": "The connection is gone: nothing was saved. Try again once you are back online.",
+    "failed": "It could not be saved: try again."
+  },
+  "error": {
+    "offline": "The connection is gone: try again once you are back online.",
+    "forbidden": "Your role does not read the planning of this company.",
+    "failed": "Something went wrong reading the orders: try again."
+  },
+  "common": {
+    "retry": "Try again",
+    "clearFilters": "Clear filters",
+    "cancel": "Cancel"
+  }
+}

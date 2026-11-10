@@ -59,6 +59,8 @@ import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 // B-W2b-252: sample decisions (sales and the production manager decide; the production manager and quality measure the fit).
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
+// B-W2b-263: Time & action (pre-production gates).
+import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -67,6 +69,8 @@ import { USER_INFORMATION_ADDS } from '../../compliance/user-information/permiss
 import { SUPPLIER_DECLARATIONS_ADDS } from '../../compliance/declarations-asked/permissions'
 // B-W2b-259: label artwork (the quality inspector approves a proof someone else made).
 import { LABEL_ARTWORK_ADDS } from '../../compliance/label-artwork/permissions'
+// B-W2b-272: compliance reports (the quality inspector and the production manager read them).
+import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 // B-W2b-264: sourcing & claims (the quality inspector keeps the claims register and approves a claim with a fresh code).
 import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 
@@ -886,6 +890,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SUPPLIER_DECLARATIONS_ADDS[key] ?? []) : []),
   // B-W2b-259
   ...(audience === 'office' ? (LABEL_ARTWORK_ADDS[key] ?? []) : []),
+  // B-W2b-272
+  ...(audience === 'office' ? (COMPLIANCE_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-263
+  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : []),
   // B-W2b-264
   ...(audience === 'office' ? (CLAIMS_ADDS[key] ?? []) : [])]
 /**

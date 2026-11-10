@@ -174,6 +174,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.exceptions', title: 'Exceptions', titleIt: 'Eccezioni', wave: 'W2a', href: '/planning/exceptions' },
         ],
       },
+      // W2b: B-W2b-263 Time & action (SCR-253), the design's group "Dates".
+      {
+        label: 'Dates',
+        labelIt: 'Date',
+        hideLabel: false,
+        pages: [{ id: 'planning.milestones', title: 'Time & action', titleIt: 'Calendario T&A', wave: 'W2b', href: '/planning/milestones' }],
+      },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',
@@ -397,6 +404,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'compliance.sourcing', title: 'Sourcing & claims', titleIt: 'Filiera e dichiarazioni ambientali', wave: 'W2b', href: '/compliance/sourcing' }],
       },
+      // W2b: B-W2b-272 Compliance reports (SCR-261). The tree's Reports group, after Product safety (Sustainability joins with its step).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'compliance.reports', title: 'Compliance reports', titleIt: 'Report conformità', wave: 'W2b', href: '/compliance/reports' }] },
     ],
   },
   {
