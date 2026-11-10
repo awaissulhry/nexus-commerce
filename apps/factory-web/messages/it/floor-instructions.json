@@ -1,0 +1,235 @@
+{
+  "title": "Scheda e istruzioni",
+  "asOf": "Da questo tablet, aggiornato alle {time}",
+  "opShort": "Op {seq}",
+  "action": {
+    "home": "Home",
+    "scanAnother": "Altro fascio",
+    "back": "Indietro",
+    "backToBundle": "Torna al fascio",
+    "backToInstruction": "Istruzione",
+    "problem": "Problema scheda",
+    "seen": "Visto",
+    "send": "Invia"
+  },
+  "noPermission": {
+    "title": "Non aperto per te",
+    "body": "Le istruzioni si aprono a chi registra il lavoro in questa postazione. Chiedi al tuo capoturno."
+  },
+  "open": {
+    "title": "Per questo lavoro",
+    "scan": "Scansiona il cartellino del fascio",
+    "hint": "Si aprono l'istruzione della sua operazione e la scheda della sua taglia",
+    "prompt": "Scansiona un fascio a {operation} per vedere la versione {n}.",
+    "paper": "La pagina di un ordine di lavoro o un'istruzione stampata: scansiona invece il cartellino del fascio. La taglia è quella del fascio, e lo schermo mostra sempre la versione in vigore.",
+    "offline": "Niente rete: un fascio già aperto su questo tablet si apre lo stesso, com'era allora.",
+    "inHand": "Il tuo lavoro su questo tablet",
+    "state": {
+      "running": "In corso",
+      "paused": "In pausa"
+    },
+    "due": "Nuove per te",
+    "dueMeta": "{number} · versione {n} · {date}",
+    "dueCount": "{count} in attesa del tuo Visto",
+    "workOrder": "{what} {code}: un ordine di lavoro ha tante taglie. Scansiona il cartellino di un fascio.",
+    "wrongLabel": "{what} {code}: questa schermata apre il cartellino di un fascio."
+  },
+  "due": {
+    "FIRST": "Prima volta",
+    "CHANGED": "Cambiata"
+  },
+  "keys": {
+    "open": "Apri la riga",
+    "next": "Passo successivo",
+    "prev": "Passo precedente",
+    "back": "Indietro"
+  },
+  "loading": {
+    "title": "Apro l'istruzione"
+  },
+  "notOnTablet": {
+    "title": "Non è su questo tablet",
+    "body": "{code} non è stato aperto qui prima che mancasse la rete. Si apre quando torna la rete."
+  },
+  "failed": {
+    "refused": "Questo fascio non ha un'operazione da mostrare qui. Chiedi al tuo capoturno.",
+    "notFound": {
+      "title": "Fascio non trovato qui",
+      "body": "{code} non è un fascio di questo stabilimento. Controlla il cartellino."
+    }
+  },
+  "card": {
+    "version": "Versione {n}",
+    "noInstruction": "Nessuna istruzione",
+    "changeNote": "Cosa è cambiato: {note}"
+  },
+  "head": {
+    "bundle": "Fascio {code}",
+    "since": "in vigore dal {date}",
+    "seenOn": "l'hai vista il {date}",
+    "due": {
+      "FIRST": "Prima volta",
+      "CHANGED": "Nuova"
+    }
+  },
+  "tabs": {
+    "label": "Cosa mostrare",
+    "steps": "Come si fa",
+    "spec": "Scheda di questa taglia"
+  },
+  "none": {
+    "title": "Ancora nessuna istruzione",
+    "body": "{operation} non ha un'istruzione pubblicata. La scheda di questa taglia è nell'altra scheda."
+  },
+  "steps": {
+    "of": "Passo {n} di {count}",
+    "critical": "Punto critico",
+    "zoom": "Ingrandisci",
+    "zoomOpen": "Apri la foto a tutto schermo",
+    "mediaLoading": "Carico l'immagine…",
+    "mediaOffline": "L'immagine non è su questo tablet: si vede quando torna la rete.",
+    "mediaFailed": "L'immagine non si apre. Le parole qui sotto valgono lo stesso.",
+    "mediaPick": "Immagini di questo passo",
+    "photoN": "Foto {n}",
+    "videoN": "Video {n}",
+    "otherLanguage": "Non ancora scritto nella tua lingua: mostrato in un'altra.",
+    "tick": "Spunta questo passo nella schermata Operazione prima di Fine.",
+    "prev": "Indietro",
+    "next": "Avanti",
+    "firstHeld": "Questo è il primo passo",
+    "lastHeld": "Questo è l'ultimo passo",
+    "strip": "Passi",
+    "stripShown": "Passo {n}, guardato",
+    "stripNot": "Passo {n}, non ancora guardato",
+    "shownCount": "{seen} di {count} passi guardati"
+  },
+  "seen": {
+    "held": "Prima guarda ogni passo: {seen} di {count}",
+    "busy": "Salvo…",
+    "done": "Visto: grazie.",
+    "failed": "Il Visto non è stato salvato: l'ufficio non l'ha preso. Tocca di nuovo Visto."
+  },
+  "zoom": {
+    "title": "Foto",
+    "in": "Più grande",
+    "out": "Più piccola",
+    "level": "{percent} %",
+    "mostHeld": "Questa è la più grande",
+    "leastHeld": "Questa è la foto intera",
+    "close": "Chiudi",
+    "area": "La foto: spostala con un dito"
+  },
+  "spec": {
+    "notKept": "La scheda di questa taglia non è su questo tablet: si vede quando torna la rete.",
+    "failed": "La scheda di questa taglia non si legge. Riprova tra poco.",
+    "factsTitle": "Questo ordine di lavoro",
+    "fact": {
+      "workOrder": "Ordine di lavoro",
+      "style": "Modello",
+      "revision": "Revisione scheda",
+      "colourway": "Variante colore",
+      "size": "Taglia",
+      "bundle": "Fascio",
+      "label": "Etichetta",
+      "ppe": "DPI"
+    },
+    "revision": "Revisione {n}",
+    "noRevision": "Nessuna revisione scelta",
+    "frozen": "Bloccata al rilascio, {date}",
+    "pieces": "{count} pezzi",
+    "labelValue": "{code} · revisione {n}",
+    "noLabel": "Nessuna etichetta impostata",
+    "measuresTitle": "Misure della taglia {size}",
+    "col": {
+      "point": "Punto",
+      "value": "Misura",
+      "placement": "Dove",
+      "material": "Materiale",
+      "colour": "Colore",
+      "perGarment": "Per capo"
+    },
+    "noMeasures": "Per questa taglia non ci sono misure scritte.",
+    "measuresNote": "Le misure proprie della taglia. Chiedi al tuo capoturno una misura del capo che qui manca.",
+    "materialsTitle": "Materiali per capo",
+    "noMaterials": "Per la taglia di questo fascio non sono previsti materiali.",
+    "settingsTitle": "Impostazioni macchina",
+    "setting": {
+      "machine": "Macchina",
+      "stitchType": "Punto",
+      "needle": "Ago",
+      "thread": "Filo",
+      "stitchesPerCm": "Punti per cm",
+      "tension": "Tensione",
+      "foot": "Piedino",
+      "notes": "Note"
+    },
+    "routeTitle": "Le operazioni di questo ordine di lavoro",
+    "here": "Sei qui",
+    "pdfNote": "Le pagine complete della scheda con le posizioni delle etichette sono della scheda tecnica: le stampa l'ufficio.",
+    "banner": {
+      "title": "Scheda cambiata",
+      "newer": "È uscita la revisione {newer} di questa scheda. Questo ordine di lavoro si fa sulla revisione {pinned}: segui la revisione {pinned} finché l'ufficio non decide.",
+      "withdrawn": "La revisione {pinned} di questa scheda è stata ritirata. Segui le pagine che hai e chiedi all'ufficio prima di andare avanti.",
+      "decided": {
+        "FINISH_OLD": "Deciso ({changeOrder}): finisci questo ordine di lavoro sulla revisione {pinned}, come mostrano queste pagine.",
+        "REWORK": "Deciso ({changeOrder}): rilavora secondo la revisione {newer}. Valgono le pagine nuove.",
+        "SCRAP": "Deciso ({changeOrder}): il lavoro in corso va a scarto. Fermati e chiedi al tuo capoturno.",
+        "HOLD": "Deciso ({changeOrder}): l'ordine di lavoro è bloccato. Fermati e chiedi al tuo capoturno."
+      },
+      "newPages": "Le pagine nuove non sono ancora su questo tablet: chiedile al tuo capoturno."
+    }
+  },
+  "problem": {
+    "title": "Problema scheda",
+    "question": "Cosa non va?",
+    "kind": {
+      "WRONG_MEASUREMENT": "Misura sbagliata",
+      "UNCLEAR": "Istruzione poco chiara",
+      "MATERIAL_DIFFERS": "Materiale diverso",
+      "OTHER": "Altro"
+    },
+    "faces": "Una foto solo della scheda o del pezzo: niente volti nella foto.",
+    "photo": "Foto del problema",
+    "photoOptional": "Aggiungi una foto (se aiuta)",
+    "photoOffline": "Una foto ha bisogno della rete: invia senza, la segnalazione resta su questo tablet",
+    "drop": "Togli {name}",
+    "words": "Qualche parola (se aiuta)",
+    "detail": "Di' in poche parole cosa non va.",
+    "offline": "Niente rete: la segnalazione resta su questo tablet e parte quando torna la rete.",
+    "linked": "Arriva all'ufficio con questo ordine di lavoro, operazione e fascio. Il tuo nome non c'è.",
+    "held": {
+      "tile": "Prima tocca cosa non va",
+      "detail": "Di' in poche parole cosa non va",
+      "busy": "Invio…"
+    }
+  },
+  "sent": {
+    "title": "Problema scheda inviato",
+    "notSent": "Problema scheda non inviato",
+    "body": "L'ufficio lo vede sull'ordine di lavoro {number}, operazione {seq}.",
+    "failed": "L'ufficio non l'ha preso. Torna indietro e segnalalo di nuovo, o dillo al tuo capoturno.",
+    "photo": {
+      "waiting": "La foto parte appena l'ufficio ha la segnalazione.",
+      "sending": "Invio la foto…",
+      "sent": "Foto inviata.",
+      "failed": "La foto non è partita. La segnalazione invece c'è."
+    },
+    "next": "Continua a lavorare secondo la scheda che hai finché l'ufficio non risponde."
+  },
+  "refusal": {
+    "NOT_PUBLISHED": "Questa versione non è più quella mostrata in reparto. Apri di nuovo l'istruzione.",
+    "CLIENT_ID_REUSED": "Questo tocco era già partito con altri dati. Riprova."
+  },
+  "op": {
+    "instructions": "Istruzioni",
+    "instructionsNew": "Istruzioni · Nuova",
+    "new": {
+      "FIRST": "Istruzione per questa operazione: versione {n}. Si apre prima di Inizia: guardala una volta.",
+      "CHANGED": "Nuova istruzione: versione {n}. Si apre prima di Inizia."
+    }
+  },
+  "mywork": {
+    "tile": "Nuove istruzioni",
+    "tileCount": "{count} in attesa del tuo Visto"
+  }
+}

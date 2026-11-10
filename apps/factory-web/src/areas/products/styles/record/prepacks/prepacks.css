@@ -1,0 +1,76 @@
+/* Prepacks (B-W2b-233, SCR-287): layout only; every control is the DS's. */
+.fw-ppk-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+}
+.fw-ppk-num {
+  justify-content: flex-end;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.fw-ppk-name {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.fw-ppk-name > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-ppk-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-ppk-refused {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--nds-radius-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.fw-ppk-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+/* The pack dialog's grid of sizes: it scrolls inside its box on a phone, never the page. */
+.fw-ppk-grid-box {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.fw-ppk-grid {
+  border-collapse: collapse;
+  width: 100%;
+  /* The sizes share the width; on a phone the box scrolls sideways instead of squeezing them. */
+  table-layout: fixed;
+  min-width: 520px;
+}
+.fw-ppk-grid thead th:first-child {
+  width: 28%;
+}
+.fw-ppk-grid td .nds-field {
+  width: 100%;
+}
+.fw-ppk-grid th,
+.fw-ppk-grid td {
+  padding: var(--nds-space-4) var(--nds-space-6);
+  text-align: left;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-weight: var(--nds-font-weight-normal);
+}
+.fw-ppk-grid thead th {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-ppk-grid tbody th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

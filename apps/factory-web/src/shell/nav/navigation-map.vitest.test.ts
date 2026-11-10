@@ -415,6 +415,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
       myday: 'floor.work', // GET /people/myday (B-W2b-68)
       training: 'floor.work', // GET /safety/floor/training/sessions, /safety/floor/ppe/items (B-W2b-145)
+      instructions: 'production.scan', // GET /production/instructions/floor/operation (B-W2b-232 on B-W2b-214)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       incident: 'floor.work', // GET /safety/floor/incidents/start (B-W2b-137)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
@@ -431,12 +432,13 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-145: Training & PPE sign-off at every station mode (tile family Me, after My day).
       // B-W2b-105: In-line inspection at the inspection bench (tile family Quality, after Final inspection).
       // B-W2b-121: Fabric cutting at the cutting table, after Cut a hide (tile family Cutting).
-      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'help', 'incident', 'lineview', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      // B-W2b-232: Spec & instructions at every station mode but the warehouse (tile family Work, before Call for help).
+      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
       // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
-      inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
+      inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
       warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {

@@ -77,6 +77,9 @@ export interface OperationStepRow {
   readonly words: string
   readonly required: boolean
   readonly tick: { readonly outcome: StepOutcome; readonly at: string; readonly mine: boolean; readonly by: string | null } | null
+  /** B-W2b-232 (FI9:01, B-W2b-214's WI1:02): the instruction step's icon key and critical point (absent: typed lines, an older answer). */
+  readonly icon?: string | null
+  readonly critical?: boolean
 }
 
 export interface OperationSteps {
