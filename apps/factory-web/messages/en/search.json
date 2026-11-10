@@ -94,6 +94,8 @@
     "BrandingSet": "Branding set",
     "ChangeRequest": "Change request",
     "ChangeOrder": "Change order",
+    "PointOfMeasure": "Point of measure",
+    "GradeRule": "Grade rule",
     "other": "Record"
   },
   "chip": {
@@ -138,6 +140,8 @@
     "BrandingSet": "Branding sets",
     "ChangeRequest": "Change requests",
     "ChangeOrder": "Change orders",
+    "PointOfMeasure": "Points of measure",
+    "GradeRule": "Grade rules",
     "other": "Other records"
   },
   "status": {

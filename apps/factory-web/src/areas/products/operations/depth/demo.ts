@@ -87,7 +87,8 @@ export function minutesModel(role: RoleCase, overrides: Partial<MinutesModel> = 
     notice: null,
     userId: READER_ID,
     can,
-    connections: { pieceRates: can.pieceRates ? { kind: 'page', href: `${PREFIX}/people/piecerates` } : { kind: 'noRight' }, changes: { kind: 'notBuilt' } },
+    // B-W2b-274: Changes & versions is built: its SMV changes for a role that reads them.
+    connections: { pieceRates: can.pieceRates ? { kind: 'page', href: `${PREFIX}/people/piecerates` } : { kind: 'noRight' }, changes: (ROLE_PERMISSIONS[role] as readonly string[]).includes('product.changes.view') ? { kind: 'page', href: `${PREFIX}/products/changes?kind=smv` } : { kind: 'noRight' } },
     ...overrides,
   }
 }

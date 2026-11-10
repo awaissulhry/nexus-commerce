@@ -126,7 +126,9 @@ describe('compliance reports: where each number leads', () => {
     expect(supplierHref(CR6.suppliers[0]!.party, '/w/DEMO', { ...ALL, suppliers: false }, BUILT)).toBeNull()
     expect(failedLotsHref('/w/DEMO', ALL, BUILT)).toBe('/w/DEMO/compliance/tests?view=failed')
     expect(registerHref('COMPLAINT', '/w/DEMO', ALL, true, BUILT)).toBe('/w/DEMO/compliance/register?view=open&kind=COMPLAINT')
-    expect(registerHref('WITHDRAWAL', '/w/DEMO', ALL, false, BUILT)).toBe('/w/DEMO/compliance/register')
+    // B-W2b-274: the register's list filters every kind (B-W2b-271), withdrawals and authority requests too.
+    expect(registerHref('WITHDRAWAL', '/w/DEMO', ALL, false, BUILT)).toBe('/w/DEMO/compliance/register?kind=WITHDRAWAL')
+    expect(registerHref('AUTHORITY_REQUEST', '/w/DEMO', ALL, true, BUILT)).toBe('/w/DEMO/compliance/register?view=open&kind=AUTHORITY_REQUEST')
     expect(registerHref('RECALL', '/w/DEMO', { ...ALL, register: false }, false, BUILT)).toBeNull()
   })
 })

@@ -5,7 +5,8 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  * Compliance (design 01 area 9 "Compliance / Conformità", Owner answer T1: its own area): what proves a garment
  * may be sold — here the material tests of each lot with the chromium VI release (SCR-054) and the PPE register of
  * complaints, non-conformities and recalls (SCR-113); the product screens step adds the EN 17092 / protector certificate
- * register (SCR-050/051) and the PPE garment labels (SCR-053), in the approved tree's order. Declarations join later.
+ * register (SCR-050/051) and the PPE garment labels (SCR-053), in the approved tree's order; W2b-4 adds the status board,
+ * declarations, technical files, sourcing & claims, reports and rules & markets (B-W2b-274 checked the whole against the tree).
  * Labels are message keys (`shell:` = messages/<locale>/shell.json).
  */
 export const officeArea: OfficeAreaNav = {
@@ -55,7 +56,7 @@ export const officeArea: OfficeAreaNav = {
         ],
       },
       // B-W2b-272 SCR-261: Compliance › Reports › Compliance reports (GET /compliance/reports/kpis, compliance.reports.view); after
-      // Product safety (the tree's order: Sustainability and Settings join with their steps).
+      // Sustainability (the tree's order).
       {
         id: 'compliance-reports',
         label: 'shell:nav.compliance.reportsGroup',

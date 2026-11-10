@@ -1689,7 +1689,7 @@
     },
     "files": {
       "title": "Documents and files",
-      "notBuilt": "Sketches, pattern files and customer pages are listed here in a later step. For now, files added to the style are in its Activity tab."
+      "where": "Sketches, pictures and customer pages are in the Overview’s gallery; the pattern files are above. Other files added to the style are in its Activity tab."
     }
   }
 }

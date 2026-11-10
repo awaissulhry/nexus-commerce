@@ -107,7 +107,9 @@ describe('the Minutes tab', () => {
     const pages = new Set(['/people/piecerates'])
     expect(connectionsOf('/w/X', pages, ['people.piecerates.view'])).toEqual({ pieceRates: { kind: 'page', href: '/w/X/people/piecerates' }, changes: { kind: 'notBuilt' } })
     expect(connectionsOf('/w/X', pages, []).pieceRates).toEqual({ kind: 'noRight' })
-    expect(connectionsOf('/w/X', new Set(['/products/changes']), []).changes).toEqual({ kind: 'page', href: '/w/X/products/changes' })
+    // B-W2b-274: Changes & versions opens on its SMV changes, for a role that reads the changes.
+    expect(connectionsOf('/w/X', new Set(['/products/changes']), ['product.changes.view']).changes).toEqual({ kind: 'page', href: '/w/X/products/changes?kind=smv' })
+    expect(connectionsOf('/w/X', new Set(['/products/changes']), []).changes).toEqual({ kind: 'noRight' })
     expect(smvCanOf(['product.smv.propose', 'plant.view'])).toMatchObject({ propose: true, approve: false, machineClasses: true })
   })
 })

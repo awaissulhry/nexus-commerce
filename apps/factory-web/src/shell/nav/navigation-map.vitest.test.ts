@@ -284,6 +284,34 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       expect(mine).toEqual([...mine].sort((a, b) => a - b))
     }
   })
+
+  // B-W2b-274 (the W2b-4 sweep): Products and Compliance per role template, Production › Work instructions and Planning ›
+  // Time & action, each row behind its page's own read (the role templates as they stand; a change there changes this table).
+  it('the W2b-4 rows per role: Products, Compliance, Work instructions, Time & action', () => {
+    const P = (...pages: string[]) => pages.map((page) => `/products/${page}`)
+    const C = (...pages: string[]) => pages.map((page) => `/compliance/${page}`)
+    const allProducts = P('styles', 'materials', 'samples', 'changes', 'operations', 'sizes', 'colours', 'options', 'settings')
+    const allCompliance = C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'tests', 'register', 'sourcing', 'reports', 'settings')
+    const expected: Record<string, { products: string[]; compliance: string[]; instructions: boolean; milestones: boolean }> = {
+      owner: { products: allProducts, compliance: allCompliance, instructions: true, milestones: true },
+      production_manager: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'register', 'sourcing', 'reports', 'settings'), instructions: true, milestones: true },
+      quality_inspector: { products: allProducts, compliance: allCompliance, instructions: true, milestones: false },
+      planner: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'sourcing', 'settings'), instructions: false, milestones: true },
+      sales: { products: P('styles', 'materials', 'samples', 'changes', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
+      buyer: { products: P('styles', 'materials', 'changes', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: true },
+      warehouse: { products: P('styles', 'materials', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: false },
+      floor_supervisor: { products: P('styles', 'materials', 'changes', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: true, milestones: false },
+      finance: { products: P('styles', 'materials', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
+      read_only: { products: allProducts, compliance: allCompliance, instructions: true, milestones: true },
+    }
+    for (const [role, want] of Object.entries(expected)) {
+      const hrefs = rows(officeNavFor(permissionCheck(templateOf(role)!.permissions))).map((row) => row.href)
+      expect(hrefs.filter((href) => href.startsWith('/products/')), role).toEqual(want.products)
+      expect(hrefs.filter((href) => href.startsWith('/compliance/')), role).toEqual(want.compliance)
+      expect(hrefs.includes('/production/instructions'), role).toBe(want.instructions)
+      expect(hrefs.includes('/planning/milestones'), role).toBe(want.milestones)
+    }
+  })
 })
 
 describe('the palette finds every page by its name, in Italian and English', () => {

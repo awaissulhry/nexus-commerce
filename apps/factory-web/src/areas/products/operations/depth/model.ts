@@ -233,7 +233,8 @@ export type Place = { kind: 'page'; href: string } | { kind: 'notBuilt' } | { ki
 export function connectionsOf(prefix: string, pages: ReadonlySet<string>, permissions: readonly string[]): { pieceRates: Place; changes: Place } {
   const held = new Set(permissions)
   const pieceRates: Place = !pages.has('/people/piecerates') ? { kind: 'notBuilt' } : held.has('people.piecerates.view') ? { kind: 'page', href: `${prefix}/people/piecerates` } : { kind: 'noRight' }
-  const changes: Place = pages.has('/products/changes') ? { kind: 'page', href: `${prefix}/products/changes` } : { kind: 'notBuilt' }
+  // B-W2b-274: Changes & versions is built (B-W2b-244): its SMV changes (`?kind=smv`), for a role that reads the changes.
+  const changes: Place = !pages.has('/products/changes') ? { kind: 'notBuilt' } : held.has('product.changes.view') ? { kind: 'page', href: `${prefix}/products/changes?kind=smv` } : { kind: 'noRight' }
   return { pieceRates, changes }
 }
 
