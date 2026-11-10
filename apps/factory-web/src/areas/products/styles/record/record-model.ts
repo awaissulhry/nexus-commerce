@@ -38,6 +38,8 @@ import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
 import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 // B-W2b-235: the routing in depth (Operations tab).
 import type { RoutingDepthActions, RoutingDepthModel } from '../routing/depth/model'
+// B-W2b-241: the BOM in depth (Materials (BOM) tab).
+import type { BomDepthActions, BomDepthModel } from '../bom/depth/model'
 // B-W2b-240: Sizes & measurements › Measurement spec.
 import type { SpecActions, SpecModel } from './spec/spec-model'
 
@@ -58,7 +60,7 @@ export interface StyleNotice {
   params?: Record<string, string | number>
 }
 
-export type BomViewMode = 'lines' | 'sizes' | 'colours'
+export type BomViewMode = 'lines' | 'sizes' | 'colours' | /* B-W2b-241: the sub-assembly tree */ 'tree'
 
 /** The pop-ups of the studio (one at a time). */
 export type StyleDialog =
@@ -151,10 +153,14 @@ export interface StyleRecordViewModel {
   patternFiles?: PatternsModel
   /** B-W2b-235: the Operations tab's routing in depth — times, sizes, variants, checkpoints, settings (absent: not read). */
   routingDepth?: RoutingDepthModel
+  /** B-W2b-241: the Materials (BOM) tab in depth — structure, check, alternates, supply, options (absent: not read). */
+  bomDepth?: BomDepthModel
   /** B-W2b-240: the Sizes & measurements tab's Measurement spec (absent: not read, like idle). */
   spec?: SpecModel
   /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
   samples?: { view: boolean; manage: boolean }
+  /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
+  changes?: { view: boolean; request: boolean }
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -234,6 +240,8 @@ export interface StyleRecordActions {
   patternFiles?: PatternsActions
   /** B-W2b-235: the routing in depth. */
   routingDepth?: RoutingDepthActions
+  /** B-W2b-241: the BOM in depth. */
+  bomDepth?: BomDepthActions
   /** B-W2b-240: the Measurement spec. */
   spec?: SpecActions
 }

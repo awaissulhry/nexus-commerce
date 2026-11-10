@@ -1,35 +1,61 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { ArrowDown, ArrowUp, CircleAlert, CircleX, Download, Plus, Search, Trash2, Upload } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
+import { CircleAlert, CircleX, Download, Plus, Search, Upload } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu } from '@nexus/ui/components'
+import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Toggle } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { dimensionOf, UOMS } from '@nexus/factory-domain/product/units/units'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../../record-panels/i18n'
 import type { BomLine, BomLineInput, BomView, MaterialView, StyleView } from '../../api'
 import { SheetImportDialog } from '../../import/view/SheetImportDialog'
 import { decimalInput, decimalText, draftOf, editableRevision, editText, isRoutingIssue, issueWords, nextRevisionNumber, revisionInView, stepLabel } from '../../model'
 import type { BomViewMode, StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
-import { moveSeq, sizeCells } from '../bom-model'
+// B-W2b-241: the BOM in depth (sections and group rows, the sub-assembly tree, alternates, customer-supplied and option
+// lines, THE check, leather grades, fill by size).
+import { NO_BOM_DEPTH, ready, type ShowMe } from '../depth/model'
+import { CheckCard } from '../depth/view/CheckCard'
+import { DepthDialogs } from '../depth/view/DepthDialogs'
+import { LeatherGrades } from '../depth/view/LeatherGrades'
+import { LinesGrid } from '../depth/view/LinesGrid'
+import { SizesGrid } from '../depth/view/SizesGrid'
+import { TreeSection } from '../depth/view/TreeSection'
+import '../depth/bom-depth.css'
 
-const VIEWS: BomViewMode[] = ['lines', 'sizes', 'colours']
+const VIEWS: BomViewMode[] = ['lines', 'sizes', 'colours', 'tree']
 
 /**
- * SCR-042 Materials (BOM) of the revision in view: the release check of the BOM (each finding with Show me), three
- * views of the same lines — Lines (add with `n`, edit, move with Alt+↑ / Alt+↓, remove), By size (size-dependent lines ×
- * the range, decimals typed either way, a missing size said in words, never 0), By colourway (colour-dependent lines ×
- * the active colourways, the material's own colours only) — `v` cycles them; and leather: what each size cuts and
- * needs in hide, with the planned hide yield of the revision. A released revision is frozen: everything is drawn as text.
+ * SCR-042 Materials (BOM) of the revision in view: the release check of the BOM (each finding with Show me), four views
+ * of the same lines — Lines (add with `n`, edit, move with Alt+↑ / Alt+↓, remove), By size (size-dependent lines × the
+ * range, decimals typed either way, a missing size said in words, never 0), By colourway (colour-dependent lines × the
+ * active colourways, the material's own colours only), Tree (the sub-assemblies) — `v` cycles them; and leather: what
+ * each size cuts and needs in hide, with the planned hide yield of the revision. A released revision is frozen: everything
+ * is drawn as text.
  * B-W2b-88: each line may name the operation of the routing that uses it (column "Operation", a field of the line): the
  * floor then asks its components at that operation only, and dispatch flags its material per operation.
+ * B-W2b-241: THE check (W1's and the structure's findings, B-W2b-223), the Lines view on the shared list frame with the
+ * Section column and group rows, Alternates, Customer-supplied and Option (bulk Section… / Group… / Supply…), the line in
+ * depth (Enter), By size on the DS SizeColumns with Fill from base by increment, the Tree view (Sub-assemblies, used in),
+ * and the leather lines' grade mix and minimum grade per pattern piece.
  */
-export function BomTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+export function BomTab(props: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  return (
+    <WithMessages namespaces={['products-bom-depth']}>
+      <BomTabBody {...props} />
+    </WithMessages>
+  )
+}
+
+function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
+  const td = useT('products-bom-depth')
   const revision = revisionInView(style.revisions, model.revisionId)
   const editable = editableRevision(style, revision) && model.can.bomManage
   const heldWhy = !model.can.bomManage ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
+  // B-W2b-241: the BOM in depth (its own read; design cases without one draw W1's data with "—" in the W2b columns).
+  const depth = model.bomDepth ?? { ...NO_BOM_DEPTH, canManage: model.can.bomManage }
+  const depthActions = actions?.bomDepth
   // W2a Import BOM (importer product.bom): rows go into a style's DRAFT revision, so a frozen one says where to go first.
   const draft = draftOf(style.revisions)
   const importHeld = !model.can.bomManage
@@ -50,7 +76,7 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || depth.dialog) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key === 'n' && editable) {
         event.preventDefault()
@@ -79,49 +105,99 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
   const routing = model.routing.status === 'ready' ? model.routing.value : null
   const bomIssues = bom.issues.filter((issue) => !isRoutingIssue(issue.code))
   const bomWarnings = bom.warnings.filter((issue) => !isRoutingIssue(issue.code))
+  const structure = ready(depth.structure)
 
   const showMe = (issue: BomView['issues'][number]) => {
     const view: BomViewMode = issue.size ? 'sizes' : issue.colourwayId ? 'colours' : 'lines'
     actions?.onBomView?.(view)
     requestAnimationFrame(() => {
-      const selector = issue.size ? `[data-cell="${issue.lineId}:${issue.size}"]` : issue.colourwayId ? `[data-cell="${issue.lineId}:${issue.colourwayId}"]` : `[data-line="${issue.lineId}"]`
+      const selector = issue.size ? `[data-cell="${issue.lineId}:${issue.size}"]` : issue.colourwayId ? `[data-cell="${issue.lineId}:${issue.colourwayId}"]` : `[row-id="${issue.lineId}"]`
       document.querySelector<HTMLElement>(selector)?.focus()
     })
+    if (issue.size && issue.lineId) depthActions?.onShowSize?.(issue.lineId, issue.size)
+  }
+  // B-W2b-241: "Show me" of THE check lands on the cell to fix.
+  const showTarget = (target: ShowMe) => {
+    switch (target.to) {
+      case 'add':
+        actions?.onDialog?.({ kind: 'bomLine', lineId: null })
+        return
+      case 'sizes':
+        actions?.onBomView?.('sizes')
+        depthActions?.onShowSize?.(target.lineId, target.size)
+        return
+      case 'colours':
+        actions?.onBomView?.('colours')
+        requestAnimationFrame(() => document.querySelector<HTMLElement>(target.colourwayId ? `[data-cell="${target.lineId}:${target.colourwayId}"]` : `[row-id="${target.lineId}"]`)?.focus())
+        return
+      case 'line':
+        depthActions?.onDialog?.({ kind: 'line', lineId: target.lineId, part: target.part })
+        return
+      case 'edit':
+        actions?.onDialog?.({ kind: 'bomLine', lineId: target.lineId })
+        return
+      case 'yield':
+        requestAnimationFrame(() => document.getElementById('fw-bmd-yield')?.focus())
+        return
+      case 'row':
+        actions?.onBomView?.('lines')
+        requestAnimationFrame(() => document.querySelector<HTMLElement>(`[row-id="${target.lineId}"] [col-id="material"]`)?.focus())
+        return
+    }
   }
 
   return (
     <div className="fw-st-stack-lg">
-      {revision.status === 'DRAFT' && bomIssues.length > 0 && (
-        <Card header={t('bom.check.title', { count: bomIssues.length })} description={t('bom.check.intro')}>
-          <ul className="fw-st-checklist">
-            {bomIssues.map((issue, index) => {
-              const words = issueWords(issue, bom, routing)
-              return (
-                <li key={`${issue.code}-${index}`} className="fw-st-check is-blocked">
-                  <CircleX size={14} aria-hidden />
-                  <span>{t(words.key, words.params)}</span>
-                  {(issue.lineId || issue.code === 'NO_LINES') && (
-                    <Button size="sm" variant="link" onClick={() => (issue.code === 'NO_LINES' ? actions?.onDialog?.({ kind: 'bomLine', lineId: null }) : showMe(issue))}>
-                      {t('check.showMe')}
-                    </Button>
-                  )}
-                </li>
-              )
-            })}
-            {bomWarnings.map((issue, index) => {
-              const words = issueWords(issue, bom, routing)
-              return (
-                <li key={`w${index}`} className="fw-st-check is-warning">
-                  <CircleAlert size={14} aria-hidden />
-                  <span>
-                    {t(words.key, words.params)} <span className="fw-st-hint">· {t('release.warningPasses')}</span>
-                  </span>
-                  <span />
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
+      {revision.status === 'DRAFT' && structure ? (
+        <CheckCard structure={structure} depth={ready(depth.depth)} bom={bom} routing={routing} onShowMe={showTarget} />
+      ) : (
+        revision.status === 'DRAFT' &&
+        bomIssues.length > 0 && (
+          <Card header={t('bom.check.title', { count: bomIssues.length })} description={t('bom.check.intro')}>
+            <ul className="fw-st-checklist">
+              {bomIssues.map((issue, index) => {
+                const words = issueWords(issue, bom, routing)
+                return (
+                  <li key={`${issue.code}-${index}`} className="fw-st-check is-blocked">
+                    <CircleX size={14} aria-hidden />
+                    <span>{t(words.key, words.params)}</span>
+                    {(issue.lineId || issue.code === 'NO_LINES') && (
+                      <Button size="sm" variant="link" onClick={() => (issue.code === 'NO_LINES' ? actions?.onDialog?.({ kind: 'bomLine', lineId: null }) : showMe(issue))}>
+                        {t('check.showMe')}
+                      </Button>
+                    )}
+                  </li>
+                )
+              })}
+              {bomWarnings.map((issue, index) => {
+                const words = issueWords(issue, bom, routing)
+                return (
+                  <li key={`w${index}`} className="fw-st-check is-warning">
+                    <CircleAlert size={14} aria-hidden />
+                    <span>
+                      {t(words.key, words.params)} <span className="fw-st-hint">· {t('release.warningPasses')}</span>
+                    </span>
+                    <span />
+                  </li>
+                )
+              })}
+            </ul>
+          </Card>
+        )
+      )}
+      {depth.notice && (
+        <Banner
+          tone={depth.notice.tone}
+          title={td(depth.notice.key, depth.notice.params)}
+          action={
+            <Button size="sm" variant="quiet" onClick={() => depthActions?.onDismissNotice?.()}>
+              {t('common.dismiss')}
+            </Button>
+          }
+        />
+      )}
+      {(depth.structure.status === 'error' || depth.depth.status === 'error') && model.bomView !== 'tree' && (
+        <Banner tone="warning" title={td('depth.failed')} action={<Button size="sm" onClick={() => depthActions?.onRetry?.()}>{t('common.retry')}</Button>} />
       )}
 
       <Card
@@ -134,7 +210,7 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
               ariaLabel={t('bom.viewLabel')}
               value={model.bomView}
               onChange={(value) => actions?.onBomView?.(value as BomViewMode)}
-              options={VIEWS.map((view) => ({ value: view, label: t(`bom.view.${view}`) }))}
+              options={VIEWS.map((view) => ({ value: view, label: view === 'tree' ? td('view.tree') : t(`bom.view.${view}`) }))}
             />
             <Menu
               label={
@@ -161,7 +237,9 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
           </span>
         }
       >
-        {bom.lines.length === 0 ? (
+        {model.bomView === 'tree' ? (
+          <TreeSection model={depth} actions={depthActions} prefix={model.prefix} />
+        ) : bom.lines.length === 0 ? (
           <EmptyState
             title={t('bom.empty.title')}
             description={t('bom.empty.body')}
@@ -172,11 +250,21 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
             }
           />
         ) : model.bomView === 'sizes' ? (
-          <SizesView bom={bom} editable={editable} actions={actions} />
+          <SizesGrid
+            bom={bom}
+            editable={editable}
+            heldWhy={editable ? null : heldWhy}
+            marks={depth.marks}
+            offline={depth.offline}
+            focus={depth.focus}
+            onCell={(lineId, size, value) => (depthActions?.onSizeCell ? depthActions.onSizeCell(lineId, size, value) : actions?.onLineSizes?.(lineId, [{ size, qty: value }]))}
+            onFill={(lineId) => depthActions?.onDialog?.({ kind: 'fill', lineId })}
+            onFocused={() => depthActions?.onFocused?.()}
+          />
         ) : model.bomView === 'colours' ? (
           <ColoursView bom={bom} model={model} editable={editable} actions={actions} />
         ) : (
-          <LinesView bom={bom} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} />
+          <LinesGrid bom={bom} model={depth} actions={depthActions} recordActions={actions} prefix={model.prefix} />
         )}
       </Card>
 
@@ -185,204 +273,7 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
       {model.bomImport && <SheetImportDialog model={model.bomImport} actions={actions?.bomImport} />}
       {model.dialog?.kind === 'bomLine' && <LineDialog bom={bom} model={model} actions={actions} lineId={model.dialog.lineId} />}
       {model.dialog?.kind === 'removeLine' && <RemoveLineDialog bom={bom} model={model} actions={actions} lineId={model.dialog.lineId} />}
-    </div>
-  )
-}
-
-function dependence(line: BomLine, t: (key: string, params?: Record<string, string | number>) => string) {
-  return (
-    <span className="fw-st-inline">
-      {line.sizeDependent && <Tag tone="info">{t('bom.bySize')}</Tag>}
-      {line.colourDependent ? <Tag tone="info">{t('bom.byColour')}</Tag> : line.itemColour ? <Tag tone="neutral">{line.itemColour.code}</Tag> : null}
-      {line.colourway && <Tag tone="warning">{t('bom.onlyIn', { code: line.colourway.code })}</Tag>}
-    </span>
-  )
-}
-
-function LinesView({ bom, editable, heldWhy, actions, prefix }: { bom: BomView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string }) {
-  const t = useT('products')
-  const locale = useLocale()
-  const base = bom.style.baseSize
-  const move = (line: BomLine, delta: -1 | 1) => {
-    const seq = moveSeq(bom.lines, line.id, delta)
-    if (seq !== null) void actions?.onEditLine?.(line.id, { seq } as BomLineInput)
-  }
-  return (
-    <div
-      className="fw-st-scroll"
-      onKeyDown={(event) => {
-        if (!editable || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
-        const id = (event.target as HTMLElement).closest<HTMLElement>('[data-line]')?.dataset.line
-        const line = bom.lines.find((entry) => entry.id === id)
-        if (!line) return
-        event.preventDefault()
-        move(line, event.key === 'ArrowUp' ? -1 : 1)
-      }}
-    >
-      <SummaryTable
-        label={t('bom.title', { count: bom.lines.length })}
-        density="roomy"
-        stackOnPhone
-        columns={[t('bom.col.seq'), t('bom.col.material'), t('bom.col.placement'), t('bom.col.qty', { size: base ?? '—' }), t('bom.col.wastage'), t('bom.col.gross'), t('bom.col.depends'), t('bom.col.operation'), t('bom.col.actions')]}
-        widths={['5%', '19%', '10%', '9%', '7%', '9%', '11%', '11%', undefined]}
-        align={[undefined, undefined, undefined, 'right', 'right', 'right', undefined, undefined, 'right']}
-        rows={bom.lines.map((line, index) => {
-          const atBase = line.bySize.find((entry) => entry.size === base) ?? line.bySize[0]
-          return {
-            id: line.id,
-            cells: [
-              String(line.seq),
-              <span key="m" className="fw-st-cellstack">
-                {/* The material record (Products › Materials & trims, SCR-048). */}
-                <Link className="fw-st-link" href={`${prefix}/products/materials/${line.item.id}`}>
-                  <b>{line.item.code}</b>
-                </Link>
-                <span className="nds-summary-sub">
-                  {line.item.name} · {t(`kind.${line.item.kind}`)}
-                </span>
-              </span>,
-              line.placement ?? '—',
-              `${decimalText(atBase?.qty ?? line.qty, locale)} ${t(`uom.${line.uom}`)}`,
-              `${decimalText(line.wastagePct, locale)} %`,
-              atBase?.gross ? `${decimalText(atBase.gross, locale)} ${t(`uom.${line.uom}`)}` : t('bom.missing'),
-              <span key="d">{dependence(line, t)}</span>,
-              line.routingStep ? (
-                <span key="o" className="fw-st-cellstack">
-                  <span>{t('bom.operationAt', { step: stepLabel(line.routingStep) })}</span>
-                  <span className="nds-summary-sub">{line.routingStep.name}</span>
-                </span>
-              ) : (
-                <span key="o" className="fw-st-hint">
-                  {t('bom.noOperation')}
-                </span>
-              ),
-              <span key="a" className="fw-st-inline fw-st-nowrap" data-line={line.id} tabIndex={-1}>
-                <Button size="sm" variant="quiet" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'bomLine', lineId: line.id })} aria-label={t('bom.editOne', { line: line.seq })}>
-                  {t('bom.edit')}
-                </Button>
-                <Button size="sm" variant="quiet" heldReason={heldWhy ?? (index === 0 ? t('bom.held.first') : null)} onClick={() => move(line, -1)} aria-label={t('bom.moveUp', { line: line.seq })} aria-keyshortcuts="Alt+ArrowUp">
-                  <ArrowUp size={13} aria-hidden />
-                </Button>
-                <Button size="sm" variant="quiet" heldReason={heldWhy ?? (index === bom.lines.length - 1 ? t('bom.held.last') : null)} onClick={() => move(line, 1)} aria-label={t('bom.moveDown', { line: line.seq })} aria-keyshortcuts="Alt+ArrowDown">
-                  <ArrowDown size={13} aria-hidden />
-                </Button>
-                <Button size="sm" variant="quiet" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'removeLine', lineId: line.id })} aria-label={t('bom.removeOne', { line: line.seq })} title={t('bom.removeOne', { line: line.seq })}>
-                  <Trash2 size={13} aria-hidden />
-                </Button>
-              </span>,
-            ],
-          }
-        })}
-      />
-    </div>
-  )
-}
-
-function SizesView({ bom, editable, actions }: { bom: BomView; editable: boolean; actions?: StyleRecordActions }) {
-  const t = useT('products')
-  const locale = useLocale()
-  const lines = bom.lines.filter((line) => line.sizeDependent)
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const [bad, setBad] = useState<string | null>(null)
-  if (lines.length === 0) return <EmptyState title={t('bom.sizes.empty.title')} description={t('bom.sizes.empty.body')} />
-  const commit = (line: BomLine, size: string) => {
-    const key = `${line.id}:${size}`
-    const text = drafts[key]
-    if (text === undefined) return
-    const value = decimalInput(text, 4)
-    if (value === undefined) {
-      setBad(key)
-      return
-    }
-    setBad(null)
-    setDrafts(({ [key]: _gone, ...rest }) => rest)
-    const current = line.sizes.find((entry) => entry.size === size)?.qty ?? null
-    if ((current === null ? null : decimalInput(current, 4)) === value) return
-    actions?.onLineSizes?.(line.id, [{ size, qty: value }])
-  }
-  const leather = lines.filter((line) => line.item.kind === 'LEATHER')
-  return (
-    <div className="fw-st-stack">
-      <div className="fw-st-scroll">
-        <table className="fw-st-grid" aria-label={t('bom.view.sizes')}>
-          <thead>
-            <tr>
-              <th scope="col" className="fw-st-grid-first">
-                {t('bom.col.material')}
-              </th>
-              {bom.sizes.map((size) => (
-                <th key={size.code} scope="col" className={size.code === bom.style.baseSize ? 'is-base' : undefined}>
-                  {size.code}
-                  {size.code === bom.style.baseSize && <span className="fw-st-hint"> · {t('range.baseMark')}</span>}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((line) => (
-              <tr key={line.id}>
-                <th scope="row" className="fw-st-grid-first">
-                  <span className="fw-st-cellstack">
-                    <b>
-                      {line.seq} · {line.item.code}
-                    </b>
-                    <span className="fw-st-hint">
-                      {line.placement ?? line.item.name} · {t(`uom.${line.uom}`)}
-                    </span>
-                  </span>
-                </th>
-                {bom.sizes.map((size) => {
-                  const key = `${line.id}:${size.code}`
-                  const qty = line.sizes.find((entry) => entry.size === size.code)?.qty ?? null
-                  const shown = drafts[key] ?? editText(qty, locale)
-                  return (
-                    <td key={size.code} className={`${size.code === bom.style.baseSize ? 'is-base' : ''}${qty === null ? ' is-missing' : ''}`}>
-                      {editable ? (
-                        <Input
-                          size="sm"
-                          inputMode="decimal"
-                          data-cell={key}
-                          value={shown}
-                          placeholder={t('bom.missingShort')}
-                          aria-label={t('bom.sizeCell', { line: `${line.seq} · ${line.item.code}`, size: size.code })}
-                          aria-invalid={bad === key || qty === null || undefined}
-                          onChange={(event) => setDrafts((current) => ({ ...current, [key]: event.target.value }))}
-                          onBlur={() => commit(line, size.code)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              commit(line, size.code)
-                            }
-                            if (event.key === 'Escape') setDrafts(({ [key]: _gone, ...rest }) => rest)
-                          }}
-                        />
-                      ) : qty === null ? (
-                        <span className="fw-st-danger">{t('bom.missing')}</span>
-                      ) : (
-                        decimalText(qty, locale)
-                      )}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-            {leather.length > 0 && (
-              <tr className="fw-st-grid-total">
-                <th scope="row" className="fw-st-grid-first">
-                  {t('bom.sizes.leatherTotal')}
-                </th>
-                {sizeCells(leather, bom.sizes.map((size) => size.code)).map((cell) => (
-                  <td key={cell.size} className={cell.size === bom.style.baseSize ? 'is-base' : undefined}>
-                    {cell.total === null ? <span className="fw-st-danger">{t('bom.missing')}</span> : decimalText(cell.total, locale, 2)}
-                  </td>
-                ))}
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {bad && <Banner tone="warning" title={t('bom.sizes.notNumber')} />}
-      <p className="fw-st-hint">{t(editable ? 'bom.sizes.hint' : 'bom.sizes.hintRead')}</p>
+      <DepthDialogs bom={bom} model={depth} actions={depthActions} recordActions={actions} materials={model.materials} prefix={model.prefix} styleId={style.id} />
     </div>
   )
 }
@@ -518,13 +409,15 @@ function LeatherCard({ bom, model, editable, actions }: { bom: BomView; model: S
                   { label: t('bom.leather.per100'), value: perHide && gross ? decimalText(((gross / perHide) * 100).toFixed(1), locale, 1) : '—' },
                 ]}
               />
+              {/* B-W2b-241: the grade mix and minimum grade per pattern piece cut from this line (B-W2b-95's pieces). */}
+              <LeatherGrades pieces={model.pieces} lineId={line.id} filesHref={`${model.prefix}/products/styles/${bom.style.id}?tab=files&rev=${bom.revision.id}`} locale={locale} />
             </div>
           )
         })}
         <Field label={t('bom.leather.yield')} hint={t('bom.leather.yieldHint')}>
           {editable ? (
             <span className="fw-st-inline">
-              <Input inputMode="decimal" value={yieldText} onChange={(event) => setYieldText(event.target.value)} aria-label={t('bom.leather.yield')} suffix="%" />
+              <Input id="fw-bmd-yield" inputMode="decimal" value={yieldText} onChange={(event) => setYieldText(event.target.value)} aria-label={t('bom.leather.yield')} suffix="%" />
               <Button size="sm" heldReason={yieldHeld} onClick={() => void actions?.onHideYield?.(typed ?? null)}>
                 {t('bom.leather.saveYield')}
               </Button>

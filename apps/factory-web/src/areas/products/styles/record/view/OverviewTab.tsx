@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRight, CircleCheck, CircleX } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
@@ -14,6 +14,8 @@ import { PpeFields, settlePpe, type PpeValue } from '../../forms'
 import { complianceAfterRelease, decimalText, draftOf, issueTab, issueWords, nextRevisionNumber, releasedOf, REVISION_TONE, revisionInView, startRevisionHeld, STATUS_TONE } from '../../model'
 import { customsDraftOf, customsErrors, customsPatch, hsCodeText, refusedCustoms, type CustomsDraft, type CustomsField } from '../customs'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
+// B-W2b-237: the depth's parts (identity in depth, the lifecycle, completeness, where-used).
+import type { StyleDepthSlots } from '../overview/slots'
 
 const PRODUCT_TYPES: StyleView['productType'][] = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
 
@@ -72,18 +74,21 @@ export function identityPatch(style: StyleView, draft: Identity): StylePatch {
  * SCR-041 Overview: what the style is (identity, explicit save with ⌘S), and beside it its state, the release check,
  * the certificate coverage, the revisions and who made it — every line a link to the tab that explains it.
  */
-export function OverviewTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+export function OverviewTab({ style, model, actions, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; depth?: StyleDepthSlots }) {
   const t = useT('products')
   return (
     <div className="fw-st-split">
       <div className="fw-st-col">
         <IdentityCard style={style} model={model} actions={actions} />
+        {depth?.identity /* B-W2b-237 */}
         <WarningsCard style={style} model={model} />
       </div>
       <aside className="fw-st-side" aria-label={t('side.label')}>
+        {depth?.sideTop /* B-W2b-237 */}
         <StateCard style={style} model={model} />
-        <ReleaseCheckCard style={style} model={model} actions={actions} />
+        <ReleaseCheckCard style={style} model={model} actions={actions} gate={depth?.gate /* B-W2b-237 */} />
         <CoverageCard style={style} model={model} />
+        {depth?.side /* B-W2b-237 */}
         <RevisionsCard style={style} model={model} actions={actions} />
       </aside>
     </div>
@@ -320,7 +325,7 @@ function StateCard({ style, model }: { style: StyleView; model: StyleRecordViewM
   )
 }
 
-function ReleaseCheckCard({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+function ReleaseCheckCard({ style, model, actions, gate }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; /** B-W2b-237: the completeness % */ gate?: ReactNode }) {
   const t = useT('products')
   const revision = revisionInView(style.revisions, model.revisionId)
   const draft = draftOf(style.revisions)
@@ -372,6 +377,7 @@ function ReleaseCheckCard({ style, model, actions }: { style: StyleView; model: 
       }
     >
       <div className="fw-st-stack">
+        {gate /* B-W2b-237 */}
         {body}
         {revision?.status === 'DRAFT' && after.length > 0 && (
           <p className="fw-st-hint">

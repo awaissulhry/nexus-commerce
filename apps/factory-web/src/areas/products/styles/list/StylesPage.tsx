@@ -6,7 +6,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { archiveStyle, basePriceLists, countStyles, createStyle, listBrands, listScales, listStyles, priceEntries, startRevision } from '../api'
+import { archiveStyle, basePriceLists, countStyles, createStyle, listBrands, listScales, listStyles, priceEntries, startRevision, updateStyle } from '../api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { commerceHeld } from '../import/commerce/commerce-model'
 import { useCommerceImport } from '../import/commerce/use-commerce-import'
@@ -18,6 +18,10 @@ import { StylesListView } from './view/StylesListView'
 // B-W2b-236 (SCR-303): List · Gallery.
 import { galleryOn, withGallery } from '../gallery/gallery-model'
 import { useGalleryLooks } from '../gallery/use-gallery-looks'
+// B-W2b-237 (SCR-343): the release column's completeness and Set season.
+import { readGateSummaries } from '../record/overview/api'
+import { depthProblem } from '../record/overview/model'
+import { NO_GATE, unreadIds, type ListGate, type SeasonResult } from './depth/model'
 
 const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
 const PPE_CATEGORIES = ['NOT_PPE', 'CATEGORY_I', 'CATEGORY_II', 'CATEGORY_III']
@@ -91,6 +95,10 @@ function StylesContainer() {
   const [newStyle, setNewStyle] = useState<NewStyleModel | null>(null)
   const readSeq = useRef(0)
   const [prices, setPrices] = useState<ListPrices>({ state: 'hidden' })
+  // B-W2b-237: the gate summed up for the rows on screen (25 per call), read again when the rows are read again.
+  const [gate, setGate] = useState<ListGate>(NO_GATE)
+  const gateRef = useRef<ListGate>(NO_GATE)
+  const [season, setSeason] = useState<{ result: SeasonResult | null }>({ result: null })
   const duplicate = useDuplicate(api, () => {
     void load()
     loadTiles()
@@ -170,6 +178,53 @@ function StylesContainer() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // B-W2b-237: a new read of the rows starts the column again; more rows read only the ones not summed up yet.
+  useEffect(() => {
+    if (rows.items === null) {
+      gateRef.current = NO_GATE
+      setGate(NO_GATE)
+      return
+    }
+    const ids = unreadIds(rows.items, gateRef.current)
+    if (ids.length === 0) return
+    const controller = new AbortController()
+    const loading: ListGate = { state: 'loading', byStyle: gateRef.current.byStyle }
+    gateRef.current = loading
+    setGate(loading)
+    readGateSummaries(api, ids, controller.signal)
+      .then((summaries) => {
+        const next: ListGate = { state: 'ready', byStyle: { ...gateRef.current.byStyle, ...Object.fromEntries(summaries.map((row) => [row.styleId, row])) } }
+        gateRef.current = next
+        setGate(next)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        const next: ListGate = { state: 'error', problem: depthProblem(error, 'read').key, byStyle: gateRef.current.byStyle }
+        gateRef.current = next
+        setGate(next)
+      })
+    return () => controller.abort()
+  }, [api, rows.items])
+
+  /** B-W2b-237: Set season — each style at its own version, one after another; the refused ones said by code. */
+  const setSeasonMany = async (ids: string[], value: string | null): Promise<void> => {
+    setBusy(true)
+    const result: SeasonResult = { done: 0, refused: [] }
+    for (const id of ids) {
+      const row = (rows.items ?? []).find((entry) => entry.id === id)
+      if (!row) continue
+      try {
+        await updateStyle(api, row, { season: value })
+        result.done++
+      } catch (error) {
+        result.refused.push({ id: row.id, code: row.code, key: depthProblem(error, 'type').key })
+      }
+    }
+    setSeason({ result })
+    setBusy(false)
+    void load()
+  }
   useEffect(() => {
     loadTiles()
   }, [loadTiles])
@@ -309,6 +364,9 @@ function StylesContainer() {
     busy,
     notice,
     gallery: { on: galleryOn(params), looks },
+    // B-W2b-237
+    gate,
+    season,
   }
 
   return (
@@ -344,6 +402,9 @@ function StylesContainer() {
         onCreate: () => void create(),
         onDismissNotice: () => setNotice(null),
         onGallery: (on) => router.replace(`${pathname}${withGallery(searchOf(filters), on)}`),
+        // B-W2b-237
+        onSetSeason: setSeasonMany,
+        onSeasonClosed: () => setSeason({ result: null }),
       }}
     />
   )

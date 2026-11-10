@@ -19,6 +19,8 @@ import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
 import { PrepacksSection } from '../prepacks/view/PrepacksSection'
 import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
+// B-W2b-241: the BOM tab's problem mark from THE check.
+import { bomMarkCount } from '../../bom/depth/model'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import { GallerySection } from '../gallery/view/GallerySection'
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
@@ -26,6 +28,8 @@ import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
 import { SpecSection } from '../spec/view/SpecSection'
 import { TabBody } from './TabBody'
 import { VariantsTab } from './VariantsTab'
+// B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
+import type { StyleDepthSlots } from '../overview/slots'
 import '../../styles.css'
 
 export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
@@ -45,21 +49,24 @@ export function StyleRecordView({
   actions,
   panels,
   techPack,
+  depth,
 }: {
   model: StyleRecordViewModel
   actions?: StyleRecordActions
   panels?: ReactNode
   /** B-W2b-243: the Tech pack tab's body (the container mounts it while the tab is open). */
   techPack?: ReactNode
+  /** B-W2b-237: the depth's parts (the container builds them from one model). */
+  depth?: StyleDepthSlots
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options']}>
-      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} />
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth']}>
+      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
     </WithMessages>
   )
 }
 
-function StyleRecord({ model, actions, panels, techPack }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
+function StyleRecord({ model, actions, panels, techPack, depth }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
   const t = useT('products')
   const listHref = `${model.prefix}/products/styles`
   const loaded = model.style
@@ -104,10 +111,10 @@ function StyleRecord({ model, actions, panels, techPack }: { model: StyleRecordV
       </div>
     )
   }
-  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} />
+  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
 }
 
-function ReadyRecord({ style, model, actions, panels, techPack }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
+function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
   const t = useT('products')
   // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
   const tt = useT('products-techpack')
@@ -115,6 +122,8 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
   const ts = useT('products-samples')
   // B-W2b-242: the band's link to the style's options (Options & rules: its option BOM lines and routing steps).
   const tOptions = useT('products-options')
+  // B-W2b-244: the band's links to the style's changes.
+  const tc = useT('products-changes')
   const locale = useLocale()
   const recordHref = `${model.prefix}/products/styles/${style.id}`
   const revision = revisionInView(style.revisions, model.revisionId)
@@ -158,14 +167,17 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
   })
 
   const issueCount = bom && revision?.status === 'DRAFT' ? bom.issues.length : 0
+  // B-W2b-241: the BOM tab's mark counts THE check (the structure's findings too) once it is read; W1's issues until then.
+  const bomMark = bomMarkCount(model.bomDepth?.structure.status === 'ready' ? model.bomDepth.structure.value : null)
+  const markOf = (tab: 'bom' | 'routing') => (tab === 'bom' && bomMark !== null ? bomMark : issueCount > 0 ? countFor(tab, bom) : 0)
   const tabItems: TabItem[] = tabs.map((tab) => ({
     id: tab,
     href: tabHref(tab),
     label:
-      (tab === 'bom' || tab === 'routing') && issueCount > 0 && countFor(tab, bom) > 0 ? (
+      (tab === 'bom' || tab === 'routing') && markOf(tab) > 0 ? (
         <span className="fw-st-tablabel">
           {t(`tab.${tab}`)}
-          <span className="fw-st-dot" aria-label={t('tab.problems', { count: countFor(tab, bom) })} role="img" />
+          <span className="fw-st-dot" aria-label={t('tab.problems', { count: markOf(tab) })} role="img" />
         </span>
       ) : (
         t(`tab.${tab}`)
@@ -202,6 +214,9 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
     ...(model.samples?.manage ? [{ id: 'sampleNew', label: ts('style.newRequest'), href: `${model.prefix}/products/samples?new=1&style=${encodeURIComponent(style.id)}${revision && revision.status !== 'OBSOLETE' ? `&revision=${encodeURIComponent(revision.id)}` : ''}` }] : []),
     // B-W2b-242 (design products.styles conn "Options & rules (option-dependent lines, W2b)").
     { id: 'options', label: tOptions('style.link'), href: `${model.prefix}/products/options?style=${encodeURIComponent(style.id)}` },
+    // B-W2b-244 (design products.styles conn "Changes & versions"; pop:changes.new "Style › Versions & changes").
+    ...(model.changes?.view ? [{ id: 'changes', label: tc('style.changes'), href: `${model.prefix}/products/changes?style=${encodeURIComponent(style.id)}` }] : []),
+    ...(model.changes?.request ? [{ id: 'changeNew', label: tc('style.newRequest'), href: `${model.prefix}/products/changes?new=1&style=${encodeURIComponent(style.id)}` }] : []),
     {
       id: 'copy',
       label: t('action.copyCode'),
@@ -339,7 +354,7 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
           {model.tab === 'overview' || !tabs.includes(model.tab) ? (
             // B-W2b-236: the Overview's sections, in the design's order (Sketches and pictures after the matrix).
             <div className="fw-st-stack-lg">
-              <OverviewTab style={style} model={model} actions={actions} />
+              <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
               <GallerySection model={model.gallery} actions={actions?.gallery} />
             </div>
           ) : model.tab === 'files' ? (
@@ -349,7 +364,7 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
               <TabBody tab={model.tab} style={style} model={model} actions={actions} />
             </div>
           ) : model.tab === 'variants' ? (
-            <VariantsTab style={style} model={model} actions={actions} />
+            <VariantsTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
           ) : model.tab === 'sizes' ? (
             // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
             <div className="fw-st-stack-lg">

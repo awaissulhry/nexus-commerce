@@ -35,7 +35,7 @@ export const gateView = output({
   startedBefore: output({ at: instant(), by: person.nullable(), reason: z.string() }).nullable(),
   /** LEATHER_APPROVED: the order's reserved leather (none, not all released, all released); null for the other kinds. */
   leather: z.enum(LEATHER_STATES).nullable(),
-  /** The order's work orders that have not started: the planning board holds a drop of them while the gate waits. */
+  /** The order's production work orders that have not started (never a sample or a repair, B-W2b-F22): the planning board holds a drop of them while the gate waits. */
   holds: z.number().int().min(0),
   version: z.number().int(),
   actions: output({ pass: action, startBefore: action, edit: action, remove: action }),

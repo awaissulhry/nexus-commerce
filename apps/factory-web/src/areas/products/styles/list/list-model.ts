@@ -8,6 +8,8 @@ import type { PpeValue, RangeValue } from '../forms'
 import type { Grains, StyleAbilities, StyleListView } from '../model'
 // B-W2b-236: List · Gallery.
 import type { StylesGalleryModel } from '../gallery/gallery-model'
+// B-W2b-237 (SCR-343): the release column's completeness and Set season.
+import type { ListGate, SeasonResult } from './depth/model'
 
 export interface StyleFilters {
   view: StyleListView
@@ -125,6 +127,10 @@ export interface StylesListViewModel {
   phoneFilters?: boolean
   /** B-W2b-236 (SCR-303): the Gallery view (on, and the looks of the rows on screen); absent: the list. */
   gallery?: StylesGalleryModel
+  /** B-W2b-237 (SCR-343): the release gate summed up per row (absent: W1's readiness only). */
+  gate?: ListGate
+  /** B-W2b-237: Set season's outcome (the pop-up says it), and the design cases' pop-up already open. */
+  season?: { result: SeasonResult | null; open?: boolean }
 }
 
 export interface StylesListActions {
@@ -150,4 +156,7 @@ export interface StylesListActions {
   onDismissNotice?: () => void
   /** B-W2b-236: List · Gallery. */
   onGallery?: (on: boolean) => void
+  /** B-W2b-237: Set season on the selected styles (null clears it); the pop-up closing clears the outcome. */
+  onSetSeason?: (ids: string[], season: string | null) => Promise<void>
+  onSeasonClosed?: () => void
 }

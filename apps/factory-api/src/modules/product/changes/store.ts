@@ -214,6 +214,8 @@ export async function orderRowsOf(db: Reader, rows: readonly OrderData[]): Promi
     fromRevision: revisionRef(row.fromRevisionId),
     toRevision: row.toRevisionId ? revisionRef(row.toRevisionId) : null,
     title: row.title,
+    // B-W2b-244: the list's Reason column.
+    reason: row.reason,
     priority: row.priority,
     effect: row.effect,
     effectiveDate: dayOf(row.effectiveDate),

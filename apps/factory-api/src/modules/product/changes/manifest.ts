@@ -35,4 +35,7 @@ export const manifest = defineManifest({
   'POST /product/change-orders/:changeOrderId/decide': { audiences: ['office'], permission: 'product.changes.approve', scope: 'record' },
   'POST /product/change-orders/:changeOrderId/cancel': manage,
   'POST /product/change-orders/:changeOrderId/release': manage,
+  // B-W2b-244 (Changes & versions): the released versions list and the approver picker (./screens.ts).
+  'GET /product/released-versions': view,
+  'GET /product/change-orders/:changeOrderId/approver-options': manage,
 })

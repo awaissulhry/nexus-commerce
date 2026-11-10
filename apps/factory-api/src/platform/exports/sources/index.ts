@@ -53,6 +53,8 @@ import { colours } from './colours'
 import { complianceDeclarations } from './compliance-declarations'
 // B-W2b-242: Products › Libraries › Options & rules (the option groups).
 import { optionGroups } from './option-groups'
+// B-W2b-244: Products › Development › Changes & versions (B-W2b-226's and B-W2b-215's reads as one list).
+import { productChanges } from './product-changes'
 // B-W2b-240: Products › Libraries › Sizes & measurements › Points of measure and Grade rules (B-W2b-224's reads).
 import { pointsOfMeasure } from './points-of-measure'
 import { gradeRules } from './grade-rules'
@@ -121,6 +123,8 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   complianceDeclarations,
   // B-W2b-242: Products › Libraries › Options & rules.
   optionGroups,
+  // B-W2b-244: Products › Development › Changes & versions.
+  productChanges,
   // B-W2b-240: Products › Libraries › Sizes & measurements › Points of measure and Grade rules.
   pointsOfMeasure,
   gradeRules,
