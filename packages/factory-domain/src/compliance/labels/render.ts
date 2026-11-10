@@ -35,6 +35,12 @@ import {
  *   batchOrSerial   the work order's batch number, or the garment's serial (art. 8(5)); a placeholder in a preview
  *   manufactureDate the batch's year and quarter (or month): the work order's release day; a placeholder in a preview
  *   maker, importer, composition, animalOrigin, care   the template
+ *   level           W2b: the glove's EN 13594 level in words ("Livello / Level 2KP"), listed only, as the class
+ *   gpsrContact     W2b: the GPSR contact typed in the template (Reg. (EU) 2023/988 art. 9(6); B-W2b-253)
+ *   qr              W2b: the QR to the public DoC page of the batch or the style (B-W2b-166, B-W2b-253): the address is the
+ *                   block's `value`, the code printed under it its line; the painters draw the QR from `value` above the
+ *                   line (no `graphic` entry: the W1 screens' parsers know four kinds; B-W2b-270 draws it from `value`).
+ *                   A preview of a batch QR has no address yet (a placeholder box).
  *
  * Every block says where its value came from (`source`), and the label lists every problem that would stop a garment
  * label from printing (`problems`, `printable`): the template's own, the style's, the certificate gate's refusal, a
@@ -152,6 +158,19 @@ export interface Identification {
   readonly reference: string | null
 }
 
+/** Where the label's QR points (B-W2b-253 labelQrOf; the template's qrTarget), as the renderer prints it. */
+export interface LabelQr {
+  readonly kind: 'BATCH' | 'STYLE'
+  /** The whole address the QR holds; null: the batch is not known yet (a preview of a batch QR). */
+  readonly address: string | null
+  /** The code printed under the QR ("7K3Q-M2XA"); null with the address. */
+  readonly printed: string | null
+  readonly recordType: string | null
+  readonly recordId: string | null
+  /** The record as a person names it ("WO-00012", the style code). */
+  readonly reference: string | null
+}
+
 export interface LabelValues {
   readonly style: LabelStyle
   readonly colourway: { readonly id: string; readonly code: string; readonly name: string } | null
@@ -167,11 +186,14 @@ export interface LabelValues {
   readonly sample: boolean
   /** The languages the buyer's market needs (Party.language, the market's); empty: not known. */
   readonly marketLanguages: readonly string[]
+  /** W2b: where the QR points, when the template has one (null or left out: no address known). */
+  readonly qr?: LabelQr | null | undefined
 }
 
 export const SAMPLE_BANNER: readonly string[] = Object.freeze(['SAMPLE - NOT FOR GARMENTS', 'CAMPIONE - NON PER CAPI'])
 
 const CLASS_WORDS: Readonly<Record<string, string>> = Object.freeze({ it: 'Classe', en: 'Class', de: 'Klasse', fr: 'Classe', es: 'Clase' })
+const LEVEL_WORDS: Readonly<Record<string, string>> = Object.freeze({ it: 'Livello', en: 'Level', de: 'Stufe', fr: 'Niveau', es: 'Nivel' })
 
 /** Text as a label holds it: no control characters, spaces collapsed. */
 export const labelLine = (value: string): string => value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -451,6 +473,56 @@ export function buildBlocks(template: LabelTemplateFacts, values: LabelValues): 
             : { kind: 'TEMPLATE', words: `Reg. (EU) 1007/2011 art. 12: typed in the label for ${typed.join(', ')}${official.length > 0 ? `; the regulation's own words for ${official.join(', ')}` : ''}.`, recordType: 'LabelTemplate', recordId: template.id },
           height: 0,
         })
+        break
+      }
+      case 'level': {
+        // EN 13594: the level 1 or 2, with KP for knuckle protection (the pictogram prints it too).
+        const level = classification.standardCode === 'EN 13594' ? ppeClass : null
+        const words = [...new Set(template.languages.map((language) => LEVEL_WORDS[language] ?? 'Level'))].join(' / ')
+        add({
+          value: level,
+          lines: level ? wrap(`${words} ${level.replace(/KP$/, ' KP')}`) : [],
+          graphic: null,
+          placeholder: false,
+          source: { kind: covered ? 'CERTIFICATE' : 'STYLE', words: covered ? `From certificate ${covered.number}: EN 13594 level ${level ?? 'none'}.` : `From style ${style.code}: EN 13594 level ${level ?? 'none'}.`, recordType: covered ? 'Certificate' : 'Style', recordId: covered ? covered.id : style.id },
+          height: 0,
+        })
+        break
+      }
+      case 'gpsrContact': {
+        const typed = (template.gpsrContact ?? '').split(/\r?\n/).map((line) => labelLine(line)).filter((line) => line !== '')
+        add({
+          value: typed.join(', '),
+          lines: typed.flatMap((line) => wrap(line)),
+          graphic: null,
+          placeholder: false,
+          source: { kind: 'TEMPLATE', words: 'Typed in the label: the GPSR contact, the name with the postal and the electronic address (Reg. (EU) 2023/988 art. 9(6)).', recordType: 'LabelTemplate', recordId: template.id },
+          height: 0,
+        })
+        break
+      }
+      case 'qr': {
+        const qr = values.qr ?? null
+        if (!values.sample && (qr === null || qr.address === null)) {
+          problems.push({ path: 'qr', message: `Label ${template.code} r${template.revision} carries a QR to the public DoC page, but no address is known for this label: it is not printed without one.` })
+        }
+        add(
+          qr !== null && qr.address !== null
+            ? {
+                value: qr.address,
+                lines: wrap(qr.printed ?? ''),
+                graphic: null,
+                placeholder: false,
+                source: {
+                  kind: qr.kind === 'BATCH' ? 'WORK_ORDER' : 'STYLE',
+                  words: qr.kind === 'BATCH' ? `The public DoC page of ${qr.reference ? `work order ${qr.reference}'s` : 'the'} batch: ${qr.address}.` : `The public DoC page of style ${qr.reference ?? style.code}: ${qr.address}.`,
+                  recordType: qr.recordType,
+                  recordId: qr.recordId,
+                },
+                height: preset.qr,
+              }
+            : { value: null, lines: wrap('____-____'), graphic: null, placeholder: true, source: { kind: 'SAMPLE', words: "The batch's public DoC address fills the QR at print (B-W2b-166).", recordType: null, recordId: null }, height: preset.qr },
+        )
         break
       }
       case 'care': {

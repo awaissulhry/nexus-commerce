@@ -1,6 +1,7 @@
+import { labelQrOf } from '@nexus/factory-domain/compliance/label-rules/marking'
 import { LABELS_MANAGE } from '@nexus/factory-domain/compliance/labels/permissions'
 import { renderLabel, type CellCertificate, type Identification, type LabelValues, type RenderedLabel } from '@nexus/factory-domain/compliance/labels/render'
-import { hundredthsOf, mmText } from '@nexus/factory-domain/compliance/labels/rules'
+import { hundredthsOf, mmText, type LabelQrTarget } from '@nexus/factory-domain/compliance/labels/rules'
 import { garmentLabelZpl } from '@nexus/factory-domain/compliance/labels/zpl'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
@@ -8,6 +9,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
+import { processEmail } from '../../../platform/email-out/service'
 import { queueModuleLabel } from '../../../platform/print/jobs'
 import { bodyMeasuresOf, certificateGateFor } from '../certificates/gate'
 import { classLabelHoldFor } from '../type-changes/reviews'
@@ -91,6 +93,13 @@ async function readCell(client: Reader, style: StyleRow, templateId: string, ask
   return { style, revision, colourway, size, certificate, date: ask.date }
 }
 
+/**
+ * Where the label's QR points (B-W2b-253, PRD-349): the public DoC page of the batch (the work order the label is printed
+ * for; none in a preview) or of the style, on the factory web's origin (B-W2b-166). Null without a QR.
+ */
+const qrFor = (row: TemplateRow, style: StyleRow, workOrder: { readonly id: string; readonly reference: string | null } | null) =>
+  row.qrTarget === 'NONE' ? null : labelQrOf(row.qrTarget as LabelQrTarget, style, workOrder, processEmail().webOrigin)
+
 const identificationOf = (style: StyleRow): Identification => ({ kind: style.garmentTracking === 'SERIAL' ? 'SERIAL' : 'BATCH', value: null, recordType: null, recordId: null, reference: null })
 const languagesOf = (value: string | undefined): string[] => (value ? [...new Set(value.split(',').map((language) => language.trim()).filter((language) => language !== ''))] : [])
 
@@ -162,6 +171,7 @@ async function render(caller: CommandCaller, templateId: string, query: CellQuer
       date,
       sample: true,
       marketLanguages: languagesOf(query.languages),
+      qr: qrFor(row, style, null),
     }
     const label = renderLabel(factsOf(row), values)
     return {
@@ -289,5 +299,7 @@ export async function garmentLabelFor(client: Reader, question: GarmentLabelQues
     date: question.date,
     sample: false,
     marketLanguages: question.marketLanguages,
+    // The batch's public DoC page: the work order the batch was released by (B-W1-44 passes it as `manufactured`).
+    qr: qrFor(row, style, question.manufactured?.recordType === 'WorkOrder' ? { id: question.manufactured.recordId, reference: question.manufactured.reference } : null),
   })
 }

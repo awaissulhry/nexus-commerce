@@ -9,6 +9,8 @@ import {
   layoutOf,
   styleProblems,
   styleWarnings,
+  type LabelKind,
+  type LabelQrTarget,
   type LabelStyle,
   type LabelTemplateStatus,
 } from '@nexus/factory-domain/compliance/labels/rules'
@@ -88,6 +90,11 @@ export const TEMPLATE_SELECT = {
   layout: true,
   widthMm: true,
   heightMm: true,
+  // W2b (B-W2b-218 columns; B-W2b-253 prints the GPSR contact and the QR, and copies all four into a new revision).
+  kind: true,
+  gpsrContact: true,
+  qrTarget: true,
+  originClaimKey: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -120,6 +127,9 @@ export function factsOf(row: TemplateRow): LabelTemplateFacts {
     layout: layout.layout,
     widthMm: row.widthMm.toFixed(2),
     heightMm: row.heightMm.toFixed(2),
+    kind: row.kind as LabelKind,
+    gpsrContact: row.gpsrContact,
+    qrTarget: row.qrTarget as LabelQrTarget,
   }
 }
 
@@ -242,6 +252,10 @@ export function templateView(row: TemplateRow, style: StyleRow | null, today: Bu
     layout: { ...facts.layout, fields: [...facts.layout.fields], texts: { animalOrigin: { ...facts.layout.texts.animalOrigin } } },
     widthMm: facts.widthMm,
     heightMm: facts.heightMm,
+    kind: row.kind as LabelKind,
+    gpsrContact: row.gpsrContact,
+    qrTarget: row.qrTarget as LabelQrTarget,
+    originClaimKey: row.originClaimKey,
     nextStatuses: [...labelNextStatuses(facts.status)],
     problems: checks.problems,
     warnings: checks.warnings,
