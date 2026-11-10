@@ -168,6 +168,8 @@ import { events as productProtectors } from '../product-protectors/events'
 import { events as complianceSubstances } from '../compliance-substances/events'
 // B-W2b-255: certificates in depth (the notified body directory, a certificate's body, levels, base and bought-in suppliers).
 import { events as certificatesDepth } from '../certificates-depth/events'
+// B-W2b-251: technical files (a file, an Annex III item, a risk assessment, a production-control test, an evidence pack changed).
+import { events as complianceTechfiles } from '../compliance-techfiles/events'
 // B-W2b-257: the DoC generator (a generated draft changed, a translation moved, batches recorded, a shipment's pack made).
 import { events as complianceDeclarations } from '../compliance-declarations/events'
 import type { EventDefinition } from './define'
@@ -405,6 +407,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...certificatesDepth,
   // B-W2b-246
   ...salesSamples,
+  // B-W2b-251
+  ...complianceTechfiles,
   // B-W2b-257
   ...complianceDeclarations] as const satisfies readonly EventDefinition[]
 

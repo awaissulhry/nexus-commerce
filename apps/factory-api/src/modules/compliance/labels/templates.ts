@@ -194,6 +194,12 @@ const columns = (content: Content) => ({
   heightMm: content.heightMm,
 })
 
+/**
+ * The W2b columns (B-W2b-218: kind, GPSR contact, QR target, origin claim), copied as they are into a new revision and into a
+ * label started from another (B-W2b-253); set on a draft with PUT /compliance/label-rules/templates/:id/marking.
+ */
+const w2bColumns = (row: TemplateRow) => ({ kind: row.kind, gpsrContact: row.gpsrContact, qrTarget: row.qrTarget, originClaimKey: row.originClaimKey })
+
 /** The references a body names: the maker party, the company, the style (each of the tenant and visible). */
 async function checkReferences(caller: CommandCaller, refs: { makerPartyId: string | null; companyId: string | null; style: StyleRow | null }): Promise<void> {
   const problems: Issue[] = []
@@ -270,7 +276,7 @@ export async function createTemplate(caller: CommandCaller, input: CreateInput, 
       if (taken) throw new ConflictError(`Label ${code} exists already (revision ${taken.revision}): open it, or start a new revision of it.`)
       const id = newId()
       const row = await tx.labelTemplate.create({
-        data: { id, code, revision: 1, companyId, styleId: style?.id ?? null, status: 'DRAFT', ...columns(content), createdAt: now, updatedAt: now, createdById: context.actorId },
+        data: { id, code, revision: 1, companyId, styleId: style?.id ?? null, status: 'DRAFT', ...columns(content), ...(source ? w2bColumns(source) : {}), createdAt: now, updatedAt: now, createdById: context.actorId },
         select: TEMPLATE_SELECT,
       })
       audit({ recordType: 'LabelTemplate', recordId: id, companyId, after: { ...audited(row), ...(source ? { from: { id: source.id, code: source.code, revision: source.revision } } : {}) } })
@@ -401,7 +407,7 @@ export async function reviseTemplate(caller: CommandCaller, templateId: string, 
       const revision = (revisions[0]?.revision ?? 0) + 1
       const id = newId()
       const row = await tx.labelTemplate.create({
-        data: { id, code: source.code, revision, companyId: source.companyId, styleId: source.styleId, status: 'DRAFT', ...columns(content), createdAt: now, updatedAt: now, createdById: context.actorId },
+        data: { id, code: source.code, revision, companyId: source.companyId, styleId: source.styleId, status: 'DRAFT', ...columns(content), ...w2bColumns(source), createdAt: now, updatedAt: now, createdById: context.actorId },
         select: TEMPLATE_SELECT,
       })
       audit({ recordType: 'LabelTemplate', recordId: id, companyId: row.companyId, after: { ...audited(row), from: { id: source.id, revision: source.revision } } })

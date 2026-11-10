@@ -33,8 +33,9 @@ export function blockPositions(label: Pick<RenderedLabel, 'blocks' | 'preset'>):
   })
 }
 
-/** The height of a block's drawn element (hundredths), 0 without one. */
-export function graphicHeight(block: Pick<RenderedBlock, 'graphic'>, preset: (typeof LAYOUT_PRESETS)[keyof typeof LAYOUT_PRESETS]): number {
+/** The height of a block's drawn element (hundredths), 0 without one. The QR (field `qr`, B-W2b-253) has no graphic entry. */
+export function graphicHeight(block: Pick<RenderedBlock, 'graphic'> & { readonly field?: RenderedBlock['field'] }, preset: (typeof LAYOUT_PRESETS)[keyof typeof LAYOUT_PRESETS]): number {
+  if (block.field === 'qr') return preset.qr
   if (!block.graphic) return 0
   const kind = block.graphic.kind
   return kind === 'CE' ? preset.ce : kind === 'PICTOGRAM' ? preset.pictogram : kind === 'BARCODE' ? preset.barcode : preset.care
@@ -50,6 +51,19 @@ export const barHeight = (preset: (typeof LAYOUT_PRESETS)[keyof typeof LAYOUT_PR
 export function barModule(value: string, inner: number): number {
   return Math.max(1, Math.min(3, Math.floor(inner / code128Bars(value).modules)))
 }
+
+/** QR byte capacities at error correction M, versions 1 to 10 (ISO/IEC 18004 table 7). */
+const QR_BYTES_M = [14, 26, 42, 62, 84, 106, 122, 152, 180, 213] as const
+
+/** The modules a side of the QR of `value` has (version 1: 21, then 4 more per version; 57 beyond version 10). */
+export function qrModules(value: string): number {
+  const bytes = new TextEncoder().encode(value).length
+  const version = QR_BYTES_M.findIndex((capacity) => bytes <= capacity)
+  return version < 0 ? 57 : 21 + 4 * version
+}
+
+/** The ZPL QR magnification (dots a module, 1 to 10) that fits `side` dots with its 4-module quiet zone on each side. */
+export const qrMagnification = (value: string, side: number): number => Math.max(1, Math.min(10, Math.floor(side / (qrModules(value) + 8))))
 
 /**
  * The ZPL of the label at the printer's resolution, `copies` times. Throws a RangeError for a resolution the printers do
@@ -90,6 +104,13 @@ export function garmentLabelZpl(label: RenderedLabel, dpi: number, copies = 1): 
       const bars = dots(barHeight(preset))
       if (graphic.value === null) commands.push(box(x, y, width - 2 * preset.margin, barHeight(preset)))
       else commands.push(`^FO${dots(x)},${dots(y)}^BY${barModule(graphic.value, dots(width - 2 * preset.margin))},3,${bars}^BCN,${bars},N,N,N^FH^FD${zplText(graphic.value)}^FS`)
+    } else if (block.field === 'qr') {
+      // B-W2b-253 (PRD-349): the QR to the public DoC page, error correction M, automatic mode; a preview's box without one.
+      if (block.value === null) commands.push(box(x, y, preset.qr, preset.qr))
+      else {
+        const mag = qrMagnification(block.value, dots(preset.qr))
+        commands.push(`^FO${dots(x) + 4 * mag},${dots(y) + 4 * mag}^BQN,2,${mag}^FH^FDMA,${zplText(block.value)}^FS`)
+      }
     }
     let lineY = y + graphicHeight(block, preset)
     for (const line of block.lines) {
