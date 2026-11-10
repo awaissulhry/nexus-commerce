@@ -144,6 +144,8 @@ import { PRODUCT_MATERIALS_DEPTH_DEFINITIONS, PRODUCT_MATERIALS_DEPTH_PERMISSION
 // B-W2b-249: Rules & markets (compliance.rules.manage) and the phrase library (compliance.phrases.manage | approve); reading is compliance.certificates.view.
 import { RULES_LIBRARY_DEFINITIONS, RULES_LIBRARY_PERMISSIONS } from '../../compliance/register-of-rules/permissions'
 import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phrases/permissions'
+// B-W2b-250: restricted substances and their rules (compliance.substances.manage); reading is compliance.certificates.view.
+import { SUBSTANCES_DEFINITIONS, SUBSTANCES_PERMISSIONS } from '../../compliance/substances/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -800,6 +802,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-249: Rules & markets and the phrase library (area `compliance`, declared above).
   RULES_LIBRARY_DEFINITIONS,
   PHRASES_DEFINITIONS,
+  // B-W2b-250: restricted substances and their rules (area `compliance`, declared above).
+  SUBSTANCES_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1060,6 +1064,8 @@ for (const name of PRODUCT_OPTIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of PRODUCT_MATERIALS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-249: Rules & markets and the phrase library.
 for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-250: restricted substances and their rules.
+for (const name of SUBSTANCES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

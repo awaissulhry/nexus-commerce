@@ -157,6 +157,8 @@ import { events as productMeasures } from '../product-measures/events'
 import { events as productOptions } from '../product-options/events'
 // B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
 import { events as complianceRules } from '../compliance-rules/events'
+// B-W2b-250: restricted substances (the list, its rules, the Candidate List versions, the evaluated material profiles).
+import { events as complianceSubstances } from '../compliance-substances/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -380,7 +382,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-238
   ...materialsDepth,
   // B-W2b-249
-  ...complianceRules] as const satisfies readonly EventDefinition[]
+  ...complianceRules,
+  // B-W2b-250
+  ...complianceSubstances] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

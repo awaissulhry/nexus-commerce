@@ -1674,6 +1674,7 @@
     "compliance_rules_manage": "Keep the register of laws and standards, the change watch, the markets and the economic operators",
     "compliance_phrases_manage": "Add phrases and propose their translations",
     "compliance_phrases_approve": "Approve translations proposed by someone else",
+    "compliance_substances_manage": "Keep the restricted substance list and its rules, and run the substance checks on materials",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",
