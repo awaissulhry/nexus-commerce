@@ -53,6 +53,8 @@ export interface PublicDocViewModel {
   readonly pdf: PdfState | null
   readonly lookup: LookupModel
   readonly timeZone?: string
+  /** B-W2b-236: design cases only — the picture's address drawn from made-up data (the page uses the API's stripped copy). */
+  readonly pictureSrc?: string
 }
 
 export interface PublicDocActions {

@@ -166,6 +166,8 @@ import { RECALL_DEFINITIONS, RECALL_PERMISSIONS } from '../../compliance/recall/
 import { USER_INFORMATION_DEFINITIONS, USER_INFORMATION_PERMISSIONS } from '../../compliance/user-information/permissions'
 // B-W2b-256: supplier declarations (compliance.supplierDeclarations.manage); reading is compliance.certificates.view.
 import { SUPPLIER_DECLARATIONS_DEFINITIONS, SUPPLIER_DECLARATIONS_PERMISSIONS } from '../../compliance/declarations-asked/permissions'
+// B-W2b-259: label artwork approved by a second person (compliance.artwork.approve); the rest is labels.manage, bom, serials.
+import { LABEL_ARTWORK_DEFINITIONS, LABEL_ARTWORK_PERMISSIONS } from '../../compliance/label-artwork/permissions'
 // B-W2b-263: Time & action (pre-production gates).
 import { PLANNING_MILESTONES_DEFINITIONS, PLANNING_MILESTONES_PERMISSIONS } from '../../planning/milestones/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -846,6 +848,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   USER_INFORMATION_DEFINITIONS,
   // B-W2b-256: supplier declarations (area `compliance`, declared above).
   SUPPLIER_DECLARATIONS_DEFINITIONS,
+  // B-W2b-259: label artwork (area `compliance`, declared above).
+  LABEL_ARTWORK_DEFINITIONS,
   // B-W2b-263
   PLANNING_MILESTONES_DEFINITIONS,
 ])
@@ -1130,6 +1134,8 @@ for (const name of RECALL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)
 for (const name of USER_INFORMATION_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-256: supplier declarations.
 for (const name of SUPPLIER_DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-259: label artwork.
+for (const name of LABEL_ARTWORK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-263: Time & action.
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

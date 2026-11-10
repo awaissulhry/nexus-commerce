@@ -16,4 +16,7 @@ export const fileContract = defineContract({
   response: {},
 })
 
+/** B-W2b-236 (SY3:03): the main picture's stripped copy (its own type), inline. */
+export const pictureContract = defineContract({ params: input({ code: z.string().min(1).max(64), fileId: id() }), response: {} })
+
 export const addressContract = defineContract({ querystring: addressQuery, response: { 200: output({ address: addressView }) } })

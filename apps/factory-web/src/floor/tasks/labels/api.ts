@@ -158,3 +158,31 @@ export const reprintSerial = (api: ApiClient, serialId: string, body: { reason: 
   floorWrite(api, 'POST', `/production/serials/${seg(serialId)}/reprint`, { body: { reason: body.reason, ...(body.printerId ? { printerId: body.printerId } : {}) }, schema: reprintSerialAnswer, idempotencyKey: key })
 
 export const retryJob = (api: ApiClient, job: Pick<PrintJob, 'id' | 'version'>) => floorWrite(api, 'POST', `/print/jobs/${seg(job.id)}/retry`, { body: { version: job.version }, schema: jobAnswer })
+
+// ---- B-W2b-259 (MES-140): the label reconciliation and Log spoiled labels ------------------------------------------------
+
+export const SPOIL_KINDS = ['SPOILED', 'RETURNED'] as const
+export type SpoilKind = (typeof SPOIL_KINDS)[number]
+
+const counted = { printed: z.number(), used: z.number(), spoiled: z.number(), returned: z.number(), difference: z.number() }
+
+/** A work order's labels per size: printed = used + spoiled + returned (apps/factory-api compliance/label-artwork). */
+export const reconciliationSchema = z.object({
+  workOrder: z.object({ id: z.string(), number: z.string(), batchNumber: z.string().nullable(), status: z.string() }),
+  tracking: z.enum(GARMENT_TRACKINGS),
+  cells: z.array(z.object({ workOrderSizeId: z.string(), colourwayCode: z.string(), size: z.string(), ...counted, balanced: z.boolean() })),
+  total: z.object(counted),
+  balanced: z.boolean(),
+  entries: z.array(z.object({ id: z.string(), workOrderSizeId: z.string(), kind: z.enum(SPOIL_KINDS), quantity: z.number(), reason: z.string().nullable(), at: z.string() })),
+  holdsRelease: z.boolean(),
+})
+export type Reconciliation = z.infer<typeof reconciliationSchema>
+const reconciliationAnswer = z.object({ reconciliation: reconciliationSchema })
+const spoiledAnswer = z.object({ reconciliation: reconciliationSchema, replayed: z.boolean() })
+
+/** The work order's label reconciliation. */
+export const readReconciliation = (api: ApiClient, workOrderId: string) => floorRead(api, `${base(workOrderId)}/reconciliation`, { schema: reconciliationAnswer })
+
+/** Labels of a size that did not end on a garment: SPOILED (the reason sent in fixed words) or RETURNED. Online only. */
+export const logSpoiled = (api: ApiClient, workOrderId: string, body: { workOrderSizeId: string; kind: SpoilKind; quantity: number; reason: string | null }, key: string) =>
+  floorWrite(api, 'POST', `${base(workOrderId)}/spoiled`, { body: { workOrderSizeId: body.workOrderSizeId, kind: body.kind, quantity: body.quantity, ...(body.reason ? { reason: body.reason } : {}) }, schema: spoiledAnswer, idempotencyKey: key })

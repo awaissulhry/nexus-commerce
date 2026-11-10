@@ -397,7 +397,7 @@ export const duplicateStyleBody = input({
   season: text(20).nullish(),
   /** Left out: the source's brand; null: our own collection. */
   brandPartyId: id().nullish(),
-  /** The parts copied into the copy's revision 1 (BOM, ROUTING, LABELS) and its made-to-measure set-up (MEASUREMENTS). */
+  /** The parts copied into the copy's revision 1 (BOM, ROUTING, LABELS), its made-to-measure set-up (MEASUREMENTS) and its pictures (PICTURES, B-W2b-236). */
   parts: z.array(z.enum(COPYABLE_PARTS)).max(COPYABLE_PARTS.length).default([]),
   /** The source revision the parts come from; left out: its released revision, else its newest. */
   fromRevisionId: id().optional(),
@@ -457,6 +457,8 @@ export const duplicatedView = output({
     routingSteps: z.number().int(),
     label: z.boolean(),
     skus: z.number().int(),
+    /** B-W2b-236 (SY3:01): the pictures copied (PICTURES picked); absent from answers made before. */
+    pictures: z.number().int().optional(),
   }),
   /** What the copy left out, in words (an archived size, an archived library colour). */
   notes: z.array(z.string()),
