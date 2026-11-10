@@ -36,6 +36,8 @@ import { PRODUCT_LIFECYCLE_ADDS } from '../../product/lifecycle/permissions'
 import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 // B-W2b-226: change requests and change orders (the production manager runs them; quality approves; sales, planner, buyer, floor supervisor raise).
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
+// B-W2b-229: the option library (production manager) and option prices (sales).
+import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -821,7 +823,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-227
   ...(audience === 'office' ? (PRODUCT_GTINS_ADDS[key] ?? []) : []),
   // B-W2b-226
-  ...(audience === 'office' ? (PRODUCT_CHANGES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PRODUCT_CHANGES_ADDS[key] ?? []) : []),
+  // B-W2b-229
+  ...(audience === 'office' ? (PRODUCT_OPTIONS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

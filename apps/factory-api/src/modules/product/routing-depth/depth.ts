@@ -8,6 +8,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { actorOf } from '../../../core/context'
 import { STYLE_COLUMNS, type BomStyleRow, type RevisionRow } from '../bom/store'
 import { mayWrite } from '../materials/store'
+// B-W2b-229: the options a step may be only for (the style's offered active options).
+import { offeredValuesOf, optionLabelsOf } from '../options/offers'
 import { assertMayWrite, contextOf, lockDraft, lockOperations, readRevisionFor, type LockedDraft } from '../routing/store'
 import {
   auditedSettings,
@@ -34,8 +36,8 @@ import {
  * it runs for (W2b)"; products.operations › Machine & settings for a step of this style):
  *
  *   GET …/routing/depth                         every step's variants, checkpoint and settings, the revision's days
- *   PUT …/routing/steps/:stepId/variants        the sizes and colourways it is for (option values: none exist yet, refused
- *                                               in words); empty lists: every cell
+ *   PUT …/routing/steps/:stepId/variants        the sizes, colourways and options it is for (B-W2b-229: active options of
+ *                                               a group the style offers); empty lists: every cell
  *   PUT …/routing/steps/:stepId/checkpoint      a cutting, in-line or end-of-line plan of the style's company; null: none
  *   PUT …/routing/steps/:stepId/settings        the whole list, or `fromLibrary` (a copy of the library operation's now)
  *
@@ -64,6 +66,9 @@ export async function depthViewOf(db: Db, style: BomStyleRow, revision: Pick<Rev
   const plans = await readPlans(db, steps.map((step) => step.inspectionPlanId))
   const colourways = await readColourwaysOf(db, style.id)
   const sizeLabels = await sizeLabelsOf(db, style)
+  // B-W2b-229: the style's offered options, and the words of every option a step names.
+  const offered = await offeredValuesOf(db, style.id)
+  const optionLabels = await optionLabelsOf(db, [...offered.map((value) => value.id), ...steps.flatMap((step) => step.appliesToOptionValueIds)])
   const stepViews: StepDepthView[] = steps.map((step) => {
     const plan = step.inspectionPlanId ? plans.get(step.inspectionPlanId) : undefined
     return {
@@ -74,7 +79,7 @@ export async function depthViewOf(db: Db, style: BomStyleRow, revision: Pick<Rev
       name: step.name,
       workCentreKind: step.workCentreKind,
       scanRequired: step.scanRequired,
-      variants: variantsViewOf(variantsOfRow(step), sizeLabels, colourways),
+      variants: variantsViewOf(variantsOfRow(step), sizeLabels, colourways, optionLabels),
       checkpoint: plan ? checkpointViewOf(plan) : null,
       settings: (settings.get(step.id) ?? []).map((row) => settingViewOf(row, classes)),
       librarySettings: (library.get(step.operationId) ?? []).length,
@@ -88,7 +93,10 @@ export async function depthViewOf(db: Db, style: BomStyleRow, revision: Pick<Rev
     sizes: style.sizes.map((code) => ({ code, label: sizeLabels.get(code) ?? code })),
     colourways: colourways.map((row) => ({ ...row })),
     steps: stepViews,
-    options: { available: false, words: { ...NO_OPTIONS_YET } },
+    options:
+      offered.length > 0
+        ? { available: true, words: { it: `Opzioni offerte dall'articolo: ${offered.map((value) => value.label).join(', ')}.`, en: `Options the style offers: ${offered.map((value) => value.label).join(', ')}.` } }
+        : { available: false, words: { ...NO_OPTIONS_YET } },
     editable,
   }
 }
@@ -157,7 +165,10 @@ export async function setStepVariants(caller: CommandCaller, styleId: string, re
     const { tx } = tools
     const style = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })
     const colourways = await readColourwaysOf(tx, styleId)
-    const plan = planVariants({ sizes: body.sizes, colourwayIds: body.colourwayIds, optionValueIds: body.optionValueIds }, { sizes: style.sizes, colourwayIds: colourways.map((row) => row.id) })
+    // B-W2b-229: the style's offered active options, and those the step names already (kept, as the database keeps them).
+    const offered = (await offeredValuesOf(tx, styleId)).map((value) => value.id)
+    const optionValueIds = [...offered, ...step.appliesToOptionValueIds.filter((id) => !offered.includes(id))]
+    const plan = planVariants({ sizes: body.sizes, colourwayIds: body.colourwayIds, optionValueIds: body.optionValueIds }, { sizes: style.sizes, colourwayIds: colourways.map((row) => row.id), optionValueIds })
     if (!plan.ok) throw new ValidationError('The cells the step is for are not valid.', plan.issues.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
     const before = variantsOfRow(step)
     if (sameVariants(before, plan.variants)) return

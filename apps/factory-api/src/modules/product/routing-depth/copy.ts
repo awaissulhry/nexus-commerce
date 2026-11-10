@@ -1,6 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { CommandTools } from '../../../core/command'
+// B-W2b-229: a copied step keeps only the options the target style still offers.
+import { offeredValuesOf } from '../options/offers'
 import { readSettings, settingDataOf } from './store'
 
 /**
@@ -14,7 +16,8 @@ import { readSettings, settingDataOf } from './store'
  *                only an APPROVED one), the numbers stay (the step's SMV is the source's): "Use library value" re-copies.
  *   side times   set-up, wait and move minutes; the extra minutes per size, for sizes of the target style's range.
  *   cells        the sizes (of the target's range) and colourways (of the same style only) it is for; a list that loses
- *                every value leaves the step for every cell, said in the audit row (`widened`). Option values as they are.
+ *                every value leaves the step for every cell, said in the audit row (`widened`). Option values: those
+ *                the target style still offers active (B-W2b-229; the database names no other), likewise widened.
  *   checkpoint   the plan, when it is of the target style's company (or the style is every company's).
  *   settings     the step's machine and stitch settings, all of them.
  *
@@ -60,6 +63,7 @@ export async function copyStepDepthInCommand(tools: CommandTools, target: { read
   const sources = new Map((await tx.routingOperation.findMany({ where: { id: { in: pairs.map((pair) => pair.from) } }, select: SOURCE_COLUMNS })).map((row) => [row.id, row]))
   const style = await tx.style.findUniqueOrThrow({ where: { id: target.styleId }, select: { sizes: true, companyId: true } })
   const colourways = new Set((await tx.colourway.findMany({ where: { styleId: target.styleId }, select: { id: true } })).map((row) => row.id))
+  const offered = new Set([...sources.values()].some((row) => row.appliesToOptionValueIds.length > 0) ? (await offeredValuesOf(tx, target.styleId)).map((value) => value.id) : [])
   const versionIds = [...new Set([...sources.values()].flatMap((row) => (row.timeVersionId ? [row.timeVersionId] : [])))]
   const approved = new Set(versionIds.length === 0 ? [] : (await tx.operationTimeVersion.findMany({ where: { id: { in: versionIds }, status: 'APPROVED' }, select: { id: true } })).map((row) => row.id))
   const planIds = [...new Set([...sources.values()].flatMap((row) => (row.inspectionPlanId ? [row.inspectionPlanId] : [])))]
@@ -87,10 +91,11 @@ export async function copyStepDepthInCommand(tools: CommandTools, target: { read
     const sameStyle = source.styleId === target.styleId
     const sizes = source.appliesToSizes.filter((size) => style.sizes.includes(size))
     const cws = sameStyle ? source.appliesToColourwayIds.filter((id) => colourways.has(id)) : []
-    if ((source.appliesToSizes.length > 0 && sizes.length === 0) || (source.appliesToColourwayIds.length > 0 && cws.length === 0)) widened.push(pair.to)
+    const options = source.appliesToOptionValueIds.filter((id) => offered.has(id))
+    if ((source.appliesToSizes.length > 0 && sizes.length === 0) || (source.appliesToColourwayIds.length > 0 && cws.length === 0) || (source.appliesToOptionValueIds.length > 0 && options.length === 0)) widened.push(pair.to)
     if (sizes.length > 0) data.appliesToSizes = sizes
     if (cws.length > 0) data.appliesToColourwayIds = cws
-    if (source.appliesToOptionValueIds.length > 0) data.appliesToOptionValueIds = [...source.appliesToOptionValueIds]
+    if (options.length > 0) data.appliesToOptionValueIds = options
     if (source.inspectionPlanId !== null) {
       const company = planCompany.get(source.inspectionPlanId)
       if (company !== undefined && (style.companyId === null || company === style.companyId)) {
