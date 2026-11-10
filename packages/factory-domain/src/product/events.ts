@@ -131,8 +131,20 @@ export const events = [
   defineEvent({
     type: 'style.revision_released',
     context: 'product',
-    description: "A revision was released: its BOM, routing and label are frozen and it is the style's current one (the previous one is obsolete).",
-    payload: z.strictObject({ styleId: z.uuid(), code: z.string(), revisionId: z.uuid(), revision: z.number().int(), obsoletedRevisionId: z.uuid().nullable() }),
+    description:
+      "A revision was released: its BOM, routing and label are frozen and it is the style's current one (the previous one is obsolete). B-W2b-231 (PRD-191, PRD-197): it carries what it is released for (empty = every colourway or size) and its completeness score; a later release of the same revision for more colourways or sizes says it again with widened true.",
+    payload: z.strictObject({
+      styleId: z.uuid(),
+      code: z.string(),
+      revisionId: z.uuid(),
+      revision: z.number().int(),
+      obsoletedRevisionId: z.uuid().nullable(),
+      // B-W2b-231: the release scope and the score at the release (planning, quotes and the tech pack read the scope).
+      releasedColourwayIds: z.array(z.uuid()),
+      releasedSizes: z.array(z.string()),
+      completenessPct: z.string().nullable(),
+      widened: z.boolean(),
+    }),
     live: revisionLive,
   }),
   defineEvent({
