@@ -15,7 +15,8 @@ import type { ScaleSizes, StyleFields } from './rules'
  *   ROUTING       the steps of the source revision with their minutes, scan points, instructions and subcontract details
  *   MEASUREMENTS  the made-to-measure set-up: made to measure allowed and its measurement template
  *   LABELS        the source revision's garment label, when it is a shared one (another style's own label stays its own)
- *   PICTURES      the style's sketches and pictures: the gallery comes in W2b
+ *   PICTURES      the style's sketches, photos and image pages (B-W2b-236): the style's own, the copied colourways' and the
+ *                 source revision's, each file copied in the store (the copy's own file, naming its source)
  *   OPTIONS       the style's options: option groups come in W2b
  *
  * The BOM, routing and label land in the copy's revision 1, a DRAFT (never a released one: the copy is released by its
@@ -27,12 +28,12 @@ import type { ScaleSizes, StyleFields } from './rules'
 export const COPY_PARTS = ['BOM', 'ROUTING', 'MEASUREMENTS', 'LABELS', 'PICTURES', 'OPTIONS'] as const
 export type CopyPart = (typeof COPY_PARTS)[number]
 /** The parts a copy can take now. */
-export const COPYABLE_PARTS = ['BOM', 'ROUTING', 'MEASUREMENTS', 'LABELS'] as const satisfies readonly CopyPart[]
+// B-W2b-236 (SY3:01): PICTURES can be copied.
+export const COPYABLE_PARTS = ['BOM', 'ROUTING', 'MEASUREMENTS', 'LABELS', 'PICTURES'] as const satisfies readonly CopyPart[]
 export type CopyablePart = (typeof COPYABLE_PARTS)[number]
 
 /** Why a part cannot be picked in this wave, in words. */
 export const PART_NOT_YET: Readonly<Partial<Record<CopyPart, string>>> = Object.freeze({
-  PICTURES: "The style's sketches and pictures are copied once the gallery arrives (W2b).",
   OPTIONS: 'Style options are copied once option groups arrive (W2b).',
 })
 
@@ -52,7 +53,8 @@ export const PART_NAME: Readonly<Record<CopyPart, string>> = Object.freeze({
  * Why the Duplicate dialog cannot offer a part, as a code a screen says in its own words (B-W2a-37 matched the English
  * sentences by their shape); the answer keeps the sentence beside it (`reason`).
  *
- *   NOT_YET              PICTURES and OPTIONS: their pages come later (W2b)
+ *   NOT_YET              OPTIONS: its page comes later (W2b)
+ *   NO_PICTURES          PICTURES: the source has no picture (B-W2b-236)
  *   NOT_MADE_TO_MEASURE  MEASUREMENTS: the source is not made to measure
  *   NO_REVISION          the source has no revision to take a BOM, routing or label from
  *   NO_BOM_LINES         the revision has no BOM line
@@ -62,7 +64,7 @@ export const PART_NAME: Readonly<Record<CopyPart, string>> = Object.freeze({
  *   LABEL_RETIRED        the revision's shared label is retired
  *   NEEDS_PERMISSION     the caller may not write that part (the permission, over every company for a tenant-wide style)
  */
-export const OFFER_REASONS = ['NOT_YET', 'NOT_MADE_TO_MEASURE', 'NO_REVISION', 'NO_BOM_LINES', 'NO_ROUTING_STEPS', 'NO_LABEL', 'OWN_LABEL', 'LABEL_RETIRED', 'NEEDS_PERMISSION'] as const
+export const OFFER_REASONS = ['NOT_YET', 'NOT_MADE_TO_MEASURE', 'NO_REVISION', 'NO_BOM_LINES', 'NO_ROUTING_STEPS', 'NO_LABEL', 'OWN_LABEL', 'LABEL_RETIRED', 'NEEDS_PERMISSION', 'NO_PICTURES'] as const
 export type OfferReasonCode = (typeof OFFER_REASONS)[number]
 
 /** A reason with the facts its words need (null where a code needs none). */
@@ -113,6 +115,8 @@ export function offerReasonWords(part: CopyPart, reason: OfferReason): string {
       return `${label} is retired.`
     case 'NEEDS_PERMISSION':
       return `Copying ${PART_NAME[part]} needs ${reason.permission}${reason.everyCompany ? ' over every company' : ''}.`
+    case 'NO_PICTURES':
+      return `${reason.style} has no pictures.`
   }
 }
 
@@ -123,8 +127,9 @@ export function offerReasonWords(part: CopyPart, reason: OfferReason): string {
  *   COLOURWAYS_ARCHIVED  archived colourways, not copied (`count`)
  *   COLOUR_LEFT_OUT      a colourway whose library colour is archived or another company's: the copy's has none (`colourway`)
  *   BOM_LINES_LEFT_OUT   BOM lines of archived colourways, not copied (`count`)
+ *   PICTURES_LEFT_OUT    pictures of another revision or of an archived colourway, not copied (`count`; B-W2b-236)
  */
-export const COPY_NOTES = ['SIZES_ARCHIVED', 'COLOURWAYS_ARCHIVED', 'COLOUR_LEFT_OUT', 'BOM_LINES_LEFT_OUT'] as const
+export const COPY_NOTES = ['SIZES_ARCHIVED', 'COLOURWAYS_ARCHIVED', 'COLOUR_LEFT_OUT', 'BOM_LINES_LEFT_OUT', 'PICTURES_LEFT_OUT'] as const
 export type CopyNoteCode = (typeof COPY_NOTES)[number]
 
 export interface CopyNote {
@@ -147,6 +152,8 @@ export function copyNoteWords(note: CopyNote): string {
       return `Colourway ${note.colourway}: its library colour is archived or another company's; the copy has none.`
     case 'BOM_LINES_LEFT_OUT':
       return `${note.count} BOM line(s) of archived colourways are not copied.`
+    case 'PICTURES_LEFT_OUT':
+      return `${note.count} picture(s) of another revision or of an archived colourway are not copied.`
   }
 }
 

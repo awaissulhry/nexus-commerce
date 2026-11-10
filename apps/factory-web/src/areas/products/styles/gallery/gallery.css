@@ -1,0 +1,159 @@
+/*
+ * Styles › Gallery (B-W2b-236, SCR-303): layout only, semantic tokens only; every control is the DS's. The cards fill the
+ * main area (more columns on wide screens: no empty band on the right), a picture is shown whole, never cropped.
+ */
+.fw-sgal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-sgal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-height: 36px;
+}
+.fw-sgal-bar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-sgal-count {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-sgal-state {
+  padding: var(--nds-space-16) 0;
+}
+.fw-sgal-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-14);
+}
+.fw-sgal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+.fw-sgal-card.is-picked {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+}
+.fw-sgal-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding-bottom: var(--nds-space-6);
+  color: inherit;
+  text-decoration: none;
+}
+.fw-sgal-link:hover .fw-sgal-code {
+  color: var(--nds-text-link);
+}
+.fw-sgal-link:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+  border-radius: var(--nds-radius-lg);
+}
+.fw-sgal-frame {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  padding: var(--nds-space-8);
+  background: var(--nds-surface-sunken);
+  margin-bottom: var(--nds-space-6);
+}
+.fw-sgal-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.fw-sgal-none {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-sgal-code {
+  padding: 0 var(--nds-space-10);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-sgal-name {
+  padding: 0 var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-sgal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: 0 var(--nds-space-10) var(--nds-space-10);
+}
+.fw-sgal-tags,
+.fw-sgal-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.fw-sgal-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-sgal-chip {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--nds-border-strong);
+}
+.fw-sgal-chip.is-none {
+  background: var(--nds-surface-sunken);
+}
+.fw-sgal-pick {
+  position: absolute;
+  top: var(--nds-space-8);
+  left: var(--nds-space-8);
+  padding: var(--nds-space-2);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface);
+}
+.fw-sgal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+@media (max-width: 720px) {
+  .fw-sgal-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--nds-space-10);
+  }
+}

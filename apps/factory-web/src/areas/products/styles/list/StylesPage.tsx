@@ -15,6 +15,9 @@ import { abilitiesOf, grainsOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from
 import { readProblem, writeProblem } from '../problems'
 import { pickBaseList, pricesByStyle, type ListPrices, type NewStyleDraft, type NewStyleModel, type StyleFilters, type StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
+// B-W2b-236 (SCR-303): List · Gallery.
+import { galleryOn, withGallery } from '../gallery/gallery-model'
+import { useGalleryLooks } from '../gallery/use-gallery-looks'
 
 const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
 const PPE_CATEGORIES = ['NOT_PPE', 'CATEGORY_I', 'CATEGORY_II', 'CATEGORY_III']
@@ -77,6 +80,8 @@ function StylesContainer() {
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
   const companyId = session.company?.id ?? null
   const [rows, setRows] = useState<StylesListViewModel['rows']>({ items: null, more: false, count: null, problem: null })
+  // B-W2b-236: the Gallery view's pictures for the rows on screen.
+  const looks = useGalleryLooks(api, galleryOn(params), useMemo(() => (rows.items ?? []).map((row) => row.id), [rows.items]))
   const [cursor, setCursor] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [tiles, setTiles] = useState<StylesListViewModel['tiles']>({})
@@ -183,7 +188,8 @@ function StylesContainer() {
     onReconnect: () => setUpdates((count) => count + 1),
   })
 
-  const setFilters = (next: StyleFilters) => router.replace(`${pathname}${searchOf(next)}`)
+  // B-W2b-236: the Gallery view's term stays with the filters (`?mode=gallery`).
+  const setFilters = (next: StyleFilters) => router.replace(`${pathname}${withGallery(searchOf(next), galleryOn(params))}`)
 
   const more = async () => {
     if (!cursor) return
@@ -302,6 +308,7 @@ function StylesContainer() {
     importHeld: commerceHeld({ manage: can.manage, imports: importRights }),
     busy,
     notice,
+    gallery: { on: galleryOn(params), looks },
   }
 
   return (
@@ -336,6 +343,7 @@ function StylesContainer() {
         onNewDraft: (draft) => setNewStyle((current) => (current ? { ...current, draft, refused: [] } : current)),
         onCreate: () => void create(),
         onDismissNotice: () => setNotice(null),
+        onGallery: (on) => router.replace(`${pathname}${withGallery(searchOf(filters), on)}`),
       }}
     />
   )
