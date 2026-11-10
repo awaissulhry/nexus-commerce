@@ -172,6 +172,8 @@ import { LABEL_ARTWORK_DEFINITIONS, LABEL_ARTWORK_PERMISSIONS } from '../../comp
 import { COMPLIANCE_REPORTS_DEFINITIONS, COMPLIANCE_REPORTS_PERMISSIONS } from '../../compliance/reports/permissions'
 // B-W2b-263: Time & action (pre-production gates).
 import { PLANNING_MILESTONES_DEFINITIONS, PLANNING_MILESTONES_PERMISSIONS } from '../../planning/milestones/permissions'
+// B-W2b-248: made-to-measure rules (product.mtm.switch, the Owner's; reading and keeping them is product.styles.view | manage).
+import { PRODUCT_MTM_DEFINITIONS, PRODUCT_MTM_PERMISSIONS } from '../../product/mtm-rules/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -856,6 +858,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   COMPLIANCE_REPORTS_DEFINITIONS,
   // B-W2b-263
   PLANNING_MILESTONES_DEFINITIONS,
+  // B-W2b-248: made-to-measure rules (area `product`, declared above).
+  PRODUCT_MTM_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1144,6 +1148,8 @@ for (const name of LABEL_ARTWORK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-263: Time & action.
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-248: made-to-measure rules.
+for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

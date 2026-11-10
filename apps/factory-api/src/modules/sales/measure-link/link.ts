@@ -24,6 +24,7 @@ import { LinkRefusedError } from '../../../platform/links/pay'
 import { linkCommand, useLink } from '../../../platform/links/use'
 import { systemContext } from '../../../platform/outbox/system'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
+import { linkRuleChecks } from './checks'
 import { makeMeasureLinkInCommand } from './office'
 import { latestOf, linkTermsOf, measureNotice, noticeReadOf, NOTICE_READ_ACTION, pointsOf, PROFILE_COLUMNS, PROFILE_RECORD, revisionIdFor, viewOfName, zoned, type Reader } from './store'
 
@@ -256,6 +257,9 @@ export async function sendMeasurements(files: FilesRuntime, app: FastifyInstance
   }
   if (problems.length > 0) throw new ValidationError('The measurements cannot be sent like this.', problems.map(({ path, message }) => ({ path, message })))
   const values = profileValuesOf(body, facts.template.points)
+  // B-W2b-248: the template's made-to-measure rules, only while they are on (a broken BLOCK rule refuses the send, using nothing).
+  const checks = await system.withClient((db) => linkRuleChecks(db, facts.profile.garmentType, values.measurements, localeOf(facts.party?.language)))
+  if (checks.blocks.length > 0) throw new ValidationError('The measurements cannot be sent like this.', checks.blocks)
 
   const { result } = await linkCommand(request, { name: 'measureLink.send', idempotencyKey: idempotencyKeyFrom(request), input: { linkId: link.id, ...body } }, async (tools) => {
     const used = await useLink(tools, request, { action: 'submit', typedName: body.typedName ?? null })
@@ -291,13 +295,13 @@ export async function sendMeasurements(files: FilesRuntime, app: FastifyInstance
     })
     await dropLinkDraft(tools, link.id)
     const photos = PHOTO_VIEWS.filter((view) => body.photos[view]).length
-    tools.audit({ recordType: PROFILE_RECORD, recordId: revisionId, companyId: link.companyId, after: { revision: latest.revision + 1, supersedesId: latest.id, linkId: link.id, evidenceId: used.evidenceId, noticeId: notice.id, points: Object.keys(values.measurements).length, photos } })
+    tools.audit({ recordType: PROFILE_RECORD, recordId: revisionId, companyId: link.companyId, after: { revision: latest.revision + 1, supersedesId: latest.id, linkId: link.id, evidenceId: used.evidenceId, noticeId: notice.id, points: Object.keys(values.measurements).length, photos, ...(checks.on ? { mtmWarnings: checks.warnings.map((warning) => warning.code) } : {}) } })
     tools.emit({ type: 'measurements.submitted', subject: revisionId, companyId: link.companyId, payload: { profileId: revisionId, supersedesId: latest.id, linkId: link.id, partyId: link.partyId, revision: latest.revision + 1, photos } })
-    return { profileId: revisionId, revision: latest.revision + 1, at: toUtcIso(tools.now), photos, usesLeft: used.usesLeft }
+    return { profileId: revisionId, revision: latest.revision + 1, at: toUtcIso(tools.now), photos, usesLeft: used.usesLeft, checks: { on: checks.on, warnings: checks.warnings } }
   })
   // The retakes not chosen are not kept (best effort; the hourly job deletes any left).
   await deleteUnsentPhotos(files, app, system, link, revisionId).catch(() => undefined)
-  return { sent: { profileId: result.profileId, revision: result.revision, at: result.at, photos: result.photos }, link: { usesLeft: result.usesLeft } }
+  return { sent: { profileId: result.profileId, revision: result.revision, at: result.at, photos: result.photos }, link: { usesLeft: result.usesLeft }, checks: result.checks }
 }
 
 /** The link's photos the revision does not name: DELETED, their objects removed. */
