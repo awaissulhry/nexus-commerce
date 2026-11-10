@@ -211,7 +211,7 @@ function Form({ model, actions }: { model: DuplicateModel; actions?: DuplicateAc
                 title={
                   <span className="fw-st-inline">
                     {t(`duplicate.part.${part.part}`)}
-                    {!part.available && <Tag tone={part.part === 'PICTURES' || part.part === 'OPTIONS' ? 'neutral' : 'warning'}>{t(part.part === 'PICTURES' || part.part === 'OPTIONS' ? 'duplicate.later' : 'duplicate.notNow')}</Tag>}
+                    {!part.available && <Tag tone={part.part === 'OPTIONS' ? 'neutral' : 'warning'}>{t(part.part === 'OPTIONS' ? 'duplicate.later' : 'duplicate.notNow')}</Tag>}
                     {refused && <Tag tone="danger">{t('duplicate.refusedPart')}</Tag>}
                   </span>
                 }

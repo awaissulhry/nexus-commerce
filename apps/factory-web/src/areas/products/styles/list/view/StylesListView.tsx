@@ -20,6 +20,9 @@ import { completenessOf, decimalText, moneyText, rangeWords, revisionChips, STAT
 import { extraFilterCount, NO_FILTERS, START_FROM, type NewStyleModel, type StylesListActions, type StylesListViewModel } from '../list-model'
 import { usePhoneList } from '../use-phone'
 import { StyleCards } from './StyleCards'
+// B-W2b-236 (SCR-303): List · Gallery.
+import { StylesGallery, ViewSwitch } from '../../gallery/view/StylesGallery'
+import { cardsOf } from '../../gallery/gallery-model'
 import '../../styles.css'
 
 export type { StylesListViewModel, StylesListActions } from '../list-model'
@@ -373,7 +376,29 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
         </div>
       )}
 
-      {phone ? (
+      {model.gallery?.on ? (
+        // B-W2b-236: the Gallery view of the same rows, filters and selection.
+        <StylesGallery
+          cards={state ? [] : items ? cardsOf(items, model.gallery.looks) : null}
+          state={state}
+          count={countWords}
+          search={searchField}
+          tools={
+            <>
+              {filterSelects}
+              <ViewSwitch gallery onChange={(on) => actions?.onGallery?.(on)} />
+            </>
+          }
+          selected={selected}
+          onSelected={setSelected}
+          bulk={bulkActions}
+          hrefOf={recordHref}
+          looksProblem={model.gallery.looks.status === 'error' ? model.gallery.looks.problem : null}
+          more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
+          keys={listKeys(ownKeys, true)}
+          onHelp={() => setDialog('help')}
+        />
+      ) : phone ? (
         <StyleCards
           rows={state ? [] : items}
           state={state}
@@ -400,7 +425,13 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
         columns={columns}
         count={countWords}
         search={searchField}
-        tools={filterSelects}
+        tools={
+          <>
+            {filterSelects}
+            {/* B-W2b-236: List · Gallery (absent where the page offers no gallery). */}
+            {model.gallery && <ViewSwitch gallery={false} onChange={(on) => actions?.onGallery?.(on)} />}
+          </>
+        }
         // Every row may be selected: Export applies to any style; Archive N is held with its reason when an archived one
         // is among them (no isRowSelectable: no row is without a bulk action).
         selection={{

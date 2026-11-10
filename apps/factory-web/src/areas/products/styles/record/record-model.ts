@@ -32,6 +32,9 @@ import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
 import type { StyleMaterialApprovals } from '../compliance/materials'
 import type { PrepacksActions, PrepacksModel } from './prepacks/prepacks-model'
 import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors-model'
+// B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
+import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
+import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -136,6 +139,9 @@ export interface StyleRecordViewModel {
   /** B-W2b-233: the Sizes & measurements tab's Prepacks and Protector placement (absent: not read, like idle). */
   prepacks?: PrepacksModel
   protectors?: ProtectorsModel
+  /** B-W2b-236: Overview › Sketches and pictures and Files & patterns › Pattern files (absent: not read, like idle). */
+  gallery?: GalleryModel
+  patternFiles?: PatternsModel
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -208,4 +214,7 @@ export interface StyleRecordActions {
   /** B-W2b-233: the Prepacks and Protector placement sections. */
   prepacks?: PrepacksActions
   protectors?: ProtectorsActions
+  /** B-W2b-236: the Sketches and pictures and Pattern files sections. */
+  gallery?: GalleryActions
+  patternFiles?: PatternsActions
 }

@@ -19,6 +19,9 @@ import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
 import { PrepacksSection } from '../prepacks/view/PrepacksSection'
 import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
+// B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
+import { GallerySection } from '../gallery/view/GallerySection'
+import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
 import { TabBody } from './TabBody'
 import { VariantsTab } from './VariantsTab'
 import '../../styles.css'
@@ -306,7 +309,17 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
       <div className={showDock ? 'fw-st-body has-dock' : 'fw-st-body'}>
         <div className="fw-st-main">
           {model.tab === 'overview' || !tabs.includes(model.tab) ? (
-            <OverviewTab style={style} model={model} actions={actions} />
+            // B-W2b-236: the Overview's sections, in the design's order (Sketches and pictures after the matrix).
+            <div className="fw-st-stack-lg">
+              <OverviewTab style={style} model={model} actions={actions} />
+              <GallerySection model={model.gallery} actions={actions?.gallery} />
+            </div>
+          ) : model.tab === 'files' ? (
+            // B-W2b-236: Files & patterns' sections — Pattern files per revision and size range, then the pattern pieces.
+            <div className="fw-st-stack-lg">
+              <PatternFilesSection model={model.patternFiles} actions={actions?.patternFiles} />
+              <TabBody tab={model.tab} style={style} model={model} actions={actions} />
+            </div>
           ) : model.tab === 'variants' ? (
             <VariantsTab style={style} model={model} actions={actions} />
           ) : model.tab === 'sizes' ? (

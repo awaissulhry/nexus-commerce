@@ -1383,10 +1383,11 @@
       "routing_other": "{count} fasi della revisione {revision}, con minuti, punti di scansione e terzisti",
       "routingHidden": "Le fasi del ciclo della revisione (il tuo ruolo non ne legge il numero)",
       "label": "L’etichetta condivisa della revisione {revision}",
-      "measurements": "Su misura ammesso, con il suo modello di misure"
+      "measurements": "Su misura ammesso, con il suo modello di misure",
+      "pictures_one": "{count} immagine dello stile, delle varianti e della revisione, ognuna con una copia del file",
+      "pictures_other": "{count} immagini dello stile, delle varianti e della revisione, ognuna con una copia del file"
     },
     "reason": {
-      "PICTURES": "Schizzi e immagini del modello si copiano quando arriva la galleria (W2b).",
       "OPTIONS": "Le opzioni del modello si copiano quando arrivano i gruppi di opzioni (W2b).",
       "noRight": {
         "BOM": "Copiare la distinta richiede il permesso di modificare le distinte: non nel tuo ruolo.",
@@ -1401,7 +1402,8 @@
       "ownLabel": "L’etichetta {label} è propria di {code}: creane una per la copia in Conformità › Etichette e marcature.",
       "retiredLabel": "L’etichetta {label} è ritirata.",
       "noLabel": "La revisione {revision} non indica un’etichetta del capo.",
-      "other": "Ora non si può copiare."
+      "other": "Ora non si può copiare.",
+      "noPictures": "{code} non ha ancora immagini."
     },
     "note": {
       "sizes": "Le taglie {sizes} sono archiviate nella scala: la gamma della copia le lascia fuori.",
@@ -1410,7 +1412,9 @@
       "colour": "Variante {code}: il suo colore di libreria è archiviato o di un’altra azienda, quindi la copia non ne ha.",
       "lines_one": "{count} riga di distinta di una variante archiviata non è stata copiata.",
       "lines_other": "{count} righe di distinta di varianti archiviate non sono state copiate.",
-      "other": "Qualcos’altro è stato lasciato fuori: lo dice la cronologia della copia."
+      "other": "Qualcos’altro è stato lasciato fuori: lo dice la cronologia della copia.",
+      "pictures_one": "{count} immagine di un’altra revisione o di una variante archiviata non è stata copiata.",
+      "pictures_other": "{count} immagini di altre revisioni o di varianti archiviate non sono state copiate."
     },
     "held": {
       "source": "Prima scegli il modello da copiare.",

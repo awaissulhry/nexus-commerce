@@ -81,7 +81,9 @@ describe('copying a style (PRD-011)', () => {
     expect(copiedFields(source, { code: 'GT-01-C', name: 'C', season: null }, ['MEASUREMENTS'], range)).toMatchObject({ season: null, mtmAllowed: true, measurementTemplateId: id(5) })
     expect(needsRevision(['MEASUREMENTS'])).toBe(false)
     expect(needsRevision(['LABELS'])).toBe(true)
-    expect(PART_NOT_YET.PICTURES).toMatch(/W2b/)
+    // B-W2b-236: the pictures are copied now; options wait for their page.
+    expect(PART_NOT_YET.PICTURES).toBeUndefined()
+    expect(PART_NOT_YET.OPTIONS).toMatch(/W2b/)
     expect(PART_NOT_YET.BOM).toBeUndefined()
   })
 
@@ -123,7 +125,8 @@ describe('W2b (B-W2b-25): the copy keeps the gender, and says its reasons and no
   })
 
   it('says each reason in the same words as before W2b, from its code and facts', () => {
-    expect(offerReasonWords('PICTURES', offerReason('NOT_YET', 'GT-01'))).toBe(PART_NOT_YET.PICTURES)
+    expect(offerReasonWords('OPTIONS', offerReason('NOT_YET', 'GT-01'))).toBe(PART_NOT_YET.OPTIONS)
+    expect(offerReasonWords('PICTURES', offerReason('NO_PICTURES', 'GT-01'))).toBe('GT-01 has no pictures.')
     expect(offerReasonWords('MEASUREMENTS', offerReason('NOT_MADE_TO_MEASURE', 'GT-01'))).toBe('GT-01 is not made to measure.')
     expect(offerReasonWords('BOM', offerReason('NO_REVISION', 'GT-01'))).toBe('GT-01 has no revision yet.')
     expect(offerReasonWords('BOM', offerReason('NO_BOM_LINES', 'GT-01', { revision: 2 }))).toBe('Revision 2 has no BOM lines.')
@@ -133,7 +136,7 @@ describe('W2b (B-W2b-25): the copy keeps the gender, and says its reasons and no
     expect(offerReasonWords('LABELS', offerReason('LABEL_RETIRED', 'GT-01', { label: 'LBL-1', labelRevision: 2 }))).toBe('Label LBL-1 r2 is retired.')
     expect(offerReasonWords('BOM', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.bom.manage', everyCompany: true }))).toBe('Copying the BOM needs product.bom.manage over every company.')
     expect(offerReasonWords('ROUTING', offerReason('NEEDS_PERMISSION', 'GT-01', { permission: 'product.routing.manage' }))).toBe('Copying the routing needs product.routing.manage.')
-    expect(OFFER_REASONS).toHaveLength(9)
+    expect(OFFER_REASONS).toHaveLength(10)
   })
 
   it('says each note in the same words as before W2b', () => {
@@ -141,6 +144,7 @@ describe('W2b (B-W2b-25): the copy keeps the gender, and says its reasons and no
     expect(copyNoteWords(leftOutNote('COLOURWAYS_ARCHIVED', { count: 2 }))).toBe('2 archived colourway(s) are not copied.')
     expect(copyNoteWords(leftOutNote('COLOUR_LEFT_OUT', { colourway: 'BLK' }))).toBe("Colourway BLK: its library colour is archived or another company's; the copy has none.")
     expect(copyNoteWords(leftOutNote('BOM_LINES_LEFT_OUT', { count: 1 }))).toBe('1 BOM line(s) of archived colourways are not copied.')
+    expect(copyNoteWords(leftOutNote('PICTURES_LEFT_OUT', { count: 2 }))).toBe('2 picture(s) of another revision or of an archived colourway are not copied.')
     expect(leftOutNote('BOM_LINES_LEFT_OUT', { count: 1 })).toEqual({ code: 'BOM_LINES_LEFT_OUT', sizes: [], count: 1, colourway: null })
   })
 })

@@ -76,6 +76,9 @@ import { usePieces } from './pieces/use-pieces'
 import { useStyleApprovals } from '../../materials/approval/use-style-approvals'
 import { usePrepacks } from './prepacks/use-prepacks'
 import { useProtectors } from './protectors/use-protectors'
+// B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
+import { useGallery } from './gallery/use-gallery'
+import { usePatternFiles } from './files-w2b/use-pattern-files'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.products.dock.Style'
@@ -386,6 +389,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     prepacks.reload()
     protectors.reload()
   }
+  // B-W2b-236: the pictures (the style's read; changes with product.styles.manage, uploads also files.upload) and the
+  // revision's pattern files (the BOM's read; changes with product.bom.manage), each read while its tab is open.
+  const pictureStyle = useMemo(() => (value ? { id: value.id, companyId: value.companyId } : null), [value?.id, value?.companyId])
+  const gallery = useGallery({ api, style: pictureStyle, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'overview' && can.view, canManage: can.manage && session.permissions.includes('files.upload'), canArrange: can.manage, write: run })
+  const patternFiles = usePatternFiles({ api, style: pictureStyle, revisionId, loadKey: versionKey, enabled: tab === 'files' && can.bomView, canManage: can.bomManage && session.permissions.includes('files.upload'), canEdit: can.bomManage, write: run })
 
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
@@ -501,6 +509,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     materialApprovals: approvals.read,
     prepacks: prepacks.model,
     protectors: protectors.model,
+    gallery: gallery.model,
+    patternFiles: patternFiles.model,
   }
 
   return (
@@ -512,6 +522,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onRetryMaterialApprovals: approvals.reload,
         prepacks: prepacks.actions,
         protectors: protectors.actions,
+        gallery: gallery.actions,
+        patternFiles: patternFiles.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

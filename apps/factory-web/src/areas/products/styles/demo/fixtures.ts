@@ -959,7 +959,8 @@ export function demoOffer(options: { held?: boolean; noRevision?: boolean; dropp
       options.held || !revision
         ? { part: 'LABELS', ...(revision ? no("Label LBL-DEMO-01 r2 is DEMO-JKT-01's own label: make one for the copy in Compliance.", 'OWN_LABEL', { revision: 2, label: 'LBL-DEMO-01', labelRevision: 2 }) : no('DEMO-JKT-01 has no revision yet.', 'NO_REVISION')) }
         : { part: 'LABELS', available: true, count: null, reason: null, ...yes },
-      { part: 'PICTURES', ...no("The style's sketches and pictures are copied once the gallery arrives (W2b).", 'NOT_YET') },
+      // B-W2b-236: the pictures are copied now (held: the style has none).
+      options.held ? { part: 'PICTURES', ...no('DEMO-JKT-01 has no pictures.', 'NO_PICTURES') } : { part: 'PICTURES', available: true, count: 6, reason: null, ...yes },
       { part: 'OPTIONS', ...no('Style options are copied once option groups arrive (W2b).', 'NOT_YET') },
     ],
     colourways: 3,
