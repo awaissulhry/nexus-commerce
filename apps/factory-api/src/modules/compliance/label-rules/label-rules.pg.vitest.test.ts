@@ -15,7 +15,10 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
-import { processEmail } from '../../../platform/email-out/service'
+import { FakeSes } from '../../../adapters/ses/fake'
+import { sesMailAdapter } from '../../../adapters/ses/ses'
+import { createEmailRuntime, processEmail, useEmail } from '../../../platform/email-out/service'
+import type { Gateway } from '../../../platform/gateway/gateway'
 import { garmentLabelFor } from '../labels/preview'
 import { useLabelsClock } from '../labels/store'
 import { labelRulesFor } from './gate'
@@ -114,6 +117,11 @@ beforeAll(async () => {
   await seedComplianceRules({ db: database, namespace: NS })
   await admin('INSERT INTO "Tenant" (id, slug, name) VALUES ($1, $2, $2)', [otherTenant, 'label-rules-other'])
   useLabelsClock(clock)
+  // The QR's address is the email runtime's web origin (processEmail().webOrigin). Set it here, as the shipping documents
+  // test does, so this file does not need the whole process env (FACTORY_REDIS_URL…). A plain-http local origin, as on a
+  // developer's machine: the QR check warns about it. No mail is sent, so the gateway is never used.
+  const neverSes = sesMailAdapter({ clientFor: () => { throw new Error('This test sends no mail.') } })
+  useEmail(createEmailRuntime({ gateway: {} as Gateway, fake: new FakeSes(), webOrigin: 'http://localhost:3700', ses: neverSes }))
 
   const style = `INSERT INTO "Style" (id, "tenantId", "companyId", code, name, "productType", "sizeScaleId", sizes, "baseSize", "ppeCategory", "ppeStandard", "ppeClass", status)
     VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY['52'], '52', $8, $9, $10, 'DRAFT')`
@@ -137,6 +145,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   useLabelsClock(undefined)
+  useEmail(undefined)
   await app?.close()
   await database?.close()
   await db?.close()
