@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit'
+import { create as createQr } from 'qrcode'
 import type { RenderedLabel } from '@nexus/factory-domain/compliance/labels/render'
 import { hundredthsOf, LAYOUT_PRESETS } from '@nexus/factory-domain/compliance/labels/rules'
 import { barHeight, blockPositions, graphicHeight } from '@nexus/factory-domain/compliance/labels/zpl'
@@ -9,12 +10,27 @@ import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
  * The garment label as a PDF page of the label's size (B-W1-19; the browser's fallback and the proof on paper, design 02
  * `lb-sheet`), in the geometry of factory-domain compliance/labels/zpl.ts (hundredths of a millimetre): the CE mark, the
  * pictogram's box with the standard and the class, the care symbols' boxes (stand-ins until the licensed artwork, W2b),
- * the batch number or serial as Code 128 bars (a preview's empty bar row as a box), the text lines, and a sample's black SAMPLE band across the middle. pdfkit's standard fonts, a fixed creation date:
+ * the batch number or serial as Code 128 bars (a preview's empty bar row as a box), the QR to the public DoC page (W2b,
+ * B-W2b-253), the text lines, and a sample's black SAMPLE band across the middle. pdfkit's standard fonts, a fixed creation date:
  * the same label gives the same bytes. Stored nowhere.
  */
 
 /** Hundredths of a millimetre → PDF points (1 inch = 72 points = 2540 hundredths). */
 const pt = (hundredths: number): number => (hundredths * 72) / 2540
+
+/** The QR of `value` at (x, y), `size` points wide with its 4-module quiet zone, black on white (B-W2b-253; as the tech pack's). */
+function qrCode(pdf: PDFKit.PDFDocument, value: string, x: number, y: number, size: number): void {
+  const { modules } = createQr(value, { errorCorrectionLevel: 'M' })
+  const count = modules.size
+  const unit = size / (count + 8)
+  pdf.save().rect(x, y, size, size).fillColor('#ffffff').fill()
+  for (let row = 0; row < count; row++) {
+    for (let column = 0; column < count; column++) {
+      if (modules.get(row, column)) pdf.rect(x + (column + 4) * unit, y + (row + 4) * unit, unit, unit)
+    }
+  }
+  pdf.fillColor('#000000').fill().restore()
+}
 
 export async function renderGarmentLabelPdf(label: RenderedLabel): Promise<Buffer> {
   const width = label.fit ? hundredthsOf(label.fit.widthMm) : null
@@ -72,6 +88,10 @@ export async function renderGarmentLabelPdf(label: RenderedLabel): Promise<Buffe
         const module = Math.min(pt(25), pt(span) / symbol.modules)
         for (const bar of symbol.bars) pdf.rect(pt(x) + bar.x * module, pt(y), bar.width * module, pt(barHeight(preset))).fill('#000000')
       }
+    } else if (block.field === 'qr') {
+      // B-W2b-253 (PRD-349): the QR to the public DoC page; a preview's box without an address.
+      if (block.value === null) pdf.lineWidth(pt(20)).rect(pt(x), pt(y), pt(preset.qr), pt(preset.qr)).stroke('#000000')
+      else qrCode(pdf, block.value, pt(x), pt(y), pt(preset.qr))
     }
     let lineY = y + graphicHeight(block, preset)
     for (const line of block.lines) {

@@ -76,7 +76,8 @@ function mayUpload(context: RequestContext, companyId: string | null): void {
 async function readVisibleDocument(client: Reader, context: RequestContext, styleId: string, documentId: string): Promise<DocumentRow> {
   await readVisibleStyle(client, context, styleId)
   if (!isUuid(documentId)) throw new NotFoundError('Document not found.')
-  const row = await client.complianceDocument.findFirst({ where: { id: documentId, styleId }, select: DOCUMENT_SELECT })
+  // B-W2b-257: W1's routes see the signed documents only (a generated draft is the DoC generator's).
+  const row = await client.complianceDocument.findFirst({ where: { id: documentId, styleId, origin: 'SIGNED' }, select: DOCUMENT_SELECT })
   if (!row) throw new NotFoundError('Document not found.')
   return row
 }
@@ -168,7 +169,8 @@ export async function uploadDocument(caller: CommandCaller, styleId: string, bod
       const announced = { revisionId: revision.id, originalName: body.originalName, sizeBytes: body.sizeBytes, sha256: body.sha256 }
 
       const existing = await tx.complianceDocument.findFirst({
-        where: { styleId, kind: body.kind, language: body.language, revision: revision.revision },
+        // B-W2b-257: the signed document of that revision; a generated draft beside it never takes the signed upload.
+        where: { styleId, kind: body.kind, language: body.language, revision: revision.revision, origin: 'SIGNED' },
         select: DOCUMENT_SELECT,
       })
       if (existing) {
@@ -309,7 +311,8 @@ export async function completeDocumentFile(
         return documentId
       }
 
-      const siblings = await tx.complianceDocument.findMany({ where: { styleId, kind: document.kind, language: document.language }, select: { id: true, kind: true, language: true, revision: true, status: true } })
+      // B-W2b-257: only signed documents supersede each other (a generated draft is never issued before GATE-PPE-TEXTS).
+      const siblings = await tx.complianceDocument.findMany({ where: { styleId, kind: document.kind, language: document.language, origin: 'SIGNED' }, select: { id: true, kind: true, language: true, revision: true, status: true } })
       const plan = issuePlan(
         siblings.map((entry) => ({ ...entry, kind: entry.kind as DocumentKind, status: entry.status as DocumentStatus })),
         { id: documentId, kind, language: document.language, revision: document.revision },

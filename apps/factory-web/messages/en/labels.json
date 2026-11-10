@@ -282,7 +282,10 @@
       "importer": "Importer",
       "composition": "Fibre composition",
       "animalOrigin": "Animal-origin phrase",
-      "care": "Care symbols"
+      "care": "Care symbols",
+      "level": "Glove level",
+      "gpsrContact": "GPSR contact",
+      "qr": "QR to the public DoC"
     },
     "languages": "Languages",
     "languagesHint": "ISO 639-1 codes (it, en, de…), at most 8.",

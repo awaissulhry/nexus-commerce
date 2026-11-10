@@ -32,6 +32,8 @@ import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
 import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
 import { ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { gateRequestFor } from '../../compliance/certificates/gate'
+// B-W2b-254: W1's CERTIFICATE check follows the certificate-coverage requirement (the company may lift its release block).
+import { certificateBlocksRelease, RELEASE_NOT_GATED } from '../../compliance/gates/at-steps'
 import { lotFactsOf, readLots, readStock } from '../../planning/store'
 import { readLines, readMaterials, type LineRecord, type MaterialFacts } from '../../product/bom/store'
 import { readSteps, type StepRecord } from '../../product/routing/read'
@@ -327,7 +329,9 @@ export async function readReleaseFacts(db: Reader, basics: Basics, date: Busines
     return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries, blockers: await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness: 'whenShort', short: false }), scope: null }
   }
   const spec = planSpec(parts, cells)
-  const gates = await readGates(db, style.id, cells, date)
+  const gates = (await certificateBlocksRelease(db, style.id, date))
+    ? await readGates(db, style.id, cells, date)
+    : cells.map((cell): CellGate => ({ cellId: cell.id, label: cellLabel(cell), outcome: 'not_required', certificateNumber: null, validTo: null, reasons: [], message: RELEASE_NOT_GATED }))
   const deposits = await readDeposits(db, orders)
   const material = materialLines(await readMaterialNeeds(db, workOrder, spec.materials, parts))
   const batchSeries = await hasSeries(db, workOrder.companyId, 'BATCH')

@@ -85,6 +85,11 @@ export const LABEL_FIELDS = [
   'composition',
   'animalOrigin',
   'care',
+  // W2b (B-W2b-253): the glove's EN 13594 level in words (listed only), the GPSR contact (PRD-346) and the QR to the
+  // public DoC page (PRD-349, B-W2b-166).
+  'level',
+  'gpsrContact',
+  'qr',
 ] as const
 export type LabelField = (typeof LABEL_FIELDS)[number]
 
@@ -103,8 +108,8 @@ export const LISTED_ONLY_FIELDS: readonly LabelField[] = ['class', 'colourway']
  * barcode row (B-W1-44: packing scans it), the margin and the gap between fields.
  */
 export const LAYOUT_PRESETS = Object.freeze({
-  STANDARD: { margin: 250, text: 180, line: 230, gap: 100, ce: 600, pictogram: 1000, care: 500, barcode: 600 },
-  COMPACT: { margin: 200, text: 140, line: 180, gap: 60, ce: 500, pictogram: 800, care: 400, barcode: 500 },
+  STANDARD: { margin: 250, text: 180, line: 230, gap: 100, ce: 600, pictogram: 1000, care: 500, barcode: 600, qr: 1400 },
+  COMPACT: { margin: 200, text: 140, line: 180, gap: 60, ce: 500, pictogram: 800, care: 400, barcode: 500, qr: 1200 },
 })
 export type LayoutPreset = keyof typeof LAYOUT_PRESETS
 export const LAYOUT_PRESET_KEYS = Object.keys(LAYOUT_PRESETS) as [LayoutPreset, ...LayoutPreset[]]
@@ -139,6 +144,15 @@ export function layoutOf(value: unknown): { readonly layout: LabelLayout; readon
   const parsed = labelLayoutSchema.safeParse(value ?? {})
   return parsed.success ? { layout: parsed.data, problems: [] } : { layout: DEFAULT_LAYOUT, problems: issuesOf(parsed.error, 'layout') }
 }
+
+// ---- the W2b columns (B-W2b-218; B-W2b-253) -------------------------------------------------------------------------------
+
+/** What the label is (PRD-336): W1's PPE garment label, a glove marking (EN 13594), a fibre and care label, a packaging label. */
+export const LABEL_KINDS = ['PPE_GARMENT', 'GLOVE_MARKING', 'FIBRE_CARE', 'PACKAGING'] as const
+export type LabelKind = (typeof LABEL_KINDS)[number]
+/** Where its QR points (PRD-349): nowhere, the public DoC page of the garment's batch, or of its style (B-W2b-166). */
+export const LABEL_QR_TARGETS = ['NONE', 'BATCH_DOC', 'STYLE_DOC'] as const
+export type LabelQrTarget = (typeof LABEL_QR_TARGETS)[number]
 
 // ---- composition and care ------------------------------------------------------------------------------------------------
 
@@ -263,6 +277,10 @@ export interface LabelContent {
   readonly layout: LabelLayout
   readonly widthMm: string
   readonly heightMm: string
+  /** W2b (B-W2b-218 columns): left out, W1's PPE garment label with no GPSR contact and no QR. */
+  readonly kind?: LabelKind | undefined
+  readonly gpsrContact?: string | null | undefined
+  readonly qrTarget?: LabelQrTarget | undefined
 }
 
 export const MAX_LANGUAGES = 8
@@ -406,10 +424,18 @@ const classesOf = (standardCode: string | null): readonly string[] | null =>
  * EN 13594, a class), the CE mark's notified-body number (only and always for category III: art. 17(2)), and the maker
  * (with a brand label, the brand: PLAN §2.8). Paths: `style/…` for the style's own data, `layout/…`, `makerPartyId`.
  */
-export function styleProblems(content: Pick<LabelContent, 'layout' | 'makerPartyId'>, style: LabelStyle): Issue[] {
+export function styleProblems(content: Pick<LabelContent, 'layout' | 'makerPartyId' | 'kind'>, style: LabelStyle): Issue[] {
   const problems: Issue[] = []
   const classification = classificationOf(style)
   const nb = content.layout.notifiedBodyNumber
+  if (content.kind === 'FIBRE_CARE') {
+    // A fibre and care label carries no PPE marking (B-W2b-253): the style's PPE garment label does. Only the maker rule.
+    if (nb !== null) problems.push({ path: 'layout/notifiedBodyNumber', message: 'A fibre and care label carries no CE marking and no notified-body number: the PPE garment label does. Remove it.' })
+    if (content.makerPartyId !== null && style.brandPartyId !== null && content.makerPartyId !== style.brandPartyId) {
+      problems.push({ path: 'makerPartyId', message: `Style ${style.code} is made for another brand: with a brand label, that brand is the legal maker the label names (Reg. (EU) 2016/425 art. 8(6)).` })
+    }
+    return problems
+  }
   if (classification.isPpe) {
     if (style.ppeStandard === null) {
       problems.push({ path: 'style/ppeStandard', message: `Style ${style.code} is ${CATEGORY_WORDS[style.ppeCategory]} but names no harmonised standard: the label prints the standard and the class (Reg. (EU) 2016/425 Annex II 1.4).` })
@@ -450,13 +476,20 @@ export function styleWarnings(content: Pick<LabelContent, 'makerPartyId'>, style
 }
 
 /** The fields this label prints, in order: the layout's first, then the others it prints (PPE or not, with or without data). */
-export function printedFields(content: Pick<LabelContent, 'layout' | 'importerName' | 'composition' | 'animalOriginPhrase' | 'care'>, isPpe: boolean): LabelField[] {
+export function printedFields(
+  content: Pick<LabelContent, 'layout' | 'importerName' | 'composition' | 'animalOriginPhrase' | 'care' | 'kind' | 'gpsrContact' | 'qrTarget'>,
+  isPpe: boolean,
+): LabelField[] {
   const listed = new Set<LabelField>(content.layout.fields)
+  // B-W2b-253: a fibre and care label of a PPE style prints no PPE marking (the PPE garment label does), but may carry the QR.
+  const ppe = isPpe && content.kind !== 'FIBRE_CARE'
   const prints = (field: LabelField): boolean => {
-    if ((isPpe ? PPE_FIELDS : ALWAYS_FIELDS).includes(field)) return true
-    if (!isPpe && (field === 'ceMark' || field === 'pictogram' || field === 'class' || field === 'standard')) return false
+    if ((ppe ? PPE_FIELDS : ALWAYS_FIELDS).includes(field)) return true
+    if (!ppe && (field === 'ceMark' || field === 'pictogram' || field === 'class' || field === 'standard' || field === 'level')) return false
     if (LISTED_ONLY_FIELDS.includes(field)) return listed.has(field)
-    if (field === 'bodyMeasures') return listed.has(field)
+    if (field === 'bodyMeasures' || field === 'level') return listed.has(field)
+    if (field === 'qr') return isPpe && content.qrTarget !== undefined && content.qrTarget !== 'NONE'
+    if (field === 'gpsrContact') return !blank(content.gpsrContact)
     if (field === 'manufactureDate') return content.layout.manufactureDate !== 'NONE'
     if (field === 'importer') return !blank(content.importerName)
     if (field === 'composition') return content.composition.length > 0

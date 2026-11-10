@@ -161,6 +161,8 @@ import { events as productMeasures } from '../product-measures/events'
 import { events as productOptions } from '../product-options/events'
 // B-W2b-249: Rules & markets (the register and its change watch, markets, economic operators, phrases and translations).
 import { events as complianceRules } from '../compliance-rules/events'
+// B-W2b-254: requirements and gates (a requirement changed, a gate refused, a refusal overridden).
+import { events as complianceGates } from '../compliance-gates/events'
 // B-W2b-233: prepacks (a prepack changed) and protector placement (a draft revision's placement changed).
 import { events as productPrepacks } from '../product-prepacks/events'
 import { events as productProtectors } from '../product-protectors/events'
@@ -170,6 +172,8 @@ import { events as complianceSubstances } from '../compliance-substances/events'
 import { events as certificatesDepth } from '../certificates-depth/events'
 // B-W2b-251: technical files (a file, an Annex III item, a risk assessment, a production-control test, an evidence pack changed).
 import { events as complianceTechfiles } from '../compliance-techfiles/events'
+// B-W2b-257: the DoC generator (a generated draft changed, a translation moved, batches recorded, a shipment's pack made).
+import { events as complianceDeclarations } from '../compliance-declarations/events'
 // B-W2b-256: material profiles, supplier declarations and test plans.
 import { events as complianceMaterialTests } from '../compliance-material-tests/events'
 import type { EventDefinition } from './define'
@@ -396,6 +400,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...materialsDepth,
   // B-W2b-249
   ...complianceRules,
+  // B-W2b-254
+  ...complianceGates,
   // B-W2b-230
   ...productTechpack,
   // B-W2b-233
@@ -409,6 +415,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...salesSamples,
   // B-W2b-251
   ...complianceTechfiles,
+  // B-W2b-257
+  ...complianceDeclarations,
   // B-W2b-256
   ...complianceMaterialTests] as const satisfies readonly EventDefinition[]
 
