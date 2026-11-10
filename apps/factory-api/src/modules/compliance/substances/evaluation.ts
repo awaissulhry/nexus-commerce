@@ -7,11 +7,13 @@ import { can, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/p
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import type { Prisma } from '@nexus/factory-db'
-import { runCommand, type CommandCaller } from '../../../core/command'
+import { runCommand, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
 import { STYLE_SCOPE } from '../../product/styles/store'
 import { officeOf } from '../register-of-rules/common'
+// B-W2b-256: what a profile lacks beyond the rules (confirmations, a PPE material's innocuousness evidence).
+import { profileFactsOf } from '../material-profiles/facts'
 import { substancesClock, substancesGuarded, substancesSettings } from './common'
 import {
   declarationsOf,
@@ -65,6 +67,7 @@ async function evaluateAll(db: Reader, materials: readonly MaterialRow[], today:
   const tests = await testsOf(db, ids)
   const declarations = await declarationsOf(db, ids)
   const profiles = await profilesOf(db, ids)
+  const extra = await profileFactsOf(db, materials, uses, today)
   const marketCache = new Map<string, string[]>()
   const out = new Map<string, { evaluation: MaterialEvaluation; uses: StyleUse[]; markets: string[] }>()
   for (const material of materials) {
@@ -87,6 +90,7 @@ async function evaluateAll(db: Reader, materials: readonly MaterialRow[], today:
       svhcSubstanceIds: new Set(facts.svhc.keys()),
       saved: savedSvhc(profiles.get(material.id)),
       today,
+      gaps: extra.get(material.id)?.gaps ?? [],
     })
     out.set(material.id, { evaluation, uses: used, markets })
   }
@@ -186,80 +190,97 @@ export async function evaluateMaterials(caller: CommandCaller, body: { readonly 
             throw new ForbiddenError(material.companyId === null ? `${material.code} is a material for every company: its profile is written only by a role over every company.` : `You may not write ${material.code}'s compliance profile.`)
           }
         })
-        // The profiles FOR UPDATE, in id order (a concurrent evaluation of the same materials waits, never deadlocks).
-        const sorted = [...ids].sort()
-        await tx.$queryRaw`SELECT "id" FROM "MaterialComplianceProfile" WHERE "id" = ANY(${sorted}::uuid[]) ORDER BY "id" FOR UPDATE`
-        const evaluated = await evaluateAll(tx, ids.map((id) => byId.get(id)!), todayOf(now))
-        const before = await profilesOf(tx, ids)
-        const profiles = []
-        for (const id of ids) {
-          const material = byId.get(id)!
-          const { evaluation } = evaluated.get(id)!
-          const previous = before.get(id)
-          const svhc = evaluation.svhc
-          const takesSvhc = svhc.source === 'DECLARATION' && svhc.aboveThreshold !== null && svhc.listVersion !== null
-          const data = {
-            applicableRuleIds: [...evaluation.applicableRuleIds],
-            testsNeeded: [...evaluation.testsNeeded],
-            declarationsNeeded: [...evaluation.declarationsNeeded],
-            evaluatedAt: now,
-            state: evaluation.state,
-            stateReason: evaluation.stateReason,
-            ...(takesSvhc ? { svhcAboveThreshold: svhc.aboveThreshold, svhcListVersionId: svhc.listVersion!.id, svhcSubstanceIds: [...svhc.substanceIds] } : {}),
-            updatedAt: now,
-          }
-          const row = previous
-            ? await tx.materialComplianceProfile.update({ where: { id }, data: { ...data, version: { increment: 1 } }, select: PROFILE_SELECT })
-            : await tx.materialComplianceProfile.create({ data: { id, itemId: id, ...data, createdAt: now, createdById: context.actorId }, select: PROFILE_SELECT })
-          const shown = (profile: typeof row | undefined) =>
-            profile
-              ? {
-                  state: profile.state,
-                  stateReason: profile.stateReason,
-                  applicableRuleIds: [...profile.applicableRuleIds],
-                  testsNeeded: [...profile.testsNeeded],
-                  declarationsNeeded: [...profile.declarationsNeeded],
-                  svhcAboveThreshold: profile.svhcAboveThreshold,
-                  svhcListVersionId: profile.svhcListVersionId,
-                  svhcSubstanceIds: [...profile.svhcSubstanceIds],
-                }
-              : null
-          audit({ recordType: 'MaterialComplianceProfile', recordId: id, companyId: material.companyId, before: shown(previous), after: shown(row) })
-          emit({
-            type: 'compliance_substances.profile_evaluated',
-            subject: id,
-            companyId: material.companyId,
-            payload: {
-              itemId: id,
-              state: evaluation.state,
-              previousState: (previous?.state as 'INCOMPLETE' | 'COMPLETE' | 'BLOCKED' | undefined) ?? null,
-              rules: evaluation.applicableRuleIds.length,
-              testsNeeded: [...evaluation.testsNeeded],
-              declarationsNeeded: [...evaluation.declarationsNeeded],
-              svhcAboveThreshold: row.svhcAboveThreshold,
-            },
-          })
-          profiles.push({
-            itemId: id,
-            code: material.code,
-            name: material.name,
-            state: evaluation.state,
-            previousState: (previous?.state as 'INCOMPLETE' | 'COMPLETE' | 'BLOCKED' | undefined) ?? null,
-            stateReason: evaluation.stateReason,
-            applicableRules: evaluation.applicableRuleIds.length,
-            testsNeeded: [...evaluation.testsNeeded],
-            declarationsNeeded: [...evaluation.declarationsNeeded],
-            svhcAboveThreshold: row.svhcAboveThreshold,
-            changed: !previous || previous.state !== row.state || !sameList(previous.applicableRuleIds, row.applicableRuleIds) || previous.svhcAboveThreshold !== row.svhcAboveThreshold,
-            version: row.version,
-          })
-        }
+        const profiles = await writeProfilesInCommand({ tx, now, audit, emit }, ids.map((id) => byId.get(id)!), context.actorId)
         return { profiles, evaluatedAt: toUtcIso(now) }
       },
       substancesSettings(),
     ),
   )
   return result
+}
+
+/**
+ * The ONE writer of what the evaluator says (B-W2b-250; reused by B-W2b-256 after a declaration is decided, a lab result is
+ * recorded, a profile is confirmed, a rule is switched, a Candidate List version is added and every night): inside the
+ * caller's command, the materials' profiles FOR UPDATE in id order, then each profile (made with the item's id when it has
+ * none) in ONE update: the rules, tests and declarations it needs with the time it ran, its state and reason, and the SVHC
+ * answer of the newest accepted SVHC declaration; an audit row (before/after) and `compliance_substances.profile_evaluated`
+ * each. The caller checks who may write (a person's route) or runs as the system (a job). `createdById`: who makes a
+ * missing profile (null: the system).
+ */
+export async function writeProfilesInCommand(tools: Pick<CommandTools, 'tx' | 'now' | 'audit' | 'emit'>, materials: readonly MaterialRow[], createdById: string | null) {
+  const { tx, now, audit, emit } = tools
+  const ids = materials.map((material) => material.id)
+  const byId = new Map(materials.map((material) => [material.id, material]))
+  // The profiles FOR UPDATE, in id order (a concurrent evaluation of the same materials waits, never deadlocks).
+  const sorted = [...ids].sort()
+  await tx.$queryRaw`SELECT "id" FROM "MaterialComplianceProfile" WHERE "id" = ANY(${sorted}::uuid[]) ORDER BY "id" FOR UPDATE`
+  const evaluated = await evaluateAll(tx, materials, todayOf(now))
+  const before = await profilesOf(tx, ids)
+  const profiles = []
+  for (const id of ids) {
+    const material = byId.get(id)!
+    const { evaluation } = evaluated.get(id)!
+    const previous = before.get(id)
+    const svhc = evaluation.svhc
+    const takesSvhc = svhc.source === 'DECLARATION' && svhc.aboveThreshold !== null && svhc.listVersion !== null
+    const data = {
+      applicableRuleIds: [...evaluation.applicableRuleIds],
+      testsNeeded: [...evaluation.testsNeeded],
+      declarationsNeeded: [...evaluation.declarationsNeeded],
+      evaluatedAt: now,
+      state: evaluation.state,
+      stateReason: evaluation.stateReason,
+      ...(takesSvhc ? { svhcAboveThreshold: svhc.aboveThreshold, svhcListVersionId: svhc.listVersion!.id, svhcSubstanceIds: [...svhc.substanceIds] } : {}),
+      updatedAt: now,
+    }
+    const row = previous
+      ? await tx.materialComplianceProfile.update({ where: { id }, data: { ...data, version: { increment: 1 } }, select: PROFILE_SELECT })
+      : await tx.materialComplianceProfile.create({ data: { id, itemId: id, ...data, createdAt: now, createdById }, select: PROFILE_SELECT })
+    const shown = (profile: typeof row | undefined) =>
+      profile
+        ? {
+            state: profile.state,
+            stateReason: profile.stateReason,
+            applicableRuleIds: [...profile.applicableRuleIds],
+            testsNeeded: [...profile.testsNeeded],
+            declarationsNeeded: [...profile.declarationsNeeded],
+            svhcAboveThreshold: profile.svhcAboveThreshold,
+            svhcListVersionId: profile.svhcListVersionId,
+            svhcSubstanceIds: [...profile.svhcSubstanceIds],
+          }
+        : null
+    audit({ action: 'compliance.substances.evaluate', recordType: 'MaterialComplianceProfile', recordId: id, companyId: material.companyId, before: shown(previous), after: shown(row) })
+    emit({
+      type: 'compliance_substances.profile_evaluated',
+      subject: id,
+      companyId: material.companyId,
+      payload: {
+        itemId: id,
+        state: evaluation.state,
+        previousState: (previous?.state as 'INCOMPLETE' | 'COMPLETE' | 'BLOCKED' | undefined) ?? null,
+        rules: evaluation.applicableRuleIds.length,
+        testsNeeded: [...evaluation.testsNeeded],
+        declarationsNeeded: [...evaluation.declarationsNeeded],
+        svhcAboveThreshold: row.svhcAboveThreshold,
+      },
+    })
+    profiles.push({
+      itemId: id,
+      code: material.code,
+      name: material.name,
+      state: evaluation.state,
+      previousState: (previous?.state as 'INCOMPLETE' | 'COMPLETE' | 'BLOCKED' | undefined) ?? null,
+      stateReason: evaluation.stateReason,
+      applicableRules: evaluation.applicableRuleIds.length,
+      testsNeeded: [...evaluation.testsNeeded],
+      declarationsNeeded: [...evaluation.declarationsNeeded],
+      svhcAboveThreshold: row.svhcAboveThreshold,
+      changed: !previous || previous.state !== row.state || !sameList(previous.applicableRuleIds, row.applicableRuleIds) || previous.svhcAboveThreshold !== row.svhcAboveThreshold,
+      version: row.version,
+    })
+  }
+  return profiles
 }
 
 export interface StyleQuery {

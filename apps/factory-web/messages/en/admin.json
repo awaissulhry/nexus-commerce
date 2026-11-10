@@ -1678,6 +1678,7 @@
     "compliance_techfiles_manage": "Keep technical files: link and review each Annex III point's evidence, draft the risk assessment, plan and record production-control tests, build evidence packs",
     "compliance_techfiles_sign": "Sign a product risk assessment yourself (with a fresh code)",
     "compliance_techfiles_share": "Send an evidence pack by a read-only link with a password and an end date (with a fresh code)",
+    "compliance_supplierDeclarations_manage": "Ask suppliers for declarations (REACH SVHC, RSL, PFAS-free, nickel release, chromium VI), remind them, record and decide their answers",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",

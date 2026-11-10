@@ -170,6 +170,8 @@ import { events as complianceSubstances } from '../compliance-substances/events'
 import { events as certificatesDepth } from '../certificates-depth/events'
 // B-W2b-251: technical files (a file, an Annex III item, a risk assessment, a production-control test, an evidence pack changed).
 import { events as complianceTechfiles } from '../compliance-techfiles/events'
+// B-W2b-256: material profiles, supplier declarations and test plans.
+import { events as complianceMaterialTests } from '../compliance-material-tests/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -406,7 +408,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-246
   ...salesSamples,
   // B-W2b-251
-  ...complianceTechfiles] as const satisfies readonly EventDefinition[]
+  ...complianceTechfiles,
+  // B-W2b-256
+  ...complianceMaterialTests] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
