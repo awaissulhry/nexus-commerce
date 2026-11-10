@@ -154,6 +154,8 @@ import { SUBSTANCES_DEFINITIONS, SUBSTANCES_PERMISSIONS } from '../../compliance
 import { SALES_SAMPLES_DEFINITIONS, SALES_SAMPLES_PERMISSIONS } from '../../sales/samples/permissions'
 // B-W2b-251: technical files (compliance.techfiles.manage | sign | share); reading is compliance.certificates.view.
 import { TECHFILES_DEFINITIONS, TECHFILES_PERMISSIONS } from '../../compliance/techfiles/permissions'
+// B-W2b-257: the DoC generator (compliance.declarations.generate | check | pack); reading is compliance.certificates.view.
+import { DECLARATIONS_DEFINITIONS, DECLARATIONS_PERMISSIONS } from '../../compliance/declarations/permissions'
 // B-W2b-260: recall, withdrawal and authority (compliance.recall.manage | send); reading is compliance.register.view.
 import { RECALL_DEFINITIONS, RECALL_PERMISSIONS } from '../../compliance/recall/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -822,6 +824,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SALES_SAMPLES_DEFINITIONS,
   // B-W2b-251: technical files (area `compliance`, declared above).
   TECHFILES_DEFINITIONS,
+  // B-W2b-257: the DoC generator (area `compliance`, declared above).
+  DECLARATIONS_DEFINITIONS,
   // B-W2b-260: recall, withdrawal and authority (area `compliance`, declared above).
   RECALL_DEFINITIONS,
 ])
@@ -1094,6 +1098,8 @@ for (const name of SUBSTANCES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of SALES_SAMPLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-251: technical files.
 for (const name of TECHFILES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-257: the DoC generator.
+for (const name of DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-260: recall, withdrawal and authority.
 for (const name of RECALL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

@@ -198,7 +198,8 @@ export function documentFactsOf(row: DocumentRow, files: readonly FileRow[]): Do
 /** The style's compliance documents (optionally one kind and language) with their files. */
 export async function readDocuments(client: Reader, styleId: string, filter: { kind?: DocumentKind | undefined; language?: string | undefined } = {}) {
   const rows = await client.complianceDocument.findMany({
-    where: { styleId, ...(filter.kind ? { kind: filter.kind } : {}), ...(filter.language ? { language: filter.language } : {}) },
+    // B-W2b-257: the signed documents only; a generated draft (origin GENERATED, GATE-PPE-TEXTS) is never W1's signed DoC.
+    where: { styleId, origin: 'SIGNED', ...(filter.kind ? { kind: filter.kind } : {}), ...(filter.language ? { language: filter.language } : {}) },
     select: DOCUMENT_SELECT,
     orderBy: [{ kind: 'asc' }, { language: 'asc' }, { revision: 'desc' }],
   })
