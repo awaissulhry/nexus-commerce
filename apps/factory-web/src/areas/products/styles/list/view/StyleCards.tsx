@@ -33,6 +33,8 @@ export interface StyleCardsProps {
   recordHref: (row: StyleRow) => string
   onDuplicate?: (row: StyleRow) => void
   duplicateHeld: string | null
+  /** B-W2b-243: ⋯ Tech pack PDF (the PDF window, a new tab); null without the BOM's right. */
+  techPackHref?: ((row: StyleRow) => string) | null
   more: { label: string; onMore: () => void } | null
   /** Design cases: select mode already on. */
   selectMode?: boolean
@@ -44,7 +46,7 @@ export interface StyleCardsProps {
  * revision, range and SKUs, and the list price with the price grain — with a toolbar of search, Filters (n) (the filter
  * sheet) and Select: select mode puts a box on each card, Select all, and the same bulk actions as the grid.
  */
-export function StyleCards({ rows, state, count, search, filterCount, onFilters, selected, onSelected, bulk, prices, showPrice, recordHref, onDuplicate, duplicateHeld, more, selectMode }: StyleCardsProps) {
+export function StyleCards({ rows, state, count, search, filterCount, onFilters, selected, onSelected, bulk, prices, showPrice, recordHref, onDuplicate, duplicateHeld, techPackHref, more, selectMode }: StyleCardsProps) {
   const t = useT('products')
   const locale = useLocale()
   const [selecting, setSelecting] = useState(selectMode ?? selected.length > 0)
@@ -135,6 +137,7 @@ export function StyleCards({ rows, state, count, search, filterCount, onFilters,
                   items={[
                     { id: 'open', label: t('list.open'), href: recordHref(row) },
                     { id: 'duplicate', label: t('list.duplicate'), disabled: !!duplicateHeld, description: duplicateHeld ?? undefined, onSelect: () => onDuplicate?.(row) },
+                    ...(techPackHref ? [{ id: 'techpack', label: t('list.techPackPdf'), href: techPackHref(row), target: '_blank' as const }] : []),
                   ]}
                 />
               </li>

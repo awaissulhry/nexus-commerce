@@ -35,15 +35,26 @@ export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
  * reads it. A released revision is frozen: its tabs say so and offer the draft (or Start revision N). It draws one view
  * model and fetches nothing (StyleRecord.tsx loads it).
  */
-export function StyleRecordView({ model, actions, panels }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode }) {
+export function StyleRecordView({
+  model,
+  actions,
+  panels,
+  techPack,
+}: {
+  model: StyleRecordViewModel
+  actions?: StyleRecordActions
+  panels?: ReactNode
+  /** B-W2b-243: the Tech pack tab's body (the container mounts it while the tab is open). */
+  techPack?: ReactNode
+}) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks']}>
-      <StyleRecord model={model} actions={actions} panels={panels} />
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack']}>
+      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} />
     </WithMessages>
   )
 }
 
-function StyleRecord({ model, actions, panels }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode }) {
+function StyleRecord({ model, actions, panels, techPack }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
   const t = useT('products')
   const listHref = `${model.prefix}/products/styles`
   const loaded = model.style
@@ -88,11 +99,13 @@ function StyleRecord({ model, actions, panels }: { model: StyleRecordViewModel; 
       </div>
     )
   }
-  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} />
 }
 
-function ReadyRecord({ style, model, actions, panels }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode }) {
+function ReadyRecord({ style, model, actions, panels, techPack }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
   const t = useT('products')
+  // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
+  const tt = useT('products-techpack')
   const locale = useLocale()
   const recordHref = `${model.prefix}/products/styles/${style.id}`
   const revision = revisionInView(style.revisions, model.revisionId)
@@ -171,6 +184,8 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
       ? [{ id: 'reactivate', label: t('action.reactivate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onReactivate?.() }]
       : [{ id: 'archive', label: t('action.archive'), tone: 'danger' as const, disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDialog?.({ kind: 'archive' }) }]),
     { id: 'duplicate', label: t('action.duplicate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicate?.() },
+    // B-W2b-243 (design pop:styles.techpackPdf "Tech pack tab · band overflow").
+    ...(tabs.includes('techpack') && revision ? [{ id: 'techpack', label: tt('techpack.band.make'), href: `${tabHref('techpack')}&make=1` }] : []),
     {
       id: 'copy',
       label: t('action.copyCode'),
@@ -315,6 +330,9 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
               <PrepacksSection model={model} actions={actions?.prepacks} />
               {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
             </div>
+          ) : model.tab === 'techpack' ? (
+            // B-W2b-243: the Tech pack tab (SCR-305), mounted by the container.
+            (techPack ?? null)
           ) : model.tab === 'activity' ? (
             (activity ?? <p className="fw-st-hint">{t('record.noPanels')}</p>)
           ) : (
