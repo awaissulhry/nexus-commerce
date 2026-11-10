@@ -18,7 +18,9 @@ import { defineMachine } from '../../state/machine'
  * Pure: the facts are passed in (apps/factory-api's modules/compliance/register reads them).
  */
 
-export const REGISTER_KINDS = ['COMPLAINT', 'NON_CONFORMITY', 'RECALL'] as const
+export const REGISTER_KINDS = ['COMPLAINT', 'NON_CONFORMITY', 'RECALL',
+  // B-W2b-260 (on B-W2b-222's PpeRegisterKind): a withdrawal from the market, and an entry opened from an authority request.
+  'WITHDRAWAL', 'AUTHORITY_REQUEST'] as const
 export type RegisterKind = (typeof REGISTER_KINDS)[number]
 
 export const REGISTER_STATUSES = ['OPEN', 'CLOSED'] as const
@@ -41,10 +43,14 @@ export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease'
   'Complaint',
   // B-W2b-F1 (Z4:02): a customer's return (a protective garment returned for a defect, or found defective or misused at
   // its inspection, opens its return's one entry; the register guard accepts it since …_followups_f1_w2b_guards).
-  'ReturnAuthorisation'] as const
+  'ReturnAuthorisation',
+  // B-W2b-260: an authority's request (Reg. (EU) 2019/1020 art. 4(3)) opens its one entry (the register guard accepts it since …_recall_claims_w2b_guards).
+  'AuthorityRequest'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
 
-export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall' })
+export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall',
+  // B-W2b-260
+  WITHDRAWAL: 'withdrawal', AUTHORITY_REQUEST: 'authority request' })
 export const RISK_WORDS: Readonly<Record<RegisterRisk, string>> = Object.freeze({ NO: 'no risk', ASSESSING: 'risk being assessed', YES: 'may present a risk' })
 
 /** The law each duty rests on, for the screens' LawRef chips. */
@@ -163,6 +169,10 @@ export function entryProblems(
   }
   if (entry.kind === 'RECALL' && !namesGarments(entry)) {
     problems.push({ path: 'body/batchNumbers', message: 'A recall names what it calls back: batch numbers, serials, material lots, work orders or shipments.' })
+  }
+  // B-W2b-260: a withdrawal names what it takes off the market, as a recall names what it calls back.
+  if (entry.kind === 'WITHDRAWAL' && !namesGarments(entry)) {
+    problems.push({ path: 'body/batchNumbers', message: 'A withdrawal names what it takes off the market: batch numbers, serials, material lots, work orders or shipments.' })
   }
   return problems
 }
