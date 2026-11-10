@@ -183,6 +183,8 @@ model Item {
   bomLines        BomLine[]
   // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
   coverage        CertificateCoverage[]
+  // W2b-4 recall.prisma (wave 33/33): the sustainability claims about it.
+  sustainabilityClaims SustainabilityClaim[] @relation("SustainabilityClaimItem")
   // W2b-4 sizes-depth.prisma (wave 27/33): the pockets of style revisions it goes in (a PROTECTOR).
   protectorPlacements ProtectorPlacement[]
   // W2b leather.prisma (wave 12/16): what each grade means for it, and its shade groups.
@@ -538,6 +540,11 @@ model Style {
   pieceRateTables     PieceRateTable[]
   // quality.prisma: the PPE register's entries about it.
   ppeRegisterEntries  PpeRegisterEntry[]
+  // W2b-4 recall.prisma (wave 33/33): its recalls and withdrawals, the authority requests about it, its sustainability
+  // claims.
+  recallActions        RecallAction[]
+  authorityRequests    AuthorityRequest[]    @relation("AuthorityRequestStyle")
+  sustainabilityClaims SustainabilityClaim[] @relation("SustainabilityClaimStyle")
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances     Nonconformance[]
   // W2b inspection-plans.prisma (wave 10/16): the AQL profiles assigned to it.

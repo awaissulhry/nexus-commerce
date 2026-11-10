@@ -1,0 +1,511 @@
+// Recall, authority and claims (W2b-4, schema wave 33/33, B-W2b-222; features PRD-380, PRD-387, PRD-388, PRD-390): what
+// happens after a garment left. The register entry of W1 (quality.prisma PpeRegisterEntry; Reg. (EU) 2016/425 art. 8(4))
+// stays the one record each of them hangs on: the notice to a market surveillance authority when the PPE does not conform
+// or presents a risk (art. 8(8)), a recall or a withdrawal with its scope from the trace, its public notice per language
+// (first on the public DoC page) and its progress per customer, the distributors told one by one and their answers, and
+// a request from an authority (Reg. (EU) 2019/1020 art. 4(3)) with what is asked, by when and the evidence sent. W1 keeps
+// the dates typed by hand on the entry (distributorsInformedAt, authorityNotifiedAt); these rows say what was sent, to
+// whom and what came back, and B-W2b-260 keeps the entry's dates in step. Beside them, the register of sustainability
+// claims (Dir. (EU) 2024/825): the words per language, what the claim covers, the files that prove it, until when, the
+// approval before use, and where each claim is used. Green claims are built switched off (Owner answer 11-09, question
+// Q23): the seed's requirement CLAIM-EVIDENCE (compliance-rules.prisma) is OFF with the reason until a style or a market
+// needs them. apps/factory-api's modules/compliance/recall and claims (B-W2b-260, -264) write these tables through
+// command(); the hand-written …_recall_claims_w2b_guards migration holds their rules for every login.
+//
+// Nothing here goes to an authority, a distributor or the public by itself: every notice is sent by a person (sentById),
+// and an e-mail to a distributor goes through the outbox (EmailOutbound names this record). Records of parallel steps
+// are named by record type + id (the evidence pack, B-W2b-218's EvidencePack; where a claim is used), a market by its
+// code (compliance-rules.prisma MarketProfile.code) and a phrase by its key (Phrase.key).
+//
+// Who sees what (ownership/recall.json): the office reads and writes; the floor, the portal and links read nothing (the
+// public DoC page reads a published notice in the tenant's system scope, as it reads the DoC). No money column, no
+// personal data beyond who wrote a row and the contact a distributor was reached at.
+
+/// How a notice went to an authority, or how an authority's request came.
+enum AuthorityChannel {
+  /// The EU Safety Business Gateway (Safety Gate), for products that reach consumers.
+  SAFETY_BUSINESS_GATEWAY
+  /// The authority's own web form or portal.
+  AUTHORITY_SITE
+  /// Posta elettronica certificata.
+  PEC
+  EMAIL
+  POST
+  /// Handed over or asked for during an inspection visit.
+  INSPECTION
+  OTHER
+}
+
+/// What an authority notice reports (Reg. (EU) 2016/425 art. 8(8)).
+enum AuthorityNoticeDecision {
+  /// The PPE does not conform, without a risk found.
+  NOT_CONFORMING
+  /// The PPE presents a risk: the authorities of every market it was made available in are told at once.
+  RISK
+}
+
+/// DRAFT → SENT | CANCELLED. SENT and CANCELLED are final (a sent notice only gains the authority's reference and its
+/// file, once).
+enum AuthorityNoticeStatus {
+  DRAFT
+  SENT
+  CANCELLED
+}
+
+/// A notice to a market surveillance authority (PRD-387; Reg. (EU) 2016/425 art. 8(8)): of a register entry, to the
+/// authority of one market (a market code), how it goes, what it reports (not conforming, or a risk), its words per
+/// language (drafted from the entry: the product, the risk, the corrective action), when and by whom it was sent (a
+/// person: nothing goes to an authority by itself), the authority's reference and the notice as sent (a file of this
+/// notice). Drafted, sent once, then frozen; a draft not needed is cancelled; never deleted.
+model AuthorityNotice {
+  id              String                  @id @db.Uuid
+  tenantId        String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The register entry's company (the reference pins it). Never changes.
+  companyId       String                  @db.Uuid
+  /// The register entry it reports. Never changes.
+  registerEntryId String                  @db.Uuid
+  /// The market whose authority it goes to ("IT", "DE"): a market code of the tenant. Never changes.
+  marketCode      String
+  /// The authority, as it is called (1 to 300 characters).
+  authorityName   String
+  channel         AuthorityChannel
+  decision        AuthorityNoticeDecision
+  /// What it says, per language (BCP 47 → words, 1 to 20000 characters each, line breaks allowed; at least one).
+  words           Json
+  status          AuthorityNoticeStatus   @default(DRAFT)
+  /// SENT: when, and the office user who sent it (both exactly when SENT).
+  sentAt          DateTime?               @db.Timestamptz(3)
+  sentById        String?                 @db.Uuid
+  /// The authority's reference of the notice (1 to 200 characters): only once SENT, filled in once.
+  reference       String?
+  /// The notice as sent (a file of record type "AuthorityNotice" and this id): filled in once.
+  fileId          String?                 @db.Uuid
+  /// CANCELLED: when and why (1 to 500 characters), exactly then.
+  cancelledAt     DateTime?               @db.Timestamptz(3)
+  cancelReason    String?
+  note            String?
+  version         Int                     @default(1)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                 @db.Uuid
+
+  registerEntry PpeRegisterEntry @relation(fields: [tenantId, companyId, registerEntryId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file          StoredFile?      @relation("AuthorityNoticeFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An entry's notices; the tile "authority notices due or sent".
+  @@index([tenantId, registerEntryId])
+  @@index([tenantId, status])
+}
+
+/// What a recall action is (PRD-388; the PPE Regulation's guidelines): a recall takes the PPE back from the end users; a
+/// withdrawal stops it in the distribution chain.
+enum RecallKind {
+  RECALL
+  WITHDRAWAL
+}
+
+/// DRAFT → ACTIVE (started) → CLOSED; DRAFT → CANCELLED. CLOSED and CANCELLED are final.
+enum RecallStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+/// A recall or a withdrawal (PRD-388): of a register entry and its style, numbered from the company's RECALL series; its
+/// scope from the trace of W2a (the batches, serials, work orders and shipments it calls back), or the whole style when
+/// the batches cannot be told apart (the PPE guidelines: without batch distinction every product of the type is recalled);
+/// the public notice per language (what is wrong, what to do, whom to contact), shown first on the public DoC page of
+/// every garment in its scope from the time it is published until it is taken down; started and closed by a person. The
+/// scope is set while it is a DRAFT and only widens once started. The holds on what is still here are QualityHold rows
+/// whose source is this action (B-W2b-114, -260); the progress per customer is RecallProgress. Never deleted.
+model RecallAction {
+  id                 String       @id @db.Uuid
+  tenantId           String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The register entry's company (the reference pins it). Never changes.
+  companyId          String       @db.Uuid
+  /// The register entry it carries out. Never changes.
+  registerEntryId    String       @db.Uuid
+  /// From the company's RECALL series (RCL-…), unique in the company; given at insert, never changed.
+  number             String
+  /// Never changes.
+  kind               RecallKind
+  /// The register entry's style. Never changes.
+  styleId            String       @db.Uuid
+  /// The scope: every garment of the style (true), or what the lists name (at least one of them): batch numbers and
+  /// serials as the trace gives them (1 to 100 characters each), work orders of the style and shipments of the company,
+  /// each once. Set while DRAFT; once started it only widens.
+  wholeStyle         Boolean      @default(false)
+  batchNumbers       String[]     @default([])
+  serials            String[]     @default([])
+  workOrderIds       String[]     @default([]) @db.Uuid
+  shipmentIds        String[]     @default([]) @db.Uuid
+  /// The public notice per language: { "<BCP 47>": { "title": …, "problem": …, "action": …, "contact": … } } (a title of 1
+  /// to 200 characters, the other three 1 to 2000, line breaks allowed); null: none yet. Published: shown on the public DoC
+  /// page from noticePublishedAt (set once, while ACTIVE, by a person) until noticeWithdrawnAt (set once, not before it);
+  /// once published its words never change (a language may be added).
+  publicNotice       Json?
+  noticePublishedAt  DateTime?    @db.Timestamptz(3)
+  noticePublishedById String?     @db.Uuid
+  noticeWithdrawnAt  DateTime?    @db.Timestamptz(3)
+  status             RecallStatus @default(DRAFT)
+  /// ACTIVE (and after): when it started and the office user who started it (both, exactly from ACTIVE on).
+  startedAt          DateTime?    @db.Timestamptz(3)
+  startedById        String?      @db.Uuid
+  /// CLOSED: when, by whom and how it ended in words (1 to 2000 characters), exactly then.
+  closedAt           DateTime?    @db.Timestamptz(3)
+  closedById         String?      @db.Uuid
+  closeNote          String?
+  /// CANCELLED (from DRAFT): when and why (1 to 500 characters), exactly then.
+  cancelledAt        DateTime?    @db.Timestamptz(3)
+  cancelReason       String?
+  note               String?
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?      @db.Uuid
+
+  registerEntry      PpeRegisterEntry    @relation(fields: [tenantId, companyId, registerEntryId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style              Style               @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  progress           RecallProgress[]
+  distributorNotices DistributorNotice[]
+
+  @@unique([tenantId, companyId, number])
+  @@unique([tenantId, id])
+  // The target of a distributor notice's reference: an action of the notice's own register entry.
+  @@unique([tenantId, registerEntryId, id])
+  // A style's actions (the public DoC page's notice), and the tile "recalls in progress".
+  @@index([tenantId, styleId])
+  @@index([tenantId, status])
+}
+
+/// How far a recall or withdrawal got with one customer (PRD-388): of the action, the customer (and one of its shipments,
+/// when it is followed per shipment), how many garments of the scope it received, and of those how many came back,
+/// were repaired where they are, were destroyed, and are still out (sent = returned + repaired + destroyed + still out).
+/// Written while the action is a DRAFT or ACTIVE, frozen once it is closed or cancelled; removed only while it is a
+/// DRAFT. One row per action, customer and shipment (a row of a whole customer, without a shipment, is the API's: see
+/// the notes).
+model RecallProgress {
+  id             String   @id @db.Uuid
+  tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  recallActionId String   @db.Uuid
+  /// The customer (or distributor) that received garments of the scope: a party of the action's company or tenant-wide.
+  /// Never changes.
+  partyId        String   @db.Uuid
+  /// One of its shipments of the action's company (no foreign key: a Shipment is keyed by its site; the trigger checks
+  /// it); null: the customer as a whole. Never changes.
+  shipmentId     String?  @db.Uuid
+  /// Garments of the scope it received, and what became of them; each 0 or more, adding up.
+  unitsSent      Int
+  unitsReturned  Int      @default(0)
+  unitsRepaired  Int      @default(0)
+  unitsDestroyed Int      @default(0)
+  unitsStillOut  Int
+  note           String?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?  @db.Uuid
+
+  recallAction RecallAction @relation(fields: [tenantId, recallActionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party        Party        @relation("RecallProgressParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One row per action, customer and shipment (a null shipment is not compared: the whole customer's row is the API's).
+  @@unique([tenantId, recallActionId, partyId, shipmentId])
+  @@index([tenantId, partyId])
+}
+
+/// How a distributor or B2B customer is told (B-W1-43's "Inform distributors"; PRD-388).
+enum DistributorNoticeChannel {
+  /// An e-mail through the outbox (EmailOutbound names this notice).
+  EMAIL
+  /// A message in the customer portal.
+  PORTAL
+  /// A one-off link of the party.
+  LINK
+  /// A phone call (the words are what was said).
+  PHONE
+}
+
+/// DRAFT → SENT | CANCELLED; SENT → ANSWERED | FAILED. ANSWERED, FAILED and CANCELLED are final (a failed one is sent
+/// again as a new notice).
+enum DistributorNoticeStatus {
+  DRAFT
+  SENT
+  ANSWERED
+  FAILED
+  CANCELLED
+}
+
+/// One distributor or B2B customer told about a register entry (Reg. (EU) 2016/425 art. 8(4); B-W1-43: "inform
+/// distributors" records a date and sends nothing): of the entry (and of its recall or withdrawal, when it tells of one),
+/// to a party, at a contact (an e-mail address, a phone number), by which way, in which language and with which words;
+/// when and by whom it was sent (a person), and what came back: the answer and when, or why it failed. What was sent never
+/// changes once it left; never deleted.
+model DistributorNotice {
+  id              String                   @id @db.Uuid
+  tenantId        String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The register entry's company (the reference pins it). Never changes.
+  companyId       String                   @db.Uuid
+  /// The register entry it tells of. Never changes.
+  registerEntryId String                   @db.Uuid
+  /// The recall or withdrawal of that entry it tells of; null: the entry itself.
+  recallActionId  String?                  @db.Uuid
+  /// The distributor or customer told: a party of the company or tenant-wide. Never changes.
+  partyId         String                   @db.Uuid
+  channel         DistributorNoticeChannel
+  /// Who at the party (1 to 200 characters), and where: an e-mail address (EMAIL, required) or a phone number (PHONE,
+  /// required); optional for PORTAL and LINK.
+  contactName     String?
+  contact         String?
+  /// The language of the words (ISO 639: "it", "de").
+  language        String
+  /// The subject (1 to 300 characters, one line) and the words (1 to 20000 characters).
+  subject         String?
+  message         String
+  /// LINK: the one-off link of the party it went through, set once.
+  linkId          String?                  @db.Uuid
+  status          DistributorNoticeStatus  @default(DRAFT)
+  /// From SENT on: when and the office user who sent it.
+  sentAt          DateTime?                @db.Timestamptz(3)
+  sentById        String?                  @db.Uuid
+  /// ANSWERED: when, what they answered (1 to 4000 characters) and who answered (1 to 200 characters, optional).
+  answeredAt      DateTime?                @db.Timestamptz(3)
+  answer          String?
+  answeredByName  String?
+  /// FAILED: when and why (1 to 500 characters: a bounce, a wrong number).
+  failedAt        DateTime?                @db.Timestamptz(3)
+  failureReason   String?
+  /// CANCELLED (from DRAFT): when and why (1 to 500 characters).
+  cancelledAt     DateTime?                @db.Timestamptz(3)
+  cancelReason    String?
+  note            String?
+  version         Int                      @default(1)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                  @db.Uuid
+
+  registerEntry PpeRegisterEntry @relation(fields: [tenantId, companyId, registerEntryId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and registerEntryId.
+  recallAction  RecallAction?    @relation(fields: [tenantId, registerEntryId, recallActionId], references: [tenantId, registerEntryId, id], onDelete: Restrict, onUpdate: Restrict)
+  party         Party            @relation("DistributorNoticeParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not SetNull: that would also clear tenantId and partyId.
+  link          OneOffLink?      @relation("DistributorNoticeLink", fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An entry's log ("3 of 5 informed"), and a party's notices.
+  @@index([tenantId, registerEntryId, status])
+  @@index([tenantId, partyId])
+}
+
+/// OPEN → ANSWERED | CANCELLED. ANSWERED and CANCELLED are final.
+enum AuthorityRequestStatus {
+  OPEN
+  ANSWERED
+  CANCELLED
+}
+
+/// A request from a market surveillance authority (PRD-390; Reg. (EU) 2019/1020 art. 4(3); Reg. (EU) 2016/425 art. 8(9)):
+/// numbered from the company's AUTHORITY_REQUEST series; the authority, its market and its reference, how and when it
+/// came, the style (and batches) it is about, what it asks, by when; then the answer: when, by whom (a person), what was
+/// sent in words and the evidence pack by record type + id (B-W2b-218's EvidencePack); the register entry that keeps it
+/// (of kind AUTHORITY_REQUEST, or the entry it is about). Corrected while OPEN, frozen once answered or cancelled; never
+/// deleted.
+model AuthorityRequest {
+  id                 String                 @id @db.Uuid
+  tenantId           String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company asked. Never changes.
+  companyId          String                 @db.Uuid
+  /// From the company's AUTHORITY_REQUEST series (AR-…), unique in the company; given at insert, never changed.
+  number             String
+  /// The authority (1 to 300 characters), its market (a market code of the tenant) and its own reference (1 to 200).
+  authorityName      String
+  marketCode         String
+  authorityReference String?
+  channel            AuthorityChannel
+  /// When it came (not in the future).
+  receivedAt         DateTime               @db.Timestamptz(3)
+  /// What it is about: a style of the company (or tenant-wide), and batch numbers of it (1 to 100 characters each, each
+  /// once, only with a style); neither: the company's PPE in general.
+  styleId            String?                @db.Uuid
+  batchNumbers       String[]               @default([])
+  /// What is asked, in words (1 to 4000 characters), and the day it is due (not before the day it came).
+  request            String
+  dueOn              DateTime               @db.Date
+  status             AuthorityRequestStatus @default(OPEN)
+  /// ANSWERED: when, the office user who answered and what was sent, in words (1 to 4000 characters), exactly then.
+  answeredAt         DateTime?              @db.Timestamptz(3)
+  answeredById       String?                @db.Uuid
+  answerSummary      String?
+  /// The evidence sent: its record type (a model name: "EvidencePack") and id, both or neither.
+  evidenceType       String?
+  evidenceId         String?                @db.Uuid
+  /// The register entry that keeps it (of the company, and of its style when it names one): set once.
+  registerEntryId    String?                @db.Uuid
+  /// CANCELLED: when and why (1 to 500 characters: logged by mistake, withdrawn by the authority), exactly then.
+  cancelledAt        DateTime?              @db.Timestamptz(3)
+  cancelReason       String?
+  note               String?
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?                @db.Uuid
+
+  company       Company           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and companyId).
+  style         Style?            @relation("AuthorityRequestStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  registerEntry PpeRegisterEntry? @relation(fields: [tenantId, companyId, registerEntryId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, number])
+  // The open requests by due day (the Countdown and its tile), and an entry's requests.
+  @@index([tenantId, status, dueOn])
+  @@index([tenantId, registerEntryId])
+}
+
+/// What a sustainability claim says (Dir. (EU) 2024/825; PRD-380).
+enum SustainabilityClaimKind {
+  /// Recycled content ("made with 50 % recycled polyester").
+  RECYCLED_CONTENT
+  /// Organic content.
+  ORGANIC_CONTENT
+  /// Bio-based content.
+  BIO_BASED
+  /// Where and how a material was sourced ("leather from a tannery rated by LWG").
+  RESPONSIBLE_SOURCING
+  /// Free of a substance ("made without PFAS").
+  SUBSTANCE_FREE
+  DURABILITY
+  REPAIRABILITY
+  /// A climate claim (one based on offsetting is not allowed: Dir. (EU) 2024/825).
+  CARBON
+  SOCIAL
+  /// A sustainability label of a certification scheme.
+  CERTIFICATION_LABEL
+  OTHER
+}
+
+/// What a sustainability claim covers.
+enum SustainabilityClaimScope {
+  /// The company's products as a whole.
+  COMPANY
+  /// One style.
+  STYLE
+  /// One material.
+  MATERIAL
+}
+
+/// DRAFT → APPROVED → WITHDRAWN; DRAFT → WITHDRAWN. WITHDRAWN is final; a changed claim is a new one that supersedes it.
+enum SustainabilityClaimStatus {
+  DRAFT
+  APPROVED
+  WITHDRAWN
+}
+
+/// A sustainability claim (PRD-380; Dir. (EU) 2024/825, from 27 September 2026: a claim needs its evidence): its code in
+/// the company, its kind, its words per language (and the approved phrase it is printed from, by key), what it covers (the
+/// company, a style or a material, and in words which part), the files that prove it (StoredFile ids of the company or
+/// tenant-wide: a certificate's PDF, a test report, a tannery's certificate), until when that evidence holds, the approval
+/// before use (with its time and approver), and its withdrawal. Approved only with its evidence and not after it expired;
+/// once approved it never changes but its withdrawal. "Blocked: evidence expired" is a reading (validUntil before today),
+/// not a status. Where it is used is ClaimUse. Never deleted.
+model SustainabilityClaim {
+  id              String                    @id @db.Uuid
+  tenantId        String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  companyId       String                    @db.Uuid
+  /// The office's code, unique in the company ("CL-0004"): a letter or digit, then letters, digits, ".", "_" or "-", up to
+  /// 60. Never changes.
+  code            String
+  kind            SustainabilityClaimKind
+  /// The words per language (BCP 47 → words of one line, 1 to 1000 characters; at least one).
+  wording         Json
+  /// The phrase it is printed from (compliance-rules.prisma Phrase.key of the tenant), when it has one.
+  phraseKey       String?
+  scope           SustainabilityClaimScope
+  /// STYLE: the style; MATERIAL: the material (not a FINISHED garment); exactly as the scope says, of the company or
+  /// tenant-wide. Which part it covers, in words (up to 1000 characters).
+  styleId         String?                   @db.Uuid
+  itemId          String?                   @db.Uuid
+  scopeNote       String?
+  /// The evidence: files of the company or tenant-wide, not deleted, each once, at most 50; at least one to approve it.
+  evidenceFileIds String[]                  @default([]) @db.Uuid
+  /// The last day the evidence holds (null: it does not expire); not before the day it is approved.
+  validUntil      DateTime?                 @db.Date
+  status          SustainabilityClaimStatus @default(DRAFT)
+  /// When it was approved and by whom (both, from APPROVED on; kept when it is withdrawn).
+  approvedAt      DateTime?                 @db.Timestamptz(3)
+  approvedById    String?                   @db.Uuid
+  /// WITHDRAWN: when, by whom (optional) and why (1 to 500 characters), exactly then.
+  withdrawnAt     DateTime?                 @db.Timestamptz(3)
+  withdrawnById   String?                   @db.Uuid
+  withdrawReason  String?
+  /// The earlier claim of the company this one replaces. Never changes.
+  supersedesId    String?                   @db.Uuid
+  note            String?
+  version         Int                       @default(1)
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                   @db.Uuid
+
+  company      Company               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and companyId).
+  style        Style?                @relation("SustainabilityClaimStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item         Item?                 @relation("SustainabilityClaimItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes   SustainabilityClaim?  @relation("SustainabilityClaimSupersedes", fields: [tenantId, companyId, supersedesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy SustainabilityClaim[] @relation("SustainabilityClaimSupersedes")
+  uses         ClaimUse[]
+
+  @@unique([tenantId, companyId, code])
+  @@unique([tenantId, id])
+  // The target of a later claim's reference: a claim of the same company.
+  @@unique([tenantId, companyId, id])
+  // The tiles (approved, drafts, expired evidence) and a style's or a material's claims.
+  @@index([tenantId, status, validUntil])
+  @@index([tenantId, styleId])
+  @@index([tenantId, itemId])
+}
+
+/// Where a claim is used (PRD-380).
+enum ClaimUseKind {
+  /// On a label (a LabelTemplate, a label artwork).
+  LABEL
+  /// On a style (its texts, its tech pack).
+  STYLE
+  /// In a catalogue or a catalogue export.
+  CATALOGUE
+  /// In web shop texts.
+  WEB_SHOP
+  OTHER
+}
+
+/// One place a claim is used (PRD-380: labels, styles, catalogues, web shop texts), by record type + id (a STYLE use is a
+/// Style of the claim's company or tenant-wide), with how it is named there; added only while the claim is APPROVED and
+/// its evidence holds; ended (endedAt, once) when it is no longer used, then frozen. An expired or withdrawn claim's
+/// live uses are what must change. Never deleted.
+model ClaimUse {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Never changes.
+  claimId     String       @db.Uuid
+  kind        ClaimUseKind
+  /// The record it is used on: its model name and id. Never change.
+  recordType  String
+  recordId    String       @db.Uuid
+  /// How it is named there ("Hang tag of SEED-JKT-01"), 1 to 200 characters.
+  label       String?
+  /// When it stopped being used and by whom (set once; then the row never changes).
+  endedAt     DateTime?    @db.Timestamptz(3)
+  endedById   String?      @db.Uuid
+  note        String?
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  claim SustainabilityClaim @relation(fields: [tenantId, claimId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A claim's uses, and what a record carries.
+  @@index([tenantId, claimId])
+  @@index([tenantId, recordType, recordId])
+}
