@@ -51,7 +51,7 @@ export function StyleRecordView({
   techPack?: ReactNode
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-244 */ 'products-changes']}>
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes']}>
       <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} />
     </WithMessages>
   )
@@ -111,6 +111,8 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
   const tt = useT('products-techpack')
   // B-W2b-261: the band's links to the style's sample rounds.
   const ts = useT('products-samples')
+  // B-W2b-242: the band's link to the style's options (Options & rules: its option BOM lines and routing steps).
+  const tOptions = useT('products-options')
   // B-W2b-244: the band's links to the style's changes.
   const tc = useT('products-changes')
   const locale = useLocale()
@@ -198,6 +200,8 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
       ? [{ id: 'samples', label: revision ? ts('style.rounds', { revision: revision.revision }) : ts('style.roundsAll'), href: `${model.prefix}/products/samples?style=${encodeURIComponent(style.id)}${revision ? `&revision=${encodeURIComponent(revision.id)}` : ''}` }]
       : []),
     ...(model.samples?.manage ? [{ id: 'sampleNew', label: ts('style.newRequest'), href: `${model.prefix}/products/samples?new=1&style=${encodeURIComponent(style.id)}${revision && revision.status !== 'OBSOLETE' ? `&revision=${encodeURIComponent(revision.id)}` : ''}` }] : []),
+    // B-W2b-242 (design products.styles conn "Options & rules (option-dependent lines, W2b)").
+    { id: 'options', label: tOptions('style.link'), href: `${model.prefix}/products/options?style=${encodeURIComponent(style.id)}` },
     // B-W2b-244 (design products.styles conn "Changes & versions"; pop:changes.new "Style › Versions & changes").
     ...(model.changes?.view ? [{ id: 'changes', label: tc('style.changes'), href: `${model.prefix}/products/changes?style=${encodeURIComponent(style.id)}` }] : []),
     ...(model.changes?.request ? [{ id: 'changeNew', label: tc('style.newRequest'), href: `${model.prefix}/products/changes?new=1&style=${encodeURIComponent(style.id)}` }] : []),

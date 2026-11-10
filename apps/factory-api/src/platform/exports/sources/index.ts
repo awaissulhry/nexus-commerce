@@ -51,6 +51,8 @@ import { sampleRounds } from './sample-rounds'
 import { colours } from './colours'
 // B-W2b-268: Compliance › Declarations & instructions.
 import { complianceDeclarations } from './compliance-declarations'
+// B-W2b-242: Products › Libraries › Options & rules (the option groups).
+import { optionGroups } from './option-groups'
 // B-W2b-244: Products › Development › Changes & versions (B-W2b-226's and B-W2b-215's reads as one list).
 import { productChanges } from './product-changes'
 
@@ -116,6 +118,8 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   colours,
   // B-W2b-268: Compliance › Declarations & instructions.
   complianceDeclarations,
+  // B-W2b-242: Products › Libraries › Options & rules.
+  optionGroups,
   // B-W2b-244: Products › Development › Changes & versions.
   productChanges,
 ])
