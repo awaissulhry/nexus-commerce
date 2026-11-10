@@ -81,6 +81,8 @@ import { useProtectors } from './protectors/use-protectors'
 import { useRoutingDepth } from '../routing/depth/use-routing-depth'
 // B-W2b-241: the Materials (BOM) tab in depth.
 import { useBomDepth } from '../bom/depth/use-bom-depth'
+// B-W2b-240: Sizes & measurements › Measurement spec.
+import { useSpec } from './spec/use-spec'
 // B-W2b-243: the Tech pack tab (its own container, mounted while the tab is open).
 import { TechPackTab } from '../techpack/TechPackTab'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
@@ -303,6 +305,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const routingDepthReload = useRef<() => void>(() => undefined)
   // B-W2b-241: the BOM in depth.
   const bomDepthReload = useRef<() => void>(() => undefined)
+  // B-W2b-240: the Measurement spec.
+  const specReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
@@ -310,6 +314,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     sizesReload.current()
     routingDepthReload.current()
     bomDepthReload.current() // B-W2b-241
+    // B-W2b-240
+    specReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -430,6 +436,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     onChanged: () => afterBom(),
   })
   routingDepthReload.current = routingDepth.reload
+  // B-W2b-240: the Sizes & measurements tab's Measurement spec (the BOM's read; written through the one queue above at the
+  // spec's own version, so a BOM edit of the same draft never clashes with it).
+  const specCan = useMemo(() => ({ manage: can.bomManage, release: session.permissions.includes('product.bom.release'), library: can.view }), [can.bomManage, can.view, session.permissions])
+  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: tab === 'sizes' && can.bomView, can: specCan, write: run })
+  specReload.current = spec.reload
 
   // B-W2b-241: the BOM in depth — the structure and its check with the BOM's read (the tab's mark), the lines in depth and
   // the options while the tab is open; writes through the one queue above, each moving the revision's version; after one
@@ -573,6 +584,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     routingDepth: routingDepth.model,
     // B-W2b-241
     bomDepth: bomDepth.model,
+    // B-W2b-240
+    spec: spec.model,
     // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
     // B-W2b-244: the style's changes (Products › Changes & versions), read and raised with their own rights.
@@ -600,6 +613,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         routingDepth: routingDepth.actions,
         // B-W2b-241
         bomDepth: bomDepth.actions,
+        // B-W2b-240
+        spec: spec.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

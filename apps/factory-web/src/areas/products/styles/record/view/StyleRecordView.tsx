@@ -24,6 +24,8 @@ import { bomMarkCount } from '../../bom/depth/model'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import { GallerySection } from '../gallery/view/GallerySection'
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
+// B-W2b-240: Sizes & measurements › Measurement spec.
+import { SpecSection } from '../spec/view/SpecSection'
 import { TabBody } from './TabBody'
 import { VariantsTab } from './VariantsTab'
 // B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
@@ -366,6 +368,8 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
           ) : model.tab === 'sizes' ? (
             // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
             <div className="fw-st-stack-lg">
+              {/* B-W2b-240: the Measurement spec, after the size range (Overview) and before the prepacks. */}
+              {model.can.bomView && <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />}
               <PrepacksSection model={model} actions={actions?.prepacks} />
               {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
             </div>

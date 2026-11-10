@@ -150,8 +150,10 @@ export function archiveHeld(rows: readonly ScaleRow[], can: Pick<LibraryCan, 'sc
 export const STATUS_TONE = { ACTIVE: 'success', ARCHIVED: 'neutral' } as const
 
 export const SCALE_TABS = ['sizes', 'points', 'whereused'] as const
-export type ScaleTab = (typeof SCALE_TABS)[number]
-export const tabOf = (value: string | null | undefined): ScaleTab => ((SCALE_TABS as readonly string[]).includes(value ?? '') ? (value as ScaleTab) : 'sizes')
+// B-W2b-240: the record's tabs in the design's order — Sizes, Grade rules (W2b), Measurement points, Where used.
+export const RECORD_TABS = ['sizes', 'graderules', 'points', 'whereused'] as const
+export type ScaleTab = (typeof RECORD_TABS)[number]
+export const tabOf = (value: string | null | undefined): ScaleTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as ScaleTab) : 'sizes')
 
 /** The order after moving one size up (-1) or down (+1); null at an end. */
 export function moved(codes: readonly string[], code: string, by: -1 | 1): string[] | null {

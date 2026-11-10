@@ -235,10 +235,12 @@ const FOLDERS = ['library', 'materials', 'operations', 'sizes']
 const OWN_CATALOGUE = new Set(['approval', 'properties', 'whereused'])
 // B-W2b-235: operations in depth speak their own catalogue (products-operations-depth; its own key test in operations/depth).
 const OWN_OPERATIONS_CATALOGUE = new Set(['depth'])
+// B-W2b-240: sizes in depth speak their own catalogue (products-sizes-depth; its own key test in sizes/depth).
+const OWN_SIZES_CATALOGUE = new Set(['depth'])
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return (OWN_CATALOGUE.has(entry.name) && dir.endsWith('materials')) || (OWN_OPERATIONS_CATALOGUE.has(entry.name) && dir.endsWith('operations')) ? [] : sources(path)
+    if (entry.isDirectory()) return (OWN_CATALOGUE.has(entry.name) && dir.endsWith('materials')) || (OWN_OPERATIONS_CATALOGUE.has(entry.name) && dir.endsWith('operations')) || /* B-W2b-240 */ (OWN_SIZES_CATALOGUE.has(entry.name) && dir.endsWith('sizes')) ? [] : sources(path)
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.') ? [path] : []
   })
 }

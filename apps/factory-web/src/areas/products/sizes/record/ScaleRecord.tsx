@@ -10,6 +10,10 @@ import { failed, libraryCan, readProblem, ready, reading, writeProblem, type Not
 import { addSizes, archiveScale, getScale, reactivateScale, reorderSizes, stylesOn, updateScale, updateSize, type ScaleView } from '../api'
 import { tabOf } from '../model'
 import { ScaleRecordView, type ScaleLoad, type ScaleRecordViewModel } from './view/ScaleRecordView'
+// B-W2b-240: the Grade rules tab.
+import { scaleRules } from '../depth/api'
+import { readProblemOf } from '../depth/model'
+import type { ScaleRulesModel } from '../depth/view/ScaleRulesTab'
 
 /**
  * `/w/<company>/products/sizes/<id>` (SCR-049): reads the scale with every size, and the styles on it (Where used). One
@@ -42,6 +46,17 @@ function Container({ scaleId }: { scaleId: string }) {
   const [dialog, setDialog] = useState<ScaleRecordViewModel['dialog']>(null)
   const writing = useRef(false)
   const current = scale.status === 'ready' ? scale.value : null
+  // B-W2b-240: the scale's grade rules, read while their tab is open.
+  const [gradeRules, setGradeRules] = useState<ScaleRulesModel>({ rules: null, problem: null })
+  const loadRules = useCallback(() => {
+    setGradeRules({ rules: null, problem: null })
+    scaleRules(api, scaleId)
+      .then((rules) => setGradeRules({ rules, problem: null }))
+      .catch((error: unknown) => setGradeRules({ rules: null, problem: readProblemOf(error) }))
+  }, [api, scaleId])
+  useEffect(() => {
+    if (tab === 'graderules') loadRules()
+  }, [tab, loadRules])
 
   const load = useCallback(async () => {
     try {
@@ -97,7 +112,7 @@ function Container({ scaleId }: { scaleId: string }) {
     }
   }
 
-  const model: ScaleRecordViewModel = { prefix, can, tab, scale, styles, save, busy, notice, changed, refused, dialog }
+  const model: ScaleRecordViewModel = { prefix, can, tab, scale, styles, save, busy, notice, changed, refused, dialog, /* B-W2b-240 */ gradeRules }
   return (
     <ScaleRecordView
       model={model}
@@ -115,6 +130,8 @@ function Container({ scaleId }: { scaleId: string }) {
         onReactivate: () => void write((value) => reactivateScale(api, value), { key: 'scale.notice.reactivated', tone: 'success' }),
         onDialog: setDialog,
         onDismissNotice: () => setNotice(null),
+        // B-W2b-240
+        onRetryRules: loadRules,
       }}
     />
   )

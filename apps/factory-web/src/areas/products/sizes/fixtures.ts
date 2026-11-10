@@ -21,7 +21,7 @@ export const SCALES: ScaleRow[] = [
 ]
 
 const open = SCALES.filter((row) => row.status === 'ACTIVE')
-const base: SizesListViewModel = { prefix: PREFIX, can: canFor('owner'), filters: { view: 'open', q: '' }, rows: { items: open, more: false, count: open.length, problem: null }, asOf: NOW, updates: 0, newScale: null, busy: false, notice: null }
+const base: SizesListViewModel = { prefix: PREFIX, can: canFor('owner'), filters: { view: 'open', q: '' }, rows: { items: open, more: false, count: open.length, problem: null }, asOf: NOW, updates: 0, newScale: null, busy: false, notice: null, /* B-W2b-240 */ library: { library: 'scales', importHeld: null } }
 const newScale = (draft: Partial<NewScaleModel['draft']> = {}, extra: Partial<NewScaleModel> = {}): NewScaleModel => ({
   draft: { companyId: COMPANY_ID, code: '', name: '', sizes: '', ...draft },
   companies: [
@@ -41,7 +41,7 @@ export const designScreen = defineDesignScreen<SizesListViewModel>({
   cases: [
     { id: 'owner', label: 'Owner: the size scales', model: base, note: '"44 46 48 … 64", the styles on each; the order stays once styles use a scale.' },
     { id: 'developer', label: 'Product developer', model: { ...base, can: canFor('developer') } },
-    { id: 'quality', label: 'Quality (reads)', model: { ...base, can: canFor('quality') }, note: 'New size scale and Archive held with their reason.' },
+    { id: 'quality', label: 'Quality (reads)', model: { ...base, can: canFor('quality'), library: { library: 'scales', importHeld: 'held.noManage' } }, note: 'New size scale, Import and Archive held with their reason.' },
     { id: 'sales', label: 'Sales (reads)', model: { ...base, can: canFor('sales') } },
     { id: 'selected', label: 'Two rows selected', model: { ...base, selected: [SCALES[2]!.id, SCALES[3]!.id] } },
     { id: 'archive-dialog', label: 'Archive 1', model: { ...base, selected: [SCALES[3]!.id], dialog: 'archive' } },

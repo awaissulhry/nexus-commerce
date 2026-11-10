@@ -40,6 +40,8 @@ import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 import type { RoutingDepthActions, RoutingDepthModel } from '../routing/depth/model'
 // B-W2b-241: the BOM in depth (Materials (BOM) tab).
 import type { BomDepthActions, BomDepthModel } from '../bom/depth/model'
+// B-W2b-240: Sizes & measurements › Measurement spec.
+import type { SpecActions, SpecModel } from './spec/spec-model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -153,6 +155,8 @@ export interface StyleRecordViewModel {
   routingDepth?: RoutingDepthModel
   /** B-W2b-241: the Materials (BOM) tab in depth — structure, check, alternates, supply, options (absent: not read). */
   bomDepth?: BomDepthModel
+  /** B-W2b-240: the Sizes & measurements tab's Measurement spec (absent: not read, like idle). */
+  spec?: SpecModel
   /** B-W2b-261: the band's links to the style's sample rounds (sales.samples.view) and New sample request (sales.samples.manage). */
   samples?: { view: boolean; manage: boolean }
   /** B-W2b-244: the band's links to the style's changes (product.changes.view) and New change request (product.changes.request). */
@@ -238,4 +242,6 @@ export interface StyleRecordActions {
   routingDepth?: RoutingDepthActions
   /** B-W2b-241: the BOM in depth. */
   bomDepth?: BomDepthActions
+  /** B-W2b-240: the Measurement spec. */
+  spec?: SpecActions
 }
