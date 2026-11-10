@@ -20,7 +20,7 @@ import {
 import { daysLate, OPEN_STATUSES, type WorkOrderKind, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { relativeRange, type DayRange, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
-import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { command, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { allocateNumber } from '../../../platform/numbering/allocate'
@@ -327,6 +327,19 @@ export interface CreateInput {
   readonly lines: readonly { readonly salesOrderLineId: string; readonly sizes?: readonly { readonly size: string; readonly quantity: number }[] | undefined }[]
 }
 
+/**
+ * B-W2b-246 (MES-018): a SAMPLE work order of a sample round, made by modules/sales/samples through this same create (the
+ * lines, cells, site, number and checks are W1's): the round's pinned revision is the one asked, the command is on the round
+ * (its version bump locks it, at the version the samples module read), and `inCommand` (the round's own writes: its stage,
+ * audit row and event) runs in the same transaction once the work order is written.
+ */
+export interface SampleWorkOrder {
+  readonly roundId: string
+  readonly revisionId: string
+  readonly version: number
+  readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string }) => Promise<void>
+}
+
 /** A revision of this style a work order may be made to: a DRAFT or the RELEASED one (an OBSOLETE one never). */
 async function revisionOf(db: Reader, styleId: string, revisionId: string, path: string): Promise<RevisionRow> {
   const revision = await db.styleRevision.findUnique({ where: { id: revisionId }, select: REVISION_COLUMNS })
@@ -342,7 +355,7 @@ async function revisionOf(db: Reader, styleId: string, revisionId: string, path:
  * the lines fix, else the style's released one. Due date: the earliest promise (or request) of its lines and orders;
  * priority: the highest.
  */
-export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string): Promise<{ workOrder: WorkOrderView }> {
+export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
@@ -367,7 +380,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
       throw new ValidationError("Not an active plant of the order's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the order lines' company." }])
     }
     assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Sales order line')
-    const asked = body.styleRevisionId ? await revisionOf(client, style.id, body.styleRevisionId, 'body/styleRevisionId') : null
+    const askedId = sample?.revisionId ?? body.styleRevisionId
+    const asked = askedId ? await revisionOf(client, style.id, askedId, 'body/styleRevisionId') : null
     const released = await readReleasedRevision(client, style.id)
     const chosen = revisionFor(asked?.id ?? null, [...lines.values()], released?.id ?? null)
     if (chosen.problem) throw new ValidationError(chosen.problem, [{ path: 'body/styleRevisionId', message: chosen.problem }])
@@ -385,7 +399,10 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
   const priority = body.priority ?? Math.max(0, ...[...lines.values()].map((line) => line.priority ?? orderOf.get(line.orderId)?.priority ?? 0))
   const target: CellTarget = { companyId: site.companyId, siteId: site.id, styleId: style.id, styleSizes: style.sizes, styleRevisionId: revisionId }
 
-  const { result } = await command(caller, { name: 'workorders.create', idempotencyKey, input: body }, async (tools) => {
+  const spec: CommandSpec = sample
+    ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
+    : { name: 'workorders.create', idempotencyKey, input: body }
+  const { result } = await command(caller, spec, async (tools) => {
     const { tx } = tools
     await lockOrderLines(tx, context.tenantId, lineIds)
     const current = await readOrderLines(tx, lineIds)
@@ -412,7 +429,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         companyId: site.companyId,
         siteId: site.id,
         number: number.formatted,
-        kind: 'SIZE_GRID',
+        kind: sample ? 'SAMPLE' : 'SIZE_GRID',
+        ...(sample ? { sampleRoundId: sample.roundId } : {}),
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate: dueDate ? asDay(dueDate) : null,
@@ -438,7 +456,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
       after: {
         number: number.formatted,
         status: 'DRAFT',
-        kind: 'SIZE_GRID',
+        kind: sample ? 'SAMPLE' : 'SIZE_GRID',
+        ...(sample ? { sampleRoundId: sample.roundId } : {}),
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate,
@@ -448,6 +467,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
       },
     })
     tools.emit({ type: 'workorder.created', subject: id, companyId: site.companyId, siteId: site.id, payload: { workOrderId: id, number: number.formatted, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces } })
+    if (sample) await sample.inCommand(tools, { id, number: number.formatted })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })
   return result
@@ -584,6 +604,8 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
       if (current.status !== 'DRAFT') throw new InvalidStateError(`Work order ${current.number} is ${current.status}; its revision is frozen (a different specification is a new work order).`)
       // B-W2a-12: a repair's steps were chosen from its revision's routing.
       if (current.kind === 'REPAIR') throw new InvalidStateError(`Work order ${current.number} is a repair whose steps were chosen from its revision's routing: cancel it and make a new repair work order for another revision.`)
+      // B-W2b-246 (MES-018): a sample work order makes its round's pinned revision (the database holds the same rule).
+      if (current.kind === 'SAMPLE') throw new InvalidStateError(`Work order ${current.number} makes the samples of its sample round, from the round's pinned revision: change the round's revision (while it is requested) and make a new sample work order.`)
       const revision = await revisionOf(tx, current.styleId, body.styleRevisionId, 'body/styleRevisionId')
       const cellLines = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { salesOrderLineId: true } })
       const fixed = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(cellLines.map((cell) => cell.salesOrderLineId))] }, styleRevisionId: { not: null } }, select: { seq: true, styleRevisionId: true } })

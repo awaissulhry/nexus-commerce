@@ -14,6 +14,10 @@ import { dash, Freshness, NoAccess, NoticeBanner, PageHead } from '../../../qual
 import { REGISTER_MAX, type Certificate, type StyleOption } from '../api'
 import { CERT_TILES, CERT_VIEWS, CERTIFICATE_KINDS, filterRows, holderOf, isFiltered, kindOf, NO_FILTERS, noticesOf, tileCounts, type CertFilters, type CertificateDraft, type CertificatesListModel, type CheckModel, type DraftField, type ListDialog } from '../model'
 import { AddCertificateDialog, CheckGarmentDialog } from './dialogs'
+import type { NotifiedBody } from '../depth/api'
+import { DEPTH_NS } from '../depth/model'
+import type { BodiesActions } from '../bodies/use-bodies'
+import { BodiesDialog } from '../bodies/view/BodiesDialog'
 import { CertMessages, GateExplainer, LeftTag, ShortcutsDialog, StatusPill, useDay, useListWords } from './parts'
 
 export interface CertificatesListActions {
@@ -38,6 +42,9 @@ export interface CertificatesListActions {
   onCheckClearStyle?: () => void
   onCheckPatch?: (patch: Partial<Pick<CheckModel, 'colourwayId' | 'size' | 'date'>>) => void
   onCheckRun?: () => void
+  /** W2b (B-W2b-255): Add certificate's body from the directory, and the Notified bodies pop-up. */
+  onAddBody?: (body: NotifiedBody | null) => void
+  bodies?: BodiesActions
 }
 
 /** A certificate's record address (a tab when asked). */
@@ -60,6 +67,7 @@ export function CertificatesListView({ model, actions }: { model: CertificatesLi
 
 function CertificatesList({ model, actions }: { model: CertificatesListModel; actions?: CertificatesListActions }) {
   const t = useT('certificates')
+  const d = useT(DEPTH_NS)
   const q = useT('quality')
   const day = useDay()
   const lists = useListWords()
@@ -86,7 +94,7 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
   // c: Add certificate, k: Check a garment (g stays for the global go-to chords). The frame keeps / j k x ↵ ?.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (dialog || model.add || model.check || !isPageKey(event)) return
+      if (dialog || model.add || model.check || model.bodies?.open || !isPageKey(event)) return
       if (event.key === 'c' && can.manage) {
         event.preventDefault()
         actions?.onDialog?.({ kind: 'add' })
@@ -97,7 +105,7 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [actions, can.manage, can.view, dialog, model.add, model.check])
+  }, [actions, can.manage, can.view, dialog, model.add, model.check, model.bodies?.open])
 
   const live = useRef({ actions })
   live.current = { actions }
@@ -209,6 +217,8 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
   const viewItems: MenuItemDef[] = [{ id: 'heading', heading: true, label: t('list.rowsHeading') }, ...CERT_VIEWS.map((view) => ({ id: view, label: t(`view.${view}`), checked: model.filters.view === view, onSelect: () => setFilters({ view }) }))]
   const moreItems: MenuItemDef[] = [
     { id: 'export', label: t('list.exportView'), onSelect: () => actions?.onExport?.(rows), disabled: rows.length === 0, description: rows.length === 0 ? t('list.exportNothing') : t('list.exportViewHint', { count: rows.length }) },
+    // W2b (B-W2b-255; design page.h "Notified bodies"): the directory pop-up.
+    { id: 'bodies', label: d('bodies.open'), onSelect: () => actions?.bodies?.onOpen?.() },
     { id: 'check', label: t('check.open'), onSelect: () => actions?.onDialog?.({ kind: 'check' }) },
     { id: 'sep', separator: true },
     { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onDialog?.({ kind: 'shortcuts' }) },
@@ -374,7 +384,17 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
         focusRow={model.focusRow}
       />
 
-      {model.add && <AddCertificateDialog model={model.add} can={can} companies={model.companies} brands={model.brands} actions={{ onDraft: actions?.onAddDraft, onTouch: actions?.onAddTouch, onFile: actions?.onAddFile, onCreate: actions?.onCreate, onClose: () => actions?.onDialog?.(null) }} />}
+      {model.add && (
+        <AddCertificateDialog
+          model={model.add}
+          can={can}
+          companies={model.companies}
+          brands={model.brands}
+          directory={model.directory ?? null}
+          actions={{ onDraft: actions?.onAddDraft, onBody: actions?.onAddBody, onTouch: actions?.onAddTouch, onFile: actions?.onAddFile, onCreate: actions?.onCreate, onClose: () => actions?.onDialog?.(null) }}
+        />
+      )}
+      {model.bodies && <BodiesDialog model={model.bodies} can={can} actions={actions?.bodies} />}
       {model.check && (
         <CheckGarmentDialog
           model={model.check}

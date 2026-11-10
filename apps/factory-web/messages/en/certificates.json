@@ -133,7 +133,12 @@
     "suspended": "Suspended or withdrawn",
     "drafts": "Drafts not registered",
     "expired": "Expired",
-    "changes": "Changes waiting for the notified body"
+    "changes": "Changes waiting for the notified body",
+    "garment": "Garment (EN 17092)",
+    "protectors": "Protectors (EN 1621)",
+    "gloves": "Gloves (EN 13594)",
+    "expiring90": "Expiring in 90 days",
+    "privateLabel": "Private label"
   },
   "tile": {
     "valid": "Valid",

@@ -97,6 +97,8 @@ export const workOrderSchema = output({
   nextActions: z.array(status),
   /** B-W2a-12 (MES-019): a REPAIR work order's repair order; null for a size run. */
   repairOrder: output({ id: id(), number: z.string(), stage: z.string() }).nullable(),
+  /** B-W2b-246 (MES-018): a SAMPLE work order's sample round; null for any other kind. */
+  sampleRound: output({ id: id(), number: z.string(), kind: z.string(), roundNo: z.number().int(), stage: z.string() }).nullable(),
   orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), partyId: id(), partyName: z.string(), depositRequired: z.boolean() })),
   cells: z.array(
     output({

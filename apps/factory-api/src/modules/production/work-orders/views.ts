@@ -227,6 +227,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
     nextActions: [...nextActions(workOrder.status)],
     // B-W2a-12 (MES-019): the repair order a REPAIR work order repairs for (wave 2 RepairOrder.workOrderId).
     repairOrder: workOrder.kind === 'REPAIR' ? await db.repairOrder.findFirst({ where: { workOrderId: workOrder.id }, select: { id: true, number: true, stage: true }, orderBy: { createdAt: 'desc' } }) : null,
+    // B-W2b-246 (MES-018): the sample round a SAMPLE work order makes (WorkOrder.sampleRoundId, wave 29).
+    sampleRound: workOrder.kind === 'SAMPLE' ? await db.sampleRound.findFirst({ where: { workOrders: { some: { id: workOrder.id } } }, select: { id: true, number: true, kind: true, roundNo: true, stage: true } }) : null,
     orders: orders.map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, status: order.status, partyId: order.partyId, partyName: order.partyName, depositRequired: order.depositRequired })),
     cells: cells.map((cell) => ({
       id: cell.id,

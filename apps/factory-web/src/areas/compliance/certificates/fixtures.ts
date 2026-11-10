@@ -7,6 +7,7 @@ import { failedRead, reading, ready } from '../../quality/_shared/model'
 import type { BrandOption, Certificate, CertificateDetail, Coverage, GateResult, StyleFacts, StyleOption } from './api'
 import { blankCheck, blankDraft, certCan, type AddModel, type CertFilters, type CertificatesListModel, type CheckModel } from './model'
 import { CertificatesListView } from './view/CertificatesListView'
+import { BODIES, BODY_0000, bodiesModel } from './depth/bodies-demo/fixtures'
 
 /**
  * SCR-050 Certificates — made-up register only: CERT-DEMO-… numbers, a made-up notified body "Demo Test Lab" (0000) and
@@ -248,5 +249,18 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'w2a-changes-none', label: 'W2a Changes waiting: none', model: listModel({ filters: { view: 'changes', kind: 'all', q: '' }, waiting: ready({}) }) },
     { id: 'w2a-changes-failed', label: 'W2a Changes could not be read', model: listModel({ waiting: failedRead('problem.unavailable') }), note: 'The column says "—", never "none".' },
     { id: 'w2a-product', label: 'W2a Product developer: Start renewal held', model: listModel({}, 'production') },
+    // W2b (B-W2b-255): the saved views, the Notified bodies pop-up (⋯), Add certificate's directory pick and the five-year words.
+    { id: 'w2b-garment', label: 'W2b Rows ▾ Garment (EN 17092)', model: listModel({ filters: { view: 'garment', kind: 'all', q: '' } }) },
+    { id: 'w2b-protectors', label: 'W2b Rows ▾ Protectors (EN 1621)', model: listModel({ filters: { view: 'protectors', kind: 'all', q: '' } }) },
+    { id: 'w2b-gloves', label: 'W2b Rows ▾ Gloves (EN 13594)', model: listModel({ filters: { view: 'gloves', kind: 'all', q: '' } }), note: 'Gloves are made only if the Owner says so; the view lists glove certificates typed so far.' },
+    { id: 'w2b-expiring90', label: 'W2b Rows ▾ Expiring in 90 days', model: listModel({ filters: { view: 'expiring90', kind: 'all', q: '' } }) },
+    { id: 'w2b-private-label', label: 'W2b Rows ▾ Private label (brand-held)', model: listModel({ filters: { view: 'privateLabel', kind: 'all', q: '' } }) },
+    { id: 'w2b-bodies', label: 'W2b ⋯ Notified bodies: the directory over the register', model: listModel({ bodies: bodiesModel() }), note: 'The same pop-up as SCR-291.' },
+    {
+      id: 'w2b-add-directory',
+      label: 'W2b Add certificate: the body picked from the directory (its number fills in)',
+      model: listModel({ dialog: { kind: 'add' }, add: addModel({ draft: filledDraft, bodyId: BODY_0000.id }), directory: BODIES.filter((body) => body.status === 'ACTIVE') }),
+    },
+    { id: 'w2b-add-five-years', label: 'W2b Add certificate: "Valid to is 5 years and 2 months after Valid from"', model: listModel({ dialog: { kind: 'add' }, add: addModel({ draft: { ...filledDraft, validFrom: '2026-10-15', validTo: '2031-12-14' }, touched: ['validTo', 'validFrom'] }), directory: BODIES.filter((body) => body.status === 'ACTIVE') }) },
   ],
 })
