@@ -1,0 +1,713 @@
+{
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "no": "No",
+    "yes": "Yes",
+    "notYet": "Not read yet",
+    "retry": "Try again",
+    "updated": "Updated {time}",
+    "working": "Working…"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts"
+  },
+  "dialog": {
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept with the change in the history.",
+    "reasonRequired": "Reason"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PUBLISHED": "In force",
+    "SUPERSEDED": "Replaced",
+    "DISCARDED": "Discarded"
+  },
+  "version": {
+    "pill": "v{number} · {status}",
+    "author": "Written by",
+    "approvedBy": "Approved by",
+    "seen": "Seen on the floor",
+    "seenDraft": "Not on the floor yet",
+    "seenCount_one": "{count} person saw it",
+    "seenCount_other": "{count} people saw it"
+  },
+  "revisionStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "OBSOLETE": "obsolete"
+  },
+  "fileStatus": {
+    "PENDING_UPLOAD": "still uploading",
+    "AVAILABLE": "ready",
+    "QUARANTINED": "held for the virus check",
+    "DELETED": "deleted"
+  },
+  "list": {
+    "title": "Work instructions",
+    "intro": "Photo and video instructions per operation, with versions a second person approves and who saw them on the floor.",
+    "tableLabel": "Work instructions",
+    "search": "Search operation or number",
+    "viewFilter": "Saved view",
+    "new": "New instruction",
+    "keyNew": "New instruction",
+    "count_one": "{count} instruction",
+    "count_other": "{count} instructions",
+    "truncated": "Only the first 500 instructions are shown: search to find the others.",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove this filter",
+    "chipSearch": "Search: {q}",
+    "clearAll": "Clear filters",
+    "failed": "The instructions could not be read",
+    "forbidden": {
+      "title": "No access to work instructions",
+      "body": "This page needs the right production.instructions.view. Ask an administrator for it."
+    },
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Change the search or clear the filters."
+    },
+    "empty": {
+      "title": "No instructions yet",
+      "body": "Write the first one for an operation: steps, photos and videos the tablet shows at that operation.",
+      "bodyView": "When the production office writes one, it shows here."
+    },
+    "forRevision": "{code} rev {revision}",
+    "everyStyle": "Every style",
+    "usedIn_one": "On {count} released revision",
+    "usedIn_other": "On {count} released revisions",
+    "inForce": "v{number} in force",
+    "noneInForce": "None in force",
+    "draftOpen": "Draft v{number} open",
+    "publishedOn": "Since {date}",
+    "status": {
+      "ARCHIVED": "Archived",
+      "DRAFT": "Draft waiting",
+      "IN_FORCE": "In force",
+      "NONE": "Not published"
+    },
+    "seen": {
+      "none": "—",
+      "count_one": "{count} person",
+      "count_other": "{count} people"
+    },
+    "rowMenu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "openVersions": "Versions",
+    "openAcks": "Acknowledgements",
+    "copyNumber": "Copy the number"
+  },
+  "col": {
+    "operation": "Operation",
+    "styles": "Styles where used",
+    "languages": "Languages",
+    "version": "Version",
+    "status": "Status",
+    "media": "Media",
+    "seen": "Seen by",
+    "changed": "Last changed",
+    "more": "More"
+  },
+  "tile": {
+    "drafts": "Drafts waiting",
+    "missing": "Floor language missing",
+    "unpublished": "Never published",
+    "archived": "Archived"
+  },
+  "tileHint": {
+    "drafts": "A draft waits for a second person to approve it.",
+    "missing": "The version in force lacks a language a site’s floor reads.",
+    "unpublished": "Nothing of it reaches the floor yet.",
+    "archived": "No longer shown on the floor."
+  },
+  "view": {
+    "active": "In use",
+    "drafts": "Drafts waiting",
+    "missing": "Floor language missing",
+    "unpublished": "Never published",
+    "archived": "Archived"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "restore_one": "Restore {count}",
+    "restore_other": "Restore {count}"
+  },
+  "archive": {
+    "title_one": "Archive {count} instruction?",
+    "title_other": "Archive {count} instructions?",
+    "floor": "The tablets stop showing it at once; the operation’s typed step lines, if any, take its place.",
+    "kept": "Its versions and who saw them stay on the record (the training record is kept).",
+    "back": "Restore brings it back as it was."
+  },
+  "restore": {
+    "title_one": "Restore {count} instruction?",
+    "title_other": "Restore {count} instructions?",
+    "floor": "Its version in force is shown on the tablets again.",
+    "twin": "Refused when another instruction is in use for the same operation and style."
+  },
+  "archiveOne": {
+    "title": "Archive {number}?"
+  },
+  "restoreOne": {
+    "title": "Restore {number}?"
+  },
+  "csv": {
+    "file": "work-instructions",
+    "number": "Number",
+    "operation": "Operation",
+    "operationName": "Operation name",
+    "scope": "Styles",
+    "inForce": "In force",
+    "draft": "Draft",
+    "languages": "Languages",
+    "missing": "Floor languages missing",
+    "steps": "Steps",
+    "media": "Photos and videos",
+    "seen": "People who saw it",
+    "usedIn": "Released revisions",
+    "status": "Status",
+    "changed": "Last changed"
+  },
+  "language": {
+    "missingChip": "{code} missing",
+    "missingTitle": "{language} is a floor language and is not written"
+  },
+  "new": {
+    "title": "New instruction",
+    "subtitle": "An instruction belongs to one operation of the library, for every style or for one style revision.",
+    "operation": "Operation",
+    "operationHint": "The tablets show it at this operation.",
+    "operationPlaceholder": "Search the operation",
+    "scope": "For which styles",
+    "every": "Every style",
+    "everyHint": "Shown at this operation on every work order.",
+    "revision": "One style revision",
+    "revisionHint": "Shown first on that revision’s work orders; the others keep the one for every style.",
+    "style": "Style",
+    "stylePlaceholder": "Search the style",
+    "revisionPick": "Revision",
+    "revisionChoose": "Choose the revision",
+    "styleFirst": "Choose the style first",
+    "revisionOption": "Revision {revision} ({status})",
+    "copy": "Start from",
+    "copyHint": "A copy takes the steps, photos and videos of an instruction in force.",
+    "blank": "A blank instruction",
+    "copyOption": "A copy of {number} · {code} (v{version})",
+    "after": "It is made with version 1 as a draft: nothing reaches the floor until a second person approves it.",
+    "create": "Make the instruction"
+  },
+  "typed": {
+    "open": "Bring in typed steps",
+    "title": "Bring in the typed steps of the routings",
+    "subtitle": "The “[ ] CODE words” lines typed in a routing step become version 1 of an instruction for that operation and revision: a draft, so nothing changes on the floor before a second person approves it.",
+    "language": "The lines are written in",
+    "languageHint": "Their words go under this language.",
+    "lang": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "none": "No routing step has typed step lines without an instruction.",
+    "tableLabel": "Routing steps with typed step lines",
+    "col": {
+      "style": "Style revision",
+      "step": "Routing step",
+      "lines": "Steps it gives",
+      "instruction": "Instruction"
+    },
+    "required": "{code} (tick required)",
+    "optional": "{code} (tick optional)",
+    "existing": "Has {number} already",
+    "toMake": "Will be made",
+    "bring_one": "Bring in {count}",
+    "bring_other": "Bring in {count}",
+    "held": {
+      "reading": "Still reading the routings",
+      "nothing": "Nothing to bring in"
+    },
+    "made_one": "{count} instruction made as a draft.",
+    "made_other": "{count} instructions made as drafts."
+  },
+  "record": {
+    "back": "Work instructions",
+    "backToList": "Back to the work instructions",
+    "tabsLabel": "Parts of the instruction",
+    "loading": "Reading the instruction…",
+    "state": {
+      "loading": {
+        "title": "Loading",
+        "body": "Reading the instruction…"
+      },
+      "error": {
+        "title": "The instruction could not be read",
+        "body": "Try again in a moment."
+      },
+      "notFound": {
+        "title": "Instruction not found",
+        "body": "It does not exist, or it belongs to a company your role does not reach."
+      },
+      "forbidden": {
+        "title": "No access to work instructions",
+        "body": "This page needs the right production.instructions.view. Ask an administrator for it."
+      }
+    },
+    "everyStyle": "For every style",
+    "forRevision": "For {code} · {name}, revision {revision}",
+    "showing": "Showing v{number} ({status})",
+    "inForce": "v{number} in force",
+    "saving": "Saving…",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "savedAt": "Saved at {time}",
+    "save": "Save the draft",
+    "approve": "Approve version {number}",
+    "newVersion": "Start version {number}",
+    "more": "More actions",
+    "preview": "Floor preview",
+    "previewShort": "Floor preview",
+    "previewHint": "Opens a new tab: the version as the tablet shows it.",
+    "sheet": "Instruction sheet PDF",
+    "sheetShort": "Sheet PDF",
+    "sheetHint": "Opens a new tab: the paper for the station.",
+    "discard": "Discard draft v{number}",
+    "discardNone": "Discard the draft",
+    "archive": "Archive",
+    "archiveHint": "The tablets stop showing it.",
+    "restore": "Restore",
+    "archivedBanner": "{number} is archived: the tablets do not show it. Restore it to change it or show it again.",
+    "showingOther": "You are looking at v{number} ({status}).",
+    "showLatest": "Show the latest"
+  },
+  "tab": {
+    "steps": "Steps",
+    "media": "Media",
+    "versions": "Versions",
+    "acks": "Acknowledgements"
+  },
+  "live": {
+    "changed": "Someone else changed this instruction.",
+    "reload": "Reload"
+  },
+  "held": {
+    "noManage": "Writing instructions needs the right production.instructions.manage.",
+    "noApprove": "Approving needs the right production.instructions.approve.",
+    "noPeople": "The training record by name needs the right production.instructions.people (HR).",
+    "noOperations": "Picking an operation needs the right product.routing.view.",
+    "noStyles": "Picking a style needs the right product.styles.view.",
+    "archived": "{number} is archived: restore it first.",
+    "noVersion": "No version yet.",
+    "noDraft": "No draft is open.",
+    "draftExists": "Version {number} is being written already: change it, or discard it first.",
+    "readOnly": {
+      "PUBLISHED": "Version {number} is in force: a published version never changes. Start a new version to change it.",
+      "SUPERSEDED": "Version {number} was replaced: it never changes.",
+      "DISCARDED": "Version {number} was discarded: it never changes."
+    },
+    "ownDraft": "Version {number} is your own draft: another person approves it (four eyes).",
+    "noSteps": "Version {number} has no step: write at least one first.",
+    "noNote": "Version {number} needs a change note: say what changed, for the people who saw the version before.",
+    "mediaNotReady_one": "{count} photo or video is not uploaded yet: wait for it or take it off.",
+    "mediaNotReady_other": "{count} photos or videos are not uploaded yet: wait for them or take them off.",
+    "unsaved_one": "Save the draft first ({count} change not saved).",
+    "unsaved_other": "Save the draft first ({count} changes not saved).",
+    "offline": "No connection: try again when it is back.",
+    "offlineBanner": "No connection: what you see may be old, and nothing can be saved now.",
+    "busy": "Working…",
+    "pickRows": "Select the instructions first.",
+    "allArchived": "They are archived already.",
+    "allActive": "They are in use already.",
+    "pickOperation": "Choose the operation.",
+    "pickRevision": "Choose the style revision.",
+    "notPublished": "No version is in force yet.",
+    "nobodyNamed": "Nobody can be named here: the sites’ legal basis for naming workers is not recorded.",
+    "problems_one": "Fix {count} problem first.",
+    "problems_other": "Fix {count} problems first."
+  },
+  "steps": {
+    "language": "Language written",
+    "addLanguage": "Add a language",
+    "writing": "Writing in {language}",
+    "list": "Steps of the version",
+    "itemLabel": "Step {n}, {code}",
+    "empty": "No step yet",
+    "emptyBody": "Add the first step: what the operator does, in the order they do it.",
+    "emptyRead": "This version has no steps.",
+    "failed": "The version could not be read",
+    "noVersion": {
+      "title": "No version yet",
+      "body": "Start version 1 to write the steps."
+    },
+    "add": "Add a step",
+    "openStep": "Open step {n} ({code})",
+    "close": "Close step {n} ({code})",
+    "onlyIn": "Only in {language}: {words}",
+    "noWords": "No words in {language} yet",
+    "critical": "Critical point",
+    "safety": "Safety note",
+    "tickRequired": "Tick required",
+    "tickOptional": "Tick optional",
+    "mediaCount_one": "{count} photo or video",
+    "mediaCount_other": "{count} photos or videos",
+    "refused": "The last save refused this step: open it to see why.",
+    "code": "Step code",
+    "codeHint": "Capitals, digits, _ or - (SEAM_ALLOWANCE): the tablet ticks the step by it.",
+    "icon": "Icon on the tablet",
+    "iconHint": "Drawn beside the step for a quick read.",
+    "words": "What the operator does ({language})",
+    "wordsHint": "Short sentences, one action each. The tablet reads them aloud.",
+    "safetyNote": "Safety note ({language})",
+    "safetyHint": "Shown boxed on the tablet and the sheet. Leave it empty when there is none.",
+    "criticalLabel": "Critical point",
+    "criticalHint": "Marked on the tablet and the sheet: a mistake here makes the garment unsafe or scrap.",
+    "tickLabel": "The tablet asks a tick before Finish",
+    "tickHint": "Finish waits until the operator ticks this step.",
+    "missing": "Missing in the floor languages: {languages}.",
+    "remove": "Take this step out",
+    "version": "Version {number}",
+    "languages": "Languages",
+    "languageCount": "{count} of {total} steps",
+    "floorLanguages": "The floor reads: {languages}.",
+    "problems": "Before saving",
+    "noProblems": "Nothing stops the save."
+  },
+  "note": {
+    "label": "Change note",
+    "hint": "What this version says new, for the people who look at it.",
+    "hintRequired": "Needed before approval: what changed from the version before."
+  },
+  "ack": {
+    "required": "Ask the operators to look at it again",
+    "requiredHint": "At their next Start the tablet opens this version until they tap Seen. Leave it off for a wording fix."
+  },
+  "settings": {
+    "title": "Machine settings of the operation",
+    "machine": "Machine",
+    "stitchType": "Stitch",
+    "needle": "Needle",
+    "thread": "Thread",
+    "stitchesPerCm": "Stitches per cm",
+    "tension": "Tension",
+    "foot": "Foot",
+    "notes": "Notes"
+  },
+  "icon": {
+    "none": "No icon",
+    "needle": "Needle",
+    "thread": "Thread",
+    "scissors": "Scissors",
+    "ruler": "Ruler",
+    "check": "Check",
+    "eye": "Look",
+    "hand": "By hand",
+    "shield": "Protection",
+    "alert": "Attention",
+    "flame": "Heat",
+    "iron": "Iron",
+    "glue": "Glue",
+    "zip": "Zip",
+    "button": "Button",
+    "label": "Label",
+    "layers": "Layers",
+    "tape": "Tape",
+    "stamp": "Stamp",
+    "package": "Package"
+  },
+  "problem": {
+    "steps": {
+      "tooMany": "At most {max} steps."
+    },
+    "code": {
+      "format": "Step {n}: the code is 1 to 40 capitals, digits, _ or -.",
+      "twice": "Step {n}: {code} is the code of an earlier step; each step has its own."
+    },
+    "text": {
+      "missing": "Step {n}: write what the operator does in at least one language.",
+      "tooLong": "Step {n}: at most {max} characters in {language}."
+    },
+    "safety": {
+      "tooLong": "Step {n}: the safety note is at most {max} characters in {language}."
+    },
+    "languages": {
+      "tooMany": "Step {n}: at most {max} languages."
+    },
+    "media": {
+      "tooMany": "Step {n}: at most {max} photos or videos."
+    },
+    "caption": {
+      "tooLong": "Step {n}: a caption is at most {max} characters."
+    },
+    "changeNote": {
+      "tooLong": "The change note is at most {max} characters."
+    },
+    "unavailable": "The factory server did not answer. Try again in a moment.",
+    "forbidden": "Your role does not allow this.",
+    "writeForbidden": "Your role does not allow this change.",
+    "notFound": "It no longer exists, or your role does not reach it.",
+    "signedOut": "Your session ended: sign in again.",
+    "contract": "The server answered in a shape this page does not know: reload the page.",
+    "rateLimited": "Too many requests: wait a minute and try again.",
+    "stale": "Someone changed it first: reload to see it as it stands now.",
+    "invalid": "The server refused some fields: they are marked.",
+    "sheetCompany": "The sheet needs the company’s legal data (VAT number, registered office): fill them in Admin › Companies & sites."
+  },
+  "refusal": {
+    "ACTIVE_EXISTS": "Another instruction is in use for this operation and style: open it instead, or archive it first.",
+    "ALREADY_ACTIVE": "It is in use already.",
+    "ALREADY_ARCHIVED": "It is archived already.",
+    "ARCHIVED": "The instruction is archived: restore it first.",
+    "DRAFT_EXISTS": "A version is being written already: change it, or discard it first.",
+    "NOT_DRAFT": "This version is not a draft any more: it never changes. Start a new version.",
+    "OWN_DRAFT": "This is your own draft: another person approves it (four eyes).",
+    "NO_STEPS": "The draft has no step: write at least one first.",
+    "CHANGE_NOTE_MISSING": "The draft needs a change note: say what changed from the version before.",
+    "MEDIA_NOT_READY": "A photo or video is not uploaded yet: wait for it or take it off.",
+    "NOT_PUBLISHED": "This version is not on the floor: only a version in force is acknowledged.",
+    "SEEN_ALREADY": "This person acknowledged this version already: one acknowledgement per version.",
+    "DATABASE_REFUSED": "The database refused the change: reload and look at the instruction as it stands.",
+    "ALREADY_EXISTS": "Someone did the same at the same moment: reload and look at it as it stands.",
+    "other": "The change was refused by a rule: reload and try again."
+  },
+  "notice": {
+    "saved": "Draft v{number} saved.",
+    "published": "Version {number} is in force: the tablets show it from now on.",
+    "publishedSuperseding": "Version {number} is in force: it replaces v{old} on the tablets from now on.",
+    "newVersion": "Version {number} started as a draft.",
+    "discarded": "Draft v{number} discarded.",
+    "archived": "{number} archived: the tablets no longer show it.",
+    "restored": "{number} restored.",
+    "archivedMany_one": "{count} instruction archived.",
+    "archivedMany_other": "{count} instructions archived.",
+    "restoredMany_one": "{count} instruction restored.",
+    "restoredMany_other": "{count} instructions restored.",
+    "paper": "Paper acknowledgement recorded."
+  },
+  "media": {
+    "intro_one": "{count} photo or video on the steps.",
+    "intro_other": "{count} photos or videos on the steps.",
+    "noFilesRead": "Your role cannot open files (files.read): their names show instead.",
+    "noSteps": {
+      "title": "No step yet",
+      "body": "Photos and videos belong to a step: write the steps first."
+    },
+    "none": "No photo or video on this step.",
+    "listOf": "Photos and videos of {code}",
+    "kind": {
+      "PHOTO": "Photo",
+      "VIDEO": "Video"
+    },
+    "photoOf": "Photo: {name}",
+    "videoOf": "Video: {name}",
+    "unknownFile": "A file",
+    "notReady": "Not ready: {status}",
+    "caption": "Caption ({language})",
+    "earlier": "Move {name} earlier",
+    "later": "Move {name} later",
+    "first": "It is first already",
+    "last": "It is last already",
+    "remove": "Take off",
+    "uploading": "Uploading {name}…",
+    "failed": "{name} was not uploaded",
+    "dropHint": "Photos (JPEG, PNG, WebP, HEIC) or short videos (MP4, WebM, MOV), up to 25 MB, {max} more on this step. Never a face: show the hands and the garment.",
+    "problem": {
+      "empty": "The file is empty.",
+      "tooBig": "The file is larger than 25 MB.",
+      "type": "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, WebM, MOV)."
+    },
+    "markupGap": "Drawing on a photo comes later; mark the point in the caption meanwhile."
+  },
+  "versions": {
+    "revision": "The routing revision",
+    "everyStyle": "For every style: the work orders of any style show it at this operation, unless a revision has its own.",
+    "forRevision": "For {code} · {name}, revision {revision} ({status}): that revision’s work orders show it first.",
+    "usedInLabel": "Released revisions using the operation",
+    "usedInNone": "No released revision uses this operation yet.",
+    "col": {
+      "style": "Style",
+      "revision": "Revision",
+      "revisionStatus": "State",
+      "version": "Version",
+      "note": "What changed",
+      "people": "Written and approved",
+      "dates": "On the floor",
+      "content": "Content",
+      "seen": "Seen"
+    },
+    "revisionN": "Revision {revision}",
+    "tableLabel": "Versions of the instruction",
+    "first": "The first version",
+    "writtenBy": "Written by {name}",
+    "approvedBy": "Approved by {name}",
+    "notApproved": "Not approved",
+    "publishedOn": "Since {date}",
+    "createdOn": "Started {date}",
+    "supersededOn": "Replaced {date}",
+    "content": "{steps} steps · {media} media",
+    "open": "Open v{number}"
+  },
+  "compare": {
+    "title": "Compare two versions",
+    "before": "Before",
+    "after": "After",
+    "pick": "Choose a version",
+    "pickBoth": "Choose the two versions to compare.",
+    "oneVersion": {
+      "title": "Only one version",
+      "body": "A comparison needs a second version."
+    },
+    "failed": "The versions could not be read",
+    "head": "Version {number}",
+    "field": {
+      "text": "Words",
+      "safety": "Safety note",
+      "critical": "Critical point",
+      "icon": "Icon",
+      "tick": "Tick",
+      "media": "Photos and videos"
+    }
+  },
+  "acks": {
+    "privacy": {
+      "counts": "Counts per site · no names",
+      "whoMore": "HR sees the training record by name",
+      "people": "Training record by name (HR)",
+      "gate": "A name shows only where the site recorded the legal basis; never a figure per person"
+    },
+    "failed": "The acknowledgements could not be read",
+    "remind": "Remind (sends to the floor)",
+    "remindHeld": "Not built yet: the floor has no message for a reminder. The tablet opens a new version at Start by itself.",
+    "paper": "Record a paper acknowledgement",
+    "current": "Version {number} in force",
+    "noCurrent": "No version in force",
+    "noCurrentBody": "Once a version is approved, the people who look at it on the tablet are counted here.",
+    "asked": "This version asks the operators to look at it: the tablet opens it at their next Start.",
+    "notAsked": "This version does not ask to be looked at again (a wording fix): only people who never saw the instruction are asked.",
+    "noSites": "No site of the company yet.",
+    "seenOf": "{seen} of {of}",
+    "seenNoSkill": "{seen} saw it · nobody holds the skill here",
+    "siteBar": "{site}: {seen} of {of} saw it",
+    "ofMeans": "“of” counts the people at the site whose skills include this operation.",
+    "versionsLabel": "How many saw each version",
+    "col": {
+      "seen": "People who saw it",
+      "person": "Person",
+      "site": "Site",
+      "skill": "Skill",
+      "last": "Last seen",
+      "current": "Version in force"
+    },
+    "people": "Training record",
+    "peopleNone": "Nothing to show by name.",
+    "peopleEmpty": {
+      "title": "Nobody yet",
+      "body": "Nobody holds the skill of this operation or saw the instruction."
+    },
+    "peopleLabel": "Who saw which version",
+    "hidden": "Name hidden",
+    "hiddenWhy": "A name is hidden where the site has not recorded the legal basis for naming workers in office reads (Production › Floor rules & codes).",
+    "holdsSkill": "Holds the skill",
+    "noSkill": "Saw it, no skill",
+    "lastSeen": "v{number} · {date}",
+    "way": {
+      "FLOOR": "On the tablet, in {language}",
+      "PAPER": "Signed on paper, in {language}"
+    },
+    "never": "Never",
+    "seenYes": "Seen",
+    "seenNo": "Not yet",
+    "namesHR": "Names are a training record for HR only (production.instructions.people).",
+    "record": "An acknowledgement is a training record (D.Lgs. 81/2008 art. 37), never a performance record."
+  },
+  "approve": {
+    "title": "Approve version {number}",
+    "subtitle": "{number} · {operation}",
+    "floorAsked": "The floor shows v{number} from now on; operators are asked to acknowledge it at their next Start.",
+    "floorNotAsked": "The floor shows v{number} from now on; operators who saw an earlier version are not asked again (a wording fix).",
+    "allNew_one": "The first version: {count} step",
+    "allNew_other": "The first version: {count} steps",
+    "changes": "What changed from v{from} to v{to}",
+    "added": "{code} added",
+    "changed": "{code} changed",
+    "removed": "{code} removed",
+    "same": "The steps are the same as the version in force.",
+    "note": "Change note:",
+    "signOff": "Approval",
+    "stepWrite": "Version {number} written",
+    "stepApprove": "Version {number} approved by a second person",
+    "roleAuthor": "Author",
+    "roleApprover": "Approver",
+    "whoMay": "Production manager or quality, never the author",
+    "ruleMet": "Written by {name}: you are a second person.",
+    "ruleBroken": "Version {number} is your own draft: another person approves it.",
+    "do": "Approve v{number}",
+    "supersedes": "v{number} in force is replaced in the same moment.",
+    "first": "The first version to reach the floor."
+  },
+  "newVersion": {
+    "title": "Start version {number}",
+    "copy": "A copy of v{number} in force: its steps, photos and videos.",
+    "blank": "A new draft.",
+    "noteHint": "What will change (you can write it later; it is needed before approval).",
+    "floor": "Nothing changes on the floor until a second person approves it.",
+    "do": "Start v{number}"
+  },
+  "discard": {
+    "title": "Discard draft v{number}?",
+    "subtitle": "It never reaches the floor; it stays in the history with your reason.",
+    "reasonMissing": "Say why it is discarded.",
+    "do": "Discard v{number}"
+  },
+  "paper": {
+    "title": "Paper acknowledgement of v{number}",
+    "subtitle": "For a person who signed the printed sheet of the version in force.",
+    "person": "Person",
+    "personHint": "People named here who have not seen the version in force.",
+    "nobody": "Everybody named here has seen it already.",
+    "choose": "Choose the person",
+    "language": "Language of the sheet",
+    "date": "Signed on",
+    "dateHint": "Never a day in the future.",
+    "pickPerson": "Choose the person.",
+    "pickDate": "Choose the day it was signed.",
+    "do": "Record it"
+  },
+  "preview": {
+    "title": "Floor preview · {number}",
+    "titlePlain": "Floor preview",
+    "note": "As the tablet shows it to the operator. Nothing is recorded here.",
+    "language": "Language on the tablet",
+    "version": "Version",
+    "failed": "The preview could not be read",
+    "draft": "Draft v{number}: the floor does not see it until it is approved.",
+    "notInForce": "v{number} is not in force: the floor shows the version in force.",
+    "newVersion": "New version {number}: look at every step, then tap Seen.",
+    "tick": "Tick before Finish",
+    "shownIn": "Not written in this language: shown in {language}.",
+    "moreMedia_one": "{count} more photo or video on the tablet",
+    "moreMedia_other": "{count} more photos or videos on the tablet",
+    "seen": "Seen",
+    "seenHeld": "A preview: the operator taps Seen on the tablet."
+  },
+  "sheet": {
+    "title": "{number} · v{version}",
+    "titlePlain": "Instruction sheet",
+    "note": "The paper for the station, made now and kept nowhere. The tablet counts as the version in force.",
+    "language": "Language of the sheet",
+    "lang": {
+      "it": "Italiano",
+      "en": "English"
+    },
+    "version": "Version",
+    "print": "Print",
+    "held": "The sheet is still being made",
+    "reading": "Making the sheet…",
+    "failed": "The sheet could not be made",
+    "draft": "Draft v{number}: the paper says so; the floor does not use it.",
+    "notInForce": "v{number} is not in force: the paper says so."
+  }
+}

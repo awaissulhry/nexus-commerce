@@ -146,6 +146,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/calls': 'production.calls.view', // GET /production/calls (B-W2b-58)
+      '/production/instructions': 'production.instructions.view', // GET /production/instructions (B-W2b-234)
       '/production/labour': 'production.labour.view', // GET /production/labour/inbox (B-W2b-57)
       '/production/bundles': 'production.bundles.view', // GET /production/bundles (B-W2b-59)
       '/production/dispatch': 'production.dispatch.view', // GET /production/dispatch/board (B-W2b-56)

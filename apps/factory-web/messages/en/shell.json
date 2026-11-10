@@ -118,7 +118,8 @@
       "floorControl": "Floor control",
       "scrap": "Scrap & rework",
       "calls": "Help calls",
-      "labour": "Labour & corrections"
+      "labour": "Labour & corrections",
+      "instructions": "Work instructions"
     },
     "quality": {
       "area": "Quality",
