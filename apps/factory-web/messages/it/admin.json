@@ -1690,6 +1690,8 @@
     "compliance_userInformation_check": "Verificare la traduzione di una nota informativa generata (mai la propria)",
     "compliance_supplierDeclarations_manage": "Chiedere dichiarazioni ai fornitori (SVHC REACH, RSL, senza PFAS, rilascio di nichel, cromo VI), sollecitarli, registrare e decidere le risposte",
     "compliance_reports_view": "Vedere i report conformità di un'azienda: copertura dei certificati per modello e mercato, modelli spediti coperti, lacune aperte per tipo, blocchi dei controlli, calendario delle scadenze, cromo VI per fornitore, riepilogo del registro e riesame annuale (solo dai record che si possono vedere)",
+    "compliance_claims_manage": "Tenere il registro delle dichiarazioni ambientali: preparare le dichiarazioni con testo, ambito, prove e scadenza, registrare dove sono usate, ritirarle",
+    "compliance_claims_approve": "Approvare una dichiarazione ambientale quando le sue prove ci sono e sono ancora valide (con un codice nuovo)",
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
     "product_materials_cost": "Impostare il prezzo standard di un materiale",

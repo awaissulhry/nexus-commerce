@@ -1,0 +1,449 @@
+{
+  "access": {
+    "title": "No access to the claims register",
+    "body": "This page needs the right to see compliance (compliance.certificates.view). Ask whoever manages roles in your company."
+  },
+  "common": {
+    "stillLoading": "Still loading…",
+    "retry": "Try again",
+    "close": "Close",
+    "cancel": "Cancel",
+    "back": "Back",
+    "reading": "Reading…",
+    "working": "Working…"
+  },
+  "band": {
+    "label": "Claims actions",
+    "reading": "Not read yet",
+    "add": "New claim",
+    "more": "More actions",
+    "export": "Export",
+    "exportHint": "From Export ▾ in the claims list: this view as CSV."
+  },
+  "tile": {
+    "title": "Claim tiles",
+    "failed": "The tiles could not be read.",
+    "approved": {
+      "label": "Approved claims",
+      "hint": "Approved, with evidence that still holds"
+    },
+    "blocked": {
+      "label": "Claims with expired evidence – blocked",
+      "hint": "They may not be used anywhere new; change where they are still used"
+    },
+    "drafts": {
+      "label": "Drafts waiting approval",
+      "hint": "Not usable until a person approves them"
+    }
+  },
+  "views": {
+    "label": "Views",
+    "claims": "Claims",
+    "custodyLater": "Chain of custody · comes later"
+  },
+  "held": {
+    "company": "Open a company first: a claim belongs to one company.",
+    "manage": "Only a role that keeps the claims register can do this (compliance.claims.manage).",
+    "approve": "Only a role that approves claims can approve (compliance.claims.approve).",
+    "busy": "Saving…",
+    "notDraft": "Only a draft is approved.",
+    "nothingChanged": "Nothing changed.",
+    "code": "Give it a code: a letter or digit, then letters, digits, \".\", \"_\" or \"-\" (up to 60).",
+    "kind": "Choose what kind of claim it is.",
+    "wording": "Write the claim in at least one language.",
+    "wordingLine": "A claim is one line of up to 1000 characters per language.",
+    "wordingRefused": "The words are refused by the checker: use the wording it offers or say what is better.",
+    "style": "Choose the style the claim covers.",
+    "material": "Choose the material the claim covers.",
+    "validUntil": "Give the last valid day as a date.",
+    "evidenceMany": "At most 50 evidence files.",
+    "upload": "Uploading a file needs the right to upload files (files.upload).",
+    "reason": "Say why it is withdrawn.",
+    "reasonLong": "The reason is at most 500 characters.",
+    "noneWithdrawable": "Choose claims that are not withdrawn yet.",
+    "retiredRow": "Withdrawn already.",
+    "replaceDraft": "A draft is changed with Edit, not replaced.",
+    "replaced": "Replaced already by {code}.",
+    "fileGone": "This file is no longer there.",
+    "useLabel": "Choose the label it is printed on.",
+    "useStyle": "Choose the style it appears on.",
+    "useName": "Name where it appears (\"Autumn catalogue 2026\").",
+    "styleId": "Choose a style of this company.",
+    "itemId": "Choose a material of this company.",
+    "phraseKey": "Choose a phrase of the phrase library.",
+    "scopeNote": "Which part it covers, in up to 1000 characters.",
+    "evidenceFileIds": "Check the evidence files.",
+    "note": "A note of up to 2000 characters.",
+    "label": "Name where it appears.",
+    "recordId": "Choose where it is used.",
+    "companyId": "Open a company first.",
+    "supersedesId": "Check the claim it replaces.",
+    "version": "Someone changed it meanwhile: read it again."
+  },
+  "kind": {
+    "RECYCLED_CONTENT": "Recycled content",
+    "ORGANIC_CONTENT": "Organic content",
+    "BIO_BASED": "Bio-based",
+    "RESPONSIBLE_SOURCING": "Responsible sourcing",
+    "SUBSTANCE_FREE": "Free of a substance",
+    "DURABILITY": "Durability",
+    "REPAIRABILITY": "Repairability",
+    "CARBON": "Climate",
+    "SOCIAL": "Social",
+    "CERTIFICATION_LABEL": "Certification label",
+    "OTHER": "Other"
+  },
+  "state": {
+    "DRAFT": "Draft",
+    "APPROVED": "Approved",
+    "BLOCKED": "Blocked – evidence expired",
+    "RETIRED": "Retired"
+  },
+  "status": {
+    "DRAFT": "draft",
+    "APPROVED": "approved",
+    "WITHDRAWN": "withdrawn"
+  },
+  "rows": {
+    "current": "Current claims",
+    "all": "Every claim",
+    "DRAFT": "Drafts",
+    "APPROVED": "Approved",
+    "BLOCKED": "Blocked – evidence expired",
+    "RETIRED": "Retired"
+  },
+  "scope": {
+    "COMPANY": "The whole company"
+  },
+  "scopeKind": {
+    "COMPANY": "The company",
+    "STYLE": "One style",
+    "MATERIAL": "One material"
+  },
+  "use": {
+    "LABEL": "Label",
+    "STYLE": "Style texts",
+    "CATALOGUE": "Catalogue",
+    "WEB_SHOP": "Web shop",
+    "OTHER": "Other",
+    "open": "Record a use",
+    "save": "Record use",
+    "hint": "Where {code} appears: a label it is printed on, or a style whose texts, catalogue or web shop page carry it.",
+    "kind": "Where",
+    "label": "Label",
+    "style": "Style",
+    "name": "How it is named there",
+    "nameHint": "For example \"Autumn catalogue 2026\" or \"Product page\".",
+    "note": "Note"
+  },
+  "law": {
+    "claims": "From 27 September 2026 an environmental claim needs its evidence; generic claims and claims of neutrality through offsetting are not allowed.",
+    "GENERIC": "A generic environmental claim (\"eco-friendly\", \"green\", \"sustainable\") is not allowed without proof of recognised excellent environmental performance.",
+    "OFFSETTING": "Saying a product has a neutral, reduced or positive impact because emissions are offset is not allowed.",
+    "CERTIFIED_PRODUCT": "A sustainability label must rest on a certification scheme; LWG rates tanneries, not garments.",
+    "NO_SHARE": "Say how much: a share of which part, so the claim is not about the whole product when it is about a part."
+  },
+  "finding": {
+    "GENERIC": "\"{words}\" is a generic claim: refused.",
+    "OFFSETTING": "\"{words}\": neutrality through offsetting is not allowed: refused.",
+    "CERTIFIED_PRODUCT": "\"{words}\": LWG rates the tannery, not the garment: refused.",
+    "NO_SHARE": "Say how much (a percentage) and of which part.",
+    "use": "Use this wording",
+    "suggestion": "Allowed wording: \"{words}\""
+  },
+  "claims": {
+    "title": "Claims",
+    "label": "Sustainability claims",
+    "failed": "The claims could not be read.",
+    "count_one": "{count} claim",
+    "count_other": "{count} claims",
+    "languages": "Languages: {list}",
+    "col": {
+      "claim": "Claim",
+      "wording": "Wording",
+      "scope": "Scope",
+      "evidence": "Evidence",
+      "validUntil": "Valid to",
+      "approver": "Approver",
+      "state": "Status",
+      "uses": "Used on"
+    },
+    "labelCheck": {
+      "ON": "Label print checks every claim used on a label.",
+      "OFF": "Label print does not check claims yet: switched off until a style or a market needs green claims (Rules & markets › Gates).",
+      "NONE": "Label print does not check claims: no requirement for them yet (Rules & markets › Gates)."
+    },
+    "noEvidence": "No evidence yet",
+    "notUsed": "Not used",
+    "search": "Search code, words, style or material",
+    "filterState": "Rows",
+    "filterKind": "Kind",
+    "allKinds": "Every kind",
+    "filterScope": "Scope",
+    "allScopes": "Every scope",
+    "more": "More claims",
+    "moreHeld": "The first 500 are shown: narrow the filters.",
+    "noneFiltered": "No claims match these filters.",
+    "noneFilteredHint": "Clear the filters to see every current claim.",
+    "clearFilters": "Clear filters",
+    "emptyTitle": "No claims yet",
+    "empty": "Generic claims (\"eco-friendly\") are not allowed without evidence (Dir. 2024/825). Draft a claim with its words, scope, evidence and expiry."
+  },
+  "bulk": {
+    "withdraw_one": "Withdraw {count}",
+    "withdraw_other": "Withdraw {count}",
+    "withdrawnResult_one": "{count} claim withdrawn.",
+    "withdrawnResult_other": "{count} claims withdrawn.",
+    "refusedRow": "{label}: {why}"
+  },
+  "validity": {
+    "none": "No end",
+    "left_one": "{count} day left · {date}",
+    "left_other": "{count} days left · {date}",
+    "expired_one": "Expired {count} day ago · {date}",
+    "expired_other": "Expired {count} days ago · {date}",
+    "threshold": "Within {days} days of its end"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "add": "New claim",
+    "moves": "Previous or next claim in the window",
+    "close": "Close the window"
+  },
+  "new": {
+    "title": "New claim",
+    "subtitle": "A draft: it is used only once a person approves it with its evidence.",
+    "replaceTitle": "Replacement of {code}",
+    "replaceSubtitle": "When this draft is approved, the claim it replaces is withdrawn and every place it is used moves to the replacement.",
+    "save": "Create draft claim",
+    "savedWithoutFile": "The draft is saved, but a file was not taken. Open the draft and add the file again (Edit).",
+    "openDraft": "Open the draft"
+  },
+  "form": {
+    "choicesFailed": "The styles, materials and files to choose from could not be read.",
+    "code": "Code",
+    "codeHint": "The next free code is {code}.",
+    "kind": "Kind of claim",
+    "chooseKind": "Choose…",
+    "wording": "Wording",
+    "wordingIn": "In {language}",
+    "phrase": "Printed from the phrase",
+    "phraseHint": "A claim phrase of the phrase library, with its approved translations.",
+    "noPhrase": "No phrase",
+    "scope": "Scope",
+    "covers": "It covers",
+    "style": "Style",
+    "material": "Material",
+    "scopeNote": "Which part",
+    "scopeNoteHint": "For example \"the lining only\": a claim about a part never reads as one about the whole product.",
+    "evidence": "Evidence",
+    "evidenceHint": "The files that prove it: a certificate, a test report, a supplier declaration.",
+    "noEvidence": "No evidence yet: a claim is approved only with at least one file.",
+    "storedFile": "Stored file",
+    "fileExpires": "valid until {date}",
+    "fileStored": "Stored",
+    "fileToUpload": "Uploaded when the claim is saved",
+    "addStored": "Add a stored file",
+    "upload": "Upload a file",
+    "uploadHint": "PDF, JPEG or PNG, up to 20 MB.",
+    "validUntil": "Evidence valid until",
+    "validHint": "The last day the evidence holds; leave empty when it does not expire.",
+    "validSuggested": "The earliest expiry of the files chosen is {date}.",
+    "useSuggested": "Use {date}",
+    "note": "Note"
+  },
+  "claim": {
+    "noun": "claim"
+  },
+  "tab": {
+    "wording": "Wording",
+    "evidence": "Evidence",
+    "where": "Where used",
+    "activity": "Activity",
+    "label": "Claim tabs"
+  },
+  "edit": {
+    "open": "Edit",
+    "save": "Save draft"
+  },
+  "approve": {
+    "open": "Approve",
+    "do": "Approve claim",
+    "sentence": "Approving a claim makes it usable on labels, styles, catalogues and web shop texts.",
+    "signOff": "Approval",
+    "stepDraft": "{code} drafted",
+    "roleKeeper": "Claims register",
+    "stepApprove": "{code} approved with its evidence",
+    "roleApprover": "Approver",
+    "whoMay": "A person whose role approves claims, with a fresh code from the authenticator app",
+    "note": "From then on it may be used; it never changes again (a changed claim is a replacement).",
+    "replacesNote": "Approving it withdraws {code} and moves every place it is used to this claim.",
+    "evidence": "Evidence",
+    "until": "Valid until",
+    "code": "Approving asks for a fresh code from your authenticator app."
+  },
+  "withdraw": {
+    "open": "Withdraw",
+    "save": "Withdraw claim",
+    "reason": "Why it is withdrawn",
+    "usesEnd_one": "It is used in {count} place: that use ends with it.",
+    "usesEnd_other": "It is used in {count} places: those uses end with it.",
+    "noUses": "It is used nowhere now.",
+    "bulkTitle_one": "Withdraw {count} claim",
+    "bulkTitle_other": "Withdraw {count} claims"
+  },
+  "replace": {
+    "open": "Draft a replacement"
+  },
+  "wording": {
+    "title": "The claim per language",
+    "checked": "Checked: nothing refused.",
+    "phrase": "Printed from the phrase {key}.",
+    "covers": "It covers",
+    "part": "Which part",
+    "drafted": "Drafted",
+    "approved": "Approved",
+    "notApproved": "Not approved yet",
+    "someone": "Someone",
+    "replaces": "It replaces",
+    "replacedBy": "Replaced by",
+    "withdrawn": "Withdrawn",
+    "note": "Note"
+  },
+  "evidence": {
+    "blocked": "Its evidence no longer holds: it may not be used anywhere new.",
+    "until": "Evidence valid until",
+    "files": "Files",
+    "none": "No evidence files.",
+    "file": "File",
+    "of": "of the {record}",
+    "open": "Open",
+    "openNamed": "Open {name} in a new tab"
+  },
+  "block": {
+    "VALID_UNTIL": "Its evidence held until {date}.",
+    "FILE_EXPIRED": "{file} expired on {date}.",
+    "FILE_GONE": "An evidence file is no longer there."
+  },
+  "category": {
+    "DDT_PHOTO": "DDT photo",
+    "POD": "Proof of delivery",
+    "CMR": "CMR",
+    "CARRIER_INVOICE": "Carrier invoice",
+    "CLAIM_PHOTO": "Claim photo",
+    "MACHINE_CE": "Machine CE paper",
+    "MANUAL": "Manual",
+    "CHECK_REPORT": "Check report",
+    "BEFORE_WORK": "Before the work",
+    "AFTER_WORK": "After the work",
+    "OTHER": "Other file",
+    "SUPPLIER_CERTIFICATE": "Supplier certificate",
+    "TEST_REPORT": "Test report",
+    "DECLARATION": "Declaration",
+    "BODY_PHOTO": "Photo",
+    "QUESTIONNAIRE": "Questionnaire",
+    "PROOF": "Proof",
+    "SAMPLE_PHOTO": "Sample photo"
+  },
+  "record": {
+    "SustainabilityClaim": "claim",
+    "Certificate": "certificate",
+    "Lot": "lot",
+    "Item": "material",
+    "Party": "supplier",
+    "Style": "style",
+    "Company": "company"
+  },
+  "fileStatus": {
+    "PENDING_UPLOAD": "still uploading",
+    "AVAILABLE": "available",
+    "QUARANTINED": "held for a check",
+    "DELETED": "deleted",
+    "MISSING": "not found"
+  },
+  "where": {
+    "noneTitle": "Not used yet",
+    "none": "Record where it appears: a label, a style, a catalogue, web shop texts.",
+    "noneNotApproved": "A claim is used only once it is approved.",
+    "outOfSight": "A record you cannot see",
+    "flagBlocked_one": "Its evidence no longer holds and it is still used in {count} place: change it there.",
+    "flagBlocked_other": "Its evidence no longer holds and it is still used in {count} places: change them.",
+    "flagRetired_one": "It is withdrawn but still recorded in {count} place: end that use.",
+    "flagRetired_other": "It is withdrawn but still recorded in {count} places: end those uses.",
+    "live_one": "Used now: {count}",
+    "live_other": "Used now: {count}",
+    "ended_one": "Ended: {count}",
+    "ended_other": "Ended: {count}",
+    "noLive": "Used nowhere now.",
+    "col": {
+      "kind": "Where",
+      "record": "Record",
+      "label": "Named",
+      "since": "Since",
+      "end": "End",
+      "ended": "Ended"
+    },
+    "mustChange": "must change",
+    "end": "End",
+    "endNamed": "End the use on {kind} {record}"
+  },
+  "activity": {
+    "label": "Changes and approvals",
+    "none": "Nothing recorded yet.",
+    "system": "The system",
+    "draft": "Drafted",
+    "edit": "Draft changed",
+    "approve": "Approved",
+    "withdraw": "Withdrawn",
+    "addUse": "Use recorded",
+    "endUse": "Use ended",
+    "replaced": "Replaced by {code}",
+    "evidenceExpired": "Evidence expired: flagged where it is used"
+  },
+  "saved": {
+    "edited": "Draft saved.",
+    "approved": "Approved: it may be used from now on.",
+    "approvedReplacing": "Approved: {code} is withdrawn and {count} uses moved here.",
+    "withdrawn": "Withdrawn; uses ended: {count}.",
+    "useAdded": "Use recorded.",
+    "useEnded": "Use ended."
+  },
+  "notice": {
+    "drafted": "Draft {code} created: add its evidence and approve it.",
+    "replacementDrafted": "Replacement {code} drafted: approve it with its evidence to take over."
+  },
+  "refusal": {
+    "NOT_DRAFT": "Only a draft changes or is approved; an approved claim is replaced by a new one.",
+    "NOT_APPROVED": "A claim is used only once it is approved.",
+    "ALREADY_WITHDRAWN": "This claim is withdrawn already.",
+    "NO_EVIDENCE": "Add at least one evidence file before approving.",
+    "EVIDENCE_NOT_AVAILABLE": "Every evidence file must be uploaded and available before approving.",
+    "EVIDENCE_EXPIRED": "An evidence file has expired: add a valid one first.",
+    "EVIDENCE_OTHER_COMPANY": "The evidence files are files of this company that are not deleted.",
+    "VALID_UNTIL_PAST": "The evidence has expired: a claim is not approved after its evidence expired.",
+    "CODE_TAKEN": "This code is taken in this company: choose another.",
+    "STYLE_OTHER_COMPANY": "The style is one of this company's styles.",
+    "MATERIAL_NOT_ALLOWED": "The material is one of this company's materials, never a finished garment.",
+    "PHRASE_UNKNOWN": "The phrase is not in the phrase library.",
+    "REPLACES_OTHER": "A replacement replaces an approved or withdrawn claim of this company.",
+    "ALREADY_REPLACED": "This claim has a replacement already: change or withdraw that one.",
+    "NOT_HOLDING": "Its evidence no longer holds: it may not be used anywhere new until a replacement is approved.",
+    "USE_TAKEN": "This claim is recorded there already.",
+    "USE_RECORD": "Choose a label or style of this company.",
+    "USE_ENDED": "This use ended already.",
+    "WORDING_REFUSED": "The words are refused by the checker.",
+    "DATABASE": "The database refused this change: read the claim again."
+  },
+  "problem": {
+    "unavailable": "The factory server did not answer. Try again in a moment.",
+    "signedOut": "Your session ended: sign in again.",
+    "forbidden": "Your role does not allow this.",
+    "notFound": "This claim is not there (or not for you).",
+    "conflict": "Someone changed it meanwhile: read it again.",
+    "rateLimited": "Too many requests: wait a moment.",
+    "noAnswer": "No answer: check the connection.",
+    "internal": "Something went wrong on the server.",
+    "invalid": "Check the fields.",
+    "read": "It could not be read."
+  }
+}
