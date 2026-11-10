@@ -139,6 +139,13 @@ model StoredFile {
   cutLogPhotos     CutLog[]     @relation("CutLogPhoto")
   // W2b-4 sizes-depth.prisma (wave 27/33): the point of measure whose how-to picture it is.
   pointOfMeasurePictures PointOfMeasure[] @relation("PointOfMeasurePicture")
+  // W2b-4 techfiles.prisma (wave 32/33): the technical file evidence it is, the lab report of a production-control test, an
+  // evidence pack's PDF or ZIP, a label artwork's proof.
+  technicalFileItems     TechnicalFileItem[]     @relation("TechnicalFileItemFile")
+  productionControlTests ProductionControlTest[] @relation("ProductionControlTestReport")
+  evidencePackFiles      EvidencePack[]          @relation("EvidencePackFile")
+  evidencePackZips       EvidencePack[]          @relation("EvidencePackZip")
+  labelArtworkVersions   LabelArtworkVersion[]   @relation("LabelArtworkVersionFile")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
   // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.

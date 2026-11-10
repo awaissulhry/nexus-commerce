@@ -122,6 +122,10 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b-4 wave 31/33: the declarations asked of suppliers are numbered from it when they are sent (B-W2b-256): without
       // it, a declaration cannot be asked. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:SUPPLIER_DECLARATION:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SUPPLIER_DECLARATION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SD-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-4 wave 32/33: technical files (one per style, master documents: a series that never resets) and evidence packs are
+      // numbered from these (B-W2b-251): without them, a file or a pack cannot be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:TECHNICAL_FILE:MAIN:ALL`).slice(8)}`, companyId, kind: 'TECHNICAL_FILE', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'TF-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:EVIDENCE_PACK:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'EVIDENCE_PACK', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'EP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

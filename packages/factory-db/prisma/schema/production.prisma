@@ -239,6 +239,9 @@ model WorkOrder {
   scanRefusals           FloorScanRefusal[]
   // quality.prisma: its final inspections.
   inspections   Inspection[]
+  // W2b-4 techfiles.prisma (wave 32/33): the declarations its batch went with, its production-control tests.
+  complianceDocumentBatches ComplianceDocumentBatch[]
+  productionControlTests    ProductionControlTest[]
   // W2b inspection-plans.prisma (wave 10/16): its in-process checks.
   inProcessChecks InProcessCheck[]
   // W2b leather.prisma (wave 12/16): the protector lots its garments hold.
@@ -1109,10 +1112,14 @@ model GarmentLabelPrint {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId.
   printer       Printer?      @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device        Device?       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-4 techfiles.prisma (wave 32/33; MES-140): its labels that did not end on a garment (spoiled or handed back).
+  spoils        GarmentLabelSpoil[]
 
   // A work order's label log; a cell's labels.
   @@index([tenantId, workOrderId])
   @@index([tenantId, workOrderSizeId])
+  // W2b-4 (wave 32/33): the target of a spoiled label's site- and work-order-safe reference.
+  @@unique([tenantId, siteId, workOrderId, id])
 }
 
 /// A first print of a cell's labels, or a print again of labels already given (the same batch or serials).
