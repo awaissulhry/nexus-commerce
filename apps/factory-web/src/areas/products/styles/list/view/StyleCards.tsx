@@ -38,6 +38,8 @@ export interface StyleCardsProps {
   more: { label: string; onMore: () => void } | null
   /** Design cases: select mode already on. */
   selectMode?: boolean
+  /** B-W2b-237: the release gate's completeness of a card. */
+  release?: (row: StyleRow) => ReactNode
 }
 
 /**
@@ -46,7 +48,7 @@ export interface StyleCardsProps {
  * revision, range and SKUs, and the list price with the price grain — with a toolbar of search, Filters (n) (the filter
  * sheet) and Select: select mode puts a box on each card, Select all, and the same bulk actions as the grid.
  */
-export function StyleCards({ rows, state, count, search, filterCount, onFilters, selected, onSelected, bulk, prices, showPrice, recordHref, onDuplicate, duplicateHeld, techPackHref, more, selectMode }: StyleCardsProps) {
+export function StyleCards({ rows, state, count, search, filterCount, onFilters, selected, onSelected, bulk, prices, showPrice, recordHref, onDuplicate, duplicateHeld, techPackHref, more, selectMode, release }: StyleCardsProps) {
   const t = useT('products')
   const locale = useLocale()
   const [selecting, setSelecting] = useState(selectMode ?? selected.length > 0)
@@ -126,6 +128,7 @@ export function StyleCards({ rows, state, count, search, filterCount, onFilters,
                   <span className="fw-st-hint">
                     {[t(`productType.${row.productType}`), row.sizes.length ? rangeWords(row.sizes) : null, t('phone.skus', { count: row.skuCount })].filter(Boolean).join(' · ')}
                   </span>
+                  {release?.(row) /* B-W2b-237 */}
                   {showPrice && prices.state === 'ready' && (
                     <span className="fw-stc-price">{price?.price ? t(price.from ? 'list.price.from' : 'list.price.is', { price: moneyText(price.price, prices.list.currency, locale) }) : t('list.price.none')}</span>
                   )}

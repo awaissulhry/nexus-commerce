@@ -24,6 +24,8 @@ import { GallerySection } from '../gallery/view/GallerySection'
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
 import { TabBody } from './TabBody'
 import { VariantsTab } from './VariantsTab'
+// B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
+import type { StyleDepthSlots } from '../overview/slots'
 import '../../styles.css'
 
 export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
@@ -43,21 +45,24 @@ export function StyleRecordView({
   actions,
   panels,
   techPack,
+  depth,
 }: {
   model: StyleRecordViewModel
   actions?: StyleRecordActions
   panels?: ReactNode
   /** B-W2b-243: the Tech pack tab's body (the container mounts it while the tab is open). */
   techPack?: ReactNode
+  /** B-W2b-237: the depth's parts (the container builds them from one model). */
+  depth?: StyleDepthSlots
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options']}>
-      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} />
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-237 */ 'products-styles-depth']}>
+      <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
     </WithMessages>
   )
 }
 
-function StyleRecord({ model, actions, panels, techPack }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
+function StyleRecord({ model, actions, panels, techPack, depth }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
   const t = useT('products')
   const listHref = `${model.prefix}/products/styles`
   const loaded = model.style
@@ -102,10 +107,10 @@ function StyleRecord({ model, actions, panels, techPack }: { model: StyleRecordV
       </div>
     )
   }
-  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} />
+  return <ReadyRecord style={loaded.value} model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
 }
 
-function ReadyRecord({ style, model, actions, panels, techPack }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode }) {
+function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode; techPack?: ReactNode; depth?: StyleDepthSlots }) {
   const t = useT('products')
   // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
   const tt = useT('products-techpack')
@@ -337,7 +342,7 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
           {model.tab === 'overview' || !tabs.includes(model.tab) ? (
             // B-W2b-236: the Overview's sections, in the design's order (Sketches and pictures after the matrix).
             <div className="fw-st-stack-lg">
-              <OverviewTab style={style} model={model} actions={actions} />
+              <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
               <GallerySection model={model.gallery} actions={actions?.gallery} />
             </div>
           ) : model.tab === 'files' ? (
@@ -347,7 +352,7 @@ function ReadyRecord({ style, model, actions, panels, techPack }: { style: Style
               <TabBody tab={model.tab} style={style} model={model} actions={actions} />
             </div>
           ) : model.tab === 'variants' ? (
-            <VariantsTab style={style} model={model} actions={actions} />
+            <VariantsTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
           ) : model.tab === 'sizes' ? (
             // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
             <div className="fw-st-stack-lg">
