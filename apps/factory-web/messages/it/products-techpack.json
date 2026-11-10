@@ -1,0 +1,531 @@
+{
+  "techpack": {
+    "common": {
+      "back": "Indietro",
+      "retry": "Riprova",
+      "dismiss": "Chiudi"
+    },
+    "band": {
+      "make": "Crea PDF scheda tecnica…"
+    },
+    "audience": {
+      "INTERNAL": "Copia interna",
+      "SUBCONTRACTOR": "Copia per il terzista",
+      "BRAND": "Copia per il cliente"
+    },
+    "audienceLong": {
+      "INTERNAL": "Interna (completa)",
+      "SUBCONTRACTOR": "Terzista (senza costi né nomi dei fornitori)",
+      "BRAND": "Cliente (senza note interne)"
+    },
+    "audienceHint": {
+      "INTERNAL": "Tutto ciò che l'ufficio può vedere. Il PDF non riporta mai un costo: la carta viaggia.",
+      "SUBCONTRACTOR": "Nessun costo, margine o compenso, nessun minuto standard, nessun nome di fornitore o laboratorio, nessuna alternativa, stato di approvazione o nome di persona. Si segna cosa arriva con il kit.",
+      "BRAND": "Come la copia per il terzista, e senza note interne né segno del kit. La copia di un modello a marchio privato va solo al suo marchio."
+    },
+    "language": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "leftOut": {
+      "MONEY": "costi, margini e compensi",
+      "MINUTES": "minuti standard",
+      "SUPPLIERS": "nomi di fornitori e laboratori",
+      "ALTERNATES": "materiali alternativi",
+      "APPROVALS": "stati di approvazione dei materiali",
+      "CUSTOMERS": "quale cliente fornisce un materiale",
+      "INTERNAL_NOTES": "note interne",
+      "PEOPLE": "nomi delle persone"
+    },
+    "section": {
+      "COVER": "Copertina",
+      "SKETCHES": "Disegni",
+      "BOM": "Distinta base",
+      "COLOURWAYS": "Varianti colore",
+      "SIZE_SPEC": "Tabella misure",
+      "CONSTRUCTION": "Costruzione",
+      "LABELS": "Etichette e confezione",
+      "PROTECTION": "Protezione e prestazioni",
+      "COMPLIANCE": "Conformità",
+      "REVISION_LOG": "Storico revisioni"
+    },
+    "why": {
+      "CONSTRUCTION": "Mostra il ciclo di lavoro: il tuo ruolo non lo legge.",
+      "PROTECTION": "Mostra i certificati: il tuo ruolo non li legge.",
+      "COMPLIANCE": "Mostra i certificati: il tuo ruolo non li legge."
+    },
+    "revisionStatus": {
+      "DRAFT": "bozza",
+      "RELEASED": "rilasciata",
+      "OBSOLETE": "obsoleta"
+    },
+    "held": {
+      "noMake": "Il tuo ruolo non crea PDF delle schede tecniche: lo fa il responsabile di produzione o il buyer.",
+      "noRevision": "Il modello non ha ancora una revisione.",
+      "offline": "Non in linea: il PDF lo crea il server. Riprova quando torna la connessione.",
+      "busy": "Il PDF è in preparazione.",
+      "noSections": "Spunta almeno una sezione.",
+      "sectionNotYours": "Una sezione spuntata non è tra quelle che il tuo ruolo può vedere.",
+      "internalParty": "Una copia interna non è per nessuno fuori dall'azienda.",
+      "privateLabel": "La copia per il cliente di questo modello a marchio privato è solo per il suo marchio."
+    },
+    "tab": {
+      "audience": "Per chi è",
+      "language": "Lingua",
+      "make": "Crea PDF scheda tecnica…",
+      "internal": "Interna: tutto ciò che il tuo ruolo può vedere. Per le altre copie importi e nomi li toglie il server, non vengono nascosti su questa schermata.",
+      "internalCost": "Interna: tutto ciò che il tuo ruolo può vedere, con il costo di ogni riga (solo su questa schermata: un PDF non riporta mai importi). Per le altre copie importi e nomi li toglie il server, non vengono nascosti qui.",
+      "leftOut": "Questa copia non contiene {list}: il server non li invia, quindi su questa schermata non c'è nulla di nascosto.",
+      "otherLanguage": "I testi propri della copia (nomi, note, manutenzione, impostazioni) sono in {language}, come li stampa il PDF.",
+      "offline": "Non in linea: ciò che è a video resta leggibile; la creazione di un PDF attende la connessione.",
+      "openPdf": "Apri il PDF",
+      "goInForce": "Vai alla revisione {revision} (in vigore)",
+      "side": "Indice e versioni PDF",
+      "loading": "Lettura della scheda tecnica…",
+      "failed": "Impossibile leggere la scheda tecnica",
+      "noRevision": {
+        "title": "Ancora nessuna revisione",
+        "body": "La scheda tecnica è una vista di una revisione: avvia la prima sul modello."
+      },
+      "nothing": {
+        "title": "Nessuna sezione scelta",
+        "body": "Spunta nell'indice le sezioni da mostrare."
+      }
+    },
+    "contents": {
+      "title": "Indice",
+      "intro": "Una vista del modello attuale, sezione per sezione. Spunta cosa mostrare e stampare.",
+      "all": "Spunta tutte",
+      "none": "Togli tutte",
+      "livesIn": "Modifica in {tab}"
+    },
+    "versions": {
+      "title": "Versioni PDF",
+      "intro": "Ogni PDF creato di questa revisione; il QR su ogni pagina dice se una copia stampata è ancora valida.",
+      "loading": "Lettura delle versioni…",
+      "failed": "Impossibile leggere le versioni.",
+      "none": "Ancora nessun PDF di questa revisione.",
+      "newTab": "si apre in una nuova scheda"
+    },
+    "version": {
+      "line": "v{version} · {audience} · {language}",
+      "lineOther": "v{version} · {language}"
+    },
+    "banner": {
+      "draft": "La revisione {revision} è una bozza: può cambiare prima del rilascio.",
+      "obsolete": "La revisione {revision} è obsoleta.",
+      "obsoleteInForce": "La revisione {revision} è obsoleta: è in vigore la revisione {inForce}."
+    },
+    "notice": {
+      "made": "Versione {version} creata ({code}): si è aperta in una nuova scheda.",
+      "same": "Nulla è cambiato dalla versione {version} ({code}): si è riaperta quella versione."
+    },
+    "make": {
+      "title": "Crea PDF scheda tecnica",
+      "subtitle": "{code} · revisione {revision} ({status})",
+      "audience": "Per chi è",
+      "language": "Lingua",
+      "languageHint": "Le parole del PDF, e i testi del modello dove sono scritti in quella lingua.",
+      "forWorkshop": "Laboratorio",
+      "forBrand": "Cliente o marchio",
+      "partyHint": "Stampato sulla copertina. Lascia vuoto per una copia valida per chiunque di questo tipo.",
+      "privateLabelHint": "Modello a marchio privato: la sua copia per il cliente è solo per {brand}.",
+      "noPartiesRight": "Il tuo ruolo non legge le anagrafiche: la copia non nomina nessuno.",
+      "partiesLoading": "Lettura delle anagrafiche…",
+      "nobody": "Nessuno indicato",
+      "sections_one": "{count} sezione",
+      "sections_other": "{count} sezioni",
+      "noMoneyInternal": "Un PDF non riporta mai un costo, nemmeno quello interno: la carta viaggia.",
+      "noMoneyPartner": "Il server toglie da questa copia ogni costo, margine, compenso, minuto standard e nome di fornitore.",
+      "versionRule": "Se il contenuto è uguale all'ultima copia per lo stesso destinatario e la stessa lingua, non nasce una nuova versione: si riapre quella.",
+      "go": "Crea PDF (si apre in una nuova scheda)",
+      "goHere": "Crea PDF"
+    },
+    "problem": {
+      "read": {
+        "signed_out": "La sessione è scaduta: accedi di nuovo.",
+        "forbidden": "Il tuo ruolo non può leggere questa scheda tecnica.",
+        "not_found": "Questo modello o questa revisione non esiste più.",
+        "unavailable": "Il server non ha risposto. Riprova tra poco.",
+        "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+        "contract": "La risposta non corrisponde a questa schermata: ricarica la pagina.",
+        "internal": "Qualcosa è andato storto. Riprova."
+      },
+      "make": {
+        "party": "Questa copia non può andare a quell'anagrafica: la copia per il terzista va a un laboratorio o a un fornitore, quella per il cliente a un cliente o a un marchio, mai a uno bloccato o archiviato, e la copia di un modello a marchio privato solo al suo marchio.",
+        "sections": "Una sezione richiesta non è tra quelle che il tuo ruolo può vedere, oppure è richiesta due volte.",
+        "company": "Indica quale azienda conserva questa copia: il modello è di tutte le aziende.",
+        "invalid": "Il PDF è stato rifiutato così com'è: controlla per chi è e le sezioni.",
+        "meanwhile": "Nel frattempo è stata creata un'altra versione di questa revisione: crea di nuovo il PDF.",
+        "forbidden": "Il tuo ruolo non crea PDF delle schede tecniche per questa azienda.",
+        "notFound": "Questo modello o questa revisione non esiste più.",
+        "signed_out": "La sessione è scaduta: accedi di nuovo.",
+        "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+        "unavailable": "Il server non ha risposto: nessun PDF è stato creato. Riprova tra poco.",
+        "internal": "Qualcosa è andato storto: nessun PDF è stato creato. Riprova."
+      }
+    },
+    "cover": {
+      "style": "Modello",
+      "type": "Tipo di prodotto",
+      "season": "Stagione",
+      "brand": "Marchio",
+      "privateLabel": "Marchio privato",
+      "ownCollection": "Collezione propria",
+      "sizes": "Taglie",
+      "sizesValue": "{range} · base {base}",
+      "lifecycle": "Ciclo di vita",
+      "gender": "Taglio",
+      "customs": "Codice doganale · origine",
+      "revision": "Revisione",
+      "revisionValue": "Revisione {revision} · {status}",
+      "released": "Rilasciata",
+      "notReleased": "Non rilasciata",
+      "effective": "In vigore dal",
+      "scope": "Il rilascio comprende",
+      "completeness": "Completezza",
+      "output": "Una produzione dà",
+      "changeNote": "Nota di modifica"
+    },
+    "scope": {
+      "whole": "Tutte le varianti e taglie",
+      "sizes": "Tutte le varianti nelle taglie {sizes}",
+      "colourways": "{colourways} in tutte le taglie",
+      "both": "{colourways} nelle taglie {sizes}"
+    },
+    "lifecycle": {
+      "CONCEPT": "Idea",
+      "DEVELOPMENT": "Sviluppo",
+      "SAMPLING": "Campionatura",
+      "APPROVED": "Approvato",
+      "IN_PRODUCTION": "In produzione",
+      "PHASE_OUT": "In uscita",
+      "DISCONTINUED": "Fuori produzione"
+    },
+    "gender": {
+      "MEN": "Uomo",
+      "WOMEN": "Donna",
+      "UNISEX": "Unisex"
+    },
+    "pictureKind": {
+      "SKETCH": "Disegno",
+      "PHOTO": "Foto",
+      "PAGE": "Pagina con richiami"
+    },
+    "patternKind": {
+      "PATTERN": "Cartamodello",
+      "MARKER": "Piazzamento",
+      "CAD": "Disegno CAD",
+      "OTHER": "Altro file"
+    },
+    "labelKind": {
+      "PPE_GARMENT": "Etichetta del capo DPI",
+      "GLOVE_MARKING": "Marcatura del guanto",
+      "FIBRE_CARE": "Etichetta composizione e manutenzione",
+      "PACKAGING": "Etichetta della confezione"
+    },
+    "testKind": {
+      "SEAM_STRENGTH": "Resistenza delle cuciture",
+      "POCKET_RETENTION": "Tenuta delle tasche delle protezioni",
+      "LABEL_DURABILITY": "Durata dell'etichetta",
+      "ABRASION": "Abrasione",
+      "TEAR_STRENGTH": "Resistenza allo strappo",
+      "IMPACT": "Impatto",
+      "DIMENSIONS": "Dimensioni",
+      "COLOUR_FASTNESS": "Solidità del colore",
+      "OTHER": "Altra prova"
+    },
+    "testResult": {
+      "PASS": "Superata",
+      "FAIL": "Non superata"
+    },
+    "frequency": {
+      "EVERY_BATCH": "ogni lotto",
+      "MONTHLY": "mensile",
+      "QUARTERLY": "trimestrale",
+      "YEARLY": "annuale",
+      "ON_CHANGE": "a ogni modifica",
+      "ONCE": "una volta"
+    },
+    "specStatus": {
+      "DRAFT": "Bozza",
+      "APPROVED": "Approvata",
+      "ARCHIVED": "Archiviata"
+    },
+    "docState": {
+      "CURRENT": "Valido",
+      "OLDER_REVISION": "Solo per una revisione precedente",
+      "MISSING": "Mancante"
+    },
+    "docKind": {
+      "DECLARATION_OF_CONFORMITY": "Dichiarazione UE di conformità",
+      "USER_INFORMATION": "Nota informativa per l'utilizzatore"
+    },
+    "colourwayStatus": {
+      "ACTIVE": "Attiva",
+      "ARCHIVED": "Archiviata"
+    },
+    "approval": {
+      "PENDING": "in attesa di approvazione",
+      "APPROVED": "approvato",
+      "CONDITIONAL": "approvato con condizioni",
+      "BLOCKED": "bloccato"
+    },
+    "bomSection": {
+      "SHELL": "Esterno",
+      "LINING": "Fodera",
+      "INSULATION": "Imbottitura",
+      "PROTECTION": "Protezioni",
+      "TRIMS": "Accessori",
+      "THREAD": "Filati",
+      "LABELS": "Etichette",
+      "PACKAGING": "Confezione",
+      "OTHER": "Altro"
+    },
+    "pictures": {
+      "none": "Nessuna immagine.",
+      "main": "Principale",
+      "ofRevision": "solo questa revisione",
+      "ofStyle": "tutte le revisioni",
+      "everyColourway": "Tutte le varianti",
+      "col": {
+        "picture": "Immagine",
+        "colourway": "Variante",
+        "callouts": "Richiami"
+      }
+    },
+    "bom": {
+      "lines_one": "{count} riga",
+      "lines_other": "{count} righe",
+      "noLines": "Nessuna riga.",
+      "bySize": "Per taglia (base {qty} {unit})",
+      "missing": "mancante",
+      "wastage": "+{pct} % di scarto",
+      "byColourway": "Per variante",
+      "kit": "Nel kit",
+      "customerSupplied": "Fornito dal cliente",
+      "customerSuppliedBy": "Fornito da {party}",
+      "onlyIn": "Solo in {colourway}",
+      "option": "Opzione {option}",
+      "step": "Per la fase {seq} · {code}",
+      "subAssembly": "Semilavorato {code} rev {revision}",
+      "supplier": "Fornitore {party}",
+      "alternates": "Alternative {list}",
+      "approval": "Materiale {state}",
+      "unitCost": "{cost} per unità",
+      "col": {
+        "seq": "#",
+        "material": "Materiale",
+        "placement": "Dove",
+        "quantity": "Quantità",
+        "colour": "Colore",
+        "details": "Dettagli",
+        "cost": "Costo alla taglia base"
+      }
+    },
+    "colourways": {
+      "none": "Nessuna variante.",
+      "notUsed": "non usato",
+      "col": {
+        "colourway": "Variante",
+        "colour": "Colore",
+        "materials": "Colori dei materiali"
+      }
+    },
+    "spec": {
+      "none": "Nessuna tabella misure per questa revisione.",
+      "missing": "mancante",
+      "state": "Stato",
+      "base": "Taglia base",
+      "grade": "Regola di sviluppo",
+      "missingCount": "Valori",
+      "noneMissing": "Tutti i valori inseriti",
+      "missingValues_one": "{count} valore mancante",
+      "missingValues_other": "{count} valori mancanti",
+      "noPoints": "Ancora nessun punto di misura.",
+      "baseMark": "{size} · base",
+      "col": {
+        "point": "Punto di misura"
+      }
+    },
+    "construction": {
+      "composed": "Composta dal ciclo di lavoro, dalle impostazioni di macchina e punto, dai controlli e dalle istruzioni di lavoro, dalle pagine con richiami e dai file dei cartamodelli: modificali dove si trovano.",
+      "steps": "Fasi di costruzione",
+      "noSteps": "Nessuna fase nel ciclo.",
+      "everyCell": "tutte le varianti e opzioni",
+      "subcontracted": "In terzista",
+      "subcontractedTo": "In terzista presso {party}",
+      "instruction": "{number} v{version}",
+      "instructionSteps_one": "{count} passo",
+      "instructionSteps_other": "{count} passi",
+      "critical_one": "{count} punto critico",
+      "critical_other": "{count} punti critici",
+      "safety": "note di sicurezza",
+      "noInstruction": "Nessuna istruzione in vigore",
+      "minutes": "{minutes} min",
+      "pages": "Pagine con richiami",
+      "patterns": "File dei cartamodelli",
+      "noPatterns": "Nessun file di cartamodello.",
+      "everySize": "Tutte le taglie",
+      "col": {
+        "seq": "#",
+        "operation": "Operazione",
+        "settings": "Macchina e punto",
+        "checkpoint": "Controllo",
+        "instruction": "Istruzione di lavoro",
+        "minutes": "Minuti standard",
+        "file": "File",
+        "kind": "Tipo",
+        "sizes": "Taglie",
+        "note": "Nota"
+      }
+    },
+    "labels": {
+      "template": "Etichetta del capo",
+      "label": "Etichetta",
+      "languages": "Lingue",
+      "size": "Misura",
+      "maker": "Fabbricante",
+      "composition": "Composizione",
+      "care": "Manutenzione",
+      "animalOrigin": "Dicitura origine animale",
+      "yes": "Sì",
+      "no": "No",
+      "qr": "Il QR porta a",
+      "noTemplate": "Nessuna etichetta del capo indicata su questa revisione.",
+      "lines": "Righe di etichette e confezione della distinta",
+      "branding": "Confezione del marchio",
+      "brandingSet": "Set di marchio",
+      "brand": "Marchio",
+      "artwork": "File",
+      "artworkCount": "{logos} loghi · {artwork} grafiche di etichetta",
+      "rules": "Regole di confezionamento",
+      "noBranding": "Nessuna confezione di marchio per questo modello.",
+      "col": {
+        "rule": "Regola",
+        "material": "Materiale",
+        "quantity": "Quantità"
+      }
+    },
+    "protection": {
+      "composed": "Composta dalla classificazione, dal posizionamento delle protezioni, dai certificati e dalle prove di controllo della produzione: non è ancora registrato un obiettivo per prova.",
+      "class": "Classificazione",
+      "coverage": "Copertura dei certificati",
+      "zones": "Protezioni per tasca",
+      "noPlacements": "Nessuna protezione posizionata.",
+      "protectors": "Righe delle protezioni nella distinta",
+      "certificates": "Certificati",
+      "noCertificates": "Nessun certificato copre il modello.",
+      "tests": "Prove di controllo della produzione",
+      "noTests": "Nessuna prova di controllo della produzione.",
+      "notTested": "Non ancora provata",
+      "reportOnFile": "rapporto in archivio",
+      "levelValue": "{standard} · livello {level}",
+      "allSizes": "Tutte le taglie",
+      "everyColourway": "Tutte le varianti",
+      "validRange": "{from} – {to}",
+      "col": {
+        "pocket": "Tasca",
+        "protector": "Protezione",
+        "level": "Norma e livello",
+        "sizes": "Taglie",
+        "position": "Posizione",
+        "certificate": "Certificato",
+        "body": "Organismo notificato",
+        "valid": "Validità",
+        "covers": "Copre",
+        "levels": "Livelli di prestazione",
+        "test": "Prova",
+        "due": "Scadenza",
+        "result": "Esito",
+        "report": "Rapporto",
+        "by": "Provata da"
+      }
+    },
+    "coverage": {
+      "notRequired": "Nessun certificato richiesto.",
+      "noSkus": "Ancora nessuna variante attiva.",
+      "all_one": "Coperta: la {count} combinazione variante × taglia attiva.",
+      "all_other": "Coperte: tutte le {count} combinazioni variante × taglia attive.",
+      "some": "{covered} su {count} combinazioni variante × taglia attive coperte; {notCovered} non coperte."
+    },
+    "compliance": {
+      "class": "Classificazione",
+      "scope": "Il rilascio comprende",
+      "blockers": "Prima del rilascio",
+      "noBlockers": "Nulla blocca il rilascio.",
+      "blockersCount_one": "{count} elemento blocca il rilascio (vedi Conformità)",
+      "blockersCount_other": "{count} elementi bloccano il rilascio (vedi Conformità)",
+      "noDocuments": "Non serve alcuna dichiarazione o nota informativa.",
+      "documentsNone": "Nessuna dichiarazione o nota informativa registrata.",
+      "documents": "Dichiarazioni e note informative",
+      "col": {
+        "document": "Documento",
+        "language": "Lingua",
+        "state": "Stato"
+      }
+    },
+    "log": {
+      "effective": "{from} – {to}",
+      "open": "aperta",
+      "col": {
+        "revision": "Revisione",
+        "released": "Rilasciata",
+        "effective": "In vigore",
+        "note": "Nota di modifica",
+        "by": "Rilasciata da"
+      }
+    },
+    "window": {
+      "title": "Scheda tecnica {code} · rev {revision} · v{version}",
+      "titleNoVersion": "Scheda tecnica {code} · rev {revision}",
+      "titlePlain": "PDF scheda tecnica",
+      "reading": "Lettura…",
+      "opening": "Apertura del PDF…",
+      "revision": "Revisione",
+      "revisionOption": "Revisione {revision} · {status}",
+      "version": "Versione",
+      "make": "Crea nuova versione",
+      "print": "Stampa",
+      "printHeld": "Il PDF non è ancora aperto.",
+      "made": "{audience} · {code} · creata il {at} da {by}",
+      "failed": "Impossibile aprire il modello",
+      "versionsFailed": "Impossibile leggere le versioni",
+      "pdfFailed": "Impossibile aprire questo PDF",
+      "forbidden": {
+        "title": "Non hai accesso alle schede tecniche",
+        "body": "Le schede tecniche si aprono ai ruoli che leggono la distinta: il responsabile di produzione, il buyer, l'ufficio prodotto."
+      },
+      "none": {
+        "title": "Ancora nessun PDF della revisione {revision}",
+        "body": "Crea il primo: indica per chi è, la lingua e le sezioni.",
+        "bodyNoMake": "Lo crea il responsabile di produzione o il buyer."
+      }
+    },
+    "scan": {
+      "scanned": "Pagina scansionata {code}",
+      "CURRENT": "Questa pagina è valida: versione {version} della revisione {revision}, la revisione in vigore.",
+      "DRAFT": "Questa pagina è la copia più recente (versione {version} della revisione {revision}), ma la revisione {revision} è ancora una bozza: può cambiare prima del rilascio.",
+      "NEWER_VERSION": "Esiste una versione più recente: la versione {newer} della revisione {revision}. Questa pagina è la versione {version}: non lavorare con questa.",
+      "NEWER_REVISION": "Esiste una scheda tecnica più recente: è in vigore la revisione {inForce} (la sua copia più recente è la versione {newer}). Questa pagina è la versione {version} della revisione {revision}: non lavorare con questa.",
+      "NEWER_REVISION_NONE": "Esiste una scheda tecnica più recente: è in vigore la revisione {inForce}, ancora senza una copia di questo tipo. Questa pagina è la versione {version} della revisione {revision}: non lavorare con questa.",
+      "OBSOLETE": "Questa pagina è la versione {version} della revisione {revision}, che è obsoleta, e nessuna revisione è in vigore: chiedi all'ufficio prima di lavorare con questa.",
+      "nowShowing": "Qui è mostrata la versione {version} della revisione {revision}.",
+      "openNewer": "Apri la versione {version} della revisione {revision}",
+      "openRevision": "Apri la revisione {revision}",
+      "failed": "Impossibile verificare questa pagina",
+      "notFound": {
+        "title": "Nessuna pagina di scheda tecnica ha questo codice",
+        "body": "Il codice potrebbe essere scritto male, oppure la pagina è di un modello che il tuo ruolo non vede."
+      },
+      "type": {
+        "title": "Verifica una pagina stampata",
+        "body": "Scrivi il codice stampato sotto il QR di una pagina della scheda tecnica.",
+        "label": "Codice sotto il QR",
+        "hint": "Come TP 7K3QM-2XA9B; spazi e trattini non contano.",
+        "held": "Scrivi prima il codice.",
+        "go": "Verifica"
+      }
+    }
+  }
+}

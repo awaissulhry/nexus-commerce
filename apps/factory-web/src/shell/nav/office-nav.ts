@@ -412,6 +412,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/instructions/[id]',
   '/production/instructions/[id]/preview',
   '/production/instructions/[id]/sheet',
+  // B-W2b-243: Products › Styles › Tech pack PDF (SCR-306, a window page; also where a scanned QR lands).
+  '/products/styles/tech-pack',
 ])
 
 /**
@@ -449,7 +451,8 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * line TV's office preview) adds its address here.
  */
 export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print', /* B-W2b-144 */ '/plant/risk/dvr', '/plant/risk/role-sheets', '/plant/risk/plan', /* B-W2b-147 */ '/plant/ppe/receipt', '/plant/ppe/card', /* B-W2b-148 */ '/plant/health/print', '/plant/health/copy', /* B-W2b-146 */ '/people/skills/certificate', '/people/skills/due', /* B-W2b-136 */ '/plant/machines/wall', /* B-W2b-104 */ '/quality/plans/print', /* B-W2b-119 */ '/quality/capa/report', /* B-W2b-127 */ '/quality/inspections/report', '/quality/inspections/reports',
-  /* B-W2b-129 */ '/production/cutting/sheet'])
+  /* B-W2b-129 */ '/production/cutting/sheet',
+  /* B-W2b-243 */ '/products/styles/tech-pack'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')
