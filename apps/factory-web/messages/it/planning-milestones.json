@@ -1,0 +1,368 @@
+{
+  "noAccess": {
+    "title": "Non puoi aprire il Calendario T&A",
+    "body": "Il Calendario T&A è per chi pianifica: il tuo ruolo non legge la pianificazione (planning.view). Chiedi al tuo amministratore."
+  },
+  "page": {
+    "today": "Oggi {day}",
+    "notRead": "Non ancora letto",
+    "updates_one": "{count} modifica · Mostra",
+    "updates_other": "{count} modifiche · Mostra",
+    "search": "Ordine o riferimento del cliente",
+    "add": "Aggiungi gate",
+    "more": "Altro",
+    "keys": "Scorciatoie da tastiera",
+    "truncated": "Sono mostrati solo i 400 ordini aperti con le date promesse più vicine: cerca un ordine per trovare gli altri."
+  },
+  "live": {
+    "connecting": "In collegamento",
+    "live": "In diretta",
+    "offline": "Offline: le modifiche non si vedono finché la connessione non torna"
+  },
+  "view": {
+    "label": "Mostra le scadenze come",
+    "calendar": "Calendario",
+    "list": "Elenco",
+    "orders": "Per ordine"
+  },
+  "gates": {
+    "title": "In attesa di un gate",
+    "purpose": "Ordini che non possono partire perché un gate non è superato: il tabellone di pianificazione trattiene i loro ordini di lavoro finché il gate non è superato o qualcuno parte prima con un motivo.",
+    "error": "Impossibile caricare gli ordini in attesa di un gate"
+  },
+  "tile": {
+    "SAMPLE": "Campione non approvato",
+    "LEATHER_NOT_RECEIVED": "Pelle non arrivata",
+    "LEATHER_NOT_PASSED": "Pelle non rilasciata",
+    "TRIMS": "Accessori non arrivati",
+    "OTHER": "Laboratorio o altro",
+    "hint": {
+      "SAMPLE": "Ordini in attesa che un campione o il campione di pre-produzione sia approvato",
+      "LEATHER_NOT_RECEIVED": "Ordini in attesa della pelle senza ancora un lotto di pelle riservato",
+      "LEATHER_NOT_PASSED": "Ordini la cui pelle riservata non è ancora rilasciata dalla qualità",
+      "TRIMS": "Ordini in attesa che arrivino gli accessori",
+      "OTHER": "Ordini in attesa del laboratorio o di un loro gate"
+    },
+    "filtering": "Mostra solo: {tile}."
+  },
+  "calendar": {
+    "title": "Scadenze",
+    "purpose": {
+      "calendar": "Le scadenze per data obiettivo: apri un giorno per vederne le scadenze.",
+      "list": "Ogni scadenza degli ordini aperti, con l'obiettivo, cosa è successo e il ritardo.",
+      "orders": "Una riga per ordine: le scadenze come punti, cosa aspetta, la prossima."
+    },
+    "error": "Impossibile caricare le scadenze",
+    "label": "Scadenze per data obiettivo",
+    "kind": {
+      "late": "In ritardo",
+      "waiting": "Un gate aspetta",
+      "due": "In scadenza",
+      "done": "Fatte",
+      "none": "Nessuna scadenza"
+    },
+    "count_one": "{count} scadenza",
+    "count_other": "{count} scadenze",
+    "andMore_one": "e {count} altra",
+    "andMore_other": "e altre {count}",
+    "dayLabel": "Le scadenze del giorno",
+    "dayTitle_one": "{day}: {count} scadenza",
+    "dayTitle_other": "{day}: {count} scadenze",
+    "empty": "Nessuna scadenza in questo periodo",
+    "emptyMonth": "Nessuna scadenza in questo periodo. Scegli un altro mese, o un giorno.",
+    "dayEmpty": "Nessuna scadenza in questo giorno.",
+    "pick": "Apri un giorno per vederne le scadenze.",
+    "undated_one": "{count} scadenza senza data obiettivo",
+    "undated_other": "{count} scadenze senza data obiettivo",
+    "layoutGrid": "Mese",
+    "layoutList": "Giorni con scadenze"
+  },
+  "kind": {
+    "SAMPLE_APPROVED": "Campione approvato",
+    "LEATHER_APPROVED": "Pelle approvata",
+    "TRIMS_IN": "Accessori arrivati",
+    "PP_SAMPLE": "Campione di pre-produzione approvato",
+    "LAB_PASSED": "Laboratorio superato",
+    "OTHER": "Altro"
+  },
+  "kindHint": {
+    "SAMPLE_APPROVED": "Si supera da solo quando il giro campione che indica è approvato.",
+    "LEATHER_APPROVED": "Si supera da solo quando ogni lotto di pelle riservato all'ordine è rilasciato dalla qualità.",
+    "TRIMS_IN": "Si segna fatto quando gli accessori sono arrivati.",
+    "PP_SAMPLE": "Si supera da solo quando il giro di pre-produzione che indica è approvato.",
+    "LAB_PASSED": "Si segna fatto quando i risultati del laboratorio sono arrivati e superati.",
+    "OTHER": "Di' cos'è: si segna fatto a mano."
+  },
+  "milestone": {
+    "START": "Inizio produzione",
+    "SHIP": "Spedizione"
+  },
+  "milestoneKind": {
+    "GATE": "Gate di pre-produzione",
+    "START": "Segue il tabellone di pianificazione e gli ordini di lavoro",
+    "SHIP": "Segue la data promessa e le spedizioni"
+  },
+  "state": {
+    "DONE": "Fatta",
+    "WAITING": "In attesa",
+    "STARTED_BEFORE": "Partito prima",
+    "TO_COME": "Da fare"
+  },
+  "late": {
+    "onTime": "Puntuale",
+    "doneLate_one": "Fatta con {count} giorno di ritardo",
+    "doneLate_other": "Fatta con {count} giorni di ritardo",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo"
+  },
+  "row": {
+    "owner": "pianificatore {name}",
+    "actual": "fatta il {day}",
+    "open": "Apri",
+    "orderNewTab": "Apri l'ordine {order} in una nuova scheda",
+    "orderNewTabShort": "Apri l'ordine in una nuova scheda",
+    "round": "Aspetta {round}",
+    "openNamed": "Apri {name} di {order}",
+    "openHint": "Segna fatto, parti prima del gate, modificalo",
+    "menu": "Azioni per {name} di {order}",
+    "done": "Segna fatto…",
+    "startBefore": "Parti prima del gate…",
+    "target": "obiettivo {day}",
+    "noTarget": "nessuna data obiettivo"
+  },
+  "col": {
+    "order": "Ordine",
+    "milestone": "Scadenza",
+    "owner": "Pianificatore",
+    "target": "Obiettivo",
+    "actual": "Effettiva",
+    "state": "Stato",
+    "late": "Ritardo",
+    "more": "Azioni",
+    "ship": "Data di spedizione",
+    "milestones": "Scadenze",
+    "waiting": "In attesa di",
+    "lateCount": "In ritardo",
+    "next": "Prossima"
+  },
+  "list": {
+    "count_one": "{count} scadenza",
+    "count_other": "{count} scadenze"
+  },
+  "bulk": {
+    "done_one": "Segna {count} fatto",
+    "done_other": "Segna {count} fatti"
+  },
+  "empty": {
+    "body": "Aggiungi un gate a un ordine per pianificare cosa deve essere vero prima che il lavoro possa partire.",
+    "noMatch": {
+      "title": "Nessun risultato",
+      "body": "Nessuna scadenza corrisponde alla ricerca o al riquadro premuto."
+    }
+  },
+  "orders": {
+    "label": "Ordini e le loro scadenze",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "steps": "Scadenze dell'ordine {order}",
+    "noneWaiting": "Niente",
+    "allDone": "Tutte le scadenze fatte",
+    "menu": "Azioni per l'ordine {order}",
+    "add": "Aggiungi un gate…",
+    "late_one": "{count} in ritardo",
+    "late_other": "{count} in ritardo",
+    "empty": "Nessun ordine aperto",
+    "more_one": "+{count} altro",
+    "more_other": "+{count} altri"
+  },
+  "tracker": {
+    "target": "Obiettivo {date}"
+  },
+  "keys": {
+    "open": "Apri la scadenza",
+    "openNext": "Apri la prossima scadenza dell'ordine",
+    "done": "Segna fatto il gate",
+    "views": "Calendario, Elenco, Per ordine",
+    "add": "Aggiungi un gate",
+    "months": "Il mese prima o dopo (il calendario)",
+    "today": "Oggi (il calendario)"
+  },
+  "dialog": {
+    "title": "{name} · {order}",
+    "gone": {
+      "title": "Scadenza non trovata",
+      "body": "Questa scadenza non è più tra gli ordini aperti (il gate è stato tolto, o l'ordine è spedito o chiuso)."
+    },
+    "order": "Ordine",
+    "customerRef": "Riferimento del cliente {ref}",
+    "target": "Obiettivo",
+    "actual": "Effettiva",
+    "owner": "Pianificatore",
+    "round": "Giro campione",
+    "leather": "Pelle",
+    "passed": "Superato",
+    "passedBy": "{name}, {day}",
+    "startedBefore": "Partito prima",
+    "startedBy": "{name}, {when}",
+    "comesFrom": "Viene da",
+    "follows": {
+      "START": "La prima barra degli ordini di lavoro dell'ordine sul tabellone di pianificazione (obiettivo) e il primo ordine di lavoro iniziato (effettiva).",
+      "SHIP": "La data promessa dell'ordine (obiettivo) e la prima spedizione partita (effettiva)."
+    },
+    "openOrder": "Apri l'ordine",
+    "remove": "Togli",
+    "edit": "Modifica",
+    "startBefore": "Parti prima del gate…",
+    "done": "Segna fatto…",
+    "holds_one": "Finché aspetta, il tabellone di pianificazione trattiene {count} ordine di lavoro di {order}.",
+    "holds_other": "Finché aspetta, il tabellone di pianificazione trattiene {count} ordini di lavoro di {order}.",
+    "holdsNone": "Finché aspetta, il tabellone di pianificazione tratterrà gli ordini di lavoro di {order}.",
+    "holdsHow": "Segnalo fatto quando è vero, o fai partire il lavoro prima con un motivo (qualcuno diverso dal suo pianificatore).",
+    "opened": "Superato: gli ordini di lavoro di {order} si possono pianificare.",
+    "openedEarly": "Partito prima del gate: gli ordini di lavoro di {order} si possono pianificare; il gate aspetta ancora di essere superato."
+  },
+  "decision": {
+    "APPROVED": "Approvato",
+    "APPROVED_WITH_COMMENTS": "Approvato con commenti",
+    "REJECTED": "Rifiutato",
+    "none": "Non ancora deciso"
+  },
+  "leather": {
+    "NOT_RECEIVED": "Nessun lotto di pelle ancora riservato all'ordine",
+    "NOT_PASSED": "Riservata, non ancora tutta rilasciata dalla qualità",
+    "PASSED": "Ogni lotto di pelle riservato all'ordine è rilasciato"
+  },
+  "via": {
+    "OFFICE": "A mano, {day}",
+    "SAMPLE": "Con l'approvazione del suo giro campione, {day}",
+    "LOT": "Con il rilascio della pelle, {day}"
+  },
+  "roundKind": {
+    "PROTO": "Prototipo, giro {no}",
+    "FIT": "Vestibilità, giro {no}",
+    "SALESMAN": "Campionario, giro {no}",
+    "PRE_PRODUCTION": "Pre-produzione, giro {no}",
+    "CERTIFICATION": "Certificazione, giro {no}",
+    "BRAND": "Campione del marchio, giro {no}"
+  },
+  "form": {
+    "addTitle": "Aggiungi un gate",
+    "editTitle": "Modifica il gate: {name}",
+    "subtitle": "Ordine {order} · {customer}",
+    "pickSubtitle": "Prima scegli l'ordine",
+    "add": "Aggiungi il gate",
+    "save": "Salva",
+    "order": "Ordine",
+    "noOrders": "Nessun ordine aperto di cui puoi gestire i gate.",
+    "pickOrder": "Scegli un ordine aperto",
+    "ships": "spedisce il {day}",
+    "kind": "Gate",
+    "label": "Cos'è",
+    "labelOptional": "In parole (facoltativo)",
+    "labelHint": "Fino a {max} caratteri, una riga.",
+    "target": "Data obiettivo",
+    "targetHint": "Entro quando va superato (facoltativo).",
+    "round": "Giro campione",
+    "roundHint": "Il giro la cui approvazione lo supera (facoltativo): un giro dei modelli dell'ordine per il suo cliente, o interno.",
+    "roundHintPp": "Il giro di pre-produzione la cui approvazione lo supera (facoltativo).",
+    "noRound": "Nessun giro indicato",
+    "owner": "Pianificatore",
+    "ownerHint": "Chi è responsabile del gate: non può essere lui a far partire il lavoro prima.",
+    "ownerMe": "Io",
+    "choicesFailed": "Impossibile caricare i giri e i pianificatori: il gate si può salvare anche senza."
+  },
+  "pass": {
+    "title_one": "Segna fatto il gate",
+    "title_other": "Segna fatti {count} gate",
+    "gate": "{name} · {order}",
+    "on": "Superato il",
+    "onHint": "Oggi o un giorno prima.",
+    "opens": "Una volta superato, gli ordini di lavoro dell'ordine si possono pianificare sul tabellone.",
+    "confirm_one": "Segna fatto",
+    "confirm_other": "Segna {count} fatti"
+  },
+  "start": {
+    "title_one": "Partire prima del gate?",
+    "title_other": "Partire prima di {count} gate?",
+    "subtitle": "Ordine {order}",
+    "gate": "{name} · obiettivo {target}",
+    "owner": "Pianificatore {name}",
+    "noOwner": "Nessun pianificatore indicato",
+    "why": "Il lavoro dell'ordine aspetta questo gate: partire prima permette al tabellone di pianificazione di mettere ora i suoi ordini di lavoro. Il gate aspetta ancora di essere superato.",
+    "reason": "Perché parte prima del gate",
+    "reasonHint": "Da {min} a {max} caratteri: cosa rende sicuro partire ora.",
+    "audit": "Registrato sul gate con il tuo nome, l'ora e il motivo. Solo chi non è né il pianificatore del gate né chi l'ha aggiunto può farlo.",
+    "confirm": "Parti prima con questo motivo"
+  },
+  "remove": {
+    "title": "Togliere il gate {name} di {order}?",
+    "confirm": "Togli il gate",
+    "what": "Il gate viene tolto dall'ordine; nient'altro cambia.",
+    "frees_one": "Il tabellone di pianificazione smette di trattenere {count} ordine di lavoro per questo gate.",
+    "frees_other": "Il tabellone di pianificazione smette di trattenere {count} ordini di lavoro per questo gate.",
+    "nothingHeld": "Nessun ordine di lavoro dell'ordine lo aspetta ora.",
+    "back": "Aggiungi di nuovo il gate"
+  },
+  "notice": {
+    "added": "Gate aggiunto.",
+    "addedPassed": "Gate aggiunto: il suo giro campione è già approvato, quindi è superato.",
+    "edited": "Gate modificato.",
+    "passed_one": "Gate segnato fatto.",
+    "passed_other": "{count} gate segnati fatti.",
+    "started_one": "Partito prima del gate: gli ordini di lavoro dell'ordine si possono pianificare.",
+    "started_other": "Partito prima di {count} gate: gli ordini di lavoro dell'ordine si possono pianificare.",
+    "removed": "Gate tolto."
+  },
+  "needs": {
+    "planning": {
+      "milestones": {
+        "manage": "Gestire i gate di un ordine richiede il permesso di gestire i gate (un pianificatore o un responsabile di produzione).",
+        "override": "Partire prima di un gate richiede un ruolo che può far partire il lavoro in anticipo (un responsabile di produzione), e qualcuno diverso dal pianificatore del gate."
+      },
+      "view": "Il tuo ruolo non legge la pianificazione."
+    }
+  },
+  "held": {
+    "loading": "Lettura degli ordini…",
+    "busy": "Salvataggio…",
+    "unknown": "Non possibile ora.",
+    "notAGate": "Inizio produzione e spedizione seguono il tabellone e le spedizioni: si segna fatto solo un gate.",
+    "pickOrder": "Prima scegli l'ordine.",
+    "noGate": "Nessun gate scelto.",
+    "reasonShort": "Di' perché in almeno {min} caratteri.",
+    "reasonLong": "Al massimo {max} caratteri.",
+    "labelLong": "Al massimo {max} caratteri."
+  },
+  "refusal": {
+    "ORDER_CLOSED": "L'ordine è spedito, chiuso o annullato: i suoi gate restano come sono.",
+    "GATE_EXISTS": "L'ordine ha già un gate di questo tipo: modifica quello.",
+    "LABEL_NEEDED": "Di' cos'è il gate: un gate di tipo Altro ha bisogno delle sue parole.",
+    "ROUND_ONLY_SAMPLE": "Solo un gate di campione indica un giro campione.",
+    "ROUND_NOT_OF_ORDER": "Quel giro campione non è di uno dei modelli dell'ordine per il suo cliente, o è stato annullato.",
+    "ROUND_KIND": "Un gate del campione di pre-produzione aspetta un giro di pre-produzione.",
+    "ROUND_NOT_APPROVED": "Aspetta che il suo giro campione sia approvato: allora si supera da solo.",
+    "PASSED": "Il gate è già superato.",
+    "STARTED_BEFORE": "Il lavoro è già partito prima di questo gate.",
+    "OWN_GATE": "Sei il pianificatore di questo gate o l'hai aggiunto tu: qualcun altro deve far partire il lavoro prima.",
+    "FUTURE_DAY": "Un gate si supera oggi o un giorno prima, non un giorno futuro.",
+    "KEPT": "Un gate superato o con partenza anticipata si conserva.",
+    "OWNER_NOT_ALLOWED": "Quella persona non può gestire i gate di questo ordine.",
+    "changed": "Qualcuno l'ha modificato nel frattempo: è stato riletto, riprova.",
+    "forbidden": "Il tuo ruolo non può farlo per l'azienda o il cliente di questo ordine.",
+    "notFound": "Non trovato: è stato tolto nel frattempo.",
+    "reason": "Di' perché parte prima del gate.",
+    "invalid": "Qualcosa nel modulo non è valido: controllalo e riprova.",
+    "offline": "La connessione è caduta: non è stato salvato nulla. Riprova quando sei di nuovo online.",
+    "failed": "Non è stato possibile salvare: riprova."
+  },
+  "error": {
+    "offline": "La connessione è caduta: riprova quando sei di nuovo online.",
+    "forbidden": "Il tuo ruolo non legge la pianificazione di questa azienda.",
+    "failed": "Qualcosa è andato storto leggendo gli ordini: riprova."
+  },
+  "common": {
+    "retry": "Riprova",
+    "clearFilters": "Togli i filtri",
+    "cancel": "Annulla"
+  }
+}

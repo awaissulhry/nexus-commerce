@@ -77,4 +77,13 @@ export const manifest = defineManifest({
   'GET /planning/leather/yield': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'POST /planning/leather/styles/:styleId/loss/accept': { audiences: ['office'], permission: 'planning.leather.manage', scope: 'record' },
   'POST /planning/leather/styles/:styleId/loss/dismiss': { audiences: ['office'], permission: 'planning.leather.manage', scope: 'record' },
+  // B-W2b-263: Time & action (./milestones): read with planning.view over the order's company and customer; gates kept with
+  // planning.milestones.manage; "Start before the gate" with planning.milestones.override (someone other than its planner).
+  'GET /planning/milestones': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/milestones/orders/:salesOrderId/choices': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/milestones/gates': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
+  'POST /planning/milestones/gates/pass': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
+  'PATCH /planning/milestones/gates/:gateId': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
+  'POST /planning/milestones/gates/:gateId/remove': { audiences: ['office'], permission: 'planning.milestones.manage', scope: 'record' },
+  'POST /planning/milestones/gates/:gateId/start-before': { audiences: ['office'], permission: 'planning.milestones.override', scope: 'record' },
 })

@@ -59,6 +59,8 @@ import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 // B-W2b-252: sample decisions (sales and the production manager decide; the production manager and quality measure the fit).
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
+// B-W2b-263: Time & action (pre-production gates).
+import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -879,7 +881,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-258
   ...(audience === 'office' ? (USER_INFORMATION_ADDS[key] ?? []) : []),
   // B-W2b-256
-  ...(audience === 'office' ? (SUPPLIER_DECLARATIONS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SUPPLIER_DECLARATIONS_ADDS[key] ?? []) : []),
+  // B-W2b-263
+  ...(audience === 'office' ? (PLANNING_MILESTONES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

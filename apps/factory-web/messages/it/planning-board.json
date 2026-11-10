@@ -189,6 +189,7 @@
     "PART_LANE": "Una parte di un ordine va su una linea o da un terzista.",
     "OPERATION_DONE": "Quella fase è fatta: niente da pianificare.",
     "NOTHING_TO_PLACE": "Niente da pianificare: ogni fase con lavoro residuo è sul tabellone.",
+    "GATE_NOT_PASSED": "Non spostato: l'ordine aspetta un gate di pre-produzione non superato. Superalo, o parti prima del gate con un motivo (Pianificazione › Calendario T&A).",
     "NOTHING_CHANGED": "Niente è cambiato dall'ultima versione pubblicata.",
     "CONFLICT": "Il tabellone ha rifiutato questa modifica con il piano com'è ora: è stato riletto.",
     "FORBIDDEN": "Non puoi modificare il piano di lavoro di questo stabilimento.",
