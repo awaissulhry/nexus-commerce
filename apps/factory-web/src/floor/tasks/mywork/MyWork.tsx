@@ -16,6 +16,10 @@ import { TASK_ROUTES, taskForScan } from '../routes'
 import { fetchMyMessages, fetchStationHelp, fetchWorkList, keptMyMessages, keptStationHelp, keptWorkList } from './api'
 import { arranged, changedRows, helpHeld, helpPayload, listChanged, materialTile, PUT_LAST_KEY, putLastIn, readPutLast, readSeen, SEEN_KEY, withPutLast, withSeen, type DispatchList, type MyMessages, type PutLast, type StationHelp } from './model'
 import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from './view/MyWorkView'
+// B-W2b-232 (FI9:02): "New instructions N".
+import { useMine } from '../instructions/mine'
+import { dueCount } from '../instructions/model'
+import { offerInstructions, seenHere } from '../instructions/memory'
 // B-W2b-126: the repair queue (MES-132).
 import { fetchRepairQueue, keptRepairQueue, scanOrKeep, type RepairScan } from './repair/api'
 import { doneStill, outCounts, repairHeld, rowOfCode, withDone, type RepairDone, type RepairQueue } from './repair/model'
@@ -94,6 +98,9 @@ export function FloorMyWork() {
   // B-W2b-109: at an inspection bench the inspector queue is My work's list (design "Variants: … inspector queue").
   const inspector = allowed && mayQueue(me?.permissions ?? [])
   const inspectorFirst = inspector && queueFirst(me ? modeOf(me.device.station, me.device.mode) : null, me?.permissions ?? [])
+  // B-W2b-232 (FI9:02): the versions waiting for this person's Seen (production.scan reads them), on the same 30 s beat.
+  const instructionsAllowed = allowed && Boolean(me?.permissions.includes('production.scan'))
+  const { mine: myInstructions } = useMine({ api, online, workerId: me?.worker.id ?? null, allowed: instructionsAllowed, onSignedOut: () => void sessionEnded() })
   const [step, setStep] = useState<MyWorkStep>(allowed ? (inspectorFirst ? { kind: 'inspections' } : { kind: 'loading' }) : { kind: 'noPermission' })
   const [shown, setShown] = useState<DispatchList | null>(null)
   const [fresh, setFresh] = useState<DispatchList | null>(null)
@@ -496,6 +503,10 @@ export function FloorMyWork() {
       case 'messages':
         setPutLastDone(null)
         return setStep({ kind: 'messages' })
+      // B-W2b-232 (FI9:02): New instructions opens Spec & instructions on its list "New for you".
+      case 'instructions':
+        offerInstructions({ code: null, operationId: null, from: 'mywork' })
+        return router.push(TASK_ROUTES.instructions)
       case 'message':
         return openMessage(action.id)
       case 'putLast':
@@ -583,6 +594,7 @@ export function FloorMyWork() {
         seen,
         messagesAsOf: messagesAsOf ?? (!online && messages ? messages.asOf : null),
         messagesFailed,
+        instructions: dueCount(myInstructions, seenHere(me.worker.id)),
         helpHeld: held,
         call,
         repair: canRepair ? repairShown : null,

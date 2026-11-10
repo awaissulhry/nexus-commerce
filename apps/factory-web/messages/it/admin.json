@@ -1689,6 +1689,8 @@
     "product_changes_approve": "Approvare o rifiutare gli ordini di modifica (mai i propri)",
     "product_options_manage": "Gestire la libreria delle opzioni: gruppi, valori, regole ed effetti",
     "product_options_price": "Impostare il supplemento di prezzo di un'opzione",
+    "product_techpacks_make": "Creare il PDF della scheda tecnica per un destinatario (la copia per i partner non ha costi, margini né paghe)",
+    "product_prepacks_manage": "Gestire i prepack ordinati dai rivenditori: assortimenti fissi di taglie per modello o scala taglie",
     "product_bom_view": "Vedere le distinte base",
     "product_bom_manage": "Modificare una distinta base in bozza",
     "product_bom_release": "Rilasciare una revisione (blocca distinta, ciclo ed etichetta)",

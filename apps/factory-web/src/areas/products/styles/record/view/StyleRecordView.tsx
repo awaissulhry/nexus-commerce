@@ -17,6 +17,8 @@ import { draftOf, editableRevision, isRoutingBlocker, nextRevisionNumber, releas
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
+import { PrepacksSection } from '../prepacks/view/PrepacksSection'
+import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
 import { TabBody } from './TabBody'
 import { VariantsTab } from './VariantsTab'
 import '../../styles.css'
@@ -35,7 +37,7 @@ export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
  */
 export function StyleRecordView({ model, actions, panels }: { model: StyleRecordViewModel; actions?: StyleRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists']}>
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks']}>
       <StyleRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -307,6 +309,12 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
             <OverviewTab style={style} model={model} actions={actions} />
           ) : model.tab === 'variants' ? (
             <VariantsTab style={style} model={model} actions={actions} />
+          ) : model.tab === 'sizes' ? (
+            // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
+            <div className="fw-st-stack-lg">
+              <PrepacksSection model={model} actions={actions?.prepacks} />
+              {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
+            </div>
           ) : model.tab === 'activity' ? (
             (activity ?? <p className="fw-st-hint">{t('record.noPanels')}</p>)
           ) : (
