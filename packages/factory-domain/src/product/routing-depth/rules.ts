@@ -20,8 +20,9 @@ import { decimalText } from '../units/units'
  *                instruction (`settingLine`).
  *   variants     a step only for some cells (PRD-128): sizes of the style's range, colourways of the style, option values;
  *                empty = every one. A work order's copy keeps the steps one of its cells needs (`stepsForCells`); a work
- *                order whose cells need no scanned step is held at release in words (`workCentresForCells`). No option
- *                value exists yet (the options of a style come later): a step names none.
+ *                order whose cells need no scanned step is held at release in words (`workCentresForCells`). Option
+ *                values: active ones of the groups the style offers (B-W2b-229 wires them: `planVariants` takes the
+ *                style's offered values).
  *   checkpoint   an inspection plan at a step (PRD-119): a cutting, in-line or end-of-line plan of the style's company; the
  *                bundle's first report there opens its check (`checkpointKindOf`, the plan version's frequency; a cutting
  *                plan a cutting check, in-line a roving or first-piece check, end of line an end-of-line check), only for
@@ -141,19 +142,20 @@ export const EVERY_CELL: StepVariants = Object.freeze({ sizes: [], colourwayIds:
 
 export const isLimited = (variants: StepVariants): boolean => variants.sizes.length > 0 || variants.colourwayIds.length > 0 || variants.optionValueIds.length > 0
 
-/** The words of option values that do not exist yet (a step names none until a style has options). */
+/** B-W2b-229: the words when the style offers no option (a step names none until a group is offered on the style). */
 export const NO_OPTIONS_YET: Words = w(
-  'Le opzioni dello stile (cappuccio, paraschiena …) non esistono ancora: una fase non può valere solo per un\'opzione.',
-  "A style's options (hood, back protector …) do not exist yet: a step cannot be only for an option.",
+  "L'articolo non offre opzioni (cappuccio, paraschiena …): offri un gruppo di opzioni sull'articolo prima che una fase valga solo per un'opzione.",
+  "The style offers no options (hood, back protector …): offer an option group on the style before a step is only for an option.",
 )
 
 export type VariantsPlan = { readonly ok: true; readonly variants: StepVariants } | { readonly ok: false; readonly issues: readonly Issue[] }
 
 /**
- * The cells a step is for, as typed: sizes of the style's range, colourways of the style, no option value (none exists
- * yet), each once. Answered in the style's order (the range's sizes, the colourways' order).
+ * The cells a step is for, as typed: sizes of the style's range, colourways of the style, option values the style offers
+ * (B-W2b-229: `optionValueIds` = the active values of the groups it offers, in the configurator's order; left out or empty:
+ * none may be named), each once. Answered in the style's order (the range's sizes, the colourways', the options').
  */
-export function planVariants(input: StepVariants, style: { readonly sizes: readonly string[]; readonly colourwayIds: readonly string[] }): VariantsPlan {
+export function planVariants(input: StepVariants, style: { readonly sizes: readonly string[]; readonly colourwayIds: readonly string[]; readonly optionValueIds?: readonly string[] }): VariantsPlan {
   const issues: Issue[] = []
   const once = (values: readonly string[], path: string, what: string) => {
     const seen = new Set<string>()
@@ -170,10 +172,17 @@ export function planVariants(input: StepVariants, style: { readonly sizes: reado
   input.colourwayIds.forEach((colourwayId, index) => {
     if (!style.colourwayIds.includes(colourwayId)) issues.push({ path: `colourwayIds/${index}`, message: 'Not a colourway of this style.' })
   })
-  if (input.optionValueIds.length > 0) issues.push({ path: 'optionValueIds', message: NO_OPTIONS_YET.en })
+  const offered = style.optionValueIds ?? []
+  if (input.optionValueIds.length > 0 && offered.length === 0) issues.push({ path: 'optionValueIds', message: NO_OPTIONS_YET.en })
+  else {
+    once(input.optionValueIds, 'optionValueIds', 'Option')
+    input.optionValueIds.forEach((valueId, index) => {
+      if (!offered.includes(valueId)) issues.push({ path: `optionValueIds/${index}`, message: 'Not an option the style offers (an active option of a group offered on the style).' })
+    })
+  }
   if (issues.length > 0) return { ok: false, issues }
   const inOrder = (values: readonly string[], order: readonly string[]) => [...new Set(values)].sort((a, b) => order.indexOf(a) - order.indexOf(b))
-  return { ok: true, variants: { sizes: inOrder(input.sizes, style.sizes), colourwayIds: inOrder(input.colourwayIds, style.colourwayIds), optionValueIds: [] } }
+  return { ok: true, variants: { sizes: inOrder(input.sizes, style.sizes), colourwayIds: inOrder(input.colourwayIds, style.colourwayIds), optionValueIds: inOrder(input.optionValueIds, offered) } }
 }
 
 export const sameVariants = (a: StepVariants, b: StepVariants): boolean =>
@@ -214,13 +223,13 @@ export function stepsForCells<Step extends { readonly id: string }>(steps: reado
   return { kept, leftOut }
 }
 
-/** "Only for sizes 54, 56 · colourway BLK" in both languages; null for every cell. */
-export function variantWords(variants: StepVariants, colourwayCode: (id: string) => string): Words | null {
+/** "Only for sizes 54, 56 · colourway BLK · option PERF: FRONT" in both languages; null for every cell. */
+export function variantWords(variants: StepVariants, colourwayCode: (id: string) => string, optionLabel?: (id: string) => string): Words | null {
   if (!isLimited(variants)) return null
   const sizes = variants.sizes.join(', ')
   const colourways = variants.colourwayIds.map(colourwayCode).join(', ')
-  const it = [variants.sizes.length > 0 ? `${variants.sizes.length === 1 ? 'taglia' : 'taglie'} ${sizes}` : null, variants.colourwayIds.length > 0 ? `${variants.colourwayIds.length === 1 ? 'variante' : 'varianti'} ${colourways}` : null, variants.optionValueIds.length > 0 ? `${variants.optionValueIds.length} opzioni` : null].filter((part): part is string => part !== null)
-  const en = [variants.sizes.length > 0 ? `${variants.sizes.length === 1 ? 'size' : 'sizes'} ${sizes}` : null, variants.colourwayIds.length > 0 ? `${variants.colourwayIds.length === 1 ? 'colourway' : 'colourways'} ${colourways}` : null, variants.optionValueIds.length > 0 ? `${variants.optionValueIds.length} options` : null].filter((part): part is string => part !== null)
+  const it = [variants.sizes.length > 0 ? `${variants.sizes.length === 1 ? 'taglia' : 'taglie'} ${sizes}` : null, variants.colourwayIds.length > 0 ? `${variants.colourwayIds.length === 1 ? 'variante' : 'varianti'} ${colourways}` : null, variants.optionValueIds.length > 0 ? (optionLabel ? `${variants.optionValueIds.length === 1 ? 'opzione' : 'opzioni'} ${variants.optionValueIds.map(optionLabel).join(', ')}` : `${variants.optionValueIds.length} ${variants.optionValueIds.length === 1 ? 'opzione' : 'opzioni'}`) : null].filter((part): part is string => part !== null)
+  const en = [variants.sizes.length > 0 ? `${variants.sizes.length === 1 ? 'size' : 'sizes'} ${sizes}` : null, variants.colourwayIds.length > 0 ? `${variants.colourwayIds.length === 1 ? 'colourway' : 'colourways'} ${colourways}` : null, variants.optionValueIds.length > 0 ? (optionLabel ? `${variants.optionValueIds.length === 1 ? 'option' : 'options'} ${variants.optionValueIds.map(optionLabel).join(', ')}` : `${variants.optionValueIds.length} ${variants.optionValueIds.length === 1 ? 'option' : 'options'}`) : null].filter((part): part is string => part !== null)
   return w(`Solo per ${it.join(' · ')}`, `Only for ${en.join(' · ')}`)
 }
 
