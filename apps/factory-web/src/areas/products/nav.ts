@@ -1,4 +1,6 @@
 import { Clock, FlaskConical, Layers, Palette, Ruler, Shirt } from 'lucide-react'
+// B-W2b-239: Settings › Product settings.
+import { SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -49,6 +51,12 @@ export const officeArea: OfficeAreaNav = {
           // B-W2b-247 SCR-118: the colour library and the private-label brands' branding sets (read with product.styles.view).
           { id: 'products-colours', label: 'shell:nav.products.colours', href: '/products/colours', icon: Palette, permission: 'product.styles.view' },
         ],
+      },
+      // B-W2b-239: Settings › Product settings (SCR-251; design 01: the area's last group). GET /product/settings reads with product.styles.view.
+      {
+        id: 'products-settings',
+        label: 'shell:nav.products.settingsGroup',
+        items: [{ id: 'products-settings-page', label: 'shell:nav.products.settings', href: '/products/settings', icon: SlidersHorizontal, permission: 'product.styles.view' }],
       },
     ],
   },

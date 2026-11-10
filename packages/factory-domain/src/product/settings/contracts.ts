@@ -45,6 +45,8 @@ export const settingsView = output({
   exists: z.boolean(),
   version: z.number().int().nullable(),
   updatedAt: instant().nullable(),
+  /** B-W2b-239: the caller may change this row (product.settings.manage over its company; the tenant-wide row: over every company). */
+  mayChange: z.boolean(),
   editRules: z.array(output({ state: z.enum(STYLE_LIFECYCLES), own: z.enum(EDIT_RULES).nullable(), rule: z.enum(EDIT_RULES), source: z.enum(RULE_SOURCES) })),
   tolerance: output({
     own: output({ rule: z.enum(CONSUMPTION_TOLERANCES).nullable(), percent: z.string().nullable() }),

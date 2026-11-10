@@ -10,6 +10,8 @@ import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permis
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { assertMayWrite, contextOf, isUniqueViolation } from '../styles/store'
+// B-W2b-239: whether the caller may change the row (the Product settings screen draws the fields as text otherwise).
+import { mayWrite } from '../materials/store'
 
 /**
  * The product settings (B-W2b-221; PRD-105, PRD-182; design products.settings psettings.lifecycle, psettings.tolerance;
@@ -59,7 +61,7 @@ export async function settingsRows(db: Reader, tenantId: string, companyId: stri
   return { own, tenant }
 }
 
-function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenant: SettingsRow | null): SettingsView {
+function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenant: SettingsRow | null, mayChange: boolean): SettingsView {
   // For the tenant-wide row, "company" is the row itself and nothing sits above it but the defaults.
   const company = companyId === null ? null : own
   const ruleRow = (row: SettingsRow | null): EditRuleRow | null => row
@@ -75,6 +77,7 @@ function settingsViewOf(companyId: string | null, own: SettingsRow | null, tenan
     exists: own !== null,
     version: own?.version ?? null,
     updatedAt: own ? toUtcIso(own.updatedAt) : null,
+    mayChange,
     editRules,
     tolerance: {
       own: { rule: own?.consumptionTolerance ?? null, percent: own?.consumptionTolerancePct?.toString() ?? null },
@@ -109,7 +112,7 @@ export async function readSettings(caller: CommandCaller, query: SettingsQuery):
   await companyFor(caller, companyId)
   const tenantId = tenantOf(caller)
   const { own, tenant } = await caller.withClient((client) => settingsRows(client, tenantId, companyId))
-  return settingsViewOf(companyId, own, tenant)
+  return settingsViewOf(companyId, own, tenant, mayWrite(actorOf(contextOf(caller)), PRODUCT_SETTINGS_MANAGE, companyId))
 }
 
 /** The fields a change names, as the row's columns (only what was sent). */
@@ -172,7 +175,7 @@ export async function updateSettings(caller: CommandCaller, body: UpdateSettings
       })
       tools.emit({ type: 'product_settings.changed', subject: rowId, companyId, payload: { companyId, fields } })
       const rows = await settingsRows(tx, tenantId, companyId)
-      return settingsViewOf(companyId, rows.own, rows.tenant)
+      return settingsViewOf(companyId, rows.own, rows.tenant, true)
     },
   ).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw new ConflictError('These settings were made at the same time by someone else: load them again.')
