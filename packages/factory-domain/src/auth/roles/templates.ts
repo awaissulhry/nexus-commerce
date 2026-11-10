@@ -65,6 +65,8 @@ import { RECALL_ADDS } from '../../compliance/recall/permissions'
 import { USER_INFORMATION_ADDS } from '../../compliance/user-information/permissions'
 // B-W2b-256: supplier declarations (the quality inspector).
 import { SUPPLIER_DECLARATIONS_ADDS } from '../../compliance/declarations-asked/permissions'
+// B-W2b-259: label artwork (the quality inspector approves a proof someone else made).
+import { LABEL_ARTWORK_ADDS } from '../../compliance/label-artwork/permissions'
 // B-W2b-272: compliance reports (the quality inspector and the production manager read them).
 import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 
@@ -882,6 +884,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (USER_INFORMATION_ADDS[key] ?? []) : []),
   // B-W2b-256
   ...(audience === 'office' ? (SUPPLIER_DECLARATIONS_ADDS[key] ?? []) : []),
+  // B-W2b-259
+  ...(audience === 'office' ? (LABEL_ARTWORK_ADDS[key] ?? []) : []),
   // B-W2b-272
   ...(audience === 'office' ? (COMPLIANCE_REPORTS_ADDS[key] ?? []) : [])]
 /**

@@ -1385,10 +1385,11 @@
       "routing_other": "{count} steps of revision {revision}, with minutes, scan points and workshops",
       "routingHidden": "The routing steps of the revision (your role does not read their count)",
       "label": "The shared garment label of revision {revision}",
-      "measurements": "Made to measure allowed, with its measurement template"
+      "measurements": "Made to measure allowed, with its measurement template",
+      "pictures_one": "{count} picture of the style, its colourways and the revision, each file copied",
+      "pictures_other": "{count} pictures of the style, its colourways and the revision, each file copied"
     },
     "reason": {
-      "PICTURES": "The style’s sketches and pictures are copied once the gallery arrives (W2b).",
       "OPTIONS": "Style options are copied once option groups arrive (W2b).",
       "noRight": {
         "BOM": "Copying the BOM needs the right to change BOMs: not in your role.",
@@ -1403,7 +1404,8 @@
       "ownLabel": "Label {label} is {code}’s own: make one for the copy in Compliance › Labels & marking.",
       "retiredLabel": "Label {label} is retired.",
       "noLabel": "Revision {revision} names no garment label.",
-      "other": "It cannot be copied now."
+      "other": "It cannot be copied now.",
+      "noPictures": "{code} has no pictures yet."
     },
     "note": {
       "sizes": "Sizes {sizes} are archived in the scale: the copy’s range leaves them out.",
@@ -1412,7 +1414,9 @@
       "colour": "Colourway {code}: its library colour is archived or another company’s, so the copy has none.",
       "lines_one": "{count} BOM line of an archived colourway was not copied.",
       "lines_other": "{count} BOM lines of archived colourways were not copied.",
-      "other": "Something more was left out: the copy’s history says what."
+      "other": "Something more was left out: the copy’s history says what.",
+      "pictures_one": "{count} picture of another revision or of an archived colourway was not copied.",
+      "pictures_other": "{count} pictures of another revision or of archived colourways were not copied."
     },
     "held": {
       "source": "Pick the style to copy first.",

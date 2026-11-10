@@ -1,0 +1,42 @@
+{
+  "panel": {
+    "title": "Labels accounted for",
+    "size": "{size}: printed {printed} · on garments {used} · spoiled {spoiled} · returned {returned}",
+    "total": "Whole work order: printed {printed} · on garments {used} · spoiled {spoiled} · returned {returned}",
+    "balanced": "Every label printed is on a garment, spoiled or returned.",
+    "missing_one": "{count} label printed is not accounted for: log it as spoiled or returned.",
+    "missing_other": "{count} labels printed are not accounted for: log them as spoiled or returned.",
+    "over_one": "{count} label more was logged than printed beyond the labelled garments: print it again, or tell your team leader.",
+    "over_other": "{count} labels more were logged than printed beyond the labelled garments: print them again, or tell your team leader.",
+    "holds": "Quality cannot release the garments of this work order until the labels balance.",
+    "log": "Log spoiled labels"
+  },
+  "held": {
+    "offline": "Waits for the network: spoiled labels are logged by the office at once.",
+    "busy": "Wait for the last action to finish.",
+    "nothingPrinted": "No label of this size has been printed yet.",
+    "noneLeft": "Every label printed for this size is already logged as spoiled or returned."
+  },
+  "spoil": {
+    "title": "Log spoiled labels",
+    "question_one": "{size}: {count} label printed, {used} on a garment, {logged} already logged spoiled or returned. How many more, and why?",
+    "question_other": "{size}: {count} labels printed, {used} on garments, {logged} already logged spoiled or returned. How many more, and why?",
+    "count": "Labels of {size}",
+    "range": "From 1 to {max}",
+    "why": "Why",
+    "reason": {
+      "DAMAGED": "Damaged or torn",
+      "MISPRINTED": "Misprinted",
+      "LOST": "Lost",
+      "JAMMED": "Printer jammed"
+    },
+    "returned": "Handed back unused",
+    "logged": "Every entry is logged and never changed. A spoiled label is not printed again by itself: print it again from the size."
+  },
+  "note": {
+    "spoiled_one": "Logged: {count} label of {what} spoiled.",
+    "spoiled_other": "Logged: {count} labels of {what} spoiled.",
+    "returned_one": "Logged: {count} label of {what} handed back.",
+    "returned_other": "Logged: {count} labels of {what} handed back."
+  }
+}

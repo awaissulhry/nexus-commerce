@@ -182,6 +182,10 @@ import { events as complianceRecall } from '../compliance-recall/events'
 import { events as complianceUserInformation } from '../compliance-user-information/events'
 // B-W2b-256: material profiles, supplier declarations and test plans.
 import { events as complianceMaterialTests } from '../compliance-material-tests/events'
+// B-W2b-259: label artwork (a version added, approved by a second person, retired) and labels logged spoiled or returned.
+import { events as complianceLabelArtwork } from '../compliance-label-artwork/events'
+// B-W2b-236: a style's pictures and its revisions' pattern files changed.
+import { events as productImages } from '../product-images/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -430,7 +434,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-258
   ...complianceUserInformation,
   // B-W2b-256
-  ...complianceMaterialTests] as const satisfies readonly EventDefinition[]
+  ...complianceMaterialTests,
+  // B-W2b-259
+  ...complianceLabelArtwork,
+  // B-W2b-236
+  ...productImages] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

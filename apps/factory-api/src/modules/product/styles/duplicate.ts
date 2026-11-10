@@ -61,6 +61,8 @@ import {
   type StyleRowData,
 } from './store'
 import { codeConflict, codeTaken, columnsOf, readScaleSizes } from './styles'
+// B-W2b-236 (SY3:01): Duplicate copies the pictures, once the copy is made.
+import { copyPicturesOfCopy } from './duplicate-pictures'
 
 /**
  * Copy a style (feature PRD-011; design products.styles pop:styles.duplicate; factory-domain product/styles/copy):
@@ -119,6 +121,12 @@ async function partOffers(client: Client, actor: Actor, source: StyleRowData, re
     const copyable = part as CopyablePart
     if (part === 'MEASUREMENTS') {
       offers.push(offer(part, source.mtmAllowed ? null : why('NOT_MADE_TO_MEASURE')))
+      continue
+    }
+    // B-W2b-236 (SY3:01): the pictures need no revision (the style's own, its colourways' and the source revision's).
+    if (part === 'PICTURES') {
+      const count = await client.styleImage.count({ where: { styleId: source.id } })
+      offers.push(offer(part, count === 0 ? why('NO_PICTURES') : null, count))
       continue
     }
     if (revision === null) {
@@ -352,5 +360,15 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     if (isUniqueViolation(error)) throw codeConflict(body.code)
     throw error
   })
+  // B-W2b-236 (SY3:01): the pictures, after the copy's command (each file is copied in the store first); what stays behind is a note.
+  if (parts.includes('PICTURES')) {
+    const pictures = await copyPicturesOfCopy(
+      caller,
+      { sourceStyleId: styleId, copyStyleId: result.style.id, copyCode: result.style.code, companyId, sourceRevisionId: result.copied.from.revisionId, copyRevisionId: result.revision?.id ?? null },
+      idempotencyKey,
+    )
+    const left = pictures.left > 0 ? [leftOutNote('PICTURES_LEFT_OUT', { count: pictures.left })] : []
+    return { ...result, copied: { ...result.copied, pictures: pictures.copied }, notes: [...result.notes, ...left.map(copyNoteWords)], noteCodes: [...result.noteCodes, ...left.map((note) => ({ ...note, sizes: [...note.sizes] }))] }
+  }
   return result
 }

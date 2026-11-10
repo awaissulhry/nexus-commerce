@@ -6,6 +6,8 @@ import type { CommerceImportActions } from '../import/commerce/commerce-model'
 import type { CommerceImportState } from '../import/commerce/use-commerce-import'
 import type { PpeValue, RangeValue } from '../forms'
 import type { Grains, StyleAbilities, StyleListView } from '../model'
+// B-W2b-236: List · Gallery.
+import type { StylesGalleryModel } from '../gallery/gallery-model'
 
 export interface StyleFilters {
   view: StyleListView
@@ -121,6 +123,8 @@ export interface StylesListViewModel {
   phone?: boolean
   phoneSelect?: boolean
   phoneFilters?: boolean
+  /** B-W2b-236 (SCR-303): the Gallery view (on, and the looks of the rows on screen); absent: the list. */
+  gallery?: StylesGalleryModel
 }
 
 export interface StylesListActions {
@@ -144,4 +148,6 @@ export interface StylesListActions {
   onNewDraft?: (draft: NewStyleDraft) => void
   onCreate?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-236: List · Gallery. */
+  onGallery?: (on: boolean) => void
 }

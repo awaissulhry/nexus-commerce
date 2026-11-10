@@ -1,0 +1,318 @@
+{
+  "gallery": {
+    "title": "Sketches and pictures",
+    "intro": "Flats, photos per colourway and image pages with numbered callouts. The main picture is the one the styles list, the gallery and the public DoC page show.",
+    "retry": "Try again",
+    "failed": "Couldn’t load the pictures",
+    "loading": "Loading the pictures…",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "add": {
+      "button": "Add pictures",
+      "title": "Add pictures",
+      "subtitle": "To style {code}: JPEG, PNG or WebP, up to 15 MB each",
+      "send_one": "Add {count} picture",
+      "send_other": "Add {count} pictures",
+      "pickFirst": "Pick a picture first",
+      "hint": "Drop JPEG, PNG or WebP pictures here, or choose them. A HEIC photo: save it as JPEG first.",
+      "sending": "Sending {done} of {of}…",
+      "failed": "A picture was not added: the others before it are in the gallery. Try again.",
+      "unused_one": "{count} picture already among the style’s files",
+      "unused_other": "{count} pictures already among the style’s files",
+      "useFile": "Add to the gallery",
+      "wrongType": "Only JPEG, PNG or WebP pictures can be added.",
+      "tooBig": "A picture holds up to 15 MB."
+    },
+    "held": {
+      "noRight": "Your role can view the pictures, not change them",
+      "noUpload": "Your role cannot send files: pick one already among the style’s files",
+      "archived": "The style is archived: reactivate it first",
+      "rule": "The style’s edit rule does not allow it in this state",
+      "offline": "Offline: the pictures change once the connection is back",
+      "busy": "Wait: a change is being saved",
+      "full": "The style keeps at most {max} pictures: remove one first"
+    },
+    "banner": {
+      "noRight": "You can view the pictures, not change them.",
+      "noUpload": "Your role cannot send files: you can arrange the pictures and add the style’s picture files.",
+      "archived": "The style is archived: its pictures are read-only until it is reactivated.",
+      "rule": "The style’s edit rule does not allow changes in its state: move the style or start a revision first."
+    },
+    "empty": {
+      "title": "No pictures",
+      "body": "Add flats, photos per colourway or an image page with callouts."
+    },
+    "count_one": "{count} picture · {printable} go into the tech pack PDF",
+    "count_other": "{count} pictures · {printable} go into the tech pack PDF",
+    "listLabel": "Pictures of the style, in order",
+    "open": "Open {name} full size",
+    "noLook": "The picture cannot be shown now",
+    "notAvailable": "The file is not available yet",
+    "calloutCount_one": "{count} callout",
+    "calloutCount_other": "{count} callouts",
+    "main": "Main picture",
+    "revision": "Revision {revision}",
+    "notInPdf": "Not in the tech pack PDF (a JPEG or PNG up to 4 MB goes in)",
+    "frozen": "Revision {revision} is released: this picture keeps what it shows. Move it or make it the main one; for a change, add a picture to the draft revision.",
+    "menu": {
+      "view": "Open full size",
+      "main": "Make it the main picture",
+      "isMain": "It is the main picture",
+      "earlier": "Move earlier",
+      "first": "It is the first",
+      "later": "Move later",
+      "last": "It is the last",
+      "callouts": "Callouts…",
+      "edit": "Details…",
+      "remove": "Remove…",
+      "label": "Actions for {name}"
+    },
+    "kind": {
+      "SKETCH": "Sketch",
+      "PHOTO": "Photo",
+      "PAGE": "Image page"
+    },
+    "kindHint": {
+      "SKETCH": "A flat: front, back or a detail.",
+      "PHOTO": "A photo of the garment, for a colourway or the style.",
+      "PAGE": "A tech pack page with numbered callouts (construction details)."
+    },
+    "field": {
+      "kind": "What it is",
+      "colourway": "Colourway",
+      "noColourway": "No colourway in particular",
+      "revision": "Revision",
+      "revisionHint": "A picture of a draft revision is frozen with it at release.",
+      "noRevision": "The style, whatever the revision",
+      "draftRevision": "Revision {revision} (draft)",
+      "caption": "Caption",
+      "captionHint": "What it shows, up to {max} characters."
+    },
+    "edit": {
+      "title": "Picture details",
+      "save": "Save details",
+      "captionLong": "A caption has up to {max} characters on one line"
+    },
+    "viewer": {
+      "position": "Picture {at} of {of}",
+      "first": "It is the first picture",
+      "last": "It is the last picture",
+      "previous": "Previous",
+      "next": "Next",
+      "keys": "← and → move between the pictures; Esc closes."
+    },
+    "callouts": {
+      "list": "Callouts",
+      "item": "{n}. {text}",
+      "title": "Callouts on {name}",
+      "subtitle": "Click the picture to place a numbered callout, or add one and type its place.",
+      "held_one": "{count} callout needs a fix",
+      "held_other": "{count} callouts need a fix",
+      "save_one": "Save {count} callout",
+      "save_other": "Save {count} callouts",
+      "clickHint": "Click to place a callout here",
+      "full": "A picture has at most 60 callouts",
+      "add": "Add a callout",
+      "none": "No callouts yet.",
+      "textLabel": "Callout {n}",
+      "x": "Across %",
+      "y": "Down %",
+      "remove": "Remove callout {n}",
+      "place": "Place it from 0 to 100 %",
+      "textProblem": "Give it a text of 1 to 500 characters on one line",
+      "number": "Each number once, from 1 to 999"
+    },
+    "remove": {
+      "title": "Remove this picture?",
+      "confirm": "Remove the picture",
+      "body": "{name} leaves the gallery; its file stays among the style’s files.",
+      "heir": "{name} becomes the main picture.",
+      "noHeir": "The style will have no main picture."
+    },
+    "notice": {
+      "held_one": "{count} picture is waiting for its check: add it from the style’s files once it is ready.",
+      "held_other": "{count} pictures are waiting for their check: add them from the style’s files once they are ready.",
+      "added_one": "{count} picture added.",
+      "added_other": "{count} pictures added.",
+      "main": "The main picture changed: the list, the gallery and the public DoC page show it.",
+      "removed": "Picture removed; its file stays among the style’s files.",
+      "removedMain": "Picture removed; the next one is the main picture now."
+    },
+    "problem": {
+      "write": "The change was not saved. Try again.",
+      "moved": "Someone changed this picture meanwhile: the gallery was read again.",
+      "state": "The gallery changed meanwhile or the picture keeps what it shows: it was read again.",
+      "invalid": "Something typed is not valid: check the fields.",
+      "gone": "The picture is no longer there: the gallery was read again.",
+      "offline": "No connection: try again when it is back.",
+      "read": "The pictures could not be read. Try again.",
+      "readForbidden": "Your role does not read this style’s pictures."
+    }
+  },
+  "styles": {
+    "view": {
+      "label": "Show the styles as",
+      "list": "List",
+      "gallery": "Gallery"
+    },
+    "gallery": {
+      "label": "Styles as pictures",
+      "selected_one": "{count} selected",
+      "selected_other": "{count} selected",
+      "open": "Open {style}",
+      "noPicture": "No main picture yet",
+      "colourways_one": "{count} colourway",
+      "colourways_other": "{count} colourways",
+      "pick": "Select {style}",
+      "looksFailed": "The pictures could not be read: the styles show without them. Try again later.",
+      "looksForbidden": "Your role does not read the styles’ pictures."
+    }
+  },
+  "patterns": {
+    "title": "Pattern files",
+    "failed": "Couldn’t load the pattern files",
+    "noRevision": "Start a revision: pattern files belong to a revision.",
+    "loading": "Loading the pattern files…",
+    "intro": "Revision {revision} ({status}) · patterns, markers and CAD files per size range (DXF-AAMA, Lectra, Gerber)",
+    "revisionStatus": {
+      "DRAFT": "draft",
+      "RELEASED": "released",
+      "OBSOLETE": "obsolete"
+    },
+    "version_one": "Version {version}",
+    "version_other": "Version {version} · {count} versions",
+    "kind": {
+      "PATTERN": "Pattern",
+      "MARKER": "Marker",
+      "CAD": "CAD drawing",
+      "OTHER": "Other file"
+    },
+    "kindHint": {
+      "PATTERN": "The pattern pieces: the revision’s specification, frozen at release.",
+      "MARKER": "A lay plan (nest) for a cut; can be added to a released revision.",
+      "CAD": "A CAD drawing of the garment: the specification, frozen at release.",
+      "OTHER": "Any other file of the revision (a plot, a note)."
+    },
+    "format": {
+      "DXF_AAMA": "DXF-AAMA",
+      "LECTRA": "Lectra",
+      "GERBER": "Gerber",
+      "PDF": "PDF plot",
+      "OTHER": "Another format"
+    },
+    "sizes": {
+      "all": "All sizes",
+      "some": "{sizes}"
+    },
+    "menu": {
+      "download": "Download",
+      "versions_one": "{count} version…",
+      "versions_other": "{count} versions…",
+      "newVersion": "New version…",
+      "edit": "Details…",
+      "remove": "Remove…",
+      "label": "Actions for {name}"
+    },
+    "col": {
+      "file": "File",
+      "kind": "Kind",
+      "format": "Format",
+      "sizes": "Sizes",
+      "note": "Note",
+      "updated": "Updated",
+      "more": "More"
+    },
+    "add": {
+      "button": "Add pattern file",
+      "title": "Add a pattern file to revision {revision}",
+      "subtitle": "DXF (AAMA), HP-GL plot or PDF, up to 200 MB, sent in parts",
+      "send": "Send and add",
+      "pickFirst": "Pick the file first",
+      "hint": "Drop a .dxf, .plt or .pdf file here, or choose it. A native Lectra or Gerber file: export it as DXF-AAMA or a PDF plot first.",
+      "picked": "Chosen: {name}",
+      "sending": "Sending the file…",
+      "failed": "The file was not sent. Try again.",
+      "wrongType": "This file type cannot be sent: export it as DXF-AAMA, an HP-GL plot or a PDF."
+    },
+    "bulk": {
+      "remove_one": "Remove {count}",
+      "remove_other": "Remove {count}",
+      "frozen_one": "{count} of them is a pattern or CAD file of released revision {revision}",
+      "frozen_other": "{count} of them are pattern or CAD files of released revision {revision}"
+    },
+    "banner": {
+      "noRight": "You can view the pattern files, not change them.",
+      "noUpload": "Your role cannot send files: you can change and remove the pattern files.",
+      "archived": "The style is archived: its pattern files are read-only until it is reactivated.",
+      "rule": "The style’s edit rule does not allow changes in its state."
+    },
+    "frozenKinds": "Revision {revision} is released: its pattern and CAD files stay as they are; markers and other files can still be added.",
+    "held": {
+      "noRight": "Your role can view the pattern files, not change them",
+      "noUpload": "Your role cannot send files",
+      "archived": "The style is archived: reactivate it first",
+      "rule": "The style’s edit rule does not allow it in this state",
+      "offline": "Offline: the pattern files change once the connection is back",
+      "frozen": "Revision {revision} is released: no new pattern or CAD file"
+    },
+    "frozenRow": "A pattern or CAD file of released revision {revision} does not change",
+    "table": "Pattern files of the revision",
+    "count_one": "{count} file",
+    "count_other": "{count} files",
+    "empty": {
+      "title": "No pattern files yet",
+      "body": "Add the pattern, the markers or the CAD drawing of this revision."
+    },
+    "field": {
+      "kind": "Kind",
+      "format": "Format",
+      "sizes": "Sizes",
+      "sizesAll": "None ticked: every size of the range.",
+      "sizesSome_one": "{count} size ticked.",
+      "sizesSome_other": "{count} sizes ticked.",
+      "note": "Note",
+      "noteHint": "What it is, up to {max} characters.",
+      "noteLong": "A note has up to {max} characters on one line"
+    },
+    "edit": {
+      "title": "Pattern file details",
+      "save": "Save details"
+    },
+    "newVersion": {
+      "title": "Version {version}",
+      "send": "Send the new version",
+      "body": "The new version joins the file’s series; the earlier ones stay and can be downloaded."
+    },
+    "versions": {
+      "title": "Versions of {name}",
+      "subtitle_one": "{count} version, newest first",
+      "subtitle_other": "{count} versions, newest first",
+      "item": "Version {version} · {name}",
+      "current": "In use",
+      "notAvailable": "This version is not available"
+    },
+    "remove": {
+      "title_one": "Remove {count} pattern file?",
+      "title_other": "Remove {count} pattern files?",
+      "confirm_one": "Remove {count}",
+      "confirm_other": "Remove {count}",
+      "body": "The files and their versions stay among the revision’s files."
+    },
+    "notice": {
+      "added": "{name} added.",
+      "held": "{name} is waiting for its check: it is named once it is ready.",
+      "version": "{name} is the new version.",
+      "removed_one": "{count} pattern file removed.",
+      "removed_other": "{count} pattern files removed."
+    },
+    "problem": {
+      "write": "The change was not saved. Try again.",
+      "moved": "Someone changed this file meanwhile: the list was read again.",
+      "state": "The revision changed meanwhile or the file is frozen: the list was read again.",
+      "invalid": "Something chosen is not valid: check the fields.",
+      "gone": "The file is no longer there: the list was read again.",
+      "read": "The pattern files could not be read. Try again.",
+      "readForbidden": "Your role does not read this revision’s pattern files."
+    }
+  }
+}

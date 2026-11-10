@@ -42,7 +42,7 @@ describe('Duplicate style: the offer, the draft, the body', () => {
     const draft = draftFor(offer)
     expect(draft.code).toBe('DEMO-JKT-01-COPY')
     expect(draft.name).toBe('Giacca Touring Demo')
-    expect(draft.parts).toEqual(['BOM', 'ROUTING', 'MEASUREMENTS', 'LABELS'])
+    expect(draft.parts).toEqual(['BOM', 'ROUTING', 'MEASUREMENTS', 'LABELS', 'PICTURES'])
     // A typed code and name stay when the offer is read again.
     expect(draftFor(offer, { ...blankDraft(), code: 'MINE', name: 'Mine' })).toMatchObject({ code: 'MINE', name: 'Mine' })
   })
@@ -60,7 +60,9 @@ describe('Duplicate style: the offer, the draft, the body', () => {
   it('says each part in our words, the API\'s reasons read by their shape', () => {
     const at = (part: string, o = offer) => partWords(o.parts.find((entry) => entry.part === part)!, o)
     expect(at('BOM')).toEqual({ key: 'duplicate.holds.bom', params: { count: 8, revision: 2 } })
-    expect(at('PICTURES')).toEqual({ key: 'duplicate.reason.PICTURES' })
+    // B-W2b-236: the pictures are copied now: their count, or the style has none.
+    expect(at('PICTURES')).toEqual({ key: 'duplicate.holds.pictures', params: { count: 6 } })
+    expect(at('PICTURES', demoOffer({ held: true }))).toEqual({ key: 'duplicate.reason.noPictures', params: { code: 'DEMO-JKT-01' } })
     expect(at('OPTIONS')).toEqual({ key: 'duplicate.reason.OPTIONS' })
     const held = demoOffer({ held: true })
     expect(at('MEASUREMENTS', held)).toEqual({ key: 'duplicate.reason.notMtm', params: { code: 'DEMO-JKT-01' } })

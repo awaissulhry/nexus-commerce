@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
-import type { LabelsView as LabelsAnswer, RenderedLabel, ViewCell } from './api'
+import type { LabelsView as LabelsAnswer, Reconciliation, RenderedLabel, ViewCell } from './api'
+import { reconcileModel } from './reconcile'
 import { labelsStepOf, orderOf, type LabelsState } from './steps'
 import type { JobModel } from './model'
 import { LabelsView, type LabelsViewModel } from './view/LabelsView'
@@ -128,6 +129,31 @@ const NONE_FITS = answer(CELLS, { printers: [{ id: 'printer-c', code: 'LBL-CUT-0
 const FULL = answer([cell('48', 2, 2), cell('50', 4, 4), cell('52', 6, 6, { reprinted: 1 }), cell('54', 3, 3)])
 const size52 = labelsStepOf(base({}, FULL)).picked!
 
+// ---- B-W2b-259 (MES-140): the label reconciliation and Log spoiled labels ----------------------------------------------
+const counts = (printed: number, used: number, spoiled: number, returned: number) => ({ printed, used, spoiled, returned, difference: printed - used - spoiled - returned })
+const recRow = (size: string, figures: ReturnType<typeof counts>) => ({ workOrderSizeId: `cell-nero-${size}`, colourwayCode: 'NERO', size, ...figures, balanced: figures.difference === 0 })
+const reconciliation = (rows: ReturnType<typeof recRow>[], holdsRelease = false): Reconciliation => {
+  const sum = (key: 'printed' | 'used' | 'spoiled' | 'returned' | 'difference') => rows.reduce((total, row) => total + row[key], 0)
+  return {
+    workOrder: { id: 'wo-demo-0042', number: 'WO-DEMO-0042', batchNumber: 'BT-DM-26-041', status: 'IN_PROGRESS' },
+    tracking: 'BATCH',
+    cells: rows,
+    total: { printed: sum('printed'), used: sum('used'), spoiled: sum('spoiled'), returned: sum('returned'), difference: sum('difference') },
+    balanced: rows.every((row) => row.balanced),
+    entries: [],
+    holdsRelease,
+  }
+}
+const REC_BALANCED = reconciliation([recRow('48', counts(2, 2, 0, 0)), recRow('50', counts(4, 4, 0, 0)), recRow('52', counts(7, 6, 1, 0)), recRow('54', counts(3, 3, 0, 0))])
+const REC_MISSING = reconciliation([recRow('48', counts(2, 2, 0, 0)), recRow('50', counts(4, 4, 0, 0)), recRow('52', counts(8, 6, 0, 0)), recRow('54', counts(3, 3, 0, 0))], true)
+const REC_OVER = reconciliation([recRow('48', counts(2, 2, 0, 0)), recRow('52', counts(6, 6, 1, 0))], true)
+const REC_ALL_LOGGED = reconciliation([recRow('52', counts(6, 0, 4, 2))])
+const withRec = (rec: Reconciliation, state: Partial<LabelsState> = {}, view: LabelsAnswer = FULL) => ({ ...labels(state, view), reconcile: reconcileModel(rec, state.picked ?? 'cell-nero-52', { online: state.online ?? true, busy: state.busy ?? false }) })
+const spoilModel = (rec: Reconciliation, extra: { count?: number; online?: boolean } = {}) => {
+  const model = reconcileModel(rec, 'cell-nero-52', { online: extra.online ?? true, busy: false })!
+  return { kind: 'spoil' as const, order: orderOf(FULL), spoil: { size: model.size!.label, printed: model.size!.printed, used: model.size!.used, logged: model.size!.spoiled + model.size!.returned, room: model.room, count: extra.count ?? 1, held: model.held } }
+}
+
 export const designScreen = defineDesignScreen<LabelsViewModel>({
   screen: 'SCR-096',
   title: 'Garment labels',
@@ -192,6 +218,25 @@ export const designScreen = defineDesignScreen<LabelsViewModel>({
       model: model(labels(), { notice: { kind: 'refused', code: 'MORE_THAN_FINISHED', message: 'NERO 52 has 6 garments finished and 2 of them labelled.', fix: 'Read the numbers again.' } }),
     },
     { id: 'done', label: 'All labels printed', model: model({ kind: 'done', number: 'WO-DEMO-0042', labels: 15 }) },
+    // B-W2b-259 (MES-140): printed vs used vs spoiled, Log spoiled labels.
+    { id: 'w2b-reconcile-balanced', label: 'W2b: the labels balance (printed = on garments + spoiled + returned)', model: model(withRec(REC_BALANCED)), note: 'The picked size and the whole work order; Log spoiled labels opens how many and why.' },
+    {
+      id: 'w2b-reconcile-missing',
+      label: 'W2b: 2 labels of NERO 52 not accounted for; the final release waits',
+      model: model(withRec(REC_MISSING)),
+      note: 'A requirement of the company holds the final release on a difference (B-W2b-254 gate, check label.reconciliation).',
+    },
+    { id: 'w2b-reconcile-over', label: 'W2b: one label logged spoiled before it was printed again', model: model(withRec(REC_OVER)) },
+    { id: 'w2b-reconcile-none-left', label: 'W2b: every label of the size is logged: Log spoiled waits and says why', model: model(withRec(REC_ALL_LOGGED)) },
+    { id: 'w2b-spoil', label: 'W2b: Log spoiled labels: how many, then why (one tap)', model: model(spoilModel(REC_MISSING, { count: 2 })), note: 'Enter = Cancel. Spoiled sends a fixed reason; Handed back unused logs them as returned.' },
+    { id: 'w2b-spoil-offline', label: 'W2b: Log spoiled labels offline: held with the reason', model: model(spoilModel(REC_MISSING, { online: false }), { online: false, asOf: AT, frame: frame({ online: false }) }) },
+    {
+      id: 'w2b-spoil-refused',
+      label: 'W2b: more than are left: refused, the numbers read again',
+      model: model(spoilModel(REC_MISSING, { count: 2 }), { notice: { kind: 'conflict', message: null } }),
+    },
+    { id: 'w2b-logged', label: 'W2b: 2 labels logged spoiled, the labels balance again', model: model(withRec(REC_BALANCED, { note: { kind: 'logged', count: 2, what: 'NERO 52', returned: false } })) },
+    { id: 'w2b-reconcile-offline', label: 'W2b: offline: the last count stays, Log spoiled waits', model: model(withRec(REC_MISSING, { online: false }), { online: false, asOf: AT, frame: frame({ online: false }) }) },
     { id: 'team-leader', label: 'A team leader at the bench', model: model(labels(), { frame: frame({ operator: { name: 'Teo Demo' } }) }) },
   ],
 })

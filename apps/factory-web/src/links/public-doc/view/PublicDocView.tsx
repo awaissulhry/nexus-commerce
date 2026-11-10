@@ -14,6 +14,9 @@ import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { PublicDocFile, PublicDocPage } from '@nexus/factory-domain/compliance/public-doc/contracts'
 import { careText, dayInstant, fileIn, languageName, monthOf, pdfName, publicDocFileUrl, readerFirst, spanMonths, styleName, type PublicDocActions, type PublicDocViewModel } from '../model'
 import '../public-doc.css'
+// B-W2b-236 (SY3:03): the style's main picture, as its stripped public copy.
+import { PublicDocPicture } from '../picture/view/PublicDocPicture'
+import { publicDocPictureUrl } from '../picture/model'
 
 export type { PublicDocActions, PublicDocViewModel } from '../model'
 
@@ -181,6 +184,7 @@ function ProductSection({ page, model }: { page: PublicDocPage; model: PublicDoc
     <Card padded className="fw-pd-card" aria-labelledby="fw-pd-product">
       <SectionHead id="fw-pd-product" icon={<Shirt size={18} aria-hidden />} title={t('product.heading')} extra={<StandingPill page={page} locale={locale} />} />
       <p className="fw-pd-lead">{product.batch ? t('product.scannedBatch', { batch: product.batch.number }) : t('product.scannedStyle', { code: product.style.code })}</p>
+      {page.picture && <PublicDocPicture src={model.pictureSrc ?? publicDocPictureUrl(page.path, page.picture.fileId)} alt={styleName(page, model.readerLanguages)} caption={page.picture.caption} />}
       <KeyValue items={items} labelCase="sentence" columns={2} />
     </Card>
   )

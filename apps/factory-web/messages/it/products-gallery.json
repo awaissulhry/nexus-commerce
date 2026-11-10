@@ -1,0 +1,318 @@
+{
+  "gallery": {
+    "title": "Schizzi e immagini",
+    "intro": "Figurini, foto per variante e pagine con richiami numerati. L’immagine principale è quella che mostrano l’elenco stili, la galleria e la pagina pubblica della DoC.",
+    "retry": "Riprova",
+    "failed": "Impossibile caricare le immagini",
+    "loading": "Caricamento delle immagini…",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "add": {
+      "button": "Aggiungi immagini",
+      "title": "Aggiungi immagini",
+      "subtitle": "Allo stile {code}: JPEG, PNG o WebP, fino a 15 MB ciascuna",
+      "send_one": "Aggiungi {count} immagine",
+      "send_other": "Aggiungi {count} immagini",
+      "pickFirst": "Scegli prima un’immagine",
+      "hint": "Trascina qui immagini JPEG, PNG o WebP, oppure sceglile. Una foto HEIC: salvala prima come JPEG.",
+      "sending": "Invio {done} di {of}…",
+      "failed": "Un’immagine non è stata aggiunta: quelle prima sono nella galleria. Riprova.",
+      "unused_one": "{count} immagine già tra i file dello stile",
+      "unused_other": "{count} immagini già tra i file dello stile",
+      "useFile": "Aggiungi alla galleria",
+      "wrongType": "Si possono aggiungere solo immagini JPEG, PNG o WebP.",
+      "tooBig": "Un’immagine può arrivare a 15 MB."
+    },
+    "held": {
+      "noRight": "Il tuo ruolo può vedere le immagini, non modificarle",
+      "noUpload": "Il tuo ruolo non può inviare file: scegline uno già tra i file dello stile",
+      "archived": "Lo stile è archiviato: riattivalo prima",
+      "rule": "La regola di modifica dello stile non lo consente in questo stato",
+      "offline": "Offline: le immagini si modificano quando torna la connessione",
+      "busy": "Attendi: si sta salvando una modifica",
+      "full": "Lo stile tiene al massimo {max} immagini: rimuovine una prima"
+    },
+    "banner": {
+      "noRight": "Puoi vedere le immagini, non modificarle.",
+      "noUpload": "Il tuo ruolo non può inviare file: puoi ordinare le immagini e aggiungere i file immagine dello stile.",
+      "archived": "Lo stile è archiviato: le sue immagini sono in sola lettura finché non viene riattivato.",
+      "rule": "La regola di modifica dello stile non consente modifiche nel suo stato: sposta lo stile o avvia prima una revisione."
+    },
+    "empty": {
+      "title": "Nessuna immagine",
+      "body": "Aggiungi figurini, foto per variante o una pagina con richiami."
+    },
+    "count_one": "{count} immagine · {printable} vanno nel PDF della scheda tecnica",
+    "count_other": "{count} immagini · {printable} vanno nel PDF della scheda tecnica",
+    "listLabel": "Immagini dello stile, in ordine",
+    "open": "Apri {name} a dimensione piena",
+    "noLook": "L’immagine non si può mostrare ora",
+    "notAvailable": "Il file non è ancora disponibile",
+    "calloutCount_one": "{count} richiamo",
+    "calloutCount_other": "{count} richiami",
+    "main": "Immagine principale",
+    "revision": "Revisione {revision}",
+    "notInPdf": "Non nel PDF della scheda tecnica (vi entra un JPEG o PNG fino a 4 MB)",
+    "frozen": "La revisione {revision} è rilasciata: questa immagine resta com’è. Spostala o rendila principale; per una modifica, aggiungi un’immagine alla revisione in bozza.",
+    "menu": {
+      "view": "Apri a dimensione piena",
+      "main": "Rendila principale",
+      "isMain": "È l’immagine principale",
+      "earlier": "Sposta prima",
+      "first": "È la prima",
+      "later": "Sposta dopo",
+      "last": "È l’ultima",
+      "callouts": "Richiami…",
+      "edit": "Dettagli…",
+      "remove": "Rimuovi…",
+      "label": "Azioni per {name}"
+    },
+    "kind": {
+      "SKETCH": "Figurino",
+      "PHOTO": "Foto",
+      "PAGE": "Pagina illustrata"
+    },
+    "kindHint": {
+      "SKETCH": "Un figurino: davanti, dietro o un dettaglio.",
+      "PHOTO": "Una foto del capo, per una variante o per lo stile.",
+      "PAGE": "Una pagina della scheda tecnica con richiami numerati (dettagli di costruzione)."
+    },
+    "field": {
+      "kind": "Che cos’è",
+      "colourway": "Variante",
+      "noColourway": "Nessuna variante in particolare",
+      "revision": "Revisione",
+      "revisionHint": "Un’immagine di una revisione in bozza si blocca con essa al rilascio.",
+      "noRevision": "Lo stile, qualunque revisione",
+      "draftRevision": "Revisione {revision} (bozza)",
+      "caption": "Didascalia",
+      "captionHint": "Cosa mostra, fino a {max} caratteri."
+    },
+    "edit": {
+      "title": "Dettagli dell’immagine",
+      "save": "Salva i dettagli",
+      "captionLong": "Una didascalia ha fino a {max} caratteri su una riga"
+    },
+    "viewer": {
+      "position": "Immagine {at} di {of}",
+      "first": "È la prima immagine",
+      "last": "È l’ultima immagine",
+      "previous": "Precedente",
+      "next": "Successiva",
+      "keys": "← e → passano da un’immagine all’altra; Esc chiude."
+    },
+    "callouts": {
+      "list": "Richiami",
+      "item": "{n}. {text}",
+      "title": "Richiami su {name}",
+      "subtitle": "Fai clic sull’immagine per mettere un richiamo numerato, oppure aggiungilo e scrivi la sua posizione.",
+      "held_one": "{count} richiamo da correggere",
+      "held_other": "{count} richiami da correggere",
+      "save_one": "Salva {count} richiamo",
+      "save_other": "Salva {count} richiami",
+      "clickHint": "Fai clic per mettere qui un richiamo",
+      "full": "Un’immagine ha al massimo 60 richiami",
+      "add": "Aggiungi un richiamo",
+      "none": "Ancora nessun richiamo.",
+      "textLabel": "Richiamo {n}",
+      "x": "Orizz. %",
+      "y": "Vert. %",
+      "remove": "Rimuovi il richiamo {n}",
+      "place": "Posizionalo da 0 a 100 %",
+      "textProblem": "Dagli un testo da 1 a 500 caratteri su una riga",
+      "number": "Ogni numero una volta, da 1 a 999"
+    },
+    "remove": {
+      "title": "Rimuovere questa immagine?",
+      "confirm": "Rimuovi l’immagine",
+      "body": "{name} esce dalla galleria; il suo file resta tra i file dello stile.",
+      "heir": "{name} diventa l’immagine principale.",
+      "noHeir": "Lo stile non avrà un’immagine principale."
+    },
+    "notice": {
+      "held_one": "{count} immagine attende il controllo: aggiungila dai file dello stile quando è pronta.",
+      "held_other": "{count} immagini attendono il controllo: aggiungile dai file dello stile quando sono pronte.",
+      "added_one": "{count} immagine aggiunta.",
+      "added_other": "{count} immagini aggiunte.",
+      "main": "L’immagine principale è cambiata: la mostrano l’elenco, la galleria e la pagina pubblica della DoC.",
+      "removed": "Immagine rimossa; il suo file resta tra i file dello stile.",
+      "removedMain": "Immagine rimossa; ora la successiva è l’immagine principale."
+    },
+    "problem": {
+      "write": "La modifica non è stata salvata. Riprova.",
+      "moved": "Qualcuno ha modificato questa immagine nel frattempo: la galleria è stata riletta.",
+      "state": "La galleria è cambiata nel frattempo o l’immagine resta com’è: è stata riletta.",
+      "invalid": "Qualcosa di scritto non è valido: controlla i campi.",
+      "gone": "L’immagine non c’è più: la galleria è stata riletta.",
+      "offline": "Nessuna connessione: riprova quando torna.",
+      "read": "Le immagini non si sono potute leggere. Riprova.",
+      "readForbidden": "Il tuo ruolo non legge le immagini di questo stile."
+    }
+  },
+  "styles": {
+    "view": {
+      "label": "Mostra gli stili come",
+      "list": "Elenco",
+      "gallery": "Galleria"
+    },
+    "gallery": {
+      "label": "Stili come immagini",
+      "selected_one": "{count} selezionato",
+      "selected_other": "{count} selezionati",
+      "open": "Apri {style}",
+      "noPicture": "Ancora nessuna immagine principale",
+      "colourways_one": "{count} variante",
+      "colourways_other": "{count} varianti",
+      "pick": "Seleziona {style}",
+      "looksFailed": "Le immagini non si sono potute leggere: gli stili si vedono senza. Riprova più tardi.",
+      "looksForbidden": "Il tuo ruolo non legge le immagini degli stili."
+    }
+  },
+  "patterns": {
+    "title": "File dei cartamodelli",
+    "failed": "Impossibile caricare i file dei cartamodelli",
+    "noRevision": "Avvia una revisione: i file dei cartamodelli appartengono a una revisione.",
+    "loading": "Caricamento dei file dei cartamodelli…",
+    "intro": "Revisione {revision} ({status}) · cartamodelli, piazzamenti e file CAD per gamma taglie (DXF-AAMA, Lectra, Gerber)",
+    "revisionStatus": {
+      "DRAFT": "bozza",
+      "RELEASED": "rilasciata",
+      "OBSOLETE": "obsoleta"
+    },
+    "version_one": "Versione {version}",
+    "version_other": "Versione {version} · {count} versioni",
+    "kind": {
+      "PATTERN": "Cartamodello",
+      "MARKER": "Piazzamento",
+      "CAD": "Disegno CAD",
+      "OTHER": "Altro file"
+    },
+    "kindHint": {
+      "PATTERN": "I pezzi del cartamodello: la specifica della revisione, bloccata al rilascio.",
+      "MARKER": "Un piazzamento per il taglio; si può aggiungere anche a una revisione rilasciata.",
+      "CAD": "Un disegno CAD del capo: la specifica, bloccata al rilascio.",
+      "OTHER": "Qualsiasi altro file della revisione (un plot, una nota)."
+    },
+    "format": {
+      "DXF_AAMA": "DXF-AAMA",
+      "LECTRA": "Lectra",
+      "GERBER": "Gerber",
+      "PDF": "Plot PDF",
+      "OTHER": "Altro formato"
+    },
+    "sizes": {
+      "all": "Tutte le taglie",
+      "some": "{sizes}"
+    },
+    "menu": {
+      "download": "Scarica",
+      "versions_one": "{count} versione…",
+      "versions_other": "{count} versioni…",
+      "newVersion": "Nuova versione…",
+      "edit": "Dettagli…",
+      "remove": "Rimuovi…",
+      "label": "Azioni per {name}"
+    },
+    "col": {
+      "file": "File",
+      "kind": "Tipo",
+      "format": "Formato",
+      "sizes": "Taglie",
+      "note": "Nota",
+      "updated": "Aggiornato",
+      "more": "Altro"
+    },
+    "add": {
+      "button": "Aggiungi file",
+      "title": "Aggiungi un file alla revisione {revision}",
+      "subtitle": "DXF (AAMA), plot HP-GL o PDF, fino a 200 MB, inviato a parti",
+      "send": "Invia e aggiungi",
+      "pickFirst": "Scegli prima il file",
+      "hint": "Trascina qui un file .dxf, .plt o .pdf, oppure sceglilo. Un file nativo Lectra o Gerber: esportalo prima come DXF-AAMA o plot PDF.",
+      "picked": "Scelto: {name}",
+      "sending": "Invio del file…",
+      "failed": "Il file non è stato inviato. Riprova.",
+      "wrongType": "Questo tipo di file non si può inviare: esportalo come DXF-AAMA, plot HP-GL o PDF."
+    },
+    "bulk": {
+      "remove_one": "Rimuovi {count}",
+      "remove_other": "Rimuovi {count}",
+      "frozen_one": "{count} è un cartamodello o un file CAD della revisione rilasciata {revision}",
+      "frozen_other": "{count} sono cartamodelli o file CAD della revisione rilasciata {revision}"
+    },
+    "banner": {
+      "noRight": "Puoi vedere i file dei cartamodelli, non modificarli.",
+      "noUpload": "Il tuo ruolo non può inviare file: puoi modificare e rimuovere i file dei cartamodelli.",
+      "archived": "Lo stile è archiviato: i suoi file sono in sola lettura finché non viene riattivato.",
+      "rule": "La regola di modifica dello stile non consente modifiche nel suo stato."
+    },
+    "frozenKinds": "La revisione {revision} è rilasciata: i cartamodelli e i file CAD restano come sono; si possono ancora aggiungere piazzamenti e altri file.",
+    "held": {
+      "noRight": "Il tuo ruolo può vedere i file, non modificarli",
+      "noUpload": "Il tuo ruolo non può inviare file",
+      "archived": "Lo stile è archiviato: riattivalo prima",
+      "rule": "La regola di modifica dello stile non lo consente in questo stato",
+      "offline": "Offline: i file si modificano quando torna la connessione",
+      "frozen": "La revisione {revision} è rilasciata: nessun nuovo cartamodello o file CAD"
+    },
+    "frozenRow": "Un cartamodello o un file CAD della revisione rilasciata {revision} non cambia",
+    "table": "File dei cartamodelli della revisione",
+    "count_one": "{count} file",
+    "count_other": "{count} file",
+    "empty": {
+      "title": "Ancora nessun file",
+      "body": "Aggiungi il cartamodello, i piazzamenti o il disegno CAD di questa revisione."
+    },
+    "field": {
+      "kind": "Tipo",
+      "format": "Formato",
+      "sizes": "Taglie",
+      "sizesAll": "Nessuna spuntata: ogni taglia della gamma.",
+      "sizesSome_one": "{count} taglia spuntata.",
+      "sizesSome_other": "{count} taglie spuntate.",
+      "note": "Nota",
+      "noteHint": "Cos’è, fino a {max} caratteri.",
+      "noteLong": "Una nota ha fino a {max} caratteri su una riga"
+    },
+    "edit": {
+      "title": "Dettagli del file",
+      "save": "Salva i dettagli"
+    },
+    "newVersion": {
+      "title": "Versione {version}",
+      "send": "Invia la nuova versione",
+      "body": "La nuova versione entra nella serie del file; le precedenti restano e si possono scaricare."
+    },
+    "versions": {
+      "title": "Versioni di {name}",
+      "subtitle_one": "{count} versione, la più recente prima",
+      "subtitle_other": "{count} versioni, la più recente prima",
+      "item": "Versione {version} · {name}",
+      "current": "In uso",
+      "notAvailable": "Questa versione non è disponibile"
+    },
+    "remove": {
+      "title_one": "Rimuovere {count} file?",
+      "title_other": "Rimuovere {count} file?",
+      "confirm_one": "Rimuovi {count}",
+      "confirm_other": "Rimuovi {count}",
+      "body": "I file e le loro versioni restano tra i file della revisione."
+    },
+    "notice": {
+      "added": "{name} aggiunto.",
+      "held": "{name} attende il controllo: viene indicato quando è pronto.",
+      "version": "{name} è la nuova versione.",
+      "removed_one": "{count} file rimosso.",
+      "removed_other": "{count} file rimossi."
+    },
+    "problem": {
+      "write": "La modifica non è stata salvata. Riprova.",
+      "moved": "Qualcuno ha modificato questo file nel frattempo: l’elenco è stato riletto.",
+      "state": "La revisione è cambiata nel frattempo o il file è bloccato: l’elenco è stato riletto.",
+      "invalid": "Qualcosa di scelto non è valido: controlla i campi.",
+      "gone": "Il file non c’è più: l’elenco è stato riletto.",
+      "read": "I file non si sono potuti leggere. Riprova.",
+      "readForbidden": "Il tuo ruolo non legge i file di questa revisione."
+    }
+  }
+}

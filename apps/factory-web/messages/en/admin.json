@@ -1668,6 +1668,7 @@
     "compliance_certificates_manage": "Register, suspend and withdraw certificates",
     "compliance_declarations_manage": "Upload declarations of conformity and leaflets",
     "compliance_labels_manage": "Build and activate garment label templates",
+    "compliance_artwork_approve": "Approve label artwork made by someone else (a second person)",
     "compliance_register_view": "See the PPE register",
     "compliance_register_manage": "Record complaints, non-conformities and recalls",
     "compliance_textileRules_manage": "Switch the textile, care and Made in Italy checks on or off",

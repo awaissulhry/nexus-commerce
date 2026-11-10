@@ -114,13 +114,16 @@ describe("a style's gender, apart from the CN code (B-W2b-25)", () => {
 })
 
 describe('what a style list row adds (B-W2b-25)', () => {
-  it('shows the first available picture of the style, only with files.read', async () => {
+  // B-W2b-236 (SY3:02): the thumbnail is the main picture, no longer the oldest image file.
+  it('shows the main picture of the style, only with files.read', async () => {
     expect((await rowOf('everything')).thumbnail).toBeNull()
     await file('drawing.pdf', 'application/pdf', 'ATTACHMENT', '2026-10-01T08:00:00Z')
     await file('pending.png', 'image/png', 'PHOTO', '2026-10-01T09:00:00Z', 'PENDING_UPLOAD')
-    const front = await file('front.jpg', 'image/jpeg', 'PHOTO', '2026-10-02T08:00:00Z')
-    await file('back.png', 'image/png', 'ATTACHMENT', '2026-10-03T08:00:00Z')
-    expect((await rowOf('everything')).thumbnail).toEqual({ fileId: front, name: 'front.jpg', contentType: 'image/jpeg' })
+    await file('front.jpg', 'image/jpeg', 'PHOTO', '2026-10-02T08:00:00Z')
+    const back = await file('back.png', 'image/png', 'ATTACHMENT', '2026-10-03T08:00:00Z')
+    expect((await rowOf('everything')).thumbnail).toBeNull()
+    await admin(`INSERT INTO "StyleImage" (id, "tenantId", "styleId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, $4, 'PHOTO', 0, true)`, [seedId('image:back'), tenant, jacket, back])
+    expect((await rowOf('everything')).thumbnail).toEqual({ fileId: back, name: 'back.png', contentType: 'image/png' })
     expect((await rowOf('plain')).thumbnail).toBeNull()
   })
 

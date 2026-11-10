@@ -209,7 +209,8 @@ describe('copying a style (PRD-011)', () => {
       { part: 'ROUTING', available: true, count: 4, reason: null, ...can },
       { part: 'MEASUREMENTS', available: true, count: null, reason: null, ...can },
       { part: 'LABELS', available: false, count: null, reason: 'Revision 1 has no garment label.', reasonCode: 'NO_LABEL', reasonFacts: facts({ revision: 1 }) },
-      { part: 'PICTURES', available: false, count: null, reason: "The style's sketches and pictures are copied once the gallery arrives (W2b).", reasonCode: 'NOT_YET', reasonFacts: facts() },
+      // B-W2b-236 (SY3:01): the pictures are copied now; this style has none.
+      { part: 'PICTURES', available: false, count: 0, reason: 'SEED-JKT-01 has no pictures.', reasonCode: 'NO_PICTURES', reasonFacts: facts() },
       { part: 'OPTIONS', available: false, count: null, reason: 'Style options are copied once option groups arrive (W2b).', reasonCode: 'NOT_YET', reasonFacts: facts() },
     ])
     const limited = (await ok('stylesOnly', 'GET', `/product/styles/${jacket}/duplicate`)).offer.parts
@@ -316,7 +317,9 @@ describe('copying a style (PRD-011)', () => {
     expect((await refused('stylesOnly', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['ROUTING'] }, 403)).message).toBe('Copying the routing needs product.routing.manage over every company.')
     const label = await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['LABELS'] }, 409)
     expect(label).toMatchObject({ code: 'invalid_state', issues: [{ path: 'body/parts/0', message: 'Revision 1 has no garment label.' }] })
-    expect((await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['PICTURES'] }, 400)).code).toBe('validation_failed')
+    // B-W2b-236: PICTURES is a part now; a style without pictures refuses it at its place, as a BOM without lines.
+    expect((await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['PICTURES'] }, 409)).issues).toEqual([{ path: 'body/parts/0', message: 'SEED-JKT-01 has no pictures.' }])
+    expect((await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', parts: ['OPTIONS'] }, 400)).code).toBe('validation_failed')
     expect((await refused('engineer', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X', fromRevisionId: newId() }, 404)).message).toBe('Revision not found.')
     // A tenant-wide style is copied only by a role over every company; another tenant does not see it.
     expect((await refused('companyA', 'POST', `/product/styles/${jacket}/duplicate`, { code: 'SEED-JKT-09', name: 'X' }, 403)).code).toBe('forbidden')

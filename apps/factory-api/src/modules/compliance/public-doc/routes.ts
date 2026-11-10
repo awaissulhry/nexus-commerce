@@ -1,8 +1,10 @@
 import { defineRoutes } from '../../../core/manifest'
-import { addressContract, fileContract, lookupContract } from './contract'
+import { addressContract, fileContract, lookupContract, pictureContract } from './contract'
 import { manifest } from './manifest'
 import { dispositionOf } from '@nexus/factory-domain/files/preview/rules'
-import { lookupPublicDoc, officeAddress, publicDocFile } from './public-doc'
+import { lookupPublicDoc, officeAddress, pagesUnder, publicDocFile } from './public-doc'
+// B-W2b-236 (SY3:03): the page's picture, the stripped copy of the style's main picture.
+import { publicDocPicture } from './picture'
 
 /**
  * The public DoC (B-W2b-166; public-doc.ts): the page's lookup by code, its PDFs, and the office's address of a style or a
@@ -28,6 +30,12 @@ export default defineRoutes('compliance.public-doc', manifest, async (app) => {
       .header('x-content-type-options', 'nosniff')
       .header('content-disposition', dispositionOf(request.query.download === '1' ? 'download' : 'inline', file.name))
       .send(file.bytes)
+  })
+
+  // B-W2b-236 (SY3:03): only the picture the code's page names, as its stripped copy (no camera or location data).
+  app.get('/public/doc/:code/picture/:fileId', { schema: pictureContract, config: { rateLimit: FILE_RATE } }, async (request, reply) => {
+    const picture = await publicDocPicture(app, request, request.params.code, request.params.fileId, pagesUnder)
+    return reply.type(picture.contentType).header('cache-control', FILE_CACHE).header('x-content-type-options', 'nosniff').header('content-disposition', 'inline').send(picture.bytes)
   })
 
   app.get('/compliance/public-doc/address', { schema: addressContract }, async (request) => officeAddress(request, request.query))
