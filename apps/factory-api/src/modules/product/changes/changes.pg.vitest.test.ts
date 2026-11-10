@@ -316,3 +316,29 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
     expect((await orderOf(order.id)).status).toBe('RELEASED')
   })
 })
+
+// B-W2b-244 (Changes & versions, SCR-117): the screens' two reads (./screens.ts) and the list's Reason column.
+describe('Changes & versions: released versions and the approver picker', () => {
+  it('lists the released revisions newest first with the change order that released each and the revision it replaced', async () => {
+    const { rows, complete } = await ok('viewer', 'GET', `/product/released-versions?styleId=${jacket2}`)
+    expect(complete).toBe(true)
+    expect(rows[0]).toMatchObject({ style: { id: jacket2, code: 'SEED-JKT-02' }, revision: { revision: 2, status: 'RELEASED' }, previous: { revision: 1 }, releasedById: PEOPLE.manager, changeOrder: { id: order.id, number: order.number } })
+    expect(rows.map((row: Json) => row.revision.revision)).toEqual([...rows].sort((a: Json, b: Json) => b.releasedAt.localeCompare(a.releasedAt)).map((row: Json) => row.revision.revision))
+    expect((await ok('viewer', 'GET', `/product/released-versions?q=${encodeURIComponent(order.number)}`)).rows.map((row: Json) => row.revision.id)).toEqual([order.toRevision.id])
+    await no('floor', 'GET', '/product/released-versions', undefined, 403)
+  })
+
+  it('offers as approvers the people who may approve over the company, never the author; only to who writes change orders', async () => {
+    const draft = (await ok('manager', 'POST', '/product/change-orders', { styleId: jacket2, companyId: companyA, title: 'Pocket flap (made-up)', reason: 'Made-up.' }, 201)).changeOrder
+    expect(draft.reason).toBe('Made-up.')
+    const { people, authorId } = await ok('manager', 'GET', `/product/change-orders/${draft.id}/approver-options`)
+    expect(authorId).toBe(PEOPLE.manager)
+    const ids = people.map((person: Json) => person.id)
+    expect(ids).toContain(PEOPLE.quality)
+    expect(ids).not.toContain(PEOPLE.manager)
+    expect(ids).not.toContain(PEOPLE.sales)
+    expect(people.find((person: Json) => person.id === PEOPLE.quality)).toEqual({ id: PEOPLE.quality, name: 'Made-up quality' })
+    await no('quality', 'GET', `/product/change-orders/${draft.id}/approver-options`, undefined, 403)
+    expect((await ok('viewer', 'GET', '/product/change-orders?status=DRAFT')).rows.find((row: Json) => row.id === draft.id)).toMatchObject({ reason: 'Made-up.' })
+  })
+})

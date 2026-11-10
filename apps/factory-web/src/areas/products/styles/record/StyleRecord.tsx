@@ -572,6 +572,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     bomDepth: bomDepth.model,
     // B-W2b-261: the style's sample rounds (Products › Samples & prototypes), read and asked with their own rights.
     samples: { view: session.permissions.includes('sales.samples.view'), manage: session.permissions.includes('sales.samples.manage') },
+    // B-W2b-244: the style's changes (Products › Changes & versions), read and raised with their own rights.
+    changes: { view: session.permissions.includes('product.changes.view'), request: session.permissions.includes('product.changes.request') },
   }
 
   return (

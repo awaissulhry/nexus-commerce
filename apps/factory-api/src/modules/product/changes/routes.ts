@@ -2,6 +2,7 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import {
   addLineContract,
+  approverOptionsContract,
   approversContract,
   cancelContract,
   createOrderContract,
@@ -18,6 +19,7 @@ import {
   readOrderContract,
   readRequestContract,
   releaseContract,
+  releasedContract,
   removeLineContract,
   submitContract,
   updateLineContract,
@@ -46,6 +48,7 @@ import {
   updateOrder,
 } from './orders'
 import { createRequest, listRequests, moveRequest, readRequest, updateRequest, workOrderChanges } from './requests'
+import { approverOptions, listReleased } from './screens'
 
 /**
  * Change requests and change orders (B-W2b-226): ./requests.ts (the office's requests), ./floor.ts (the floor's spec problem
@@ -87,4 +90,7 @@ export default defineRoutes('product.changes', manifest, async (app) => {
   app.post('/product/change-orders/:changeOrderId/decide', { schema: decideContract }, async (request) => ({ changeOrder: await decideOrder(request, request.params.changeOrderId, request.body, idempotencyKeyFrom(request)) }))
   app.post('/product/change-orders/:changeOrderId/cancel', { schema: cancelContract }, async (request) => ({ changeOrder: await cancelOrder(request, request.params.changeOrderId, request.body, idempotencyKeyFrom(request)) }))
   app.post('/product/change-orders/:changeOrderId/release', { schema: releaseContract }, async (request) => ({ changeOrder: await releaseOrder(request, request.params.changeOrderId, request.body, idempotencyKeyFrom(request)) }))
+  // B-W2b-244 (Changes & versions, SCR-117): the released versions list and the approver picker (./screens.ts).
+  app.get('/product/released-versions', { schema: releasedContract }, async (request) => listReleased(request, request.query))
+  app.get('/product/change-orders/:changeOrderId/approver-options', { schema: approverOptionsContract }, async (request) => approverOptions(request, request.params.changeOrderId))
 })

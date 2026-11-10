@@ -92,6 +92,8 @@
     "SampleRound": "Sample round",
     "Colour": "Colour",
     "BrandingSet": "Branding set",
+    "ChangeRequest": "Change request",
+    "ChangeOrder": "Change order",
     "other": "Record"
   },
   "chip": {
@@ -134,6 +136,8 @@
     "SampleRound": "Sample rounds",
     "Colour": "Colours",
     "BrandingSet": "Branding sets",
+    "ChangeRequest": "Change requests",
+    "ChangeOrder": "Change orders",
     "other": "Other records"
   },
   "status": {
@@ -222,6 +226,8 @@
     "CUT": "Cut",
     "RECONCILED": "Reconciled",
     "IN_MAKING": "In making",
-    "UNDER_REVIEW": "Under review"
+    "UNDER_REVIEW": "Under review",
+    "IN_REVIEW": "In review",
+    "DONE": "Done"
   }
 }

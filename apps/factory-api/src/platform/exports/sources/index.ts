@@ -53,6 +53,8 @@ import { colours } from './colours'
 import { complianceDeclarations } from './compliance-declarations'
 // B-W2b-242: Products › Libraries › Options & rules (the option groups).
 import { optionGroups } from './option-groups'
+// B-W2b-244: Products › Development › Changes & versions (B-W2b-226's and B-W2b-215's reads as one list).
+import { productChanges } from './product-changes'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -118,4 +120,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   complianceDeclarations,
   // B-W2b-242: Products › Libraries › Options & rules.
   optionGroups,
+  // B-W2b-244: Products › Development › Changes & versions.
+  productChanges,
 ])
