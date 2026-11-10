@@ -7,6 +7,7 @@
     "quotesSamples": "Preventivi e campioni",
     "quotes": "Preventivi e richieste",
     "catalogue": "Catalogo",
+    "samples": "Campioni e schede tecniche",
     "documents": "Documenti",
     "returns": "Resi e reclami",
     "account": "Account",
@@ -301,7 +302,8 @@
       "portal_returns_view": "Vedere i tuoi resi e reclami",
       "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità",
       "portal_complaints_view": "Seguire i tuoi reclami di qualità",
-      "portal_approvals_view": "Vedere cosa ti chiediamo di approvare"
+      "portal_approvals_view": "Vedere cosa ti chiediamo di approvare",
+      "portal_samples_view": "Vedere i tuoi campioni, i tuoi modelli in sviluppo e le loro schede tecniche"
     }
   },
   "display": {
