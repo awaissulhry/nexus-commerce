@@ -36,6 +36,8 @@ export interface SplitParent {
 export function splitRefusal(parent: SplitParent): string | null {
   if (parent.kind === 'REPAIR') return `Work order ${parent.number} repairs one garment of its repair order: there is nothing to split.`
   if (parent.kind === 'MADE_TO_MEASURE') return `Work order ${parent.number} makes one made-to-measure unit: there is nothing to split.`
+  // B-W2b-246 (MES-018): a sample work order belongs to its sample round (WorkOrder.sampleRoundId; the split would lose it).
+  if (parent.kind === 'SAMPLE') return `Work order ${parent.number} makes the samples of its sample round: it is not split (make a second sample work order of the round instead).`
   if (!SPLITTABLE.includes(parent.status)) {
     return `Work order ${parent.number} is ${parent.status}; its sizes were frozen at its release (MES-005), so only a DRAFT is split. Make a new work order for what is still open on the order lines instead.`
   }
