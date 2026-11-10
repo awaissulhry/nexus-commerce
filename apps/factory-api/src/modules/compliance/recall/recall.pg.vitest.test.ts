@@ -20,6 +20,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
+import { createAbuseGuard, useAbuseGuard } from '../../../platform/abuse/guard'
+import { memoryAbuseStore } from '../../../platform/abuse/store'
 import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { readPublicNotices } from '../public-doc/notice'
 import { guarded } from './common'
@@ -93,6 +95,9 @@ async function asPerson(method: 'GET' | 'POST', url: string, body: unknown, stat
 
 beforeAll(async () => {
   h = await startHarness('w2b260_recall')
+  // The public DoC lookup (POST /public/doc/lookup) runs the abuse guard: give it a store in memory, as the public DoC
+  // test does, so this file does not need the whole process env (FACTORY_REDIS_URL…).
+  useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore(), key: Buffer.alloc(32, 9), prefix: 'test', clock: h.clock }))
   await seedCore({ db: h.database, namespace: NS })
   await seedAuth({ db: h.database, namespace: NS })
   await seedRoles({ db: h.database, namespace: NS })
@@ -113,6 +118,7 @@ beforeAll(async () => {
 }, 1_500_000)
 
 afterAll(async () => {
+  useAbuseGuard(undefined)
   await app?.close()
   await h?.close()
 }, 60_000)
