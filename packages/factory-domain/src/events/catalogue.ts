@@ -174,6 +174,8 @@ import { events as certificatesDepth } from '../certificates-depth/events'
 import { events as complianceTechfiles } from '../compliance-techfiles/events'
 // B-W2b-257: the DoC generator (a generated draft changed, a translation moved, batches recorded, a shipment's pack made).
 import { events as complianceDeclarations } from '../compliance-declarations/events'
+// B-W2b-252: sample decisions (a round decided or asked, its fit, a CE test result, a swatch changed).
+import { events as salesSampleDecisions } from '../sales-sample-decisions/events'
 // B-W2b-258: the user information builder (a generated leaflet draft changed, a translation moved).
 import { events as complianceUserInformation } from '../compliance-user-information/events'
 import type { EventDefinition } from './define'
@@ -417,6 +419,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...complianceTechfiles,
   // B-W2b-257
   ...complianceDeclarations,
+  // B-W2b-252
+  ...salesSampleDecisions,
   // B-W2b-258
   ...complianceUserInformation] as const satisfies readonly EventDefinition[]
 

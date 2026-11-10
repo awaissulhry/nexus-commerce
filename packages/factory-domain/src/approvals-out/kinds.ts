@@ -45,6 +45,12 @@ export interface Words {
 
 /** The records a sample, a colour, a leather or an artwork is asked on: records with a thread whose party is the partner. */
 export const THREAD_RECORD_TYPES = ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder'] as const
+/**
+ * B-W2b-252 (sample decisions): a sample round is asked as a SAMPLE (its brand decides the round), a leather or colour swatch
+ * as a COLOUR or LEATHER (its own kind); the brand's answer becomes the round's or swatch's decision.
+ */
+export const SAMPLE_ROUND_RECORD = 'SampleRound'
+export const SAMPLE_SWATCH_RECORD = 'SampleSwatch'
 
 export interface KindRule {
   readonly kind: ApprovalKind
@@ -66,9 +72,9 @@ const rule = (spec: KindRule): KindRule => Object.freeze({ ...spec, recordTypes:
 
 export const KIND_RULES: Readonly<Record<ApprovalKind, KindRule>> = Object.freeze({
   CONCESSION: rule({ kind: 'CONCESSION', recordTypes: ['NcrConcession'], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 5, max: 60 }, needsFiles: false, name: { it: 'Concessione', en: 'Concession' } }),
-  SAMPLE: rule({ kind: 'SAMPLE', recordTypes: THREAD_RECORD_TYPES, withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Campione', en: 'Sample' } }),
-  COLOUR: rule({ kind: 'COLOUR', recordTypes: THREAD_RECORD_TYPES, withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Colore', en: 'Colour' } }),
-  LEATHER: rule({ kind: 'LEATHER', recordTypes: THREAD_RECORD_TYPES, withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Pellame', en: 'Leather' } }),
+  SAMPLE: rule({ kind: 'SAMPLE', recordTypes: [...THREAD_RECORD_TYPES, SAMPLE_ROUND_RECORD], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Campione', en: 'Sample' } }),
+  COLOUR: rule({ kind: 'COLOUR', recordTypes: [...THREAD_RECORD_TYPES, SAMPLE_SWATCH_RECORD], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Colore', en: 'Colour' } }),
+  LEATHER: rule({ kind: 'LEATHER', recordTypes: [...THREAD_RECORD_TYPES, SAMPLE_SWATCH_RECORD], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Pellame', en: 'Leather' } }),
   ARTWORK: rule({ kind: 'ARTWORK', recordTypes: THREAD_RECORD_TYPES, withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Grafica', en: 'Artwork' } }),
   PROOF: rule({ kind: 'PROOF', recordTypes: ['SalesOrderLine'], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 5, max: 60 }, needsFiles: true, name: { it: 'Bozza del design', en: 'Design proof' } }),
   REVISED_ORDER: rule({ kind: 'REVISED_ORDER', recordTypes: ['SalesOrderAmendment'], withChanges: false, task: 'RECONFIRM_ORDER', price: true, dueDays: { default: 5, max: 60 }, needsFiles: false, name: { it: 'Ordine modificato', en: 'Revised order' } }),
