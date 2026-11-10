@@ -45,6 +45,10 @@ import { inspectionPlans } from './inspection-plans'
 import { capas } from './capas'
 // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
 import { complianceClaims } from './compliance-claims'
+// B-W2b-261: Products › Development › Samples & prototypes (B-W2b-246's read, registered with its page).
+import { sampleRounds } from './sample-rounds'
+// B-W2b-247: Products › Libraries › Colours & artwork (the colour library).
+import { colours } from './colours'
 // B-W2b-268: Compliance › Declarations & instructions.
 import { complianceDeclarations } from './compliance-declarations'
 
@@ -104,6 +108,10 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   capas,
   // B-W2b-264: Compliance › Sustainability › Sourcing & claims.
   complianceClaims,
+  // B-W2b-261: Products › Development › Samples & prototypes.
+  sampleRounds,
+  // B-W2b-247: Products › Libraries › Colours & artwork.
+  colours,
   // B-W2b-268: Compliance › Declarations & instructions.
   complianceDeclarations,
 ])

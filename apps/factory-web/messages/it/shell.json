@@ -22,7 +22,10 @@
       "materials": "Materiali e accessori",
       "libraries": "Librerie",
       "operations": "Operazioni",
-      "sizes": "Taglie e misure"
+      "sizes": "Taglie e misure",
+      "development": "Sviluppo",
+      "samples": "Campionature e prototipi",
+      "colours": "Colori e grafiche"
     },
     "sales": {
       "area": "Vendite",
@@ -150,7 +153,9 @@
       "sourcing": "Filiera e dichiarazioni ambientali",
       "reportsGroup": "Report",
       "reports": "Report conformità",
-      "status": "Stato conformità"
+      "status": "Stato conformità",
+      "settingsGroup": "Impostazioni",
+      "settings": "Norme e mercati"
     },
     "finance": {
       "area": "Amministrazione",

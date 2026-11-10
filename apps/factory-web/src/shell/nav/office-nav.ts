@@ -186,6 +186,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/products/operations/[id]',
   '/products/sizes',
   '/products/sizes/[id]',
+  // B-W2b-247: Products › Libraries › Colours & artwork (SCR-118), the colour library and the brands' branding sets.
+  '/products/colours',
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',
@@ -249,6 +251,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
   '/compliance/reports',
   '/compliance/reports/print',
+  // B-W2b-265: Compliance › Settings › Rules & markets (SCR-262).
+  '/compliance/settings',
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
@@ -429,6 +433,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/instructions/[id]/sheet',
   // B-W2b-243: Products › Styles › Tech pack PDF (SCR-306, a window page; also where a scanned QR lands).
   '/products/styles/tech-pack',
+  // B-W2b-261: Products › Development › Samples & prototypes (SCR-110) and a sample round (SCR-110-record).
+  '/products/samples',
+  '/products/samples/[id]',
 ])
 
 /**

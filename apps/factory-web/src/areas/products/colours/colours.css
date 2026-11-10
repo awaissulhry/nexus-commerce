@@ -1,0 +1,272 @@
+/*
+ * Products › Colours & artwork (SCR-118, B-W2b-247). Layout only, semantic --nds-* tokens; the parts are the design system's
+ * and the area's Swatch. No page max-width (Owner 2026-10-29): every block fills the shell's main area; wide screens get
+ * two columns in the forms and the branding set's file groups.
+ */
+.fw-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-col-notices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-col-notices > * {
+  align-self: stretch;
+}
+
+.fw-col-notices > button {
+  align-self: flex-start;
+}
+
+.fw-col-mono {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-col-photo {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--nds-border-strong);
+}
+
+.fw-col-branding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-col-branding:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 4px;
+}
+
+.fw-col-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-col-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-col-h4 {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-base);
+  font-weight: 600;
+}
+
+.fw-col-logo-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-col-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface);
+}
+
+.fw-col-li {
+  list-style: none;
+}
+
+.fw-col-form {
+  gap: var(--nds-space-12);
+}
+
+.fw-col-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: start;
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-col-hex {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+.fw-col-hex > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-col-hex > .fw-swatch {
+  margin-top: var(--nds-space-20);
+}
+
+.fw-col-photo-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-col-photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-col-photo-lg {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--nds-border-strong);
+}
+
+.fw-col-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-col-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-col-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--nds-space-16);
+  margin-top: var(--nds-space-8);
+}
+
+.fw-col-files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-col-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-self: stretch;
+}
+
+.fw-col-file {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-6);
+  border: 1px solid var(--nds-border);
+  border-radius: 6px;
+}
+
+.fw-col-file-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex: none;
+  background: var(--nds-surface);
+  border-radius: 4px;
+}
+
+.fw-col-file-icon {
+  flex: none;
+  color: var(--nds-text-3);
+}
+
+.fw-col-file-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-col-file-actions {
+  display: inline-flex;
+  flex: none;
+}
+
+.fw-col-rules {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+.fw-col-rule {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-self: stretch;
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: 6px;
+}
+
+/* Wide screens: the rule on one line, its words widest. */
+@media (min-width: 1100px) {
+  .fw-col-rule {
+    grid-template-columns: minmax(130px, 1fr) minmax(220px, 2.6fr) minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(130px, 1fr) auto;
+  }
+}
+
+.fw-col-brand-colours {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-col-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-col-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-4) var(--nds-space-4) var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: 999px;
+  max-width: 100%;
+}
+
+.fw-col-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

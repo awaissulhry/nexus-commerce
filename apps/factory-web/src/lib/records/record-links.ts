@@ -28,6 +28,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Item: '/products/materials/[id]',
   Operation: '/products/operations/[id]',
   SizeScale: '/products/sizes/[id]',
+  // B-W2b-247: a private-label brand's branding set opens in its DetailModal on Colours & artwork (SCR-118); a library colour
+  // has no page of its own (its row is edited in the list) and opens in its panels (its photo, history, thread).
+  BrandingSet: '/products/colours?open=[id]',
   WorkOrder: '/production/work-orders/[id]',
   // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
   Bundle: '/production/bundles/[id]',
@@ -155,6 +158,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Chemical: '/plant/chemicals?open=[id]',
   // B-W2b-264 Compliance › Sourcing & claims (SCR-215): a sustainability claim opens in its window.
   SustainabilityClaim: '/compliance/sourcing?open=[id]',
+  // B-W2b-265 Compliance › Settings › Rules & markets (SCR-262): a register entry, a change of the watch and an operator row open in
+  // their tab's window.
+  RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
+  StandardChange: '/compliance/settings?tab=regulations&change=[id]',
+  EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
   // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
   ComplianceDocument: '/compliance/declarations/[id]',
   // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
@@ -176,6 +184,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PpeItem: '/plant/ppe?view=catalogue&item=[id]',
   // B-W2b-234 Production › Work instructions (SCR-285): an instruction opens its record page.
   WorkInstruction: '/production/instructions/[id]',
+  // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
+  SampleRound: '/products/samples/[id]',
 })
 
 /**
@@ -323,6 +333,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/safety/rolesheets': '/plant/risk',
   // B-W2b-234: the work instructions (SCR-141).
   '/production/instructions': '/production/instructions',
+  // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
+  '/sales/samples/rounds': '/products/samples',
 })
 
 export interface RecordRef {

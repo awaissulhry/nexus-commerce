@@ -141,6 +141,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.materials', title: 'Materials & trims', titleIt: 'Materiali e accessori', wave: 'W1', href: '/products/materials' },
         ],
       },
+      // W2b: B-W2b-261 Development › Samples & prototypes (SCR-110); Changes & versions joins the group with its page.
+      {
+        label: 'Development',
+        labelIt: 'Sviluppo',
+        hideLabel: false,
+        pages: [{ id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' }],
+      },
       {
         label: 'Libraries',
         labelIt: 'Librerie',
@@ -148,6 +155,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'products.operations', title: 'Operations', titleIt: 'Operazioni', wave: 'W1', href: '/products/operations' },
           { id: 'products.sizes', title: 'Sizes & measurements', titleIt: 'Taglie e misure', wave: 'W1', href: '/products/sizes' },
+          // W2b: B-W2b-247 Colours & artwork (SCR-118), after Sizes (the design's order).
+          { id: 'products.colours', title: 'Colours & artwork', titleIt: 'Colori e grafiche', wave: 'W2b', href: '/products/colours' },
         ],
       },
     ],
@@ -410,6 +419,8 @@ export const OFFICE: readonly TreeArea[] = [
       },
       // W2b: B-W2b-272 Compliance reports (SCR-261). The tree's Reports group, after Product safety (Sustainability joins with its step).
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'compliance.reports', title: 'Compliance reports', titleIt: 'Report conformità', wave: 'W2b', href: '/compliance/reports' }] },
+      // W2b: B-W2b-265 Rules & markets (SCR-262), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'compliance.settings', title: 'Rules & markets', titleIt: 'Norme e mercati', wave: 'W2b', href: '/compliance/settings' }] },
     ],
   },
   {

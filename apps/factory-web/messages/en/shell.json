@@ -22,7 +22,10 @@
       "materials": "Materials & trims",
       "libraries": "Libraries",
       "operations": "Operations",
-      "sizes": "Sizes & measurements"
+      "sizes": "Sizes & measurements",
+      "development": "Development",
+      "samples": "Samples & prototypes",
+      "colours": "Colours & artwork"
     },
     "sales": {
       "area": "Sales",
@@ -150,7 +153,9 @@
       "sourcing": "Sourcing & claims",
       "reportsGroup": "Reports",
       "reports": "Compliance reports",
-      "status": "Status board"
+      "status": "Status board",
+      "settingsGroup": "Settings",
+      "settings": "Rules & markets"
     },
     "finance": {
       "area": "Finance",
