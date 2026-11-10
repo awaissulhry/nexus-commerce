@@ -250,7 +250,7 @@ export async function createRepairWorkOrder(caller: CommandCaller, body: RepairI
 
 export async function setRepairSteps(caller: CommandCaller, workOrderId: string, body: { readonly version?: number | undefined; readonly routingSeqs: readonly number[] }, idempotencyKey?: string): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_MANAGE)
-  if (workOrder.kind !== 'REPAIR') throw new InvalidStateError(`Work order ${workOrder.number} is a ${workOrder.kind === 'SIZE_GRID' ? 'size run' : 'made-to-measure unit'}: it takes its revision's whole routing at the release; only a repair chooses its steps.`)
+  if (workOrder.kind !== 'REPAIR') throw new InvalidStateError(`Work order ${workOrder.number} is a ${workOrder.kind === 'SIZE_GRID' ? 'size run' : workOrder.kind === 'SAMPLE' ? 'sample work order' : 'made-to-measure unit'}: it takes its revision's whole routing at the release; only a repair chooses its steps.`)
   return onWorkOrder(caller, workOrder, { name: 'workorders.setRepairSteps', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
     const { tx } = tools
     const current = await lockedStatus(tx, workOrder.id, ['DRAFT'], 'its steps change')

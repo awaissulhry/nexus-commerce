@@ -49,6 +49,8 @@ import { PRODUCT_TECHPACKS_ADDS } from '../../product/techpack/permissions'
 import { PRODUCT_PREPACKS_ADDS } from '../../product/prepacks/permissions'
 // B-W2b-250: restricted substances and their rules (the quality inspector).
 import { SUBSTANCES_ADDS } from '../../compliance/substances/permissions'
+// B-W2b-246: sample rounds (sales and the production manager keep them; the planner and quality read them).
+import { SALES_SAMPLES_ADDS } from '../../sales/samples/permissions'
 // B-W2b-251: technical files (the quality inspector keeps them, signs the risk assessment and sends evidence packs).
 import { TECHFILES_ADDS } from '../../compliance/techfiles/permissions'
 
@@ -850,6 +852,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_PREPACKS_ADDS[key] ?? []) : []),
   // B-W2b-250
   ...(audience === 'office' ? (SUBSTANCES_ADDS[key] ?? []) : []),
+  // B-W2b-246
+  ...(audience === 'office' ? (SALES_SAMPLES_ADDS[key] ?? []) : []),
   // B-W2b-251
   ...(audience === 'office' ? (TECHFILES_ADDS[key] ?? []) : [])]
 /**
