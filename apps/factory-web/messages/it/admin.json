@@ -2060,6 +2060,7 @@
     "partners_shares_view": "Vedere chi, fuori dall'azienda, è invitato a un record, cosa può fare e fino a quando",
     "partners_shares_manage": "Invitare un contatto di un partner a un solo record con un link (leggere, scrivere, caricare file, fino a una data), cambiare cosa può fare, revocare l'invito",
     "portal_approvals_view": "Vedere cosa chiediamo di approvare alla propria organizzazione (campioni, colori, pellami, grafiche, bozze del design, concessioni, ordini modificati) e le risposte date; rispondere richiede il diritto di approvare",
+    "portal_samples_view": "Vedere i giri di campionatura dell'organizzazione con stato e spedizione, i propri modelli in sviluppo con la loro fase, e scaricare il PDF della scheda tecnica condivisa per ciascuno (mai un costo; ogni download registrato); decidere un campione richiede il diritto di approvare",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "sales_measurements_view": "Vedere le misure inviate tramite link e aprire le foto del corpo (ogni apertura registrata)",
     "sales_measurements_manage": "Inviare ai piloti il link per le misure e decidere quando cancellare le foto del corpo",

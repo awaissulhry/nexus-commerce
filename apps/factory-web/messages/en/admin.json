@@ -2060,6 +2060,7 @@
     "partners_shares_view": "See who outside the company is invited to a record, what each may do there and until when",
     "partners_shares_manage": "Invite a partner's contact to one record by link (read, write, upload, until a date), change what they may do, revoke the invitation",
     "portal_approvals_view": "See what we ask your organisation to approve (samples, colours, leathers, artworks, design proofs, concessions, revised orders) and the answers given; answering takes the right to approve",
+    "portal_samples_view": "See your organisation's sample rounds with their status and shipment, your own styles in development and their stage, and download the tech pack PDF we shared for each (never a cost; every download recorded); deciding a sample takes the right to approve",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
     "sales_measurements_view": "See measurements sent by link and open the body photos (each opening recorded)",
     "sales_measurements_manage": "Send riders a measurement link and set when their body photos are deleted",

@@ -64,7 +64,9 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     expect(ids('CUSTOMER', false)).toEqual([
       ['home', 'nav.home', '/'],
       ['orders', 'nav.orders', '/orders'],
-      ['quotes', 'nav.catalogue', '/catalogue'],
+      // B-W2b-262: Samples & tech packs joins the Catalogue (two pages: the area keeps its name; Quotes & requests is not built, so
+      // the area opens its first page).
+      ['quotes', 'nav.quotesSamples', '/samples'],
       ['documents', 'nav.documents', '/documents'],
       ['returns', 'nav.returns', '/returns'],
       ['account', 'nav.account', '/account'],
@@ -73,10 +75,10 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
     const designer = portalNavFor({ can: roleCan('customer-designer'), kinds: ['CUSTOMER'], everyPage: true })
-    // The Designer holds the catalogue (Quotes & samples keeps that one page) and its colleagues (Account).
+    // The Designer holds the catalogue and the samples (B-W2b-262; Quotes & samples keeps both) and its colleagues (Account).
     expect(designer.areas.map((area) => [area.id, area.label])).toEqual([
       ['home', 'nav.home'],
-      ['quotes', 'nav.catalogue'],
+      ['quotes', 'nav.quotesSamples'],
       ['account', 'nav.account'],
     ])
     const invoices = portalNavFor({ can: roleCan('supplier-invoices'), kinds: ['SUPPLIER'], everyPage: true })
@@ -168,8 +170,10 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       keys: portalChords(nav),
     }
   }
-  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerRead = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  // B-W2b-262: a role with the samples page has Quotes & samples with its badge (approvals are answered there); Finance keeps the Catalogue.
+  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerRead = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  const customerFinance = ['home:nav.home#home', 'orders:nav.ordersTracking#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
   const supplierOrders = ['home:nav.home#home', 'work:nav.purchaseOrders#orders', 'deliveries:nav.deliveries#deliveries', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const supplierPapers = ['home:nav.home#home', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const workshop = ['home:nav.home#home', 'work:nav.jobs#orders', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
@@ -178,10 +182,10 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
     const rails = Object.fromEntries(PARTNER_ROLE_TEMPLATES.filter((entry) => entry.kind).map((entry) => [entry.key, asSigned(entry.key).rail]))
     expect(rails).toEqual({
       'customer-buyer': customerFull,
-      'customer-finance': customerRead,
+      'customer-finance': customerFinance,
       'customer-quality': customerRead,
-      // The Designer: the catalogue and its colleagues only.
-      'customer-designer': ['home:nav.home#home', 'quotes:nav.catalogue', 'account:nav.account#account'],
+      // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues only.
+      'customer-designer': ['home:nav.home#home', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
       'customer-viewer': customerRead,
       'customer-admin': customerFull,
       'supplier-orders': supplierOrders,
@@ -204,8 +208,11 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   })
 
   it('a count leads to its requests: Quotes & samples carries its badge once a page that shows quotes or approvals is built', () => {
+    // B-W2b-262: Samples & tech packs shows the approvals: the badge is there, the area opens its first built page.
     const customer = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'quotes')!
-    expect([customer.label, customer.href, customer.badge]).toEqual(['nav.catalogue', '/catalogue', undefined])
+    expect([customer.label, customer.href, customer.badge]).toEqual(['nav.quotesSamples', '/samples', 'quotes'])
+    const catalogueOnly = portalNavFor({ can: (permission) => permission !== 'portal.samples.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'quotes')!
+    expect([catalogueOnly.label, catalogueOnly.href, catalogueOnly.badge]).toEqual(['nav.catalogue', '/catalogue', undefined])
     const later = PORTAL_AREAS.map((def) => (def.id === 'quotes' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
     const withQuotes = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }, later).areas.find((area) => area.id === 'quotes')!
     expect([withQuotes.label, withQuotes.badge]).toEqual(['nav.quotesSamples', 'quotes'])
