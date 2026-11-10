@@ -236,6 +236,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/register',
   '/compliance/register/[id]',
   '/compliance/evidence/[kind]/[subject]',
+  // B-W2b-264: Compliance › Sustainability › Sourcing & claims (SCR-215).
+  '/compliance/sourcing',
   // B-W2b-272: Compliance › Reports › Compliance reports (SCR-261) and the annual compliance review for paper or PDF (SCR-307, a new tab).
   '/compliance/reports',
   '/compliance/reports/print',

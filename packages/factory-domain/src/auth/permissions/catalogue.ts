@@ -174,6 +174,8 @@ import { COMPLIANCE_REPORTS_DEFINITIONS, COMPLIANCE_REPORTS_PERMISSIONS } from '
 import { PLANNING_MILESTONES_DEFINITIONS, PLANNING_MILESTONES_PERMISSIONS } from '../../planning/milestones/permissions'
 // B-W2b-248: made-to-measure rules (product.mtm.switch, the Owner's; reading and keeping them is product.styles.view | manage).
 import { PRODUCT_MTM_DEFINITIONS, PRODUCT_MTM_PERMISSIONS } from '../../product/mtm-rules/permissions'
+// B-W2b-264: sourcing & claims (compliance.claims.manage | approve); reading is compliance.certificates.view.
+import { CLAIMS_DEFINITIONS, CLAIMS_PERMISSIONS } from '../../compliance/claims/permissions'
 // B-W2b-262: the brand's samples and tech packs in the portal (portal.samples.view, partner).
 import { PORTAL_SAMPLES_DEFINITIONS, PORTAL_SAMPLES_PERMISSIONS } from '../../sales/portal-samples/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -862,6 +864,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_MILESTONES_DEFINITIONS,
   // B-W2b-248: made-to-measure rules (area `product`, declared above).
   PRODUCT_MTM_DEFINITIONS,
+  // B-W2b-264: sourcing & claims (area `compliance`, declared above).
+  CLAIMS_DEFINITIONS,
   // B-W2b-262: the brand's samples and tech packs (area `portal`, partner, declared above).
   PORTAL_SAMPLES_DEFINITIONS,
 ])
@@ -1154,6 +1158,8 @@ for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-248: made-to-measure rules.
 for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-264: sourcing & claims.
+for (const name of CLAIMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-262: the brand's samples and tech packs (a partner permission).
 for (const name of PORTAL_SAMPLES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
