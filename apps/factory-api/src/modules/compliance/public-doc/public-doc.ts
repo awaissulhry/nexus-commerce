@@ -20,7 +20,9 @@ import { systemCallerOf } from '../../../platform/files/files'
 import { KIND_RULES } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { systemContext } from '../../../platform/outbox/system'
-import { readMatchFacts, readSender, type CodeMatch } from './facts'
+import { readMatchFacts, type CodeMatch } from './facts'
+// B-W2b-249: the sender follows the economic operators (Owner question 3: the brand for a style sold under its name).
+import { readDocSender } from './sender'
 
 /**
  * The public DoC (B-W2b-166; PRD-294, PRD-356; design links.doc; Reg. (EU) 2016/425 art. 8(8), Reg. (EU) 2023/988 art. 19):
@@ -84,9 +86,9 @@ export async function pagesUnder(request: FastifyRequest, code: string): Promise
         const match: CodeMatch = { tenantId, ...hit }
         const read = await readMatchFacts(client, match, code, day)
         if (!read) continue
-        const head = await readSender(client, read.companyId)
+        const head = await readDocSender(client, match, read.companyId, day)
         if (!head) continue
-        const page = publicDocPage(read.facts, head.sender, head.contact)
+        const page = publicDocPage({ ...read.facts, style: { ...read.facts.style, privateLabel: head.makerRole === 'BRAND' } }, head.sender, head.contact)
         if (match.kind === 'STYLE' && page.declaration === null) continue
         own.push({ match, page })
       }
