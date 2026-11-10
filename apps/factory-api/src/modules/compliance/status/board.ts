@@ -3,7 +3,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { CERTIFICATES_VIEW } from '@nexus/factory-domain/compliance/certificates/permissions'
 import { linesOf, type GateLine, type GateMarket, type GateTarget } from '@nexus/factory-domain/compliance/gates/gate'
 import { checkOf, notApplying, byGateOrder, ownerOf, type RequirementRow } from '@nexus/factory-domain/compliance/requirements/rules'
-import { cellOf, cellWords, needsAction, windowEnd, type ActionInput, type CellSummary } from '@nexus/factory-domain/compliance/status/board'
+import { cellOf, cellWords, expiryMonths, needsAction, windowEnd, type ActionInput, type CellSummary } from '@nexus/factory-domain/compliance/status/board'
 import { gapTypeOf, type GapType } from '@nexus/factory-domain/compliance/reports/rules'
 import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
@@ -263,15 +263,26 @@ export async function statusCell(request: FastifyRequest, query: { readonly styl
 /**
  * GET /compliance/status/expiries?months — what stops within the months (1-24, default 12), per month. B-W2b-266: the compliance
  * reports' calendar (B-W2b-272 `expiriesOf`): certificates in force (a brand's own stops with its base) and accepted supplier
- * declarations, each with its first valid day; within the reader's certificate view, every company it reaches. LWG and claims
- * evidence join with their step (B-W2b-264).
+ * declarations, each with its first valid day; and approved sustainability claims whose evidence stops (B-W2b-264: validUntil,
+ * the claim's first day = its approval); within the reader's certificate view, every company it reaches. LWG comes later.
  */
 export async function statusExpiries(request: FastifyRequest, query: { readonly months?: number | undefined }) {
   const context = officeOf(request)
   const months = Math.min(Math.max(query.months ?? 12, 1), 24)
   return request.withClient(async (db) => {
     const day = today()
-    const answer = await expiriesOf(db, { actor: actorOf(context), company: null, brand: null, today: day, sight: { certificates: true, register: false, lots: false, shipments: false } }, months, null)
-    return { months: answer.months, count: answer.count, from: day, to: answer.end, asOf: toUtcIso(rulesClock().now()) }
+    const actor = actorOf(context)
+    const answer = await expiriesOf(db, { actor, company: null, brand: null, today: day, sight: { certificates: true, register: false, lots: false, shipments: false } }, months, null)
+    const claims = await db.sustainabilityClaim.findMany({
+      where: { AND: [scopeWhere(actor, CERTIFICATES_VIEW, { company: 'companyId' }) as Prisma.SustainabilityClaimWhereInput, { status: 'APPROVED', validUntil: { gte: new Date(`${day}T00:00:00Z`), lte: new Date(`${answer.end}T00:00:00Z`) } }] },
+      select: { id: true, code: true, kind: true, status: true, validUntil: true, approvedAt: true },
+      orderBy: [{ validUntil: 'asc' }, { code: 'asc' }],
+      take: 500,
+    })
+    const items = [
+      ...answer.months.flatMap((month) => month.items),
+      ...claims.map((row) => ({ recordType: 'SustainabilityClaim', recordId: row.id, label: row.code, validFrom: row.approvedAt ? businessDate(row.approvedAt) : null, validTo: row.validUntil!.toISOString().slice(0, 10), status: row.status, detail: row.kind, party: null, endsWithBase: false })),
+    ]
+    return { months: expiryMonths(items, day, months) as { month: string; count: number; items: typeof items }[], count: items.length, from: day, to: answer.end, asOf: toUtcIso(rulesClock().now()) }
   })
 }

@@ -24,6 +24,7 @@ import {
   OVERRIDE_REASON_MAX,
   OVERRIDE_REASON_MIN,
   overrideHeld,
+  overridesInForce,
   overrideProblems,
   overrideRefusalKey,
   overrideSendHeld,
@@ -152,6 +153,11 @@ describe('gate refusals and the override', () => {
     expect(overrideHeld(overridden, ALL, false)).toBe('override.held.state.OVERRIDDEN')
     expect(overrideHeld(cleared, ALL, false)).toBe('override.held.state.CLEARED')
     expect(overrideHeld({ ...blocked, requirement: { ...blocked.requirement, overrideRoleKeys: [] } }, ALL, false)).toBe('override.held.noRole')
+    // Another refusal of the same work order, gate and requirement with an override in force: the API would answer IN_FORCE.
+    const twin = { ...blocked, id: 'twin', overrides: [{ id: 'o1', at: blocked.at, until: '2026-11-12T22:59:59.000Z', reason: 'Made up.', by: null, inForce: true }] }
+    const keys = overridesInForce([blocked, twin], new Date('2026-11-10T09:42:00.000Z'))
+    expect(overrideHeld(blocked, ALL, false, keys)).toBe('override.held.state.OVERRIDDEN')
+    expect(overridesInForce(FEED.events, new Date('2026-11-10T09:42:00.000Z')).size).toBe(1)
   })
   it('the last day: the end of that day in Rome, never later than the requirement allows', () => {
     const now = new Date('2026-11-10T09:42:00.000Z')

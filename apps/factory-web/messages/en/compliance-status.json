@@ -339,11 +339,11 @@
     }
   },
   "expiry": {
-    "hint": "Certificates and supplier declarations ending in the next 12 months.",
-    "hintRange": "Certificates and supplier declarations ending from {from} to {to}.",
+    "hint": "Certificates, supplier declarations and claims evidence ending in the next 12 months.",
+    "hintRange": "Certificates, supplier declarations and claims evidence ending from {from} to {to}.",
     "failed": "What expires next could not be read",
     "empty": "Nothing expires in 12 months",
-    "emptyBody": "No certificate in force and no accepted supplier declaration ends in the next 12 months.",
+    "emptyBody": "No certificate in force, accepted supplier declaration or approved claim ends in the next 12 months.",
     "monthsLabel": "Months",
     "count_one": "1 item",
     "count_other": "{count} items",
@@ -358,7 +358,8 @@
     "suspended": "Suspended by the notified body",
     "endsWithBase": "Ends with its base certificate",
     "chipLabel": "{kind} {what}, valid to {date}, {left}",
-    "later": "LWG and claims evidence join this calendar with the sustainability step."
+    "later": "LWG evidence joins this calendar with the chain-of-custody step.",
+    "kindClaim": "Claim"
   },
   "validity": {
     "span": "Valid {from} – {to}",

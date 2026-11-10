@@ -169,7 +169,7 @@ function Print({ model }: { model: StatusPrintModel }) {
                     cells: [
                       monthLabel(month.month, locale),
                       day(item.validTo),
-                      `${item.recordType === 'Certificate' ? t('expiry.kindCertificate') : t('expiry.kindDeclaration')} · ${[item.label, item.detail, item.party].filter(Boolean).join(' · ')}${item.endsWithBase ? ` (${t('expiry.endsWithBase')})` : ''}`,
+                      `${item.recordType === 'Certificate' ? t('expiry.kindCertificate') : item.recordType === 'SustainabilityClaim' ? t('expiry.kindClaim') : t('expiry.kindDeclaration')} · ${[item.label, item.detail, item.party].filter(Boolean).join(' · ')}${item.endsWithBase ? ` (${t('expiry.endsWithBase')})` : ''}`,
                       validity({ from: item.validFrom, to: item.validTo, today: model.today }).left,
                     ],
                   })),

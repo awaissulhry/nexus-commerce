@@ -266,10 +266,27 @@ export const feedShown = (events: readonly GateEvent[], filter: FeedFilter): Gat
 /** The tone of a refusal's state (with its word). */
 export const FEED_TONE: Readonly<Record<FeedState, 'danger' | 'success' | 'warning' | 'neutral'>> = { BLOCKED: 'danger', CLEARED: 'success', OVERRIDDEN: 'warning', OVERRIDE: 'neutral' }
 
+/** A subject's requirement at a gate (an override lifts exactly that). */
+export const overrideKeyOf = (event: Pick<GateEvent, 'gate' | 'subject' | 'requirement'>): string => `${event.gate}|${event.subject.id}|${event.requirement.id}`
+
+/**
+ * The gate × subject × requirement keys with an override in force now, from every row of the feed (an override row, or a
+ * refusal's overrides): another refusal of the same key cannot be overridden again until it ends (the API's IN_FORCE).
+ */
+export function overridesInForce(events: readonly GateEvent[], now: Date): Set<string> {
+  const keys = new Set<string>()
+  for (const event of events) {
+    if (event.overrides.some((entry) => entry.inForce)) keys.add(overrideKeyOf(event))
+    if (event.outcome === 'OVERRIDDEN' && event.overrideUntil && new Date(event.overrideUntil).getTime() > now.getTime()) keys.add(overrideKeyOf(event))
+  }
+  return keys
+}
+
 /** Why "Override…" is held on a refusal (a message key), or null when the person may override it now. */
-export function overrideHeld(event: GateEvent, can: StatusCan, offline: boolean): string | null {
+export function overrideHeld(event: GateEvent, can: StatusCan, offline: boolean, inForce: ReadonlySet<string> = new Set()): string | null {
   if (event.outcome !== 'REFUSED') return 'override.held.notRefusal'
   if (event.state !== 'BLOCKED') return `override.held.state.${event.state}`
+  if (inForce.has(overrideKeyOf(event))) return 'override.held.state.OVERRIDDEN'
   if (event.requirement.locked) return 'override.held.locked'
   if (event.requirement.overrideRoleKeys.length === 0) return 'override.held.noRole'
   if (!can.override || !event.mayOverride) return 'override.held.role'

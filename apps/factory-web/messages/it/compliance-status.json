@@ -339,11 +339,11 @@
     }
   },
   "expiry": {
-    "hint": "Certificati e dichiarazioni dei fornitori in scadenza nei prossimi 12 mesi.",
-    "hintRange": "Certificati e dichiarazioni dei fornitori in scadenza dal {from} al {to}.",
+    "hint": "Certificati, dichiarazioni dei fornitori e prove delle dichiarazioni ambientali in scadenza nei prossimi 12 mesi.",
+    "hintRange": "Certificati, dichiarazioni dei fornitori e prove delle dichiarazioni ambientali in scadenza dal {from} al {to}.",
     "failed": "Non è stato possibile leggere le prossime scadenze",
     "empty": "Nulla scade nei prossimi 12 mesi",
-    "emptyBody": "Nessun certificato in vigore e nessuna dichiarazione accettata scade nei prossimi 12 mesi.",
+    "emptyBody": "Nessun certificato in vigore, dichiarazione accettata o dichiarazione ambientale approvata scade nei prossimi 12 mesi.",
     "monthsLabel": "Mesi",
     "count_one": "1 voce",
     "count_other": "{count} voci",
@@ -358,7 +358,8 @@
     "suspended": "Sospeso dall'organismo notificato",
     "endsWithBase": "Scade con il certificato di base",
     "chipLabel": "{kind} {what}, valido fino al {date}, {left}",
-    "later": "Le prove LWG e delle dichiarazioni ambientali entrano in questo calendario con il passo sostenibilità."
+    "later": "Le prove LWG entrano in questo calendario con il passo della catena di custodia.",
+    "kindClaim": "Dichiarazione ambientale"
   },
   "validity": {
     "span": "Valido {from} – {to}",

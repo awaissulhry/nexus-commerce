@@ -27,6 +27,7 @@ import {
   fixHref,
   marketName,
   overrideHeld,
+  overridesInForce,
   recordHref,
   rowsShown,
   styleHref,
@@ -376,8 +377,10 @@ export function GatesPanel({ model, actions }: Props) {
   const board = model.board.status === 'ready' ? model.board.value : null
   const markets = useMemo(() => board?.markets ?? [], [board])
   const offline = model.live === 'offline'
-  const latest = useRef({ model, actions, offline })
-  latest.current = { model, actions, offline }
+  // Another refusal of the same work order and requirement already overridden: held as overridden (the API's IN_FORCE).
+  const inForce = useMemo(() => overridesInForce(value?.events ?? [], new Date(model.now)), [value, model.now])
+  const latest = useRef({ model, actions, offline, inForce })
+  latest.current = { model, actions, offline, inForce }
 
   const columns = useMemo((): ColDef<GateEvent>[] => {
     const WhenCell = ({ data }: ICellRendererParams<GateEvent>) => (data ? <span>{formatDateTime(data.at, { locale })}</span> : null)
@@ -438,7 +441,7 @@ export function GatesPanel({ model, actions }: Props) {
       if (!data) return null
       const now = latest.current
       const href = subjectHref(data, now.model.prefix, now.model.can)
-      const held = overrideHeld(data, now.model.can, now.offline)
+      const held = overrideHeld(data, now.model.can, now.offline, now.inForce)
       const items: MenuItemDef[] = [
         ...(href ? [{ id: 'open', label: t('feed.open', { number: data.subject.number ?? '' }), href }] : []),
         ...(data.outcome === 'REFUSED' ? [{ id: 'override', label: t('feed.override'), onSelect: () => now.actions?.onOverride?.(data), ...(held ? { disabled: true, description: t(held) } : {}) }] : []),
@@ -549,7 +552,7 @@ function ExpiryChip({ item, model }: { item: ExpiryItem; model: StatusModel }) {
   const locale = useLocale()
   const words = useValidityWords()
   const { left } = words({ from: item.validFrom, to: item.validTo, today: model.today })
-  const kind = item.recordType === 'Certificate' ? t('expiry.kindCertificate') : item.recordType === 'SupplierDeclarationRequest' ? t('expiry.kindDeclaration') : t('expiry.kindOther')
+  const kind = item.recordType === 'Certificate' ? t('expiry.kindCertificate') : item.recordType === 'SupplierDeclarationRequest' ? t('expiry.kindDeclaration') : item.recordType === 'SustainabilityClaim' ? t('expiry.kindClaim') : t('expiry.kindOther')
   const what = item.recordType === 'Certificate' ? [item.label, item.detail].filter(Boolean).join(' · ') : [item.label, item.party].filter(Boolean).join(' · ')
   const rows: [string, string][] = [
     [t('expiry.what'), `${kind} · ${what}`],
@@ -564,7 +567,7 @@ function ExpiryChip({ item, model }: { item: ExpiryItem; model: StatusModel }) {
       <HoverCard rows={rows}>
         <Link className="fw-cs-chip" href={recordHref(item, model.prefix)} aria-label={t('expiry.chipLabel', { kind, what, date: dayText(item.validTo, locale), left })}>
           <span className="fw-cs-chip-head">
-            <Tag tone={item.status === 'SUSPENDED' || item.endsWithBase ? 'warning' : item.recordType === 'Certificate' ? 'info' : 'neutral'}>{kind}</Tag>
+            <Tag tone={item.status === 'SUSPENDED' || item.endsWithBase ? 'warning' : item.recordType === 'Certificate' ? 'info' : item.recordType === 'SustainabilityClaim' ? 'success' : 'neutral'}>{kind}</Tag>
             <span className="fw-cs-chip-label">{item.label}</span>
           </span>
           <ValidityBar mini from={item.validFrom} to={item.validTo} today={model.today} />

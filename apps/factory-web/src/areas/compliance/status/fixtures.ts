@@ -206,7 +206,7 @@ export const FEED: Feed = { events: EVENTS, days: 7, asOf: NOW }
 export const EXPIRIES: Expiries = {
   from: TODAY,
   to: '2027-11-10',
-  count: 4,
+  count: 5,
   asOf: NOW,
   months: Array.from({ length: 12 }, (_, index) => {
     const at = new Date(Date.UTC(2026, 10 + index, 1))
@@ -219,6 +219,8 @@ export const EXPIRIES: Expiries = {
           ]
         : month === '2027-03'
           ? [{ recordType: 'Certificate', recordId: uid('7304', 3), label: 'DEMO-CERT-0007', validTo: '2027-03-31', validFrom: '2022-04-01', status: 'SUSPENDED', detail: 'EN 17092-4:2020', party: null, endsWithBase: false }]
+          : month === '2027-06'
+            ? [{ recordType: 'SustainabilityClaim', recordId: uid('7312', 1), label: 'DEMO-CL-0003', validTo: '2027-06-30', validFrom: '2026-07-01', status: 'APPROVED', detail: 'RECYCLED_CONTENT', party: null, endsWithBase: false }]
           : month === '2027-08'
             ? [{ recordType: 'Certificate', recordId: uid('7304', 4), label: 'DEMO-CERT-0011', validTo: '2027-08-15', validFrom: '2023-01-10', status: 'VALID', detail: 'EN 17092-3:2020', party: null, endsWithBase: true }]
             : []
