@@ -278,11 +278,13 @@ describe('technical files: navigation', () => {
     expect(recordPage({ type: 'EvidencePack', id: 'p1' }, OFFICE_PAGES)).toBe('/compliance/techfiles/pack?pack=p1')
   })
 
-  it('Compliance › Main lists Technical files after Certificates for a reader of certificates', () => {
+  it('Compliance › Main lists Technical files after Certificates and Declarations for a reader of certificates', () => {
     const nav = officeNavFor(permissionCheck(['home.view', 'compliance.certificates.view']))
     const area = nav.areas.find((entry) => entry.id === 'compliance')!
     const ids = (area.sections ?? []).flatMap((section) => section.items.map((entry) => entry.id))
-    expect(ids.indexOf('compliance-techfiles')).toBe(ids.indexOf('compliance-certificates') + 1)
+    // The design's Main group: Certificates, then B-W2b-268's Declarations & instructions, then Technical files.
+    expect(ids.indexOf('compliance-declarations')).toBe(ids.indexOf('compliance-certificates') + 1)
+    expect(ids.indexOf('compliance-techfiles')).toBe(ids.indexOf('compliance-declarations') + 1)
     const none = officeNavFor(permissionCheck(['home.view', 'sales.quotes.view']))
     expect((none.areas.find((entry) => entry.id === 'compliance')?.sections ?? []).flatMap((section) => section.items.map((entry) => entry.id))).not.toContain('compliance-techfiles')
   })
