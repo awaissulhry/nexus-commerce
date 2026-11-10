@@ -1685,6 +1685,8 @@
     "compliance_declarations_pack": "Build a shipment's compliance pack",
     "compliance_recall_manage": "Draft authority notices, recalls and withdrawals (holds, progress per customer), notices to distributors and the authority requests",
     "compliance_recall_send": "Speak for the company outward: mark an authority notice as sent, send notices to distributors, publish a recall's public notice (with a fresh code)",
+    "compliance_userInformation_generate": "Make generated user-information drafts and their translations for each market",
+    "compliance_userInformation_check": "Check a generated leaflet's translation (never one's own)",
     "compliance_supplierDeclarations_manage": "Ask suppliers for declarations (REACH SVHC, RSL, PFAS-free, nickel release, chromium VI), remind them, record and decide their answers",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",

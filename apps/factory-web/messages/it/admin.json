@@ -1685,6 +1685,8 @@
     "compliance_declarations_pack": "Preparare il pacchetto di conformità di una spedizione",
     "compliance_recall_manage": "Preparare le comunicazioni alle autorità, i richiami e i ritiri (blocchi, avanzamento per cliente), gli avvisi ai distributori e le richieste delle autorità",
     "compliance_recall_send": "Parlare per l'azienda verso l'esterno: segnare come inviata una comunicazione all'autorità, inviare gli avvisi ai distributori, pubblicare l'avviso pubblico di un richiamo (con un codice nuovo)",
+    "compliance_userInformation_generate": "Preparare le bozze generate delle istruzioni per l'utilizzatore e le loro traduzioni per ogni mercato",
+    "compliance_userInformation_check": "Verificare la traduzione di una nota informativa generata (mai la propria)",
     "compliance_supplierDeclarations_manage": "Chiedere dichiarazioni ai fornitori (SVHC REACH, RSL, senza PFAS, rilascio di nichel, cromo VI), sollecitarli, registrare e decidere le risposte",
     "product_materials_view": "Vedere la libreria dei materiali",
     "product_materials_manage": "Aggiungere e modificare materiali",
