@@ -1,0 +1,703 @@
+{
+  "switch": {
+    "label": "Libraries of Sizes & measurements",
+    "scales": "Size scales",
+    "poms": "Points of measure",
+    "rules": "Grade rules",
+    "key": "Key {key}"
+  },
+  "import": {
+    "menu": "Import",
+    "poms": "Points of measure from a sheet…",
+    "rules": "Grade rules from a sheet…",
+    "held": "Importing needs the import rights (run imports and upload files): ask an administrator.",
+    "name": {
+      "poms": "Points of measure",
+      "rules": "Grade rules"
+    },
+    "fills": {
+      "poms": "Code, name, kind, body zone, unit, default tolerance, how to measure and the body point of each point of measure.",
+      "rules": "A grade rule per line: its scale and base size, then the increment of a point between two sizes (\"50-52\") or of every step (\"*\")."
+    }
+  },
+  "common": {
+    "activeFilters": "Active filters",
+    "back": "Back",
+    "chipSearch": "Search: {q}",
+    "clearAll": "Clear all",
+    "clearFilters": "Clear filters",
+    "close": "Close",
+    "count_one": "{count} of {total}",
+    "count_other": "{count} of {total}",
+    "countMore_one": "{count} of {total}, more to show",
+    "countMore_other": "{count} of {total}, more to show",
+    "dismiss": "Dismiss",
+    "everyCompany": "Every company",
+    "keysTitle": "Keyboard shortcuts",
+    "more": "Show more",
+    "notYet": "Not read yet",
+    "readAgain": "Read again",
+    "reading": "Reading…",
+    "removeFilter": "Remove filter",
+    "retry": "Try again",
+    "save": "Save",
+    "statusFilter": "Which",
+    "updated": "Updated {time}",
+    "working": "Working…"
+  },
+  "statusView": {
+    "open": "In use",
+    "archived": "Archived",
+    "all": "All"
+  },
+  "status": {
+    "ACTIVE": "In use",
+    "ARCHIVED": "Archived"
+  },
+  "kind": {
+    "BODY": "Body",
+    "GARMENT": "Garment"
+  },
+  "zone": {
+    "UPPER": "Upper body",
+    "ARMS": "Arms",
+    "LEGS": "Legs",
+    "RIDING": "Riding position",
+    "OTHER": "Other"
+  },
+  "format": {
+    "RELATIVE": "Relative (size to size)",
+    "ABSOLUTE": "Absolute (from the base)",
+    "hint": {
+      "RELATIVE": "Each increment goes from one size to the next; the standard increment covers every step a row leaves empty.",
+      "ABSOLUTE": "Each increment counts from the base size; the standard increment is multiplied by the places from the base."
+    }
+  },
+  "held": {
+    "alreadyActive": "Some of these are already in use.",
+    "alreadyArchived": "Some of these are already archived.",
+    "busy": "Wait: the last change is still being saved.",
+    "noManage": "Changing the libraries needs product.styles.manage (a product developer's role).",
+    "none": "Pick at least one row.",
+    "nothing": "Nothing changed yet."
+  },
+  "problem": {
+    "read": {
+      "forbidden": "Your role does not read these.",
+      "internal": "Something went wrong reading this. Try again.",
+      "signed_out": "You were signed out: sign in again.",
+      "not_found": "This no longer exists.",
+      "unavailable": "The server cannot be reached right now.",
+      "rate_limited": "Too many requests: wait a moment and try again.",
+      "contract": "The server answered in a way this page does not understand."
+    },
+    "write": {
+      "codeTaken": "This code is already in the library (whatever the letter case).",
+      "internal": "Something went wrong saving. Nothing was saved.",
+      "inUse": "It is in use, so this cannot change.",
+      "invalid": "Something in it was refused. Check the fields.",
+      "moved": "Someone else changed it meanwhile: read it again, then make your change.",
+      "state": "It cannot change in the state it is in now.",
+      "signed_out": "You were signed out: sign in again.",
+      "not_found": "It no longer exists.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The server cannot be reached: nothing was saved."
+    }
+  },
+  "poms": {
+    "intro": "The points every measurement spec and grade rule is measured at: a code that means the same on every style, how to measure it, its unit and the tolerance a spec takes by default.",
+    "new": "New point",
+    "search": "Search points",
+    "table": "Points of measure",
+    "kindFilter": "Kind",
+    "kindAll": "Body and garment",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "howTo": "How to measure",
+      "uom": "Unit",
+      "tolerance": "Default tolerance",
+      "body": "Body point",
+      "status": "State",
+      "more": "More"
+    },
+    "cell": {
+      "name": "Name of {code}",
+      "howTo": "How to measure {code}",
+      "uom": "Unit of {code}",
+      "tolerance": "Default tolerance of {code}"
+    },
+    "howToPlaceholder": "How to measure it",
+    "tolerancePlaceholder": "± per spec",
+    "noHowTo": "No how-to yet",
+    "perSpec": "Typed per spec",
+    "isBody": "Body point",
+    "keys": {
+      "new": "New point",
+      "open": "Open the point"
+    },
+    "menu": {
+      "edit": "Edit point…",
+      "view": "Open",
+      "archive": "Archive…",
+      "restore": "Restore…",
+      "copyCode": "Copy code",
+      "more": "More for {code}"
+    },
+    "bulk": {
+      "export_one": "Export {count}",
+      "export_other": "Export {count}",
+      "archive_one": "Archive {count}",
+      "archive_other": "Archive {count}",
+      "restore_one": "Restore {count}",
+      "restore_other": "Restore {count}"
+    },
+    "status": {
+      "archiveTitle_one": "Archive {count} point",
+      "archiveTitle_other": "Archive {count} points",
+      "restoreTitle_one": "Restore {count} point",
+      "restoreTitle_other": "Restore {count} points",
+      "archiveBody": "An archived point is not offered to new specs and rules; the specs and rules that have it keep it.",
+      "restoreBody": "A restored point is offered to new specs and rules again."
+    },
+    "notice": {
+      "created": "{code} added to the library.",
+      "saved": "{code} saved.",
+      "archived_one": "{count} point archived.",
+      "archived_other": "{count} points archived.",
+      "restored_one": "{count} point restored.",
+      "restored_other": "{count} points restored.",
+      "picture": "The picture of {code} is on file.",
+      "pictureScan": "The picture of {code} is being checked: it shows once it is clean."
+    },
+    "offline_one": "Offline: {count} change waits on this page and is sent when the connection is back.",
+    "offline_other": "Offline: {count} changes wait on this page and are sent when the connection is back.",
+    "empty": {
+      "title": "No points of measure yet",
+      "body": "Add the first point (chest width, back length …), or import them from a sheet.",
+      "bodyView": "A product developer adds them."
+    },
+    "filteredEmpty": {
+      "title": "No rows match these filters",
+      "body": "Clear the filters to see every point."
+    },
+    "error": {
+      "title": "Couldn't load points of measure"
+    },
+    "forbidden": {
+      "title": "You don't have access to points of measure",
+      "body": "Reading them needs product.styles.view (product developers, production and quality have it)."
+    },
+    "dialog": {
+      "newTitle": "New point of measure",
+      "editTitle": "Point of measure",
+      "editTitleOf": "Point of measure {code}",
+      "create": "Add point",
+      "failed": "Couldn't read the point",
+      "inUse": "In use: {specs} spec(s) with {values} value(s), {rules} grade rule(s), {templates} measurement template point(s). Its kind and unit stay as they are.",
+      "unused": "Nothing uses it yet: every field may change."
+    },
+    "field": {
+      "company": "Whose",
+      "companyHint": "Every company shares a point; or keep it to one company.",
+      "code": "Code",
+      "codeHint": "1 to 40 letters, digits, dots, dashes or underscores (\"CHEST_W\"): the final inspection records by it.",
+      "name": "Name",
+      "kind": "Kind",
+      "kindHint": "Garment: what the finished garment measures (a spec, a grade rule). Body: what a rider measures.",
+      "kindInUse": "In use: the kind stays.",
+      "zone": "Body zone",
+      "uom": "Unit",
+      "uomInUse": "In use: the unit stays.",
+      "tolerance": "Default tolerance (±)",
+      "toleranceHint": "Taken by a spec when its own is not typed; empty: typed per spec.",
+      "body": "Body point it answers to",
+      "bodyHint": "The rider's measure this garment point follows (garment chest ↔ body chest).",
+      "bodyNone": "None",
+      "howTo": "How to measure",
+      "howToHint": "Plain words a fitter or an inspector follows; the picture shows it."
+    },
+    "picture": {
+      "section": "Picture",
+      "none": "No picture yet.",
+      "onFile": "On file",
+      "scanning": "Being checked",
+      "add": "Add picture",
+      "replace": "Replace picture",
+      "remove": "Remove picture",
+      "choose": "Choose a picture",
+      "open": "How to measure {code}: see the picture",
+      "title": "How to measure {code}",
+      "alt": "How to measure {code}",
+      "loading": "Reading the picture…",
+      "failed": "The picture cannot be shown right now.",
+      "problem": "The file store did not take the picture: try again."
+    },
+    "problem": {
+      "name": "Give it a name.",
+      "tooLong": "Too long.",
+      "uom": "Pick cm or mm.",
+      "tolerance": "A tolerance is a number of 0 or more, at most 2 decimals.",
+      "code": "1 to 40 letters, digits, dots, dashes or underscores, starting with a letter or a digit.",
+      "codeTaken": "This code is already in the library (whatever the letter case).",
+      "inUse": "In use: it stays as it is. Make a new point instead.",
+      "invalid": "Refused: check the value.",
+      "moved": "Someone else changed this point meanwhile: it was read again.",
+      "write": "Not saved: try again.",
+      "refusedField": "Refused: see the reason above."
+    },
+    "held": {
+      "archived": "This point is archived: restore it to change it."
+    },
+    "readOnly": "You can look at this point; changing it needs product.styles.manage.",
+    "csv": {
+      "code": "Code",
+      "name": "Name",
+      "kind": "Kind",
+      "zone": "Body zone",
+      "unit": "Unit",
+      "tolerance": "Default tolerance",
+      "body": "Body point",
+      "howTo": "How to measure",
+      "status": "State"
+    }
+  },
+  "rules": {
+    "intro": "Reusable increments per point of measure between the sizes of a scale: a spec is typed in its base size and graded to the others by a rule.",
+    "new": "New grade rule",
+    "search": "Search rules",
+    "table": "Grade rules",
+    "scaleFilter": "Scale",
+    "scaleAll": "Every scale",
+    "chipScale": "Scale {scale}",
+    "twoDimensions": "Size and fit",
+    "noun": "rule",
+    "col": {
+      "rule": "Rule",
+      "scale": "Scale",
+      "base": "Base size",
+      "points": "Points",
+      "format": "Increments",
+      "specs": "Used by",
+      "status": "State",
+      "more": "More"
+    },
+    "points_one": "{count} point",
+    "points_other": "{count} points",
+    "steps_one": "{count} step",
+    "steps_other": "{count} steps",
+    "specs_one": "{count} spec",
+    "specs_other": "{count} specs",
+    "keys": {
+      "new": "New grade rule",
+      "open": "Open the rule"
+    },
+    "menu": {
+      "open": "Open",
+      "newTab": "Open in a new tab",
+      "archive": "Archive…",
+      "restore": "Restore…",
+      "more": "More for {code}"
+    },
+    "bulk": {
+      "export_one": "Export {count}",
+      "export_other": "Export {count}",
+      "archive_one": "Archive {count}",
+      "archive_other": "Archive {count}",
+      "restore_one": "Restore {count}",
+      "restore_other": "Restore {count}"
+    },
+    "status": {
+      "archiveTitle_one": "Archive {count} rule",
+      "archiveTitle_other": "Archive {count} rules",
+      "restoreTitle_one": "Restore {count} rule",
+      "restoreTitle_other": "Restore {count} rules",
+      "archiveBody": "An archived rule is not offered to new specs; the specs graded with it keep their values.",
+      "restoreBody": "A restored rule is offered to new specs again."
+    },
+    "notice": {
+      "created": "{code} made: give it its increments.",
+      "saved": "{code} saved.",
+      "archived_one": "{count} rule archived.",
+      "archived_other": "{count} rules archived.",
+      "restored_one": "{count} rule restored.",
+      "restored_other": "{count} rules restored."
+    },
+    "empty": {
+      "title": "No grade rules yet",
+      "body": "Make the first rule for a scale, or import them from a sheet.",
+      "bodyView": "A product developer makes them."
+    },
+    "filteredEmpty": {
+      "title": "No rows match these filters",
+      "body": "Clear the filters to see every rule."
+    },
+    "error": {
+      "title": "Couldn't load grade rules"
+    },
+    "forbidden": {
+      "title": "You don't have access to grade rules",
+      "body": "Reading them needs product.styles.view (product developers, production and quality have it)."
+    },
+    "newTitle": "New grade rule",
+    "newIntro": "A rule belongs to one size scale. Its increments are typed next, in the rule itself.",
+    "create": "Make rule",
+    "newAfter": "Next: the increments per point and size step.",
+    "companyHint": "Every company shares a rule; or keep it to one company.",
+    "field": {
+      "code": "Code",
+      "codeHint": "Capital letters or digits, with . _ - / inside (\"GR-JACKET-EU\").",
+      "name": "Name",
+      "scale": "Size scale",
+      "scalePick": "Pick a scale",
+      "scaleFirst": "Pick the scale first",
+      "base": "Base size",
+      "baseHint": "Where grading starts: the size a spec is typed in.",
+      "format": "How increments count"
+    },
+    "problem": {
+      "code": "1 to 60 capital letters or digits, with . _ - / inside.",
+      "name": "Give it a name.",
+      "scale": "Pick the scale.",
+      "base": "Pick a size of the scale.",
+      "refusedField": "Refused: see the reason above.",
+      "bothWays": "{code} has a step from {from} to {to} and back: give it one way only (the other way takes the increment off)."
+    },
+    "dialog": {
+      "title": "Grade rule",
+      "subtitle": "{scale} · base {base} · {format}"
+    },
+    "readOnly": "You can look at this rule; changing it needs product.styles.manage.",
+    "held": {
+      "archived": "This rule is archived: restore it to change it."
+    },
+    "dropped_one": "{count} step does not start at the base size {base}: an absolute rule leaves it out on Save.",
+    "dropped_other": "{count} steps do not start at the base size {base}: an absolute rule leaves them out on Save.",
+    "grid": {
+      "title": "Increments per point and size step",
+      "introRelative": "Type the increment from one size to the next (negative too). An empty step takes the standard increment.",
+      "introAbsolute": "Type each size's increment from the base size (negative too). An empty one takes the standard increment times its places from the base.",
+      "point": "Point",
+      "standard": "Every step",
+      "standardTip": "The standard increment: used for every step a row leaves empty.",
+      "stepTip": "The increment from {step}",
+      "fromBaseTip": "The increment from the base: {step}",
+      "standardCell": "{code}, every step",
+      "stepCell": "{code}, {step}",
+      "remove": "Take {code} out of the rule",
+      "empty": "No points yet: add the first one below."
+    },
+    "add": {
+      "point": "Add a point…",
+      "pointButton": "Add point",
+      "pickPoint": "Pick a point first.",
+      "noPoint": "Every garment point is in the rule",
+      "stepLead": "A step between two sizes (between fits too):",
+      "from": "From",
+      "to": "To",
+      "stepButton": "Add step",
+      "pick": "Pick both sizes.",
+      "same": "Pick two different sizes.",
+      "there": "This step is already a column."
+    },
+    "grades": {
+      "title": "What it grades to",
+      "intro": "Each size's offset from the base size {base}, as grading reads the increments above.",
+      "base": "{size} · base",
+      "none": "Not graded",
+      "notReached": "No step reaches this size: grading leaves its value as it is."
+    },
+    "csv": {
+      "code": "Code",
+      "name": "Name",
+      "scale": "Scale",
+      "base": "Base size",
+      "points": "Points",
+      "steps": "Steps",
+      "format": "Increments",
+      "specs": "Used by specs",
+      "status": "State"
+    }
+  },
+  "scaleTab": {
+    "tab": "Grade rules",
+    "title": "Grade rules for this scale",
+    "intro": "The rules bound to this scale. Open one to see or change its increments.",
+    "empty": "No rules yet",
+    "emptyBody": "Make the first grade rule for this scale.",
+    "emptyView": "A product developer makes them.",
+    "failed": "Couldn't load the grade rules"
+  },
+  "spec": {
+    "title": "Measurement spec",
+    "intro": "Points of measure × sizes of revision {revision}, graded from the base size.",
+    "loading": "Reading the measurement spec…",
+    "failed": "Couldn't load the measurement spec",
+    "add": "Add points",
+    "startButton": "Start the spec",
+    "gradeButton": "Apply grade rule",
+    "pasteButton": "Paste from a sheet",
+    "approve": "Approve",
+    "reopen": "Reopen",
+    "status": {
+      "DRAFT": "Draft",
+      "APPROVED": "Approved",
+      "ARCHIVED": "Archived"
+    },
+    "base": "Base size {size}",
+    "rule": "Rule {code}",
+    "ruleNone": "No grade rule (typed by hand)",
+    "ruleBase": "base {size}",
+    "missing_one": "{count} value missing",
+    "missing_other": "{count} values missing",
+    "complete": "Nothing missing",
+    "noPoints": "No points yet",
+    "approvedAt": "Approved {time}",
+    "missingTitle_one": "{count} value still missing (approval needs every point in every size)",
+    "missingTitle_other": "{count} values still missing (approval needs every point in every size)",
+    "missingLine": "{code}: {sizes}",
+    "table": "Measurement spec",
+    "count_one": "{count} point × {sizes} sizes",
+    "count_other": "{count} points × {sizes} sizes",
+    "col": {
+      "point": "Point of measure",
+      "tolerance": "Tolerance",
+      "more": "More"
+    },
+    "cell": "{code}, size {size}",
+    "tolerance": {
+      "varies": "varies by size"
+    },
+    "legend": "The base size {base} is marked; a dot marks a value typed by hand among graded ones; \"missing\" is a value the range still asks.",
+    "keys": {
+      "cell": "Type in a cell"
+    },
+    "menu": {
+      "fill": "Fill from the base by an increment…",
+      "tolerance": "Tolerance…",
+      "up": "Move up",
+      "down": "Move down",
+      "first": "Already first.",
+      "last": "Already last.",
+      "remove": "Take out…",
+      "more": "More for {code}",
+      "settings": "Base size and grade rule…",
+      "archive": "Archive the spec…",
+      "specMore": "More for the spec"
+    },
+    "bulk": {
+      "remove_one": "Take out {count}",
+      "remove_other": "Take out {count}"
+    },
+    "frozen": {
+      "released": "Revision {revision} is released and frozen: its spec is read only.",
+      "obsolete": "Revision {revision} is obsolete and frozen: its spec is read only."
+    },
+    "held": {
+      "archived": "The style is archived: its spec does not change.",
+      "frozen": "This revision is frozen: its spec changes only in a new revision.",
+      "approved": "The spec is approved: reopen it to change it.",
+      "archivedSpec": "This spec is archived: it never changes.",
+      "noManage": "Changing the spec needs product.bom.manage (a product developer's role).",
+      "rule": "The style's edit rule holds changes in this lifecycle state (Product settings).",
+      "noRange": "The style has no size range yet: set it in the Overview first.",
+      "noRelease": "Approving or reopening needs product.bom.release.",
+      "notDraft": "Only a draft spec is approved.",
+      "noPoints": "Add points first.",
+      "missing_one": "{count} value is still missing.",
+      "missing_other": "{count} values are still missing."
+    },
+    "banner": {
+      "archived": "The style is archived: its measurement spec is read only.",
+      "approved": "The spec is approved: its values are read only. Reopen it to change them.",
+      "archivedSpec": "This measurement spec is archived: it is read only.",
+      "noManage": "You can read the spec; changing it needs product.bom.manage.",
+      "rule": "The style's edit rule holds changes in its lifecycle state: the spec is read only (Products › Settings)."
+    },
+    "offline_one": "Offline: {count} value waits on this page and is sent when the connection is back.",
+    "offline_other": "Offline: {count} values wait on this page and are sent when the connection is back.",
+    "empty": {
+      "title": "No points of measure yet",
+      "body": "Start the spec of revision {revision}: its base size and grade rule, or a copy of an earlier spec.",
+      "held": "This revision has no measurement spec.",
+      "points": "Add the points this style is measured at, each with its value in the base size.",
+      "frozen": "This spec has no points."
+    },
+    "notice": {
+      "started": "The measurement spec is started.",
+      "settings": "Base size and grade rule saved.",
+      "added_one": "{count} point added.",
+      "added_other": "{count} points added.",
+      "removed_one": "{count} point taken out.",
+      "removed_other": "{count} points taken out.",
+      "graded_one": "{count} value graded.",
+      "graded_other": "{count} values graded.",
+      "pasted_one": "{count} value pasted.",
+      "pasted_other": "{count} values pasted.",
+      "filled": "{code}: {count} size(s) filled from the base.",
+      "tolerance": "The tolerance of {code} is saved.",
+      "approve": "The measurement spec is approved: the final inspection measures against it.",
+      "reopen": "The spec is reopened: its approval is cleared.",
+      "archive": "The spec is archived: a new one can be started."
+    },
+    "problem": {
+      "nominal": "A value is above 0, with at most 2 decimals.",
+      "notNumber": "Not a number: the value stays.",
+      "moved": "The spec changed meanwhile: it was read again.",
+      "state": "The spec cannot change now: it was read again.",
+      "write": "Not saved: try again."
+    },
+    "start": {
+      "title": "Start the measurement spec of revision {revision}",
+      "intro": "Type the base size's values; a grade rule fills the other sizes.",
+      "from": "Start from",
+      "blank": "Blank",
+      "copy": "A copy of an earlier spec of this revision",
+      "copyOf": "Copy of",
+      "archivedSpec": "Spec with base {base}, started {date}",
+      "go": "Start",
+      "held": {
+        "base": "Pick the base size.",
+        "copy": "Pick the spec to copy."
+      }
+    },
+    "field": {
+      "base": "Base size",
+      "baseHint": "The size the values are typed in (the style's base size).",
+      "rule": "Grade rule",
+      "ruleHint": "A rule of the style's size scale; none: every size typed by hand."
+    },
+    "settings": {
+      "title": "Base size and grade rule",
+      "baseHint": "Grading starts here; the values already typed stay.",
+      "ruleHint": "Apply grade rule offers this rule first."
+    },
+    "addDialog": {
+      "title": "Add points of measure",
+      "intro": "Garment points of the library; give each its value in the base size {base}.",
+      "none": "Every garment point of the library is in the spec.",
+      "tolerance": "± {tolerance} {unit} by default",
+      "noTolerance": "No default tolerance: type it after",
+      "value": "{code} in size {base}",
+      "valuePlaceholder": "Size {base}, {unit}",
+      "go_one": "Add {count} point",
+      "go_other": "Add {count} points",
+      "held": {
+        "none": "Tick at least one point.",
+        "value": "Give each ticked point its value in the base size (above 0)."
+      }
+    },
+    "grade": {
+      "title": "Apply grade rule",
+      "intro": "The rule's increments from the base size {base}: see what changes before anything is written.",
+      "ruleHint": "The rules of the style's size scale.",
+      "pick": "Pick a rule",
+      "pickFirst": "Pick a rule to see what it changes.",
+      "overrides": "Values typed by hand",
+      "keep": "Keep values typed by hand (recommended)",
+      "overwrite": "Overwrite them with the graded values",
+      "reading": "Reading what the rule changes…",
+      "failed": "Couldn't read what the rule changes",
+      "review_one": "{count} value changes",
+      "review_other": "{count} values change",
+      "empty": "missing",
+      "action": {
+        "ADD": "Added",
+        "CHANGE": "Graded again",
+        "OVERWRITE": "Typed value overwritten",
+        "KEEP_OVERRIDE": "Typed value kept",
+        "SAME": "As it is",
+        "NOT_REACHED": "Not reached",
+        "OUT_OF_RANGE": "Out of range"
+      },
+      "overwriteNote": "Typed by hand before.",
+      "kept_one": "{count} value typed by hand is kept.",
+      "kept_other": "{count} values typed by hand are kept.",
+      "notReached_one": "{count} size is not reached by the rule (left as it is): {cells}.",
+      "notReached_other": "{count} sizes are not reached by the rule (left as they are): {cells}.",
+      "outOfRange_one": "{count} value would be 0 or less (left as it is): {cells}.",
+      "outOfRange_other": "{count} values would be 0 or less (left as they are): {cells}.",
+      "notInRule": "Not in the rule (left as they are): {codes}.",
+      "noBase": "No value in the base size {base}, so not graded: {codes}.",
+      "go_one": "Apply to {count} value",
+      "go_other": "Apply to {count} values",
+      "held": {
+        "rule": "Pick a rule first.",
+        "preview": "Wait for the preview.",
+        "nothing": "The rule changes nothing."
+      }
+    },
+    "pasteDialog": {
+      "title": "Paste from a sheet",
+      "intro": "One line per point: its code, then a value per size in the range's order ({sizes}) — or a first line naming the sizes.",
+      "field": "Cells copied from the sheet",
+      "hint": "Tabs or semicolons between the cells; an empty cell is left as it is.",
+      "found_one": "{count} value for {points} point(s).",
+      "found_other": "{count} values for {points} point(s).",
+      "problems_one": "{count} line needs a look",
+      "problems_other": "{count} lines need a look",
+      "go_one": "Paste {count} value",
+      "go_other": "Paste {count} values",
+      "held": {
+        "empty": "Paste the cells first.",
+        "nothing": "Nothing in it fits the spec.",
+        "tooMany": "At most 3,000 values at once."
+      }
+    },
+    "pasteProblem": {
+      "unknown": "\"{code}\" is not a point of this spec.",
+      "over": "{code}: more values than sizes (the extra ones are left out).",
+      "notNumber": "{code}, size {size}: \"{text}\" is not a value above 0."
+    },
+    "fill": {
+      "title": "Fill {code} from the base",
+      "intro": "From the base size {base}: each size before or after it moves by the increment. Values typed by hand stay unless you untick them."
+    },
+    "toleranceDialog": {
+      "title": "Tolerance of {code}",
+      "intro": "Under and over the value, in {unit}, for every size that has a value.",
+      "minus": "Under (−)",
+      "plus": "Over (+)",
+      "go_one": "Save for {count} size",
+      "go_other": "Save for {count} sizes",
+      "held": {
+        "number": "A number of 0 or more, at most 2 decimals.",
+        "noValues": "This point has no values yet."
+      }
+    },
+    "removeDialog": {
+      "title_one": "Take {count} point out of the spec",
+      "title_other": "Take {count} points out of the spec",
+      "body": "Its values in every size go with it. The library keeps the point.",
+      "values_one": "{count} value",
+      "values_other": "{count} values"
+    },
+    "moveDialog": {
+      "reason": "Why",
+      "held": {
+        "reason": "Say why first."
+      },
+      "approve": {
+        "title": "Approve the measurement spec of revision {revision}",
+        "body": "{points} point(s) × {sizes} size(s), none missing. Once approved, the final inspection measures against it and it changes only after it is reopened.",
+        "go": "Approve"
+      },
+      "reopen": {
+        "title": "Reopen the measurement spec of revision {revision}",
+        "body": "Its approval is cleared; the final inspection no longer measures against it until it is approved again.",
+        "go": "Reopen"
+      },
+      "archive": {
+        "title": "Archive the measurement spec of revision {revision}",
+        "body": "It is kept, read only; a new spec of this revision can then be started (a copy of it, too).",
+        "go": "Archive"
+      }
+    },
+    "word": {
+      "reading": "Reading…",
+      "save": "Save",
+      "none": "Pick at least one row.",
+      "nothing": "Nothing changed yet."
+    }
+  }
+}

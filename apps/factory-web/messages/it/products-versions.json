@@ -1,0 +1,297 @@
+{
+  "base": {
+    "retry": "Riprova",
+    "reading": "Lettura in corso…",
+    "close": "Chiudi"
+  },
+  "ver": {
+    "title": "Revisioni",
+    "intro": "Ogni revisione di distinta, ciclo, scheda misure ed etichetta. Una revisione rilasciata è bloccata: una modifica è una nuova revisione.",
+    "failed": "Impossibile leggere le revisioni",
+    "option": "Rev. {revision} · {status}",
+    "rev": "Rev. {revision}",
+    "notInRole": "Non nel tuo ruolo",
+    "locked": "Bloccata: le revisioni rilasciate non cambiano mai",
+    "inView": "In vista",
+    "noNote": "Nessuna nota",
+    "someone": "Un collega",
+    "notReleased": "Non rilasciata",
+    "compareWith": "Confronta la revisione {revision} con la revisione {before}",
+    "compareBefore": "Rispetto alla rev. {before}"
+  },
+  "cmp": {
+    "title": "Confronta revisioni",
+    "intro": "Cosa è cambiato tra due revisioni, parte per parte: distinta, ciclo e minuti, scheda misure, protezioni, pezzi del cartamodello ed etichetta.",
+    "open": "Confronta revisioni…",
+    "openWide": "Apri in grande"
+  },
+  "pair": {
+    "from": "Da",
+    "to": "A",
+    "swap": "Scambia le due revisioni",
+    "onlyOne": "Per ora c'è una sola revisione: niente da confrontare.",
+    "pick": "Scegli due revisioni.",
+    "same": "Scegli due revisioni diverse."
+  },
+  "costCmp": {
+    "title": "Differenza di costo",
+    "how": "Entrambe le revisioni con i prezzi e le tariffe standard di oggi (al {day}): il costo per capo di ogni taglia, per variante.",
+    "notInRole": "Differenza di costo: non nel tuo ruolo.",
+    "held": "Differenza di costo: serve il permesso di leggere i costi per l'azienda del modello.",
+    "incomplete_one": "{count} voce non ha ancora un prezzo: il costo è incompleto.",
+    "incomplete_other": "{count} voci non hanno ancora un prezzo: il costo è incompleto.",
+    "total": "Costo per capo (taglia base)",
+    "field": {
+      "material": "Materiali (taglia base)",
+      "labour": "Manodopera (taglia base)",
+      "overhead": "Costi generali (taglia base)"
+    }
+  },
+  "failed": {
+    "versions": "Impossibile leggere le revisioni",
+    "changes": "Impossibile leggere le modifiche del modello",
+    "drift": "Impossibile leggere offerte e ordini su revisioni precedenti",
+    "released": "Impossibile leggere per cosa è rilasciata la revisione in vigore"
+  },
+  "col": {
+    "revision": "Revisione",
+    "status": "Stato",
+    "why": "Cosa è cambiato",
+    "released": "Rilasciata",
+    "workOrders": "Ordini di lavoro",
+    "quotes": "Righe offerta",
+    "orders": "Righe ordine",
+    "compare": "Confronto",
+    "change": "Modifica",
+    "kind": "Tipo",
+    "raisedBy": "Richiesta da",
+    "raisedOn": "Richiesta il"
+  },
+  "released": {
+    "whole": "La revisione {revision} è rilasciata per ogni variante e taglia.",
+    "part_one": "La revisione {revision} è rilasciata per {colourways} in {sizes} ({count} cella).",
+    "part_other": "La revisione {revision} è rilasciata per {colourways} in {sizes} ({count} celle).",
+    "waits": "Le altre varianti e taglie aspettano un rilascio successivo della stessa revisione: fino ad allora gli ordini di lavoro le rifiutano.",
+    "more": "Rilascia di più…"
+  },
+  "chg": {
+    "title": "Richieste e ordini di modifica",
+    "intro": "Le modifiche richieste per questo modello (Prodotti › Modifiche e versioni).",
+    "raise": "Richiedi una modifica",
+    "all": "Tutte le modifiche del modello",
+    "none": "Nessuna modifica richiesta.",
+    "more": "Qui ci sono solo le più recenti: Tutte le modifiche del modello le mostra tutte."
+  },
+  "drift": {
+    "title": "Ordini su revisioni precedenti",
+    "intro": "Offerte e ordini aperti con righe su una revisione diversa da quella in vigore, e come differisce la scheda.",
+    "cost": "Differenza di costo",
+    "perGarment": "per capo",
+    "incomplete": "una voce non ha prezzo",
+    "noCost": "Nessuna revisione da cui calcolare il costo",
+    "costNotInRole": "Differenza di costo: non nel tuo ruolo."
+  },
+  "gateCheck": {
+    "reading": "Lettura del controllo di rilascio…",
+    "failed": "Impossibile leggere il controllo di rilascio",
+    "more_one": "e ancora {count}",
+    "more_other": "e altre {count}",
+    "score": "Completezza",
+    "noScore": "Nessun punteggio ancora",
+    "open": "Bloccano il rilascio: {blockers} · avvisi: {warnings}"
+  },
+  "gateItem": {
+    "BOM": "Distinta completa",
+    "ROUTING": "Ciclo di lavoro",
+    "SMV": "Minuti approvati",
+    "MATERIALS": "Materiali approvati",
+    "PRICES": "Materiali con prezzo",
+    "LABEL": "Etichetta del capo",
+    "CERTIFICATE": "Copertura del certificato",
+    "MEASUREMENTS": "Scheda misure",
+    "ATTRIBUTES": "Attributi del tipo di prodotto",
+    "CHANGE_ORDERS": "Ordini di modifica",
+    "SCOPE": "Ambito del rilascio",
+    "DRIFT": "Offerte e ordini aperti"
+  },
+  "gateWhat": {
+    "BOM": "Quantità, colori per variante e taglie; gruppi e sottoassiemi.",
+    "ROUTING": "Operazioni con minuti sopra 0 e una fase scansionata.",
+    "SMV": "Ogni operazione governata usa il suo SMV approvato; nessuna modifica SMV in attesa di approvazione.",
+    "MATERIALS": "Ogni materiale è approvato per l'uso; uno bloccato ferma il rilascio.",
+    "PRICES": "Ogni materiale che la fabbrica acquista ha un costo standard.",
+    "LABEL": "La revisione indica un modello di etichetta del capo attivo.",
+    "CERTIFICATE": "Un certificato valido copre ogni variante × taglia attiva che il rilascio prende (DPI).",
+    "MEASUREMENTS": "La scheda misure della revisione è approvata.",
+    "ATTRIBUTES": "Ogni attributo richiesto dal tipo di prodotto è compilato.",
+    "CHANGE_ORDERS": "L'ordine di modifica che propone questa bozza è approvato e in vigore.",
+    "SCOPE": "Le varianti e le taglie che questo rilascio prende.",
+    "DRIFT": "Offerte e ordini sulla revisione che diventa obsoleta la mantengono."
+  },
+  "gateState": {
+    "OK": "Fatto",
+    "WARNING": "Avviso, non lo ferma",
+    "BLOCKED": "Ferma il rilascio",
+    "NOT_REQUIRED": "Non serve"
+  },
+  "finding": {
+    "MATERIAL_BLOCKED": "Riga {line}: il materiale è bloccato per l'uso; scegline un altro.",
+    "ALTERNATE_BLOCKED": "Riga {line}: un'alternativa è un materiale bloccato; toglila o prendine un'altra.",
+    "SUB_ASSEMBLY_NOT_RELEASED": "Riga {line}: il sottoassieme è in bozza o obsoleto; prendi la sua revisione rilasciata.",
+    "SUB_ASSEMBLY_NOT_MADE": "Riga {line}: il sottoassieme non è un componente che produciamo (pezzi, paia o set).",
+    "SUB_ASSEMBLY_CIRCLE": "Riga {line}: il modello è dentro i propri sottoassiemi.",
+    "SUB_ASSEMBLY_TOO_DEEP": "Riga {line}: troppi livelli di sottoassiemi.",
+    "SUB_ASSEMBLY_UNIT": "Riga {line}: l'unità non si converte in ciò che produce il sottoassieme.",
+    "SUB_ASSEMBLY_SIZE_MISSING": "Riga {line}: il sottoassieme non ha la taglia {size}.",
+    "SUB_ASSEMBLY_COLOURWAY_MISSING": "Riga {line}: il sottoassieme non ha la variante {colourway}.",
+    "GROUP_CIRCLE": "Riga {line}: è raggruppata sotto una riga raggruppata sotto di lei.",
+    "PPE_MATERIAL_NOT_APPROVED": "Riga {line}: una riga DPI con un materiale non ancora approvato.",
+    "ALTERNATE_ARCHIVED": "Riga {line}: un'alternativa è archiviata, quindi non viene mai presa.",
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Riga {line}: il sottoassieme è un modello archiviato.",
+    "SCOPE_REPEATED": "Una variante o una taglia è indicata due volte.",
+    "SCOPE_COLOURWAY_UNKNOWN": "Una variante non è del modello.",
+    "SCOPE_COLOURWAY_ARCHIVED": "La variante {colourway} è archiviata: non si produce, quindi non si rilascia.",
+    "SCOPE_SIZE_OUTSIDE": "La taglia {size} non è nella gamma del modello.",
+    "SCOPE_EMPTY": "Il rilascio non lascia niente da produrre: rilascia almeno una variante attiva in una taglia.",
+    "SCOPE_NARROWS": "Un rilascio successivo aggiunge solo varianti o taglie: ciò che è rilasciato resta rilasciato.",
+    "SCOPE_NOT_WIDER": "È già rilasciata per queste: aggiungi una variante o una taglia.",
+    "SMV_NOT_APPROVED": "Operazione {step}: i minuti differiscono dallo SMV approvato in vigore.",
+    "SMV_CHANGE_WAITING": "Operazione {step}: una modifica SMV attende l'approvazione.",
+    "MATERIAL_PENDING": "Riga {line}: il materiale non è ancora approvato per l'uso.",
+    "MATERIAL_NO_STANDARD_COST": "Riga {line}: il materiale non ha ancora un costo standard.",
+    "LABEL_MISSING": "La revisione non indica un modello di etichetta del capo.",
+    "LABEL_NOT_ACTIVE": "Il modello di etichetta del capo non è attivo.",
+    "CELL_NOT_COVERED": "{colourway} {size}: nessun certificato valido la copre.",
+    "CERTIFICATE_NO_CELLS": "Ancora nessuna variante in una taglia da verificare con un certificato.",
+    "SPEC_MISSING": "La revisione non ha una scheda misure.",
+    "SPEC_NOT_APPROVED": "La scheda misure non è ancora approvata.",
+    "ATTRIBUTE_MISSING": "Il tipo di prodotto richiede un valore: {field}.",
+    "CHANGE_ORDER_NOT_APPROVED": "L'ordine di modifica che propone questa bozza non è ancora approvato.",
+    "CHANGE_ORDER_NOT_EFFECTIVE": "L'ordine di modifica è approvato ma entra in vigore in un giorno successivo.",
+    "CHANGE_ORDER_OPEN": "Un altro ordine di modifica è aperto su questo modello: rilasciare fuori da esso lo lascia da decidere di nuovo.",
+    "OPEN_QUOTES": "Offerte aperte sono state calcolate sulla revisione che diventa obsoleta: mantengono il prezzo.",
+    "OPEN_ORDERS": "Ordini aperti sono stati presi sulla revisione che diventa obsoleta."
+  },
+  "scope": {
+    "title": "Rilascia solo alcune varianti o taglie",
+    "widenTitle": "Cosa aggiungere al rilascio",
+    "only": "Rilascia solo alcune varianti o taglie (le altre aspettano un rilascio successivo)",
+    "colourways": "Varianti",
+    "sizes": "Taglie",
+    "fixed": "Già rilasciata: resta rilasciata",
+    "fixedHint": "Un rilascio successivo aggiunge solo varianti o taglie; ciò che è rilasciato resta rilasciato.",
+    "useSuggested": "Usa l'ambito suggerito",
+    "suggestedIs": "Lascia fuori ciò che nessun certificato copre: {colourways} in {sizes}.",
+    "everyColourway": "ogni variante",
+    "everySize": "ogni taglia",
+    "whole": "È rilasciata per ogni variante e taglia.",
+    "both": "È rilasciata per {colourways} in {sizes}.",
+    "colourwaysOnly": "È rilasciata per {colourways} in ogni taglia.",
+    "sizesOnly": "È rilasciata per ogni variante in {sizes}.",
+    "bothWaiting": "È rilasciata per {colourways} in {sizes}; {waiting} aspettano un rilascio successivo.",
+    "colourwaysOnlyWaiting": "È rilasciata per {colourways} in ogni taglia; {waiting} aspettano un rilascio successivo.",
+    "sizesOnlyWaiting": "È rilasciata per ogni variante in {sizes}; {waiting} aspettano un rilascio successivo."
+  },
+  "hold": {
+    "reading": "Attendi: il controllo di rilascio è in lettura.",
+    "unread": "Impossibile leggere il controllo di rilascio: riprova.",
+    "notReleased": "Solo una revisione rilasciata si rilascia di più.",
+    "scopeEmpty": "Scegli almeno una variante e una taglia.",
+    "mayNot": "Il tuo ruolo non rilascia le revisioni di questo modello, o il modello ora non lo permette.",
+    "notWider": "Prima aggiungi una variante o una taglia.",
+    "scope": "L'ambito del rilascio ha un problema: vedi Ambito del rilascio.",
+    "blocked": "Prima sistema: {item}.",
+    "notReleasable": "Il controllo di rilascio non è ancora superato.",
+    "noRequest": "Il tuo ruolo non richiede modifiche."
+  },
+  "effect": {
+    "drift": "Offerte e ordini aperti sulla revisione {revision} la mantengono: vedi Ordini su revisioni precedenti.",
+    "widen": "La revisione {revision} resta quella in vigore; cresce solo ciò per cui è rilasciata.",
+    "widenNever": "Un rilascio successivo aggiunge soltanto: ciò che è rilasciato resta rilasciato."
+  },
+  "widen": {
+    "title": "Rilascia di più la revisione {revision}",
+    "go": "Rilascia di più la revisione {revision}",
+    "checkTitle": "Controllo di ciò che si aggiunge"
+  },
+  "fault": {
+    "unavailable": "Il server della fabbrica non ha risposto. Riprova tra un momento.",
+    "forbidden": "Il tuo ruolo non legge questo.",
+    "notFound": "Non trovato: potrebbe essere stato rimosso o appartenere a un'altra azienda.",
+    "signedOut": "Sei stato disconnesso. Accedi di nuovo.",
+    "contract": "La risposta non è quella che la pagina si aspetta. Ricarica la pagina.",
+    "rateLimited": "Troppi tentativi in poco tempo. Attendi un momento.",
+    "moved": "Qualcuno ha cambiato prima la revisione: il controllo è stato riletto.",
+    "refused": "Il rilascio è stato rifiutato: il controllo è cambiato da quando è stato letto. È stato riletto.",
+    "scope": "L'ambito del rilascio è stato rifiutato: vedi Ambito del rilascio.",
+    "writeForbidden": "Il tuo ruolo non rilascia le revisioni di questo modello."
+  },
+  "wo": {
+    "specFailed": "Impossibile leggere la scheda rispetto al modello in vigore",
+    "current": "Prodotto sulla revisione {revision}, la scheda in vigore.",
+    "noBanner": "Nessuna scheda più recente da segnalare.",
+    "compare": "Confronta con il modello in vigore",
+    "changeOpen": "Richiesta di modifica…",
+    "differentSpec": "Una scheda diversa è un nuovo ordine di lavoro o una richiesta di modifica.",
+    "sizeFrozen": "Bloccato al rilascio: una modifica richiede una richiesta di modifica.",
+    "newer": {
+      "NEWER_RELEASED": "Esiste una scheda più recente: revisione {newer} (rilasciata il {day}). Questo ordine di lavoro è prodotto sulla revisione {revision}.",
+      "WITHDRAWN": "La revisione {revision} è stata ritirata e nessuna revisione la sostituisce."
+    },
+    "decision": {
+      "none": "Resta sulla revisione {revision} finché l'ufficio decide.",
+      "FINISH_OLD": "Deciso in {order}: finisci questo ordine di lavoro sulla revisione {revision}.",
+      "REWORK": "Deciso in {order}: rilavora secondo la revisione {newer}; valgono le nuove pagine.",
+      "SCRAP": "Deciso in {order}: il semilavorato viene scartato.",
+      "HOLD": "Deciso in {order}: l'ordine di lavoro è sospeso."
+    },
+    "held": {
+      "reading": "Attendi: la scheda è in lettura.",
+      "unread": "Impossibile leggere la scheda: riprova.",
+      "noRevision": "L'ordine di lavoro non ha una revisione.",
+      "noReleased": "Il modello non ha una revisione rilasciata con cui confrontare.",
+      "noRequest": "Il tuo ruolo non richiede modifiche.",
+      "title": "Indica cosa cambia.",
+      "reason": "Indica perché.",
+      "long": "Troppo lungo: accorcia cosa cambia o il perché.",
+      "busy": "Attendi: è in invio."
+    },
+    "diff": {
+      "title": "Differenze di scheda",
+      "start": "Avvia una richiesta di modifica",
+      "facts": "{number} è prodotto sulla revisione {revision}, bloccata al suo rilascio. Ora il modello in vigore è la revisione {released}.",
+      "noReleased": "{number} è prodotto sulla revisione {revision}; ora il modello non ha una revisione rilasciata.",
+      "noRevision": "{number} non ha una revisione.",
+      "same": "Nulla è cambiato: il modello in vigore è ancora la revisione {revision}.",
+      "nothing": "Nessuna parte differisce.",
+      "noBomRight": "Il dettaglio riga per riga richiede il permesso di leggere la distinta.",
+      "orders": "Righe d'ordine offerte o ordinate su un'altra revisione"
+    },
+    "change": {
+      "title": "Richiesta di modifica",
+      "ask": "Chiedi l'approvazione",
+      "about": "Riguarda {number} · {style}, revisione {revision}.",
+      "raised": "Richiesta di modifica {number} inviata: decide l'ufficio prodotto.",
+      "raisedPlain": "Richiesta di modifica inviata: decide l'ufficio prodotto.",
+      "openIt": "Aprila",
+      "what": "Cosa cambia",
+      "whatHint": "Una riga, come la leggerà l'ufficio prodotto.",
+      "why": "Perché",
+      "whyHint": "Cosa si è visto e perché la scheda dovrebbe cambiare.",
+      "priority": "Priorità",
+      "made": "Già prodotto",
+      "madeNoRight": "Ciò che è già prodotto richiede il permesso di leggere le modifiche.",
+      "madeFailed": "Impossibile leggere ciò che è già prodotto",
+      "madeHint": "Questi fasci sono toccati se la modifica vale per questo ordine di lavoro.",
+      "already": "Richieste già su questo ordine di lavoro",
+      "noneYet": "Ancora nessuna.",
+      "approval": "L'ufficio prodotto la accetta o la rifiuta; una modifica accettata passa da un ordine di modifica con i suoi approvatori."
+    },
+    "col": {
+      "request": "Richiesta",
+      "what": "Cosa cambia",
+      "status": "Stato",
+      "raisedOn": "Richiesta il"
+    }
+  }
+}

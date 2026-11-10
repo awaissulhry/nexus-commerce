@@ -41,6 +41,8 @@ import { useLabourCost } from '../labour/use-labour'
 import { SHIFT_NAMESPACE } from '../every-shift/model'
 import { useSplit } from '../every-shift/use-split'
 import { useExtra } from '../extra/use-extra'
+// B-W2b-245: the frozen spec against the master and Change request.
+import { useWorkOrderSpec } from '../spec/use-spec'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
@@ -335,6 +337,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     void load()
   })
 
+  // B-W2b-245: once released, the spec against the master (read while the Overview shows); the pop-ups read their own parts.
+  const spec = useWorkOrderSpec({ api, workOrder: workOrder.status === 'ready' ? workOrder.value : null, permissions: session.permissions, enabled: tab === 'overview' })
+
   const model: WorkOrderRecordModel = {
     prefix,
     can,
@@ -365,6 +370,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     labour: labour.model,
     extra: extra.model,
     split: split.model,
+    // B-W2b-245
+    spec: spec.model,
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -379,6 +386,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         onOpenSplit: split.open,
         split: split.actions,
         extra: extra.actions,
+        // B-W2b-245
+        spec: spec.actions,
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,

@@ -86,6 +86,7 @@
     "techpack": "Scheda tecnica",
     "compliance": "Conformità",
     "files": "File e cartamodelli",
+    "versions": "Versioni e modifiche",
     "activity": "Attività",
     "problems_one": "{count} problema prima del rilascio",
     "problems_other": "{count} problemi prima del rilascio"
@@ -194,6 +195,7 @@
     "skusSaved_one": "{count} SKU salvato.",
     "skusSaved_other": "{count} SKU salvati.",
     "released": "La revisione {revision} è rilasciata: i nuovi ordini di lavoro la usano.",
+    "widened": "La revisione {revision} ora è rilasciata per più varianti o taglie: gli ordini di lavoro possono usarle.",
     "revisionStarted": "La nuova revisione in bozza è aperta.",
     "abandoned": "La revisione in bozza è abbandonata.",
     "archived": "Il modello è archiviato.",

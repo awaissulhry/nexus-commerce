@@ -17,6 +17,8 @@ import { PartState } from './WorkOrderRecordView'
 import { beforeRelease, readinessView } from '../../daily/model'
 import { HoldsCard, ReadinessLine } from '../../daily/view/DailyParts'
 import { SHIFT_NAMESPACE } from '../../every-shift/model'
+// B-W2b-245: 'Compare with the current master' (wo-frozen) and the size run's frozen banner (wo-sizegrid).
+import { FrozenSpecLine, SizeRunFrozen } from '../../spec/view/SpecParts'
 
 /**
  * Overview & release (design wo-release, wo-frozen, wo-facts, wo-sizes-mini): a draft's release check (each condition
@@ -28,7 +30,7 @@ export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrde
   return (
     <div className="fw-pr-stack">
       <div className="fw-pr-cards fw-pr-cards--wide">
-        {beforeRelease(workOrder) ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} /> : <FrozenCard workOrder={workOrder} model={model} />}
+        {beforeRelease(workOrder) ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} /> : <FrozenCard workOrder={workOrder} model={model} actions={actions} />}
         <FactsCard workOrder={workOrder} model={model} actions={actions} />
       </div>
       {/* B-W2a-46 (wo-side "holds (W2a)"): the work order's holds, Put on hold / Release the hold. */}
@@ -90,7 +92,7 @@ export function translateParams(t: (key: string, params?: Record<string, string 
   return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, typeof value === 'string' && /^(reason|kind)\.[A-Z_]+$/.test(value) ? t(value) : value]))
 }
 
-function FrozenCard({ workOrder, model }: { workOrder: WorkOrder; model: WorkOrderRecordModel }) {
+function FrozenCard({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
   const locale = useLocale()
   const override = workOrder.release?.materialOverride ?? null
@@ -113,7 +115,8 @@ function FrozenCard({ workOrder, model }: { workOrder: WorkOrder; model: WorkOrd
       />
       {override && <Banner tone="warning" title={t('overview.override', { reason: override.reason })} />}
       <ReadinessLine readiness={readinessView(workOrder, null, model.daily?.readiness?.value ?? null)} />
-      <p className="fw-pr-hint">{t('overview.frozenHint')}</p>
+      {/* B-W2b-245: the newer spec, Compare with the current master and Change request replace W1's "a change request comes later". */}
+      {model.spec ? <FrozenSpecLine model={model.spec} actions={actions?.spec} /> : <p className="fw-pr-hint">{t('overview.frozenHint')}</p>}
     </Card>
   )
 }
@@ -238,6 +241,8 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
           <SegmentedControl size="sm" wrap ariaLabel={t('size.layer')} value={layer} onChange={(value) => actions?.onSizeLayer?.(value as SizeLayer)} options={SIZE_LAYERS.map((value) => ({ value, label: t(`size.layers.${value}`) }))} />
         )}
       </div>
+      {/* B-W2b-245 (wo-sizegrid "Released and later: read-only Banner 'Frozen at release: a change needs a change request'"). */}
+      {!draft && model.spec && <SizeRunFrozen model={model.spec} actions={actions?.spec} />}
       {!draft && (
         <div className="fw-pr-steps">
           {(['cut', 'bundled', 'sewn', 'finished'] as const).map((step) => (

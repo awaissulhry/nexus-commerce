@@ -3,6 +3,8 @@ import { canFor, NOW, PREFIX } from '../../library/demo'
 import { failed, ready } from '../../library/model'
 import { EU_SCALE, NEW_SCALE, STYLES_ON_EU } from '../fixtures'
 import { ScaleRecordView, type ScaleRecordViewModel } from './view/ScaleRecordView'
+// B-W2b-240: the Grade rules tab.
+import { RULES } from '../depth/fixtures'
 
 /**
  * SCR-049 a size scale — made-up data only: the EU men's scale 44–64 with chest and height per size (64 has no height
@@ -39,6 +41,12 @@ export const designScreen = defineDesignScreen<ScaleRecordViewModel>({
     { id: 'rename', label: 'Rename', model: { ...base, dialog: { kind: 'rename' } }, note: 'The code stays once styles use the scale.' },
     { id: 'points', label: 'Measurement points', model: { ...base, tab: 'points' } },
     { id: 'points-none', label: 'Measurement points: none', model: { ...fresh, tab: 'points' } },
+    // B-W2b-240: Size scale › Grade rules.
+    { id: 'grade-rules', label: 'Grade rules (W2b)', model: { ...base, tab: 'graderules', gradeRules: { rules: RULES.filter((rule) => rule.scale.code === 'DEMO-EU-UOMO'), problem: null } }, note: 'The rules bound to this scale; each opens its pop-up on Sizes › Grade rules.' },
+    { id: 'grade-rules-none', label: 'Grade rules: none yet', model: { ...fresh, tab: 'graderules', gradeRules: { rules: [], problem: null } }, note: '"No rules yet" with New grade rule for this scale.' },
+    { id: 'grade-rules-quality', label: 'Grade rules: quality (reads)', model: { ...fresh, can: canFor('quality'), tab: 'graderules', gradeRules: { rules: [], problem: null } } },
+    { id: 'grade-rules-loading', label: 'Grade rules: loading', model: { ...base, tab: 'graderules', gradeRules: { rules: null, problem: null } } },
+    { id: 'grade-rules-failed', label: 'Grade rules: could not load', model: { ...base, tab: 'graderules', gradeRules: { rules: null, problem: 'problem.read.unavailable' } } },
     { id: 'where-used', label: 'Where used', model: { ...base, tab: 'whereused' } },
     { id: 'where-used-none', label: 'Where used: none', model: { ...fresh, tab: 'whereused' } },
     { id: 'where-used-failed', label: 'Where used: could not load', model: { ...base, tab: 'whereused', styles: failed('problem.read.unavailable') } },

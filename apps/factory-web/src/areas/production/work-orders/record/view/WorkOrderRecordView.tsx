@@ -28,6 +28,9 @@ import { minutesOf, SHIFT_NAMESPACE, splitHeld, travellersHref } from '../../eve
 import { DocumentsTab } from '../../every-shift/view/DocumentsTab'
 import { SplitDialog } from '../../every-shift/view/SplitDialog'
 import '../../../_shared/production.css'
+// B-W2b-245: Spec differences and Change request (design pop:wo-diff, pop:wo-change).
+import { SpecDialogs } from '../../spec/view/SpecParts'
+import { requestHeld, SPEC_NS } from '../../spec/model'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 
@@ -41,7 +44,7 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  */
 export function WorkOrderRecordView({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS]}>
       <WorkOrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -162,11 +165,15 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
 
   // B-W2b-59: Split work order (⋯, held with its reason) and the traveller's new tab.
   const ts = useT(SHIFT_NAMESPACE)
+  // B-W2b-245: the ⋯ "Change request…".
+  const tspec = useT(SPEC_NS)
   const heldWords = useScopedT('production')
   const splitWait = splitHeld(workOrder, model.can)
   const more = [
     { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
     { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [workOrder.id]), target: '_blank' as const },
+    // B-W2b-245 (design pop:wo-change "⋯"): a change to this work order's spec is a change request.
+    ...(model.spec ? [{ id: 'changeRequest', label: tspec('wo.changeOpen'), disabled: requestHeld(model.spec.can) !== null, ...(requestHeld(model.spec.can) ? { description: tspec(requestHeld(model.spec.can)!) } : {}), onSelect: () => actions?.spec?.onOpen?.({ kind: 'change' }) }] : []),
     ...(mayCancel(workOrder, model.can) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
     {
       id: 'copy',
@@ -317,6 +324,8 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       <RecordDialogs workOrder={workOrder} model={model} actions={actions} />
       {model.split && <SplitDialog workOrder={workOrder} model={model.split} actions={actions?.split} />}
       {daily && <DailyDialogs workOrder={workOrder} daily={daily} actions={actions?.daily} pick={model.pick?.value ?? null} bundles={model.bundles.value} />}
+      {/* B-W2b-245 */}
+      {model.spec && <SpecDialogs workOrder={workOrder} model={model.spec} prefix={model.prefix} actions={actions?.spec} />}
     </div>
   )
 }

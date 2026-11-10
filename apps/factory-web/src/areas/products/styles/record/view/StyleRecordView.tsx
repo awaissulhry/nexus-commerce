@@ -24,7 +24,13 @@ import { bomMarkCount } from '../../bom/depth/model'
 // B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
 import { GallerySection } from '../gallery/view/GallerySection'
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
+// B-W2b-240: Sizes & measurements › Measurement spec.
+import { SpecSection } from '../spec/view/SpecSection'
 import { TabBody } from './TabBody'
+// B-W2b-245: Versions & changes, Compare revisions, and the Release modal on B-W2b-231's gate.
+import { VersionsTab } from '../../versions/view/VersionsTab'
+import { CompareDialog } from '../../versions/view/CompareDialog'
+import { ReleaseGateDialog } from '../../release/view/ReleaseGateDialog'
 import { VariantsTab } from './VariantsTab'
 // B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
 import type { StyleDepthSlots } from '../overview/slots'
@@ -58,7 +64,7 @@ export function StyleRecordView({
   depth?: StyleDepthSlots
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth']}>
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions']}>
       <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
     </WithMessages>
   )
@@ -122,6 +128,8 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
   const tOptions = useT('products-options')
   // B-W2b-244: the band's links to the style's changes.
   const tc = useT('products-changes')
+  // B-W2b-245: the band's "Compare revisions…".
+  const tv = useT('products-versions')
   const locale = useLocale()
   const recordHref = `${model.prefix}/products/styles/${style.id}`
   const revision = revisionInView(style.revisions, model.revisionId)
@@ -215,6 +223,8 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
     // B-W2b-244 (design products.styles conn "Changes & versions"; pop:changes.new "Style › Versions & changes").
     ...(model.changes?.view ? [{ id: 'changes', label: tc('style.changes'), href: `${model.prefix}/products/changes?style=${encodeURIComponent(style.id)}` }] : []),
     ...(model.changes?.request ? [{ id: 'changeNew', label: tc('style.newRequest'), href: `${model.prefix}/products/changes?new=1&style=${encodeURIComponent(style.id)}` }] : []),
+    // B-W2b-245 (design pop:styles.compare "Versions tab · band overflow").
+    ...(model.versions && style.revisions.length > 1 ? [{ id: 'compare', label: tv('cmp.open'), onSelect: () => actions?.versions?.onCompareOpen?.() }] : []),
     {
       id: 'copy',
       label: t('action.copyCode'),
@@ -366,9 +376,14 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
           ) : model.tab === 'sizes' ? (
             // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
             <div className="fw-st-stack-lg">
+              {/* B-W2b-240: the Measurement spec, after the size range (Overview) and before the prepacks. */}
+              {model.can.bomView && <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />}
               <PrepacksSection model={model} actions={actions?.prepacks} />
               {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
             </div>
+          ) : model.tab === 'versions' && model.versions ? (
+            // B-W2b-245: Versions & changes (revisions, Compare revisions, change requests and orders, orders on older revisions).
+            <VersionsTab style={style} model={model.versions} record={model} actions={actions?.versions} recordActions={actions} />
           ) : model.tab === 'techpack' ? (
             // B-W2b-243: the Tech pack tab (SCR-305), mounted by the container.
             (techPack ?? null)
@@ -386,6 +401,9 @@ function ReadyRecord({ style, model, actions, panels, techPack, depth }: { style
       </div>
 
       <StyleDialogs style={style} model={model} actions={actions} />
+      {/* B-W2b-245: the Release modal on the gate (it replaces W1's check while open) and Compare revisions. */}
+      {model.release && <ReleaseGateDialog style={style} model={model.release} bom={bom} routing={model.routing.status === 'ready' ? model.routing.value : null} prefix={model.prefix} can={model.can} busy={model.busy} actions={actions?.release} />}
+      {model.versions?.compareOpen && <CompareDialog model={model.versions} actions={actions?.versions} />}
       {model.duplicate && <DuplicateDialog model={model.duplicate} can={model.can} prefix={model.prefix} actions={actions?.duplicate} />}
       {model.dialog?.kind === 'help' && <KeysDialog onClose={() => actions?.onDialog?.(null)} />}
     </div>
