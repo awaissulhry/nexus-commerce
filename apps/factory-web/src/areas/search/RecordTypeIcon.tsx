@@ -42,6 +42,8 @@ import {
 } from 'lucide-react'
 // B-W2b-261: a sample round's icon (as its navigation row).
 import { FlaskConical } from 'lucide-react'
+// B-W2b-244: a change request's and a change order's icons (Changes & versions).
+import { GitPullRequestArrow, MessageSquareDiff } from 'lucide-react'
 
 /** The icon of a record type in the search's rows (the palette's Records group, the All results page). */
 const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
@@ -89,6 +91,9 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   // B-W2b-247
   Colour: Palette,
   BrandingSet: Stamp,
+  // B-W2b-244
+  ChangeRequest: MessageSquareDiff,
+  ChangeOrder: GitPullRequestArrow,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {

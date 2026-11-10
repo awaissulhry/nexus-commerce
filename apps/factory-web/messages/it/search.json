@@ -92,6 +92,8 @@
     "SampleRound": "Giro di campionatura",
     "Colour": "Colore",
     "BrandingSet": "Kit di marca",
+    "ChangeRequest": "Richiesta di modifica",
+    "ChangeOrder": "Ordine di modifica",
     "other": "Record"
   },
   "chip": {
@@ -134,6 +136,8 @@
     "SampleRound": "Campionature",
     "Colour": "Colori",
     "BrandingSet": "Kit di marca",
+    "ChangeRequest": "Richieste di modifica",
+    "ChangeOrder": "Ordini di modifica",
     "other": "Altri record"
   },
   "status": {
@@ -222,6 +226,8 @@
     "CUT": "Tagliato",
     "RECONCILED": "Riconciliato",
     "IN_MAKING": "In lavorazione",
-    "UNDER_REVIEW": "In valutazione"
+    "UNDER_REVIEW": "In valutazione",
+    "IN_REVIEW": "In valutazione",
+    "DONE": "Fatta"
   }
 }

@@ -196,6 +196,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   WorkInstruction: '/production/instructions/[id]',
   // B-W2b-261 Products › Samples & prototypes (SCR-110-record): a sample round opens its record page.
   SampleRound: '/products/samples/[id]',
+  // B-W2b-244 Products › Changes & versions (SCR-117-record): a change request and a change order open their record pages.
+  ChangeRequest: '/products/changes/requests/[id]',
+  ChangeOrder: '/products/changes/orders/[id]',
   // B-W2b-269 Compliance › Technical files (SCR-120): a technical file opens its record page, an evidence pack its PDF window (SCR-326).
   TechnicalFile: '/compliance/techfiles/[id]',
   EvidencePack: '/compliance/techfiles/pack?pack=[id]',
@@ -350,6 +353,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/instructions': '/production/instructions',
   // B-W2b-261: the sample rounds (SCR-110) read `?tile=`, `?kind=`, `?party=`, `?internal=1`, `?style=`, `?q=`.
   '/sales/samples/rounds': '/products/samples',
+  // B-W2b-244: the changes (SCR-117) read `?tile=` (B-W2b-226's request and order tiles are its saved rows), `?style=` or
+  // `?styleId=`, `?q=`.
+  '/product/change-requests': '/products/changes',
+  '/product/change-orders': '/products/changes',
 })
 
 export interface RecordRef {

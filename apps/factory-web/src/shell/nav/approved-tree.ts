@@ -146,7 +146,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Development',
         labelIt: 'Sviluppo',
         hideLabel: false,
-        pages: [{ id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' }],
+        pages: [
+          { id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' },
+          // W2b: B-W2b-244 Changes & versions (SCR-117).
+          { id: 'products.changes', title: 'Changes & versions', titleIt: 'Modifiche e versioni', wave: 'W2b', href: '/products/changes' },
+        ],
       },
       {
         label: 'Libraries',
