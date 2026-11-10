@@ -148,6 +148,10 @@ import { PHRASES_DEFINITIONS, PHRASES_PERMISSIONS } from '../../compliance/phras
 import { PRODUCT_TECHPACKS_DEFINITIONS, PRODUCT_TECHPACKS_PERMISSIONS } from '../../product/techpack/permissions'
 // B-W2b-233: prepacks (product.prepacks.manage; reading is product.styles.view).
 import { PRODUCT_PREPACKS_DEFINITIONS, PRODUCT_PREPACKS_PERMISSIONS } from '../../product/prepacks/permissions'
+// B-W2b-250: restricted substances and their rules (compliance.substances.manage); reading is compliance.certificates.view.
+import { SUBSTANCES_DEFINITIONS, SUBSTANCES_PERMISSIONS } from '../../compliance/substances/permissions'
+// B-W2b-246: sample rounds (sales.samples.view | manage).
+import { SALES_SAMPLES_DEFINITIONS, SALES_SAMPLES_PERMISSIONS } from '../../sales/samples/permissions'
 // B-W2b-257: the DoC generator (compliance.declarations.generate | check | pack); reading is compliance.certificates.view.
 import { DECLARATIONS_DEFINITIONS, DECLARATIONS_PERMISSIONS } from '../../compliance/declarations/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -810,6 +814,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_TECHPACKS_DEFINITIONS,
   // B-W2b-233: prepacks (area `product`, declared above).
   PRODUCT_PREPACKS_DEFINITIONS,
+  // B-W2b-250: restricted substances and their rules (area `compliance`, declared above).
+  SUBSTANCES_DEFINITIONS,
+  // B-W2b-246: sample rounds (area `sales`, declared above).
+  SALES_SAMPLES_DEFINITIONS,
   // B-W2b-257: the DoC generator (area `compliance`, declared above).
   DECLARATIONS_DEFINITIONS,
 ])
@@ -1076,6 +1084,10 @@ for (const name of [...RULES_LIBRARY_PERMISSIONS, ...PHRASES_PERMISSIONS]) if (!
 for (const name of PRODUCT_TECHPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-233: prepacks.
 for (const name of PRODUCT_PREPACKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-250: restricted substances and their rules.
+for (const name of SUBSTANCES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-246: sample rounds.
+for (const name of SALES_SAMPLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-257: the DoC generator.
 for (const name of DECLARATIONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

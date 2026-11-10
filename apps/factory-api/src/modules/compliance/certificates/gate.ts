@@ -107,7 +107,19 @@ export async function gateRequestFor(client: Reader, question: GateQuestion, dat
       sizes: true,
       allowsMadeToMeasure: true,
       certificate: {
-        select: { id: true, number: true, standard: true, ppeClass: true, notifiedBodyName: true, notifiedBodyNumber: true, validFrom: true, validTo: true, status: true },
+        select: {
+          id: true,
+          number: true,
+          standard: true,
+          ppeClass: true,
+          notifiedBodyName: true,
+          notifiedBodyNumber: true,
+          validFrom: true,
+          validTo: true,
+          status: true,
+          // B-W2b-255 (PRD-287): an own-brand certificate holds only while its base (the factory's certificate) does.
+          baseCertificate: { select: { number: true, status: true, validFrom: true, validTo: true } },
+        },
       },
     },
     orderBy: { id: 'asc' },
@@ -117,7 +129,12 @@ export async function gateRequestFor(client: Reader, question: GateQuestion, dat
     colourwayIds: coverage.colourwayIds,
     sizes: coverage.sizes,
     allowsMadeToMeasure: coverage.allowsMadeToMeasure,
-    certificate: { ...coverage.certificate, validFrom: dayOf(coverage.certificate.validFrom), validTo: dayOf(coverage.certificate.validTo) },
+    certificate: (({ baseCertificate, ...certificate }) => ({
+      ...certificate,
+      validFrom: dayOf(certificate.validFrom),
+      validTo: dayOf(certificate.validTo),
+      base: baseCertificate ? { number: baseCertificate.number, status: baseCertificate.status, validFrom: dayOf(baseCertificate.validFrom), validTo: dayOf(baseCertificate.validTo) } : null,
+    }))(coverage.certificate),
   }))
   const base = {
     style: { id: style.id, code: style.code, ppeCategory: style.ppeCategory as PpeCategory, sizes: style.sizes, mtmAllowed: style.mtmAllowed },

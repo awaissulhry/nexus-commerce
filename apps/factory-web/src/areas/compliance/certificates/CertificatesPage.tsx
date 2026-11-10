@@ -14,6 +14,9 @@ import { waitingByCertificate } from './renewals/model'
 import { addressOf, blankCheck, blankDraft, certCan, certificatesCsv, draftFieldOf, filtersFromAddress, holderOf, inputOf, kindOf, todayInRome, type AddModel, type CertFilters, type CheckModel, type ListDialog } from './model'
 import { CertMessages } from './view/parts'
 import { certificateHref, CertificatesListView } from './view/CertificatesListView'
+import { listBodies, setNotifiedBody, type NotifiedBody } from './depth/api'
+import { bodiesCsv } from './depth/model'
+import { useBodies } from './bodies/use-bodies'
 
 const EXPLAINER_KEY = 'fw.ce.explainer'
 
@@ -40,6 +43,7 @@ function CertificatesContainer() {
   const pathname = usePathname()
   const params = useSearchParams()
   const t = useT('certificates')
+  const d = useT('compliance-certificates-depth')
   const can = useMemo(() => certCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const filters = useMemo(() => filtersFromAddress(params), [params])
@@ -56,6 +60,8 @@ function CertificatesContainer() {
   const [add, setAdd] = useState<AddModel | null>(null)
   const [check, setCheck] = useState<CheckModel | null>(null)
   const [explainerOpen, setExplainerOpen] = useState(false)
+  // W2b (B-W2b-255): the directory Add certificate picks a body from (read when Add opens).
+  const [directory, setDirectory] = useState<NotifiedBody[] | null>(null)
   const file = useRef<PickedFile | null>(null)
   const request = useRef<AbortController | null>(null)
   const styleSearch = useRef<AbortController | null>(null)
@@ -103,9 +109,20 @@ function CertificatesContainer() {
     }
   }, [])
 
+  // W2b (B-W2b-255): the Notified bodies pop-up (⋯ Notified bodies); its Export N writes the selected bodies' CSV.
+  const bodies = useBodies({
+    api,
+    onExport: (rows) => {
+      const header = [d('csv.number'), d('csv.name'), d('csv.country'), d('csv.address'), d('csv.scopes'), d('csv.clothing'), d('csv.nando'), d('csv.email'), d('csv.phone'), d('csv.certificates'), d('csv.status')]
+      const lines = bodiesCsv(rows, header, { status: (body) => d(`bodies.status.${body.status}`), scope: (body) => d(`scope.${body.clothing.state}.GARMENT`) }).map(csvLine)
+      downloadText(`notified-bodies-${new Date().toISOString().slice(0, 10)}.csv`, lines.join('\r\n'))
+    },
+  })
+
   const live = useLive(
     (change) => {
-      if (liveMatches(change, ['compliance.certificate_', 'compliance.type_change_', 'compliance.renewal_'])) setUpdates((count) => count + 1)
+      if (liveMatches(change, ['compliance.certificate_', 'compliance.type_change_', 'compliance.renewal_', 'certificates_depth.certificate_'])) setUpdates((count) => count + 1)
+      if (liveMatches(change, ['certificates_depth.notified_body_']) && bodies.model.open && !bodies.model.form) void bodies.reload()
     },
     () => void load(),
   )
@@ -121,7 +138,11 @@ function CertificatesContainer() {
     if (next?.kind !== 'check') setCheck(null)
     if (next?.kind === 'add') {
       file.current = null
-      setAdd({ draft: blankDraft(session.company?.id ?? null), touched: [], fileName: null, busy: false, problem: null, lines: [], refused: [] })
+      setAdd({ draft: blankDraft(session.company?.id ?? null), bodyId: null, touched: [], fileName: null, busy: false, problem: null, lines: [], refused: [] })
+      if (directory === null)
+        listBodies(api, { status: 'ACTIVE' })
+          .then((answer) => setDirectory(answer.bodies))
+          .catch(() => setDirectory([]))
     }
     if (next?.kind === 'check') setCheck(blankCheck(today ?? todayInRome()))
     if (!next && params?.get('new') === '1') router.replace(`${pathname}${addressOf(filters)}`, { scroll: false })
@@ -138,7 +159,17 @@ function CertificatesContainer() {
     if (!add) return
     setAdd({ ...add, busy: true, problem: null, lines: [], refused: [] })
     try {
-      const created = await createCertificate(api, inputOf(add.draft))
+      let created = await createCertificate(api, inputOf(add.draft))
+      // W2b (B-W2b-255): the body picked from the directory, linked to the new draft (its number was filled in from it).
+      const picked = add.bodyId ? directory?.find((body) => body.id === add.bodyId) : undefined
+      if (picked && picked.number === created.notifiedBodyNumber) {
+        try {
+          const depth = await setNotifiedBody(api, created, picked.id)
+          created = { ...created, version: depth.certificate.version }
+        } catch {
+          // The draft stands; its Notified body tab offers the pick again.
+        }
+      }
       let tab = 'coverage'
       if (file.current) {
         try {
@@ -211,7 +242,7 @@ function CertificatesContainer() {
 
   return (
     <CertificatesListView
-      model={{ prefix, can, companies, brands, filters, rows, waiting, today, asOf, live, updates, selected, notice, dialog, add, check, explainerOpen }}
+      model={{ prefix, can, companies, brands, filters, rows, waiting, today, asOf, live, updates, selected, notice, dialog, add, check, explainerOpen, bodies: bodies.model, directory }}
       actions={{
         onFilters: setFilters,
         onRetry: () => void load(),
@@ -230,7 +261,15 @@ function CertificatesContainer() {
         onExport: exportRows,
         onCopy: (text) => void copy(text),
         onDismissNotice: () => setNotice(null),
-        onAddDraft: (draft) => setAdd((current) => (current ? { ...current, draft, refused: [] } : current)),
+        onAddDraft: (draft) =>
+          setAdd((current) => {
+            if (!current) return current
+            // A number typed by hand that is not the picked body's leaves the directory pick.
+            const picked = current.bodyId ? directory?.find((body) => body.id === current.bodyId) : undefined
+            return { ...current, draft, refused: [], bodyId: picked && picked.number === draft.notifiedBodyNumber ? current.bodyId : null }
+          }),
+        onAddBody: (body) => setAdd((current) => (current ? { ...current, bodyId: body?.id ?? null } : current)),
+        bodies: bodies.actions,
         onAddTouch: (field) => setAdd((current) => (current && !current.touched.includes(field) ? { ...current, touched: [...current.touched, field] } : current)),
         onAddFile: (chosen) => {
           void pickedFile(chosen).then((picked) => {

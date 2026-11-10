@@ -22,6 +22,7 @@ import { ApiError } from '../../../core/errors'
 import { serverClock, type Clock } from '../../../core/time'
 import { retainFilesInCommand } from '../../../platform/files/files'
 import type { CertificateDetail, CertificateView, CoverageView } from './contract'
+import { bodyNumberKept, inWords } from '../certificates-depth/guarded'
 
 /**
  * The certificate register (QHS-103, PRD-280; Reg. (EU) 2016/425 art. 8, Annex V; EN 17092), office side: list and read
@@ -379,8 +380,12 @@ export async function updateCertificate(caller: CommandCaller, certificateId: st
   // Moving it to another company or holder needs manage over the new one too.
   mayManage(caller, fields)
   await checkReferences(caller, fields, certificateId)
+  // B-W2b-255: a draft that names a body of the directory keeps the body's number as its typed one (the database refuses
+  // another; before, that refusal reached the person as a 500).
+  const linked = await caller.withClient((client) => client.certificate.findUnique({ where: { id: certificateId }, select: { notifiedBody: { select: { number: true } } } }))
+  if (linked?.notifiedBody && linked.notifiedBody.number !== fields.notifiedBodyNumber) throw bodyNumberKept(before.number, linked.notifiedBody.number)
   try {
-    const { result } = await certificateCommand(
+    const { result } = await inWords(() => certificateCommand(
       caller,
       { name: 'compliance.certificates.update', idempotencyKey, input: { certificateId, ...input }, record: { type: 'Certificate', id: certificateId, expectedVersion: input.version } },
       async ({ tx, audit, emit, now }) => {
@@ -392,7 +397,7 @@ export async function updateCertificate(caller: CommandCaller, certificateId: st
         certificateChanged(emit, row, 'EDITED')
         return certificateDetail(tx, certificateId, businessDate(now))
       },
-    )
+    ))
     return result
   } catch (error) {
     if (isUniqueViolation(error)) throw duplicate(fields)

@@ -236,6 +236,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const order = await client.changeOrder.findUnique({ where: { id }, select: { companyId: true } })
     return order ? { companyId: order.companyId, siteId: null, partyId: null } : null
   },
+  // B-W2b-246 (modules/sales/samples; design products.samples Activity): a sample round's company, no site, and the brand or
+  // customer it is for (its shared messages reach that party only); an internal round takes internal notes only.
+  SampleRound: async (client, id) => {
+    const round = await client.sampleRound.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return round ? { companyId: round.companyId, siteId: null, partyId: round.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

@@ -429,7 +429,7 @@ export async function viewOf(caller: CommandCaller, inspectionId: string, subjec
   const row = (await caller.withClient((db) => readIncoming(db, inspectionId)))!
   const fresh: Subject = subject.receipt ? { lot: null, receipt: (await receiptAs(caller, context, subject.receipt.id)) ?? subject.receipt } : subject
   const named = (await caller.withClient((db) => readComponents(db, inspectionId))).flatMap((component) => (component.certificateId ? [component.certificateId] : []))
-  const extras = await certificateExtras(caller, context, { companyId: row.companyId, itemId: subject.lot?.itemId ?? null, named })
+  const extras = await certificateExtras(caller, context, { companyId: row.companyId, itemId: subject.lot?.itemId ?? null, named, supplierId: subject.lot?.supplierId ?? null })
   return caller.withClient((db) => incomingView(db, row, fresh, context, extras))
 }
 
