@@ -82,6 +82,7 @@ import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedWarehouseDepth } from '../seed/warehouse-depth'
 import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -379,6 +380,12 @@ beforeAll(async () => {
   // state and their history; the first rule (off), request (PENDING) and line (its REQUESTED) are the plain ones a copy may repeat.
   await seedApprovals({ db: factory, namespace: 'iso-a' })
   await seedApprovals({ db: factory, namespace: 'iso-b' })
+  // The warehouse in depth schema of W2b-5 (wave 36/44): places, defaults, transfers, schedules, a count that freezes moves with
+  // its scans, the warehouse rules, the task inbox, substitutes and goods without a PO at A1 (and B1's default); their first
+  // rows (an inactive default, a DRAFT transfer and its line, an OPEN task, a WAITING substitute, an ADDED line of a COUNTING
+  // count and its COUNT scan) are the plain ones a copy may repeat.
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-a' })
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -445,6 +452,7 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
     'CostingSettings',
+    'CountSchedule',
     'CrewMember',
     'CrewSession',
     'CutConsumption',
@@ -458,6 +466,7 @@ it('covers every classified table and every runtime role', () => {
     'CutTicket',
     'Ddt',
     'DdtCancellation',
+    'DefaultLocation',
     'DefectCode',
     'DepositRequest',
     'Device',
@@ -534,6 +543,7 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationAccount',
     'IntegrationCall',
     'InterestReferenceRate',
+    'InventorySettings',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -576,6 +586,7 @@ it('covers every classified table and every runtime role', () => {
     'MarketProfile',
     'MaterialComplianceProfile',
     'MaterialRequirement',
+    'MaterialSubstitution',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementRule',
@@ -790,6 +801,7 @@ it('covers every classified table and every runtime role', () => {
     'Station',
     'StockCount',
     'StockCountLine',
+    'StockCountScan',
     'StockMove',
     'StockValuation',
     'StoredFile',
@@ -838,10 +850,13 @@ it('covers every classified table and every runtime role', () => {
     'TrainingRecord',
     'TrainingRequirement',
     'TrainingSession',
+    'TransferLine',
+    'TransferOrder',
     'TypeChangeReview',
     'User',
     'Variant',
     'ViesCheck',
+    'WarehouseTask',
     'WorkCalendar',
     'WorkCentre',
     'WorkCentreCapacity',

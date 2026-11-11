@@ -94,6 +94,21 @@ describe('mapError()', () => {
     }
   })
 
+  it("B-W2b-277: answers the database's warehouse refusal of a move as a 409 in words, never a 500", () => {
+    const refusal = prismaError('P2010', 'Raw query failed.', {
+      driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'inventory: location A1-DMG-01 is blocked (DAMAGE); it takes no move in or out until it is unblocked (stock move x)' } },
+    })
+    expect(mapError(refusal)).toEqual({
+      status: 409,
+      code: 'conflict',
+      message: 'Location A1-DMG-01 is blocked (damage): nothing moves in or out of it until it is unblocked.',
+      issues: [{ path: 'warehouse/LOCATION_BLOCKED', message: 'Location A1-DMG-01 is blocked (damage): nothing moves in or out of it until it is unblocked.' }],
+      unexpected: false,
+    })
+    const other = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'inventory: stock move x takes 2 from location y, which holds 1 of it' } } })
+    expect(mapError(other).status).toBe(500)
+  })
+
   it('writes the error body', () => {
     expect(errorBodyFor('not_found', 'req-1')).toEqual({ error: { code: 'not_found', message: 'Not found.', requestId: 'req-1' } })
     expect(errorBodyFor('validation_failed', 'req-2', 'Bad.', [{ path: 'body', message: 'x' }]).error.issues).toHaveLength(1)
