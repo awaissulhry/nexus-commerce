@@ -72,6 +72,11 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-224 (PRD-062): a point of measure's how-to picture (modules/product/measures): PHOTO files only; the database takes
   // only an AVAILABLE PHOTO of the point as its picture, set by the completion.
   PointOfMeasure: { kinds: ['PHOTO'], route: 'POST /product/points-of-measure/:pomId/picture, then POST …/picture/:fileId/complete' },
+  // B-W2b-278 (FU4:02; B-W2b-251's technical files, modules/compliance/techfiles): an evidence pack's PDF and ZIP, only ever made
+  // by the API when the pack is built; every kind.
+  EvidencePack: { route: 'POST /compliance/techfiles/:fileId/packs (the pack\'s PDF and ZIP are made by the API, never uploaded)' },
+  // B-W2b-278 (FU4:02): a production-control test's lab report, kept ten years with the recorded result (QHS-110); every kind.
+  ProductionControlTest: { route: 'POST /compliance/production-tests/:testId/report, then POST …/report/:fileId/complete' },
 })
 
 /**

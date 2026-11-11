@@ -284,6 +284,7 @@
       "EVIDENCE_PACK": "Pacchetto di evidenze",
       "RECALL": "Richiamo o ritiro",
       "AUTHORITY_REQUEST": "Richiesta dell'autorità",
+      "TRANSFER": "Trasferimento tra stabilimenti",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },

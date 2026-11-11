@@ -12,12 +12,14 @@ import {
   milestoneOrder,
   milestoneStateOf,
   passRefusal,
+  productionStartOf,
   reasonOf,
   removeRefusal,
   shapeRefusal,
   startBeforeRefusal,
   tileCounts,
   tileOf,
+  workOrdersByKind,
   type GateFacts,
 } from './rules'
 
@@ -106,6 +108,24 @@ describe('milestones', () => {
       { id: 'g1', kind: 'GATE' as const, target: '2026-11-25' },
     ]
     expect(rows.sort(milestoneOrder).map((row) => row.id)).toEqual(['g1', 'g2', 'ship', 'start'])
+  })
+
+  it('B-W2b-284: production start follows the production work orders only, never a sample or a repair; the order counts its work orders per kind', () => {
+    const at = (iso: string) => new Date(iso)
+    const sample = { kind: 'SAMPLE', status: 'IN_PROGRESS', startedAt: at('2026-11-02T08:00:00Z'), firstBar: at('2026-11-01T07:00:00Z') }
+    const repair = { kind: 'REPAIR', status: 'RELEASED', startedAt: null, firstBar: at('2026-11-03T07:00:00Z') }
+    expect(productionStartOf([sample, repair])).toBeNull()
+    const grid = { kind: 'SIZE_GRID', status: 'RELEASED', startedAt: null, firstBar: at('2026-11-20T07:00:00Z') }
+    const mtm = { kind: 'MADE_TO_MEASURE', status: 'IN_PROGRESS', startedAt: at('2026-11-18T09:00:00Z'), firstBar: null }
+    expect(productionStartOf([sample, repair, grid])).toEqual({ firstBar: grid.firstBar, firstStart: null })
+    expect(productionStartOf([sample, grid, mtm])).toEqual({ firstBar: grid.firstBar, firstStart: mtm.startedAt })
+    expect(workOrdersByKind([sample, repair, grid, { ...grid, status: 'CANCELLED' }, mtm])).toEqual([
+      { kind: 'SIZE_GRID', count: 2, notStarted: 1 },
+      { kind: 'MADE_TO_MEASURE', count: 1, notStarted: 0 },
+      { kind: 'SAMPLE', count: 1, notStarted: 0 },
+      { kind: 'REPAIR', count: 1, notStarted: 1 },
+    ])
+    expect(workOrdersByKind([])).toEqual([])
   })
 
   it("the board's hold names the work order and its gates", () => {

@@ -80,7 +80,8 @@ export const PROOF_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
  */
 export async function proofHoldFacts(db: Client, workOrderId: string): Promise<HoldFact[]> {
   const cells = await db.workOrderSize.findMany({ where: { workOrderId, measurementProfileId: { not: null } }, select: { salesOrderLineId: true } })
-  const lineIds = [...new Set(cells.map((cell) => cell.salesOrderLineId))]
+  // B-W2b-275: a made-to-measure cell names its line; only a SAMPLE cell may name none.
+  const lineIds = [...new Set(cells.flatMap((cell) => (cell.salesOrderLineId === null ? [] : [cell.salesOrderLineId])))]
   if (lineIds.length === 0) return []
   const requests = await db.approvalRequest.findMany({
     where: { kind: 'PROOF', recordType: RECORD, recordId: { in: lineIds } },

@@ -171,7 +171,8 @@ export async function readKeyFacts(db: Reader, key: ReserveKey, options: { reado
 /** The order lines a work order makes (its cells' lines): their reservations count as the work order's own. */
 export async function orderLinesOf(db: Reader, workOrderId: string): Promise<Set<string>> {
   const cells = await db.workOrderSize.findMany({ where: { workOrderId }, select: { salesOrderLineId: true } })
-  return new Set(cells.map((cell) => cell.salesOrderLineId))
+  // B-W2b-275: a SAMPLE cell may name no order line.
+  return new Set(cells.flatMap((cell) => (cell.salesOrderLineId === null ? [] : [cell.salesOrderLineId])))
 }
 
 export const decimalOf = (value: { toString(): string } | null | undefined): Decimal => (value === null || value === undefined ? ZERO : new Dec(value.toString()))

@@ -85,7 +85,7 @@ function order(n: number, over: Partial<Order> & { gates: Gate[]; start?: [strin
     status: 'CONFIRMED',
     promiseDate: over.ship,
     customerRef: n === 1 ? 'PO-DEMO-77' : null,
-    workOrders: { count: over.start ? 2 : 0, notStarted: over.start?.[1] ? 1 : over.start ? 2 : 0 },
+    workOrders: { count: over.start ? 2 : 0, notStarted: over.start?.[1] ? 1 : over.start ? 2 : 0, byKind: over.start ? [{ kind: 'SIZE_GRID' as const, count: 2, notStarted: over.start[1] ? 1 : 2 }] : [] },
     gates,
     milestones,
     waiting: gates.filter((entry) => entry.state === 'WAITING').map((entry) => entry.kind),
@@ -177,6 +177,26 @@ const managerWorld = (): Milestones => ({
     gates: entry.gates.map((row) => (row.state === 'WAITING' ? { ...row, actions: { ...row.actions, startBefore: row.ownerId === MARCO.id ? refused('OWN_GATE') : allowed } } : row)),
   })),
 })
+/** B-W2b-284: the first order also has its pre-production round's sample work order and a repair (neither starts its production). */
+const startWorld = (): Milestones => ({
+  ...WORLD,
+  orders: ORDERS.map((entry, index) =>
+    index === 0
+      ? {
+          ...entry,
+          workOrders: {
+            count: 4,
+            notStarted: 4,
+            byKind: [
+              { kind: 'SIZE_GRID', count: 2, notStarted: 2 },
+              { kind: 'SAMPLE', count: 1, notStarted: 1 },
+              { kind: 'REPAIR', count: 1, notStarted: 1 },
+            ],
+          },
+        }
+      : entry,
+  ),
+})
 const readOnlyWorld = (): Milestones => ({
   ...WORLD,
   orders: ORDERS.map((entry) => ({ ...entry, mayAddGate: { allowed: false, needs: 'planning.milestones.manage', refusal: null }, gates: entry.gates.map((row) => ({ ...row, actions: { pass: needs('planning.milestones.manage'), startBefore: needs('planning.milestones.override'), edit: needs('planning.milestones.manage'), remove: needs('planning.milestones.manage') } })) })),
@@ -199,6 +219,8 @@ export const designScreen = defineDesignScreen<MilestonesCase>({
     { id: 'milestone-passed', label: 'Milestone dialog: leather passed by its release', model: make({ controls: { open: `gate:${LEATHER_PASSED.id}` } }) },
     { id: 'milestone-started', label: 'Milestone dialog: trims — started before, with who, when and why', model: make({ controls: { open: `gate:${TRIMS_STARTED.id}` } }) },
     { id: 'milestone-ship', label: 'Milestone dialog: Ship follows the promise date and the shipments', model: make({ controls: { open: `ship:${ORDERS[0]!.id}` } }) },
+    // B-W2b-284 (F22's follow-up): production start follows the production work orders only; the order's work orders per kind.
+    { id: 'w2b-284-start-production', label: 'Milestone dialog: Production start follows the 2 production work orders; the sample and the repair are not counted', model: make({ world: { status: 'ready', value: startWorld() }, controls: { open: `start:${ORDERS[0]!.id}` } }) },
     { id: 'mark-done', label: 'Mark done on a day', model: make({ dialog: { kind: 'pass', gateIds: [ARTWORK.id], on: TODAY, busy: false, problem: null } }) },
     { id: 'mark-done-future', label: 'Mark done refused: a day to come', model: make({ dialog: { kind: 'pass', gateIds: [ARTWORK.id, LAB.id], on: '2026-11-30', busy: false, problem: null } }) },
     { id: 'start-before', label: 'Start before the gate? The production manager, a reason typed', model: make({ world: { status: 'ready', value: managerWorld() }, dialog: { kind: 'startBefore', gateIds: [PP_WAITING.id], reason: 'The brand approved by phone; the PP sample comes Friday (made up).', busy: false, problem: null } }, MANAGER) },

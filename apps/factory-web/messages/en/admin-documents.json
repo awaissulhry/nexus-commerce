@@ -284,6 +284,7 @@
       "EVIDENCE_PACK": "Evidence pack",
       "RECALL": "Recall or withdrawal",
       "AUTHORITY_REQUEST": "Authority request",
+      "TRANSFER": "Transfer between sites",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },

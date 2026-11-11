@@ -360,8 +360,12 @@ export function draftGrid(workOrder: Pick<WorkOrder, 'cells'>): Record<string, R
 
 /** The PUT body's cells for an edited grid: every cell of the draft with its new count (0 removes it). */
 export function cellsBody(workOrder: Pick<WorkOrder, 'cells'>, grid: Readonly<Record<string, Readonly<Record<string, number>>>>): Array<{ salesOrderLineId: string; size: string; quantity: number }> {
-  return workOrder.cells.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: grid[cell.colourwayCode]?.[cell.size] ?? 0 }))
+  // B-W2b-284: a sample cell of no order line is never set here (its work order's sizes are its round's: `sizesFromRound`).
+  return workOrder.cells.flatMap((cell) => (cell.salesOrderLineId === null ? [] : [{ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: grid[cell.colourwayCode]?.[cell.size] ?? 0 }]))
 }
+
+/** B-W2b-284: a sample work order made for no order line: its sizes are its round's, never edited on the work order. */
+export const sizesFromRound = (workOrder: Pick<WorkOrder, 'kind' | 'cells'>): boolean => workOrder.kind === 'SAMPLE' && workOrder.cells.some((cell) => cell.salesOrderLineId === null)
 
 export function gridChanged(workOrder: Pick<WorkOrder, 'cells'>, grid: Readonly<Record<string, Readonly<Record<string, number>>>>): boolean {
   return workOrder.cells.some((cell) => (grid[cell.colourwayCode]?.[cell.size] ?? 0) !== cell.quantity)

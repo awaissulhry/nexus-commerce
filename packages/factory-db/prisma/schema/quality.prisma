@@ -707,6 +707,14 @@ model LabResult {
   /// The earlier result of the same lot a later FAIL supersedes.
   supersedesId        String?      @db.Uuid
   note                String?
+  /// W2b-5 (schema wave 34/44, B-W2b-275; the B-W2b-217 and -267 notes): what the lab charged for this result, in minor
+  /// units of costCurrency, 0 or more; both or neither (null: not typed). Typed with the result, never changed (the row is
+  /// append-only). A cost: the office's only (the floor reads the result without it); Material tests' "Lab cost" column
+  /// (B-W2b-288).
+  /// @grain cost
+  costAmount          Int?
+  /// @not-money the ISO 4217 currency of the lab's cost (hidden with it from the floor)
+  costCurrency        String?
   createdAt           DateTime     @default(now()) @db.Timestamptz(3)
   createdById         String?      @db.Uuid
 

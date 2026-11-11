@@ -22,9 +22,14 @@
 // (`@grain cost`), the COUNT moves are valued in the StockValuation ledger, and the year-end valued list is the signed
 // file. Who counted a line is a user id inside the one record (Owner answer W1: never a per-person figure or filter).
 //
-// Who sees what (ownership/stockcount.json): the office reads and writes; the floor and portal or link sessions read
-// nothing (W2b adds the floor's count by scan). Nobody deletes a count (it is cancelled); the office deletes a line only
-// while the count is DRAFT or COUNTING.
+// Who sees what (ownership/stockcount.json): the office reads and writes; portal and link sessions read nothing. Nobody
+// deletes a count (it is cancelled); the office deletes a line only while the count is DRAFT or COUNTING.
+//
+// W2b-5 (schema wave 36/44, B-W2b-277; warehouse-depth.prisma; SCM-226, SCM-228, SCM-229): a count may freeze what it counts
+// (its lines' moves are refused until each is counted); the floor counts by scanning every unit (StockCountScan, each with
+// its own area or length), reads its site's counts and lines, adds the extra units it finds (ADDED lines) and writes what
+// it counted; a recount is another person's and the counter never approves their own variance while the company's switch
+// is on (InventorySettings.counterNotApprover; the …_warehouse_depth_w2b_guards triggers).
 
 /// A count of a site's stock (SCM-224): a cycle count of some locations, items or lots, or the year-end physical
 /// inventory (SCM-230).
@@ -48,6 +53,10 @@ model StockCount {
   inventoryDate      DateTime?        @db.Date
   /// Who counts, as the count sheets name them (a team, never a figure per person).
   countTeam          String?
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-226): the count freezes what it counts: its lines carry frozenAt, and while it
+  /// is COUNTING no move but a COUNT leaves or enters a frozen line's location with the line's item until the line is counted
+  /// (and recounted, when a recount was asked). Chosen while DRAFT; fixed once it counts.
+  freezeMoves        Boolean          @default(false)
   status             StockCountStatus @default(DRAFT)
   /// From COUNTING on: when counting started, and the instant whose ledger balance each line expects (that start, or the
   /// end of the inventory date for a year-end count taken later). Fixed once set.
@@ -95,6 +104,9 @@ model StockCount {
   lot           Lot?             @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   valuedList    StoredFile?      @relation("StockCountValuedList", fields: [tenantId, valuedListFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         StockCountLine[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the units scanned into it; the schedules it was the last count of.
+  scans         StockCountScan[]
+  schedules     CountSchedule[]
 
   @@unique([tenantId, companyId, number])
   // The target of the lines' reference: on the count's own site.
@@ -166,6 +178,10 @@ model StockCountLine {
   /// The COUNT move that posted the difference (the recount, else the count, minus the expected quantity), named once
   /// while the count is APPROVED: into the location for more, out of it for less.
   moveId               String?              @db.Uuid
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-226): when the line was frozen: a line of a count that freezes moves, set when
+  /// it is written and never changed. Until it is counted (and recounted, when a recount was asked) no move but a COUNT
+  /// leaves or enters its location with its item while the count is COUNTING.
+  frozenAt             DateTime?            @db.Timestamptz(3)
   version              Int                  @default(1)
   createdAt            DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
@@ -179,8 +195,12 @@ model StockCountLine {
   lot        Lot?        @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   hide       Hide?       @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
   move       StockMove?  @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the units scanned into it.
+  scans      StockCountScan[]
 
   @@unique([tenantId, countId, seq])
+  // W2b-5: the target of the scans' reference (a line of the scan's own count and site).
+  @@unique([tenantId, siteId, countId, id])
   // The counts a stock key is in (a hide's count history).
   @@index([tenantId, siteId, itemId, lotId, hideId])
 }

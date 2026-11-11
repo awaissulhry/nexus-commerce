@@ -9,6 +9,8 @@ import type { ProductType } from '../api'
 import { inheritedOf, kindHeld, mayKeepTypeOf, parentChoices, PPE_CATEGORIES, PRODUCT_TYPES, REQUIRABLE_ATTRIBUTES, typeChanged, typeProblems, type GarmentKind, type PpeCategory, type RequirableAttribute, type TypeDraft } from '../model'
 import type { ProductSettingsActions, ProductSettingsModel } from '../view-model'
 import { ChangedLine } from './parts'
+// B-W2b-283 (FU1:03): a type's measurement template is picked here.
+import { TemplatePicker } from '../template-picker/view/TemplatePicker'
 
 /** ⌘↵ inside the dialog saves while Save is not held. */
 function useSubmitKey(open: boolean, held: boolean, run: () => void) {
@@ -83,7 +85,7 @@ export function TypeDialog({ model, actions }: { model: ProductSettingsModel; ac
   }
   const templateWords = (id: string | null, from: ProductType | null): string | null => {
     if (!id) return null
-    const known = (from?.refs.measurementTemplate?.id === id ? from.refs.measurementTemplate : null) ?? (type?.refs.measurementTemplate?.id === id ? type.refs.measurementTemplate : null)
+    const known = model.templates?.value?.find((template) => template.id === id) ?? (from?.refs.measurementTemplate?.id === id ? from.refs.measurementTemplate : null) ?? (type?.refs.measurementTemplate?.id === id ? type.refs.measurementTemplate : null)
     return known ? `${known.code} · ${known.name}` : t('type.unknownRef')
   }
   /** "Inherits EU-JKT · Jackets EU from DEMO-JKT" when the type sets none of its own. */
@@ -228,16 +230,16 @@ export function TypeDialog({ model, actions }: { model: ProductSettingsModel; ac
               <span className="fw-pst-text">{labelWords(draft.labelTemplateId, null) ?? inherits('labelTemplateId', labelWords(inherited?.defaults.labelTemplateId.value ?? null, parent)) ?? '—'}</span>
             )}
           </Field>
-          <Field label={t('type.template')} hint={t('type.templateHint')} error={at('measurementTemplateId')}>
-            <span className="fw-pst-text-row">
-              <span className="fw-pst-text">{templateWords(draft.measurementTemplateId, null) ?? inherits('measurementTemplateId', templateWords(inherited?.defaults.measurementTemplateId.value ?? null, parent)) ?? '—'}</span>
-              {draft.measurementTemplateId && (
-                <Button size="sm" variant="quiet" onClick={() => set({ measurementTemplateId: null })}>
-                  {t('type.clear')}
-                </Button>
-              )}
-            </span>
-          </Field>
+          <TemplatePicker
+            label={t('type.template')}
+            templates={model.templates ?? null}
+            draft={draft}
+            current={templateWords(draft.measurementTemplateId, null)}
+            inherits={inherits('measurementTemplateId', templateWords(inherited?.defaults.measurementTemplateId.value ?? null, parent)) ?? null}
+            emptyOption={t(inherited?.defaults.measurementTemplateId.value ? 'type.inheritOption' : 'type.noneOption')}
+            error={at('measurementTemplateId')}
+            onPick={(measurementTemplateId) => set({ measurementTemplateId })}
+          />
           <Field label={t('type.ppeCategory')} hint={draft.defaultPpeCategory === null ? (inherits('defaultPpeCategory', ppeWords(inherited?.defaults.defaultPpeCategory.value ?? null)) ?? t('type.noneOwn')) : undefined} error={at('defaultPpeCategory')}>
             <Select size="sm" value={draft.defaultPpeCategory ?? ''} onChange={(event) => set({ defaultPpeCategory: (event.target.value || null) as PpeCategory | null })}>
               <option value="">{t(inherited?.defaults.defaultPpeCategory.value ? 'type.inheritOption' : 'type.noneOption')}</option>
@@ -265,7 +267,7 @@ export function TypeDialog({ model, actions }: { model: ProductSettingsModel; ac
       onClose={() => actions?.onTypeClose?.()}
       size="lg"
       title={title}
-      subtitle={type ? <ChangedLine changed={dialog.changedBy ?? { at: type.updatedAt, by: null }} href={null} /> : undefined}
+      subtitle={type ? <ChangedLine changed={dialog.changedBy ?? { at: type.updatedAt, by: type.changedBy?.name ?? null /* B-W2b-283 */ }} href={null} /> : undefined}
       footer={
         <>
           {type && may && (

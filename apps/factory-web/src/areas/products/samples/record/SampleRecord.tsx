@@ -43,7 +43,7 @@ import { approvalHeld, fieldOfPath, panelOf, readProblem, recordHref, recordTabO
 import type { DecideModel } from '../view/DecideDialog'
 import type { CellState, FitState, Loaded, Part, RecordDialog, SampleRecordModel } from './view-model'
 import { SampleRecordView } from './view/SampleRecordView'
-import { workOrderFacts } from './view/RecordDialogs'
+import { defaultMode, workOrderBodyOf, workOrderFacts } from '../work-order/model'
 import { swatchHeld } from './view/ApprovalTab'
 
 const LIVE_TYPES = ['sample_round.', 'sample_shipment.', 'sample_swatch.'] as const
@@ -297,7 +297,8 @@ export function SampleRecord({ roundId }: { roundId: string }) {
           .then((options) => {
             const lineIds = options.lines.filter((line) => line.proposed.length > 0).map((line) => line.id)
             const site = options.lines.find((line) => line.siteId && options.sites.some((one) => one.id === line.siteId))?.siteId ?? options.sites[0]?.id ?? ''
-            setDialog((now) => (now?.kind === 'workOrder' ? { ...now, options, lineIds, siteId: site, dueDate: now.dueDate || (roundRef.current?.dueDate ?? '') } : now))
+            // B-W2b-284: an internal or uncharged proto, fit or salesman round opens on "without an order line".
+            setDialog((now) => (now?.kind === 'workOrder' ? { ...now, options, mode: defaultMode(options), lineIds, siteId: site, dueDate: now.dueDate || (roundRef.current?.dueDate ?? '') } : now))
           })
           .catch((error: unknown) => setDialog((now) => (now?.kind === 'workOrder' ? { ...now, problem: readProblem(error) } : now)))
       }
@@ -362,13 +363,8 @@ export function SampleRecord({ roundId }: { roundId: string }) {
           break
         }
         case 'workOrder': {
-          if (!dialog.options || workOrderFacts(dialog.options, dialog.lineIds).blockers.length > 0) break
-          const made = await makeWorkOrder(
-            api,
-            now.id,
-            { version: now.version, siteId: dialog.siteId, ...(dialog.dueDate ? { dueDate: dialog.dueDate } : {}), lines: dialog.lineIds.map((salesOrderLineId) => ({ salesOrderLineId })) },
-            dialogKey.current,
-          )
+          if (!dialog.options || workOrderFacts(dialog.options, dialog.lineIds, dialog).blockers.length > 0) break
+          const made = await makeWorkOrder(api, now.id, workOrderBodyOf(dialog, dialog.options, now.version), dialogKey.current)
           setLoaded({ status: 'ready', round: made.round })
           setDialog((open) => (open?.kind === 'workOrder' ? { ...open, busy: false, made: { id: made.workOrder.id, number: made.workOrder.number } } : open))
           break
@@ -464,7 +460,7 @@ export function SampleRecord({ roundId }: { roundId: string }) {
         onRequestGrid: (grid) => round && setDraft((now) => ({ ...(now ?? requestDraftOf(round, locale)), grid })),
         onRequestDiscard: () => setDraft(null),
         onRequestSave: () => void saveRequest(),
-        onMakeWorkOrder: () => openDialog({ kind: 'workOrder', options: null, problem: null, lineIds: [], siteId: '', dueDate: '', busy: false, notice: null, made: null }),
+        onMakeWorkOrder: () => openDialog({ kind: 'workOrder', options: null, problem: null, mode: 'lines', lineIds: [], colourwayId: '', siteId: '', dueDate: '', busy: false, notice: null, made: null }),
         onFitCell,
         onFitRefused: (size, text) => setFit((now) => ({ ...now, failed: { key: 'fit.notNumber', params: { size, text } } })),
         onFitRetry: () => void readFitNow(),

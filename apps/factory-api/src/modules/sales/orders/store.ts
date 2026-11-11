@@ -211,10 +211,11 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
 
   const progress = orderProgress({
     lines: lines.map((line) => ({ id: line.id, seq: line.seq, quantity: line.quantity, sizes: line.sizes.map(({ size, quantity }) => ({ size, quantity })) })),
-    inWorkOrders: cells.filter((cell) => statusOf.get(cell.workOrderId) !== 'CANCELLED').map((cell): PieceCount => ({ lineId: cell.salesOrderLineId, size: cell.size, quantity: cell.quantity })),
+    // B-W2b-275: the cells of this order's lines (a SAMPLE cell may name none).
+    inWorkOrders: cells.flatMap((cell): PieceCount[] => (statusOf.get(cell.workOrderId) === 'CANCELLED' || cell.salesOrderLineId === null ? [] : [{ lineId: cell.salesOrderLineId, size: cell.size, quantity: cell.quantity }])),
     released: released.flatMap((row): PieceCount[] => {
       const cell = cellOf.get(row.workOrderSizeId)
-      return cell ? [{ lineId: cell.salesOrderLineId, size: cell.size, quantity: (row._sum.quantity ?? 0) - (reversedOf.get(row.workOrderSizeId) ?? 0) }] : []
+      return cell?.salesOrderLineId ? [{ lineId: cell.salesOrderLineId, size: cell.size, quantity: (row._sum.quantity ?? 0) - (reversedOf.get(row.workOrderSizeId) ?? 0) }] : []
     }),
     shipped: shipped.map((row): PieceCount => ({ lineId: row.salesOrderLineId, size: row.size, quantity: row._sum.quantity ?? 0 })),
     invoiced,

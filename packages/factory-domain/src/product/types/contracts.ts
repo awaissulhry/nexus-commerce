@@ -85,6 +85,8 @@ export const typeView = output({
   status: z.enum(MASTER_STATUSES),
   version: z.number().int(),
   updatedAt: instant(),
+  /** B-W2b-283 (FU1:04): the office person who changed the type last (null: nobody recorded); "Changed by" without audit.read. */
+  changedBy: output({ id: id(), name: z.string() }).nullable().optional(),
   /** The type's own values (null: inherited or none). */
   own: output({
     requiredAttributes: z.array(z.string()),

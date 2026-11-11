@@ -80,6 +80,23 @@
     "open": "Open {number}",
     "failed": "Couldn't read what the work order can be made on",
     "body": "A sample work order is made on an order line of the style, from revision {revision}, with the round’s sizes.",
+    "bodyNone": "Without an order line, the sample work order makes the round's own sizes, from revision {revision}: it is shipped, invoiced and returned on no order.",
+    "way": {
+      "legend": "How it is made",
+      "none": "Without an order line",
+      "noneBody": "The round's own sizes: a proto, fit or salesman sample that no order pays for.",
+      "lines": "On an order line",
+      "linesBody": "The order that charges the samples: they take its sizes."
+    },
+    "none": {
+      "colourway": "Colourway of the sizes without one",
+      "colourwayHint": "The round names sizes without a colourway: say which one they are made in.",
+      "pickColourway": "Choose a colourway",
+      "cells": "What the work order makes",
+      "size": "Size",
+      "pieces": "Pieces",
+      "anyColour": "Any colourway: choose one"
+    },
     "lines": "Order lines",
     "takeLine": "Make it on {order} line {seq}",
     "lineName": "{order} · line {seq}",
@@ -102,7 +119,8 @@
       "pickLine": "Choose at least one order line.",
       "pickSite": "Choose the plant.",
       "other_one": "The factory names {count} reason it cannot be made now.",
-      "other_other": "The factory names {count} reasons it cannot be made now."
+      "other_other": "The factory names {count} reasons it cannot be made now.",
+      "pickColourway": "Choose the colourway of the sizes without one."
     },
     "warning": {
       "draft": "Revision {revision} is a draft: the work order is made, and released only once the revision is released.",
@@ -230,7 +248,8 @@
     "LEATHER_ONLY": "A leather swatch is of a leather.",
     "NOT_THE_ROUNDS_PARTY": "The swatch goes to the round's own customer.",
     "NO_COMPANY": "A swatch of a shared style with no round cannot be asked of the customer: ask on a round’s swatch, or decide it here.",
-    "other": "The factory refused it as it is."
+    "other": "The factory refused it as it is.",
+    "ORDER_LINE_NEEDED": "This round is made on an order line: only a proto, fit or salesman round that charges nobody is made without one."
   },
   "problem": {
     "unavailable": "The factory didn't answer. Try again in a moment.",
@@ -478,6 +497,7 @@
   },
   "sample": {
     "made": "What was made",
+    "noOrderLine": "No order line",
     "make": "Make sample work order",
     "none": "No sample work order yet",
     "noneBody": "The samples are made on the floor through a sample work order, like any other work order.",

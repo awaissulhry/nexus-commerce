@@ -1,0 +1,72 @@
+// The PPE text approvals (W2b-5, schema wave 34/44, B-W2b-275; GATE-PPE-TEXTS, Owner answers 11-09, question 2 of W2b-4: a PPE
+// consultant checks the generated texts once, per template; the B-W2b-218, -253, -257 and -258 notes): the consultant's yes
+// to one template of generated PPE texts, in the languages checked, with the consultant's own file as evidence. Three
+// templates generate PPE texts: the Declaration of Conformity (B-W2b-257, Annex IX), the user information (B-W2b-258, Annex
+// II 1.4) and a label template's class warnings (B-W2b-253, EN 17092-5 and -6).
+//
+// The yes is the gate: a GENERATED compliance document leaves DRAFT (to be issued) only while a live approval of its template
+// covers its language and company (the redefined ComplianceDocument rule of …_followups_product_w2b4_guards); with none, every
+// generated text stays a draft, as before (the Owner's default). An issued document stays issued when its approval is later
+// withdrawn: the withdrawal stops new issues only. B-W2b-288 records and withdraws approvals (Compliance › Rules & markets ›
+// Templates) and has the three generators read them.
+//
+// Who sees what (ownership/ppe-texts.json): the office records and withdraws them. The floor, portal and link sessions read
+// nothing here. No money column; the consultant is named as typed (a professional's name on a professional act, as a DoC's
+// signatory), nobody else.
+
+/// Which template of generated PPE texts an approval is about.
+enum PpeTextTemplateKind {
+  /// The generated Declaration of Conformity (B-W2b-257): templateKey "annex-ix", templateVersion 1 = the generator's
+  /// TEMPLATE_ID "annex-ix.1", written on every generated DoC as content.template.
+  DOC
+  /// The generated user information (B-W2b-258): templateKey "annex-ii-1.4", templateVersion 1 = TEMPLATE_ID
+  /// "annex-ii-1.4.1", written on every generated leaflet as sections.template.
+  USER_INFORMATION
+  /// A label template's class warnings (B-W2b-253): templateKey the LabelTemplate's code, templateVersion its revision.
+  LABEL_WARNING
+}
+
+/// A PPE consultant's yes to one template of generated PPE texts (GATE-PPE-TEXTS): which template and version, in which
+/// languages, who checked it (the consultant as typed), who recorded it and when, and the consultant's file. Append-only but
+/// for its withdrawal: withdrawn once, with when, by whom and why, then frozen. Never deleted. Several approvals of one
+/// template may stand together (a later one for more languages).
+model PpeTextApproval {
+  id              String              @id @db.Uuid
+  tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose generated texts it approves; null: every company of the tenant (A1 §2.1). Never changes.
+  companyId       String?             @db.Uuid
+  /// Never changes.
+  templateKind    PpeTextTemplateKind
+  /// The template (DOC, USER_INFORMATION: the generator's template key, "annex-ix"; LABEL_WARNING: the label template's code,
+  /// a LabelTemplate of the company or tenant-wide), 1 to 80 characters without spaces, and its version from 1 (LABEL_WARNING:
+  /// the label template's revision). A generated document names its template as `<templateKey>.<templateVersion>`. Never
+  /// change.
+  templateKey     String
+  templateVersion Int
+  /// The languages the consultant checked (ISO 639 codes, "it", each once, 1 to 20). Never change.
+  languages       String[]
+  /// Who checked the texts: the consultant (name and firm) as typed, 1 to 300 characters. Never changes.
+  checkedBy       String
+  /// The office user who recorded the yes, and when (not in the future). Never change.
+  recordedById    String              @db.Uuid
+  recordedAt      DateTime            @default(now()) @db.Timestamptz(3)
+  /// The consultant's file (the signed check): a StoredFile of the company (or tenant-wide), AVAILABLE when recorded. Never
+  /// changes.
+  evidenceFileId  String              @db.Uuid
+  /// Withdrawn exactly with when (not before it was recorded, not in the future), by whom and why (1 to 2000 characters),
+  /// set once; a withdrawn approval approves nothing more.
+  withdrawnAt     DateTime?           @db.Timestamptz(3)
+  withdrawnById   String?             @db.Uuid
+  withdrawReason  String?
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?             @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company      Company?   @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  evidenceFile StoredFile @relation("PpeTextApprovalEvidence", fields: [tenantId, evidenceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A template's approvals (the generators' read, the Templates page).
+  @@index([tenantId, templateKind, templateKey, templateVersion])
+}

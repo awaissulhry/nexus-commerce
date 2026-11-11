@@ -801,9 +801,16 @@ model InspectionMeasurement {
   sampleIndex          Int      @default(1)
   nominal              Decimal  @db.Decimal(12, 3)
   tolerance            Decimal  @db.Decimal(12, 3)
+  /// W2b-5 (schema wave 34/44, B-W2b-275; the B-W2b-224 note): an asymmetric band of the style's graded spec kept as it is
+  /// (61 −1/+1.5), not as a centre ± half: how far below and above the nominal a value may be, both or neither, each 0 or
+  /// more; with them `tolerance` is the larger of the two (what a reader of nominal ± tolerance shows). Never on a row
+  /// whose plan check has a nominal (the check's ± tolerance applies).
+  toleranceMinus       Decimal? @db.Decimal(12, 3)
+  tolerancePlus        Decimal? @db.Decimal(12, 3)
   measured             Decimal  @db.Decimal(12, 3)
   uom                  Uom
-  /// Within nominal ± tolerance: written by the database.
+  /// Within nominal ± tolerance (W2b-5: within nominal − toleranceMinus … nominal + tolerancePlus when the band is
+  /// given): written by the database.
   pass                 Boolean  @default(false)
   /// Who recorded it and where, as on InspectionCheckResult.
   recordedById         String?  @db.Uuid

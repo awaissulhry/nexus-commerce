@@ -61,7 +61,8 @@ export const orderSchema = z.object({
   status: z.string(),
   promiseDate: z.string().nullable(),
   customerRef: z.string().nullable(),
-  workOrders: z.object({ count: z.number(), notStarted: z.number() }),
+  /** B-W2b-284: per kind too (production start follows SIZE_GRID and MADE_TO_MEASURE; a sample or a repair never). */
+  workOrders: z.object({ count: z.number(), notStarted: z.number(), byKind: z.array(z.object({ kind: z.enum(['SIZE_GRID', 'MADE_TO_MEASURE', 'SAMPLE', 'REPAIR']), count: z.number(), notStarted: z.number() })) }),
   gates: z.array(gateSchema),
   milestones: z.array(milestoneSchema),
   waiting: z.array(z.enum(GATE_KINDS)),

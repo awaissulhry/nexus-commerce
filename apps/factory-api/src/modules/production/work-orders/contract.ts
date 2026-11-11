@@ -109,9 +109,10 @@ export const workOrderSchema = output({
       colourwayName: z.string(),
       size: z.string(),
       quantity: z.number().int(),
-      salesOrderLineId: id(),
-      salesOrderId: id(),
-      lineSeq: z.number().int(),
+      /** B-W2b-284: null for a SAMPLE cell of an internal or uncharged round (it makes no order line). */
+      salesOrderLineId: id().nullable(),
+      salesOrderId: id().nullable(),
+      lineSeq: z.number().int().nullable(),
       /** Counted from the cut log, the bundles and the floor's scans (B-W1-40, B-W1-41, B-W1-42): null for a draft. */
       progress: output({ cut: z.number().int().nullable(), bundled: z.number().int().nullable(), sewn: z.number().int().nullable(), finished: z.number().int().nullable() }),
     }),

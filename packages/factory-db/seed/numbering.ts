@@ -133,6 +133,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // (B-W2b-260): without them, a recall cannot be set up nor a request logged. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:RECALL:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'RECALL', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'RCL-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:AUTHORITY_REQUEST:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'AUTHORITY_REQUEST', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'AR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-5 wave 36/44: transfers between sites are numbered from it when they are made (B-W2b-326): without it, a transfer
+      // cannot be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:TRANSFER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'TRANSFER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'TRF-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

@@ -136,13 +136,14 @@ export const events = [
   defineEvent({
     type: 'workorder.created',
     context: 'production',
-    description: 'A DRAFT work order was made from sales order lines of one style.',
+    description: 'A DRAFT work order was made from sales order lines of one style (or a sample work order of a round, for no order line).',
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
       siteId: z.uuid(),
       styleId: z.uuid(),
-      salesOrderIds: z.array(z.uuid()).min(1),
+      /** B-W2b-284: empty for a SAMPLE work order of an internal or uncharged round (its cells name no order line). */
+      salesOrderIds: z.array(z.uuid()),
       cells: z.number().int().min(0),
       pieces: z.number().int().min(0),
       /** B-W2a-12: a REPAIR work order's repair order (MES-019); absent for a size run. */
@@ -179,7 +180,8 @@ export const events = [
       styleId: z.uuid(),
       styleRevisionId: z.uuid(),
       labelTemplateId: z.uuid(),
-      salesOrderIds: z.array(z.uuid()).min(1),
+      /** B-W2b-284: empty for a SAMPLE work order of an internal or uncharged round (its cells name no order line). */
+      salesOrderIds: z.array(z.uuid()),
       cells: z.number().int().min(1),
       pieces: z.number().int().min(1),
       operations: z.number().int().min(1),

@@ -107,6 +107,7 @@
   },
   "held": {
     "noManage": "You can view work orders, not change them (workorders.manage)",
+    "sampleSizes": "A sample work order of no order line makes its round's sizes: change them on the sample round",
     "noRelease": "Releasing needs the right to release (workorders.release)",
     "checking": "Checking…",
     "checksOpen_one": "{count} check holds the release: see Overview",

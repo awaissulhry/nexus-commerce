@@ -65,7 +65,8 @@ export const reportRecordOf = (row: InspectionRow, workOrderNumber: string): Doc
 /** The report's language: asked, else the one the work order's customers share (it or en), else Italian. */
 async function languageOf(db: Reader, workOrderId: string, asked: DocumentLanguage | undefined): Promise<DocumentLanguage> {
   if (asked) return asked
-  const parties = [...new Set((await readCells(db, workOrderId)).map((cell) => cell.partyId))]
+  // B-W2b-275: a SAMPLE cell may name no order line, so no customer.
+  const parties = [...new Set((await readCells(db, workOrderId)).flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId])))]
   const languages = parties.length === 0 ? [] : [...new Set((await db.party.findMany({ where: { id: { in: parties } }, select: { language: true } })).map((party) => party.language))]
   return languages.length === 1 && isDocumentLanguage(languages[0]) ? languages[0] : 'it'
 }

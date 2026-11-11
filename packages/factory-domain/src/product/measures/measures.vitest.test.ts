@@ -4,7 +4,6 @@ import { parseRow } from '../../imports/plan'
 import { pointsOfMeasureImporter, planPomRow, importRecordValues } from './importer'
 import {
   approvalProblems,
-  bandOf,
   kindChangeRefusal,
   missingCells,
   normalisePom,
@@ -125,9 +124,7 @@ describe('the measurement spec (PRD-063)', () => {
     expect(specEditRefusal({ revision: 2, status: 'DRAFT' }, { status: 'DRAFT' }, 'ACTIVE')).toBeNull()
   })
 
-  it('keeps an asymmetric band as its centre ± half its width (the same band for the inspection)', () => {
-    expect(bandOf('58', '1', '1')).toEqual({ nominal: '58.000', tolerance: '1.000' })
-    expect(bandOf('58', '1', '1.5')).toEqual({ nominal: '58.250', tolerance: '1.250' })
+  it('says a band in words, an asymmetric one with both sides (B-W2b-283: the inspection keeps the band itself)', () => {
     expect(toleranceWords('58.00', '1.00', '1.50', 'CM')).toBe('58 −1/+1.5 cm')
     expect(toleranceWords('58', '1', '1', 'MM')).toBe('58 ± 1 mm')
   })
