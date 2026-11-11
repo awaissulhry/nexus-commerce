@@ -24,6 +24,7 @@ import { mayOn, officeOf, officeReturn } from './access'
 import { policyOf } from './policy'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockSold, returnableRows, soldKeyOf, type ReturnableRow, type SoldKey } from './returnable'
+import { sampleSerialProblems } from './sample-serials'
 import { asDay, closeWarningsFor, dayOf, LINE_COLUMNS, liveRepairsByLine, readRecordFacts, readRma, returnView, RMA_COLUMNS, type LineRow, type Reader, type ReturnView, type RmaRow } from './store'
 
 /**
@@ -158,6 +159,8 @@ export async function planLines(db: Reader, rows: readonly ReturnableRow[], line
   }
   const currencies = new Set(planned.map((line) => line.row.currency))
   if (currencies.size > 1) problems.push({ path, message: `One return credits in one currency: these lines were sold in ${[...currencies].join(' and ')}. Make one return per currency.` })
+  // B-W2b-284: a serial of a sample made for no order line was never sold.
+  problems.push(...(await sampleSerialProblems(db, lines.map((line, index) => ({ serial: line.serial, path: `${path}/${index}/serial` })))))
   return { planned, problems, aboveSold }
 }
 
@@ -470,6 +473,8 @@ export async function changeLine(caller: CommandCaller, returnId: string, lineId
     if (tooLong(body.reasonNote, RETURN_LIMITS.reasonNote)) problems.push({ path: 'body/reasonNote', message: `At most ${RETURN_LIMITS.reasonNote} characters.` })
     if (tooLong(body.serial, RETURN_LIMITS.serial)) problems.push({ path: 'body/serial', message: `At most ${RETURN_LIMITS.serial} characters.` })
     if (tooLong(body.batchNumber, RETURN_LIMITS.batchNumber)) problems.push({ path: 'body/batchNumber', message: `At most ${RETURN_LIMITS.batchNumber} characters.` })
+    // B-W2b-284: a serial of a sample made for no order line was never sold.
+    if (body.serial !== undefined) problems.push(...(await sampleSerialProblems(tx, [{ serial: body.serial, path: 'body/serial' }])))
     if (problems.length > 0) refuse(problems, 'The line cannot be changed like this.')
     if (body.quantity !== undefined && body.quantity !== current.quantity) {
       const policy = await policyOf(tx, rma.companyId)

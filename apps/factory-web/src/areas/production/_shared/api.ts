@@ -175,9 +175,10 @@ export const workOrderSchema = z.object({
       colourwayName: z.string(),
       size: z.string(),
       quantity: z.number(),
-      salesOrderLineId: z.string(),
-      salesOrderId: z.string(),
-      lineSeq: z.number(),
+      /** B-W2b-284: null for a SAMPLE cell of an internal or uncharged round (it makes no order line). */
+      salesOrderLineId: z.string().nullable(),
+      salesOrderId: z.string().nullable(),
+      lineSeq: z.number().nullable(),
       progress,
     }),
   ),

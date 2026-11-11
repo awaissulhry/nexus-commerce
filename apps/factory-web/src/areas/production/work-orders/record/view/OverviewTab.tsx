@@ -11,7 +11,7 @@ import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
 import { sizeGridCopy } from '../../../_shared/grid-copy'
-import { checkItems, draftGrid, gridChanged, mayEditDetails, onlyMaterialShort, percentOf, SIZE_LAYERS, sizeRunOf, stepTotals, type SizeLayer } from '../../../_shared/model'
+import { checkItems, draftGrid, gridChanged, mayEditDetails, onlyMaterialShort, percentOf, SIZE_LAYERS, sizeRunOf, sizesFromRound, stepTotals, type SizeLayer } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { PartState } from './WorkOrderRecordView'
 import { beforeRelease, readinessView } from '../../daily/model'
@@ -233,7 +233,7 @@ function SizeRunCard({ workOrder, model, actions }: { workOrder: WorkOrder; mode
         <h2 className="fw-pr-h2">{t('size.title')}</h2>
         {draft ? (
           !editing && (
-            <Button size="sm" variant="quiet" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => setEditing(true)}>
+            <Button size="sm" variant="quiet" heldReason={!model.can.manage ? t('held.noManage') : sizesFromRound(workOrder) ? t('held.sampleSizes') : null} onClick={() => setEditing(true)}>
               <Pencil size={13} aria-hidden /> {t('size.edit')}
             </Button>
           )
