@@ -232,6 +232,9 @@ model WorkOrder {
   // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
   reservations  Reservation[]
   peggings      RequirementPegging[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work order it was made from, the board's changes of its slots.
+  plannedWorkOrders PlannedWorkOrder[]
+  scheduleChanges   ScheduleChange[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
   // The floor's correction requests and refused scans about it (B-W1-42).
@@ -395,6 +398,12 @@ model WorkOrderOperation {
   parallelGroup   Int?
   /// A work centre of the site, of the routing step's kind.
   workCentreId    String   @db.Uuid
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-165): done outside: the operation goes to a workshop (its subcontract order,
+  /// of the same work order, not CANCELLED or CLOSED when named; null while the order is not made yet), or back in (false,
+  /// none). Changes while the work order is DRAFT, RELEASED, IN_PROGRESS or ON_HOLD; the only change of a released
+  /// operation besides its work centre.
+  outsourced         Boolean  @default(false)
+  subcontractOrderId String?  @db.Uuid
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -406,6 +415,10 @@ model WorkOrderOperation {
   // W2b-2 (B-W2b-74): an unplanned operation's operation of the library (Restrict: as above, for tenantId).
   libraryOperation Operation?       @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 41/44): the subcontract order it is outsourced to (Restrict, not Prisma's SetNull default for an optional
+  // relation: that would also clear tenantId, siteId and workOrderId); the board's changes of its slots.
+  subcontractOrder SubcontractOrder? @relation("WorkOrderOperationOutsourced", fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  scheduleChanges  ScheduleChange[]
   scans            OperationScan[]
   correctionRequests ScanCorrectionRequest[]
   // W2b labour.prisma (wave 7/7): the steps ticked at it, its coupons, the scan findings and the dispatch about it.

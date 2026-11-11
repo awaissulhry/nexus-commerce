@@ -196,6 +196,9 @@ model Party {
   supplierClaims          SupplierClaim[]
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
+  // W2b-5 planning-depth.prisma (wave 41/44): as a workshop, the planned subcontract orders for it and its weekly capacity.
+  plannedWorkOrders       PlannedWorkOrder[]      @relation("PlannedWorkOrderWorkshop")
+  subcontractorCapacities SubcontractorCapacity[] @relation("SubcontractorCapacityWorkshop")
   // W2b inspection-plans.prisma (wave 10/16): as a customer, the AQL profiles assigned to it.
   aqlProfileAssignments   AqlProfileAssignment[]
   subcontractOrders       SubcontractOrder[]

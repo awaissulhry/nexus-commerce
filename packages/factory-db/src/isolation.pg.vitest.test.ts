@@ -42,6 +42,7 @@ import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
+import { seed as seedPlanningDepth } from '../seed/planning-depth'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
@@ -374,6 +375,11 @@ beforeAll(async () => {
   // (the one a copy may repeat), company A's two are withdrawn.
   await seedPpeTexts({ db: factory, namespace: 'iso-a' })
   await seedPpeTexts({ db: factory, namespace: 'iso-b' })
+  // The planning depth schema of W2b-5 (wave 41/44): planned work and subcontract orders, action messages, promises, the
+  // board's changes and pins, what-ifs, a workshop's capacity; their first rows (a PLANNED order with a protected due date, an
+  // OPEN message, a re-promise, a move, a DRAFT what-if, an open capacity) are the plain ones a copy may repeat.
+  await seedPlanningDepth({ db: factory, namespace: 'iso-a' })
+  await seedPlanningDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -576,6 +582,7 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'MrpActionMessage',
     'NcrConcession',
     'NcrContainmentAction',
     'NcrCostLine',
@@ -644,6 +651,7 @@ it('covers every classified table and every runtime role', () => {
     'PieceRateTable',
     'PieceRateVersion',
     'PlanVersion',
+    'PlannedWorkOrder',
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
@@ -677,6 +685,7 @@ it('covers every classified table and every runtime role', () => {
     'ProductTypeProfile',
     'ProductionControlTest',
     'ProductionSettings',
+    'PromiseRecord',
     'ProtectedView',
     'ProtectorPlacement',
     'PurchaseOrder',
@@ -753,6 +762,7 @@ it('covers every classified table and every runtime role', () => {
     'SavedView',
     'ScanCorrectionRequest',
     'ScanPatternFinding',
+    'ScheduleChange',
     'ScheduleSlot',
     'ScrapApproval',
     'ScrapReason',
@@ -799,6 +809,7 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReceipt',
     'SubcontractReceiptLine',
     'SubcontractReturnNotice',
+    'SubcontractorCapacity',
     'SubstanceRule',
     'SupplierClaim',
     'SupplierClaimLine',
@@ -834,6 +845,7 @@ it('covers every classified table and every runtime role', () => {
     'User',
     'Variant',
     'ViesCheck',
+    'WhatIfScenario',
     'WorkCalendar',
     'WorkCentre',
     'WorkCentreCapacity',

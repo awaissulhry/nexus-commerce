@@ -77,7 +77,7 @@
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "createdById", "backlogRank"] }
       }
     },
     "SalesOrderLine": {

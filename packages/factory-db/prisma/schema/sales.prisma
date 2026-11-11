@@ -551,6 +551,10 @@ model SalesOrder {
   originalPromiseDate DateTime?        @db.Date
   /// Higher first; 0 is normal.
   priority            Int              @default(0)
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-177, PLN-088): its place in the ranked backlog (by priority, promise and
+  /// customer; 1 first, up to 1 000 000; ties allowed), which allocation of scarce material reads; null: not ranked. Changes
+  /// until the order is CLOSED or CANCELLED.
+  backlogRank         Int?
   /// The order states that a made-to-measure unit for a consumer has no right of withdrawal; the acceptance of its
   /// version holds the consumer's acceptance of it (SAL-304).
   noWithdrawal        Boolean          @default(false)
@@ -699,6 +703,9 @@ model SalesOrderLine {
   // W2a reservations.prisma, planning.prisma: the stock held for it before its work order, and the planning runs' pegging.
   reservations       Reservation[]
   peggings           RequirementPegging[]
+  // W2b-5 planning-depth.prisma, supply.prisma (wave 41/44): its promise history, and the requirements hard-pegged to it.
+  promises             PromiseRecord[]
+  reservedRequirements MaterialRequirement[] @relation("MaterialRequirementReservedFor")
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
   // money.prisma: the invoice lines that bill it.
