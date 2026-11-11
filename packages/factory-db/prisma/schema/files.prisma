@@ -150,6 +150,8 @@ model StoredFile {
   printJobs    PrintJob[]
   // W2b-4 recall.prisma (wave 33/33): the authority notices it is the sent copy of.
   authorityNotices AuthorityNotice[] @relation("AuthorityNoticeFile")
+  // W2b-5 ppe-texts.prisma (wave 34/44): the PPE text approvals it is the consultant's evidence of.
+  ppeTextApprovals PpeTextApproval[] @relation("PpeTextApprovalEvidence")
   // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.
   invoiceXmlOf   Invoice[]       @relation("InvoiceXml")
   invoicePdfOf   Invoice[]       @relation("InvoicePdf")

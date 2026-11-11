@@ -53,7 +53,8 @@ async function ordersOfLot(caller: CommandCaller, lotId: string): Promise<string
     })
     const workOrderIds = [...new Set(reservations.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))]
     const sizes = workOrderIds.length ? await db.workOrderSize.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { salesOrderLine: { select: { orderId: true } } } }) : []
-    const ids = [...new Set([...reservations.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : [])), ...sizes.map((row) => row.salesOrderLine.orderId)])]
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const ids = [...new Set([...reservations.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : [])), ...sizes.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : []))])]
     if (ids.length === 0) return []
     const open = await db.salesOrder.findMany({ where: { id: { in: ids }, status: { in: [...OPEN_ORDER_STATUSES] } }, select: { id: true }, orderBy: { id: 'asc' } })
     return open.map((row) => row.id)

@@ -175,7 +175,10 @@ export async function readWorkOrders(db: Reader, siteId: string, orderLineIds: r
     select: { workOrderId: true, salesOrderLineId: true, size: true, quantity: true, workOrder: { select: { number: true, status: true } } },
     orderBy: [{ workOrderId: 'asc' }, { size: 'asc' }],
   })
-  const cells: PlanWorkOrderCell[] = rows.map((row) => ({ workOrderId: row.workOrderId, workOrderNumber: row.workOrder.number, status: row.workOrder.status, orderLineId: row.salesOrderLineId, size: row.size, pieces: row.quantity }))
+  // B-W2b-275: the query asks for cells of these lines (a SAMPLE cell may name none).
+  const cells: PlanWorkOrderCell[] = rows.flatMap((row) =>
+    row.salesOrderLineId === null ? [] : [{ workOrderId: row.workOrderId, workOrderNumber: row.workOrder.number, status: row.workOrder.status, orderLineId: row.salesOrderLineId, size: row.size, pieces: row.quantity }],
+  )
   const open = [...new Set(cells.filter((cell) => OPEN_WORK_ORDER_STATUSES.includes(cell.status)).map((cell) => cell.workOrderId))]
   if (open.length === 0) return { cells, issues: [] }
   // Net issued per work order, material and colour: moves that leave a location for the work order, less moves that
