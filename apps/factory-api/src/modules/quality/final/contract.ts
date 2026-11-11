@@ -674,10 +674,10 @@ export const sheetOut = output({
         nominal: z.string().nullable(),
         tolerance: z.string().nullable(),
         uom: z.string().nullable(),
-        /** B-W2b-224: a SPEC point's nominal ± tolerance per size of the work order (the band as one nominal ± one tolerance; `words` as the spec writes it). */
-        bySize: z.array(output({ size: z.string(), nominal: z.string(), tolerance: z.string(), words: z.string() })),
+        /** B-W2b-224: a SPEC point's nominal ± tolerance per size of the work order (B-W2b-283: with its band when the sides differ, `tolerance` the larger side; `words` as the spec writes it). */
+        bySize: z.array(output({ size: z.string(), nominal: z.string(), tolerance: z.string(), /** B-W2b-283: the band when its sides differ. */ toleranceMinus: z.string().nullable().optional(), tolerancePlus: z.string().nullable().optional(), words: z.string() })),
         spec: z.string(),
-        values: z.array(output({ id: id(), size: z.string(), sampleIndex: z.number().int(), measured: z.string(), nominal: z.string(), tolerance: z.string(), pass: z.boolean(), words })),
+        values: z.array(output({ id: id(), size: z.string(), sampleIndex: z.number().int(), measured: z.string(), nominal: z.string(), tolerance: z.string(), /** B-W2b-283: the band when its sides differ (nominal − minus … nominal + plus). */ toleranceMinus: z.string().nullable().optional(), tolerancePlus: z.string().nullable().optional(), pass: z.boolean(), words })),
       }),
     ),
     values: z.number().int(),

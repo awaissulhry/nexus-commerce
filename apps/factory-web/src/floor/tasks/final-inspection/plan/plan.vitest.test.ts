@@ -12,6 +12,8 @@ import {
   measureHeld,
   measurePayload,
   measureVerdict,
+  specOf, // B-W2b-283
+  valueBand, // B-W2b-283
   nextUnit,
   passPayload,
   photoTargets,
@@ -175,5 +177,30 @@ describe('opening on the plan, and where a code goes', () => {
     expect(startsAtBench({ kind: 'label', type: 'hide' })).toBe(false)
     expect(startsAtBench({ kind: 'label', type: 'workOrder' })).toBe(false)
     expect(startsAtBench({ kind: 'free' })).toBe(false)
+  })
+})
+
+// B-W2b-283 (FU1:05): a point of the approved measurement spec whose sides differ.
+describe('a spec point with a band (B-W2b-283)', () => {
+  const point = {
+    ...sheet().chart.points[0]!,
+    pointCode: 'SLEEVE_LEN',
+    checkCode: null,
+    source: 'SPEC' as const,
+    nominal: null,
+    tolerance: null,
+    bySize: [{ size: '52', nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', words: '64 −0.5/+1.5 cm' }],
+    values: [],
+  }
+  const draft = { pointCode: 'SLEEVE_LEN', unit: 1, size: '52', value: 63.4, nominal: null, tolerance: null, field: 'value' as const }
+
+  it('asks only the value; judges it against the band of its size (centre ± half), never nominal ± the larger side', () => {
+    expect(pointAsks(point)).toEqual({ nominal: false, tolerance: false })
+    expect(specOf(point, draft)).toEqual({ nominal: 64.5, tolerance: 1 })
+    expect(measureVerdict(point, draft)).toBe('FAIL')
+    expect(measureVerdict(point, { ...draft, value: 65.5 })).toBe('PASS')
+    expect(specOf(point, { ...draft, size: '54' })).toEqual({ nominal: null, tolerance: null })
+    expect(valueBand({ nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500' })).toEqual({ nominal: 64.5, tolerance: 1 })
+    expect(valueBand({ nominal: '58.000', tolerance: '1.000' })).toEqual({ nominal: 58, tolerance: 1 })
   })
 })

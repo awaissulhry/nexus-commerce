@@ -28,7 +28,8 @@ import { mainPictureThumbnails } from '../images/main-picture'
  *              over the file's company.
  *   coverage   the certificate coverage as the style's Compliance tab counts it (factory-domain product/compliance
  *              `coverageCell`, `checkedCells`, `coverageCounts`: the same gate on the same rows, today in Europe/Rome),
- *              with compliance.certificates.view.
+ *              with compliance.certificates.view. B-W2b-283 (FU1:02): with each certificate's base (B-W2b-255), as the
+ *              real gates ask it: a brand certificate whose base does not hold covers nothing here either.
  *   cost       what one garment costs on the cost sheet (modules/costing `loadCostFacts`, factory-domain costing/sheet):
  *              the RELEASED revision, else the newest DRAFT (an estimate); the base size, else the range's first; the
  *              lowest and highest of the active colourways whose garment has every input. Only with costing.view AND the
@@ -91,7 +92,21 @@ async function coverages(client: Reader, rows: readonly StyleRowData[], date: Bu
       colourwayIds: true,
       sizes: true,
       allowsMadeToMeasure: true,
-      certificate: { select: { id: true, number: true, standard: true, ppeClass: true, notifiedBodyName: true, notifiedBodyNumber: true, validFrom: true, validTo: true, status: true } },
+      certificate: {
+        select: {
+          id: true,
+          number: true,
+          standard: true,
+          ppeClass: true,
+          notifiedBodyName: true,
+          notifiedBodyNumber: true,
+          validFrom: true,
+          validTo: true,
+          status: true,
+          // B-W2b-283 (FU1:02): an own-brand certificate covers only while its base (the factory's certificate) holds, as the gates ask.
+          baseCertificate: { select: { number: true, status: true, validFrom: true, validTo: true } },
+        },
+      },
     },
     orderBy: { id: 'asc' },
   })
@@ -104,7 +119,13 @@ async function coverages(client: Reader, rows: readonly StyleRowData[], date: Bu
         colourwayIds: cover.colourwayIds,
         sizes: cover.sizes,
         allowsMadeToMeasure: cover.allowsMadeToMeasure,
-        certificate: { ...cover.certificate, validFrom: dayOf(cover.certificate.validFrom), validTo: dayOf(cover.certificate.validTo) },
+        certificate: (({ baseCertificate, ...certificate }) => ({
+          ...certificate,
+          validFrom: dayOf(certificate.validFrom),
+          validTo: dayOf(certificate.validTo),
+          // B-W2b-283 (FU1:02): the base as modules/compliance/certificates/gate.ts `gateRequestFor` passes it.
+          base: baseCertificate ? { number: baseCertificate.number, status: baseCertificate.status, validFrom: dayOf(baseCertificate.validFrom), validTo: dayOf(baseCertificate.validTo) } : null,
+        }))(cover.certificate),
       }))
     const own = colourways.filter((colourway) => colourway.styleId === row.id)
     const base = (colourwayId: string, size: string): SizeGateRequest => ({

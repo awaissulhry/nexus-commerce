@@ -6,6 +6,10 @@ import { StyleRecordView } from '../view/StyleRecordView'
 import { demoAssign, demoGate, demoLifecycle, demoPrivateLabel, demoRanges, demoStyleType, demoTexts, demoWhereUsed, depthModel } from './demo/fixtures'
 import { failed, ready, type StyleDepthModel } from './model'
 import { depthSlots } from './slots'
+// B-W2b-283 (FU1:01): the Overview's Markets, cases `w2b-283-*`.
+import { MARKET_CASES } from './markets/fixtures'
+import type { MarketsModel } from './markets/model'
+import { MarketsCard } from './markets/view/MarketsCard'
 
 /**
  * SCR-342 — Style › Overview & variants in depth (B-W2b-237; design products.styles rec:Style style.ov.identity,
@@ -18,6 +22,8 @@ import { depthSlots } from './slots'
 interface Case {
   studio: StyleRecordViewModel
   depth: StyleDepthModel
+  /** B-W2b-283: the Overview's Markets (absent: not drawn). */
+  markets?: MarketsModel
 }
 
 const style = demoStyle()
@@ -28,7 +34,7 @@ const assign = (extra: Partial<StyleDepthModel['assign']>, depth: Partial<StyleD
 
 const View = ({ model }: { model: Case }) => {
   const value = model.studio.style.status === 'ready' ? model.studio.style.value : style
-  return createElement(StyleRecordView, { model: model.studio, depth: depthSlots(model.depth, undefined, value.skus) })
+  return createElement(StyleRecordView, { model: model.studio, depth: { ...depthSlots(model.depth, undefined, value.skus), markets: model.markets ? createElement(MarketsCard, { model: model.markets }) : null /* B-W2b-283 */ } })
 }
 
 const archivedStyle = { status: 'ready' as const, value: demoStyle({ status: 'ARCHIVED' }) }
@@ -83,5 +89,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'assign-refused', label: 'Assign GTINs: refused meanwhile', model: assign({}, { problem: 'gtin.problem.again' }), note: 'The range moved meanwhile: the preview was made again.' },
     { id: 'assign-done', label: 'Assign GTINs: given', model: assign({ preview: null, done: demoAssign(style, { dryRun: false }) }) },
     { id: 'variants-sales', label: 'Colourways & sizes (sales)', model: variants({}, 'sales'), note: 'Assign GTINs held: the role does not give GTINs.' },
+    // B-W2b-283 (FU1:01): the markets the style is sold in.
+    ...MARKET_CASES.map((entry) => ({ id: entry.id, label: entry.label, model: { ...owner(), markets: entry.markets }, ...(entry.note ? { note: entry.note } : {}) })),
   ],
 })

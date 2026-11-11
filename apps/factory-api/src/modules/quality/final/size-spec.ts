@@ -1,5 +1,5 @@
 import type { GradedPoint, GradedSpec } from '@nexus/factory-domain/quality/final/plan'
-import { bandOf, toleranceWords } from '@nexus/factory-domain/product/measures/rules'
+import { toleranceWords } from '@nexus/factory-domain/product/measures/rules'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import type { LabelHeader } from '../../production/serials/store'
 import type { Reader } from './store'
@@ -11,9 +11,11 @@ import type { Reader } from './store'
  * measured outside the plan take it instead of a typed nominal and tolerance; a plan check with its own nominal still
  * binds (the database's rule). A draft spec is not read: only what a person approved is measured against.
  *
- * InspectionMeasurement keeps one tolerance, so a cell's band (nominal − minus … nominal + plus) is kept as its centre ±
- * half its width: the same band, the same pass or fail; a symmetric tolerance keeps its nominal. Made-to-measure units are
- * checked against the rider's profile, never this. No money, no person.
+ * B-W2b-283 (FU1:05; InspectionMeasurement.toleranceMinus / tolerancePlus, schema wave 34/44): a cell whose sides differ
+ * keeps the spec's own nominal and its band (nominal − minus … nominal + plus), with `tolerance` the larger side, as the
+ * database asks of such a row (it writes `pass` from the band); a symmetric cell is nominal ± tolerance as before. No more
+ * centre ± half: the inspector sees the spec's nominal. Made-to-measure units are checked against the rider's profile, never
+ * this. No money, no person.
  */
 
 export interface SizeSpecFacts {
@@ -41,8 +43,23 @@ export async function sizeSpecFor(db: Reader, header: Pick<LabelHeader, 'styleRe
     const nominal = value.nominal.toString()
     const minus = value.toleranceMinus.toString()
     const plus = value.tolerancePlus.toString()
-    const band = bandOf(nominal, minus, plus)
-    return [{ code: point.code, name: point.name, size: value.size, nominal: band.nominal, tolerance: band.tolerance, uom: point.uom as Uom, words: toleranceWords(nominal, minus, plus, point.uom) }]
+    return [{ code: point.code, name: point.name, size: value.size, ...gradedBand(value.nominal, value.toleranceMinus, value.tolerancePlus), uom: point.uom as Uom, words: toleranceWords(nominal, minus, plus, point.uom) }]
   })
   return { spec: { revision: revision.revision, points: graded }, specId: spec.id, words: `The approved measurement spec of revision ${revision.revision}: ${ids.length} point(s) of measure.` }
+}
+
+/** A decimal as the database answers it (Prisma's Decimal). */
+interface DecimalLike {
+  toFixed(digits: number): string
+  comparedTo(other: string): number
+}
+
+/**
+ * A spec cell as the size check writes it (3 decimals): symmetric, nominal ± tolerance; else the spec's nominal, the larger
+ * side as `tolerance` and the band (the database refuses any other tolerance on a row with a band).
+ */
+export function gradedBand(nominal: DecimalLike, minus: DecimalLike, plus: DecimalLike): Pick<GradedPoint, 'nominal' | 'tolerance' | 'band'> {
+  const [low, high] = [minus.toFixed(3), plus.toFixed(3)]
+  if (low === high) return { nominal: nominal.toFixed(3), tolerance: low, band: null }
+  return { nominal: nominal.toFixed(3), tolerance: minus.comparedTo(high) >= 0 ? low : high, band: { minus: low, plus: high } }
 }
