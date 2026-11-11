@@ -162,6 +162,9 @@ describe('the catalogue (SAL-071)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(list.seesPrices).toBe(true)
     const detail = await ok(browsers.buyer, 'GET', `/portal/catalogue/${jkt01}`)
     expect(detail.style.colourways.find((colourway: Json) => colourway.code === 'RED').price).toBe('430.00')
+    // B-W2b-278 (FU4:04): the style's page says its PPE category in words looked up by the style's own code, never the code.
+    expect(detail.style.ppe.words).toEqual(PPE_WORDS[detail.style.ppe.category as keyof typeof PPE_WORDS])
+    expect(detail.style.ppe.words.en).not.toBe(detail.style.ppe.category)
     expect((await call(browsers.buyer, 'GET', `/portal/catalogue/${jkt03}`)).status).toBe(404)
     // The viewer: the same styles, no price field at all.
     const seen = await ok(browsers.viewer, 'GET', '/portal/catalogue')

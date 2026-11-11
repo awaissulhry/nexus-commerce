@@ -3,6 +3,7 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
+import { PPE_CATEGORIES, type PpeCategory } from '@nexus/factory-domain/product/styles/rules'
 import { lowestPrice, PPE_WORDS, priceShown, rangeLabel, type RangeFilter } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { appClock } from '../../../platform/portal/tasks/clock'
 import { portalReader } from '../portal-orders/access'
@@ -22,9 +23,15 @@ import { catalogueTextsOf, type CatalogueTexts } from '../../product/style-texts
  *                                                            PPE category, standard and class, the revision it is made to
  */
 
-type PpeCategory = keyof typeof PPE_WORDS
+/**
+ * B-W2b-278 (FU4:04): the PPE words are looked up by the style's own codes (Style.ppeCategory: NOT_PPE, CATEGORY_I …, the
+ * product rules' PPE_CATEGORIES), never through a cast to the table's keys: a table keyed by other codes (B-W2b-190's NONE /
+ * CAT_I, which B-W2b-F17 put right in the table) no longer compiles, so the catalogue's words come from the API, not the code.
+ */
+const isPpeCategory = (code: string): code is PpeCategory => (PPE_CATEGORIES as readonly string[]).includes(code)
+const ppeWordsOf = (code: string) => (isPpeCategory(code) ? PPE_WORDS[code] : { it: code, en: code })
 
-const ppeOf = (style: CatalogueStyle) => ({ category: style.ppeCategory, standard: style.ppeStandard, class: style.ppeClass, words: PPE_WORDS[style.ppeCategory as PpeCategory] ?? { it: style.ppeCategory, en: style.ppeCategory } })
+const ppeOf = (style: CatalogueStyle) => ({ category: style.ppeCategory, standard: style.ppeStandard, class: style.ppeClass, words: ppeWordsOf(style.ppeCategory) })
 
 function cardOf(style: CatalogueStyle) {
   const available = style.colourways.filter((colourway) => colourway.available)
