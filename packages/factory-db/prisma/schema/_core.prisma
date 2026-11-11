@@ -265,6 +265,10 @@ model Company {
   reportSubscriptions  ReportSubscription[]
   // alerts.prisma: the alert rules that look at it.
   alertRules           AlertRule[]
+  // W2b-5 approvals.prisma (wave 35/44): its approval rules, the requests for a yes about its records, their history.
+  approvalRules        ApprovalRule[]
+  approvalTasks        ApprovalTask[]
+  approvalEvents       ApprovalEvent[]
   // W2b capa.prisma, holds.prisma, quality.prisma, gendocs.prisma (wave 11/16): its corrective actions, genealogy holds,
   // quality alert rules and the documents generated for its records.
   capas                Capa[]
@@ -418,6 +422,8 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2b-5 approvals.prisma (wave 35/44): the requests for a yes about its records.
+  approvalTasks       ApprovalTask[]
   // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
   incomingInspections IncomingInspection[]
   inProcessChecks     InProcessCheck[]
