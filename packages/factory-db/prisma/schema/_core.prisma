@@ -200,6 +200,8 @@ model Company {
   // supplier invoices and the SDI deliveries waiting in its inbox.
   purchasingSettings   PurchasingSettings[]
   payablesSettings     PayablesSettings[]
+  // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
+  deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
   sdiInboxItems        SdiInboxItem[]
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -340,6 +342,8 @@ model Site {
   // supply.prisma: the purchase orders delivered to it and its planning runs.
   purchaseOrders  PurchaseOrder[]
   planningRuns    PlanningRun[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the requests to buy for it.
+  purchaseRequests PurchaseRequest[]
   // W2b portal-supply.prisma (wave 22/22): the ship notices of deliveries to it.
   shipNotices     ShipNotice[]
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations and stock counts; its planning settings,

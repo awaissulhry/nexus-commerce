@@ -6,6 +6,7 @@ import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAndon } from '../seed/andon'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
 import { seed as seedChanges } from '../seed/changes'
@@ -374,6 +375,12 @@ beforeAll(async () => {
   // (the one a copy may repeat), company A's two are withdrawn.
   await seedPpeTexts({ db: factory, namespace: 'iso-a' })
   await seedPpeTexts({ db: factory, namespace: 'iso-b' })
+  // Buying and subcontracting in depth (W2b-5 schema wave 40/44): variants, tolerances, two purchase orders with their delivery
+  // schedules (P1's), a re-dated delivery, requests to buy, a workshop's cost; with partnerScope a SENT kit line of P1's job and
+  // its material balance. Their first rows (a DRAFT order's delivery, the newest change of its date, an OPEN request, an
+  // adjustment that moves 0.1 from used to scrapped, a fee) are the ones a copy may repeat.
+  await seedBuyingDepth({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
+  await seedBuyingDepth({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -451,6 +458,7 @@ it('covers every classified table and every runtime role', () => {
     'Ddt',
     'DdtCancellation',
     'DefectCode',
+    'DeliveryTolerance',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -533,6 +541,7 @@ it('covers every classified table and every runtime role', () => {
     'ItemColour',
     'ItemGradeRule',
     'ItemPlanning',
+    'ItemVariant',
     'LabResult',
     'LabelArtworkVersion',
     'LabelTemplate',
@@ -649,6 +658,7 @@ it('covers every classified table and every runtime role', () => {
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PoDateChange',
     'PointOfMeasure',
     'PortalOrderRequest',
     'PortalOrderRequestLine',
@@ -681,8 +691,10 @@ it('covers every classified table and every runtime role', () => {
     'ProtectorPlacement',
     'PurchaseOrder',
     'PurchaseOrderLine',
+    'PurchaseOrderLineDelivery',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchaseRequest',
     'PurchasingSettings',
     'QualityAlertRule',
     'QualityHold',
@@ -792,6 +804,8 @@ it('covers every classified table and every runtime role', () => {
     'StyleRevisionFile',
     'StyleText',
     'SubcontractBundle',
+    'SubcontractConsumption',
+    'SubcontractCostEntry',
     'SubcontractKitLine',
     'SubcontractOperation',
     'SubcontractOrder',

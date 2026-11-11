@@ -259,6 +259,7 @@
   },
   "poStatus": {
     "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Waiting for a yes, not sent",
     "SENT": "Sent, not confirmed",
     "CONFIRMED": "Confirmed",
     "DECLINED": "Declined",

@@ -135,6 +135,10 @@ model Party {
   paymentIntents      PaymentIntent[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
+  // W2b-5 supply.prisma, buying-depth.prisma (wave 40/44): the purchase orders delivered to it as a third party (a workshop,
+  // a customer), and its delivery tolerances as a supplier.
+  shipToPurchaseOrders PurchaseOrder[]     @relation("PurchaseOrderShipToParty")
+  deliveryTolerances   DeliveryTolerance[] @relation("DeliveryToleranceSupplier")
   materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
   // W2a supply.prisma, planning.prisma: the firm planned orders that buy from it, the item parameters that prefer it.
   firmRequirements     MaterialRequirement[] @relation("MaterialRequirementFirmSupplier")
@@ -309,6 +313,8 @@ model PartyAddress {
   shipments           Shipment[]
   // W2b-4 samples.prisma (wave 29/33): the sample shipments sent to it.
   sampleShipments     SampleShipment[]
+  // W2b-5 supply.prisma (wave 40/44): the purchase orders delivered to it (a third party's address).
+  purchaseOrdersShipTo PurchaseOrder[] @relation("PurchaseOrderShipToAddress")
   // W2b portal-sales.prisma (wave 21/22): the portal order requests and the change requests that ask to deliver there.
   portalOrderRequestsShipTo PortalOrderRequest[] @relation("PortalOrderRequestShipTo")
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
