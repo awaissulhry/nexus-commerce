@@ -198,6 +198,8 @@ model Company {
   // supplier invoices and the SDI deliveries waiting in its inbox.
   purchasingSettings   PurchasingSettings[]
   payablesSettings     PayablesSettings[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): its warehouse rules.
+  inventorySettings    InventorySettings[]
   supplierInvoiceFiles SupplierInvoiceFile[]
   sdiInboxItems        SdiInboxItem[]
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -350,6 +352,13 @@ model Site {
   workCentreCapacities WorkCentreCapacity[]
   planningExceptions   PlanningException[]
   madeItemPlannings    ItemPlanning[]       @relation("ItemPlanningMakeSite")
+  // W2b-5 warehouse-depth.prisma (wave 36/44): its default locations, the transfers it sends and receives, its count
+  // schedules and warehouse tasks.
+  defaultLocations     DefaultLocation[]
+  transfersSent        TransferOrder[]      @relation("TransferOrderFromSite")
+  transfersReceived    TransferOrder[]      @relation("TransferOrderToSite")
+  countSchedules       CountSchedule[]
+  warehouseTasks       WarehouseTask[]
   // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
   locations       Location[]
   goodsReceipts   GoodsReceipt[]

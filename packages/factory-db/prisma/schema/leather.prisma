@@ -357,6 +357,9 @@ model FabricRoll {
   location   Location?   @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b-2 cutting.prisma (wave 13/16): the lays it was spread in.
   layRolls   LayRoll[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the transfer lines that send it or that it arrived as.
+  transferLines   TransferLine[] @relation("TransferLineRoll")
+  transferLinesIn TransferLine[] @relation("TransferLineToRoll")
 
   @@unique([tenantId, code])
   // The target of a lay's reference (B-W2b-85): a roll of the lay's own site.

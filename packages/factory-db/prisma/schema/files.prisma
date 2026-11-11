@@ -210,6 +210,8 @@ model StoredFile {
   purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
   // W2b gendocs.prisma (B-W2b-01): the generated document versions it is the file of.
   generatedDocuments     GeneratedDocument[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the transfers whose DDT PDF it is.
+  transferDdts           TransferOrder[]     @relation("TransferOrderDdtFile")
   // W2b parties.prisma (wave 21/22): the measurement revisions whose front, side or back photo it is.
   measurementPhotosFront MeasurementProfile[] @relation("MeasurementProfilePhotoFront")
   measurementPhotosSide  MeasurementProfile[] @relation("MeasurementProfilePhotoSide")
