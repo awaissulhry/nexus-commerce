@@ -63,6 +63,14 @@ describe('what each kind may hold', () => {
     expect(MAX_FILE_BYTES).toBe(Math.max(...FILE_KINDS.map((kind) => KIND_RULES[kind].maxBytes)))
   })
 
+  it('takes a ZIP as a DOCUMENT only (B-W2b-278: the evidence pack\'s ZIP goes through putGeneratedFile)', () => {
+    expect(uploadProblems({ kind: 'DOCUMENT', contentType: 'application/zip', sizeBytes: 25 * 1_048_576, sha256: SHA })).toEqual([])
+    expect(uploadProblems({ kind: 'DOCUMENT', contentType: 'application/zip', sizeBytes: 25 * 1_048_576 + 1, sha256: SHA })[0]?.path).toBe('body/sizeBytes')
+    for (const kind of FILE_KINDS.filter((other) => other !== 'DOCUMENT')) {
+      expect(uploadProblems({ kind, contentType: 'application/zip', sizeBytes: 10, sha256: SHA }), kind).toEqual([{ path: 'body/contentType', message: expect.any(String) }])
+    }
+  })
+
   it('normalises a content type', () => {
     expect(normaliseContentType(' Application/PDF ; charset=binary')).toBe('application/pdf')
   })
