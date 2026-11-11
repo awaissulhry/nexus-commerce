@@ -195,7 +195,9 @@
     "CUSTOMER_RETURN": "Customer return",
     "SUPPLIER_RETURN": "Return to supplier",
     "SHIPMENT": "Shipment",
-    "REMNANT": "Offcut from work order"
+    "REMNANT": "Offcut from work order",
+    "TRANSFER_OUT": "Sent to another site",
+    "TRANSFER_IN": "Received from another site"
   },
   "print": {
     "title": "Stock valuation · {company} · as at {day}",

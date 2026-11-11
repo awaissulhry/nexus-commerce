@@ -43,6 +43,8 @@ model Role {
   assignments RoleAssignment[]
   // floor-auth.prisma: the floor workers holding this (floor) role.
   workerRoles WorkerRole[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the warehouse tasks given to its holders.
+  warehouseTasks WarehouseTask[]
   // views.prisma, alerts.prisma: the saved views shared with its holders, the alert rules that tell them.
   savedViews  SavedView[]
   alertRules  AlertRule[]
