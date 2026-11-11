@@ -148,6 +148,8 @@ model StoredFile {
   labelArtworkVersions   LabelArtworkVersion[]   @relation("LabelArtworkVersionFile")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the subcontract agreements whose signed terms it is.
+  subcontractAgreementTerms SubcontractAgreement[] @relation("SubcontractAgreementTerms")
   // W2b-4 recall.prisma (wave 33/33): the authority notices it is the sent copy of.
   authorityNotices AuthorityNotice[] @relation("AuthorityNoticeFile")
   // W2b-5 ppe-texts.prisma (wave 34/44): the PPE text approvals it is the consultant's evidence of.
