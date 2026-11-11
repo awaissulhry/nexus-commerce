@@ -345,7 +345,8 @@ export async function seed(context: SeedContext): Promise<SalesSeed> {
       })
       await tx.quoteApproval.update({
         where: { id: q1.approval },
-        data: { status: QuoteApprovalStatus.APPROVED, decidedAt: T.approved, decidedById: actorId, decisionNote: 'Approved for this volume.', ...step(T.approved) },
+        // B-W2b-282 (PLT-042, Owner answer Q3 = A): another person than the one who asked decides it, the Owner included.
+        data: { status: QuoteApprovalStatus.APPROVED, decidedAt: T.approved, decidedById: id('user:member'), decisionNote: 'Approved for this volume.', ...step(T.approved) },
         select,
       })
       await tx.quoteVersion.update({ where: { id: q1.version }, data: { status: QuoteVersionStatus.APPROVED, ...step(T.approved) }, select })
