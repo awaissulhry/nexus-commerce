@@ -170,6 +170,9 @@ model Company {
   depositRequests      DepositRequest[]
   // W2b portal-sales.prisma (wave 21/22): the order requests its customers sent from the portal, their payment intents.
   portalOrderRequests  PortalOrderRequest[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): what freezes on its orders at each stage, its customers' credit checks.
+  orderFreezeRules     OrderFreezeRule[]
+  creditChecks         CreditCheck[]
   paymentIntents       PaymentIntent[]
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]

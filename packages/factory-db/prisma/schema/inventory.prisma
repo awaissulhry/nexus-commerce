@@ -56,6 +56,10 @@
 // holding place for a buyer; a lot has a lifecycle beside its quality status, a parent lot it was split from and its own
 // attributes; a move has a posting date apart from the day it happened, and the transfer line it carries (TRANSFER_OUT and
 // TRANSFER_IN between two sites: stock in transit stays on the from-site's TRANSIT location until it is received).
+//
+// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306; sales-orders-depth.prisma): a customer's own material (leather, trims the
+// brand sends for its orders) is stock the customer owns: its lots name their owner (Lot.ownerPartyId); it is never valued,
+// never bought and never used for another party's order (the …_sales_orders_depth_w2b_guards triggers).
 
 /// A place on a site where stock lies (SCM-176): a warehouse, a zone, a bin, the goods-in dock, the quarantine shelf,
 /// a line-side supply point. A tree inside the site. Archived (never deleted) once used; an archived location takes no
@@ -248,6 +252,10 @@ enum GoodsReceiptKind {
   STANDARD
   /// Goods nobody ordered: held in a holding place for a buyer until a purchase order names them (or they go back).
   UNPLANNED
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306): goods a customer sends for its orders (the brand's own leather, trims):
+  /// from a CUSTOMER or BRAND party, with no purchase order or ship notice, of materials tracked by LOT or HIDE; its lots are
+  /// owned by the sender (Lot.ownerPartyId), never valued, never matched to a supplier invoice.
+  CUSTOMER_SUPPLIED
 }
 
 /// OPEN → POSTED → REVERSED; OPEN → CANCELLED.
@@ -325,6 +333,11 @@ model Lot {
   supplierId         String?          @db.Uuid
   /// The supplier's batch number.
   supplierLotRef     String?
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306, B-W2b-228): customer-owned stock: the customer or brand whose material
+  /// it is (sent to us for its orders: a CUSTOMER_SUPPLIED receipt of that party, or opening stock); null: ours. Set when the
+  /// lot is made, never changed. Never valued, never bought, never issued or reserved for another party's order (the
+  /// …_sales_orders_depth_w2b_guards triggers, for every login).
+  ownerPartyId       String?          @db.Uuid
   /// The tannery's dye batch (one shade).
   dyeBatch           String?
   shade              String?
@@ -374,6 +387,8 @@ model Lot {
   itemColour  ItemColour?       @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier    Party?            @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   receiptLine GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 39/44): the customer who owns it. Restrict, not Prisma's SetNull default: that would also clear tenantId.
+  owner       Party?            @relation("LotOwner", fields: [tenantId, ownerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   hides       Hide[]
   moves       StockMove[]
   valuations  StockValuation[]

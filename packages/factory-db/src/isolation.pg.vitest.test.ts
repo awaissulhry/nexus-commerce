@@ -66,6 +66,7 @@ import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSalesOrdersDepth } from '../seed/sales-orders-depth'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
@@ -386,6 +387,11 @@ beforeAll(async () => {
   // count and its COUNT scan) are the plain ones a copy may repeat.
   await seedWarehouseDepth({ db: factory, namespace: 'iso-a' })
   await seedWarehouseDepth({ db: factory, namespace: 'iso-b' })
+  // The orders, credit and changes schema of W2b-5 (wave 39/44): freeze rules, credit checks with an override, customers'
+  // materials, an order waiting for a yes, a priced amendment, customer-owned stock; the first freeze rule (off), check (a PASS)
+  // and material (of the waiting order) are the plain ones a copy may repeat.
+  await seedSalesOrdersDepth({ db: factory, namespace: 'iso-a' })
+  await seedSalesOrdersDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -453,8 +459,10 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceRequirement',
     'CostingSettings',
     'CountSchedule',
+    'CreditCheck',
     'CrewMember',
     'CrewSession',
+    'CustomerMaterial',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -624,6 +632,7 @@ it('covers every classified table and every runtime role', () => {
     'OptionValue',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
+    'OrderFreezeRule',
     'OrderGate',
     'OrgArea',
     'OutboxEvent',

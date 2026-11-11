@@ -232,6 +232,8 @@ model Item {
   lots                 Lot[]
   stockMoves           StockMove[]
   stockValuations      StockValuation[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials of it expected for their orders.
+  customerMaterials    CustomerMaterial[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
   supplierItems        SupplierItem[]
   supplierClaimLines   SupplierClaimLine[]
@@ -352,6 +354,8 @@ model ItemColour {
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]
   stockMoves           StockMove[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials expected in this colour.
+  customerMaterials    CustomerMaterial[]
   // production.prisma: the work orders' planned materials in this colour.
   workOrderMaterials   WorkOrderMaterial[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
@@ -890,6 +894,8 @@ model BomLine {
   workOrderMaterials WorkOrderMaterial[]
   // W2b-5 warehouse-depth.prisma (wave 36/44): the substitutes used for its material on work orders.
   materialSubstitutions MaterialSubstitution[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): the customers' materials expected for orders of the line (customer-supplied).
+  customerMaterials  CustomerMaterial[]
   // W2b-2 cutting.prisma (wave 13/16): the pattern pieces cut from the line.
   patternPieces      PatternPiece[]
 
