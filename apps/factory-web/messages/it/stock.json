@@ -74,7 +74,9 @@
     "CUSTOMER_RETURN": "Reso da cliente",
     "SUPPLIER_RETURN": "Reso a fornitore",
     "SHIPMENT": "Spedizione",
-    "REMNANT": "Ritaglio da ordine"
+    "REMNANT": "Ritaglio da ordine",
+    "TRANSFER_OUT": "Inviato ad altro stabilimento",
+    "TRANSFER_IN": "Ricevuto da altro stabilimento"
   },
   "quality": {
     "QUARANTINE": "Quarantena",
@@ -112,7 +114,11 @@
     "PRODUCTION": "Bordo linea",
     "SHIPPING": "Spedizioni",
     "SUBCONTRACTOR": "Terzista",
-    "FINISHED_GOODS": "Prodotti finiti"
+    "FINISHED_GOODS": "Prodotti finiti",
+    "CUSTOMER": "Presso cliente",
+    "TRANSIT": "In transito",
+    "PICK_FACE": "Fronte di prelievo",
+    "BULK": "Magazzino di riserva"
   },
   "locationStatus": {
     "ACTIVE": "Attiva",

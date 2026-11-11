@@ -60,13 +60,19 @@ export function planLocationRow(values: RowValues, existing: ExistingRecord | nu
   const kind = values.kind ?? existing?.values.kind ?? null
   if (existing === null) {
     if (kind === 'SUBCONTRACTOR' && values.workshop === undefined) return refused('workshop', "A Subcontractor location is our stock at one workshop: name it (the subcontractor's party code).")
+    // W2b-5 (B-W2b-277, schema wave 36): a CUSTOMER location (our stock at a customer or brand) names its party in the same
+    // column; the export writes it, so the re-import keeps it UNCHANGED. Making one by import waits for its checks (B-W2b-289).
+    if (kind === 'CUSTOMER') return refused('kind', 'A Customer location (our stock at a customer or brand) is made on the Locations page, not by import.')
   } else {
     const change = values.kind === undefined ? [] : kindChangeProblems(String(existing.values.kind), String(values.kind))
     if (change.length > 0) return refused('kind', change[0]!.message)
     if (values.workshop !== undefined && kind === 'SUBCONTRACTOR' && values.workshop !== existing.values.workshop) {
       return refused('workshop', `This workshop location stays ${String(existing.values.workshop ?? 'without a workshop')}'s (its workshop never changes): make a new location for another workshop.`)
     }
+    if (values.workshop !== undefined && kind === 'CUSTOMER' && values.workshop !== existing.values.workshop) {
+      return refused('workshop', `This customer location stays ${String(existing.values.workshop ?? 'without a party')}'s (its party never changes): make a new location for another customer.`)
+    }
   }
-  if (values.workshop !== undefined && kind !== 'SUBCONTRACTOR') return refused('workshop', 'Only a Subcontractor location names a workshop: leave the cell blank.')
+  if (values.workshop !== undefined && kind !== 'SUBCONTRACTOR' && kind !== 'CUSTOMER') return refused('workshop', 'Only a Subcontractor location names a workshop: leave the cell blank.')
   return diffPlan(locationsImporter, values, existing)
 }
