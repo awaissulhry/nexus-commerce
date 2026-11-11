@@ -132,8 +132,7 @@
 }
 
 .fw-pst-inforce,
-.fw-pst-inforce-row,
-.fw-pst-text-row {
+.fw-pst-inforce-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

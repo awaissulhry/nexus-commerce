@@ -4,7 +4,7 @@ import type { Issue } from '../../core/errors'
 import { isUuid } from '../../core/ids'
 import { Dec } from '../../tax/decimal'
 import { GARMENT_ZONES, isGarmentZone } from '../defects/rules'
-import { decimalWords, measurementPass } from '../final/plan'
+import { decimalWords, measurementPass, type Band } from '../final/plan'
 import type { CheckType } from '../plans/rules'
 
 /**
@@ -152,7 +152,7 @@ export interface RowFacts {
   readonly check?: { readonly type: CheckType; readonly code: string; readonly nominal: string | null; readonly tolerance: string | null; readonly choices: readonly string[] }
   readonly outcome?: 'PASS' | 'FAIL' | 'NOT_APPLICABLE'
   /** A measurement: its nominal ± tolerance and whether it passed (the database's `pass`). */
-  readonly measurement?: { readonly pointCode: string; readonly nominal: string; readonly tolerance: string; readonly pass: boolean }
+  readonly measurement?: { readonly pointCode: string; readonly nominal: string; readonly tolerance: string; readonly pass: boolean; /** B-W2b-283: a spec band under and over (the database's `pass` reads it). */ readonly band?: Band | null }
   /** A cause: the active cause codes by id (the API reads them). */
   readonly activeCauses?: ReadonlySet<string>
 }
@@ -233,8 +233,8 @@ function checkValueProblem(facts: RowFacts, value: string): string | null {
 export function verdictProblem(field: FieldRule, facts: RowFacts, after: AmendValue): string | null {
   if (after === null) return null
   if (field.kind === 'decimal' && facts.measurement && isDecimal(after)) {
-    const { pointCode, nominal, tolerance, pass } = facts.measurement
-    if (measurementPass(after, nominal, tolerance) !== pass) return crossing(pointCode, after, nominal, tolerance, pass)
+    const { pointCode, nominal, tolerance, pass, band = null } = facts.measurement
+    if (measurementPass(after, nominal, tolerance, band) !== pass) return crossing(pointCode, after, nominal, tolerance, pass, band)
   }
   if (field.kind === 'value' && facts.check?.type === 'MEASUREMENT' && facts.check.nominal !== null && facts.check.tolerance !== null && isDecimal(after) && facts.outcome) {
     const passed = facts.outcome === 'PASS'
@@ -243,8 +243,8 @@ export function verdictProblem(field: FieldRule, facts: RowFacts, after: AmendVa
   return null
 }
 
-const crossing = (code: string, after: string, nominal: string, tolerance: string, passed: boolean): string =>
-  `${code} ${decimalWords(after)} is ${passed ? 'outside' : 'within'} ${decimalWords(nominal)} ± ${decimalWords(tolerance)}: it would turn a ${passed ? 'pass into a fail' : 'fail into a pass'}. A signed result never changes its verdict: reverse the release and inspect again.`
+const crossing = (code: string, after: string, nominal: string, tolerance: string, passed: boolean, band: Band | null = null): string =>
+  `${code} ${decimalWords(after)} is ${passed ? 'outside' : 'within'} ${band ? `${decimalWords(nominal)} −${decimalWords(band.minus)}/+${decimalWords(band.plus)}` : `${decimalWords(nominal)} ± ${decimalWords(tolerance)}`}: it would turn a ${passed ? 'pass into a fail' : 'fail into a pass'}. A signed result never changes its verdict: reverse the release and inspect again.`
 
 // ---- what stands now ------------------------------------------------------------------------------------------------------
 

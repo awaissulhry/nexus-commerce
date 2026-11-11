@@ -25,6 +25,8 @@ import { readDefects, readInspection, type Reader } from './store'
 import { sizeSpecFor } from './size-spec'
 import { readCells } from '../../production/serials/store'
 import { gradedPointOf } from '@nexus/factory-domain/quality/final/plan'
+// B-W2b-283 (FU1:05): a value's band.
+import { bandOfRow } from '@nexus/factory-domain/quality/final/plan'
 
 /**
  * The bench sheet of a final inspection on its plan (B-W2b-97; design floor.final "serial", "aql", "measure", "photos" and
@@ -134,13 +136,18 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
       points.push(point)
       for (const entry of valuesOf(point)) placed.add(entry.id)
     }
+    // B-W2b-283 (FU1:05): a value keeps its band (a spec cell whose sides differ); its words say the band's own sides.
+    const valueView = (value: (typeof measurements)[number]) => {
+      const band = bandOfRow(value)
+      return { id: value.id, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, toleranceMinus: band?.minus ?? null, tolerancePlus: band?.plus ?? null, pass: value.pass, words: deviationWords(value.measured, value.nominal, value.tolerance, value.uom, band) }
+    }
     const chartPoints = points.map((point) => {
       const values = valuesOf(point)
       const { nominal, tolerance, uom } = point
-      const bySize = point.source === 'SPEC' ? specOf(point.pointCode).map((cell) => ({ size: cell.size, nominal: cell.nominal, tolerance: cell.tolerance, words: cell.words })) : []
+      const bySize = point.source === 'SPEC' ? specOf(point.pointCode).map((cell) => ({ size: cell.size, nominal: cell.nominal, tolerance: cell.tolerance, toleranceMinus: cell.band?.minus ?? null, tolerancePlus: cell.band?.plus ?? null /* B-W2b-283 */, words: cell.words })) : []
       if (point.source === 'SPEC') {
         const head = lang(language) === 'it' ? `Dalla specifica di misura approvata, revisione ${graded!.spec!.revision}` : `From the approved measurement spec, revision ${graded!.spec!.revision}`
-        return { pointCode: point.pointCode, checkCode: point.checkCode, label: point.label, size: point.size, source: point.source, nominal, tolerance, uom, bySize, spec: `${head}: ${bySize.map((cell) => `${cell.size} ${cell.words}`).join(' · ')}`, values: values.map((value) => ({ id: value.id, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, pass: value.pass, words: deviationWords(value.measured, value.nominal, value.tolerance, value.uom) })) }
+        return { pointCode: point.pointCode, checkCode: point.checkCode, label: point.label, size: point.size, source: point.source, nominal, tolerance, uom, bySize, spec: `${head}: ${bySize.map((cell) => `${cell.size} ${cell.words}`).join(' · ')}`, values: values.map(valueView) }
       }
       return {
         bySize,
@@ -158,7 +165,7 @@ export async function sheetOf(caller: CommandCaller, inspectionId: string, query
             : nominal !== null && uom !== null
               ? lang(language) === 'it' ? `${decimalWords(nominal)} ${uom.toLowerCase()} dal profilo del pilota (tolleranza da scrivere)` : `${decimalWords(nominal)} ${uom.toLowerCase()} from the rider's profile (tolerance to type)`
               : lang(language) === 'it' ? 'Dalla tabella taglie (valore e tolleranza da scrivere)' : 'From the size chart (nominal and tolerance to type)',
-        values: values.map((value) => ({ id: value.id, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, pass: value.pass, words: deviationWords(value.measured, value.nominal, value.tolerance, value.uom) })),
+        values: values.map(valueView),
       }
     })
     const out = measurements.filter((value) => !value.pass).length

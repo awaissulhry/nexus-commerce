@@ -140,7 +140,20 @@ export interface MeasurementRow {
   readonly measured: string
   readonly uom: Uom
   readonly pass: boolean
+  /** B-W2b-283 (FU1:05): the spec's band when its sides differ (nominal − minus … nominal + plus; `tolerance` = the larger side). */
+  readonly toleranceMinus?: string | null
+  readonly tolerancePlus?: string | null
 }
+
+/** B-W2b-283 (FU1:05): an asymmetric band under and over the nominal (null: nominal ± tolerance). */
+export interface Band {
+  readonly minus: string
+  readonly plus: string
+}
+
+/** A row's band, when it keeps one (both sides), else null. */
+export const bandOfRow = (row: { readonly toleranceMinus?: string | null; readonly tolerancePlus?: string | null }): Band | null =>
+  row.toleranceMinus !== undefined && row.toleranceMinus !== null && row.tolerancePlus !== undefined && row.tolerancePlus !== null ? { minus: row.toleranceMinus, plus: row.tolerancePlus } : null
 
 export const takesResult = (check: Pick<PlanCheck, 'type'>): boolean => check.type !== 'INSTRUCTION'
 
@@ -252,13 +265,18 @@ export interface MeasureContext {
   readonly spec?: GradedSpec | null
 }
 
-/** One cell of a revision's graded spec as the size check reads it: its band as one nominal ± one tolerance (3 decimals). */
+/**
+ * One cell of a revision's graded spec as the size check reads it (3 decimals): nominal ± tolerance; B-W2b-283 (FU1:05): when
+ * its sides differ, the spec's own nominal, `tolerance` the larger side and the band under and over (InspectionMeasurement
+ * keeps it: the database's `pass` reads nominal − minus … nominal + plus).
+ */
 export interface GradedPoint {
   readonly code: string
   readonly name: string
   readonly size: string
   readonly nominal: string
   readonly tolerance: string
+  readonly band?: Band | null
   readonly uom: Uom
   /** "58 −1/+1.5 cm" as the spec writes it. */
   readonly words: string
@@ -279,6 +297,8 @@ export interface MeasuredValue {
   readonly measured: string
   readonly nominal: string
   readonly tolerance: string
+  /** B-W2b-283 (FU1:05): a SPEC point's band when its sides differ (written as toleranceMinus / tolerancePlus). */
+  readonly band?: Band | null
   readonly uom: Uom
   readonly source: SpecSource
 }
@@ -323,8 +343,9 @@ export function resolveMeasurements(rows: readonly MeasurementInput[], context: 
     const sampleIndex = row.sampleIndex ?? 1
     if (!isWhole(sampleIndex, 1)) problems.push(issue(`${at}/sampleIndex`, 'The unit of the sample is a whole number from 1.'))
     else if (sampleIndex > context.sampleSize) problems.push(issue(`${at}/sampleIndex`, `The sample has ${context.sampleSize} unit(s).`))
-    const key = `${pointCode}|${size}|${sampleIndex}`
-    if (seen.has(key)) problems.push(issue(`${at}/pointCode`, `${pointCode} of size ${size}, unit ${sampleIndex}, is given twice.`))
+    // B-W2b-283 (FU1:05): a point code is one code whatever its letter case ("chest_w" is CHEST_W).
+    const key = `${pointCode.toUpperCase()}|${size}|${sampleIndex}`
+    if (seen.has(key)) problems.push(issue(`${at}/pointCode`, `${pointCode} of size ${size}, unit ${sampleIndex}, is given twice (a point code is one code whatever its letter case).`))
     seen.add(key)
     if (row.measured === null) {
       // Taking a value back needs only its place.
@@ -333,7 +354,10 @@ export function resolveMeasurements(rows: readonly MeasurementInput[], context: 
     }
     if (!decimalOk(row.measured)) problems.push(issue(`${at}/measured`, 'A measured value is a decimal from 0, at most three decimals ("61.5").'))
     // Where the value is measured against.
-    let spec: { nominal: string; tolerance: string; uom: Uom; source: SpecSource } | null = null
+    let spec: { nominal: string; tolerance: string; uom: Uom; source: SpecSource; band?: Band | null } | null = null
+    // B-W2b-283 (FU1:05): a free value of a point the spec or the rider's template names keeps that point's spelling (a plan
+    // check's value keeps the check's code).
+    let stored = pointCode
     if (check && check.type === 'MEASUREMENT' && check.nominal !== null && check.tolerance !== null && check.uom !== null) {
       const typed = [row.nominal, row.tolerance].some((value) => typeof value === 'string' && value.trim() !== '')
       const differs = (row.nominal && decimalOk(row.nominal) && fixed3(row.nominal) !== fixed3(check.nominal)) || (row.tolerance && decimalOk(row.tolerance) && fixed3(row.tolerance) !== fixed3(check.tolerance)) || (row.uom && row.uom !== check.uom)
@@ -347,13 +371,15 @@ export function resolveMeasurements(rows: readonly MeasurementInput[], context: 
         }
         if (!decimalOk(row.tolerance)) problems.push(issue(`${at}/tolerance`, `Type the ± tolerance for ${point.name} (the profile gives the nominal, ${decimalWords(point.nominal)} ${unitWords(point.uom)}).`))
         else spec = { nominal: fixed3(point.nominal), tolerance: fixed3(row.tolerance), uom: point.uom, source: 'PROFILE' }
+        if (!check) stored = point.code
       } else if (gradedPointOf(context.spec, pointCode, size)) {
         // B-W2b-224 (SZ1:01): the graded spec of the work order's revision gives nominal ± tolerance of the point and size.
         const graded = gradedPointOf(context.spec, pointCode, size)!
         const typed = [row.nominal, row.tolerance].some((value) => typeof value === 'string' && value.trim() !== '')
         const differs = (row.nominal && decimalOk(row.nominal) && fixed3(row.nominal) !== graded.nominal) || (row.tolerance && decimalOk(row.tolerance) && fixed3(row.tolerance) !== graded.tolerance) || (row.uom && row.uom !== graded.uom)
         if (typed && differs) problems.push(issue(`${at}/nominal`, `The measurement spec of revision ${context.spec!.revision} sets ${graded.code} of size ${size} at ${graded.words}: nothing else is typed.`))
-        spec = { nominal: graded.nominal, tolerance: graded.tolerance, uom: graded.uom, source: 'SPEC' }
+        spec = { nominal: graded.nominal, tolerance: graded.tolerance, uom: graded.uom, source: 'SPEC', band: graded.band ?? null }
+        if (!check) stored = graded.code
       } else {
         if (!decimalOk(row.nominal)) problems.push(issue(`${at}/nominal`, `Type the nominal of ${pointCode || 'the point'} from the size chart (no graded spec is kept for it).`))
         if (!decimalOk(row.tolerance)) problems.push(issue(`${at}/tolerance`, 'Type the ± tolerance from the size chart.'))
@@ -363,24 +389,35 @@ export function resolveMeasurements(rows: readonly MeasurementInput[], context: 
       }
     }
     if (problems.length > before || spec === null) return
-    resolved.push({ planCheckId: check?.id ?? null, pointCode, size, sampleIndex, value: { measured: fixed3(row.measured), ...spec } })
+    resolved.push({ planCheckId: check?.id ?? null, pointCode: stored, size, sampleIndex, value: { measured: fixed3(row.measured), ...spec } })
   })
   return { rows: resolved, problems }
 }
 
-/** Within nominal ± tolerance (the database writes the same into `pass`). */
-export function measurementPass(measured: string, nominal: string, tolerance: string): boolean {
+/**
+ * Within nominal ± tolerance (the database writes the same into `pass`); B-W2b-283 (FU1:05): with a band, within
+ * nominal − minus … nominal + plus (the database's rule for a row that keeps one).
+ */
+export function measurementPass(measured: string, nominal: string, tolerance: string, band: Band | null = null): boolean {
+  if (band) return new Dec(measured).greaterThanOrEqualTo(new Dec(nominal).minus(new Dec(band.minus))) && new Dec(measured).lessThanOrEqualTo(new Dec(nominal).plus(new Dec(band.plus)))
   return new Dec(measured).minus(new Dec(nominal)).abs().lessThanOrEqualTo(new Dec(tolerance))
 }
 
-/** A value against its spec in words, never colour alone: "within 58 ± 1 cm", "over by 0.8 cm", "under by 0.5 cm". */
-export function deviationWords(measured: string, nominal: string, tolerance: string, uom: Uom): string {
+/** "58 ± 1 cm", or with a band "61 −1/+1.5 cm" (B-W2b-283). */
+export function specWords(nominal: string, tolerance: string, uom: Uom, band: Band | null = null): string {
+  return band && !new Dec(band.minus).equals(new Dec(band.plus))
+    ? `${decimalWords(nominal)} −${decimalWords(band.minus)}/+${decimalWords(band.plus)} ${unitWords(uom)}`
+    : `${decimalWords(nominal)} ± ${decimalWords(band ? band.minus : tolerance)} ${unitWords(uom)}`
+}
+
+/** A value against its spec in words, never colour alone: "within 58 ± 1 cm", "over by 0.8 cm", "under by 0.5 cm"; a band's own sides (B-W2b-283). */
+export function deviationWords(measured: string, nominal: string, tolerance: string, uom: Uom, band: Band | null = null): string {
   const value = new Dec(measured)
-  const high = new Dec(nominal).plus(new Dec(tolerance))
-  const low = new Dec(nominal).minus(new Dec(tolerance))
+  const high = new Dec(nominal).plus(new Dec(band ? band.plus : tolerance))
+  const low = new Dec(nominal).minus(new Dec(band ? band.minus : tolerance))
   if (value.greaterThan(high)) return `over by ${decimalWords(value.minus(high).toFixed(3))} ${unitWords(uom)}`
   if (value.lessThan(low)) return `under by ${decimalWords(low.minus(value).toFixed(3))} ${unitWords(uom)}`
-  return `within ${decimalWords(nominal)} ± ${decimalWords(tolerance)} ${unitWords(uom)}`
+  return `within ${specWords(nominal, tolerance, uom, band)}`
 }
 
 /**
@@ -592,7 +629,7 @@ export function checksState(checks: readonly PlanCheck[], results: readonly Pick
 export function planChecklist(
   checks: readonly PlanCheck[],
   results: readonly Pick<ResultRow, 'planCheckId' | 'outcome' | 'note' | 'sampleIndex'>[],
-  measurements: readonly Pick<MeasurementRow, 'planCheckId' | 'pass' | 'measured' | 'nominal' | 'tolerance' | 'uom' | 'sampleIndex'>[],
+  measurements: readonly Pick<MeasurementRow, 'planCheckId' | 'pass' | 'measured' | 'nominal' | 'tolerance' | 'uom' | 'sampleIndex' | 'toleranceMinus' | 'tolerancePlus'>[],
   system: { readonly inspected: number; readonly sampleSize: number; readonly identity: ChecklistEntry | null },
 ): ChecklistEntry[] {
   const entries: ChecklistEntry[] = []
@@ -605,7 +642,7 @@ export function planChecklist(
     if (failedResult || failedValue) {
       const note = failedResult
         ? `${failedResult.note ?? 'Failed'}${mine.length > 1 ? ` (unit ${failedResult.sampleIndex})` : ''}`
-        : `Unit ${failedValue!.sampleIndex}: ${deviationWords(failedValue!.measured, failedValue!.nominal, failedValue!.tolerance, failedValue!.uom)}`
+        : `Unit ${failedValue!.sampleIndex}: ${deviationWords(failedValue!.measured, failedValue!.nominal, failedValue!.tolerance, failedValue!.uom, bandOfRow(failedValue!))}`
       entries.push({ code: check.code, ok: false, note: note.slice(0, NOTE_MAX) })
       continue
     }
