@@ -347,12 +347,13 @@ describe('receiving and locations', () => {
     expect(await run(office(), `UPDATE "GoodsReceiptLine" SET "receivedQuantity" = NULL, "receivedUom" = NULL, "receivedFactor" = NULL WHERE id = $1::uuid`, lineId)).toBe(1)
   })
 
+  // W2b schema wave 36/44 (B-W2b-277) widened the rule to a CUSTOMER place too; its words name the party that holds it.
   it('a SUBCONTRACTOR location names its workshop, and only it does; the workshop never changes', async () => {
     const row = (kind: string, partyId: string | null) => ({ id: randomUUID(), companyId: A.companyA, siteId: A.siteA, code: `T-${tag()}`.toUpperCase(), name: 'Test', kind, partyId })
-    await expect(insert(office(), 'Location', row('SUBCONTRACTOR', null))).rejects.toThrow(/exactly when it names the workshop/)
-    await expect(insert(office(), 'Location', row('WAREHOUSE', A.P2))).rejects.toThrow(/exactly when it names the workshop/)
-    await expect(run(office(), `UPDATE "Location" SET "partyId" = $2::uuid WHERE id = $1::uuid`, sub.locationId, A.P1)).rejects.toThrow(/the workshop of location .* never changes/)
-    await expect(run(office(), `UPDATE "Location" SET kind = 'WAREHOUSE' WHERE id = $1::uuid`, sub.locationId)).rejects.toThrow(/exactly when it names the workshop/)
+    await expect(insert(office(), 'Location', row('SUBCONTRACTOR', null))).rejects.toThrow(/exactly when it names the party that holds it/)
+    await expect(insert(office(), 'Location', row('WAREHOUSE', A.P2))).rejects.toThrow(/exactly when it names the party that holds it/)
+    await expect(run(office(), `UPDATE "Location" SET "partyId" = $2::uuid WHERE id = $1::uuid`, sub.locationId, A.P1)).rejects.toThrow(/the workshop \(or customer\) of location .* never changes/)
+    await expect(run(office(), `UPDATE "Location" SET kind = 'WAREHOUSE' WHERE id = $1::uuid`, sub.locationId)).rejects.toThrow(/exactly when it names the party that holds it/)
     // The floor of A1 sees it (it moves the kit there).
     expect((await sql(floor(), 'SELECT id FROM "Location" WHERE kind = $1::"LocationKind"', 'SUBCONTRACTOR')).map((row) => row.id)).toEqual([sub.locationId])
   })
