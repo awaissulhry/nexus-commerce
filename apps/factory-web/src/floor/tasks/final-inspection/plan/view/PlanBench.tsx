@@ -32,6 +32,7 @@ import {
   pointAsks,
   sectionsOf,
   specOf,
+  valueBand,
   tapAnswer,
   tapGroups,
   valueChecks,
@@ -445,6 +446,8 @@ function specWords(point: ChartPoint, t: Translate, locale: Locale): string {
   const unit = unitWord(t, point.uom)
   if (point.source === 'PLAN' && point.nominal !== null && point.tolerance !== null) return t('measure.spec.plan', { nominal: n(point.nominal), tolerance: n(point.tolerance), unit })
   if (point.source === 'PROFILE' && point.nominal !== null) return t('measure.spec.profile', { nominal: n(point.nominal), unit })
+  // B-W2b-283 (FU1:05): the approved spec's own words per size ("52 64 −0.5/+1.5 cm"), as the API says them.
+  if (point.source === 'SPEC') return point.spec
   return t('measure.spec.chart')
 }
 
@@ -541,7 +544,7 @@ function MeasureStep({ point, draft, sizes, sample, send, t, locale }: { point: 
                 {value.pass ? <CircleCheckBig /> : <CircleAlert />}
               </span>
               <span className="fw-fp-value-text">
-                {t(value.pass ? 'measure.valueIn' : 'measure.valueOut', { unit: value.sampleIndex, size: value.size, measured: formatNumber(Number(value.measured), locale), nominal: formatNumber(Number(value.nominal), locale), tolerance: formatNumber(Number(value.tolerance), locale), uom: unit })}
+                {t(value.pass ? 'measure.valueIn' : 'measure.valueOut', { unit: value.sampleIndex, size: value.size, measured: formatNumber(Number(value.measured), locale), nominal: formatNumber(valueBand(value).nominal, locale), tolerance: formatNumber(valueBand(value).tolerance, locale), uom: unit }) /* B-W2b-283: a band as its centre ± half */}
               </span>
               <FloorButton size="md" variant="quiet" icon={<Undo2 />} onClick={() => send({ type: 'measureTakeBack', pointCode: point.pointCode, size: value.size, sampleIndex: value.sampleIndex })}>
                 {t('measure.takeBack')}

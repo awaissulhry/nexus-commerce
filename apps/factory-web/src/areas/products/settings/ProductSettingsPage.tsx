@@ -60,6 +60,8 @@ import {
   type ToleranceDraft,
 } from './model'
 import { ProductSettingsView } from './view/ProductSettingsView'
+// B-W2b-283 (FU1:03): the measurement templates a type picks from.
+import { listMeasurementTemplates, type TemplateRef } from './template-picker/api'
 import type { ProductSettingsModel, SettingsCan, TypeDialogState } from './view-model'
 
 const EMPTY_CHANGES: ProductSettingsModel['changed'] = { rules: null, tolerance: null, types: null }
@@ -68,7 +70,8 @@ const EMPTY_CHANGES: ProductSettingsModel['changed'] = { rules: null, tolerance:
 function savedAt(settings: ProductSettings, card: 'rules' | 'tolerance'): ChangedBy | null {
   if (!settings.exists || !settings.updatedAt) return null
   const own = card === 'rules' ? settings.editRules.some((entry) => entry.own !== null) : settings.tolerance.own.rule !== null || settings.tolerance.byKind.some((row) => row.own !== null)
-  return own ? { at: settings.updatedAt, by: null } : null
+  // B-W2b-283 (FU1:04): the person who saved the row last, without audit.read.
+  return own ? { at: settings.updatedAt, by: settings.changedBy?.name ?? null } : null
 }
 
 /**
@@ -111,6 +114,7 @@ export function ProductSettingsPage() {
   const [typeDialog, setTypeDialog] = useState<TypeDialogState | null>(null)
   const [scales, setScales] = useState<Read<ScaleRef[]> | null>(null)
   const [labels, setLabels] = useState<Read<LabelRef[]> | null>(null)
+  const [templates, setTemplates] = useState<Read<TemplateRef[]> | null>(null) // B-W2b-283
   const [costing, setCosting] = useState<Read<CostingDefaults> | null>(null)
   const [changed, setChanged] = useState<ProductSettingsModel['changed']>(EMPTY_CHANGES)
   const [busy, setBusy] = useState<ProductSettingsModel['busy']>(null)
@@ -129,7 +133,8 @@ export function ProductSettingsPage() {
       const fallback = {
         rules: scoped ? savedAt(scoped, 'rules') : null,
         tolerance: scoped ? savedAt(scoped, 'tolerance') : null,
-        types: typeRows && typeRows.length > 0 ? { at: [...typeRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!.updatedAt, by: null } : null,
+        // B-W2b-283 (FU1:04): the newest type's last changer, without audit.read.
+        types: typeRows && typeRows.length > 0 ? (([newest]) => ({ at: newest!.updatedAt, by: newest!.changedBy?.name ?? null }))([...typeRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) : null,
       }
       if (!can.audit) {
         setChanged(fallback)
@@ -261,6 +266,11 @@ export function ProductSettingsPage() {
       listScales(api)
         .then((rows) => setScales(ready(rows)))
         .catch((error: unknown) => setScales(failed(readProblemOf(error))))
+      // B-W2b-283 (FU1:03): the measurement templates (product.styles.view, as the page).
+      setTemplates(reading())
+      listMeasurementTemplates(api)
+        .then((rows) => setTemplates(ready(rows)))
+        .catch((error: unknown) => setTemplates(failed(readProblemOf(error))))
       if (can.labels) {
         setLabels(reading())
         listLabelTemplates(api)
@@ -412,6 +422,7 @@ export function ProductSettingsPage() {
     typeDialog,
     scales,
     labels,
+    templates, // B-W2b-283
     costing: can.costing ? costing : null,
     changed,
     busy,

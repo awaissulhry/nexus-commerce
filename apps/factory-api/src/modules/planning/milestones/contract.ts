@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { GATE_KINDS, GATE_LIMITS, GATE_REFUSALS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS, WAITING_TILES } from '@nexus/factory-domain/planning/milestones/rules'
+import { GATE_KINDS, GATE_LIMITS, GATE_REFUSALS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, ORDER_WORK_ORDER_KINDS, PASS_VIAS, WAITING_TILES } from '@nexus/factory-domain/planning/milestones/rules'
 
 /**
  * Time & action (B-W2b-263; PLN-186; design planning.milestones, SCR-253). Dates are the site's business days (YYYY-MM-DD,
@@ -67,7 +67,15 @@ export const orderView = output({
   status: z.string(),
   promiseDate: businessDate().nullable(),
   customerRef: z.string().nullable(),
-  workOrders: output({ count: z.number().int(), notStarted: z.number().int() }),
+  /**
+   * Its work orders: every kind (count, not started), and B-W2b-284 per kind (F22's follow-up): the production ones (SIZE_GRID,
+   * MADE_TO_MEASURE) are what production start follows and a waiting gate holds; a SAMPLE or REPAIR one is shown apart.
+   */
+  workOrders: output({
+    count: z.number().int(),
+    notStarted: z.number().int(),
+    byKind: z.array(output({ kind: z.enum(ORDER_WORK_ORDER_KINDS), count: z.number().int(), notStarted: z.number().int() })),
+  }),
   gates: z.array(gateView),
   milestones: z.array(milestoneView),
   /** The kinds of the gates that wait (the order cannot be put on the planning board while one does). */

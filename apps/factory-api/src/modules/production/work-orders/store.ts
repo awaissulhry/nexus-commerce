@@ -108,10 +108,11 @@ export interface CellRow {
   readonly colourwayName: string
   readonly size: string
   readonly quantity: number
-  readonly salesOrderLineId: string
-  readonly partyId: string
-  readonly lineSeq: number
-  readonly salesOrderId: string
+  /** B-W2b-284: null (all four) for a SAMPLE cell of an internal or uncharged round: it makes no order line. */
+  readonly salesOrderLineId: string | null
+  readonly partyId: string | null
+  readonly lineSeq: number | null
+  readonly salesOrderId: string | null
 }
 
 /** The work order's cells: colourways in code order, sizes in the style's range order (then by code). */
@@ -132,14 +133,11 @@ export async function readCells(db: Reader, workOrderId: string, styleSizes: rea
   return rows
     .map((row) => ({
       ...row,
-      // B-W2b-275: every cell names its order line but a SAMPLE cell of an internal or uncharged round, which no command makes
-      // yet: B-W2b-284 widens this row (and the work order's view) for it.
-      salesOrderLineId: row.salesOrderLineId!,
-      partyId: row.partyId!,
+      // B-W2b-284: a SAMPLE cell of an internal or uncharged round names no order line (B-W2b-275's nullable cell).
       colourwayCode: colourwayOf.get(row.colourwayId)?.code ?? '',
       colourwayName: colourwayOf.get(row.colourwayId)?.name ?? '',
-      lineSeq: lineOf.get(row.salesOrderLineId!)?.seq ?? 0,
-      salesOrderId: lineOf.get(row.salesOrderLineId!)?.orderId ?? '',
+      lineSeq: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.seq ?? 0),
+      salesOrderId: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.orderId ?? ''),
     }))
     .sort((a, b) => a.colourwayCode.localeCompare(b.colourwayCode) || place(a.size) - place(b.size) || a.size.localeCompare(b.size, undefined, { numeric: true }))
 }

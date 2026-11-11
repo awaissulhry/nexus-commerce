@@ -105,7 +105,7 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
       ['TRIMS_IN', 'STARTED_BEFORE'],
     ])
     expect(so2.waiting.sort()).toEqual(['OTHER', 'PP_SAMPLE'])
-    expect(so2.workOrders).toEqual({ count: 2, notStarted: 1 })
+    expect(so2.workOrders).toEqual({ count: 2, notStarted: 1, byKind: [{ kind: 'SIZE_GRID', count: 2, notStarted: 1 }] })
     const pp = gateIn(world, samples.gateIds.pp)
     expect(pp).toMatchObject({ sampleRound: { number: 'SEED-SR-0003', kind: 'PRE_PRODUCTION', decision: null }, holds: 1, leather: null })
     // The planner may keep gates but not start before one; the pre-production gate waits for its round.
@@ -217,6 +217,27 @@ describe('Time & action: the gates and milestones of the open orders (PLN-186)',
     expect(placed.slot).toMatchObject({ workOrderId: sample })
     expect(refusalOf(await as(planner, 'POST', '/planning/schedule/slots', { workOrderId: wo2, operationId: null, lane: { kind: 'LINE', id: line.id }, startAt }, 409))).toBe('refusal/GATE_NOT_PASSED')
     expect(gateIn(await read(), samples.gateIds.pp)).toMatchObject({ state: 'WAITING', holds: 1 })
+  })
+
+  it("B-W2b-284: production start follows the order's production work orders only; the order counts its work orders per kind", async () => {
+    // F22's case made SEED-SR-0003's SAMPLE work order on SO-0002 and placed its bar on the working plan.
+    const sample = (await one<{ id: string }>('SELECT id FROM "WorkOrder" WHERE "sampleRoundId" = $1 ORDER BY "createdAt", id LIMIT 1', [samples.roundIds.pp])).id
+    const before = orderIn(await read(), 'SEED-SO-0002')
+    expect(before.workOrders).toEqual({
+      count: 3,
+      notStarted: 2,
+      byKind: [
+        { kind: 'SIZE_GRID', count: 2, notStarted: 1 },
+        { kind: 'SAMPLE', count: 1, notStarted: 1 },
+      ],
+    })
+    const start = before.milestones.find((row: Json) => row.kind === 'START')
+    // The sample's bar moved far before every production bar: the old read took the earliest bar of ANY work order.
+    await admin('UPDATE "ScheduleSlot" SET "startAt" = "startAt" - interval \'400 days\', "endAt" = "endAt" - interval \'400 days\' WHERE "workOrderId" = $1 AND "planKind" = \'WORKING\'', [sample])
+    const early = await one<{ day: string }>('SELECT to_char(min("startAt") AT TIME ZONE \'Europe/Rome\', \'YYYY-MM-DD\') AS day FROM "ScheduleSlot" WHERE "workOrderId" = $1 AND "planKind" = \'WORKING\'', [sample])
+    const after = orderIn(await read(), 'SEED-SO-0002').milestones.find((row: Json) => row.kind === 'START')
+    expect(after).toMatchObject({ target: start.target, actual: start.actual })
+    expect(after.target).not.toBe(early.day)
   })
 
   it('starts before the gate only by someone other than its planner and maker, with a reason', async () => {

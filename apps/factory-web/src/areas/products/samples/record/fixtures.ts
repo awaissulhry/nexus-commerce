@@ -23,7 +23,9 @@ import {
   REQUESTED_ROUND,
   ROUND,
   TODAY,
+  MADE_WITHOUT_LINE_ROUND,
   WO_OPTIONS,
+  WO_OPTIONS_INTERNAL,
   WO_OPTIONS_NONE,
   type RoleCase,
 } from '../demo/fixtures'
@@ -107,7 +109,20 @@ function RecordDesign({ model }: { model: RecordCase }) {
   return inShell('/products/samples', view, model.role)
 }
 
-const workOrderDialog = (options = WO_OPTIONS, made: { id: string; number: string } | null = null): RecordDialog => ({ kind: 'workOrder', options, problem: null, lineIds: options.lines.map((line) => line.id), siteId: options.sites[0]?.id ?? '', dueDate: '2026-11-12', busy: false, notice: null, made })
+const workOrderDialog = (options = WO_OPTIONS, made: { id: string; number: string } | null = null, way: { mode?: 'lines' | 'none'; colourwayId?: string } = {}): RecordDialog => ({
+  kind: 'workOrder',
+  options,
+  problem: null,
+  mode: way.mode ?? 'lines',
+  lineIds: options.lines.map((line) => line.id),
+  colourwayId: way.colourwayId ?? '',
+  siteId: options.sites[0]?.id ?? '',
+  dueDate: '2026-11-12',
+  busy: false,
+  notice: null,
+  made,
+})
+const NAVY = WO_OPTIONS.withoutLine.colourways[0]!.id
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-110-record',
@@ -127,6 +142,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'make-work-order-none', label: 'Make sample work order held: no confirmed order line of the style', model: dialog(workOrderDialog(WO_OPTIONS_NONE), 'sample', REQUESTED_ROUND) },
     { id: 'make-work-order-made', label: 'Make sample work order: made (the receipt with its link)', model: dialog(workOrderDialog(WO_OPTIONS, { id: ROUND.workOrdersList[0]!.id, number: 'WO-DEMO-0043' }), 'sample', REQUESTED_ROUND) },
     { id: 'sample-sales', label: 'Sample for sales: Make sample work order held (needs the right to make work orders)', model: recordCase('sample', {}, 'sales', REQUESTED_ROUND) },
+    // B-W2b-284: the sample work order of an internal or uncharged proto, fit or salesman round, without an order line.
+    { id: 'w2b-284-make-without-line', label: "Make sample work order without an order line: the internal proto's own sizes, made in the colourway chosen (Navy)", model: dialog(workOrderDialog(WO_OPTIONS_INTERNAL, null, { mode: 'none', colourwayId: NAVY }), 'sample', REQUESTED_ROUND), note: 'No order line of the style: the round is internal, so its samples are made on no order (it ships, invoices and returns on none).' },
+    { id: 'w2b-284-make-without-line-colourway', label: 'Without an order line: Make held until the colourway of the sizes without one is chosen', model: dialog(workOrderDialog(WO_OPTIONS_INTERNAL, null, { mode: 'none' }), 'sample', REQUESTED_ROUND) },
+    { id: 'w2b-284-make-choose-way', label: 'Both ways open: without an order line (chosen) or on an order line of the style', model: dialog(workOrderDialog(WO_OPTIONS, null, { mode: 'none', colourwayId: NAVY }), 'sample', REQUESTED_ROUND) },
+    { id: 'w2b-284-make-charged', label: 'A charged customer round with no order line: held, with why it is made on an order line', model: dialog(workOrderDialog(WO_OPTIONS_NONE), 'sample', REQUESTED_ROUND) },
+    { id: 'w2b-284-made-without-line', label: 'Made without an order line (the receipt with its link)', model: dialog(workOrderDialog(WO_OPTIONS_INTERNAL, { id: MADE_WITHOUT_LINE_ROUND.workOrdersList[0]!.id, number: 'WO-DEMO-0044' }, { mode: 'none', colourwayId: NAVY }), 'sample', MADE_WITHOUT_LINE_ROUND) },
+    { id: 'w2b-284-sample-without-line', label: 'Sample: the work order made for no order line, tagged', model: recordCase('sample', {}, 'owner', MADE_WITHOUT_LINE_ROUND) },
+    { id: 'w2b-284-make-without-line-planner', label: 'The planner reads the round: Make sample work order held with the right it needs', model: recordCase('sample', {}, 'planner', REQUESTED_ROUND) },
     { id: 'fit', label: 'Fit & comments: spec ± tolerance, measured, difference per size; two values outside listed above; comments', model: recordCase('fit'), note: 'Type a value or paste a column; each cell saves alone. "abc" is refused and the value stays.' },
     { id: 'fit-saving', label: 'Fit: two cells saving', model: recordCase('fit', { fit: { ...recordCase('fit').record.fit, cells: { a: 'saving', b: 'saving' } } }) },
     { id: 'fit-refused', label: 'Fit: a typed word refused (the value stays)', model: recordCase('fit', { fit: { ...recordCase('fit').record.fit, failed: { key: 'fit.notNumber', params: { size: '52', text: 'abc' } } } }) },
