@@ -59,6 +59,8 @@ model PaymentTerms {
   company       Company?       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // parties.prisma: the customers whose default terms these are.
   parties       Party[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the quote templates that start with them.
+  quoteTemplates QuoteTemplate[]
   // sales.prisma: the quote versions and sales orders made with them.
   quoteVersions QuoteVersion[]
   salesOrders   SalesOrder[]
@@ -82,6 +84,9 @@ model PriceList {
   kind        PriceListKind
   /// ISO 4217: the currency of every price of the list.
   currency    String        @default("EUR")
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-170): the customer's documents show the list price and the discount (true,
+  /// W1's way) or only the net price (false).
+  showDiscount Boolean      @default(true)
   /// The list a style missing here is priced from (a customer's list over the base list); never itself, of the same
   /// currency. Null: none.
   baseListId  String?       @db.Uuid
@@ -99,6 +104,8 @@ model PriceList {
   baseList     PriceList?         @relation("PriceListBase", fields: [tenantId, baseListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   fallbackOf   PriceList[]        @relation("PriceListBase")
   versions     PriceListVersion[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the minimum order quantities of its customers.
+  moqRules     MoqRule[]          @relation("MoqRulePriceList")
   // parties.prisma: the customers priced from it by default.
   parties      Party[]
   // W2b: the customers it was given to, each from a day (the Customers tab).
@@ -149,6 +156,9 @@ model PriceListVersion {
 
   list          PriceList        @relation(fields: [tenantId, listId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   entries       PriceListEntry[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quantity breaks and size surcharges (removed with it while a DRAFT).
+  breaks         PriceBreak[]    @relation("PriceBreakVersion")
+  sizeSurcharges SizeSurcharge[] @relation("SizeSurchargeVersion")
   // sales.prisma: the quote versions whose list prices came from it (an open quote keeps its version).
   quoteVersions QuoteVersion[]
 
@@ -177,6 +187,12 @@ model PriceListEntry {
   /// The net unit price per piece, in the list's currency; above 0.
   /// @grain price
   unitPrice   Decimal  @db.Decimal(18, 6)
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-167): the days the price holds inside its version (a season's price, an
+  /// announced increase), in the company's time zone: from a day, to a day (not before it), either open; null and null:
+  /// the whole version. Several entries of one style (and colourway) in a version do not overlap: the pricelists module's
+  /// rule (B-W2b-325), as the one entry per style.
+  validFrom   DateTime? @db.Date
+  validTo     DateTime? @db.Date
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -186,8 +202,12 @@ model PriceListEntry {
   style       Style            @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
   colourway   Colourway?       @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quantity breaks (removed with it).
+  breaks      PriceBreak[]
 
   @@index([tenantId, versionId, styleId])
+  // W2b-5 (wave 38/44): the target of a quantity break's reference: an entry of the break's own version.
+  @@unique([tenantId, versionId, id])
 }
 
 /// W2b (B-W2b-03; design pricelist.customers "Customer or group · From"): one price list given to one customer from a

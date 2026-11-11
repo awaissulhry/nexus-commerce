@@ -64,6 +64,7 @@ import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSalesPricing } from '../seed/sales-pricing'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
@@ -369,6 +370,12 @@ beforeAll(async () => {
   // claim that never expires) are the plain ones a copy may repeat.
   await seedRecall({ db: factory, namespace: 'iso-a' })
   await seedRecall({ db: factory, namespace: 'iso-b' })
+  // The quotes, pricing and configuration schema of W2b-5 (wave 38/44): templates, delivery schedules and chosen options of a
+  // DRAFT quote and a CONFIRMED order for P1 (the partner reads them), breaks and surcharges of a DRAFT price list version,
+  // minimums, size curves; their first rows (a delivery bringing at most half of each size, a default option) are the plain
+  // ones a copy may repeat.
+  await seedSalesPricing({ db: factory, namespace: 'iso-a' })
+  await seedSalesPricing({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -571,6 +578,7 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'MoqRule',
     'NcrConcession',
     'NcrContainmentAction',
     'NcrCostLine',
@@ -656,6 +664,7 @@ it('covers every classified table and every runtime role', () => {
     'PpeRegisterEntry',
     'Prepack',
     'PrepackLine',
+    'PriceBreak',
     'PriceList',
     'PriceListEntry',
     'PriceListVersion',
@@ -688,7 +697,11 @@ it('covers every classified table and every runtime role', () => {
     'QuoteAcceptance',
     'QuoteApproval',
     'QuoteLine',
+    'QuoteLineDelivery',
+    'QuoteLineOption',
     'QuoteLineSize',
+    'QuoteTemplate',
+    'QuoteTemplateLine',
     'QuoteVersion',
     'RateAcknowledgement',
     'RatePublication',
@@ -736,6 +749,8 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrder',
     'SalesOrderAmendment',
     'SalesOrderLine',
+    'SalesOrderLineDelivery',
+    'SalesOrderLineOption',
     'SalesOrderLineSize',
     'SalesOrderMilestone',
     'SalesSettings',
@@ -768,7 +783,9 @@ it('covers every classified table and every runtime role', () => {
     'ShippingSettings',
     'Site',
     'Size',
+    'SizeCurve',
     'SizeScale',
+    'SizeSurcharge',
     'Skill',
     'StaffNoticeAck',
     'StandardChange',

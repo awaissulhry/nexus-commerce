@@ -18,6 +18,7 @@
     "DISCREPANCY": "Delivery problems",
     "CLAIM": "Supplier claims",
     "DOWNGRADE": "Downgrades",
+    "PRICE_ADJUSTMENT": "Price adjustments",
     "SCRAP": "Scrap",
     "REWORK": "Rework"
   },
@@ -33,6 +34,7 @@
     "DISCREPANCY": "What was wrong with a delivery: short, over, wrong or damaged.",
     "CLAIM": "Why we claim against a supplier.",
     "DOWNGRADE": "Why goods went down to a lower quality.",
+    "PRICE_ADJUSTMENT": "Why a line's price was changed by hand: every manual change on a quote or order line names one.",
     "SCRAP": "Why a garment is lost at an operation: the operation screen's scrap tiles.",
     "REWORK": "Why a garment goes back to be made again: the operation screen's rework tiles."
   },

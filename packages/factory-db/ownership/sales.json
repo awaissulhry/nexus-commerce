@@ -7,7 +7,7 @@
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["lostReason", "internalNote", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["lostReason", "internalNote", "templateId", "createdById"] }
       }
     },
     "QuoteVersion": {
@@ -32,7 +32,7 @@
         "factory_partner_runtime": {
           "privileges": ["select"],
           "scopedBy": ["party"],
-          "hiddenColumns": ["adjustmentReason", "unitCost", "costAmount", "marginAmount", "marginPct", "costSnapshot", "createdById"]
+          "hiddenColumns": ["adjustmentReason", "priceSteps", "unitCost", "costAmount", "marginAmount", "marginPct", "costSnapshot", "createdById"]
         }
       }
     },
@@ -86,7 +86,7 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "closedShortById", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["priceSteps", "unitCost", "costAmount", "closedShortById", "createdById"] }
       }
     },
     "SalesOrderLineSize": {
