@@ -64,7 +64,7 @@ export function StyleRecordView({
   depth?: StyleDepthSlots
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions']}>
+    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions', /* B-W2b-283 */ 'products-followups-w2b4']}>
       <StyleRecord model={model} actions={actions} panels={panels} techPack={techPack} depth={depth} />
     </WithMessages>
   )

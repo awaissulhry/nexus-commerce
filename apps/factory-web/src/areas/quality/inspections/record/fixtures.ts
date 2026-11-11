@@ -10,12 +10,41 @@ import { ANSWERED, CANCELLED, FAILED, FAILING_BY_COUNTS, FAILING_HARD, FINAL, FI
 import { answer, changedLine, checklistRows, defectKey, defectLinesOf, planDraftOf, releaseDraftOf, signDraftOf, withPicked, type DefectsTabModel, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
 import type { DefectBody, Inspection } from '../api'
 import { InspectionRecordView } from './view/InspectionRecordView'
+
 // B-W2b-127: the record's W2b parts (the plan's checks, Sample & AQL, Measurements, the photo set, Amendments, the gate).
 import { ROLE_PERMISSIONS } from '../../_shared/fixtures'
 import { AMENDMENTS, AMENDMENTS_MINE, AMENDMENTS_NONE, AQL, AQL_OPEN, AQL_W1, CAUSES, PLANNED, PLANNED_SIGNED, plannedRead, PROFILES, SHEET, SHEET_SIGNED } from '../depth/demo/fixtures'
 import { AMEND_DRAFT, depthCan, draftFor, fieldKey } from '../depth/model'
 import type { AmendmentsState } from '../depth/use-amendments'
 import type { FinalDepthState } from '../depth/use-final-depth'
+
+/** B-W2b-283 (FU1:05): the demo sheet with a point of the approved spec whose band is 64 −0.5/+1.5 cm (made-up values). */
+const BAND_SHEET = {
+  ...SHEET,
+  chart: {
+    ...SHEET.chart,
+    points: [
+      ...SHEET.chart.points,
+      {
+        pointCode: 'SLEEVE_LEN',
+        checkCode: null,
+        label: 'Sleeve length',
+        size: null,
+        source: 'SPEC' as const,
+        nominal: null,
+        tolerance: null,
+        uom: 'cm',
+        spec: 'From the approved measurement spec, revision 2: 52 64 −0.5/+1.5 cm · 54 64.5 −0.5/+1.5 cm',
+        values: [
+          { id: uid('9531', 283), size: '52', sampleIndex: 1, measured: '63.400', nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', pass: false },
+          { id: uid('9531', 284), size: '52', sampleIndex: 2, measured: '65.400', nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', pass: true },
+        ],
+      },
+    ],
+    values: SHEET.chart.values + 2,
+    outOfTolerance: SHEET.chart.outOfTolerance + 1,
+  },
+}
 
 type Depth = NonNullable<InspectionRecordModel['depth']>
 
@@ -260,6 +289,13 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'w2b127-aql-error', label: 'W2b-127 Sample & AQL could not be read', model: record({ read: plannedRead(), tab: 'aql', depth: depthOf('owner', { final: { aql: failedRead('problem.unavailable') } }) }) },
     { id: 'w2b127-measurements', label: 'W2b-127 Measurements: points down, units across; values with "over by 0.8 cm" (never colour alone); Create defect on the out-of-tolerance value', model: record({ read: plannedRead(), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready(SHEET), marks: { 'cell:CHEST:52:3': { state: 'refused', problem: 'chart.problem.decimal' } } } }) }) },
     { id: 'w2b127-measurements-signed', label: 'W2b-127 Measurements of a signed inspection: read only', model: record({ read: plannedRead(PLANNED_SIGNED), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready(SHEET_SIGNED) } }) }) },
+    // B-W2b-283 (FU1:05): a point of the approved measurement spec whose sides differ, kept as the spec writes it.
+    {
+      id: 'w2b-283-measurements-band',
+      label: 'W2b-283 Measurements: a spec point with a band (64 −0.5/+1.5 cm)',
+      model: record({ read: plannedRead(), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready(BAND_SHEET) } }) }),
+      note: 'The spec’s own words per size; each value against the band (63.4 is out although within 64 ± 1.5); the mark drawn on the same band, never colour alone.',
+    },
     { id: 'w2b127-measurements-none', label: 'W2b-127 Measurements: this plan takes none', model: record({ read: plannedRead(), tab: 'measurements', depth: depthOf('owner', { final: { sheet: ready({ ...SHEET, chart: { ...SHEET.chart, points: [], values: 0, outOfTolerance: 0 } }) } }) }) },
     { id: 'w2b127-measurements-w1', label: 'W2b-127 Measurements of a W1 inspection: none (they come with a plan)', model: record({ tab: 'measurements' }) },
     { id: 'w2b127-defects', label: 'W2b-127 Defects & photos: the Cause column (the group’s cause codes) and the required photo set (Front ✓ · Label missing, holds Sign result)', model: record({ read: plannedRead({ ...PLANNED, defects: SAVED_DEFECTS.defects.map((defect, index) => ({ ...defect, causeCodeId: index === 0 ? CAUSES[0]!.id : null })) }), tab: 'defects', defects: defectsOf(WITH_DEFECTS.map((line, index) => ({ ...line, causeCodeId: index === 0 ? CAUSES[0]!.id : null }))), depth: depthOf('owner', { final: { sheet: ready(SHEET) } }) }) },

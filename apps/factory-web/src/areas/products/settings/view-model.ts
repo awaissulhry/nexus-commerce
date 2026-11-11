@@ -1,9 +1,11 @@
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { CostingDefaults, LabelRef, ProductSettings, ProductType, ScaleRef } from './api'
+// B-W2b-283 (FU1:03): the measurement templates a type picks from.
+import type { TemplateRef } from './template-picker/api'
 import type { Address, ChangedBy, Loosening, Notice, Read, RulesDraft, Scope, ToleranceDraft, TypeDraft, TypeFilter, WriteProblem } from './model'
 
 /** The page's catalogues: its own, and the list frame's words (`lists`). */
-export const SETTINGS_NAMESPACES = ['products-settings', 'lists'] as const
+export const SETTINGS_NAMESPACES = ['products-settings', 'lists', /* B-W2b-283 */ 'products-followups-w2b4'] as const
 
 /** What the person's role lets this page show (the API checks every call itself). */
 export interface SettingsCan {
@@ -51,6 +53,8 @@ export interface ProductSettingsModel {
   /** Read when the type dialog opens. */
   readonly scales: Read<ScaleRef[]> | null
   readonly labels: Read<LabelRef[]> | null
+  /** B-W2b-283 (FU1:03): the measurement templates, read when the type dialog opens (absent: not read). */
+  readonly templates?: Read<TemplateRef[]> | null
   /** null: not read (no costing.view). */
   readonly costing: Read<CostingDefaults> | null
   readonly changed: { readonly rules: ChangedBy | null; readonly tolerance: ChangedBy | null; readonly types: ChangedBy | null }

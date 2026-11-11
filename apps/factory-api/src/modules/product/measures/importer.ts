@@ -8,7 +8,7 @@ import { ApiError } from '../../../core/errors'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
 import type { ImportAdapter } from '../../../platform/imports/registry'
 import { mayWrite } from '../materials/store'
-import { POM_COLUMNS, pomFieldsOf, pomUses } from './store'
+import { isUniqueViolation, POM_COLUMNS, pomFieldsOf, pomUses } from './store'
 
 /**
  * The point of measure library's import adapter (platform/imports; B-W2b-224, PRD-062; design products.sizes "Import
@@ -97,12 +97,18 @@ export const pointsOfMeasureImportAdapter = Object.freeze({
       const fields = { ...fieldsFromRow(row.values, null), bodyPointId: body?.id ?? null }
       const problems = pomProblems(fields, { id: null, bodyPoint: body ? { ...body, uom: 'CM' } : undefined })
       if (problems.length > 0) throw new ImportRowRefused(code, problems.map((issue) => issue.message).join(' '))
-      if (await tx.pointOfMeasure.findFirst({ where: { code: { equals: fields.code, mode: 'insensitive' } }, select: { id: true } })) throw new ImportRowRefused(code, 'the code was taken since')
+      if (await tx.pointOfMeasure.findFirst({ where: { code: { equals: fields.code, mode: 'insensitive' } }, select: { id: true } })) throw new ImportRowRefused(code, 'the code was taken since (whatever the letter case)')
       const id = newId()
-      await tx.pointOfMeasure.create({
-        data: { id, companyId: scope.companyId, ...fields, nameI18n: fields.nameI18n ?? undefined, howToI18n: fields.howToI18n ?? undefined, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
-        select: { id: true },
-      })
+      await tx.pointOfMeasure
+        .create({
+          data: { id, companyId: scope.companyId, ...fields, nameI18n: fields.nameI18n ?? undefined, howToI18n: fields.howToI18n ?? undefined, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+          select: { id: true },
+        })
+        // B-W2b-283 (FU1:05): the database's one code whatever the letter case (PointOfMeasure_tenantId_lower_code_key), in words.
+        .catch((error: unknown) => {
+          if (isUniqueViolation(error)) throw new ImportRowRefused(code, 'the code was taken since (whatever the letter case)')
+          throw error
+        })
       tools.audit({ action: ACTION, recordType: 'PointOfMeasure', recordId: id, companyId: scope.companyId, after: { companyId: scope.companyId, ...fields, status: 'ACTIVE' } })
       tools.emit({ type: 'point_of_measure.changed', subject: id, companyId: scope.companyId, payload: { pointOfMeasureId: id, code: fields.code, change: 'CREATED' } })
       return { recordId: id }

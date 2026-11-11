@@ -162,6 +162,8 @@ export const roundWorkOrder = output({
   releasedAt: instant().nullable(),
   startedAt: instant().nullable(),
   completedAt: instant().nullable(),
+  /** B-W2b-284: made for no order line (an internal or uncharged proto, fit or salesman round): its cells name no order. */
+  withoutOrderLine: z.boolean(),
 })
 
 const address = output({ id: id(), name: z.string().nullable(), line1: z.string(), postalCode: z.string(), city: z.string(), country: z.string() })
@@ -218,7 +220,11 @@ export type RoundView = z.output<typeof roundView>
 
 // ---- the sample work order (MES-018) ------------------------------------------------------------------------------------
 
-/** "Make sample work order": the order lines it is made on (each line's sizes, default: the round's cells of its colourway). */
+/**
+ * "Make sample work order": the order lines it is made on (each line's sizes, default: the round's cells of its colourway), or,
+ * B-W2b-284, none: `lines` left out makes it without an order line, from the round's own cells (an internal or uncharged proto,
+ * fit or salesman round only), `colourwayId` the colourway of the round's cells that name none.
+ */
 export const workOrderBody = input({
   /** The round's version as read (the edit-conflict guard). */
   version: version().optional(),
@@ -237,7 +243,10 @@ export const workOrderBody = input({
       }),
     )
     .min(1)
-    .max(50),
+    .max(50)
+    .optional(),
+  /** B-W2b-284, without an order line only: the colourway of the round's cells of "any colourway" (default: the style's only one). */
+  colourwayId: id().optional(),
 })
 export type WorkOrderBody = z.output<typeof workOrderBody>
 
@@ -261,7 +270,18 @@ export const workOrderOptionsView = output({
     }),
   ),
   sites: z.array(output({ id: id(), code: z.string(), name: z.string() })),
-  /** What stops the work order now, in words (empty: it can be made). */
+  /**
+   * B-W2b-284: made without an order line, from the round's own cells: allowed for an internal or uncharged proto, fit or
+   * salesman round (else the refusal in words); the cells it would make (a cell of "any colourway" with a null colourway:
+   * `colourways` to pick it from, the style's only one taken when there is one).
+   */
+  withoutLine: output({
+    allowed: z.boolean(),
+    refusal: sampleRefusal.nullable(),
+    cells: z.array(output({ colourwayId: id().nullable(), colourwayCode: z.string().nullable(), size: z.string(), quantity: z.number().int() })),
+    colourways: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+  }),
+  /** What stops the work order now, in words (empty: it can be made; the order lines' own absence is said only when it cannot be made without one). */
   blockers: z.array(z.string()),
   /** What does not stop making it but stops its release (a draft revision), in words. */
   warnings: z.array(z.string()),

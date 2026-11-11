@@ -189,7 +189,9 @@ export function depositGate(order: DepositFacts): { readonly passed: boolean; re
   return { passed: true, message: `${order.orderNumber}'s deposit is ${live.every((request) => request.status === 'WAIVED') ? 'waived' : 'paid'}.` }
 }
 
-export function depositCheck(orders: readonly DepositFacts[]): ReleaseCheck {
+export function depositCheck(orders: readonly DepositFacts[], kind = 'SIZE_GRID'): ReleaseCheck {
+  // B-W2b-284: a SAMPLE work order of an internal or uncharged round makes no order line: no order, so no deposit applies.
+  if (orders.length === 0 && kind === 'SAMPLE') return { code: 'DEPOSIT', state: 'NOT_REQUIRED', message: 'The sample work order makes no order line: no deposit applies.', problems: [] }
   if (orders.length === 0) return blocked('DEPOSIT', 'The work order makes no order line, so no deposit can be checked.')
   const gates = orders.map((order) => ({ order, gate: depositGate(order) }))
   const failed = gates.filter((entry) => !entry.gate.passed)

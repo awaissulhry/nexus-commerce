@@ -94,6 +94,12 @@ export function MeasurementsTab({ model, actions }: { model: MeasurementsModel; 
   const page = pages.find((entry) => entry.from === model.from) ?? pages[0] ?? { from: 1, to: 0 }
   const units = Array.from({ length: Math.max(0, page.to - page.from + 1) }, (_, index) => page.from + index)
   const number = (text: string) => (Number.isFinite(Number(text)) ? Number(text) : null)
+  // B-W2b-283 (FU1:05): a value's band (nominal − minus … nominal + plus) as one centre ± half for the DS ToleranceCell.
+  const bandOf = (entry: ChartPoint['values'][number]): { nominal: number | null; tolerance: number | null } => {
+    if (entry.toleranceMinus == null || entry.tolerancePlus == null) return { nominal: number(entry.nominal), tolerance: number(entry.tolerance) }
+    const [minus, plus, nominal] = [Number(entry.toleranceMinus), Number(entry.tolerancePlus), Number(entry.nominal)]
+    return { nominal: nominal + (plus - minus) / 2, tolerance: (plus + minus) / 2 }
+  }
   const format = (n: number) => formatNumber(n, locale, { maximumFractionDigits: 3 })
   const outOf: { point: ChartPoint; unit: number; measured: string; words: string }[] = []
   for (const point of chart.points) {
@@ -166,14 +172,15 @@ export function MeasurementsTab({ model, actions }: { model: MeasurementsModel; 
                     </span>
                   </span>,
                   <span key="s" className="fw-q-num">
-                    {point.nominal !== null ? td('chart.spec', { nominal: format(Number(point.nominal)), tolerance: point.tolerance !== null ? format(Number(point.tolerance)) : '—', uom: point.uom ?? '' }) : td('chart.specTyped')}
+                    {point.nominal !== null ? td('chart.spec', { nominal: format(Number(point.nominal)), tolerance: point.tolerance !== null ? format(Number(point.tolerance)) : '—', uom: point.uom ?? '' }) : point.source === 'SPEC' && point.spec ? point.spec /* B-W2b-283 */ : td('chart.specTyped')}
                   </span>,
                   ...units.map((unit, col) => {
                     const entry = valueAt(point, unit)
                     const nominal = entry ? number(entry.nominal) : null
                     const shown =
                       entry && nominal !== null ? (
-                        <ToleranceCell value={number(entry.measured)} nominal={nominal} tolerance={number(entry.tolerance)} unit={point.uom ?? undefined} format={format} labels={ds.limitMeter} />
+                        // B-W2b-283 (FU1:05): a band drawn as its centre ± half (the same band the database judges).
+                        <ToleranceCell value={number(entry.measured)} nominal={bandOf(entry).nominal ?? nominal} tolerance={bandOf(entry).tolerance} unit={point.uom ?? undefined} format={format} labels={ds.limitMeter} />
                       ) : null
                     if (!editable) return <span key={unit}>{shown ?? <span className="fw-q-hint">—</span>}</span>
                     return (
