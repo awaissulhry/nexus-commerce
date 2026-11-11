@@ -186,7 +186,8 @@ export async function finalPlans(db: Reader, companyId: string): Promise<PlanCan
 /** What a work order's final inspection knows to match a plan's chips: its style, the style's category, its customers. */
 export async function workOrderFacts(db: Reader, header: Pick<LabelHeader, 'id' | 'styleId'>): Promise<{ facts: Partial<Record<ChipKind, string[]>>; productType: string | null; customerIds: string[] }> {
   const style = await db.style.findUnique({ where: { id: header.styleId }, select: { productType: true } })
-  const customerIds = [...new Set((await readCells(db, header.id)).map((cell) => cell.partyId))]
+  // B-W2b-275: a SAMPLE cell may name no order line, so no customer.
+  const customerIds = [...new Set((await readCells(db, header.id)).flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId])))]
   return { facts: { STYLE: [header.styleId], CATEGORY: style ? [style.productType] : [], CUSTOMER: customerIds }, productType: style?.productType ?? null, customerIds }
 }
 

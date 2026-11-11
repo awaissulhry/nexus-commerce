@@ -172,6 +172,10 @@ model ProductTypeProfile {
   createdAt             DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   createdById           String?      @db.Uuid
+  /// W2b-5 (schema wave 34/44, B-W2b-275; the B-W2b-221 and -239 notes): the office user who changed it last (Product
+  /// settings' "Changed by", read without audit.read; written by every write from B-W2b-283 on); null: not changed since
+  /// (the audit rows say who did before).
+  updatedById           String?      @db.Uuid
 
   company             Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
@@ -289,6 +293,10 @@ model ProductSettings {
   createdAt                  DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt                  DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
   createdById                String?               @db.Uuid
+  /// W2b-5 (schema wave 34/44, B-W2b-275; the B-W2b-221 and -239 notes): the office user who changed it last (Product
+  /// settings' "Changed by", read without audit.read; written by every write from B-W2b-283 on); null: not changed since
+  /// (the audit rows say who did before).
+  updatedById                String?               @db.Uuid
 
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 

@@ -40,6 +40,9 @@ export const manifest = defineManifest({
   'POST /compliance/production-tests': manage,
   'PATCH /compliance/production-tests/:testId': manage,
   'POST /compliance/production-tests/:testId/record': manage,
+  // B-W2b-278 (FU4:02): the lab report (+ files.upload, checked by the files platform).
+  'POST /compliance/production-tests/:testId/report': manage,
+  'POST /compliance/production-tests/:testId/report/:fileId/complete': manage,
   'DELETE /compliance/production-tests/:testId': manage,
   'GET /compliance/evidence-packs/:packId': view,
   'GET /compliance/evidence-packs/:packId/download': view,

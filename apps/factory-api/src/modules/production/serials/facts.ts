@@ -123,7 +123,8 @@ export const printDay = (now: Date): BusinessDate => businessDate(now)
 export interface CellFacts extends LabelCell {
   readonly colourwayId: string
   readonly colourwayName: string
-  readonly partyId: string
+  /** B-W2b-275: null for a SAMPLE cell without an order line. */
+  readonly partyId: string | null
   /** Labels printed again (reprints), from the label log. */
   readonly reprinted: number
   readonly toLabel: number
@@ -222,7 +223,7 @@ export const probeIdentification = (header: Pick<LabelHeader, 'number'>, tenantI
 
 /** The real garment label of a cell on the day, the certificate gate included (B-W1-19's garmentLabelFor; no permission checked there). */
 export async function renderCell(db: Reader, header: LabelHeader, cell: Pick<CellFacts, 'colourwayId' | 'size' | 'partyId'>, identification: Identification, date: BusinessDate, languages: ReadonlyMap<string, string>): Promise<RenderedLabel> {
-  const language = languages.get(cell.partyId)
+  const language = cell.partyId === null ? undefined : languages.get(cell.partyId)
   return garmentLabelFor(db, {
     labelTemplateId: header.labelTemplateId!,
     styleId: header.styleId,
@@ -240,7 +241,7 @@ export async function renderCell(db: Reader, header: LabelHeader, cell: Pick<Cel
 export async function languagesOf(caller: CommandCaller, cells: readonly Pick<CellRow, 'partyId'>[]): Promise<Map<string, string>> {
   const context = workerOf(caller)
   const reader = context.audience === 'office' ? caller : asTenantSystem(caller)
-  return reader.withClient((client) => buyerLanguages(client, cells.map((cell) => cell.partyId)))
+  return reader.withClient((client) => buyerLanguages(client, cells.flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId]))))
 }
 
 // ---- the label printer ---------------------------------------------------------------------------------------------------------

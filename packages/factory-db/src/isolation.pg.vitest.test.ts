@@ -50,6 +50,7 @@ import { seed as seedPortalFollowups } from '../seed/portal-followups'
 import { seed as seedPortalFrame } from '../seed/portal-frame'
 import { seed as seedPortalSales } from '../seed/portal-sales'
 import { seed as seedPortalSupply } from '../seed/portal-supply'
+import { seed as seedPpeTexts } from '../seed/ppe-texts'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -370,6 +371,10 @@ beforeAll(async () => {
   // claim that never expires) are the plain ones a copy may repeat.
   await seedRecall({ db: factory, namespace: 'iso-a' })
   await seedRecall({ db: factory, namespace: 'iso-b' })
+  // The W2b-4 follow-ups of W2b-5 (schema wave 34/44): the PPE text approvals; company B's approval in force is the first row
+  // (the one a copy may repeat), company A's two are withdrawn.
+  await seedPpeTexts({ db: factory, namespace: 'iso-a' })
+  await seedPpeTexts({ db: factory, namespace: 'iso-b' })
   // The approvals schema of W2b-5 (wave 35/44): approval rules (all switched off: Owner answer Q3), requests for a yes in each
   // state and their history; the first rule (off), request (PENDING) and line (its REQUESTED) are the plain ones a copy may repeat.
   await seedApprovals({ db: factory, namespace: 'iso-a' })
@@ -662,6 +667,7 @@ it('covers every classified table and every runtime role', () => {
     'PpeItem',
     'PpeKitLine',
     'PpeRegisterEntry',
+    'PpeTextApproval',
     'Prepack',
     'PrepackLine',
     'PriceList',

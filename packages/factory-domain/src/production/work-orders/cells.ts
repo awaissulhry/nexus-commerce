@@ -122,9 +122,9 @@ export function cellProblems(line: OrderLineFacts, target: Pick<CellTarget, 'sty
   return []
 }
 
-/** A cell as the work order holds it (for the uniqueness of colourway × size). */
+/** A cell as the work order holds it (for the uniqueness of colourway × size); B-W2b-275: a SAMPLE cell may name no order line. */
 export interface HeldCell {
-  readonly salesOrderLineId: string
+  readonly salesOrderLineId: string | null
   readonly colourwayId: string
   readonly size: string
 }

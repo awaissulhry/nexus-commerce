@@ -267,6 +267,39 @@ describe('production-control tests, conformity to type, kept ten years (QHS-048,
     expect((await eventsOf('technical_file.test_changed')).map((event) => event.change)).toEqual(expect.arrayContaining(['PLANNED', 'RECORDED']))
   })
 
+  it("takes a lab report only through the test's own routes, then names it with the result, kept as long (B-W2b-278)", async () => {
+    const planned = (await ok('keeper', 'POST', '/compliance/production-tests', { styleId: jkt02, companyId: T.companyA, workOrderId: workOrder, test: 'TEAR_STRENGTH', frequency: 'EVERY_BATCH', dueOn: today })).test
+    const url = `/compliance/production-tests/${planned.id}/report`
+    const report = Buffer.from('%PDF-1.4\n% made-up lab report\n%%EOF\n')
+    const announce = { originalName: 'made-up-lab-report.pdf', contentType: 'application/pdf', sizeBytes: report.length, sha256: createHash('sha256').update(report).digest('hex') }
+    // The generic files routes reach neither a test's files nor an evidence pack's (platform/files/owned.ts): a 409 naming the route.
+    const generic = await call('keeper', 'POST', '/files', { companyId: T.companyA, recordType: 'ProductionControlTest', recordId: planned.id, kind: 'CERTIFICATE', ...announce })
+    expect(generic.statusCode, generic.body).toBe(409)
+    expect(generic.json().error.message).toContain('POST /compliance/production-tests/:testId/report')
+    const packFile = await call('keeper', 'POST', '/files', { companyId: T.companyA, recordType: 'EvidencePack', recordId: seeded.packIds.built, kind: 'DOCUMENT', ...announce })
+    expect(packFile.statusCode, packFile.body).toBe(409)
+    expect(packFile.json().error.message).toContain('made by the API, never uploaded')
+    // Refused: a report that is no PDF or picture (400), a person who does not keep the tests (403).
+    expect((await no('keeper', 'POST', url, { ...announce, originalName: 'report.csv', contentType: 'text/csv' }, 400)).issues.map((issue: Json) => issue.path)).toEqual(['body/contentType'])
+    await no('viewer', 'POST', url, announce, 403)
+    const announced = await call('keeper', 'POST', url, announce)
+    expect(announced.statusCode, announced.body).toBe(201)
+    const { file, upload } = announced.json() as { file: Json; upload: { url: string; headers: Record<string, string> } }
+    expect(file).toMatchObject({ recordType: 'ProductionControlTest', recordId: planned.id, kind: 'CERTIFICATE', status: 'PENDING_UPLOAD', companyId: T.companyA })
+    const sent = await app.inject({ method: 'PUT', url: upload.url, headers: upload.headers, payload: report })
+    expect(sent.statusCode, sent.body).toBe(200)
+    // Confirmed only by the test's route too; another test's id finds no such file.
+    expect((await call('keeper', 'POST', `/files/${file.id}/complete`)).statusCode).toBe(409)
+    await no('keeper', 'POST', `/compliance/production-tests/${seeded.testIds.due}/report/${file.id}/complete`, undefined, 404)
+    expect((await ok('keeper', 'POST', `${url}/${file.id}/complete`)).file).toMatchObject({ id: file.id, status: 'AVAILABLE' })
+    const recorded = (await ok('keeper', 'POST', `/compliance/production-tests/${planned.id}/record`, { version: planned.version, result: 'PASS', testedOn: today, testedBy: 'Made-up Lab', reportNumber: 'MU-002', labReportFileId: file.id })).test
+    expect(recorded.labReportFile).toMatchObject({ id: file.id, name: 'made-up-lab-report.pdf', sha256: announce.sha256 })
+    const [kept] = await admin<{ retainUntil: Date }>('SELECT "retainUntil" FROM "StoredFile" WHERE id = $1', [file.id])
+    expect(kept!.retainUntil.toISOString().slice(0, 10)).toBe(recorded.retainUntil)
+    // A recorded test takes no other report: its report was named with the result.
+    expect((await no('keeper', 'POST', url, announce, 409)).message).toMatch(/recorded already/)
+  })
+
   it('shows conformity to type per batch and the plan of periodic tests', async () => {
     const production = await ok('viewer', 'GET', `/compliance/techfiles/${seeded.technicalFileIds.open}/production`)
     const batch = production.batches.find((row: Json) => row.workOrder.id === workOrder)
@@ -302,6 +335,8 @@ describe('evidence packs (PRD-299)', () => {
     const zip = (await h.files.storage.read(system, zipRow.storeAccountId, zipRow.storageKey, zipRow.sizeBytes))!
     expect(zip.subarray(0, 4).toString('hex')).toBe('504b0304')
     expect(zip.includes(Buffer.from('SHA256SUMS.txt'))).toBe(true)
+    // B-W2b-278 (FU4:01): the ZIP is a DOCUMENT file made through putGeneratedFile, like the PDF.
+    expect((await admin('SELECT kind::text AS kind, "contentType", status::text AS status FROM "StoredFile" WHERE id = $1', [pack.zip.id]))[0]).toEqual({ kind: 'DOCUMENT', contentType: 'application/zip', status: 'AVAILABLE' })
     const pdfRow = (await admin<{ storeAccountId: string; storageKey: string; sizeBytes: number }>('SELECT "storeAccountId", "storageKey", "sizeBytes" FROM "StoredFile" WHERE id = $1', [pack.pdf.id]))[0]!
     const pdf = (await h.files.storage.read(system, pdfRow.storeAccountId, pdfRow.storageKey, pdfRow.sizeBytes))!
     const text = pdfFlatText(pdf)

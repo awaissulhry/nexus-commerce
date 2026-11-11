@@ -294,6 +294,7 @@ describe('model ownership', () => {
       'PpeItem',
       'PpeKitLine',
       'PpeRegisterEntry',
+      'PpeTextApproval',
       'Prepack',
       'PrepackLine',
       'PriceList',

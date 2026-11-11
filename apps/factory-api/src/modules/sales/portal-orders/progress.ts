@@ -64,6 +64,8 @@ export async function readStageCounts(db: Reader, orderId: string, lines: readon
     (line.sizes.length > 0 ? line.sizes.map((entry) => entry.size as string | null) : [null]).map((size): StageCount => ({ lineId: line.id, size, cut: 0, sewn: null, inspected: 0, packed: 0 })),
   )
   for (const cell of cells) {
+    // B-W2b-275: the cells of this order's lines (a SAMPLE cell may name none).
+    if (cell.salesOrderLineId === null) continue
     const figures = scanned.get(cell.id)
     counts.push({
       lineId: cell.salesOrderLineId,

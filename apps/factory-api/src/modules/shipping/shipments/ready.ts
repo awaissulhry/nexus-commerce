@@ -82,7 +82,11 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
         salesOrderLine: { select: { seq: true, order: { select: { id: true, number: true, customerRef: true, status: true, companyId: true, partyId: true, party: { select: { code: true, legalName: true } } } } } },
       },
     })
-    const visible = cells
+    // B-W2b-275: the cells of these orders' lines, as the query asks (a SAMPLE cell may name no line and never ships here).
+    const ofLines = cells.flatMap((cell) =>
+      cell.salesOrderLine && cell.salesOrderLineId !== null && cell.partyId !== null ? [{ ...cell, salesOrderLineId: cell.salesOrderLineId, partyId: cell.partyId, salesOrderLine: cell.salesOrderLine }] : [],
+    )
+    const visible = ofLines
       .filter((cell) => mayOn(context, SHIPPING_VIEW, { companyId: cell.workOrder.companyId, siteId: cell.siteId, partyId: cell.partyId }))
       .sort(
         (a, b) =>
