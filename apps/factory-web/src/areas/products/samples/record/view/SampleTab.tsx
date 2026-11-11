@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Factory } from 'lucide-react'
 import { Banner, Card, EmptyState, SummaryTable } from '@nexus/ui/components'
-import { Button } from '@nexus/ui/primitives'
+import { Button, Tag } from '@nexus/ui/primitives'
 import type { RoundView } from '../../api'
 import { refusalPhrase, type Phrase } from '../../model'
 import { DayText, useWords } from '../../parts'
@@ -30,15 +30,17 @@ export function SampleTab({ model, round, actions }: { model: SampleRecordModel;
   const rows = round.workOrdersList.map((order) => ({
     id: order.id,
     cells: [
-      model.can.workOrdersView ? (
-        <Link key="n" className="fw-smp-link fw-smp-code" href={`${model.prefix}/production/work-orders/${encodeURIComponent(order.id)}`}>
-          {order.number}
-        </Link>
-      ) : (
-        <span key="n" className="fw-smp-code">
-          {order.number}
-        </span>
-      ),
+      <span key="n" className="fw-smp-row">
+        {model.can.workOrdersView ? (
+          <Link className="fw-smp-link fw-smp-code" href={`${model.prefix}/production/work-orders/${encodeURIComponent(order.id)}`}>
+            {order.number}
+          </Link>
+        ) : (
+          <span className="fw-smp-code">{order.number}</span>
+        )}
+        {/* B-W2b-284: made for no order line (an internal or uncharged round's): it ships, invoices and returns on no order. */}
+        {order.withoutOrderLine && <Tag tone="neutral">{t('sample.noOrderLine')}</Tag>}
+      </span>,
       order.site.code,
       t('sample.pieces', { count: order.pieces }),
       t(`wo.status.${order.status}`),

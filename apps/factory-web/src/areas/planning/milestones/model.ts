@@ -176,6 +176,14 @@ export function readProblemOf(error: unknown): ReadProblem {
 const short = (text: string, max = 28): string => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text)
 
 /** The dots of the per-order row (DS MilestoneTracker, compact): done, started before (skipped), the next one, to come. */
+/**
+ * B-W2b-284 (F22's follow-up): the order's work orders per kind, in words — the production ones production start follows, then a
+ * sample or a repair apart ("2 production (1 not started) · 1 sample · 1 repair").
+ */
+export function workOrdersWords(byKind: Order['workOrders']['byKind'], t: Translate): string {
+  return byKind.map((entry) => (entry.notStarted > 0 ? t('workOrders.kindNotStarted', { kind: t(`workOrders.kind.${entry.kind}`, { count: entry.count }), count: entry.notStarted }) : t(`workOrders.kind.${entry.kind}`, { count: entry.count }))).join(' · ')
+}
+
 export function trackerSteps(order: Order, t: Translate, day: (iso: string) => string) {
   return order.milestones.map((row) => ({
     id: row.id,
