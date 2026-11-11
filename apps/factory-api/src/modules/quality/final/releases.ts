@@ -360,7 +360,7 @@ export async function workOrderFinal(caller: CommandCaller, workOrderId: string)
       cells: cellViews,
       maker: makerCheck(viewer, makers, header.number),
       documents: docs.map((check) => ({ code: check.code, message: check.message })),
-      rule: { rule: rule.rule, source: rule.source, words: fourEyesWords(rule.rule, rule.conditions), customerListed: cells.some((cell) => rule.partyIds.includes(cell.partyId)) },
+      rule: { rule: rule.rule, source: rule.source, words: fourEyesWords(rule.rule, rule.conditions), customerListed: cells.some((cell) => cell.partyId !== null && rule.partyIds.includes(cell.partyId)) },
       holds,
     }
   })

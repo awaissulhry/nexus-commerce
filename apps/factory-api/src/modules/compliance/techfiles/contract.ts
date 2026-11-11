@@ -23,7 +23,7 @@ import {
   TEST_RESULTS,
 } from '@nexus/factory-domain/compliance/techfiles/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { presignedView } from '../../../platform/files/contract'
+import { fileView, presignedView } from '../../../platform/files/contract'
 import { LIST_TILES } from './files'
 import { REPORT_SOURCES } from './reports'
 import { EVIDENCE_STATES } from './store'
@@ -452,6 +452,20 @@ export const editTestContract = defineContract({
   response: { 200: output({ test: testView }) },
 })
 export const removeTestContract = defineContract({ params: testParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ removed: id() }) } })
+// B-W2b-278 (FU4:02): the lab report through the test's own routes (ProductionControlTest is module-owned: platform/files/owned.ts).
+export const announceLabReportContract = defineContract({
+  params: testParams,
+  body: input({
+    originalName: z.string().min(1).max(500),
+    /** application/pdf, image/jpeg or image/png (stored as a CERTIFICATE file of the test). */
+    contentType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().min(1),
+    /** SHA-256 of the content, 64 lower-case hex digits. */
+    sha256: z.string().regex(/^[0-9a-f]{64}$/, { message: 'Expected the SHA-256 of the content, 64 lower-case hex digits.' }),
+  }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+export const completeLabReportContract = defineContract({ params: input({ testId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
 
 // ---- evidence packs ------------------------------------------------------------------------------------------------------
 

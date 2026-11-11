@@ -8,7 +8,9 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { runCommand, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { retainFilesInCommand } from '../../../platform/files/files'
+import { completeUpload, requestUpload, retainFilesInCommand } from '../../../platform/files/files'
+import { normaliseContentType } from '../../../platform/files/rules'
+import { processFiles } from '../../../platform/files/service'
 import { assertMay, companyReach, dateOfDay, dayOf, guarded, officeOf, settings, techfilesClock, todayOf, type Reader } from './common'
 import { TEST_SELECT, testView, type TestRow, type TestView } from './production'
 
@@ -17,13 +19,16 @@ import { TEST_SELECT, testView, type TestRow, type TestView } from './production
  * test" / "Schedule test"; PPE Reg. Annex VIII module C2, art. 8(2)): tests that show production still matches the certified
  * type, of a style — for a batch (a work order's, or a batch number typed) or for the style's production as a whole — due by
  * their frequency. Planned with the day they are due (removed while not needed), then recorded once: PASS or FAIL, the day,
- * who tested it (the lab or the person), the report number and the lab's report (a file of the test, uploaded first with the
- * files routes: POST /files {recordType: "ProductionControlTest", recordId: <test>}). A recorded test and its report are kept
- * ten years after the test day and change no more but the note and a later keep-until day; nothing removes them before.
+ * who tested it (the lab or the person), the report number and the lab's report (a file of the test, uploaded first through
+ * the test's own routes below: ProductionControlTest is module-owned in platform/files/owned.ts, B-W2b-278). A recorded test
+ * and its report are kept ten years after the test day and change no more but the note and a later keep-until day; nothing
+ * removes them before.
  *
  *   GET    /compliance/production-tests?styleId&workOrderId&state   certificates.view (the companies it reaches)
  *   POST   /compliance/production-tests                             techfiles.manage: plan one (or record it at once with `record`)
  *   PATCH  /compliance/production-tests/:testId                     techfiles.manage: a planned test's day, sample, clause, name, note; a recorded one's note and a later keep-until
+ *   POST   /compliance/production-tests/:testId/report              techfiles.manage + files.upload: announce the lab report (B-W2b-278)
+ *   POST   /compliance/production-tests/:testId/report/:fileId/complete   … and confirm it (only through these two routes)
  *   POST   /compliance/production-tests/:testId/record              techfiles.manage: the result (PASS | FAIL), once
  *   DELETE /compliance/production-tests/:testId?version=            techfiles.manage: a planned test (a recorded one only after its keep-until day)
  */
@@ -92,7 +97,7 @@ async function checkLabReport(tx: Reader, test: Pick<TestRow, 'id' | 'companyId'
   const row = await tx.storedFile.findUnique({ where: { id: fileId }, select: { recordType: true, recordId: true, companyId: true, status: true, contentType: true, originalName: true } })
   const path = 'body/labReportFileId'
   if (!row || row.recordType !== 'ProductionControlTest' || row.recordId !== test.id) {
-    throw new ValidationError('The lab report is not a file of this test.', [{ path, message: 'Upload the lab report as a file of this test first (POST /files with recordType ProductionControlTest and this test\'s id), then record the result.' }])
+    throw new ValidationError('The lab report is not a file of this test.', [{ path, message: 'Upload the lab report as a file of this test first (POST /compliance/production-tests/:testId/report, then …/report/:fileId/complete), then record the result.' }])
   }
   if (row.status !== 'AVAILABLE') throw new ValidationError('The lab report is not available yet.', [{ path, message: `"${row.originalName}" is ${row.status.toLowerCase()}: finish its upload first.` }])
   if (!LAB_REPORT_TYPES.has(row.contentType)) throw new ValidationError('The lab report is a PDF or a picture.', [{ path, message: 'A lab report is a PDF, a JPEG or a PNG.' }])
@@ -177,6 +182,46 @@ export async function planTest(caller: CommandCaller, body: PlanBody, key: strin
     ),
   )
   return answerOf(caller, result.id)
+}
+
+// ---- the lab report (B-W2b-278, FU4:02: only through these routes; platform/files/owned.ts) ---------------------------------
+
+export interface LabReportUpload {
+  readonly originalName: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly sha256: string
+}
+
+/** The test a lab report goes onto: in reach, kept by this person, not recorded yet (a recorded test's report was named then). */
+async function reportable(caller: CommandCaller, testId: string): Promise<TestRow> {
+  const context = officeOf(caller)
+  const row = await caller.withClient((db) => readTest(db, testId))
+  if (!can(actorOf(context), TECHFILES_VIEW, { companyId: row.companyId })) throw new NotFoundError(NOT_FOUND)
+  assertMay(context, TECHFILES_MANAGE, row.companyId, 'Keeping a production-control test')
+  if (row.result !== null) throw new ConflictError(`This test is recorded already (${row.result} on ${dayOf(row.testedOn)}): its lab report was named when it was recorded. Plan and record another test.`)
+  return row
+}
+
+/** POST /compliance/production-tests/:testId/report: the lab report announced as a CERTIFICATE file of the test (a PDF or a picture). */
+export async function announceLabReport(caller: CommandCaller, testId: string, body: LabReportUpload, key: string | null | undefined) {
+  const row = await reportable(caller, testId)
+  if (!LAB_REPORT_TYPES.has(normaliseContentType(body.contentType))) throw new ValidationError('The lab report is a PDF or a picture.', [{ path: 'body/contentType', message: 'A lab report is a PDF, a JPEG or a PNG.' }])
+  return requestUpload(
+    processFiles(),
+    caller,
+    { companyId: row.companyId, recordType: 'ProductionControlTest', recordId: testId, kind: 'CERTIFICATE', originalName: body.originalName, contentType: body.contentType, sizeBytes: body.sizeBytes, sha256: body.sha256 },
+    key ?? undefined,
+    { viaModule: true },
+  )
+}
+
+/** POST /compliance/production-tests/:testId/report/:fileId/complete: the lab report's upload confirmed (then named by POST …/record). */
+export async function completeLabReport(caller: CommandCaller, testId: string, fileId: string, key: string | null | undefined) {
+  await reportable(caller, testId)
+  const known = isUuid(fileId) ? await caller.withClient((db) => db.storedFile.findFirst({ where: { id: fileId, recordType: 'ProductionControlTest', recordId: testId }, select: { id: true } })) : null
+  if (!known) throw new NotFoundError('File not found.')
+  return { file: await completeUpload(processFiles(), caller, fileId, key ?? undefined, { viaModule: true }) }
 }
 
 /** POST /compliance/production-tests/:testId/record {version, result, testedOn, testedBy, reportNumber?, resultNote?, labReportFileId?} */

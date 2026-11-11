@@ -289,8 +289,10 @@ model ComplianceDocument {
   /// W2b-4 (schema wave 32/33, B-W2b-218; GATE-PPE-TEXTS, Owner answers 11-09): SIGNED (W1's: the data typed in and the
   /// signed PDF or leaflet as its file, the live route) or GENERATED (made from the records by B-W2b-257 / B-W2b-258). A
   /// generated document stays a DRAFT (or is withdrawn) until a PPE consultant has checked the generated texts: the database
-  /// refuses it any other status. Fixed when made. Every column below is fixed once out of DRAFT, like W1's
-  /// (…_techfiles_labels_w2b_guards).
+  /// refuses it any other status. W2b-5 (schema wave 34/44, B-W2b-275): that yes is a PpeTextApproval (ppe-texts.prisma); a
+  /// generated document is made a DRAFT and leaves DRAFT (to be issued) only while a live approval of its template
+  /// (content.template or sections.template = `<templateKey>.<templateVersion>`) covers its language and its company. Fixed
+  /// when made. Every column below is fixed once out of DRAFT, like W1's (…_techfiles_labels_w2b_guards).
   origin                ComplianceDocumentOrigin @default(SIGNED)
   /// A DoC's Annex IX points with their words and where each value came from (PRD-292): { "points": [{ "point": "1",
   /// "text": "…", "source": { "kind": "CERTIFICATE", "recordType": "Certificate", "recordId": "…" } }] } (kind TYPED: typed

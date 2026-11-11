@@ -284,7 +284,8 @@ enum WorkOrderKind {
   REPAIR
   /// W2b-4 (schema wave 29/33, B-W2b-212; MES-018): a sample or prototype of a sample round (sampleRoundId): made like a
   /// size grid (every routing step, cells without a measurement profile), released with the round's revision once it is
-  /// RELEASED; its cells name the SIZE_GRID lines of the order that charges the samples (a cell needs a sales order line).
+  /// RELEASED; its cells name the SIZE_GRID lines of the order that charges the samples, or (W2b-5, schema wave 34/44,
+  /// B-W2b-275) no line at all: an internal or uncharged round.
   SAMPLE
 }
 
@@ -301,7 +302,7 @@ enum WorkOrderStatus {
 }
 
 /// One cell of a work order's size grid (MES-002): the pieces of one colourway in one size, from one sales order line
-/// (the line's style and colourway). A made-to-measure work order has exactly one cell, of quantity 1, with the rider's
+/// (the line's style and colourway; W2b-5: a SAMPLE cell may name none). A made-to-measure work order has exactly one cell, of quantity 1, with the rider's
 /// measurement profile revision (PRD-193). Changes only while the work order is DRAFT.
 model WorkOrderSize {
   id                   String   @id @db.Uuid
@@ -315,9 +316,11 @@ model WorkOrderSize {
   size                 String
   /// Pieces, above 0.
   quantity             Int
-  /// The sales order line it makes, and that line's party (the key of the reference).
-  salesOrderLineId     String   @db.Uuid
-  partyId              String   @db.Uuid
+  /// The sales order line it makes, and that line's party (the key of the reference). W2b-5 (schema wave 34/44,
+  /// B-W2b-275): both or neither, and neither only on a SAMPLE work order (it names its sample round): an internal or
+  /// uncharged proto, fit or salesman round's cells name no order line (B-W2b-284). Every other kind names its line.
+  salesOrderLineId     String?  @db.Uuid
+  partyId              String?  @db.Uuid
   /// MADE_TO_MEASURE: the rider's measurement profile revision, the order line's.
   measurementProfileId String?  @db.Uuid
   version              Int      @default(1)
@@ -327,7 +330,9 @@ model WorkOrderSize {
 
   workOrder          WorkOrder           @relation(fields: [tenantId, siteId, styleId, workOrderId], references: [tenantId, siteId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   colourway          Colourway           @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
-  salesOrderLine     SalesOrderLine      @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId (optional
+  // since W2b-5's wave 34/44: a SAMPLE cell may name no line).
+  salesOrderLine     SalesOrderLine?     @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
   measurementProfile MeasurementProfile? @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   materials          WorkOrderMaterial[]

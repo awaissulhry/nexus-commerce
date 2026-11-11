@@ -53,8 +53,9 @@ export interface CellRow {
   readonly colourwayName: string
   readonly size: string
   readonly quantity: number
-  /** The order line's party (the buyer whose market the label's languages serve). */
-  readonly partyId: string
+  /** The order line's party (the buyer whose market the label's languages serve); B-W2b-275: none for a SAMPLE cell without an
+   * order line (the label's own languages). */
+  readonly partyId: string | null
 }
 
 /** The work order's cells with their colourway, by colourway code and size. */

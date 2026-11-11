@@ -161,8 +161,9 @@ model SampleMeasurement {
   roundId          String    @db.Uuid
   /// Its row in the grid, from 1.
   seq              Int
-  /// The point of measure of the library (sizes-depth.prisma PointOfMeasure, B-W2b-210: no reference until that wave is
-  /// merged; the API checks it), and its code and name as they were (frozen). Never change.
+  /// The point of measure of the library (sizes-depth.prisma PointOfMeasure; W2b-5, schema wave 34/44, B-W2b-275: a
+  /// reference, Restrict, so a named point exists and is never deleted), and its code and name as they were (frozen).
+  /// Never change.
   pointOfMeasureId String?   @db.Uuid
   pomCode          String
   pomName          String?
@@ -185,6 +186,9 @@ model SampleMeasurement {
   createdById      String?   @db.Uuid
 
   round SampleRound @relation(fields: [tenantId, roundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 34/44): the point of measure (Restrict, not Prisma's SetNull default for an optional relation: that would
+  // also clear tenantId).
+  pointOfMeasure PointOfMeasure? @relation("SampleMeasurementPoint", fields: [tenantId, pointOfMeasureId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, roundId, pomCode, size])
 }
@@ -196,8 +200,8 @@ model SampleComment {
   id               String    @id @db.Uuid
   tenantId         String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   roundId          String    @db.Uuid
-  /// The point of measure (as SampleMeasurement: no reference until wave 27; its code as it was) and/or the body area
-  /// ("left shoulder", up to 100 characters); neither: the sample as a whole.
+  /// The point of measure (as SampleMeasurement: a reference since W2b-5's wave 34/44; its code as it was) and/or the body
+  /// area ("left shoulder", up to 100 characters); neither: the sample as a whole.
   pointOfMeasureId String?   @db.Uuid
   pomCode          String?
   bodyArea         String?
@@ -213,6 +217,8 @@ model SampleComment {
   createdById      String?   @db.Uuid
 
   round SampleRound @relation(fields: [tenantId, roundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 34/44): the point of measure (Restrict, not Prisma's SetNull default: that would also clear tenantId).
+  pointOfMeasure PointOfMeasure? @relation("SampleCommentPoint", fields: [tenantId, pointOfMeasureId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, roundId])
 }

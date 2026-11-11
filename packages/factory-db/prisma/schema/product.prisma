@@ -505,6 +505,12 @@ model Style {
   lifecycleChangedById  String?     @db.Uuid
   /// W2b-4 (B-W2b-206; B-W2b-190's need): the style that replaces it, only while PHASE_OUT or DISCONTINUED; never itself.
   replacedById          String?     @db.Uuid
+  /// W2b-5 (schema wave 34/44, B-W2b-275; the B-W2b-254 and -266 notes): the markets it is sold in, by the code of a
+  /// MarketProfile of the tenant (compliance-rules.prisma; "DE", "UK"), each once, at most 60; empty (the default): every
+  /// market, as before. The requirements gate and the status board read it (B-W2b-283, -288): a market it is not sold in
+  /// says "Not sold there", not a gap. A code is checked against the tenant's markets when it is written (an archived or
+  /// switched-off market stays named).
+  marketCodes           String[]    @default([])
   status                StyleStatus @default(DRAFT)
   version               Int         @default(1)
   createdAt             DateTime    @default(now()) @db.Timestamptz(3)

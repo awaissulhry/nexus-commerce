@@ -87,7 +87,8 @@ async function readBackorders(db: Reader, orderIds: readonly string[], shipmentI
   const released = new Map<string, number>()
   for (const cell of cells) {
     const count = counts.get(cell.id)
-    if (count) add(released, key(cell.salesOrderLineId, cell.size), count.released - count.reversed)
+    // B-W2b-275: the cells of these orders' lines (a SAMPLE cell may name none).
+    if (count && cell.salesOrderLineId !== null) add(released, key(cell.salesOrderLineId, cell.size), count.released - count.reversed)
   }
   const byOrder = new Map<string, ReturnType<typeof lineView>[]>()
   for (const line of lines) {
@@ -316,5 +317,6 @@ export async function closedShortLinesOf(tx: CommandTx, shipmentId: string): Pro
 export async function capRequestsOf(tx: CommandTx, more: ReadonlyMap<string, number>): Promise<CapRequest[]> {
   if (more.size === 0) return []
   const cells = await tx.workOrderSize.findMany({ where: { id: { in: [...more.keys()] } }, select: { id: true, salesOrderLineId: true, size: true } })
-  return cells.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, more: more.get(cell.id) ?? 0 }))
+  // B-W2b-275: a SAMPLE cell without an order line has no order cap (it never ships on an order's shipment).
+  return cells.flatMap((cell) => (cell.salesOrderLineId === null ? [] : [{ salesOrderLineId: cell.salesOrderLineId, size: cell.size, more: more.get(cell.id) ?? 0 }]))
 }

@@ -157,7 +157,8 @@ export async function garmentOf(db: Reader, serial: string | null | undefined): 
     size: cell.size,
     partyId: cell.partyId,
     companyId: cell.workOrder.companyId,
-    salesOrderId: cell.salesOrderLine.orderId,
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    salesOrderId: cell.salesOrderLine?.orderId ?? null,
     madeOn: businessDate(row.createdAt),
     workOrderNumber: cell.workOrder.number,
     batchNumber: cell.workOrder.batchNumber,

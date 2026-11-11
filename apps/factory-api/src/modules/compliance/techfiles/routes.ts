@@ -5,8 +5,10 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import {
   addItemContract,
   addRiskRowContract,
+  announceLabReportContract,
   archiveFileContract,
   completeFileContract,
+  completeLabReportContract,
   createFileContract,
   downloadPackContract,
   editFileContract,
@@ -43,7 +45,7 @@ import { downloadPack, getPack, listPacks, removePack, requestPack, sharePack, w
 import { productionOf } from './production'
 import { testReports } from './reports'
 import { addRow, editRevision, editRow, getRisk, newRevision, removeRevision, removeRow, signRevision } from './risk'
-import { editTest, listTests, planTest, recordTest, removeTest } from './tests'
+import { announceLabReport, completeLabReport, editTest, listTests, planTest, recordTest, removeTest } from './tests'
 
 /**
  * Technical files (B-W2b-251; PRD-296, PRD-299, PRD-301, PRD-302, QHS-048, QHS-110): the Annex III checklist, the product risk
@@ -90,6 +92,13 @@ export default defineRoutes('compliance.techfiles', manifest, async (app) => {
   app.post('/compliance/production-tests', { schema: planTestContract }, async (request) => planTest(request, request.body, idempotencyKeyFrom(request)))
   app.patch('/compliance/production-tests/:testId', { schema: editTestContract }, async (request) => editTest(request, request.params.testId, request.body, idempotencyKeyFrom(request)))
   app.post('/compliance/production-tests/:testId/record', { schema: recordTestContract }, async (request) => recordTest(request, request.params.testId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-278 (FU4:02): the lab report only through the test's own routes.
+  app.post('/compliance/production-tests/:testId/report', { schema: announceLabReportContract }, async (request, reply) =>
+    reply.code(201).send(await announceLabReport(request, request.params.testId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/compliance/production-tests/:testId/report/:fileId/complete', { schema: completeLabReportContract }, async (request) =>
+    completeLabReport(request, request.params.testId, request.params.fileId, idempotencyKeyFrom(request)),
+  )
   app.delete('/compliance/production-tests/:testId', { schema: removeTestContract }, async (request) => removeTest(request, request.params.testId, request.query.version, idempotencyKeyFrom(request)))
 
   app.get('/compliance/evidence-packs/:packId', { schema: getPackContract }, async (request) => getPack(request, request.params.packId))
