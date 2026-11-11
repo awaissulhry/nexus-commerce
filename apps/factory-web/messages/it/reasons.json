@@ -18,6 +18,7 @@
     "DISCREPANCY": "Problemi di consegna",
     "CLAIM": "Reclami ai fornitori",
     "DOWNGRADE": "Declassamenti",
+    "APPROVAL_REJECT": "Rifiuti di approvazione",
     "SCRAP": "Scarti",
     "REWORK": "Rilavorazioni"
   },
@@ -33,6 +34,7 @@
     "DISCREPANCY": "Cosa non andava in una consegna: mancante, in eccesso, errata o danneggiata.",
     "CLAIM": "Perché reclamiamo verso un fornitore.",
     "DOWNGRADE": "Perché la merce è passata a una qualità inferiore.",
+    "APPROVAL_REJECT": "Perché chi approva ha detto no a una richiesta: ogni rifiuto ne indica uno, con le parole.",
     "SCRAP": "Perché un capo va perso a un'operazione: i riquadri di scarto della schermata operazione.",
     "REWORK": "Perché un capo torna indietro per essere rifatto: i riquadri di rilavorazione della schermata operazione."
   },
