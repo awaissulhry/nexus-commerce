@@ -38,7 +38,8 @@ const OFFICE_DOCUMENTS = [
  */
 export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: readonly string[]; readonly maxBytes: number }>> = Object.freeze({
   ATTACHMENT: { contentTypes: [PDF, ...IMAGES, ...OFFICE_DOCUMENTS, 'text/csv', 'text/plain'], maxBytes: 25 * MIB },
-  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv'], maxBytes: 25 * MIB },
+  // B-W2b-278 (FU4:01): a ZIP is a DOCUMENT (an evidence pack's ZIP, made by the API, through putGeneratedFile like its PDF).
+  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv', 'application/zip'], maxBytes: 25 * MIB },
   PHOTO: { contentTypes: [...IMAGES], maxBytes: 15 * MIB },
   CERTIFICATE: { contentTypes: [PDF, 'image/jpeg', 'image/png'], maxBytes: 20 * MIB },
   // FatturaPA XML, its signed .p7m form, and PDF copies of invoices, DDTs and signed quotes.

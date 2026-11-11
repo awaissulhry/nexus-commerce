@@ -30,16 +30,17 @@ import {
   type TestKind,
   type TestResult,
 } from '@nexus/factory-domain/compliance/techfiles/rules'
-import type { ApiClient } from '../../../lib/api/client'
-import { completeUpload, presignedSchema, requestUpload } from '../../../record-panels/api'
+import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+import { completeUpload, fileSchema, presignedSchema, requestUpload } from '../../../record-panels/api'
 import { putToStore, readFromStore, sha256Hex } from '../../../record-panels/store'
 
 /**
  * Every call of Compliance › Technical files (SCR-120; B-W2b-269 on the API of B-W2b-251, apps/factory-api
  * modules/compliance/techfiles): the files and their tiles, one file with its Annex III points, the risk assessment, the test
  * reports, conformity to type per batch with the production-control tests, the evidence packs and their links, plus the files
- * uploaded onto a technical file (a drawing) or a test (its lab report) through the generic files routes. Each answer's shape is
- * checked (zod mirrors of the API's contracts; unknown fields are dropped). Reading is compliance.certificates.view; the writes
+ * uploaded onto a technical file (a drawing, through the generic files routes) or a test (its lab report, through the test's own
+ * routes: B-W2b-278). Each answer's shape is checked (zod mirrors of the API's contracts; unknown fields are dropped). Reading
+ * is compliance.certificates.view; the writes
  * compliance.techfiles.manage; signing a risk assessment (techfiles.sign) and sending a pack by link (techfiles.share) need a
  * fresh code. The API's English is never shown as our words: the screens say their own from the codes. No money anywhere.
  */
@@ -575,17 +576,29 @@ export const DRAWING_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'ima
 export const LAB_REPORT_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
 
 /**
- * A file uploaded onto a record through the generic files routes (POST /files with its record type, then the bytes to the store
- * with the presigned request, then complete): a drawing onto the technical file (kind ATTACHMENT) or a lab report onto its test
- * (kind CERTIFICATE: a PDF or a photo of the paper). The answer is the file's id, linked next.
+ * A file uploaded onto a record (announce, then the bytes to the store with the presigned request, then complete): a drawing onto
+ * the technical file through the generic files routes (POST /files, kind ATTACHMENT), or a lab report onto its test through the
+ * test's own routes (POST /compliance/production-tests/:testId/report, kind CERTIFICATE: a PDF or a photo of the paper; B-W2b-278:
+ * the generic routes refuse a test's files). The answer is the file's id, linked next.
  */
 export async function uploadOnto(api: ApiClient, input: { companyId: string; recordType: 'TechnicalFile' | 'ProductionControlTest'; recordId: string; file: File }): Promise<string> {
   const bytes = await input.file.arrayBuffer()
   const sha256 = await sha256Hex(bytes)
+  if (input.recordType === 'ProductionControlTest') {
+    const report = `/compliance/production-tests/${seg(input.recordId)}/report`
+    const announced = await api.post(report, {
+      body: { originalName: input.file.name, contentType: input.file.type || 'application/pdf', sizeBytes: input.file.size, sha256 },
+      schema: z.object({ file: fileSchema, upload: presignedSchema }),
+      idempotencyKey: newIdempotencyKey(),
+    })
+    await putToStore(announced.upload, bytes)
+    await api.post(`${report}/${seg(announced.file.id)}/complete`, { body: {}, schema: z.object({ file: fileSchema }), idempotencyKey: newIdempotencyKey() })
+    return announced.file.id
+  }
   const announced = await requestUpload(api, {
     companyId: input.companyId,
     record: { type: input.recordType, id: input.recordId },
-    kind: input.recordType === 'TechnicalFile' ? 'ATTACHMENT' : 'CERTIFICATE',
+    kind: 'ATTACHMENT',
     name: input.file.name,
     contentType: input.file.type || 'application/pdf',
     sizeBytes: input.file.size,

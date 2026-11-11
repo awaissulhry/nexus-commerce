@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import type { Prisma } from '@nexus/factory-db'
 import { legalFooter, legalLines, legalName } from '@nexus/factory-domain/documents/legal'
 import { packPaper, paperLanguageOf, type PackPaperInput } from '@nexus/factory-domain/compliance/techfiles/paper'
@@ -19,8 +19,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { runCommand, type CommandCaller } from '../../../core/command'
 import { companyLegalOf } from '../../../platform/documents/documents'
-import { putGeneratedFile, recordGeneratedFile, storeAccountOf, storeCall, tenantOf, type PreparedGeneratedFile } from '../../../platform/files/files'
-import { storageKeyFor } from '../../../platform/files/rules'
+import { putGeneratedFile, recordGeneratedFile, storeCall } from '../../../platform/files/files'
 import { processFiles, type FilesRuntime } from '../../../platform/files/service'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { currentFileOf, readDocumentFiles } from '../../product/compliance/read'
@@ -280,15 +279,6 @@ const scopeWords = (scope: PackScope, orders: readonly { number: string; batchNu
 
 const ROME_TIME = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
-/** The ZIP put in the store as a file of the pack (its kind's PDF-only rule does not fit a ZIP: the bytes are ours). */
-async function putZip(files: FilesRuntime, caller: CommandCaller, pack: Pack, body: Buffer, retainUntil: Date, now: Date): Promise<PreparedGeneratedFile> {
-  const sha256 = sha(body)
-  const storeAccountId = await storeAccountOf(caller, pack.companyId)
-  const storageKey = storageKeyFor({ tenantId: tenantOf(caller.factoryContext!), companyId: pack.companyId, kind: 'DOCUMENT', now, random: randomUUID() })
-  await storeCall(() => files.storage.put(caller, storeAccountId, { key: storageKey, contentType: 'application/zip', body, sha256 }))
-  return { companyId: pack.companyId, recordType: 'EvidencePack', recordId: pack.id, kind: 'DOCUMENT', originalName: `${pack.number}.zip`, contentType: 'application/zip', sizeBytes: body.length, sha256, visibility: ['OFFICE'], floorSiteId: null, partyId: null, retainUntil, storeAccountId, storageKey }
-}
-
 export interface BuildWork {
   readonly files?: FilesRuntime
   readonly lastAttempt?: boolean
@@ -373,7 +363,8 @@ export async function buildPack(caller: CommandCaller, packId: string, work: Bui
     const retainDay = retainUntilOf(businessDate(now))
     const retainUntil = dateOfDay(retainDay)
     const preparedPdf = await putGeneratedFile(files, caller, { companyId: pack.companyId, recordType: 'EvidencePack', recordId: pack.id, kind: 'DOCUMENT', originalName: paper.fileName, contentType: 'application/pdf', body: pdf, visibility: ['OFFICE'], retainUntil })
-    const preparedZip = await putZip(files, caller, pack, zip, retainUntil, now)
+    // B-W2b-278 (FU4:01): the ZIP is a DOCUMENT file like the PDF (platform/files/rules.ts takes application/zip), checked by the files rules.
+    const preparedZip = await putGeneratedFile(files, caller, { companyId: pack.companyId, recordType: 'EvidencePack', recordId: pack.id, kind: 'DOCUMENT', originalName: `${pack.number}.zip`, contentType: 'application/zip', body: zip, visibility: ['OFFICE'], retainUntil })
     const contents = material.entries.map((entry) => ({ title: entry.title, sha256: entry.sha256, recordType: entry.recordType, recordId: entry.recordId, ...(entry.kind === 'FILE' ? { fileId: entry.fileId } : {}) }))
 
     const outcome = await runCommand(
