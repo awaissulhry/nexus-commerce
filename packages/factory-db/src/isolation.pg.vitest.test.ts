@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAccounting } from '../seed/accounting'
 import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAndon } from '../seed/andon'
+import { seed as seedApprovals } from '../seed/approvals'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
@@ -374,6 +375,10 @@ beforeAll(async () => {
   // (the one a copy may repeat), company A's two are withdrawn.
   await seedPpeTexts({ db: factory, namespace: 'iso-a' })
   await seedPpeTexts({ db: factory, namespace: 'iso-b' })
+  // The approvals schema of W2b-5 (wave 35/44): approval rules (all switched off: Owner answer Q3), requests for a yes in each
+  // state and their history; the first rule (off), request (PENDING) and line (its REQUESTED) are the plain ones a copy may repeat.
+  await seedApprovals({ db: factory, namespace: 'iso-a' })
+  await seedApprovals({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -391,7 +396,10 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'ApprovalEvent',
     'ApprovalRequest',
+    'ApprovalRule',
+    'ApprovalTask',
     'AqlProfile',
     'AqlProfileAssignment',
     'AttendanceAnomaly',

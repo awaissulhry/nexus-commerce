@@ -98,6 +98,14 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     OTHER(),
   ],
   DOWNGRADE: [['GRAIN_DEFECT', 'Difetto del fiore', 'Grain defect', 'leaf', AMBER], ['SHADE', 'Differenza di tonalità', 'Shade difference', 'sun', PINK], ['REPAIRED', 'Riparato', 'Repaired', 'shirt', BLUE], OTHER()],
+  // W2b-5 (B-W2b-276): why an approver said no to a request (ApprovalTask.rejectReasonCode); the words why are always asked too.
+  APPROVAL_REJECT: [
+    ['OVER_BUDGET', 'Fuori budget', 'Over budget', 'alert', RED],
+    ['NEEDS_CHANGES', 'Da modificare', 'Needs changes', 'flag', AMBER],
+    ['MISSING_INFO', 'Informazioni mancanti', 'Missing information', 'clock', BLUE],
+    ['NOT_NEEDED', 'Non necessario', 'Not needed', 'box', VIOLET],
+    OTHER(),
+  ],
 }
 
 const reasonOf = ([code, labelIt, labelEn, icon, colour, needsDetail]: Row): StandardReason => Object.freeze({ code, labelIt, labelEn, icon, colour, needsDetail: needsDetail ?? false })
