@@ -199,7 +199,7 @@ export async function cellGate(db: Reader, input: GateInput): Promise<CellGate> 
   const lots = (await lotsOfWorkOrder(db, header.id)).filter(lotHolds)
   const makers = await makersOf(db, header.id)
   const rule = await ruleInForce(db, input.tenantId, header.companyId)
-  const reasons = secondPersonReasons({ overridden: Boolean(inspection?.overrideReason), rule: rule.rule, customerListed: rule.partyIds.includes(cell.partyId), conditions: rule.conditions })
+  const reasons = secondPersonReasons({ overridden: Boolean(inspection?.overrideReason), rule: rule.rule, customerListed: cell.partyId !== null && rule.partyIds.includes(cell.partyId), conditions: rule.conditions })
   const facts: ReleaseFacts = {
     workOrder: { number: header.number, status: header.status },
     inspection: inspection ? { label: inspectionLabel(header.number, seq, inspection.number), status: inspection.status, lotSize: inspection.lotSize, releasedFrom: fromIt } : null,

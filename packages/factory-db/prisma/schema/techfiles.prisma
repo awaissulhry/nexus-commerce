@@ -17,7 +17,8 @@
 // GATE-PPE-TEXTS (Owner answers 11-09): the generated DoC and user-information texts are checked once by a PPE consultant;
 // until then the signed W1 PDFs stay the live route. A generated document (ComplianceDocument.origin GENERATED) is a draft
 // the database tells apart from the signed one, and it never leaves DRAFT but to be withdrawn: the step that takes generated
-// documents live lifts that rule, on the Owner's word.
+// documents live lifts that rule, on the Owner's word. W2b-5 (schema wave 34/44, B-W2b-275): the consultant's yes per template
+// is a PpeTextApproval (ppe-texts.prisma); a generated document leaves DRAFT only while a live one covers it.
 //
 // apps/factory-api's modules/compliance writes these tables through command() (B-W2b-251 technical files, B-W2b-257 the DoC
 // generator, B-W2b-258 the user information builder, B-W2b-259 label artwork and reconciliation). The hand-written
@@ -39,7 +40,9 @@ model ComplianceDocumentBatch {
   companyId   String    @db.Uuid
   /// The document's style.
   styleId     String    @db.Uuid
-  /// The document revision (ISSUED when recorded; it may be superseded or withdrawn later, the record stays).
+  /// The document revision (ISSUED when recorded; it may be superseded or withdrawn later, the record stays). W2b-5 (schema
+  /// wave 34/44, B-W2b-275; the B-W2b-257 note): or SUPERSEDED for a batch made while it was in force, which ships late: a
+  /// work order's batch made to the document's revision, or a batch number typed that already has a record with it.
   documentId  String    @db.Uuid
   /// The work order that made the batch, with its site; both null for a batch number typed.
   siteId      String?   @db.Uuid

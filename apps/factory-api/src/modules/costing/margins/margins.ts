@@ -137,7 +137,8 @@ async function workOrderFigures(db: Reader, lineIds: readonly string[], now: Dat
     const plan: Plan = byActual ? 'ACTUAL' : standard ? 'STANDARD' : fact.estimate.complete ? 'ESTIMATE' : 'QUOTED'
     const planParts = plan === 'ACTUAL' ? actualParts : plan === 'STANDARD' ? partsOfMinor(minorParts(standard!, currency)) : plan === 'ESTIMATE' ? partsOfMinor(minorParts(fact.estimate.parts, currency)) : null
     const weights = new Map<string, number>()
-    for (const cell of cells.filter((row) => row.workOrderId === workOrder.id)) weights.set(cell.salesOrderLineId, (weights.get(cell.salesOrderLineId) ?? 0) + cell.quantity)
+    // B-W2b-275: a SAMPLE cell may name no order line; it weighs on none.
+    for (const cell of cells.filter((row) => row.workOrderId === workOrder.id)) if (cell.salesOrderLineId !== null) weights.set(cell.salesOrderLineId, (weights.get(cell.salesOrderLineId) ?? 0) + cell.quantity)
     const sorted = new Map([...weights.entries()].sort(([a], [b]) => a.localeCompare(b)))
     const leather = fact.entries.filter((entry) => (entry.kind === 'MATERIAL' || entry.kind === 'SCRAP') && entry.itemId !== null && leathers.has(entry.itemId)).reduce((sum, entry) => sum + entry.amount, 0)
     return { workOrder, done, plan, planParts, actualParts, leather, entries: fact.entries.length, weights: sorted, method: methods.get(workOrder.companyId) ?? 'UNDECIDED' }

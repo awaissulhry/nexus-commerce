@@ -61,7 +61,8 @@ export async function workOrderProofs(caller: CommandCaller, workOrderId: string
   const workOrder = await officeWorkOrder(caller, workOrderId)
   return caller.withClient(async (client) => {
     const sizes = await client.workOrderSize.findMany({ where: { workOrderId: workOrder.id }, select: { salesOrderLineId: true } })
-    const lineIds = [...new Set(sizes.map((size) => size.salesOrderLineId))]
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const lineIds = [...new Set(sizes.flatMap((size) => (size.salesOrderLineId === null ? [] : [size.salesOrderLineId])))]
     const lines = lineIds.length > 0 ? await client.salesOrderLine.findMany({ where: { id: { in: lineIds } }, select: { orderId: true } }) : []
     const orderIds = [...new Set(lines.map((line) => line.orderId))]
     const orders = orderIds.length > 0 ? await client.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, quoteVersionId: true }, orderBy: { number: 'asc' } }) : []

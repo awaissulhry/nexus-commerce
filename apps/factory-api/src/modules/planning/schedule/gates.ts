@@ -37,7 +37,8 @@ export async function gateHoldsOf(db: Reader, workOrderIds: readonly string[]): 
     where: { id: { in: [...workOrderIds] }, kind: { in: [...HELD_WORK_ORDER_KINDS] }, startedAt: null, status: { notIn: DONE as ('COMPLETED' | 'CLOSED' | 'CANCELLED')[] } },
     select: { id: true, sizes: { select: { salesOrderLine: { select: { orderId: true } } } } },
   })
-  const ordersOf = new Map(workOrders.map((row) => [row.id, [...new Set(row.sizes.map((size) => size.salesOrderLine.orderId))]]))
+  // B-W2b-275: a cell may name no order line (only on a SAMPLE work order, never held here).
+  const ordersOf = new Map(workOrders.map((row) => [row.id, [...new Set(row.sizes.flatMap((size) => (size.salesOrderLine ? [size.salesOrderLine.orderId] : [])))]]))
   const orderIds = [...new Set([...ordersOf.values()].flat())]
   if (orderIds.length === 0) return holds
   const gates = await db.orderGate.findMany({

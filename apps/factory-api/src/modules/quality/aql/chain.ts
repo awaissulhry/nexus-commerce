@@ -145,7 +145,8 @@ export async function resolveRoute(caller: CommandCaller, query: { readonly comp
 
 /** The customers a work order's goods are for (its cells' sales order lines' parties). */
 export async function customersOf(db: Reader, workOrderId: string): Promise<string[]> {
-  return [...new Set((await readCells(db, workOrderId)).map((cell) => cell.partyId))]
+  // B-W2b-275: a SAMPLE cell may name no order line, so no customer.
+  return [...new Set((await readCells(db, workOrderId)).flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId])))]
 }
 
 /** GET /quality/aql/work-orders/:workOrderId/plan */

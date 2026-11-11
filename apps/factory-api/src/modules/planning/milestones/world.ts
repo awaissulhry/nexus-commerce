@@ -73,7 +73,8 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
   })
   const ordersOfWorkOrder = new Map<string, Set<string>>()
   for (const workOrder of workOrders) {
-    const of = new Set(workOrder.sizes.map((size) => size.salesOrderLine.orderId).filter((id) => facts.has(id)))
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const of = new Set(workOrder.sizes.flatMap((size) => (size.salesOrderLine ? [size.salesOrderLine.orderId] : [])).filter((id) => facts.has(id)))
     ordersOfWorkOrder.set(workOrder.id, of)
     for (const orderId of of) facts.get(orderId)!.workOrders.push({ id: workOrder.id, kind: workOrder.kind, status: workOrder.status, startedAt: workOrder.startedAt })
   }

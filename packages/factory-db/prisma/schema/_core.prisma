@@ -177,6 +177,8 @@ model Company {
   // W2b-4 recall.prisma (wave 33/33): the requests authorities sent it, and its sustainability claims.
   authorityRequests    AuthorityRequest[]
   sustainabilityClaims SustainabilityClaim[]
+  // W2b-5 ppe-texts.prisma (wave 34/44): the PPE consultant's yes per template recorded for it.
+  ppeTextApprovals     PpeTextApproval[]
   // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
   branding             CompanyBranding[]
   // W2b-4 styles-depth.prisma (wave 26/33): its product types, GTIN ranges, private-label branding sets and product settings.

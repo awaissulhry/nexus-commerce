@@ -168,7 +168,8 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   })
   return {
     workOrders: page.map((row) => {
-      const orders = new Map(row.sizes.map((cell) => [cell.salesOrderLine.order.id, cell.salesOrderLine.order]))
+      // B-W2b-275: a SAMPLE cell may name no order line.
+      const orders = new Map(row.sizes.flatMap((cell) => (cell.salesOrderLine ? [[cell.salesOrderLine.order.id, cell.salesOrderLine.order] as const] : [])))
       const dueDate = dayOrNull(row.dueDate)
       return {
         id: row.id,
@@ -520,7 +521,8 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
     const held = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { id: true, salesOrderLineId: true, colourwayId: true, size: true, quantity: true } })
     const target: CellTarget = { companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, styleSizes: style.sizes, styleRevisionId: current.styleRevisionId }
     const withColour = requests.map((request) => ({ ...request, colourwayId: lines.get(request.salesOrderLineId)!.colourwayId }))
-    const sameCell = (cell: { salesOrderLineId: string; size: string }, request: { salesOrderLineId: string; size: string }) => cell.salesOrderLineId === request.salesOrderLineId && cell.size === request.size
+    // B-W2b-275: a held SAMPLE cell may name no order line; it is never the cell a request names.
+    const sameCell = (cell: { salesOrderLineId: string | null; size: string }, request: { salesOrderLineId: string; size: string }) => cell.salesOrderLineId === request.salesOrderLineId && cell.size === request.size
     const others = held.filter((cell) => !requests.some((request) => sameCell(cell, request)))
     const clashes = clashProblems(withColour, others, 'body/cells')
     if (clashes.length > 0) throw new ValidationError(clashes[0]!.message, clashes)
@@ -533,10 +535,10 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
       const cell = held.find((entry) => sameCell(entry, request))
       if (cell && request.quantity === 0) {
         await tx.workOrderSize.delete({ where: { id: cell.id }, select: { id: true } })
-        changes.push({ cellId: cell.id, before: cell.quantity, after: 0, size: cell.size, salesOrderLineId: cell.salesOrderLineId })
+        changes.push({ cellId: cell.id, before: cell.quantity, after: 0, size: cell.size, salesOrderLineId: request.salesOrderLineId })
       } else if (cell && request.quantity !== cell.quantity) {
         await tx.workOrderSize.update({ where: { id: cell.id }, data: { quantity: request.quantity, version: { increment: 1 } }, select: { id: true } })
-        changes.push({ cellId: cell.id, before: cell.quantity, after: request.quantity, size: cell.size, salesOrderLineId: cell.salesOrderLineId })
+        changes.push({ cellId: cell.id, before: cell.quantity, after: request.quantity, size: cell.size, salesOrderLineId: request.salesOrderLineId })
       } else if (!cell && request.quantity > 0) {
         const cellId = newId()
         await tx.workOrderSize.create({
@@ -608,7 +610,7 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
       if (current.kind === 'SAMPLE') throw new InvalidStateError(`Work order ${current.number} makes the samples of its sample round, from the round's pinned revision: change the round's revision (while it is requested) and make a new sample work order.`)
       const revision = await revisionOf(tx, current.styleId, body.styleRevisionId, 'body/styleRevisionId')
       const cellLines = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { salesOrderLineId: true } })
-      const fixed = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(cellLines.map((cell) => cell.salesOrderLineId))] }, styleRevisionId: { not: null } }, select: { seq: true, styleRevisionId: true } })
+      const fixed = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(cellLines.flatMap((cell) => (cell.salesOrderLineId === null ? [] : [cell.salesOrderLineId])))] }, styleRevisionId: { not: null } }, select: { seq: true, styleRevisionId: true } })
       const other = fixed.find((line) => line.styleRevisionId !== revision.id)
       if (other) throw new ValidationError('An order line of this work order is ordered to another revision.', [{ path: 'body/styleRevisionId', message: `Line ${other.seq} fixes another revision of the style.` }])
       const operations = await removeDraftOperations(tx, current, {
