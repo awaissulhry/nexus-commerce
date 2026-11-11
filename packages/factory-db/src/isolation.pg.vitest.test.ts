@@ -64,6 +64,7 @@ import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSalesIntake } from '../seed/sales-intake'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
@@ -369,6 +370,12 @@ beforeAll(async () => {
   // claim that never expires) are the plain ones a copy may repeat.
   await seedRecall({ db: factory, namespace: 'iso-a' })
   await seedRecall({ db: factory, namespace: 'iso-b' })
+  // The sales intake and customers schema of W2b-5 (wave 37/44): seasons, inquiries and their lines, customer requirements,
+  // holds and terms per company, a rider under a team, the contacts' lawful basis and an erased contact; their first rows (an
+  // OPEN season, a NEW office inquiry and its line, a requirement in force, a RELEASED hold, ENDED terms) are the plain ones a
+  // copy may repeat.
+  await seedSalesIntake({ db: factory, namespace: 'iso-a' })
+  await seedSalesIntake({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -434,6 +441,7 @@ it('covers every classified table and every runtime role', () => {
     'CostingSettings',
     'CrewMember',
     'CrewSession',
+    'CustomerRequirement',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -507,6 +515,8 @@ it('covers every classified table and every runtime role', () => {
     'IncomingHideResult',
     'IncomingInspection',
     'IncomingRollResult',
+    'Inquiry',
+    'InquiryLine',
     'Inspection',
     'InspectionAmendment',
     'InspectionCheckResult',
@@ -613,7 +623,9 @@ it('covers every classified table and every runtime role', () => {
     'Party',
     'PartyAddress',
     'PartyChangeRequest',
+    'PartyCompanyTerms',
     'PartyContact',
+    'PartyHold',
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
@@ -754,6 +766,7 @@ it('covers every classified table and every runtime role', () => {
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
+    'Season',
     'SecondaryProcess',
     'SecretValue',
     'Session',

@@ -534,6 +534,8 @@ model Style {
   salesOrderLines     SalesOrderLine[]
   // W2b portal-sales.prisma (wave 21/22): the portal order request lines that ask for it.
   portalRequestLines  PortalOrderRequestLine[] @relation("PortalOrderRequestLineStyle")
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiry lines that ask for it.
+  inquiryLines        InquiryLine[]            @relation("InquiryLineStyle")
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
   // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
@@ -646,6 +648,8 @@ model Colourway {
   salesOrderLines SalesOrderLine[]
   // W2b portal-sales.prisma (wave 21/22): the portal order request lines that ask for it.
   portalRequestLines PortalOrderRequestLine[] @relation("PortalOrderRequestLineColourway")
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiry lines that ask for it.
+  inquiryLines       InquiryLine[]            @relation("InquiryLineColourway")
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
   // W2a ncr.prisma: the nonconformances about it.

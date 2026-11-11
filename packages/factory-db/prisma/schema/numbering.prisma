@@ -160,6 +160,9 @@ enum NumberKind {
   /// request's (AR-…; AuthorityRequest.number). Office document kinds: the API numbers them when they are made.
   RECALL
   AUTHORITY_REQUEST
+  /// W2b-5 wave 37/44: an inquiry's number (INQ-…; sales-intake.prisma Inquiry.number). An office document kind: the API
+  /// numbers it when it is made.
+  INQUIRY
 }
 
 enum NumberReset {

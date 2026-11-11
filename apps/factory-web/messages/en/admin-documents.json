@@ -238,6 +238,7 @@
     },
     "kind": {
       "QUOTE": "Quote",
+      "INQUIRY": "Inquiry",
       "SALES_ORDER": "Sales order",
       "PURCHASE_ORDER": "Purchase order",
       "GOODS_RECEIPT": "Goods receipt",

@@ -198,6 +198,8 @@ model StoredFile {
   // W2b-4 styles-depth.prisma (wave 26/33): the style pictures and the revision pattern, marker and CAD files it is.
   styleImages           StyleImage[]        @relation("StyleImageFile")
   styleRevisionFiles    StyleRevisionFile[] @relation("StyleRevisionFileFile")
+  // W2b-5 sales-intake.prisma (wave 37/44): the customer requirements whose document (a routing guide) it is.
+  customerRequirements   CustomerRequirement[] @relation("CustomerRequirementFile")
   // W2b-4 substances.prisma (wave 31/33): the declaration requests whose answer (by link or by hand) it is.
   supplierDeclarationAnswers SupplierDeclarationRequest[] @relation("SupplierDeclarationRequestAnswerFile")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
