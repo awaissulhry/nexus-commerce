@@ -1,7 +1,7 @@
 import type { ItemKind, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { INVENTORY_COUNTS_MANAGE, INVENTORY_COUNTS_VIEW } from '@nexus/factory-domain/inventory/counts/permissions'
 import { dueOrder, dueStateOf, dueThisWeek, scheduleProblems, scopeWords, SCHEDULE_LIMITS, type AbcClass } from '@nexus/factory-domain/inventory/counts-depth/schedules'
@@ -154,7 +154,7 @@ export async function createSchedule(caller: CommandCaller, body: { readonly sit
   return { schedule: (await caller.withClient(async (db) => views(db, [(await db.countSchedule.findUniqueOrThrow({ where: { id: result.scheduleId }, select: SCHEDULE_COLUMNS }))], today)))[0]! }
 }
 
-async function visibleSchedule(caller: CommandCaller, scheduleId: string, permission = INVENTORY_COUNTS_VIEW): Promise<ScheduleRow> {
+async function visibleSchedule(caller: CommandCaller, scheduleId: string, permission: Permission = INVENTORY_COUNTS_VIEW): Promise<ScheduleRow> {
   const context = officeContextOf(caller)
   const row = isUuid(scheduleId) ? await caller.withClient((db) => db.countSchedule.findUnique({ where: { id: scheduleId }, select: SCHEDULE_COLUMNS })) : null
   if (!row || !can(actorOf(context), INVENTORY_COUNTS_VIEW, scheduleScope(row))) throw new NotFoundError('Count schedule not found.')

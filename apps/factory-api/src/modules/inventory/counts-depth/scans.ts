@@ -165,16 +165,15 @@ async function countsOfPlace(db: Reader, context: StockContext, place: PlaceRef 
   return out
 }
 
-async function siteOfCaller(caller: CommandCaller, context: StockContext): Promise<string | null> {
-  return context.audience === 'floor' ? context.siteId : null
-}
+/** A floor device's own site (an office caller names the count instead). */
+const siteOfCaller = (context: StockContext): string | null => (context.audience === 'floor' ? context.siteId : null)
 
 /** GET /inventory/stock-counts/bin */
 export async function binOf(caller: CommandCaller, query: { readonly placeCode: string; readonly countId?: string | undefined }) {
   const context = stockContextOf(caller)
   return caller.withClient(async (db) => {
     const named = query.countId ? await countFor(db, context, query.countId) : null
-    const siteId = named?.siteId ?? (await siteOfCaller(caller, context))
+    const siteId = named?.siteId ?? siteOfCaller(context)
     if (!siteId) throw new ValidationError('Name the count (countId): a bin label is read at a count\'s site.', [{ path: 'countId', message: 'Name the count.' }])
     const place = await placeOfScan(db, siteId, query.placeCode, 'placeCode')
     const located = { ...place, siteId }
@@ -236,7 +235,7 @@ export interface ScanBody {
 }
 
 const scanLock = (tx: CommandTx, tenantId: string, countId: string, code: string) =>
-  tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.count-scan', ${tenantId}::uuid, ${countId}::uuid, ${code}), 0))`
+  tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.count-scan', ${tenantId}::uuid, ${countId}::uuid, ${code}::text), 0))`
 
 /** POST /inventory/stock-counts/:countId/scans */
 export async function scanUnit(caller: CommandCaller, countId: string, body: ScanBody, idempotencyKey?: string) {
