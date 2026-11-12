@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { CERTIFICATES_VIEW } from '../compliance/certificates/permissions'
+// B-W2b-314: a material below its planning minimum is the stock's (inventory.stock.view).
+import { INVENTORY_STOCK_VIEW } from '../inventory/permissions'
 import type { Permission } from '../core/permissions'
 import { INVOICES_VIEW } from '../invoicing/permissions'
 // B-W2b-42: a working-time limit alert names a site and a limit, never a person: the roster's own reading permission.
@@ -37,7 +39,8 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 
 // B-W2b-24: INTEGRATION_FAILING (the design's last built-in), from the connections' health.
 // B-W2b-42: WORKING_TIME_LIMIT (MES-232), a site's people close to or over a working-time limit.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT'] as const
+// B-W2b-314: LOW_STOCK (SCM-281), a material below its planning minimum at a site.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -214,6 +217,20 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     threshold: z.strictObject({}),
     builtIn: { name: { en: 'Working-time limit close', it: 'Limite di orario vicino' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'admin' },
     label: { en: 'Working-time limits close or passed', it: 'Limiti di orario vicini o superati' },
+    recheck: [],
+  }),
+  LOW_STOCK: spec({
+    kind: 'LOW_STOCK',
+    trigger: 'CONDITION',
+    // B-W2b-314 (SCM-281): one alert per material (and colour, where the site keeps its own minimum) and site: what the site
+    // has and expects (on hand + on order − reserved) is below the minimum of its planning parameters, at a company whose
+    // warehouse rules keep the low-stock alerts on (the default). No numbers of its own: the minimum is planning's.
+    recordType: 'Item',
+    view: INVENTORY_STOCK_VIEW,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Stock below its minimum', it: 'Scorta sotto il minimo' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'buyer' },
+    label: { en: 'Materials below their minimum', it: 'Materiali sotto il minimo' },
+    // Evaluated with every pass (the low-stock alerts are daily running): a recheck on every stock move would be too often.
     recheck: [],
   }),
 })

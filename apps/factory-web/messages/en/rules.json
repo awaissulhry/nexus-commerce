@@ -8,7 +8,8 @@
     "CERTIFICATE_EXPIRING": "Certificates expiring",
     "INVOICE_DEADLINE": "Shipped goods near their invoice deadline",
     "INTEGRATION_FAILING": "Connections failing",
-    "WORKING_TIME_LIMIT": "Working-time limits close or passed"
+    "WORKING_TIME_LIMIT": "Working-time limits close or passed",
+    "LOW_STOCK": "Materials below their minimum"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -19,7 +20,8 @@
     "CERTIFICATE_EXPIRING": "{daysBefore} before a certificate expires",
     "INVOICE_DEADLINE": "{daysBefore} before the deadline to invoice a DDT's goods",
     "INTEGRATION_FAILING": "When a connection has not worked for more than {hours}",
-    "WORKING_TIME_LIMIT": "When someone comes close to a working-time limit, or passes it"
+    "WORKING_TIME_LIMIT": "When someone comes close to a working-time limit, or passes it",
+    "LOW_STOCK": "When a material falls below the minimum of its planning parameters"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

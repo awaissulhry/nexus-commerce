@@ -12,6 +12,9 @@ import { activeSourcesOf } from '../purchasing/supplier-items/store'
 import { heldByQualityHolds } from '../quality/holds/stock'
 // B-W2b-20: the work orders' scheduled starts (the planning board) are their material's need days.
 import { scheduledStartsOf } from './pegging/starts'
+// B-W2b-293 (MR1:01, MR1:02): every garment through its multi-level explosion, with the order line's options.
+import type { Garments } from '@nexus/factory-domain/planning/planned-orders/multilevel'
+import { readGarments } from './planned-orders/store'
 import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
@@ -69,6 +72,8 @@ export interface PlanInputs {
   /** Material ids with a safety stock at the site and no demand in this plan. */
   readonly safetyOnlyItemIds: readonly string[]
   readonly supplierLeadTimes: ReadonlyMap<string, number | null>
+  /** B-W2b-293: the order lines' explosions (planning/planned-orders `planLevelled` plans with them); null: none. */
+  readonly garments: Garments | null
 }
 
 const quantity = (value: { toString(): string }): string => {
@@ -121,7 +126,9 @@ export const latestDoneRun = (db: Reader, siteId: string) =>
 export async function readPlanInputs(db: Reader, site: SiteRow, runDate: BusinessDate, firmFromRunId: string | null): Promise<PlanInputs> {
   const demand = await readDemand(db, site)
   const firmSupply = await readFirmSupply(db, firmFromRunId)
-  const demandItemIds = [...new Set(demand.revisions.flatMap((revision) => revision.lines.map((line) => line.itemId)))]
+  // B-W2b-293: the materials of every level (and of the options' effects) are the plan's too.
+  const explosion = await readGarments(db, site, demand)
+  const demandItemIds = [...new Set([...demand.revisions.flatMap((revision) => revision.lines.map((line) => line.itemId)), ...(explosion?.itemIds ?? [])])]
   const itemPlanning = await db.itemPlanning.findMany({ where: { siteId: site.id }, select: ITEM_PLANNING_COLUMNS, orderBy: { id: 'asc' } })
   const safetyOnlyItemIds = [...new Set(itemPlanning.filter((row) => row.safetyStock !== null && row.safetyStock.gt(0) && !demandItemIds.includes(row.itemId)).map((row) => row.itemId))].sort()
   const itemIds = [...new Set([...demandItemIds, ...firmSupply.map((firm) => firm.itemId), ...safetyOnlyItemIds])].sort()
@@ -155,8 +162,9 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     firmSupply,
     buying: buyingOf({ companyId: site.companyId, items, itemPlanning, sources, supplierLeadTimes }),
     workOrderStarts: await scheduledStartsOf(db, site),
+    ...(explosion ? { lineSuppliers: explosion.lineSuppliers } : {}),
   }
-  return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes }
+  return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes, garments: explosion?.garments ?? null }
 }
 
 /**
