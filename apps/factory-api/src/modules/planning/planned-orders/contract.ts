@@ -56,7 +56,20 @@ export const plannedOrderView = output({
   version: z.number().int(),
   /** Why it cannot be made real now, in words; null: it can. */
   held: z.string().nullable(),
-  may: output({ convert: z.boolean(), firm: z.boolean() }),
+  /** B-W2b-306 (PLN-083): due after the day its demand needs it (late demand starts today); null: in time. */
+  late: output({ needDate: businessDate(), daysLate: z.number().int(), reason: z.string() }).nullable(),
+  /** B-W2b-306 (PLN-076): the latest plan's value of each protected field (what Reset to plan puts back). */
+  plan: output({
+    sizes: z.array(output({ size: z.string(), quantity: z.number().int() })).optional(),
+    startDate: businessDate().optional(),
+    dueDate: businessDate().optional(),
+    lineId: id().nullable().optional(),
+    partyId: id().nullable().optional(),
+    operationSeqs: z.array(z.number().int()).optional(),
+    kitDueAt: instant().nullable().optional(),
+    styleRevisionId: id().nullable().optional(),
+  }),
+  may: output({ convert: z.boolean(), firm: z.boolean(), edit: z.boolean() }),
 })
 export type PlannedOrderView = z.infer<typeof plannedOrderView>
 

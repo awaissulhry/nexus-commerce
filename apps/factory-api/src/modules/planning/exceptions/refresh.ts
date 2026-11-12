@@ -83,6 +83,8 @@ export async function detectInputs(tools: Pick<CommandTools, 'tx'>, site: SiteRo
       leadTimeDays: lead === null ? null : lead + (rule?.safetyLeadTimeDays ?? 0),
       keptInStock: rule !== null && (rule.method === 'REORDER_POINT' || rule.method === 'MIN_MAX' || safety !== null),
       safetyStock: safety,
+      // B-W2b-306 (PLN-072): an order-specific line's exceptions are its own.
+      ...(line.reservedFor ? { keySuffix: `:OL:${line.reservedFor.orderLineId}` } : {}),
     }
   })
   // Materials with a safety stock the plan has no demand for: their usable stock (less what others reserved) and arrivals.
