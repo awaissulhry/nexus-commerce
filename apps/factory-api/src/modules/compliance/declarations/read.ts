@@ -13,6 +13,8 @@ import { processEmail } from '../../../platform/email-out/service'
 import { dateDay, declarationsClock, DOCUMENT_SELECT, mayRead, mayWriteDocument, namesFor, officeOf, readVisibleDocument, refused, STYLE_SELECT, todayOf, type DocumentRow, type Reader } from './common'
 import { readComposition, readPhraseBook, readRevision } from './facts'
 import { renderDeclaration } from './pdf'
+// B-W2b-288 (FU2:01): a generated DoC reads GATE-PPE-TEXTS from the PPE consultant's yes per template.
+import { ppeGateFor } from '../ppe-texts/store'
 
 /**
  * The declarations, read side (B-W2b-257; design compliance.declarations): the grid (every DoC and leaflet per style,
@@ -227,7 +229,8 @@ export async function detailOf(db: Reader, context: OfficeContext, row: Document
     ...view!,
     points: content.points.map((point) => pointView(point, names)),
     template: generated ? content.template : null,
-    gate: generated ? { ...GATE, open: true } : null,
+    // B-W2b-288 (FU2:01): the gate reads the PPE consultant's yes to its template (its language, its company).
+    gate: generated ? await ppeGateFor(db, { kind: row.kind === 'USER_INFORMATION' ? 'USER_INFORMATION' : 'DOC', templateId: content.template ?? null, language: row.language, companyId: row.companyId }) : null,
     createdBy: checkers(row.createdById),
     original: original ? { id: original.id, language: original.language, status: original.status } : null,
     languages: familyViews.map((entry) => ({ id: entry.id, language: entry.language, status: entry.status, origin: entry.origin, translationStatus: entry.translationStatus, translationCheckedBy: entry.translationCheckedBy, marketCode: entry.marketCode, pointsToType: entry.pointsToType, original: entry.translationOfId === null })),

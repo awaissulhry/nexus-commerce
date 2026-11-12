@@ -29,6 +29,8 @@ import {
 } from '../../model'
 import { CrViMark, LabMessages, LotStatusPill, ShortcutsDialog } from '../../view/parts'
 import { DecideDialog, DocumentDialog, ResultDialog } from './dialogs'
+// B-W2b-288 (FU2:03): the lab's price of a result.
+import { costWords, LAB_COST_NAMESPACE } from '../../lab-cost/lab-cost'
 
 export interface LotRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void
@@ -207,6 +209,8 @@ function Record({ model, actions, panels }: { model: LotRecordModel; actions?: L
         onFile={(file) => actions?.onResultFile?.(file)}
         onSave={() => actions?.onSaveResult?.()}
         onClose={() => open(null)}
+        // B-W2b-288 (FU2:03)
+        costGrain={!!model.costGrain}
       />
       <DocumentDialog
         open={dialog?.kind === 'document'}
@@ -256,6 +260,8 @@ function Record({ model, actions, panels }: { model: LotRecordModel; actions?: L
 /** One result: its verdict and value against the limit, the facts of the report, superseded when a later FAIL replaced it. */
 function ResultItem({ result, onDownload }: { result: LabResult; onDownload?: (fileId: string) => void }) {
   const t = useT('lab')
+  // B-W2b-288 (FU2:03)
+  const w = useT(LAB_COST_NAMESPACE)
   const locale = useLocale()
   const value =
     result.valueMgKg !== null
@@ -275,6 +281,8 @@ function ResultItem({ result, onDownload }: { result: LabResult; onDownload?: (f
           { label: t('results.report'), value: dash(result.reportNumber) },
           { label: t('results.testedOn'), value: formatDate(result.testedOn, { locale }) },
           { label: t('results.evidence'), value: t(`evidence.${result.evidence}`) },
+          // B-W2b-288 (FU2:03): the lab's price (sent only to the cost grain).
+          ...(result.cost ? [{ label: w('labCost.result'), value: costWords(result.cost, locale) }] : []),
           ...(result.evidence === 'SUPPLIER_REPORT'
             ? [
                 { label: t('results.article'), value: dash(result.article) },

@@ -42,6 +42,8 @@ export const lotSchema = z.object({
   /** The lot's state in one sentence (the API's words: English, kept as data). */
   words: z.string(),
   version: z.number(),
+  /** B-W2b-288 (FU2:03): the list's lab prices per currency (money.cost; absent without the cost grain). */
+  labCost: z.array(z.object({ currency: z.string(), cents: z.number(), results: z.number() })).optional(),
 })
 export type Lot = z.infer<typeof lotSchema>
 

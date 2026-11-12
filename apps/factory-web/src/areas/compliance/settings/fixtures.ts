@@ -44,6 +44,8 @@ import {
 import { EMPTY_ADDRESS, EMPTY_CHANGE, EMPTY_ENTRY, EMPTY_MARKET, EMPTY_PHRASE, EMPTY_REQUIREMENT, emptyOperator, gateDraftOf, markKey, ruleDraftsOf, rulesCan, type GateDraft, type SettingsAddress } from './model'
 import { IDLE, type Cr6State, type GatesState, type MarketsState, type OperatorsState, type PhrasesState, type RegsState, type RulesMarketsModel } from './view-model'
 import { RulesMarketsView } from './view/RulesMarketsView'
+// B-W2b-288 (FU2:01): the Templates tab's cases.
+import { templatesCases } from './ppe-texts/fixtures'
 
 /**
  * SCR-262 — Compliance › Settings › Rules & markets (B-W2b-265; design compliance.settings: rm-tabs, rm-cr6, rm-gates, rm-regs,
@@ -212,5 +214,7 @@ export const designScreen = defineDesignScreen<RulesCase>({
     { id: 'offline', label: 'Offline: changes wait, every write held with why', model: base('quality', gatesTab, { live: 'offline' }) },
     { id: 'notice', label: 'After a write: the notice', model: base('quality', gatesTab, { notice: { tone: 'success', key: 'notice.suggestedAdded', params: { count: 2 } } }) },
     { id: 'keys', label: 'Keyboard shortcuts (?)', model: base('quality', gatesTab, { keysOpen: true }) },
+    // B-W2b-288 (FU2:01): Templates — the PPE consultant's yes per template (GATE-PPE-TEXTS).
+    ...templatesCases(base),
   ],
 })
