@@ -44,6 +44,8 @@ export const resultSchema = z.object({
   note: z.string().nullable(),
   createdAt: z.string(),
   createdById: z.string().nullable(),
+  /** B-W2b-288 (FU2:03): the lab's price (money.cost; absent without the cost grain). */
+  cost: z.object({ cents: z.number(), currency: z.string() }).nullable().optional(),
   words: z.string(),
   file: fileRef.optional(),
   superseded: z.boolean().optional(),
@@ -175,6 +177,8 @@ export interface ResultInput {
   readonly periodFrom: string | null
   readonly periodTo: string | null
   readonly note: string | null
+  /** B-W2b-288 (FU2:03): the lab's price (money.cost), or none. */
+  readonly cost?: { readonly cents: number; readonly currency: string } | null
 }
 
 /** Announces the report, sends it, then records the result on the lot (the record call confirms the file). */
@@ -193,6 +197,8 @@ export async function recordResult(api: ApiClient, lotId: string, version: numbe
       ...(input.evidence === 'SUPPLIER_REPORT' ? { article: input.article, periodFrom: input.periodFrom, periodTo: input.periodTo } : {}),
       note: input.note,
       fileId,
+      // B-W2b-288 (FU2:03): sent only when typed (the API refuses it without the cost grain).
+      ...(input.cost ? { cost: input.cost } : {}),
     },
     schema: recordAnswerSchema,
     idempotencyKey: newIdempotencyKey(),

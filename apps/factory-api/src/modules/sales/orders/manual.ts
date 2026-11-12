@@ -25,6 +25,8 @@ import { decideTreatment, type SheetCache } from '../quotes/pricing'
 import { quoteRulesFor } from '../quotes/rules'
 import { partySnapshotsOf } from '../quotes/send'
 import { quotePartyOf, type QuoteParty } from '../quotes/store'
+import { withCompanyTerms } from '../../parties/company-terms/in-force'
+import { assertOrderMayBeTaken } from '../../parties/holds/stops'
 import { termsForParty } from '../terms/terms'
 import { usableTerms } from '../terms/store'
 import { assertMay, officeContextOf } from './access'
@@ -99,7 +101,8 @@ async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, pic
   const issues: Issue[] = []
   const company = await db.company.findUnique({ where: { id: body.companyId }, select: { id: true, currency: true } })
   if (!company) throw new NotFoundError('Company not found.')
-  const party = await quotePartyOf(db, body.partyId, today, now)
+  // B-W2b-290 (SAL-028): the customer's terms with this company over its own (payment terms, price list, deposit).
+  const party = await withCompanyTerms(db, await quotePartyOf(db, body.partyId, today, now), company.id)
   if (!party || (party.row.companyId !== null && party.row.companyId !== company.id)) throw new NotFoundError('Customer not found.')
   if (!party.isCustomer) return [{ path: 'body/partyId', message: 'Give the party the customer (or brand) role first.' }]
   if (party.row.status === 'BLOCKED' || party.row.status === 'ARCHIVED') {
@@ -128,6 +131,9 @@ async function planManualOrder(db: Reader, body: ManualOrderBody, now: Date, pic
   if (body.promiseDate && body.promiseDate < today) issues.push({ path: 'body/promiseDate', message: 'The promise date is today or later.' })
   if (body.requestedDate && body.requestedDate < today) issues.push({ path: 'body/requestedDate', message: 'The requested date is today or later.' })
   if (body.customerRef && body.customerRef.trim().length > MAX_TEXT.customerRef) issues.push({ path: 'body/customerRef', message: `At most ${MAX_TEXT.customerRef} characters.` })
+  // B-W2b-290 (SAL-023, SAL-013): no order while the customer is on hold for this company (409); its PO number where its terms require one.
+  const poMissing = await assertOrderMayBeTaken(db, { partyId: party.row.id, companyId: company.id }, body.customerRef)
+  if (poMissing) issues.push(poMissing)
   if (body.internalNote && body.internalNote.trim().length > MAX_TEXT.internalNote) issues.push({ path: 'body/internalNote', message: `At most ${MAX_TEXT.internalNote} characters.` })
 
   // The customer's commercial terms (B-W2a-19), or the terms chosen.

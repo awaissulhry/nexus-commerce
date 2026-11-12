@@ -205,8 +205,10 @@ describe('every design case draws in both languages with no key left on screen',
   })
 
   it('no money anywhere on these screens', () => {
+    // B-W2b-288 (FU2:03): the lab's price is the only money, shown to the cost grain (its own cases, lab-cost/lab-cost.vitest).
+    const priced = (id: string) => id.startsWith('w2b-288-lab-cost') && !id.endsWith('no-grain')
     for (const screen of [listScreen, lotScreen] as DesignScreen<unknown>[]) {
-      for (const item of screen.cases) expect(render(screen, item.model, 'en'), item.id).not.toMatch(/€|EUR\b/)
+      for (const item of screen.cases) if (!priced(item.id)) expect(render(screen, item.model, 'en'), item.id).not.toMatch(/€|EUR\b/)
     }
   })
 })

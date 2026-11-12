@@ -2,6 +2,8 @@ import { CHANGE_KINDS, IMPACTS, REGULATION_KINDS, REGULATION_STATUSES, type Regu
 import { LANGUAGE_CODE, MARK_CODE, MARKET_CODE, MARKET_CODE_MAX } from '@nexus/factory-domain/compliance/markets/rules'
 import { OPERATOR_ROLES, type OperatorRole } from '@nexus/factory-domain/compliance/operators/rules'
 import { PHRASE_KINDS, type PhraseKind } from '@nexus/factory-domain/compliance/phrases/rules'
+// B-W2b-288: the Templates tab's kind filter.
+import { PPE_TEXT_KINDS } from '@nexus/factory-domain/compliance/ppe-texts/rules'
 import { CHECK_KEY, COMPLIANCE_GATES, LOOSENINGS, looseningOf, OVERRIDE_DAYS_MAX, PRODUCT_TYPES, REQUIREMENT_KINDS, type ComplianceGate, type Editable, type Loosening, type ProductType, type RequirementKind } from '@nexus/factory-domain/compliance/requirements/rules'
 import { PPE_CATEGORIES, type PpeCategory } from '@nexus/factory-domain/compliance/cert-gate/gate'
 import { isLoosening, type EvidenceRule } from '@nexus/factory-domain/quality/lab/rules'
@@ -20,7 +22,8 @@ import type { GateRow, Market, Operator, OperatorBody, Phrase, Requirement, Requ
 
 // ---- the address ---------------------------------------------------------------------------------------------------------
 
-export const SETTINGS_TABS = ['cr6', 'gates', 'regulations', 'markets', 'phrases', 'operators'] as const
+// B-W2b-288 (FU2:01): Templates — the PPE consultant's yes per template of generated PPE texts (GATE-PPE-TEXTS).
+export const SETTINGS_TABS = ['cr6', 'gates', 'regulations', 'markets', 'phrases', 'operators', 'templates'] as const
 export type SettingsTab = (typeof SETTINGS_TABS)[number]
 export const CR6_SCOPES = ['company', 'all'] as const
 export type Cr6Scope = (typeof CR6_SCOPES)[number]
@@ -50,7 +53,7 @@ export interface SettingsAddress {
 export const EMPTY_ADDRESS: SettingsAddress = Object.freeze({ tab: null, scope: 'company', add: false, open: null, change: null, q: '', kind: null, status: null, role: null, market: null, watch: 'open' })
 
 const oneOf = <T extends string>(list: readonly T[], value: string | null | undefined): T | null => ((list as readonly string[]).includes(value ?? '') ? (value as T) : null)
-const KINDS: readonly string[] = [...REGULATION_KINDS, ...PHRASE_KINDS]
+const KINDS: readonly string[] = [...REGULATION_KINDS, ...PHRASE_KINDS, /* B-W2b-288 */ ...PPE_TEXT_KINDS]
 
 export function addressOf(params: { get(name: string): string | null } | null | undefined): SettingsAddress {
   const get = (name: string) => params?.get(name) ?? null
@@ -111,6 +114,10 @@ export interface RulesCan {
   readonly materialsView: boolean
   readonly stylesView: boolean
   readonly partiesView: boolean
+  /** B-W2b-288: compliance.ppeTexts.manage — record and withdraw a PPE consultant's yes (the owner's). */
+  readonly ppeTextsManage: boolean
+  /** B-W2b-288: files.read — open the consultant's file. */
+  readonly filesRead: boolean
 }
 
 export function rulesCan(permissions: readonly string[]): RulesCan {
@@ -126,6 +133,9 @@ export function rulesCan(permissions: readonly string[]): RulesCan {
     materialsView: has('product.materials.view'),
     stylesView: has('product.styles.view'),
     partiesView: has('parties.view'),
+    // B-W2b-288
+    ppeTextsManage: has('compliance.ppeTexts.manage'),
+    filesRead: has('files.read'),
   }
 }
 
@@ -875,5 +885,7 @@ export function liveTabsOf(type: string): SettingsTab[] {
   if (type === 'compliance_rules.market_changed') return ['markets', 'phrases', 'operators', 'gates']
   if (type === 'compliance_rules.phrase_changed' || type === 'compliance_rules.translation_changed') return ['phrases', 'markets']
   if (type === 'compliance_rules.operator_changed') return ['operators']
+  // B-W2b-288 (FU2:01): a PPE consultant's yes recorded or withdrawn.
+  if (type === 'compliance_ppe_texts.approval_changed') return ['templates']
   return []
 }

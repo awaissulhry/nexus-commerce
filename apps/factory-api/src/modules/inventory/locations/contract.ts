@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { LOCATION_KINDS, LOCATION_STATUSES } from '@nexus/factory-domain/inventory/locations/rules'
+import { blockView } from '../locations-depth/contract'
 
 /**
  * The locations' contracts (SCM-176, SCM-177, SCM-178; A2 SCR-065). A code is upper case (a typed one is upper-cased),
@@ -28,6 +29,10 @@ export const locationView = output({
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
+  /** B-W2b-289 (SCM-178): the code its bin label carries and a scan reads; null: no label yet. */
+  labelCode: z.string().nullable(),
+  /** B-W2b-289 (SCM-181): its block (holds false once the until-day passed); null: not blocked. */
+  block: blockView.nullable(),
 })
 export type LocationView = z.infer<typeof locationView>
 

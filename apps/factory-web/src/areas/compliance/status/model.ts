@@ -120,7 +120,7 @@ export function rowsShown(rows: readonly BoardRow[], status: StatusFilter | null
 }
 
 /** The tone of a cell's state (always drawn with its word and icon). */
-export const CELL_TONE: Readonly<Record<CellState, 'success' | 'warning' | 'danger' | 'info'>> = { READY: 'success', MISSING: 'warning', BLOCKED: 'danger', EXPIRING: 'info' }
+export const CELL_TONE: Readonly<Record<CellState, 'success' | 'warning' | 'danger' | 'info' | 'neutral'>> = { READY: 'success', MISSING: 'warning', BLOCKED: 'danger', EXPIRING: 'info', /* B-W2b-288 */ NOT_SOLD: 'neutral' }
 
 /** Market codes that are not the ISO region's (the market profiles' UK and EL). */
 const REGION_OF: Readonly<Record<string, string>> = { UK: 'GB', EL: 'GR' }
@@ -160,7 +160,7 @@ export function cellWalk(rows: readonly BoardRow[], markets: readonly string[], 
 
 /** The cell Enter on a row opens: its first blocked, else missing, else expiring cell, else its first. */
 export function firstCellOf(row: BoardRow): CellRef | null {
-  const rank: Readonly<Record<CellState, number>> = { BLOCKED: 0, MISSING: 1, EXPIRING: 2, READY: 3 }
+  const rank: Readonly<Record<CellState, number>> = { BLOCKED: 0, MISSING: 1, EXPIRING: 2, READY: 3, /* B-W2b-288: last */ NOT_SOLD: 4 }
   const cell = [...row.cells].sort((a, b) => rank[a.state] - rank[b.state])[0]
   return cell ? { styleId: row.style.id, market: cell.marketCode } : null
 }

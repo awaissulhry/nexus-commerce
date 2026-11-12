@@ -19,6 +19,7 @@ import { lockCells, reserveReleased, tenantOf } from '../cells'
 import { contentsView, headerView, lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { assertOrderCaps, capRequestsOf } from './backorder'
 import { freightView } from './freight'
+import { assertNotOnHold } from '../../parties/holds/stops'
 
 /**
  * The office's shipments (B-W1-46; LOG-001, LOG-002, LOG-039, GAP-002; A2 SCR-066, SCR-067): plan a DRAFT shipment
@@ -367,6 +368,8 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
   const carrierName = carrierNameFor(transportBy, carrierCode)
 
   const { result } = await command(caller, { name: 'shipping.create', idempotencyKey, input: body }, async (tools) => {
+    // B-W2b-290 (SAL-023): no new shipment while the customer is on hold for the order's company (409 in words).
+    await assertNotOnHold(tools.tx, { partyId: order.partyId, companyId: order.companyId }, 'SHIPMENT')
     const id = newId()
     const number = await allocateNumber(tools, { companyId: order.companyId, kind: 'SHIPMENT' }, { type: 'Shipment', id })
     await tools.tx.shipment.create({

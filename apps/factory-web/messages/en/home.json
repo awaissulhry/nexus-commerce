@@ -574,6 +574,7 @@
       "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Site {label}: someone is close to or over the yearly overtime cap.",
       "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Site {label}: someone is under the minimum rest, or would be before their next shift.",
       "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Site {label}: someone is close to or over the weekly average of working hours.",
+      "alerts.LOW_STOCK": "{label} is below its minimum: {position} {unit} against {minimum} {unit}.",
       "why.RULE_ALERT.assigned": "It is assigned to you.",
       "why.RULE_ALERT.recipient": "The rule \"{rule}\" tells you.",
       "alerts.UNKNOWN": "Alert on {label}."
