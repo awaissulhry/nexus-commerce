@@ -13,6 +13,12 @@ import { officeContextOf, siteFor } from '../access'
 import { SITE_COLUMNS, type SiteRow } from '../store'
 import type { EditSettingsBody } from './contract'
 import { readSettings, SETTINGS_SELECT, settingsValuesOf, settingsViewOf, siteViewOf, storedAnswer, type SettingsRow } from './store'
+// B-W2b-318 (PLN-068, B-W2b-293's gap): the size-run rule and the site's size groups.
+import { mergeSizeRun, sizeRunProblems, type SizeRunValues } from '@nexus/factory-domain/planning/lot-sizing/size-run'
+import { sizeRunOf } from './store'
+
+/** B-W2b-318: the size-run fields that differ. */
+const runChanges = (a: SizeRunValues, b: SizeRunValues): string[] => [...(a.sizeRunRule !== b.sizeRunRule ? ['sizeRunRule'] : []), ...(JSON.stringify(a.sizeGroups) !== JSON.stringify(b.sizeGroups) ? ['sizeGroups'] : [])]
 
 /**
  * A site's planning settings (B-W2a-16; PLN-003; design planning.settings "Horizon & fences"): how far the plan looks
@@ -72,9 +78,11 @@ export async function editSettings(caller: CommandCaller, siteId: string, body: 
   if (!existing && body.version !== undefined) throw new NotFoundError('This site has no planning settings yet; save them without a version.')
   const before = settingsValuesOf(existing)
   const after = merged(before, body)
-  const problems = settingsProblems(after)
+  // B-W2b-318 (PLN-068): the size-run rule and groups, said first in words.
+  const runAfter = mergeSizeRun(sizeRunOf(existing), body)
+  const problems = [...settingsProblems(after), ...sizeRunProblems(runAfter)]
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The planning settings cannot be saved this way.', problems)
-  const changed = changedSettings(before, after)
+  const changed = [...changedSettings(before, after), ...runChanges(sizeRunOf(existing), runAfter)]
   const input = { siteId: site.id, ...body }
   if (existing && changed.length === 0) {
     const replay = await storedAnswer<ReturnType<typeof detailOf> & { changed: string[] }>(caller, { name: 'planning.editSettings', idempotencyKey, input }, [undefined, { type: 'PlanningSettings', id: site.id, expectedVersion: body.version }])
@@ -92,7 +100,10 @@ export async function editSettings(caller: CommandCaller, siteId: string, body: 
       // The row is locked by the version bump (when it existed); a change made since the read is never overwritten.
       const current = existing ? await readSettings(tools.tx, site.id) : null
       const from = settingsValuesOf(current)
-      const data = merged(from, body)
+      // B-W2b-318 (PLN-068): the size run at the version locked.
+      const runFrom = sizeRunOf(current)
+      const run = mergeSizeRun(runFrom, body)
+      const data = { ...merged(from, body), sizeRunRule: run.sizeRunRule, sizeGroups: run.sizeGroups.map((group) => [...group]) }
       if (current) {
         await tools.tx.planningSettings.update({ where: { id: site.id }, data, select: { id: true } })
       } else {
@@ -100,8 +111,8 @@ export async function editSettings(caller: CommandCaller, siteId: string, body: 
         if (count !== 1) throw new ConflictError('The planning settings of this site were just saved by someone else; reload them and save again.')
       }
       const row = (await readSettings(tools.tx, site.id))!
-      const fields = changedSettings(from, settingsValuesOf(row))
-      tools.audit({ recordType: 'PlanningSettings', recordId: site.id, companyId: site.companyId, siteId: site.id, before: current ? from : null, after: settingsValuesOf(row) })
+      const fields = [...changedSettings(from, settingsValuesOf(row)), ...runChanges(runFrom, sizeRunOf(row))]
+      tools.audit({ recordType: 'PlanningSettings', recordId: site.id, companyId: site.companyId, siteId: site.id, before: current ? { ...from, ...runFrom } : null, after: { ...settingsValuesOf(row), ...sizeRunOf(row) } })
       tools.emit({ type: 'planning.settings_changed', subject: site.id, companyId: site.companyId, siteId: site.id, payload: { siteId: site.id, created: current === null, changed: fields } })
       return { ...detailOf(site, row), changed: fields as string[] }
     },

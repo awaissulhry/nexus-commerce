@@ -7,6 +7,10 @@ import { NO_SUPPLY_RULES, suggestionFor, type Suggestion, type SupplyRulesOf } f
 import type { LotFacts, OpenPurchase, StockEntry } from './netting'
 // B-W2a-22 (MRP every day): the netting part by part, with reservations and firm planned orders (./mrp/net).
 import { pegMaterial, type DemandPart, type FirmSupply, type MaterialPegging, type PlanReservation } from './mrp/net'
+// B-W2b-318 (PLN-006, PLN-081): lot sizing, and scrap and yield on top of the BOM's wastage.
+import { nextLotOf, type LotRule } from './lot-sizing/lots'
+import { withScrapYield, type ScrapYield } from './lot-sizing/scrap'
+import type { PlanLevel } from './lot-sizing/parameters'
 
 /**
  * One planning run of a site, pure (PLN-062, PLN-063, PLN-064, PLN-065, PLN-066; design 02 "What to buy & make"):
@@ -77,6 +81,10 @@ export interface PlanOrderLine {
   /** B-W2a-22: the line's party (the pegging names the line with it), and whether it is a made-to-measure unit. */
   readonly partyId?: string | null
   readonly madeToMeasure?: boolean
+  /** B-W2b-318 (PLN-088): the order's backlog rank (SalesOrder.backlogRank, 1 first); left out or null: not ranked. */
+  readonly backlogRank?: number | null
+  /** B-W2b-318 (PLN-008): the plan level of the line's style-colourway (its finished garments at the site); none: the site's size-run rule. */
+  readonly planLevel?: PlanLevel | null
 }
 
 export interface PlanRevision {
@@ -259,6 +267,13 @@ export interface PlanInput {
   /** B-W2a-22: the run's supplier and suggestion choice; none: W1's. */
   readonly buying?: BuyingRule
   /**
+   * B-W2b-318 (PLN-006): the material's lot sizing at the site (./lot-sizing/lots; ORDERS rows only): the suggestion is
+   * the next order under it, then the supplier's rounding; null or left out: lot for lot (W1).
+   */
+  readonly lotSizing?: (itemId: string, itemColourId: string | null) => LotRule | null
+  /** B-W2b-318 (PLN-081): scrap and yield on top of the BOM's wastage (./lot-sizing/scrap); left out: none. */
+  readonly scrapYield?: ScrapYield
+  /**
    * B-W2b-20: the day each open work order starts on the site's working plan (its first bar or part on the planning
    * board), when it has one: its material is needed then (pegging, readiness, the need date), not on its order line's
    * date. A work order not on the board keeps its order line's date.
@@ -365,12 +380,14 @@ export function planRequirements(input: PlanInput): PlanResult {
         }
       }
       // B-W2b-293: the multi-level explosion when the run gives it, else W1's one level.
-      const perPiece = input.perGarment?.(line, row.size) ?? exactRequirements(revision.lines, { sizes: [row.size], colourwayIds: [line.colourwayId] }, unitsOf).map((need) => ({
+      const exploded = input.perGarment?.(line, row.size) ?? exactRequirements(revision.lines, { sizes: [row.size], colourwayIds: [line.colourwayId] }, unitsOf).map((need) => ({
         itemId: need.itemId,
         itemColourId: need.itemColourId,
         quantity: need.quantity,
         lineIds: need.lineIds,
       }))
+      // B-W2b-318 (PLN-081): the material's and the garment's scrap and yield.
+      const perPiece = withScrapYield(input.scrapYield, line, row.size, exploded)
       const draft: SourceDraft = { line, size: row.size, sizeIndex, ordered: row.pieces, made: 0, perPiece, openCells: [] }
       drafts.push(draft)
       draftOf.set(cellKey(line.orderLineId, row.size), draft)
@@ -436,6 +453,8 @@ export function planRequirements(input: PlanInput): PlanResult {
     const slot = `${cellKey(draft.line.orderLineId, draft.size)}|${key}`
     const size = draft.line.madeToMeasure ? null : draft.size
     const base = { orderId: draft.line.orderId, orderNumber: draft.line.orderNumber, orderLineId: draft.line.orderLineId, lineSeq: draft.line.lineSeq, partyId: draft.line.partyId ?? null, size, dueDate: draft.line.dueDate }
+    // B-W2b-318 (PLN-088): the order's backlog rank rides on its parts (the netting shares scarce material by it).
+    if (typeof draft.line.backlogRank === 'number') Object.assign(base, { rank: draft.line.backlogRank })
     const parts: { part: Omit<DemandPart, 'issued'>; own: Decimal }[] = []
     let piecesLeft = source.pieces
     let cumulative = 0
@@ -573,7 +592,10 @@ export function planRequirements(input: PlanInput): PlanResult {
       action = chosen.action
       supplierId = chosen.action === 'MAKE' ? null : chosen.supplierId
     }
-    const computed = chosen?.suggestion ?? suggestionFor(netting.net, action, item.units, action === 'BUY' ? supplyRulesOf(item.id, supplierId) : NO_SUPPLY_RULES)
+    // B-W2b-318 (PLN-006): the item's lot sizing sizes the next order (./lot-sizing/lots); lot for lot: the whole net need.
+    const lot = nextLotOf(input.lotSizing?.(item.id, material.itemColourId) ?? null, netting)
+    const sized = lot === null ? chosen : (input.buying?.({ item, itemColourId: material.itemColourId, action, supplierId, quantity: lot }) ?? null)
+    const computed = sized?.suggestion ?? suggestionFor(lot ?? netting.net, action, item.units, action === 'BUY' ? supplyRulesOf(item.id, supplierId) : NO_SUPPLY_RULES)
     // A carried firm planned order keeps its unit: the line's suggestion is said in it too (rounded up).
     const firmUom = firm ? (firm.uom as Uom) : null
     const suggestion =

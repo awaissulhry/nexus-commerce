@@ -45,6 +45,12 @@ export const manifest = defineManifest({
   'PATCH /planning/work-centres/:workCentreId/capacity': { audiences: ['office'], permission: 'planning.settings.manage', scope: 'record' },
   'GET /planning/capacity': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/capacity/cell': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  // B-W2b-318: the item's requirement profile (./item-profile), the calculated delays, scarce material by priority
+  // (./allocation-priority): read with planning.view over the site, from the plan computed now. The rules per item are
+  // written on the item-parameters routes (a plan level also asks planning.strategy.manage).
+  'GET /planning/item-profile': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/delays': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/allocation-priority': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   // B-W2a-22: MRP every day.
   'POST /planning/requirements/:requirementId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   'POST /planning/requirements/:requirementId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
