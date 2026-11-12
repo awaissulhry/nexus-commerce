@@ -1909,6 +1909,7 @@
     "planning_milestones_override": "Let an order's work start before a gate, with a reason (not the gate's planner)",
     "planning_planned_convert": "Make the plan's planned work orders and planned subcontract orders real (needs the work-order and subcontracting permissions too)",
     "planning_promise_view": "See available to promise and ask when an order can be ready (the promise calculator, a quote's suggested dates, an order line's dates per size)",
+    "planning_reports_view": "See a site's planning reports: planned against actual start and finish of the finished work orders per line and week, load and utilisation per line, the plant and each workshop over the weeks, and each material's days of cover and projected stock-out date (only at sites you plan; no money)",
     "planning_promise_manage": "Record an order line's promise per size (only sizes a valid certificate covers through the date)",
     "planning_schedule_pin": "Pin bars and work orders on the planning board where they are, or unpin them",
     "planning_subcontract_capacity": "Keep the workshops' weekly capacity (minutes or garments a week per kind of work)",
