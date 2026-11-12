@@ -302,6 +302,15 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-W2b-314
     case 'LOW_STOCK':
       return it ? 'Quando un materiale scende sotto il minimo dei suoi parametri di pianificazione' : 'When a material falls below the minimum of its planning parameters'
+    // B-W2b-350: the supply alerts.
+    case 'PO_CONFIRMED_LATE':
+      return it
+        ? `Quando il fornitore conferma una riga di un ordine di acquisto almeno ${days(n('days'))} dopo il giorno in cui serve`
+        : `When a supplier confirms a purchase order line at least ${days(n('days'))} later than the day it is needed`
+    case 'SUPPLIER_STATUS_CHANGED':
+      return it
+        ? `Quando un fornitore viene approvato con condizioni, sospeso, bloccato o reso inattivo (avviso per ${days(n('days'))})`
+        : `When a supplier is approved with conditions, put on hold, blocked or made inactive (an alert for ${days(n('days'))})`
   }
 }
 
@@ -349,6 +358,16 @@ export const ALERT_TEMPLATES = {
   'alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE': { en: 'Site {label}: someone is close to or over the weekly average of working hours.', it: 'Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.' },
   // B-W2b-314: a material below its minimum at a site ({label} "LEA-BLK at A1"; {position} what the site has and expects, {minimum}, {unit}).
   'alerts.LOW_STOCK': { en: '{label} is below its minimum: {position} {unit} against {minimum} {unit}.', it: '{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.' },
+  // B-W2b-350: a line confirmed later than needed ({label} the order's number; the worst line's {confirmedDate}, {needDate} and
+  // {days} between them; {salesOrder} the customer order it puts at risk first, by its promise).
+  'alerts.PO_CONFIRMED_LATE': { en: 'Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}).', it: "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate})." },
+  'alerts.PO_CONFIRMED_LATE.AT_RISK': { en: 'Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}): it puts customer order {salesOrder} at risk.', it: "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate}): mette a rischio l'ordine cliente {salesOrder}." },
+  // B-W2b-350: a supplier's status ({label} its code and name; {changedOn} the day it changed).
+  'alerts.SUPPLIER_STATUS_CHANGED': { en: 'The status of supplier {label} changed on {changedOn}.', it: 'Lo stato del fornitore {label} è cambiato il {changedOn}.' },
+  'alerts.SUPPLIER_STATUS_CHANGED.CONDITIONAL': { en: 'Supplier {label} is approved with conditions since {changedOn}.', it: 'Il fornitore {label} è approvato con condizioni dal {changedOn}.' },
+  'alerts.SUPPLIER_STATUS_CHANGED.ON_HOLD': { en: 'Supplier {label} is on hold since {changedOn}: no new purchase order until it is approved again.', it: 'Il fornitore {label} è sospeso dal {changedOn}: nessun nuovo ordine di acquisto finché non viene approvato di nuovo.' },
+  'alerts.SUPPLIER_STATUS_CHANGED.BLOCKED': { en: 'Supplier {label} is blocked since {changedOn}: no new purchase order.', it: 'Il fornitore {label} è bloccato dal {changedOn}: nessun nuovo ordine di acquisto.' },
+  'alerts.SUPPLIER_STATUS_CHANGED.INACTIVE': { en: 'Supplier {label} is inactive since {changedOn}: no new purchase order.', it: 'Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.' },
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
@@ -388,6 +407,17 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
       return { key: f.never === true ? 'alerts.INTEGRATION_FAILING.NEVER' : 'alerts.INTEGRATION_FAILING', params: { label, hours: num('hours') } }
     case 'LOW_STOCK':
       return { key: 'alerts.LOW_STOCK', params: { label, position: text('position'), minimum: text('minimum'), unit: text('unit') } }
+    // B-W2b-350
+    case 'PO_CONFIRMED_LATE':
+      return {
+        key: text('salesOrder') ? 'alerts.PO_CONFIRMED_LATE.AT_RISK' : 'alerts.PO_CONFIRMED_LATE',
+        params: { label, confirmedDate: text('confirmedDate'), needDate: text('needDate'), days: num('days'), salesOrder: text('salesOrder') },
+      }
+    case 'SUPPLIER_STATUS_CHANGED': {
+      const status = text('status')
+      const known = status === 'CONDITIONAL' || status === 'ON_HOLD' || status === 'BLOCKED' || status === 'INACTIVE'
+      return { key: known ? `alerts.SUPPLIER_STATUS_CHANGED.${status}` : 'alerts.SUPPLIER_STATUS_CHANGED', params: { label, changedOn: text('changedOn') } }
+    }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

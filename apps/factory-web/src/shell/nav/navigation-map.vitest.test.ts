@@ -109,6 +109,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
       '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/sales/customers': 'parties.view', // GET /parties
+      '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
@@ -139,6 +140,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/purchasing/sourcing': 'purchasing.view', // GET /purchasing/sample-orders (B-W2b-347)
+      '/purchasing/reports': 'purchasing.reports.view', // GET /purchasing/reports/spend (B-W2b-350)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
       '/warehouse/hides': 'inventory.stock.view', // GET /inventory/hides
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
@@ -146,6 +148,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/receipts': 'inventory.stock.view', // GET /inventory/receipts
       '/warehouse/picking': 'inventory.stock.view', // GET /inventory/picking/pick-lists (B-W2a-58)
       '/warehouse/counts': 'inventory.counts.view', // GET /inventory/stock-counts
+      '/warehouse/transfers': 'inventory.stock.view', // GET /inventory/transfer-orders (B-W2b-326)
       '/warehouse/shipments': 'shipping.view', // GET /shipping/shipments
       '/warehouse/locations': 'inventory.locations.view', // GET /inventory/locations
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
@@ -254,6 +257,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/receipts',
       '/warehouse/picking',
       '/warehouse/counts',
+      '/warehouse/transfers',
       '/warehouse/shipments',
       '/warehouse/reports',
       '/warehouse/locations',
@@ -276,6 +280,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports',
       '/home/alerts',
       '/sales/customers',
+      // B-W2b-322: Sales › Inquiries.
+      '/sales/inquiries',
       '/sales/quotes',
       '/sales/orders',
       '/sales/returns',
