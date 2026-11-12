@@ -1906,6 +1906,8 @@
     "planning_milestones_manage": "Keep the pre-production gates of a sales order and mark them done",
     "planning_milestones_override": "Let an order's work start before a gate, with a reason (not the gate's planner)",
     "planning_planned_convert": "Make the plan's planned work orders and planned subcontract orders real (needs the work-order and subcontracting permissions too)",
+    "planning_subcontract_capacity": "Keep the workshops' weekly capacity (minutes or garments a week per kind of work)",
+    "planning_subcontract_outsource": "Send one operation of a work order outside to an approved workshop or bring it back in, and set when a draft subcontract order's kit leaves (making or cancelling the order needs the subcontracting permission too)",
     "planning_strategy_manage": "Set how a site meets the demand for a garment or a component: make to order, make to stock or assemble to order",
     "alerts_view": "See the alerts of the records you see, and the exception rules",
     "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",

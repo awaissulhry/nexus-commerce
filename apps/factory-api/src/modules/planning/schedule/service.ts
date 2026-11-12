@@ -122,7 +122,12 @@ const WORK_ORDER_COLUMNS = {
   style: { select: { id: true, code: true, name: true, productType: true } },
   sizes: { select: { quantity: true, partyId: true } },
   // B-W2b-82: an unplanned operation has no target quantity, so no bar and no load: the board stays the routing's.
-  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true }, orderBy: { seq: 'asc' as const } },
+  operations: {
+    where: { routingSeq: { not: null } },
+    // B-W2b-321 (PLN-165): an operation sent outside, and the workshop of its subcontract order.
+    select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true, outsourced: true, subcontractOrder: { select: { partyId: true } } },
+    orderBy: { seq: 'asc' as const },
+  },
 } as const
 
 /** The site's open work orders, as the board needs them (`ids`: only those). */
@@ -173,7 +178,8 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
         workCentreId: operation.workCentreId,
         standardMinutes: operation.standardMinutes.toString(),
         remaining: Math.max(0, garments - (done.get(operation.id) ?? 0)),
-        outside: outside.get(operation.id) ?? null,
+        // B-W2b-321: an operation sent outside is worked at its subcontract order's workshop (the routing's days when it is the same).
+        outside: operation.outsourced && operation.subcontractOrder ? { partyId: operation.subcontractOrder.partyId, transitDays: outside.get(operation.id)?.partyId === operation.subcontractOrder.partyId ? outside.get(operation.id)!.transitDays : null } : (outside.get(operation.id) ?? null),
       })),
     })
   }

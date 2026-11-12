@@ -68,7 +68,8 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
       style: { select: { id: true, code: true, name: true } },
       sizes: { select: { quantity: true } },
       // B-W2b-82: an unplanned operation has no target quantity, so no load: the plan stays the routing's.
-      operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } },
+      // B-W2b-321 (PLN-165): an operation done outside books its workshop (capacity/subcontractors.ts), not our lanes.
+      operations: { where: { routingSeq: { not: null }, outsourced: false }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } },
     },
     orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
   })

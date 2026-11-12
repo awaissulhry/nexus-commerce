@@ -60,6 +60,29 @@ import { demandContract, demandRowsContract } from './demand/contract'
 import { readDemand, readDemandRows } from './demand/demand'
 import { bulkStrategyContract, listStrategyContract, setStrategyContract } from './strategy/contract'
 import { bulkStrategy, listStrategy, setStrategy } from './strategy/strategy'
+// B-W2b-321: work to subcontractors (weekly capacity, only approved workshops, kit timing, in-house or outside, the heatmap).
+import { subcontractorCapacity, subcontractorCell } from './capacity/subcontractors'
+import { heatmapContract } from './heatmap/contract'
+import { heatmap } from './heatmap/heatmap'
+import {
+  allocationWorkshopsContract,
+  createCapacityContract,
+  deleteCapacityContract,
+  editCapacityContract,
+  fromAllocationContract,
+  inHouseContract,
+  kitTimingContract,
+  listCapacityContract,
+  outsideContract,
+  setKitDueContract,
+  subcontractorCapacityContract,
+  subcontractorCellContract,
+  workOrderWorkshopsContract,
+} from './subcontract-capacity/contract'
+import { kitTiming, setKitDue } from './subcontract-capacity/kit-timing'
+import { bringInHouse, createFromAllocation, sendOutside } from './subcontract-capacity/outside'
+import { createCapacity, deleteCapacity, editCapacity, listCapacity } from './subcontract-capacity/rows'
+import { allocationWorkshops, workOrderWorkshops } from './subcontract-capacity/workshops'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -176,4 +199,19 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/strategy', { schema: listStrategyContract }, async (request) => listStrategy(request, request.query))
   app.put('/planning/strategy/items/:itemId', { schema: setStrategyContract }, async (request) => setStrategy(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/strategy/bulk', { schema: bulkStrategyContract }, async (request) => bulkStrategy(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-321: work to subcontractors.
+  app.get('/planning/subcontract-capacity', { schema: listCapacityContract }, async (request) => listCapacity(request, request.query))
+  app.post('/planning/subcontract-capacity', { schema: createCapacityContract }, async (request, reply) => reply.code(201).send(await createCapacity(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/planning/subcontract-capacity/:capacityId', { schema: editCapacityContract }, async (request) => editCapacity(request, request.params.capacityId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/planning/subcontract-capacity/:capacityId', { schema: deleteCapacityContract }, async (request) => deleteCapacity(request, request.params.capacityId, request.query.version, idempotencyKeyFrom(request)))
+  app.get('/planning/capacity/subcontractors', { schema: subcontractorCapacityContract }, async (request) => subcontractorCapacity(request, request.query))
+  app.get('/planning/capacity/subcontractors/cell', { schema: subcontractorCellContract }, async (request) => subcontractorCell(request, request.query))
+  app.get('/planning/heatmap', { schema: heatmapContract }, async (request) => heatmap(request, request.query))
+  app.get('/planning/allocation/workshops', { schema: allocationWorkshopsContract }, async (request) => allocationWorkshops(request, request.query))
+  app.post('/planning/allocation/subcontract-orders', { schema: fromAllocationContract }, async (request) => createFromAllocation(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/work-orders/:workOrderId/workshops', { schema: workOrderWorkshopsContract }, async (request) => workOrderWorkshops(request, request.params.workOrderId, request.query))
+  app.get('/planning/work-orders/:workOrderId/kit-timing', { schema: kitTimingContract }, async (request) => kitTiming(request, request.params.workOrderId, request.query))
+  app.post('/planning/work-orders/:workOrderId/operations/:operationId/outside', { schema: outsideContract }, async (request) => sendOutside(request, request.params.workOrderId, request.params.operationId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/work-orders/:workOrderId/operations/:operationId/in-house', { schema: inHouseContract }, async (request) => bringInHouse(request, request.params.workOrderId, request.params.operationId, request.body, idempotencyKeyFrom(request)))
+  app.put('/planning/subcontract-orders/:subcontractOrderId/kit-due', { schema: setKitDueContract }, async (request) => setKitDue(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
 })

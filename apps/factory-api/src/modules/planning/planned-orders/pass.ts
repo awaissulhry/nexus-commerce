@@ -20,6 +20,8 @@ import { addWorkingDaysFor } from '../../../platform/calendars/service'
 import type { PlanInputs } from '../inputs'
 import { dayOf, type SiteRow } from '../store'
 import { readOpenPlanned, type PlannedRow } from './store'
+// B-W2b-321: only approved workshops get planned work.
+import { unqualifiedWorkshops } from '../subcontract-capacity/planned'
 
 /**
  * The run's make and subcontract pass (B-W2b-293; PLN-067, PLN-068, PLN-069, PLN-089; design planning.mrp "To make"):
@@ -68,8 +70,9 @@ async function sizeRunOf(tools: CommandTools, siteId: string): Promise<{ rule: S
 }
 
 /** The routing of each revision planned: its steps, and its outside work. */
-async function routingsOf(tools: CommandTools, revisionIds: readonly string[]) {
-  const steps = revisionIds.length === 0 ? [] : await tools.tx.routingOperation.findMany({ where: { revisionId: { in: [...revisionIds] } }, select: { revisionId: true, seq: true, supplierId: true, transitDays: true, standardMinutes: true }, orderBy: [{ revisionId: 'asc' }, { seq: 'asc' }] })
+async function routingsOf(tools: CommandTools, revisionIds: readonly string[], qualifiedAt: { readonly companyId: string; readonly today: BusinessDate }) {
+  // B-W2b-321: the steps' kind of work and library operation (the workshop's qualification is asked for them).
+  const steps = revisionIds.length === 0 ? [] : await tools.tx.routingOperation.findMany({ where: { revisionId: { in: [...revisionIds] } }, select: { revisionId: true, seq: true, supplierId: true, transitDays: true, standardMinutes: true, workCentreKind: true, operationId: true }, orderBy: [{ revisionId: 'asc' }, { seq: 'asc' }] })
   const partyIds = [...new Set(steps.flatMap((step) => (step.supplierId ? [step.supplierId] : [])))]
   const parties = partyIds.length === 0 ? [] : await tools.tx.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, roles: true, status: true } })
   const partyOf = new Map(parties.map((party) => [party.id, party]))
@@ -82,8 +85,10 @@ async function routingsOf(tools: CommandTools, revisionIds: readonly string[]) {
   }
   const byRevision = new Map<string, typeof steps>()
   for (const step of steps) byRevision.set(step.revisionId, [...(byRevision.get(step.revisionId) ?? []), step])
+  // B-W2b-321 (PLN-162): only a workshop qualified for its steps gets planned work; the others stay MAKE with why.
+  const unqualified = await unqualifiedWorkshops(tools.tx, qualifiedAt.companyId, steps, qualifiedAt.today)
   const outside = new Map<string, OutsideWork | null>()
-  for (const revisionId of revisionIds) outside.set(revisionId, outsideWorkOf(byRevision.get(revisionId) ?? [], workshop))
+  for (const revisionId of revisionIds) outside.set(revisionId, outsideWorkOf(byRevision.get(revisionId) ?? [], (partyId) => { const base = workshop(partyId); const why = unqualified.get(`${revisionId}|${partyId}`); return base.usable && why ? { usable: false, why } : base }))
   return { stepsOf: (revisionId: string) => byRevision.get(revisionId) ?? [], outsideOf: (revisionId: string) => outside.get(revisionId) ?? null }
 }
 
@@ -125,7 +130,7 @@ export async function planWork(tools: CommandTools, site: SiteRow, runId: string
   const ownOf = new Map(own.map((row) => [row.id, row.styleRevisionId]))
   const cells = openCells(lines, (orderLineId) => ownOf.get(orderLineId) ?? null, inputs.input.workOrderCells, kept.flatMap((row) => demandOf(row.demand)))
   const revisionIds = [...new Set(cells.map((cell) => cell.line.revisionId!))].sort()
-  const routings = await routingsOf(tools, revisionIds)
+  const routings = await routingsOf(tools, revisionIds, { companyId: site.companyId, today: runDate })
   const styleIds = [...new Set(cells.map((cell) => cell.line.styleId))]
   const styles = styleIds.length === 0 ? [] : await tx.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, sizes: true } })
   const sizesOfStyle = new Map(styles.map((style) => [style.id, style.sizes]))
