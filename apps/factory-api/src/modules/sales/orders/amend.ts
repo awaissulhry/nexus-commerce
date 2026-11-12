@@ -5,7 +5,7 @@ import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { amendmentDiff, amendmentProblems, amendStateProblem, nextRevision, snapshotOf, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
-import { isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
+import { isGoodsLine, isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { lockOrderLines } from '../../production/work-orders/store'
@@ -126,7 +126,8 @@ export interface AmendmentPlan {
 export async function planAmendment(db: Reader, order: OrderRow, status: OrderRow['status'], facts: OrderFacts, body: AmendBody, now: Date): Promise<AmendmentPlan | Issue[]> {
   const stateProblem = amendStateProblem(status)
   if (stateProblem) return [{ path: 'body', message: stateProblem }]
-  const lines = facts.lines
+  if (facts.lines.some((line) => line.kind === 'FEE')) return [{ path: 'body', message: 'This order has a fee line: a fee is changed on its own line, so the order is not amended here.' }]
+  const lines = facts.lines.filter(isGoodsLine)
   if (lines.some((line) => line.kind === 'MADE_TO_MEASURE')) return [{ path: 'body', message: 'This order has a made-to-measure unit: made-to-measure comes later, so the order is not amended here.' }]
   const inWorkOrders = new Map<string, Map<string, number>>()
   for (const row of facts.progress.rows) {

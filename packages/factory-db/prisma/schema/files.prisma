@@ -148,6 +148,8 @@ model StoredFile {
   labelArtworkVersions   LabelArtworkVersion[]   @relation("LabelArtworkVersionFile")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the subcontract agreements whose signed terms it is.
+  subcontractAgreementTerms SubcontractAgreement[] @relation("SubcontractAgreementTerms")
   // W2b-4 recall.prisma (wave 33/33): the authority notices it is the sent copy of.
   authorityNotices AuthorityNotice[] @relation("AuthorityNoticeFile")
   // W2b-5 ppe-texts.prisma (wave 34/44): the PPE text approvals it is the consultant's evidence of.
@@ -285,6 +287,12 @@ enum FileCategory {
   QUESTIONNAIRE
   PROOF
   SAMPLE_PHOTO
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-140): the customer's logo or artwork for a configured quote or order line (a
+  /// QuoteLine's or SalesOrderLine's file), for cutting or printing.
+  ARTWORK
+  /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-385): a photo of a garment's damage at a repair's intake (a repair order's
+  /// file; the claim link and the portal ask at least two).
+  DAMAGE_PHOTO
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

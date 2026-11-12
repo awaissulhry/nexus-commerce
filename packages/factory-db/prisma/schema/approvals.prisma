@@ -224,6 +224,10 @@ model ApprovalTask {
   approverRole      Role?           @relation("ApprovalTaskApproverRole", fields: [tenantId, approverRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   approverUser      User?           @relation("ApprovalTaskApproverUser", fields: [tenantId, approverUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   events            ApprovalEvent[]
+  // W2b-5 sales.prisma, sales-orders-depth.prisma (wave 39/44): the order amendments whose new yes it is, the credit checks
+  // whose override it is.
+  salesOrderReapprovals SalesOrderAmendment[] @relation("SalesOrderAmendmentReapproval")
+  creditOverrides       CreditCheck[]         @relation("CreditCheckOverrideTask")
 
   // The target of the events' reference: an event names a task of its own company.
   @@unique([tenantId, companyId, id])

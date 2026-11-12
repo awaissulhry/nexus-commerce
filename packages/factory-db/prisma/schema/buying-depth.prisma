@@ -1,0 +1,427 @@
+// Buying and subcontracting in depth (W2b-5, schema wave 40/44, B-W2b-285; features SCM-035, SCM-037, SCM-043, SCM-052,
+// SCM-061, SCM-065, SCM-066, SCM-076, SCM-077, SCM-078, SCM-080, SCM-088, SCM-143, SCM-144, SCM-146, SCM-147, SCM-186):
+// what buyers do every day beyond W1's one date and one currency per order. apps/factory-api's modules/purchasing writes
+// these rows (B-W2b-296 purchase orders in depth, B-W2b-305 approvals and worklists, B-W2b-328 lines by kind, B-W2b-331
+// subcontracting in depth, B-W2b-332 ask to buy, B-W2b-347 sample orders), always through command().
+//
+// The purchase order's own new columns live where the order does (supply.prisma: its kind and development reference, the
+// rate at order with the value in the company's currency, ship to a third party, the approval it waits for; the line's
+// rolls, certificate and material variant; inventory.prisma: a lot's variant). Here:
+//
+//   - a delivery schedule per line (PurchaseOrderLineDelivery, SCM-052): the line split into deliveries, each with the
+//     date asked and its quantity, and the supplier's confirmed date of each, kept apart from the asked one;
+//   - the history of every confirmed date (PoDateChange, SCM-088, append-only): a confirmed date (a line's or a
+//     delivery's) never changes without its row, saying from which date to which, whether the supplier or a buyer moved
+//     it, when and why. A confirmed date never overwrites the asked one (needDate);
+//   - delivery tolerances (DeliveryTolerance, SCM-061): how far over or under the ordered quantity a receipt may be, per
+//     company, supplier and material or kind of material, and what happens beyond it;
+//   - material variants (ItemVariant, SCM-186): a trim or protector in colours and sizes is ONE material with variants,
+//     each a code; a purchase order line and a lot name one (supply.prisma, inventory.prisma);
+//   - requests to buy from anyone in the office (PurchaseRequest, SCM-035, SCM-037): what, how much, by when, why, the
+//     work order or shortage it came from; a yes when a rule asks one; the buyer converts it into a purchase order line.
+//     W2a's "requests to buy" are the plan's lines (MaterialRequirement), the buyer's own queue;
+//   - at the workshop (SCM-143, SCM-144, SCM-146): the material balance of a kit line (SubcontractConsumption,
+//     append-only: what the workshop declared it used, returned unused and scrapped, and the adjustments after the
+//     receipt with their reason; sent = in the goods + returned + scrapped + still out) and the workshop's cost booked
+//     to the work order (SubcontractCostEntry, append-only, cost grain: the fee per operation, transport, material).
+//
+// Approvals (SCM-078, SCM-080; B-W2b-282's one engine, B-W2b-276's ApprovalTask): a purchase order or a request that a
+// rule asks a yes for waits as PENDING_APPROVAL and names its approval task by a plain id (approvalTaskId): ApprovalTask
+// is another wave's table, so no foreign key points at it (the B-W2b-276 rule: the task names its subject by type + id).
+//
+// Money (A1 §2.6): purchase prices and the workshop's cost are costs (`@grain cost`), never shown to the floor, a portal
+// or a link. Quantities are Decimal(18,4) with their unit; amounts Int minor units; unit prices Decimal(18,6).
+//
+// Who sees what (ownership/buying-depth.json): the office reads and writes everything here. The floor of the delivery
+// site reads the delivery schedule (what to expect at the dock), the tolerances and the variants (what a receipt is
+// checked against). A portal or link session reads its OWN party's delivery schedule and confirms each delivery's date
+// while its order is SENT (as it confirms a line); it reads no date history, no tolerance, no request and nothing of the
+// workshop's balance or cost. Nothing here is deleted but the deliveries of a DRAFT order: a tolerance or a variant is
+// archived, a request cancelled, a ledger row taken back by a new one.
+//
+// Uniqueness made only of references (one active tolerance per company, supplier and material; one variant per material,
+// colour and size) is the purchasing module's: a unique key of ids alone cannot be copied by the generated isolation tests.
+
+/// W2b-5 (SCM-043): what a purchase order buys for.
+enum PurchaseOrderKind {
+  /// Material for production (every order made before W2b-5).
+  STANDARD
+  /// Sample and development buying (sample hides, swatches, colour cards), for a style or a sample round
+  /// (PurchaseOrder.developmentStyleId, sampleRoundId): not counted in production spend.
+  SAMPLE
+}
+
+/// One delivery of a purchase order line (SCM-052; design purchasing.orders record tab "Delivery schedule"): the line split
+/// into several deliveries, each with the day asked and its quantity, and the supplier's confirmed day. A line without
+/// deliveries is one delivery on its need date. While the order is DRAFT the deliveries are written and removed freely;
+/// when it is sent (or asks its yes) the deliveries of each live line add up to the line's quantity (and base quantity)
+/// and the first asked day is the line's need date (the …_buying_depth_w2b_guards triggers). The confirmed day is the
+/// supplier's: set once with the confirmation (SENT, CHANGES_PROPOSED or CONFIRMED), cleared only when the order goes back
+/// to DRAFT for a new revision, and moved after only with its PoDateChange row.
+model PurchaseOrderLineDelivery {
+  id                  String    @id @db.Uuid
+  tenantId            String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  purchaseOrderLineId String    @db.Uuid
+  /// The line's supplier (the partner role's policy key) and delivery site (the floor role's).
+  partyId             String    @db.Uuid
+  siteId              String    @db.Uuid
+  /// Its place among the line's deliveries: 1, 2, 3 …
+  seq                 Int
+  /// Above 0, in the line's unit, and the same in the item's base unit (planning nets it, receipts count against it).
+  quantity            Decimal   @db.Decimal(18, 4)
+  baseQuantity        Decimal   @db.Decimal(18, 4)
+  /// The day asked for this delivery (what we asked, never overwritten by the supplier's answer).
+  needDate            DateTime  @db.Date
+  /// The supplier's confirmed day for this delivery (see above); planning and the expediting list read it.
+  confirmedDate       DateTime? @db.Date
+  /// Printed for the supplier with the delivery; at most 2000 characters.
+  note                String?
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?   @db.Uuid
+
+  line        PurchaseOrderLine @relation(fields: [tenantId, partyId, siteId, purchaseOrderLineId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  dateChanges PoDateChange[]
+
+  @@unique([tenantId, purchaseOrderLineId, seq])
+  // The target of the date changes' reference: a delivery of the change's own line.
+  @@unique([tenantId, purchaseOrderLineId, id])
+}
+
+/// Who moved a confirmed date.
+enum PoDateChangeSource {
+  /// The supplier said so (by mail, phone, its portal or its link; recorded by a buyer).
+  SUPPLIER
+  /// A buyer moved it with the supplier (to bring it forward or push it back).
+  BUYER
+}
+
+/// One change of a confirmed date (SCM-088): a line's (deliveryId null) or one of its deliveries', from which day to which,
+/// who moved it, when and why. Written by a buyer in the command that moves the date; the line's or the delivery's
+/// confirmed date changes (once it is set) only to the `toDate` of its newest change, whose `fromDate` is the date it had
+/// (the …_buying_depth_w2b_guards triggers). Never changed or removed.
+/// @append-only
+model PoDateChange {
+  id                  String             @id @db.Uuid
+  tenantId            String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  purchaseOrderLineId String             @db.Uuid
+  /// The line's supplier and delivery site.
+  partyId             String             @db.Uuid
+  siteId              String             @db.Uuid
+  /// The delivery of a scheduled line whose confirmed date moved; null: the line's own confirmed date.
+  deliveryId          String?            @db.Uuid
+  /// Its place in the line's date history (its deliveries' changes included): above every earlier one.
+  seq                 Int
+  /// The confirmed day before and after; never the same.
+  fromDate            DateTime           @db.Date
+  toDate              DateTime           @db.Date
+  source              PoDateChangeSource
+  /// When it was said or agreed (not in the future).
+  changedAt           DateTime           @db.Timestamptz(3)
+  /// SUPPLIER: the supplier's person who said so, as heard (optional); at most 200 characters.
+  supplierContactName String?
+  /// Why, in words (1 to 2000 characters): the supplier's reason or the buyer's.
+  reason              String
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  /// The office user who recorded it.
+  createdById         String?            @db.Uuid
+
+  line     PurchaseOrderLine          @relation(fields: [tenantId, partyId, siteId, purchaseOrderLineId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the line.
+  delivery PurchaseOrderLineDelivery? @relation(fields: [tenantId, purchaseOrderLineId, deliveryId], references: [tenantId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, purchaseOrderLineId, seq])
+  @@index([tenantId, deliveryId])
+}
+
+/// What happens to a receipt beyond its tolerance.
+enum DeliveryToleranceAction {
+  /// It is refused (the warehouse receives at most the limit).
+  BLOCK
+  /// It waits for a person's yes (an approval task).
+  APPROVAL
+}
+
+/// How far a receipt may be over or under the ordered quantity (SCM-061; e.g. ±5 % of the footage), read at receipt
+/// (B-W2b-296): for a company (null: every company of the tenant), a supplier (null: every supplier), and one material,
+/// one kind of material or every material (at most one of itemId and itemKind). The most specific active row wins (the
+/// module's); beyond it a receipt is blocked or waits for a yes. A leather line's own area tolerance
+/// (PurchaseOrderLine.areaTolerancePct) is about the measured area of the hides, not the quantity received. Archived,
+/// never deleted.
+model DeliveryTolerance {
+  id          String                  @id @db.Uuid
+  tenantId    String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buying company; null: every company of the tenant.
+  companyId   String?                 @db.Uuid
+  /// The supplier (a party with the SUPPLIER role; the module checks the role); null: every supplier.
+  supplierId  String?                 @db.Uuid
+  /// One material, or one kind of material (never FINISHED), or neither: every material.
+  itemId      String?                 @db.Uuid
+  itemKind    ItemKind?
+  /// How much more, and how much less, than ordered a receipt may be, in percent, 0 to 100.
+  overPct     Decimal                 @db.Decimal(7, 4)
+  underPct    Decimal                 @db.Decimal(7, 4)
+  /// Beyond the tolerance: refused, or waiting for a yes.
+  whenBeyond  DeliveryToleranceAction @default(BLOCK)
+  status      MasterStatus            @default(ACTIVE)
+  /// At most 2000 characters.
+  note        String?
+  version     Int                     @default(1)
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?                 @db.Uuid
+  /// Who changed it last ("Changed by").
+  updatedById String?                 @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier Party?  @relation("DeliveryToleranceSupplier", fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item    Item?    @relation("DeliveryToleranceItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, supplierId])
+  @@index([tenantId, itemId])
+}
+
+/// A variant of one material (SCM-186): a trim or protector bought and stocked in colours and sizes is ONE item with
+/// variants (a zip in five colours and three lengths: one item, up to fifteen codes), each by its code, unique for the
+/// material. A purchase order line and a lot name a variant by the item and its code (a foreign key: a code in use never
+/// changes). It names one of the item's colours, a size as the supplier sells it, or both. What it is (item, colour, size,
+/// code) never changes: another one is a new variant, an unused one is archived.
+model ItemVariant {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The material (never a FINISHED item: a garment's SKU is product.prisma's Variant).
+  itemId       String       @db.Uuid
+  /// One of the item's colours; null: the variant is a size only.
+  itemColourId String?      @db.Uuid
+  /// The size as the supplier sells it ("20 cm", "M", "8 mm"), 1 to 40 characters; null: a colour only.
+  size         String?
+  /// Our code for the variant, unique for the material, 1 to 60 characters without spaces; printed on purchase orders and
+  /// lot labels.
+  code         String
+  /// The supplier's code for it, as printed on its documents (optional).
+  supplierCode String?
+  status       MasterStatus @default(ACTIVE)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  item               Item                @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and itemId.
+  itemColour         ItemColour?         @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  // supply.prisma, inventory.prisma: the purchase order lines and lots of this variant.
+  purchaseOrderLines PurchaseOrderLine[]
+  lots               Lot[]
+
+  // The target of the lines' and lots' reference: a variant of their own material, by its code.
+  @@unique([tenantId, itemId, code])
+}
+
+/// OPEN (for the buyer) → CONVERTED | REJECTED | CANCELLED; PENDING_APPROVAL while a rule's yes is awaited.
+enum PurchaseRequestStatus {
+  /// Waiting for the buyer (the queue's "New"), with or without a yes before.
+  OPEN
+  /// A PURCHASE_REQUEST rule asked a yes: approved, it goes back to OPEN; refused, REJECTED.
+  PENDING_APPROVAL
+  /// The buyer made a purchase order line of it (purchaseOrderLineId).
+  CONVERTED
+  /// Refused by the approver or the buyer, with the reason.
+  REJECTED
+  /// Withdrawn by the person who asked (or the buyer), with the reason.
+  CANCELLED
+}
+
+/// Where a request to buy comes from.
+enum PurchaseRequestSource {
+  /// Someone in the office asked (Purchasing › Requests › Ask to buy).
+  OFFICE
+  /// A shortage of a work order (the shortage list's line, or a work order's "not available"): its work order and
+  /// material, with the shortage as it was seen.
+  SHORTAGE
+}
+
+/// A request to buy from anyone in the office (SCM-035, SCM-037; design purchasing.requests pop-up "Ask to buy"): which
+/// material (or, for one not in the library yet, a description), how much, by when, why, for which work order; from a
+/// shortage, the shortage as it was seen. A PURCHASE_REQUEST rule may ask a yes first (PENDING_APPROVAL, its approval task
+/// by id); the buyer converts it into a purchase order line, or refuses it with the reason. What was asked changes only
+/// while it is OPEN; who asked, when and from where never. Cancelled, never deleted.
+model PurchaseRequest {
+  id                  String                @id @db.Uuid
+  tenantId            String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buying company and the site it is needed at (the delivery site of the order it becomes).
+  companyId           String                @db.Uuid
+  siteId              String                @db.Uuid
+  /// The office user who asks, and when.
+  requestedById       String                @db.Uuid
+  requestedAt         DateTime              @db.Timestamptz(3)
+  source              PurchaseRequestSource @default(OFFICE)
+  /// The material (and colour), or null with a description of something not in the library yet.
+  itemId              String?               @db.Uuid
+  itemColourId        String?               @db.Uuid
+  /// What is wanted in words (required without a material); at most 2000 characters.
+  description         String?
+  /// Above 0, in `uom`.
+  quantity            Decimal               @db.Decimal(18, 4)
+  uom                 Uom
+  /// By when it is needed at the site.
+  needDate            DateTime              @db.Date
+  /// Why, in words (1 to 2000 characters).
+  reason              String
+  /// The work order it is for (required for a SHORTAGE), on the request's site.
+  workOrderId         String?               @db.Uuid
+  /// SHORTAGE: the shortage line as it was seen (an object: { "word": "NOT_ENOUGH", "short": "12.0000", "needDate": "…",
+  /// "runId": "…" }); null for an OFFICE request.
+  shortage            Json?
+  status              PurchaseRequestStatus @default(OPEN)
+  /// PENDING_APPROVAL: the approval task (B-W2b-276's ApprovalTask, by id: no foreign key to another wave); kept after the
+  /// answer; a new ask replaces it.
+  approvalTaskId      String?               @db.Uuid
+  /// REJECTED: when, by whom (the approver or the buyer) and why (1 to 2000 characters).
+  rejectedAt          DateTime?             @db.Timestamptz(3)
+  rejectedById        String?               @db.Uuid
+  rejectReason        String?
+  /// CONVERTED: when, by which buyer, and the purchase order line made of it (on the request's site, of its material).
+  convertedAt         DateTime?             @db.Timestamptz(3)
+  convertedById       String?               @db.Uuid
+  purchaseOrderLineId String?               @db.Uuid
+  /// CANCELLED: when and why (1 to 2000 characters).
+  cancelledAt         DateTime?             @db.Timestamptz(3)
+  cancelReason        String?
+  version             Int                   @default(1)
+  createdAt           DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?               @db.Uuid
+
+  site              Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and itemId.
+  item              Item?              @relation("PurchaseRequestItem", fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour        ItemColour?        @relation("PurchaseRequestItemColour", fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder         WorkOrder?         @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The queue (open first, by need date) and "Asked by me".
+  @@index([tenantId, status, needDate])
+  @@index([tenantId, requestedById])
+  @@index([tenantId, workOrderId])
+}
+
+/// What a material balance row records.
+enum SubcontractConsumptionKind {
+  /// What the workshop declared with the goods back: used in them, returned unused, scrapped (each 0 or more).
+  DECLARED
+  /// A correction after the receipt (SCM-143): over- or under-consumption the workshop reports later, signed, with its
+  /// reason.
+  ADJUSTMENT
+}
+
+/// One row of a kit line's material balance at the workshop (SCM-143, SCM-144; design purchasing.subcontracting record
+/// tab "Material balance"): sent (the SENT kit line's quantity) = used in the goods back + returned unused + scrapped
+/// there + still out (a loss once the order closes). Each row is a declaration of the workshop with the goods back
+/// (DECLARED, each quantity 0 or more) or an adjustment after it (ADJUSTMENT, signed, with its reason). Over every row of
+/// a kit line each total stays 0 or more and used + returned + scrapped never pass what was sent (checked under a lock
+/// per kit line). Quantities are in the kit line's unit. Never changed or removed.
+/// @append-only
+model SubcontractConsumption {
+  id                 String                     @id @db.Uuid
+  tenantId           String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site, work order and workshop.
+  siteId             String                     @db.Uuid
+  workOrderId        String                     @db.Uuid
+  partyId            String                     @db.Uuid
+  subcontractOrderId String                     @db.Uuid
+  /// The SENT kit line of the order whose material it accounts for.
+  kitLineId          String                     @db.Uuid
+  /// Its place among the kit line's rows: above every earlier one.
+  seq                Int
+  kind               SubcontractConsumptionKind
+  /// The goods back it was declared with (a receipt of the order); optional.
+  receiptId          String?                    @db.Uuid
+  /// In the kit line's unit: used in the goods back, returned unused, scrapped at the workshop.
+  usedQuantity       Decimal                    @default(0) @db.Decimal(18, 4)
+  returnedQuantity   Decimal                    @default(0) @db.Decimal(18, 4)
+  scrappedQuantity   Decimal                    @default(0) @db.Decimal(18, 4)
+  /// When the workshop reported it (not in the future).
+  reportedAt         DateTime                   @db.Timestamptz(3)
+  /// ADJUSTMENT (required) or DECLARED (optional): a code of the REWORK reason list (no spaces) and the words (at most
+  /// 2000 characters).
+  reasonCode         String?
+  reason             String?
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  createdById        String?                    @db.Uuid
+
+  subcontractOrder SubcontractOrder    @relation(fields: [tenantId, siteId, workOrderId, partyId, subcontractOrderId], references: [tenantId, siteId, workOrderId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  kitLine          SubcontractKitLine  @relation(fields: [tenantId, siteId, partyId, subcontractOrderId, kitLineId], references: [tenantId, siteId, partyId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and the order.
+  receipt          SubcontractReceipt? @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId, receiptId], references: [tenantId, siteId, workOrderId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, kitLineId, seq])
+  @@index([tenantId, subcontractOrderId])
+}
+
+/// What a workshop cost entry is for.
+enum SubcontractCostKind {
+  /// The fee for an operation's pieces (pieces × the fee per piece).
+  FEE
+  /// Transport to or from the workshop.
+  TRANSPORT
+  /// Material the workshop supplied and charges.
+  MATERIAL
+  /// Anything else, in words.
+  OTHER
+}
+
+/// One cost of a subcontract order booked to its work order (SCM-146; design purchasing.subcontracting record tab "Cost":
+/// fee 120 × 4.50 + transport 35 = 575 → the work order): the fee for an operation's pieces, transport, the workshop's
+/// material or another charge, in the order's currency, usually when goods come back (its receipt). The costing module
+/// posts it to the work order's cost ledger (cost-ledger.prisma WorkOrderCostEntry kind SUBCONTRACT, sourceType
+/// "SubcontractCostEntry"). A mistake is taken back by a reversal (its opposite amount, once, with the reason). Never changed
+/// or removed.
+/// @append-only
+model SubcontractCostEntry {
+  id                     String              @id @db.Uuid
+  tenantId               String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site and work order.
+  siteId                 String              @db.Uuid
+  workOrderId            String              @db.Uuid
+  subcontractOrderId     String              @db.Uuid
+  kind                   SubcontractCostKind
+  /// FEE: the operation of the order whose pieces it pays (required); another kind names none.
+  subcontractOperationId String?             @db.Uuid
+  /// The goods back it was earned with (a receipt of the order); optional.
+  receiptId              String?             @db.Uuid
+  /// FEE: the pieces; another kind: how many of it (1 for a transport). Above 0.
+  quantity               Decimal             @db.Decimal(18, 4)
+  /// The price of one, in the order's currency, 0 or more.
+  /// @grain cost
+  unitPrice              Decimal             @db.Decimal(18, 6)
+  /// quantity × unit price, rounded to minor units (factory-domain money), 0 or more; a reversal's is the opposite of the
+  /// entry it takes back.
+  /// @grain cost
+  amount                 Int
+  /// ISO 4217: the order's currency.
+  currency               String
+  /// When it was incurred (the goods back, the transport): not in the future.
+  occurredAt             DateTime            @db.Timestamptz(3)
+  /// A reversal: the entry of the same order it takes back (once; never a reversal itself).
+  reversalOfId           String?             @db.Uuid
+  /// Why (required on a reversal and on OTHER), at most 2000 characters.
+  reason                 String?
+  createdAt              DateTime            @default(now()) @db.Timestamptz(3)
+  createdById            String?             @db.Uuid
+
+  subcontractOrder SubcontractOrder      @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and the order.
+  operation        SubcontractOperation? @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId, subcontractOperationId], references: [tenantId, siteId, workOrderId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "SubcontractCostEntry_operation_fkey")
+  receipt          SubcontractReceipt?   @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId, receiptId], references: [tenantId, siteId, workOrderId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "SubcontractCostEntry_receipt_fkey")
+  reversalOf       SubcontractCostEntry?  @relation("SubcontractCostEntryReversal", fields: [tenantId, subcontractOrderId, reversalOfId], references: [tenantId, subcontractOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals        SubcontractCostEntry[] @relation("SubcontractCostEntryReversal")
+
+  // A reversal takes back one entry, once (a NULL repeats freely).
+  @@unique([tenantId, reversalOfId])
+  // The target of the reversals' reference: an entry of the same order.
+  @@unique([tenantId, subcontractOrderId, id])
+  @@index([tenantId, subcontractOrderId, occurredAt])
+  @@index([tenantId, workOrderId])
+}

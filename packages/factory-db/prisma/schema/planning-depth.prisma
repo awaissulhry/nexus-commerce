@@ -1,0 +1,445 @@
+// Planning in depth (W2b-5, schema wave 41/44, B-W2b-286; features PLN-006, PLN-008, PLN-061, PLN-067, PLN-068, PLN-069,
+// PLN-072, PLN-073, PLN-076, PLN-079, PLN-081, PLN-082, PLN-088, PLN-089, PLN-095, PLN-124, PLN-139, PLN-149, PLN-164,
+// PLN-165, PLN-171, PLN-173, PLN-175, PLN-177; the design's planning.mrp "To make", planning.board "What-if" and "Changes",
+// planning.promise, planning.allocation and planning.capacity): planning that a planner can trust. W1 plans buys only
+// (MaterialRequirement) and W2a schedules backwards without pins, a change log or what-if; MRP and the board run every day.
+//
+//   PlannedWorkOrder       what the run proposes to MAKE (a work order) or to SUBCONTRACT (a work order whose operations go
+//                          to a workshop): style, the revision the demand names, colourway, the size run, start and due, the
+//                          demand it pegs; firm or not; the fields a planner protected (and who), which the next run keeps;
+//                          the work order (and subcontract order) made from it. One row lives across runs: each run moves it
+//                          on (runId) but never over a protected field (PLN-076).
+//   MrpActionMessage       what a run says should happen to an order that exists: expedite, defer, cancel, more, less, or a
+//                          new one, from and to a date or a quantity, in words; OPEN until a person marks it DONE or IGNORED.
+//   PromiseRecord          the history of what was promised to a customer per order line and size: the FIRST promise kept
+//                          forever, each RE_PROMISE a new row with why, by whom, from which plan version, when the customer
+//                          was told. Append-only (`@append-only`): a promise is never overwritten.
+//   ScheduleChange         every change of the board's working plan (placed, moved, removed, pinned, unpinned, published,
+//                          undone): the slot, from lane and time, to lane and time, by whom and when, why. Append-only: an undo
+//                          is a new row that names the change it undoes (once).
+//   WhatIfScenario         a planner's private moves on a copy of the plan (owner, moves, the plan it was based on), applied
+//                          to the working plan or discarded.
+//   SubcontractorCapacity  a workshop's weekly capacity for a kind of work, in minutes or pieces, from a date until a date.
+//
+// The columns this wave adds to earlier tables live with them: ItemPlanning (lot sizing, plan level, scrap and yield,
+// phantom, strategy, delay days), PlanningSettings (the size-run rule), PlanningRun.inputs, MaterialRequirement's hard peg
+// (orderSpecific, reservedForLineId), SalesOrder.backlogRank, ScheduleSlot's pin, SubcontractOrder.kitDueAt and
+// WorkOrderOperation.outsourced with its subcontract order; their enums are here.
+//
+// apps/factory-api's modules/planning writes all of it (B-W2b-293 planned orders, B-W2b-301 and -317 promises, B-W2b-306 the
+// run's protection, action messages and log, B-W2b-312 and -329 the board's pins, what-if and changes, B-W2b-318 the item
+// rules, B-W2b-319 the strategy, B-W2b-321 subcontractor capacity and outsourced operations), always through command(). The
+// hand-written …_planning_depth_w2b_guards are the last word, for every login.
+//
+// Who sees what (ownership/planning-depth.json): the office only (planners, buyers, sales for promises; the scheduler's
+// system context for the nightly run). The floor sees nothing here (P3: the published plan is schedule.prisma's); portal and
+// link sessions read nothing (a promise reaches the customer through the order and its thread). A what-if is private to its
+// owner by the API (the database knows no actor). No money here; no figure per person (capacity is per workshop).
+
+/// What a planned order makes.
+enum PlannedOrderKind {
+  /// A work order of the site (made in-house; its line on the board).
+  MAKE
+  /// A work order whose operations a workshop does (a terzista): made real as a work order and its subcontract order.
+  SUBCONTRACT
+}
+
+/// PLANNED (the run's proposal, edited by planners) → CONVERTED (made real: the work order, and for a SUBCONTRACT its
+/// subcontract order, exist). CONVERTED is final. A PLANNED order the run no longer needs is removed (unless firm or
+/// protected).
+enum PlannedOrderStatus {
+  PLANNED
+  CONVERTED
+}
+
+/// What an action message asks of an order that exists (PLN-073).
+enum MrpAction {
+  /// Bring it earlier: from one date to an earlier one.
+  EXPEDITE
+  /// Push it later: from one date to a later one.
+  DEFER
+  /// Not needed any more.
+  CANCEL
+  /// More: from one quantity to a larger one.
+  INCREASE
+  /// Less: from one quantity to a smaller one (above 0; none is CANCEL).
+  DECREASE
+  /// A new order: how much, by when.
+  NEW
+}
+
+/// OPEN until a person marks it: DONE (acted on) or IGNORED. Both are final.
+enum MrpActionStatus {
+  OPEN
+  DONE
+  IGNORED
+}
+
+/// FIRST: the first promise of an order line (and size), kept forever (one per line and size). RE_PROMISE: every later one.
+enum PromiseKind {
+  FIRST
+  RE_PROMISE
+}
+
+/// What a change of the board's working plan did (PLN-149).
+enum ScheduleChangeKind {
+  /// A slot placed on a lane (its to side).
+  PLACE
+  /// A slot moved in time or to another lane (from and to).
+  MOVE
+  /// A slot taken off the board (its from side).
+  REMOVE
+  /// A slot pinned where it is (PLN-139), or unpinned.
+  PIN
+  UNPIN
+  /// The working plan published as a version (publishedVersionId).
+  PUBLISH
+  /// A change undone (undoesChangeId), with what it put back.
+  UNDO
+}
+
+/// DRAFT (private moves) → APPLIED (merged into the working plan) | DISCARDED. Both are final.
+enum WhatIfStatus {
+  DRAFT
+  APPLIED
+  DISCARDED
+}
+
+/// How a workshop's weekly capacity counts.
+enum SubcontractCapacityUnit {
+  /// Standard minutes per week (SAM × pieces of the work it takes).
+  MINUTES
+  /// Garments per week.
+  PIECES
+}
+
+/// How a planning run sizes the orders it suggests for an item at a site (PLN-006): its ItemPlanning.lotSizing. Read only
+/// with the ORDERS method (REORDER_POINT orders its lot size, MIN_MAX up to its maximum).
+enum ItemLotSizing {
+  /// Exactly the net need (W1).
+  LOT_FOR_LOT
+  /// A fixed quantity, as many times as the need takes (ItemPlanning.fixedLotQty).
+  FIXED
+  /// The net need, at least minOrderQty and at most maxOrderQty per order (the limits the row has).
+  MIN_MAX
+  /// The need of a period of days in one order (ItemPlanning.lotPeriodDays).
+  PERIOD
+}
+
+/// At which level the plan groups a finished item's demand (PLN-008); null on ItemPlanning: SKU (W1).
+enum ItemPlanLevel {
+  STYLE
+  STYLE_COLOUR
+  SKU
+}
+
+/// How a made item meets its demand (PLN-061); null on ItemPlanning: MAKE_TO_ORDER (W1).
+enum ProductionStrategy {
+  MAKE_TO_ORDER
+  MAKE_TO_STOCK
+  ASSEMBLE_TO_ORDER
+}
+
+/// How a run splits a size run into planned work orders (PLN-068; PlanningSettings.sizeRunRule).
+enum SizeRunRule {
+  /// One work order per style, colourway and due date with every size in its grid (W1).
+  ONE_GRID
+  /// One work order per group of sizes (PlanningSettings.sizeGroups).
+  SIZE_GROUPS
+}
+
+/// One order the planning run proposes to make (PLN-067) or to give to a workshop (PLN-069): a style in one colourway, its
+/// size run, start and due, the demand it pegs. A planner edits it (sizes, dates, line, workshop, revision, kit date) and
+/// may protect what they edited, so the next run keeps it (PLN-076); Reset to plan clears the protection. Made real by a
+/// person: the work order (and, for a SUBCONTRACT, its subcontract order) made from it, then frozen.
+model PlannedWorkOrder {
+  id                 String             @id @db.Uuid
+  tenantId           String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String             @db.Uuid
+  /// The site that makes it (its plan's site).
+  siteId             String             @db.Uuid
+  /// The latest run of the site that proposed or moved it on (a later run of the site replaces it; never back).
+  runId              String             @db.Uuid
+  /// Fixed when it is made.
+  kind               PlannedOrderKind
+  /// The style it makes and the colourway (one of the style's); fixed when it is made.
+  styleId            String             @db.Uuid
+  colourwayId        String             @db.Uuid
+  /// The style revision the demand names (PLN-089: the order line's, not the newest); null: the style's RELEASED revision
+  /// when it is made real.
+  styleRevisionId    String?            @db.Uuid
+  /// The size run: [{ "size": "52", "quantity": 4 }], 1 to 200 sizes, each once, each quantity from 1 (whole garments).
+  sizes              Json
+  /// The sum of the size run's quantities (the database checks it).
+  quantity           Int
+  /// The group of sizes it was split by when the site's rule is SIZE_GROUPS (its first size code, or the group's words:
+  /// "44-50"); null: one grid.
+  sizeGroup          String?
+  /// When it starts and when it is due (start ≤ due), from backward scheduling.
+  startDate          DateTime           @db.Date
+  dueDate            DateTime           @db.Date
+  /// The demand it pegs (PLN-071's shape for orders): [{ "orderId": "…", "orderLineId": "…", "size": "52", "pieces": 4 }];
+  /// empty: stock (MAKE_TO_STOCK).
+  demand             Json               @default("[]")
+  /// MAKE: the line of the site it is planned on; null: not allocated.
+  lineId             String?            @db.Uuid
+  /// SUBCONTRACT exactly: the workshop (a party with the SUBCONTRACTOR role), the routing steps it does (RoutingOperation.seq
+  /// of the revision; each once, from 1; empty: every step of the routing) and when the kit must leave for the work to start
+  /// on time (PLN-164; not after the due date).
+  partyId            String?            @db.Uuid
+  operationSeqs      Int[]              @default([])
+  kitDueAt           DateTime?          @db.Timestamptz(3)
+  /// Firm: the run never changes it or takes it away. With when and by whom (both from firm on).
+  firm               Boolean            @default(false)
+  firmedAt           DateTime?          @db.Timestamptz(3)
+  firmedById         String?            @db.Uuid
+  /// The fields a planner protected from the next run (PLN-076), each once: "sizes", "startDate", "dueDate", "lineId",
+  /// "partyId", "operationSeqs", "kitDueAt", "styleRevisionId"; with who and when (exactly while the list is not empty).
+  /// Reset to plan empties it.
+  protectedFields    String[]           @default([])
+  protectedById      String?            @db.Uuid
+  protectedAt        DateTime?          @db.Timestamptz(3)
+  status             PlannedOrderStatus @default(PLANNED)
+  /// CONVERTED exactly: the work order made from it (of the site and style), for a SUBCONTRACT its subcontract order (of
+  /// that work order and workshop), when and by whom. Then nothing changes.
+  workOrderId        String?            @db.Uuid
+  subcontractOrderId String?            @db.Uuid
+  convertedAt        DateTime?          @db.Timestamptz(3)
+  convertedById      String?            @db.Uuid
+  note               String?
+  version            Int                @default(1)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?            @db.Uuid
+
+  site             Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  run              PlanningRun       @relation(fields: [tenantId, siteId, runId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  style            Style             @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway        Colourway         @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and styleId.
+  styleRevision    StyleRevision?    @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  line             Line?             @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  party            Party?            @relation("PlannedWorkOrderWorkshop", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder        WorkOrder?        @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrder SubcontractOrder? @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The run's proposals ("To make") and what is still planned at a site.
+  @@index([tenantId, runId])
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, workOrderId])
+}
+
+/// One thing a planning run says should happen to an order that exists (PLN-073): a purchase order line, a work order, a
+/// subcontract order, a planned work order or a requirement's planned order; expedite, defer, cancel, more, less, or a new
+/// one, from and to a date or a quantity, in words. Its facts never change; a person marks it DONE or IGNORED while its run
+/// is DONE.
+model MrpActionMessage {
+  id           String          @id @db.Uuid
+  tenantId     String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The run's site and the run.
+  siteId       String          @db.Uuid
+  runId        String          @db.Uuid
+  /// Its place in the run's list, from 1.
+  seq          Int
+  /// The order it is about, by model name and id: "PurchaseOrderLine", "WorkOrder", "SubcontractOrder", "PlannedWorkOrder"
+  /// or "MaterialRequirement" (a record of the tenant).
+  recordType   String
+  recordId     String          @db.Uuid
+  action       MrpAction
+  /// EXPEDITE, DEFER: the date it has and the date it should have (earlier, later); NEW: by when (to only); CANCEL may name
+  /// its date (from).
+  fromDate     DateTime?       @db.Date
+  toDate       DateTime?       @db.Date
+  /// INCREASE, DECREASE: the quantity it has and the one it should have (more, less, above 0), in `uom`; NEW: how much (to
+  /// only); CANCEL may name its quantity (from). With `uom` exactly when a quantity is given.
+  fromQuantity Decimal?        @db.Decimal(18, 4)
+  toQuantity   Decimal?        @db.Decimal(18, 4)
+  uom          Uom?
+  /// What to do and why, in words, for the office (1 to 2000 characters): "Expedite PO-0042 line 2 from 20 Nov to 14 Nov:
+  /// SO-1043 needs the leather on 15 Nov."
+  message      String
+  /// The numbers its sentence is made from, as decimal strings and ISO dates (no floats, never a cost or a person), so the
+  /// API can say it in the reader's language: { "needDate": "2026-11-15", "orderNumber": "SO-1043", … }.
+  facts        Json            @default("{}")
+  status       MrpActionStatus @default(OPEN)
+  /// DONE or IGNORED: when and by whom, with an optional note.
+  decidedAt    DateTime?       @db.Timestamptz(3)
+  decidedById  String?         @db.Uuid
+  decisionNote String?
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?         @db.Uuid
+
+  run PlanningRun @relation(fields: [tenantId, siteId, runId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, runId, seq])
+  // An order's messages, run after run (a later run reads what a person ignored).
+  @@index([tenantId, recordType, recordId])
+}
+
+/// One promise of a delivery date to the customer of a sales order line (PLN-171, PLN-173, PLN-175): for one size or for
+/// every size of the line, FIRST (kept forever, one per line and size) or a RE_PROMISE with why; by whom and when, the plan
+/// version it came from, when the customer was told. The current promise is the latest row of the line and size. Written
+/// once, never changed or removed (the …_planning_depth_w2b_guards triggers, for every login).
+/// @append-only
+model PromiseRecord {
+  id               String      @id @db.Uuid
+  tenantId         String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order line and its party (the key of the reference).
+  salesOrderLineId String      @db.Uuid
+  partyId          String      @db.Uuid
+  /// A size of the line's size grid; null: every size of the line (and a made-to-measure unit).
+  size             String?
+  promisedDate     DateTime    @db.Date
+  kind             PromiseKind
+  /// RE_PROMISE: why, as a code of factory-domain's re-promise reasons (upper-case letters, digits, underscores) and/or in
+  /// words (at least one of them); FIRST: optional.
+  reasonCode       String?
+  reason           String?
+  /// Who promised it and when (not in the future).
+  promisedById     String      @db.Uuid
+  promisedAt       DateTime    @db.Timestamptz(3)
+  /// The plan it came from: the site and a plan version of it (the working plan or a published version), both or neither.
+  siteId           String?     @db.Uuid
+  planVersionId    String?     @db.Uuid
+  /// When the customer was told (the order thread's message, the order confirmation); null: not told with this row.
+  customerToldAt   DateTime?   @db.Timestamptz(3)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(3)
+  createdById      String?     @db.Uuid
+
+  salesOrderLine SalesOrderLine @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  planVersion    PlanVersion?   @relation(fields: [tenantId, siteId, planVersionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A line's history, oldest first.
+  @@index([tenantId, salesOrderLineId, promisedAt])
+}
+
+/// One change of a site's working plan on the board (PLN-149): a slot placed, moved, removed, pinned or unpinned, the plan
+/// published, or a change undone; the slot and its work order (operation), from lane and time and to lane and time, by
+/// whom, when and why, and the what-if it was applied from. Written once, never changed or removed: an undo is a new row
+/// naming the change it undoes (one undo per change). The slot is named by id only: a working slot is removed freely, its
+/// changes stay.
+/// @append-only
+model ScheduleChange {
+  id                   String             @id @db.Uuid
+  tenantId             String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String             @db.Uuid
+  /// The site's WORKING plan it changed.
+  planVersionId        String             @db.Uuid
+  kind                 ScheduleChangeKind
+  /// Every kind but PUBLISH: the slot (by id), its work order and, when the slot books one, its operation.
+  slotId               String?            @db.Uuid
+  workOrderId          String?            @db.Uuid
+  workOrderOperationId String?            @db.Uuid
+  /// Where the slot was (MOVE, REMOVE; UNDO as needed): one lane (a line, a work centre or a workshop) from a start to a
+  /// later end; all or none.
+  fromLineId           String?            @db.Uuid
+  fromWorkCentreId     String?            @db.Uuid
+  fromPartyId          String?            @db.Uuid
+  fromStartAt          DateTime?          @db.Timestamptz(3)
+  fromEndAt            DateTime?          @db.Timestamptz(3)
+  /// Where it went (PLACE, MOVE; UNDO as needed): the same shape.
+  toLineId             String?            @db.Uuid
+  toWorkCentreId       String?            @db.Uuid
+  toPartyId            String?            @db.Uuid
+  toStartAt            DateTime?          @db.Timestamptz(3)
+  toEndAt              DateTime?          @db.Timestamptz(3)
+  /// PUBLISH exactly: the PUBLISHED version of the site it made.
+  publishedVersionId   String?            @db.Uuid
+  /// UNDO exactly: the change it undoes (of the same plan, not a PUBLISH or an UNDO; undone once).
+  undoesChangeId       String?            @db.Uuid
+  /// The what-if it was applied from (a scenario of the site), when it came from one.
+  whatIfScenarioId     String?            @db.Uuid
+  /// Why (the drop warning's "Keep with a reason", a note): 1 to 2000 characters, or none.
+  reason               String?
+  /// Who changed it and when (not in the future).
+  changedById          String             @db.Uuid
+  changedAt            DateTime           @db.Timestamptz(3)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  createdById          String?            @db.Uuid
+
+  plan             PlanVersion         @relation("ScheduleChangePlan", fields: [tenantId, siteId, planVersionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  publishedVersion PlanVersion?        @relation("ScheduleChangePublished", fields: [tenantId, siteId, publishedVersionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder        WorkOrder?          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation        WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  undoes           ScheduleChange?     @relation("ScheduleChangeUndo", fields: [tenantId, siteId, undoesChangeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  undoneBy         ScheduleChange[]    @relation("ScheduleChangeUndo")
+  whatIfScenario   WhatIfScenario?     @relation(fields: [tenantId, siteId, whatIfScenarioId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The target of an undo's reference: a change of the same site.
+  @@unique([tenantId, siteId, id])
+  // The feed: a plan's changes, newest first; a slot's changes.
+  @@index([tenantId, planVersionId, changedAt])
+  @@index([tenantId, slotId])
+}
+
+/// A planner's what-if on the board (design planning.board "What-if"): moves tried on a copy of the plan, seen by nobody
+/// else (the API keeps it to its owner), then applied to the working plan (each move a ScheduleChange naming it) or
+/// discarded.
+model WhatIfScenario {
+  id                String       @id @db.Uuid
+  tenantId          String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String       @db.Uuid
+  siteId            String       @db.Uuid
+  /// The planner whose private moves they are; never changes.
+  ownerId           String       @db.Uuid
+  /// A name the planner gives it (1 to 200 characters), or none.
+  name              String?
+  /// The plan it was based on (the site's working plan, or a published version) and when it was read: "Apply" lists what
+  /// the working plan changed since as conflicts. Never change.
+  basePlanVersionId String       @db.Uuid
+  basedAt           DateTime     @db.Timestamptz(3)
+  /// The moves, in order (at most 500): [{ "slotId": "…", "workOrderId": "…", "to": { "lineId": "…", "startAt": "…",
+  /// "endAt": "…" } }]; changed only while DRAFT.
+  moves             Json         @default("[]")
+  status            WhatIfStatus @default(DRAFT)
+  /// APPLIED exactly: when and by whom; DISCARDED exactly: when and by whom.
+  appliedAt         DateTime?    @db.Timestamptz(3)
+  appliedById       String?      @db.Uuid
+  discardedAt       DateTime?    @db.Timestamptz(3)
+  discardedById     String?      @db.Uuid
+  version           Int          @default(1)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?      @db.Uuid
+
+  site     Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  basePlan PlanVersion      @relation("WhatIfScenarioBase", fields: [tenantId, siteId, basePlanVersionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  changes  ScheduleChange[]
+
+  // The target of the changes' reference: a scenario of the change's site.
+  @@unique([tenantId, siteId, id])
+  // A planner's scenarios at a site.
+  @@index([tenantId, siteId, ownerId, status])
+}
+
+/// A workshop's weekly capacity (PLN-124): how many standard minutes or garments a week it takes for one kind of work (or
+/// any), from a day until a day. The board's subcontractor lanes and the load heatmap read it; one row per workshop, kind
+/// and period is the planning module's (a unique key of ids and dates alone cannot be copied by the generated isolation
+/// tests).
+model SubcontractorCapacity {
+  id             String                  @id @db.Uuid
+  tenantId       String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The workshop (a party with the SUBCONTRACTOR role); never changes.
+  partyId        String                  @db.Uuid
+  /// The kind of work (the work centre kind its operations need: SEWING, FINISHING …); null: any work.
+  workCentreKind WorkCentreKind?
+  unit           SubcontractCapacityUnit
+  /// Minutes or garments a week, 1 to 1 000 000.
+  perWeek        Int
+  /// From this day, until this day (not before it); until null: open.
+  validFrom      DateTime                @db.Date
+  validTo        DateTime?               @db.Date
+  note           String?
+  version        Int                     @default(1)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                 @db.Uuid
+
+  party Party @relation("SubcontractorCapacityWorkshop", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, partyId, validFrom])
+}

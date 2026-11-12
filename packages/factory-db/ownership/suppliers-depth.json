@@ -1,0 +1,34 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/suppliers-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5 schema wave 42/44 (B-W2b-287). The office writes bank accounts, qualifications and subcontract agreements through apps/factory-api's modules/purchasing (B-W2b-311, -315, -331), always through command(); the API keeps staff to the companies and parties their grants reach, and shows a full IBAN only to Finance behind a step-up. A supplier's portal session (factory_partner_runtime) reads its OWN party's bank accounts and inserts only a PROPOSED account of its own party, proposed by one of its own active people (the …_suppliers_depth_w2b_guards triggers refuse any other partner insert; it has no update): never the call-back (who called, which number) nor who in the office checked, refused or wrote an account. It reads its own account's IBAN as it typed it (a column the partner inserts cannot be hidden from its reads: the generator hides a column for every privilege); the portal shows `ibanCountry` and `ibanLast4` only. It reads nothing of another party (the party key) and none of the qualifications or agreements. The floor reads nothing here. Nobody deletes a bank account or a qualification (their history is the record); the office deletes only a DRAFT agreement (the guards refuse any other). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SupplierBankAccount": {
+      "about": "The office proposes a supplier's new bank account, records the call-back to a number on file before the proposal, verifies it as a second person (never the one who proposed or wrote it), activates it, refuses it, retires the one it replaces; it is never changed in place. A supplier's portal session reads its own party's accounts and proposes a new one (PROPOSED, by one of its own active people), never the call-back or who in the office checked it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "insert"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["callBackById", "callBackContactId", "callBackAddressId", "callBackPhone", "verifiedById", "refusedById", "createdById"]
+        }
+      }
+    },
+    "SupplierQualification": {
+      "about": "The office records what a supplier or workshop is qualified for (kinds of work, operations, kinds of material), decides it once with its evidence, suspends, lifts and withdraws it; buyers and planners read it. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SubcontractAgreement": {
+      "about": "The office writes a workshop's agreement (a DRAFT, deleted while DRAFT), records it SIGNED with its file, then supersedes or terminates it; every subcontract order links the revision in force.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

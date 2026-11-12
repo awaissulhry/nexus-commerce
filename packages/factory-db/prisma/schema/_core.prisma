@@ -177,6 +177,9 @@ model Company {
   depositRequests      DepositRequest[]
   // W2b portal-sales.prisma (wave 21/22): the order requests its customers sent from the portal, their payment intents.
   portalOrderRequests  PortalOrderRequest[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): what freezes on its orders at each stage, its customers' credit checks.
+  orderFreezeRules     OrderFreezeRule[]
+  creditChecks         CreditCheck[]
   paymentIntents       PaymentIntent[]
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
@@ -184,6 +187,11 @@ model Company {
   // W2b-4 recall.prisma (wave 33/33): the requests authorities sent it, and its sustainability claims.
   authorityRequests    AuthorityRequest[]
   sustainabilityClaims SustainabilityClaim[]
+  // W2b-5 service.prisma (wave 43/44): its return policies and fee rules, service cases and product-safety reports.
+  returnPolicies       ReturnPolicy[]
+  returnFeeRules       ReturnFeeRule[]
+  serviceCases         ServiceCase[]
+  productSafetyReports ProductSafetyReport[]
   // W2b-5 ppe-texts.prisma (wave 34/44): the PPE consultant's yes per template recorded for it.
   ppeTextApprovals     PpeTextApproval[]
   // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
@@ -209,6 +217,8 @@ model Company {
   payablesSettings     PayablesSettings[]
   // W2b-5 warehouse-depth.prisma (wave 36/44): its warehouse rules.
   inventorySettings    InventorySettings[]
+  // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
+  deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
   sdiInboxItems        SdiInboxItem[]
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -221,6 +231,10 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quote templates, minimum order quantities and size curves.
+  quoteTemplates       QuoteTemplate[]
+  moqRules             MoqRule[]
+  sizeCurves           SizeCurve[]
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]
@@ -235,6 +249,9 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the qualifications of its suppliers and workshops, its written terms with them.
+  supplierQualifications SupplierQualification[]
+  subcontractAgreements  SubcontractAgreement[]
   // W2b pay.prisma (schema wave 6/7): its incentive schemes, pay periods, payroll export layouts, exports and code mapping.
   incentiveSchemes     IncentiveScheme[]
   payPeriods           PayPeriod[]
@@ -353,6 +370,8 @@ model Site {
   // supply.prisma: the purchase orders delivered to it and its planning runs.
   purchaseOrders  PurchaseOrder[]
   planningRuns    PlanningRun[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the requests to buy for it.
+  purchaseRequests PurchaseRequest[]
   // W2b portal-supply.prisma (wave 22/22): the ship notices of deliveries to it.
   shipNotices     ShipNotice[]
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations and stock counts; its planning settings,
@@ -372,6 +391,9 @@ model Site {
   transfersReceived    TransferOrder[]      @relation("TransferOrderToSite")
   countSchedules       CountSchedule[]
   warehouseTasks       WarehouseTask[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the work its plan proposes to make or give out, its planners' what-ifs.
+  plannedWorkOrders    PlannedWorkOrder[]
+  whatIfScenarios      WhatIfScenario[]
   // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
   locations       Location[]
   goodsReceipts   GoodsReceipt[]
@@ -434,6 +456,8 @@ model Site {
   // returns.prisma: the returns coming back to it and the repairs it makes.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]
+  // W2b-5 service.prisma (wave 43/44): the estimates of its repairs.
+  repairEstimates      RepairEstimate[]
   // calendar.prisma, views.prisma, alerts.prisma: its calendar, the reports sent about it, the alert rules that look at it.
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
@@ -539,6 +563,8 @@ model Line {
   inProcessChecks InProcessCheck[]
   // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
   capacity LineCapacity[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders planned on it.
+  plannedWorkOrders PlannedWorkOrder[]
   // W2b pay.prisma (schema wave 6/7): its piece-rate tables, the rate publications made on it, its incentive schemes.
   pieceRateTables  PieceRateTable[]
   ratePublications RatePublication[]
