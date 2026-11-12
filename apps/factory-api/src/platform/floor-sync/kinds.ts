@@ -83,6 +83,9 @@ import { moveBodyProblems, moveByScan } from '../../modules/inventory/bin-moves/
 import { doneBody, stepBody } from '../../modules/inventory/tasks/contract'
 import { doneTask, giveBackTask, takeTask } from '../../modules/inventory/tasks/floor'
 import { TaskRefusedError } from '../../modules/inventory/tasks/lifecycle'
+// B-W2b-299: counting by scanning every unit from the floor's queue (a unit scanned, a bin finished).
+import { finishBody as countFinishBody, scanBody as countScanBody } from '../../modules/inventory/counts-depth/contract'
+import { CountScanRefusedError, finishBin as finishCountBin, scanUnit as scanCountUnit } from '../../modules/inventory/counts-depth/scans'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -148,6 +151,9 @@ import { TaskRefusedError } from '../../modules/inventory/tasks/lifecycle'
  *   inventory.task.take / giveBack / done modules/inventory/tasks takeTask, giveBackTask, doneTask (B-W2b-292: a warehouse task's
  *                                         step, at the version sent or as the task stands; a quarantine move by the scan of the
  *                                         quarantine place, the same act as the office's confirm)
+ *   inventory.count.scan / finishBin      modules/inventory/counts-depth scanUnit, finishBin (B-W2b-299: a unit scanned into a
+ *                                         running count with the tablet's time, a bin finished; as the count and its lines stand
+ *                                         when they arrive: a count submitted since, or a tag counted twice, is refused in words)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -195,6 +201,8 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof CutIssueRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   // B-W2b-292
   if (error instanceof TaskRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
+  // B-W2b-299
+  if (error instanceof CountScanRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -473,6 +481,22 @@ async function applyTaskStep(caller: CommandCaller, event: QueuedEvent, key: str
   return { status: 'accepted', result: { type: 'WarehouseTask', id: result.task.id } }
 }
 
+/** B-W2b-299: a queued unit scan or a bin finished, through the counts' own commands (the key: `<device>.<client event id>`). */
+async function applyCountScan(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  if (event.kind === 'inventory.count.finishBin') {
+    const body = parsed(countFinishBody.extend({ countId: id(), locationId: id() }), { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+    if (!body.ok) return refusedBy(body.refusal)
+    const { countId, locationId, ...rest } = body.value
+    const result = await finishCountBin(caller, countId, locationId, rest, key)
+    return { status: 'accepted', result: { type: 'StockCount', id: result.count.id } }
+  }
+  const body = parsed(countScanBody.extend({ countId: id() }), { ...event.payload, ...(event.occurredAt ? { scannedAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const { countId, ...rest } = body.value
+  const result = await scanCountUnit(caller, countId, rest, key)
+  return { status: 'accepted', result: { type: 'StockCountScan', id: result.scanId } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -550,6 +574,10 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'inventory.task.giveBack':
       case 'inventory.task.done':
         return await applyTaskStep(caller, event, context.key)
+      // B-W2b-299
+      case 'inventory.count.scan':
+      case 'inventory.count.finishBin':
+        return await applyCountScan(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)
