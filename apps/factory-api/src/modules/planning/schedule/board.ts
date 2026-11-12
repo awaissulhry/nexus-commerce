@@ -246,9 +246,9 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
       ...world.workOrders
         .filter((workOrder) => world.schedules.get(workOrder.id)!.status === 'LATE')
         .map((workOrder) => ({ kind: 'FINISHES_LATE' as const, words: world.schedules.get(workOrder.id)!.words, lane: null, date: workOrder.dueDate, bucketKey: null, overMinutes: null, loadPct: null, workOrderId: workOrder.id, daysLate: daysLateOf(world, workOrder) })),
-      // B-W2b-312: operations in the past, material not in time, gate not passed.
-      ...(await depthProblemsOf(db, world, starts)),
     ]
+    // B-W2b-312: operations in the past, material not in time, gate not passed (their own list).
+    const moreProblems = await depthProblemsOf(db, world, starts)
     return {
       site: siteViewOf(site),
       from,
@@ -263,6 +263,7 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
       workOrders,
       tray,
       problems,
+      moreProblems,
     }
   })
 }

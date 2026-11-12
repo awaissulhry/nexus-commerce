@@ -112,9 +112,10 @@ describe('moves that know the material (PLN-134)', () => {
     expect(wo1.materialStart).toMatchObject({ state: 'ARRIVES', arrives: '2026-11-16', startDay: '2026-11-17', setBy: { label: 'SEED-LEA-100 RED', source: 'FIRM' } })
     expect(new Date(wo1.materialStart.earliestStart).getTime()).toBeGreaterThanOrEqual(new Date('2026-11-16T23:00:00.000Z').getTime())
     expect(wo1.materialStart.words).toMatch(/^SEED-LEA-100 RED arrives 16 Nov \(a firm planned order\)\. Earliest start with material: 17 Nov \d\d:\d\d\.$/)
-    // Its cutting bar starts on 16 Nov: material not in time, named on the board's problems with the bar.
+    // Its cutting bar starts on 16 Nov: material not in time, named on the board's W2b problems with the bar; W2a's list keeps its two kinds.
     const cut = await slotOf('SEED-WO-0001', 'SEED-CUT-LEA')
-    expect(answer.problems.find((problem: Json) => problem.kind === 'MATERIAL_NOT_IN_TIME')).toMatchObject({ workOrderId: wo1.id, slotId: cut!.id, date: '2026-11-17' })
+    expect(answer.moreProblems.find((problem: Json) => problem.kind === 'MATERIAL_NOT_IN_TIME')).toMatchObject({ workOrderId: wo1.id, slotId: cut!.id, date: '2026-11-17' })
+    expect(answer.problems.every((problem: Json) => problem.kind === 'OVERBOOKED' || problem.kind === 'FINISHES_LATE')).toBe(true)
     // The drop's check: earlier is warned with the start to snap to; on the day is in time.
     const early = await ok('viewer', 'GET', `/planning/schedule/work-orders/${wo1.id}/material?startAt=2026-11-16T13:00:00.000Z`)
     expect(early.check).toMatchObject({ state: 'ARRIVES', inTime: false, snapTo: wo1.materialStart.earliestStart })
@@ -233,8 +234,8 @@ describe('reschedule the backlog (PLN-141)', () => {
     await admin(`UPDATE "ScheduleSlot" SET "startAt" = '2026-11-09T08:00:00Z', "endAt" = '2026-11-09T10:00:00Z', version = version + 1 WHERE id = $1`, [cut.id])
     await admin(`UPDATE "ScheduleSlot" SET "startAt" = '2026-11-09T13:00:00Z', "endAt" = '2026-11-09T14:00:00Z', pinned = true, "pinnedAt" = '2026-11-09T12:00:00Z', "pinnedById" = $2, version = version + 1 WHERE id = $1`, [qc.id, planner])
     const shown = await board()
-    expect(shown.problems.filter((problem: Json) => problem.kind === 'IN_THE_PAST').map((problem: Json) => problem.slotId).sort()).toEqual([cut.id, qc.id].sort())
-    expect(shown.problems.find((problem: Json) => problem.slotId === qc.id).words).toMatch(/it is pinned \(unpin it to reschedule it\)\.$/)
+    expect(shown.moreProblems.filter((problem: Json) => problem.kind === 'IN_THE_PAST').map((problem: Json) => problem.slotId).sort()).toEqual([cut.id, qc.id].sort())
+    expect(shown.moreProblems.find((problem: Json) => problem.slotId === qc.id).words).toMatch(/it is pinned \(unpin it to reschedule it\)\.$/)
     const preview = await ok('viewer', 'POST', '/planning/schedule/reschedule-backlog', { siteId: siteA1, apply: false })
     // The cutting goes to the first free time once the red leather is there (17 Nov); the sewing still fits after it and stays.
     expect(preview.moves.map((move: Json) => [move.slotId, move.why])).toEqual([[cut.id, 'PAST']])

@@ -138,8 +138,7 @@ describe('the board: resource and order views, latest safe start (PLN-129, PLN-1
     expect(answer.tray).toEqual([expect.objectContaining({ workOrderId: wo2, unplacedOperations: 3, chips: expect.arrayContaining(['DRAFT']) })])
     // The band: v1 published, what moved since on its days, Publish not held.
     expect(answer.plan).toMatchObject({ version: 1, published: { number: 1, coversFrom: '2026-11-16', coversTo: '2026-11-20' }, changesSincePublished: { moved: 1, added: 1, removed: 0, words: '1 moved, 1 added' }, mayChange: true, mayPublish: true, publishHeld: null })
-    // B-W2b-312 (PLN-134): WO-0001's cutting starts before its red leather comes (the firm planned order of 16 Nov).
-    expect(answer.problems.map((problem: Json) => problem.kind)).toEqual(['MATERIAL_NOT_IN_TIME'])
+    expect(answer.problems).toEqual([])
   })
 
   it('gives the bar popover: sizes, operations with their latest starts, its slots and lanes', async () => {

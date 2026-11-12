@@ -11,7 +11,8 @@ import { firstLaneOf, materialCheckOf } from './material'
 
 /**
  * The problems list's three W2b kinds (B-W2b-312; design planning.board "Problems in this plan": "Operations in the past
- * (W2b)", "Material not in time (W2b)", "Gate not passed (W2b)"; "Show on board" outlines the bar named by `slotId`):
+ * (W2b)", "Material not in time (W2b)", "Gate not passed (W2b)"; "Show on board" outlines the bar named by `slotId`), the
+ * board's `moreProblems` (apart from W2a's `problems`, whose two kinds the board screen of B-W2a-45 parses strictly):
  *
  *   IN_THE_PAST          a bar that should have ended by now while its operation has work left (the backlog, PLN-141)
  *   MATERIAL_NOT_IN_TIME a work order on the board that starts before its earliest start with material (PLN-134)
@@ -25,11 +26,7 @@ export interface DepthProblem {
   readonly words: string
   readonly lane: LaneRef | null
   readonly date: string | null
-  readonly bucketKey: null
-  readonly overMinutes: null
-  readonly loadPct: null
   readonly workOrderId: string
-  readonly daysLate: null
   readonly slotId: string | null
 }
 
@@ -38,7 +35,6 @@ export async function depthProblemsOf(db: Reader, world: ScheduleWorld, starts: 
   const tz = world.site.timezone
   const say = (instant: number) => whenWords(instant, tz)
   const out: DepthProblem[] = []
-  const blank = { bucketKey: null, overMinutes: null, loadPct: null, daysLate: null } as const
   for (const workOrder of world.workOrders) {
     const bars = world.slots.filter((slot) => slot.workOrderId === workOrder.id)
     for (const slot of bars) {
@@ -53,7 +49,6 @@ export async function depthProblemsOf(db: Reader, world: ScheduleWorld, starts: 
         date: businessDate(slot.endAt, tz),
         workOrderId: workOrder.id,
         slotId: slot.id,
-        ...blank,
       })
     }
     const start = starts?.get(workOrder.id)
@@ -62,7 +57,7 @@ export async function depthProblemsOf(db: Reader, world: ScheduleWorld, starts: 
       const first = [...bars].sort((a, b) => a.startAt.getTime() - b.startAt.getTime() || (a.id < b.id ? -1 : 1))[0]
       const check = materialCheckOf(world, start, first ? laneOfSlot(first) : firstLaneOf(world, workOrder), schedule.plannedStart)
       if (!check.inTime) {
-        out.push({ kind: 'MATERIAL_NOT_IN_TIME', words: `${workOrder.number} starts ${say(schedule.plannedStart)} on the board. ${check.words}`, lane: first ? laneOfSlot(first) : null, date: start.startDay, workOrderId: workOrder.id, slotId: first?.id ?? null, ...blank })
+        out.push({ kind: 'MATERIAL_NOT_IN_TIME', words: `${workOrder.number} starts ${say(schedule.plannedStart)} on the board. ${check.words}`, lane: first ? laneOfSlot(first) : null, date: start.startDay, workOrderId: workOrder.id, slotId: first?.id ?? null })
       }
     }
   }
@@ -72,7 +67,7 @@ export async function depthProblemsOf(db: Reader, world: ScheduleWorld, starts: 
     const gates = holds.get(workOrder.id)
     if (!gates) continue
     const first = world.slots.filter((slot) => slot.workOrderId === workOrder.id).sort((a, b) => a.startAt.getTime() - b.startAt.getTime() || (a.id < b.id ? -1 : 1))[0]!
-    out.push({ kind: 'GATE_NOT_PASSED', words: holdWords(workOrder.number, gates), lane: laneOfSlot(first), date: businessDate(first.startAt, tz), workOrderId: workOrder.id, slotId: first.id, ...blank })
+    out.push({ kind: 'GATE_NOT_PASSED', words: holdWords(workOrder.number, gates), lane: laneOfSlot(first), date: businessDate(first.startAt, tz), workOrderId: workOrder.id, slotId: first.id })
   }
   return out
 }

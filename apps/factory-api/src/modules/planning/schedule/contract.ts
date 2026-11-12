@@ -22,7 +22,9 @@ import { materialCheckView, materialStartView } from '../schedule-depth/material
 
 export const BOARD_BUCKETS = ['DAY', 'WEEK', 'MONTH'] as const
 export const TRAY_CHIPS = ['PAST_LATEST_SAFE_START', 'START_SOON', 'MATERIAL_NOT_READY', 'ON_HOLD', 'DRAFT', 'NO_DUE_DATE'] as const
-export const PROBLEM_KINDS = ['OVERBOOKED', 'FINISHES_LATE', /* B-W2b-312 */ 'IN_THE_PAST', 'MATERIAL_NOT_IN_TIME', 'GATE_NOT_PASSED'] as const
+export const PROBLEM_KINDS = ['OVERBOOKED', 'FINISHES_LATE'] as const
+/** B-W2b-312: the problems list's W2b kinds, in their own list (`moreProblems`): a screen built on W2a's two kinds still reads the board. */
+export const MORE_PROBLEM_KINDS = ['IN_THE_PAST', 'MATERIAL_NOT_IN_TIME', 'GATE_NOT_PASSED'] as const
 export const CHECK_CODES = ['OVERBOOKED', 'IN_THE_PAST', 'MATERIAL_NOT_READY'] as const
 
 const named = output({ id: id(), code: z.string(), name: z.string() })
@@ -228,8 +230,21 @@ const problemView = output({
   workOrderId: id().nullable(),
   /** Calendar days after the due date it finishes (the plan's finish, else the earliest one). */
   daysLate: z.number().int().nullable(),
-  /** B-W2b-312: the bar it is about (IN_THE_PAST, MATERIAL_NOT_IN_TIME: the work order's first bar), for "Show on board". */
-  slotId: id().nullable().optional(),
+})
+
+/**
+ * B-W2b-312 (design planning.board "Problems in this plan": "Operations in the past (W2b)", "Material not in time (W2b)", "Gate not
+ * passed (W2b)"): IN_THE_PAST a bar that should have ended by now with work left (the backlog), MATERIAL_NOT_IN_TIME a work order
+ * on the board starting before its earliest start with material, GATE_NOT_PASSED one whose order waits on a pre-production gate;
+ * `slotId` the bar "Show on board" outlines.
+ */
+const moreProblemView = output({
+  kind: z.enum(MORE_PROBLEM_KINDS),
+  words: z.string(),
+  lane: laneRef.nullable(),
+  date: businessDate().nullable(),
+  workOrderId: id(),
+  slotId: id().nullable(),
 })
 
 // B-W2b-312: exported for schedule-depth's answers.
@@ -280,6 +295,8 @@ export const boardContract = defineContract({
       /** Not on the board (wholly or partly), the earliest latest safe start first. */
       tray: z.array(output({ workOrderId: id(), unplacedOperations: z.number().int(), minutes: minutes(), latestSafeStart: instant().nullable(), chips: z.array(z.enum(TRAY_CHIPS)) })),
       problems: z.array(problemView),
+      /** B-W2b-312: the problems list's W2b kinds (see moreProblemView). */
+      moreProblems: z.array(moreProblemView),
     }),
   },
 })
