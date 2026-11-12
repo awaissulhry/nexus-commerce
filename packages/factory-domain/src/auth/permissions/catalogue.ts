@@ -206,6 +206,11 @@ import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../
 import { INVENTORY_TASKS_DEFINITIONS, INVENTORY_TASKS_PERMISSIONS } from '../../inventory/tasks/permissions'
 // B-W2b-331: subcontracting in depth (purchasing.subcontract.terms | balance | cost).
 import { SUBCONTRACT_DEPTH_DEFINITIONS, SUBCONTRACT_DEPTH_PERMISSIONS } from '../../purchasing/subcontract-depth/permissions'
+// B-W2b-356: warehouse reports (inventory.reports.view: stock ageing and leather use; each figure also inventory.stock.view).
+import { INVENTORY_REPORTS_DEFINITIONS, INVENTORY_REPORTS_PERMISSIONS } from '../../inventory/reports/permissions'
+// B-W2b-315: supplier bank details with change control (purchasing.bank.*, portal.supplierBank.*), qualification and the PO's compliance gate.
+import { BANK_DEFINITIONS, BANK_PERMISSIONS, PORTAL_BANK_DEFINITIONS, PORTAL_BANK_PERMISSIONS } from '../../purchasing/bank/permissions'
+import { QUALIFICATION_DEFINITIONS, QUALIFICATION_PERMISSIONS } from '../../purchasing/qualification/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -926,6 +931,12 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_TASKS_DEFINITIONS,
   // B-W2b-331: subcontracting in depth (area `purchasing`, declared above).
   SUBCONTRACT_DEPTH_DEFINITIONS,
+  // B-W2b-356: warehouse reports (area `inventory`, declared above).
+  INVENTORY_REPORTS_DEFINITIONS,
+  // B-W2b-315: bank details (area `purchasing`, declared above; the portal's flagged partner), qualification and the compliance gate.
+  BANK_DEFINITIONS,
+  PORTAL_BANK_DEFINITIONS,
+  QUALIFICATION_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
 ])
@@ -1250,6 +1261,11 @@ for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of INVENTORY_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-331: subcontracting in depth.
 for (const name of SUBCONTRACT_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-356: warehouse reports.
+for (const name of INVENTORY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-315: bank details, qualification and the compliance gate; the portal's bank permissions flagged partner.
+for (const name of [...BANK_PERMISSIONS, ...QUALIFICATION_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_BANK_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // B-W2b-299: counts in depth.
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

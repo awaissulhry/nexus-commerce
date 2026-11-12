@@ -57,6 +57,9 @@ import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissio
 import { INVENTORY_TASKS_ADDS } from '../../inventory/tasks/permissions'
 // B-W2b-331: subcontracting in depth (the buyer: terms, balance, cost; the warehouse: balance).
 import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permissions'
+// B-W2b-315: bank details (finance), qualification (the buyer and quality) and the compliance override (quality); the portal's bank details.
+import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
+import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
 import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
@@ -89,6 +92,8 @@ import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 // B-W2b-313: lots in depth (the warehouse and quality sort hides into shade lots; quality makes the trace report).
 import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
+// B-W2b-356: warehouse reports (the warehouse, buyer, planner, production manager and finance read them).
+import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -952,6 +957,11 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_TASKS_ADDS[key] ?? []) : []),
   // B-W2b-331
   ...(audience === 'office' ? (SUBCONTRACT_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-356
+  ...(audience === 'office' ? (INVENTORY_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-315
+  ...(audience === 'office' ? (BANK_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? [])]
 /**
@@ -1605,6 +1615,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'guest-accountant': ['portal.accounting.view' as Permission] },
   // B-W2b-262: the brand's samples and tech packs (rounds, its styles in development, the BRAND tech pack PDF); not Finance.
   PORTAL_SAMPLES_READERS,
+  // B-W2b-315: the bank details in the profile (SCM-007): the supplier's Invoices role sees them masked, each Admin proposes a change.
+  PORTAL_BANK_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

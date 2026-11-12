@@ -153,6 +153,8 @@ export function answerProblem(status: PurchaseOrderStatus | string): string | nu
     case 'RECEIVED':
       return 'Goods of this order were received already: it needs no confirmation any more.'
     case 'DRAFT':
+    // B-W2b-305: a changed order waiting for its yes before it is sent again.
+    case 'PENDING_APPROVAL':
       return 'The buyer is changing this order: the changed order comes with a new link.'
     default:
       return `This order is ${STATUS_WORDS[status as PurchaseOrderStatus] ?? String(status).toLowerCase()}: it needs no answer.`

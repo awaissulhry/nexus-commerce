@@ -23,6 +23,8 @@ import { afterAcceptance } from './after-acceptance'
 import { CUSTOMER_QUOTE_COLUMNS, customerQuoteOf, dayOf, lineLabels, readCustomerLines, readCustomerVersions, type CustomerVersionRow, type Reader } from './frozen'
 // B-W2b-165 (SAL-199): the proofs the customer accepts with the quote.
 import { acceptProofsInCommand, linkProofsOf } from '../quote-proofs/link'
+// B-W2b-325 (SAL-170): the discount shown on the document.
+import { discountShownFor } from '../pricing-depth/store'
 
 /**
  * The customer's side of a sent quote, through its one-off QUOTE_ACCEPT link (B-W1-24; A1 §2.5, §3.10 "Links"; SAL-093,
@@ -102,9 +104,11 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     const language = version.language === 'en' ? 'en' : 'it'
     const instructions = deposit ? await instructionsFor(client, deposit, quoteDocumentNumber(quote.number, version.revision), language) : null
     // B-W2a-19: the deposit clause's days, as the sent PDF printed them (the version's payment terms).
-    const terms = await client.quoteVersion.findUnique({ where: { id: version.id }, select: { paymentTermsId: true } })
+    const terms = await client.quoteVersion.findUnique({ where: { id: version.id }, select: { paymentTermsId: true, priceListVersionId: true } })
     const depositDueDays = await depositDueDaysFor(client, terms?.paymentTermsId ?? null)
-    return { company, labels, deposit, instructions, depositDueDays }
+    // B-W2b-325 (SAL-170): the page shows what the PDF printed (the version's price list's choice).
+    const showDiscount = await discountShownFor(client, terms?.priceListVersionId ?? null)
+    return { company, labels, deposit, instructions, depositDueDays, showDiscount }
   })
   const customer = customerQuoteOf({
     quote,
@@ -116,6 +120,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     contact: null,
     date: businessDate(version.sentAt ?? version.createdAt),
     depositDueDays: extra.depositDueDays,
+    showDiscount: extra.showDiscount,
   })
   const proofs = await request.withClient((client) => linkProofsOf(client, version.id))
   const acceptance = version.status === 'ACCEPTED' ? await request.withClient((client) => client.quoteAcceptance.findFirst({ where: { versionId: version.id }, select: { signerName: true, acceptedAt: true, documentSha256: true, termsVersion: true } })) : null
