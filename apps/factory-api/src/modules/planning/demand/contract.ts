@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { DEMAND_BUCKETS, DEMAND_KINDS, DEMAND_LAYERS, DEMAND_LIMITS, LATER_LAYERS } from '@nexus/factory-domain/planning/demand/rules'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { PRODUCTION_STRATEGIES } from '@nexus/factory-domain/planning/strategy/rules'
 import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules'
 
@@ -65,11 +66,12 @@ export const demandRowView = output({
   colourway: ref.nullable(),
   /** The production strategy of its SKUs at the site (PLN-061): one, or MIXED. */
   strategy: z.enum([...PRODUCTION_STRATEGIES, 'MIXED']),
-  totals,
+  /** Pieces per layer (never money). */
+  totals: notMoney(totals),
   /** Sparse: a bucket without a piece is left out. */
   cells: z.array(cell),
   /** null size: made-to-measure units. */
-  sizes: z.array(output({ size: z.string().nullable(), totals, cells: z.array(cell) })),
+  sizes: z.array(output({ size: z.string().nullable(), totals: notMoney(totals), cells: z.array(cell) })),
 })
 export type DemandRowView = z.infer<typeof demandRowView>
 
