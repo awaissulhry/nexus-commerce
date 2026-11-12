@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { at, canOf, COLOURS, inShell, MATERIALS, PREFIX, SITE, SITE_SOUTH, SUPPLIER_LIST, SUPPLIERS, TIME_ZONE, uid, type Role } from '../../_shared/buying/fixtures'
 import type { Explain, OpenDraft, PegDemand, Plan, PlanLine, PlanRun, SendCard, Shortages, StockLine } from './api'
-import type { PlanModel } from './model'
+import { shortageAskKey, type PlanModel } from './model'
 import { PlanView } from './view/PlanView'
 
 /**
@@ -450,6 +450,9 @@ export const designScreen = defineDesignScreen<PlanCase>({
     { id: 'short-wo-planner', label: 'W2a Short on open work orders as a planner: Buy held (buyers make POs; the line waits in Requests to buy)', model: planCase('planner', { view: 'shortWo' }) },
     { id: 'short-wo-empty', label: 'W2a No work order is waiting for material', model: planCase('buyer', { view: 'shortWo', shortages: { status: 'ready', value: { ...SHORTAGES, rows: [] } } }) },
     { id: 'short-wo-error', label: 'W2a Short on open work orders could not be read', model: planCase('buyer', { view: 'shortWo', shortages: { status: 'error', problem: 'problem.offline' } }) },
+    // B-W2b-332: Ask to buy on a shortage (the line becomes a request to the buyers, or a buyer drafts it in one step: SCR-357).
+    { id: 'w2b-332-short-ask', label: 'W2b Short on open work orders: Ask to buy beside each fix (one asked already)', model: planCase('planner', { view: 'shortWo', canAsk: true, asked: [shortageAskKey({ workOrderId: SHORTAGES.rows[0]!.workOrder.id, itemId: SHORTAGES.rows[0]!.material.itemId, itemColourId: SHORTAGES.rows[0]!.material.itemColourId })] }), note: 'A planner (no purchasing.manage) asks the buyers; a shortage asked already is held “Asked already: it waits for the buyers”.' },
+    { id: 'w2b-332-short-ask-buyer', label: 'W2b Short on open work orders as a buyer: Buy, Ask to buy (draft in one step)', model: planCase('buyer', { view: 'shortWo', canAsk: true }) },
     { id: 'move-firm', label: 'W2a Move the firm planned order earlier', model: planCase('buyer', { view: 'shortWo', plan: { status: 'ready', value: plan({ lines: WITH_FIRM }) }, dialog: { kind: 'moveFirm', requirementId: FIRM_LINE.id, date: '2026-11-09', busy: false, problem: null } }) },
     { id: 'why-firm', label: 'W2a Why: a firm planned order carried from an earlier plan', model: planCase('buyer', { plan: { status: 'ready', value: plan({ lines: WITH_FIRM }) }, why: { lineId: FIRM_LINE.id, explain: { status: 'ready', value: { ...EXPLAIN, line: { ...FIRM_LINE, sources: [] }, pegging: [] } } } }) },
     {

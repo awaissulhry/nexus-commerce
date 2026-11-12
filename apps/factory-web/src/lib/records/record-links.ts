@@ -89,6 +89,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Shipment: '/warehouse/shipments/[id]',
   // Purchasing › the PO studio (SCR-059); Warehouse › a goods receipt (SCR-063).
   PurchaseOrder: '/purchasing/orders/[id]',
+  // B-W2b-332: a request asked in the office opens in Requests to buy (the queue's kind ASKED).
+  PurchaseRequest: '/purchasing/requests?open=asked:[id]',
   GoodsReceipt: '/warehouse/receipts/[id]',
   // Purchasing › Subcontract orders (SCR-128, B-W2a-56): an order sent to a workshop.
   SubcontractOrder: '/purchasing/subcontracting/[id]',

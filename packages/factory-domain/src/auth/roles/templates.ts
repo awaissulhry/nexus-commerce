@@ -38,6 +38,10 @@ import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 // B-W2b-282: one approval engine.
 import { APPROVALS_ADDS } from '../../approvals/permissions'
+// B-W2b-296: the delivery tolerances (the buyer keeps them).
+import { PO_DEPTH_ADDS } from '../../purchasing/po-depth/permissions'
+// B-W2b-332: ask to buy (every office template that works in the office).
+import { ASK_TO_BUY_ADDS } from '../../purchasing/ask-to-buy/permissions'
 // B-W2b-290: customers in depth (holds; contacts' personal data).
 import { PARTIES_HOLD_ADDS } from '../../parties/holds/permissions'
 import { PARTIES_PRIVACY_ADDS } from '../../parties/contact-privacy/permissions'
@@ -911,6 +915,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_BRANDING_ADDS[key] ?? []) : []),
   // B-W2b-282
   ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-296
+  ...(audience === 'office' ? (PO_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-332
+  ...(audience === 'office' ? (ASK_TO_BUY_ADDS[key] ?? []) : []),
   // B-W2b-290
   ...(audience === 'office' ? (PARTIES_HOLD_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (PARTIES_PRIVACY_ADDS[key] ?? []) : [])]

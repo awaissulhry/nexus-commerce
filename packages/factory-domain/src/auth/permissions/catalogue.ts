@@ -183,6 +183,10 @@ import { PRODUCT_COLOURS_DEFINITIONS, PRODUCT_COLOURS_PERMISSIONS } from '../../
 import { PRODUCT_BRANDING_DEFINITIONS, PRODUCT_BRANDING_PERMISSIONS } from '../../product/branding-sets/permissions'
 // B-W2b-282: one approval engine (approvals.view | request | decide | rules.manage).
 import { APPROVALS_DEFINITIONS, APPROVALS_PERMISSIONS } from '../../approvals/permissions'
+// B-W2b-296: purchase orders in depth (purchasing.tolerances.manage: the delivery tolerances).
+import { PO_DEPTH_DEFINITIONS, PO_DEPTH_PERMISSIONS } from '../../purchasing/po-depth/permissions'
+// B-W2b-332: ask to buy (purchasing.requests.ask).
+import { ASK_TO_BUY_DEFINITIONS, ASK_TO_BUY_PERMISSIONS } from '../../purchasing/ask-to-buy/permissions'
 // B-W2b-290: customers in depth (parties.hold; parties.privacy, parties.erase; area `parties`).
 import { PARTIES_HOLD_DEFINITIONS, PARTIES_HOLD_PERMISSIONS } from '../../parties/holds/permissions'
 import { PARTIES_PRIVACY_DEFINITIONS, PARTIES_PRIVACY_PERMISSIONS } from '../../parties/contact-privacy/permissions'
@@ -881,6 +885,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_BRANDING_DEFINITIONS,
   // B-W2b-282: one approval engine.
   APPROVALS_DEFINITIONS,
+  // B-W2b-296: purchase orders in depth (area `purchasing`, declared above).
+  PO_DEPTH_DEFINITIONS,
+  // B-W2b-332: ask to buy (area `purchasing`).
+  ASK_TO_BUY_DEFINITIONS,
   // B-W2b-290: customers in depth (area `parties`, declared above).
   PARTIES_HOLD_DEFINITIONS,
   PARTIES_PRIVACY_DEFINITIONS,
@@ -1182,6 +1190,10 @@ for (const name of PORTAL_SAMPLES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)
 for (const name of [...PRODUCT_COLOURS_PERMISSIONS, ...PRODUCT_BRANDING_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-282: one approval engine.
 for (const name of APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-296: purchase orders in depth.
+for (const name of PO_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-332: ask to buy.
+for (const name of ASK_TO_BUY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-290: customers in depth.
 for (const name of [...PARTIES_HOLD_PERMISSIONS, ...PARTIES_PRIVACY_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
