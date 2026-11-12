@@ -1741,6 +1741,7 @@
     "inventory_lots_manage": "Dividere un lotto di pelli in gruppi di tonalità e riunirli, registrare gli attributi di un lotto, verificarne il ciclo di vita",
     "inventory_trace_report": "Fare il rapporto di tracciabilità datato per un cliente, un organismo notificato o un'autorità (PDF o CSV)",
     "inventory_reports_view": "Vedere i report di magazzino di un'azienda: invecchiamento delle giacenze per tipo di materiale e uso della pelle per articolo e lotto del fornitore (solo dalle giacenze che si possono vedere; valori solo con il permesso sui costi)",
+    "purchasing_reports_view": "Vedere i report acquisti di un'azienda: spesa per fornitore, categoria, materiale, azienda e mese con gli ordini di campionatura a parte, e le righe degli ordini di acquisto in ritardo con cosa bloccano (solo dagli ordini che si possono vedere; importi solo con il permesso sui costi)",
     "shipping_view": "Vedere le spedizioni",
     "shipping_manage": "Pianificare e cambiare spedizioni",
     "shipping_pack": "Imballare una spedizione",

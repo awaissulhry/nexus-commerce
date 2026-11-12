@@ -138,6 +138,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/purchasing/sourcing': 'purchasing.view', // GET /purchasing/sample-orders (B-W2b-347)
+      '/purchasing/reports': 'purchasing.reports.view', // GET /purchasing/reports/spend (B-W2b-350)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
       '/warehouse/hides': 'inventory.stock.view', // GET /inventory/hides
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
