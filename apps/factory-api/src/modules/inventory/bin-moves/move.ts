@@ -2,6 +2,7 @@ import { DomainError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { parseInstant } from '@nexus/factory-domain/core/time'
 import { fromRefusal, quantityToMove, toRefusal, type MoveRefusal, type PlaceFacts } from '@nexus/factory-domain/inventory/bin-moves/rules'
 import { INVENTORY_TRANSFER } from '@nexus/factory-domain/inventory/permissions'
+import { PUT_AWAY_FROM_KINDS } from '@nexus/factory-domain/inventory/tasks/sources'
 import { databaseWarehouseRefusal, WAREHOUSE_REFUSAL_ISSUES } from '@nexus/factory-domain/inventory/warehouse/refusals'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -112,6 +113,22 @@ async function tasksAnswer(tools: Pick<CommandTools, 'tx'>, rows: readonly TaskR
   return rows.map((row) => taskView(row, names))
 }
 
+/**
+ * Where it moves from when the scan does not say (it lies in several places): the place of the task the screen works on, else
+ * for a put-away the one dock or quarantine place it waits in ("two scans and no taps": a lot partly put away lies on the dock
+ * and in its bin). Null: the move asks (NAME_THE_PLACE).
+ */
+async function impliedFrom(db: Reader, hand: Hand, taskId: string | null | undefined, purpose: MovePurpose): Promise<string | null> {
+  if (hand.lying.length < 2) return null
+  if (taskId) {
+    const task = await db.warehouseTask.findUnique({ where: { id: taskId }, select: { fromLocationId: true } })
+    if (task?.fromLocationId && hand.lying.some((entry) => entry.location.id === task.fromLocationId)) return task.fromLocationId
+  }
+  if (purpose !== 'PUT_AWAY') return null
+  const waiting = hand.lying.filter((entry) => (PUT_AWAY_FROM_KINDS as readonly string[]).includes(entry.location.kind))
+  return waiting.length === 1 ? waiting[0]!.location.id : null
+}
+
 /** POST /inventory/bin-moves and POST /inventory/putaway: the move by its two scans. */
 export async function moveByScan(caller: CommandCaller, body: MoveByScanBody, purpose: MovePurpose, idempotencyKey?: string) {
   const context = stockContextOf(caller)
@@ -133,7 +150,8 @@ export async function moveByScan(caller: CommandCaller, body: MoveByScanBody, pu
     return { moveIds: rolled.moveIds, from: placeShort(plan.from), to: placeShort(plan.to), hand: handView(hand), tasks: result.tasks }
   }
 
-  const plan = await caller.withClient((db) => planMove(db, hand, body, purpose, occurredAt))
+  const fromLocationId = body.fromLocationId ?? (await caller.withClient((db) => impliedFrom(db, hand, body.taskId, purpose)))
+  const plan = await caller.withClient((db) => planMove(db, hand, { ...body, fromLocationId }, purpose, occurredAt))
   const { result } = await command(caller, { name, idempotencyKey, input: { ...body, purpose }, ...deviceTime }, async (tools) => {
     const posted = await postMoves(tools, plan.drafts, { key: idempotencyKey ? `${name}:${idempotencyKey}` : null, issuePath: () => 'body' })
     const tasks = await settleMoveTasksInCommand(tools, hand.siteId, plan.moved, body.taskId)

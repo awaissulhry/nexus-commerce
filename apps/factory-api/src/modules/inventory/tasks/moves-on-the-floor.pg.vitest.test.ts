@@ -171,7 +171,7 @@ describe('move between bins by two scans (SCM-218)', () => {
   it('moves part of the lot from the bulk rack onto the pick face, the label being the confirmation', async () => {
     const bulk = num(await stockAt(lining.lotId, P.bulk))
     const answer = await ok(call('tablet', 'POST', '/inventory/bin-moves', { code: 'SEED-LOT-W36-01', fromLocationId: P.bulk, placeCode: 'bin-a1-pf-01', quantity: '12.5' }), 201)
-    expect(answer.moves).toEqual([expect.objectContaining({ fromLocationId: P.bulk, toLocationId: P.pickFace, quantity: '12.5', uom: 'M' })])
+    expect(answer.moves).toEqual([expect.objectContaining({ fromLocationId: P.bulk, toLocationId: P.pickFace, quantity: '12.5000', uom: 'M' })])
     expect(answer).toMatchObject({ from: { code: 'A1-BULK-01' }, to: { code: 'A1-PF-01' } })
     expect(num(await stockAt(lining.lotId, P.bulk))).toBe(bulk - 12.5)
     expect(num(await stockAt(lining.lotId, P.pickFace))).toBeGreaterThanOrEqual(12.5)
