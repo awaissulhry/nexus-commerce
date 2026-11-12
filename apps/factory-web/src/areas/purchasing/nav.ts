@@ -1,6 +1,8 @@
 import { Factory, FileText, FlaskConical, Inbox, ShoppingCart, Truck, Undo2 } from 'lucide-react'
 // B-W2b-350: the Reports section's icon.
 import { BarChart3 } from 'lucide-react'
+// B-W2b-354: the Settings section's icon.
+import { Settings2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -51,6 +53,12 @@ export const officeArea: OfficeAreaNav = {
         id: 'purchasing-reports',
         label: 'shell:nav.purchasing.reportsGroup',
         items: [{ id: 'purchasing-reports', label: 'shell:nav.purchasing.reports', href: '/purchasing/reports', icon: BarChart3, permission: 'purchasing.reports.view' }],
+      },
+      // B-W2b-354: Settings › Purchasing settings (SCR-256; GET /purchasing/tolerances and /purchasing/reminders/settings).
+      {
+        id: 'purchasing-settings-group',
+        label: 'shell:nav.purchasing.settingsGroup',
+        items: [{ id: 'purchasing-settings', label: 'shell:nav.purchasing.settings', href: '/purchasing/settings', icon: Settings2, permission: 'purchasing.view' }],
       },
     ],
   },

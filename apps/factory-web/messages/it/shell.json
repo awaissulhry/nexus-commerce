@@ -57,7 +57,9 @@
       "sourcing": "Richieste di offerta",
       "claims": "Resi e reclami ai fornitori",
       "reportsGroup": "Report",
-      "reports": "Report acquisti"
+      "reports": "Report acquisti",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni acquisti"
     },
     "people": {
       "area": "Persone",

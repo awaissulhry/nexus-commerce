@@ -255,6 +255,8 @@ export const OFFICE: readonly TreeArea[] = [
       },
       // W2b: B-W2b-350 Purchasing reports (SCR-255).
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'purchasing.reports', title: 'Purchasing reports', titleIt: 'Report acquisti', wave: 'W2b', href: '/purchasing/reports' }] },
+      // W2b: B-W2b-354 Purchasing settings (SCR-256), the tree's Settings group (last).
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'purchasing.settings', title: 'Purchasing settings', titleIt: 'Impostazioni acquisti', wave: 'W2b', href: '/purchasing/settings' }] },
     ],
   },
   {
