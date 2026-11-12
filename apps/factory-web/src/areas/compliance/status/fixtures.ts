@@ -6,6 +6,8 @@ import type { Actions, Board, BoardRow, Cell, CellDetail, Expiries, Feed, FixPla
 import { EMPTY_ADDRESS, statusCan, type StatusAddress } from './model'
 import { StatusView } from './view/StatusView'
 import { STATUS_SECTIONS, type StatusModel } from './view/types'
+// B-W2b-288 (FU2:02): Not sold there.
+import { notSoldCases } from './not-sold/fixtures'
 
 /**
  * SCR-119 — Compliance › Status board with made-up styles, brands, certificates, declarations, work orders and shipments only
@@ -41,7 +43,7 @@ const blocked = (marketCode: string, code: string, message: string, fixPlace: Fi
 const missing = (marketCode: string): Cell => ({ marketCode, state: 'MISSING', words: 'Missing 1', missing: 1, blocking: 0, expiring: 0, manual: 1, blockedGates: [], first: { code: 'LABEL-LANGUAGE', message: 'The label has no French text yet.', fix: 'Add French to the label template.', who: 'COMPLIANCE', fixPlace: 'labels', legalReference: 'Reg. (EU) 2016/425 Annex II 1.4' } })
 const expiring = (marketCode: string): Cell => ({ marketCode, state: 'EXPIRING', words: 'Expiring', missing: 0, blocking: 0, expiring: 1, manual: 1, blockedGates: [], first: { code: 'CERT-COVERAGE', message: 'Certificate DEMO-CERT-0001 ends on 08/12/2026.', fix: 'Start the renewal with the notified body.', who: 'COMPLIANCE', fixPlace: 'certificates', legalReference: 'Reg. (EU) 2016/425 Annex V' } })
 
-const style = (id: string, code: string, name: string, brand: BoardRow['style']['brand'] = null, ppeCategory = 'CATEGORY_II', productType = 'JACKET'): BoardRow['style'] => ({ id, code, name, companyId: null, ppeCategory, productType, brand, soldUnderOurName: brand === null })
+const style = (id: string, code: string, name: string, brand: BoardRow['style']['brand'] = null, ppeCategory = 'CATEGORY_II', productType = 'JACKET'): BoardRow['style'] => ({ id, code, name, companyId: null, ppeCategory, productType, brand, soldUnderOurName: brand === null, /* B-W2b-288: every market */ marketCodes: [] })
 const ROWS: BoardRow[] = [
   { style: style(ids.jacket, 'DEMO-JKT-01', 'Giacca Demo Touring'), cells: [ready('IT'), blocked('DE', 'USER-INFO-LANGUAGE', 'The user information has no issued de version for Germany.'), missing('FR'), ready('ES')], ready: false, blocked: true },
   { style: style(ids.trousers, 'DEMO-TRS-02', 'Pantalone Demo Città', BRAND, 'CATEGORY_II', 'TROUSERS'), cells: [ready('IT'), ready('DE'), ready('FR'), ready('ES')], ready: true, blocked: false },
@@ -73,8 +75,10 @@ export const BOARD: Board = {
 }
 
 const CELL: CellDetail = {
-  style: { id: ids.jacket, code: 'DEMO-JKT-01', name: 'Giacca Demo Touring', ppeCategory: 'CATEGORY_II', productType: 'JACKET' },
+  style: { id: ids.jacket, code: 'DEMO-JKT-01', name: 'Giacca Demo Touring', ppeCategory: 'CATEGORY_II', productType: 'JACKET', /* B-W2b-288 */ marketCodes: [] },
   market: MARKETS[1]!,
+  // B-W2b-288 (FU2:02): the style names no market: every market is checked.
+  standing: 'EVERY_MARKET',
   cell: ROWS[0]!.cells[1]!,
   items: [
     {
@@ -301,5 +305,7 @@ export const designScreen = defineDesignScreen<StatusModel>({
     { id: 'role-production', label: 'Production manager (no override)', model: { ...model({ feed: { status: 'ready', value: { ...FEED, events: EVENTS.map((entry) => ({ ...entry, mayOverride: false })) } } }, 'production'), can: statusCan(ROLE_PERMISSIONS.production) } },
     { id: 'role-read-only', label: 'Read only', model: { ...model({ feed: { status: 'ready', value: { ...FEED, events: EVENTS.map((entry) => ({ ...entry, mayOverride: false })) } } }, 'readOnly'), can: statusCan(ROLE_PERMISSIONS.readOnly) } },
     { id: 'no-permission', label: 'No right (sales)', model: { ...model({}, 'sales'), can: statusCan(ROLE_PERMISSIONS.sales) } },
+    // B-W2b-288 (FU2:02): a style sold in some markets only — the others say "Not sold there".
+    ...notSoldCases(model, BOARD, CELL),
   ],
 })

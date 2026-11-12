@@ -160,6 +160,7 @@
     "MISSING": "Mancante",
     "BLOCKED": "Bloccato",
     "EXPIRING": "In scadenza",
+    "NOT_SOLD": "Non venduto lì",
     "missingCount_one": "Manca 1",
     "missingCount_other": "Mancano {count}",
     "title": "{style} × {market}",
@@ -178,8 +179,7 @@
     "fixFirst": "Correggi il primo mancante",
     "nothingMissing": "Qui non manca nulla.",
     "keys": "J / K mercato successivo · ⇧J / ⇧K modello successivo · Esc chiude",
-    "marketOff": "Questo mercato è disattivato: le sue regole attendono.",
-    "notSold": "Ogni mercato è controllato come se il modello vi fosse venduto: i mercati di vendita di un modello non sono ancora registrati."
+    "marketOff": "Questo mercato è disattivato: le sue regole attendono."
   },
   "line": {
     "OK": "Presente",
@@ -191,7 +191,6 @@
   "matrix": {
     "hint": "Ogni modello per ogni mercato mostrato: pronto, mancante o bloccato. Una cella apre la sua lista di controllo; Invio apre la cella peggiore della riga.",
     "legend": "Cosa dicono le celle",
-    "notSold": "— non venduto lì (non ancora registrato)",
     "col": {
       "style": "Modello"
     },

@@ -15,12 +15,14 @@ import { MarketsTab } from './MarketsTab'
 import { OperatorsTab } from './OperatorsTab'
 import { PhrasesTab } from './PhrasesTab'
 import { RegsTab } from './RegsTab'
+// B-W2b-288 (FU2:01): Templates.
+import { TemplatesTab } from '../ppe-texts/view/TemplatesTab'
 import { KeysModal, NoTabAccess, NoticeBanner, RulesStepUp, SETTINGS_NAMESPACES, useWords } from './parts'
 
 export type { RulesMarketsActions, RulesMarketsModel } from '../view-model'
 
 /** Which tabs have an "Add …" (`c`) and the right it needs. */
-const ADDS: Readonly<Partial<Record<SettingsTab, 'requirementsManage' | 'rulesManage' | 'phrasesManage'>>> = { gates: 'requirementsManage', regulations: 'rulesManage', markets: 'rulesManage', phrases: 'phrasesManage', operators: 'rulesManage' }
+const ADDS: Readonly<Partial<Record<SettingsTab, 'requirementsManage' | 'rulesManage' | 'phrasesManage' | 'ppeTextsManage'>>> = { gates: 'requirementsManage', regulations: 'rulesManage', markets: 'rulesManage', phrases: 'phrasesManage', operators: 'rulesManage', /* B-W2b-288 */ templates: 'ppeTextsManage' }
 
 /**
  * SCR-262 — Compliance › Settings › Rules & markets (design compliance.settings, archetype settings-form; PRD-272 … PRD-275,
@@ -111,6 +113,8 @@ function Page({ model, actions }: { model: RulesMarketsModel; actions?: RulesMar
         {tab === 'markets' && <MarketsTab model={model} state={model.markets} actions={actions} onHelp={help} />}
         {tab === 'phrases' && <PhrasesTab model={model} state={model.phrases} actions={actions} onHelp={help} />}
         {tab === 'operators' && <OperatorsTab model={model} state={model.operators} actions={actions} onHelp={help} />}
+        {/* B-W2b-288 (FU2:01) */}
+        {tab === 'templates' && <TemplatesTab model={model} state={model.templates} actions={actions?.templates} onAddress={actions?.onAddress} onHelp={help} />}
       </div>
       <RulesStepUp state={model.stepUp} onSubmit={actions?.onStepUp} onCancel={actions?.onStepUpCancel} />
       {keysOpen && <KeysModal onClose={() => setKeysOpen(false)} />}
