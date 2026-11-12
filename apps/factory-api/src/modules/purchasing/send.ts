@@ -31,6 +31,8 @@ import { openConfirmTask } from './portal-orders/tasks'
 import { CONTACT_COLUMNS, dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
 // B-W2b-311 (SCM-004): the other contacts who receive POs get a copy when the office names none.
 import { copiesOf } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
+// B-W2b-315 (SCM-022): the compliance gate — a send without a valid document for a line's material is held (qualification/gate.ts).
+import { assertCompliant, complianceChecksOf, withCompliance } from './qualification/gate'
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
@@ -178,14 +180,15 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
   return caller.withClient(async (client) => {
     const facts = sendable(await readFacts(client, order, today), await approvedWaiting(client, order))
     const checks = checksOf(facts, today, companyLegal)
+    const gated = withCompliance(checks, await complianceChecksOf(client, order, today))
     const language = supplierLanguageOf(facts.contact?.language, facts.party.language)
     const terms = confirmLinkTerms(today, latestNeedOf(facts), now)
     const number = purchaseOrderDocumentNumber(order.number, order.revision)
     const words = await sendWordsOf(client, order, facts, language, {})
     const mail = purchaseOrderMail({ language, number, recipientName: facts.contact?.name ?? null, linkUntil: businessDate(terms.expiresAt), message: words.message, resend: false })
     return {
-      ready: checks.ready,
-      checks: checks.checks,
+      ready: gated.ready,
+      checks: gated.checks,
       recipient: facts.contact ? { contactId: facts.contact.id, name: facts.contact.name, email: facts.contact.email } : null,
       documentNumber: number,
       language,
@@ -301,6 +304,8 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
   const order = await officeOrder(caller, orderId, PURCHASING_SEND)
   const now = serverClock.now()
   const today = businessDate(now)
+  // B-W2b-315 (SCM-022): held at Send without a valid document (409 in words), before anything is made.
+  if (order.version === body.version) await caller.withClient((client) => assertCompliant(client, order, today))
 
   // Steps 1 and 2, only for the version the caller read (a repeat or a stale send goes straight to the command: its
   // receipt answers, or the version guard refuses).
@@ -361,6 +366,8 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
       const facts = sendable(await readFacts(tx, current, businessDate(tools.now)), passed.approvedTaskId !== null)
       const again = checksOf(facts, businessDate(tools.now), await letterheadProblems(tx, tools.context, current.companyId))
       if (!again.ready) throw refusal(again.checks)
+      // B-W2b-315 (SCM-022): the compliance gate again, in the command (a document expired, a yes withdrawn meanwhile).
+      await assertCompliant(tx, current, businessDate(tools.now))
       if (facts.contact?.email !== plan.to || !sameJson(await supplierParty(tx, facts, businessDate(tools.now)), plan.supplier)) {
         throw new DomainError('conflict', "The supplier's details changed while the order was being sent: send it again.", [{ path: 'partyId', message: 'Changed since the document was made.' }])
       }

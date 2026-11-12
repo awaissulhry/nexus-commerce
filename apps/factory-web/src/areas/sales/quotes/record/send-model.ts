@@ -30,6 +30,8 @@ const FIX_TAB: Readonly<Record<string, QuoteTab>> = {
   VAT_CHANGED: 'lines',
   // B-W2b-165: a proof still uploading, being checked or refused (Documents › Proofs).
   PROOF_NOT_READY: 'documents',
+  // B-W2b-325: a line under a minimum order quantity (sales/line-checks).
+  BELOW_MINIMUM: 'lines',
 }
 
 /** The checks that pass when none of their codes is in the answer (one line each). */

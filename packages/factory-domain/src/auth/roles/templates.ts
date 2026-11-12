@@ -57,6 +57,9 @@ import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissio
 import { INVENTORY_TASKS_ADDS } from '../../inventory/tasks/permissions'
 // B-W2b-331: subcontracting in depth (the buyer: terms, balance, cost; the warehouse: balance).
 import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permissions'
+// B-W2b-315: bank details (finance), qualification (the buyer and quality) and the compliance override (quality); the portal's bank details.
+import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
+import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -956,6 +959,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SUBCONTRACT_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-356
   ...(audience === 'office' ? (INVENTORY_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-315
+  ...(audience === 'office' ? (BANK_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
   // B-W2b-319
   ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : [])]
 /**
@@ -1609,6 +1615,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   { 'guest-accountant': ['portal.accounting.view' as Permission] },
   // B-W2b-262: the brand's samples and tech packs (rounds, its styles in development, the BRAND tech pack PDF); not Finance.
   PORTAL_SAMPLES_READERS,
+  // B-W2b-315: the bank details in the profile (SCM-007): the supplier's Invoices role sees them masked, each Admin proposes a change.
+  PORTAL_BANK_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

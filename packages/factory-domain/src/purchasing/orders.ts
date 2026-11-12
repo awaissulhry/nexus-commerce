@@ -7,6 +7,8 @@ import type { PartyRole, PartyStatus } from '../parties/rules'
 import { DEPTH_SEND_CHECK_CODES } from './po-depth/codes'
 // B-W2b-328: the send checks of purchase lines by kind (line-kinds/codes.ts).
 import { LINE_KIND_SEND_CHECK_CODES } from './line-kinds/codes'
+// B-W2b-315: the compliance gate's send checks (qualification/codes.ts).
+import { COMPLIANCE_SEND_CHECK_CODES } from './qualification/codes'
 import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
 // W2b (B-W2b-311): where the supplier stands (SCM-008) and who receives purchase orders (SCM-004).
 import { sendProblem, type SupplierStatus } from './suppliers-depth/rules'
@@ -203,6 +205,8 @@ export const SEND_CHECK_CODES = [
   ...DEPTH_SEND_CHECK_CODES,
   // B-W2b-328: rolls, a protector's certificate, a material variant (line-kinds/codes.ts).
   ...LINE_KIND_SEND_CHECK_CODES,
+  // B-W2b-315: the compliance gate on a PO (qualification/codes.ts).
+  ...COMPLIANCE_SEND_CHECK_CODES,
 ] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 export type CheckSeverity = 'BLOCKS' | 'WARNING'
