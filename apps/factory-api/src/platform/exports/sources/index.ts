@@ -64,6 +64,8 @@ import { sampleOrders } from './sample-orders'
 import { priceLists } from './price-lists'
 // B-W2b-322: Sales › Inquiries (B-W2b-295's source, registered with its page).
 import { inquiries } from '../../../modules/sales/inquiries/export-source'
+// B-W2b-339: Planning › Long range › Demand & forecast › Demand rows.
+import { demandRows } from './demand'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -140,4 +142,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   priceLists,
   // B-W2b-322: Sales › Inquiries.
   inquiries,
+  // B-W2b-339: Planning › Long range › Demand & forecast › Demand rows (the page's second list).
+  demandRows,
 ])
