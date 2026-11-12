@@ -113,7 +113,9 @@ describe('MRP you can trust', { timeout: 120_000 }, () => {
     const { run: first } = await runPlan()
     const log = await ok('planner', 'GET', `/planning/runs/${first.id}/log`)
     expect(log.run.id).toBe(first.id)
-    expect(log.inputs).toMatchObject({ version: 1, runDate: today(), explosion: 'MULTI_LEVEL', previousRunId: null })
+    // The seeds' run 1 is the one it superseded.
+    const seeded = (await admin<{ id: string }>(`SELECT id FROM "PlanningRun" WHERE "siteId" = $1 AND status = 'SUPERSEDED' ORDER BY "startedAt" DESC, id DESC LIMIT 1`, [A.siteA1]))[0]?.id ?? null
+    expect(log.inputs).toMatchObject({ version: 1, runDate: today(), explosion: 'MULTI_LEVEL', previousRunId: seeded })
     expect(log.inputs.counts.orderLinesPlanned).toBe(first.orderLines)
     expect(log.inputs.counts.purchaseLines).toBeGreaterThan(0)
     expect(log.sentence).toContain(`of ${log.inputs.counts.orderLines} order line`)

@@ -80,6 +80,14 @@ describe('order-specific supply (PLN-072)', () => {
     expect(released.requirements.map((row) => [row.onOrder, row.netQuantity])).toEqual([['5.0000', '0.0000']])
   })
 
+  it('a firm line kept for an order line goes to that line; with no line of its own it is every order’s again', () => {
+    const firm = { requirementId: 'old', itemId: 'leather', itemColourId: null, action: 'BUY' as const, quantity: '10.0000', uom: 'FT2', baseQuantity: '10.0000', date: '2026-11-25', supplierId: 'tannery', firmedAt: new Date('2026-11-01T08:00:00Z'), firmedById: null, orderLineId: 'ol-2' }
+    const pegged = planRequirements(input({ firmSupply: [firm], orderSpecific: { pegs: [{ itemId: 'leather', itemColourId: null, orderLineId: 'ol-2' }], purchaseFor: new Map() } }))
+    expect(pegged.netting.map((entry) => entry.carried?.requirementId ?? null)).toEqual([null, 'old'])
+    const unpegged = planRequirements(input({ firmSupply: [firm] }))
+    expect(unpegged.netting.map((entry) => entry.carried?.requirementId ?? null)).toEqual(['old'])
+  })
+
   it('ownOnly: stock its reservations hold, never free stock; the identity holds', () => {
     const own = pegMaterial({ itemColourId: 'blk', parts: [part({ key: 'a', quantity: '40' })], stock: [{ itemColourId: 'blk', lotId: null, quantity: '100', hides: 0 }], lotOf: lot, runDate: RUN, purchases: [], reservations: [{ id: 'r1', itemId: 'leather', itemColourId: 'blk', lotId: null, hideId: null, open: '15', workOrderId: null, salesOrderLineId: 'ol-1', demandOpen: true }], ownOnly: true })
     expect([own.gross, own.usable, own.onOrder, own.net]).toEqual(['40.0000', '15.0000', '0.0000', '25.0000'])

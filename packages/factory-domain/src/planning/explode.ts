@@ -559,7 +559,13 @@ export function planRequirements(input: PlanInput): PlanResult {
     let action: RequirementAction = item.sourcing === 'MAKE' || (item.sourcing === 'MAKE_OR_BUY' && supplierId === null) ? 'MAKE' : 'BUY'
     if (action === 'MAKE') supplierId = null
     // The firm planned order the earlier run fixed for this material and action (B-W2a-22, PLN-075).
-    const firm = firmOf.get(firmKey(material.itemId, material.itemColourId, action, material.reservedFor?.orderLineId)) ?? null
+    // B-W2b-306 (PLN-072): a firm line kept for an order line that has no line of its own this run (its need ended, or its
+    // order is not planned) is carried by every order's line, as before the peg.
+    const firm =
+      firmOf.get(firmKey(material.itemId, material.itemColourId, action, material.reservedFor?.orderLineId)) ??
+      (material.reservedFor
+        ? null
+        : ((input.firmSupply ?? []).find((entry) => entry.orderLineId && !carriedFirms.has(entry) && entry.itemId === material.itemId && entry.itemColourId === material.itemColourId && entry.action === action && !ownLines.has(`${materialKey(entry.itemId, entry.itemColourId)}|${entry.orderLineId}`)) ?? null))
     if (firm) carriedFirms.add(firm)
     const netting = pegOf(material.itemId, material.itemColourId, material.parts, firm, material.reservedFor)
     const chosen = input.buying?.({ item, itemColourId: material.itemColourId, action, supplierId, quantity: netting.net }) ?? null
