@@ -59,7 +59,8 @@ export async function portalOrderCopy(request: FastifyRequest, orderId: string, 
     const order = await heldOrder(client, session, orderId)
     const lines = await heldLines(client, order.id)
     const head = await client.purchaseOrder.findUniqueOrThrow({ where: { id: order.id }, select: { currency: true, contactId: true } })
-    const held = order.status === 'DRAFT' ? await client.purchaseOrderRevision.findFirst({ where: { purchaseOrderId: order.id, revision: order.revision - 1 }, select: { after: true } }) : null
+    // B-W2b-305: an order waiting for its yes is not sent yet either.
+    const held = order.status === 'DRAFT' || order.status === 'PENDING_APPROVAL' ? await client.purchaseOrderRevision.findFirst({ where: { purchaseOrderId: order.id, revision: order.revision - 1 }, select: { after: true } }) : null
     return { order, lines, head, held: held ? (held.after as unknown as RevisionState) : null }
   })
   const { order, lines, head, held } = own

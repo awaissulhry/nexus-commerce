@@ -83,10 +83,14 @@ export function say(t: (key: string, params?: Record<string, string | number>) =
 // ---- the saved views (tiles and Rows ▾) ---------------------------------------------------------------------------------------
 
 /** The list's saved views: the open orders (default), each tile's filter, a status, every order. */
-export const ORDER_VIEWS = ['open', 'kit', 'workshop', 'due', 'late', 'drafts', 'back', 'closed', 'cancelled', 'all'] as const
+// B-W2b-344: 'balance' — the jobs back with kit material still open (GET …/balances?open=true, ./depth).
+export const ORDER_VIEWS = ['open', 'kit', 'workshop', 'due', 'late', 'balance', 'drafts', 'back', 'closed', 'cancelled', 'all'] as const
 export type OrderView = (typeof ORDER_VIEWS)[number]
 
-/** The list's query for a view (the tiles' views use the API's own tile filters, so a tile and its list agree). */
+/**
+ * The list's query for a view (the tiles' views use the API's own tile filters, so a tile and its list agree). The
+ * "Balance open" view reads the open balances instead (./depth openBalances), never this list filtered here.
+ */
 export function orderQuery(view: OrderView, q: string, cursor?: string | null): OrderQuery {
   const base: OrderQuery = { ...(q.trim() ? { q: q.trim() } : {}), ...(cursor ? { cursor } : {}) }
   switch (view) {
@@ -133,14 +137,23 @@ export function viewFromAddress(params: Pick<URLSearchParams, 'get'> | null | un
   return 'open'
 }
 
-/** The tiles "Outside work": each a saved filter; "Balance open" is W2b (the material balance): '—', never pressed. */
+/** What the tiles count: the orders' tile counts and (B-W2b-344) the jobs back with material open (null: not known yet). */
+export interface TileValues {
+  kitToSend: number
+  atWorkshops: number
+  dueBackThisWeek: number
+  late: number
+  balanceOpen: number | null
+}
+
+/** The tiles "Outside work": each a saved filter; "Balance open" (B-W2b-344) counts the jobs back with kit material open. */
 export const TILES = [
-  { id: 'kit', view: 'kit', count: (counts: { kitToSend: number }) => counts.kitToSend },
-  { id: 'workshop', view: 'workshop', count: (counts: { atWorkshops: number }) => counts.atWorkshops },
-  { id: 'due', view: 'due', count: (counts: { dueBackThisWeek: number }) => counts.dueBackThisWeek },
-  { id: 'late', view: 'late', count: (counts: { late: number }) => counts.late },
-  { id: 'balance', view: null, count: () => null },
-] as const satisfies readonly { id: string; view: OrderView | null; count: (counts: { kitToSend: number; atWorkshops: number; dueBackThisWeek: number; late: number }) => number | null }[]
+  { id: 'kit', view: 'kit', count: (counts: TileValues) => counts.kitToSend },
+  { id: 'workshop', view: 'workshop', count: (counts: TileValues) => counts.atWorkshops },
+  { id: 'due', view: 'due', count: (counts: TileValues) => counts.dueBackThisWeek },
+  { id: 'late', view: 'late', count: (counts: TileValues) => counts.late },
+  { id: 'balance', view: 'balance', count: (counts: TileValues) => counts.balanceOpen },
+] as const satisfies readonly { id: string; view: OrderView; count: (counts: TileValues) => number | null }[]
 
 /** What the page shows: the orders, or our stock at the workshops (SCR-129: ⋯ Stock at subcontractors). */
 export type PageShow = 'orders' | 'stock'

@@ -16,7 +16,8 @@ import { readOrderFacts, type OrderFacts, type OrderRow, type Reader } from './s
  * counts on. Never a worker's name.
  */
 
-const OPEN_PO = ['DRAFT', 'SENT', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED'] as const
+// B-W2b-305: an order waiting for its yes (PENDING_APPROVAL) is open too.
+const OPEN_PO = ['DRAFT', 'PENDING_APPROVAL', 'SENT', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED'] as const
 
 export async function readCancelFacts(db: Reader, order: Pick<OrderRow, 'id' | 'status' | 'quoteVersionId'>, facts: OrderFacts): Promise<CancelFacts> {
   const lineIds = facts.lines.map((line) => line.id)

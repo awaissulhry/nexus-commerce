@@ -777,6 +777,13 @@
       "PPE_CERTIFICATE_NOT_VALID": "Il certificato di una riga di protettori non vale più per questo fornitore: indicane uno valido.",
       "PPE_CERTIFICATE_ENDS_EARLY": "Il certificato di una riga di protettori scade prima che la riga serva (un avviso).",
       "VARIANT_NOT_USABLE": "Una riga compra una variante archiviata o di un altro colore: scegline una attiva.",
+      "COMPLIANCE_DOCUMENT_MISSING": "La pelle di una riga richiede un rapporto di prova sul cromo VI e il fornitore non ne ha uno valido: l’ordine è fermo all’invio.",
+      "COMPLIANCE_CERTIFICATE_MISSING": "Una protezione dell’ordine non ha un certificato valido nel registro: l’ordine è fermo all’invio.",
+      "COMPLIANCE_RULE_MISSING": "Manca un documento che l’azienda chiede prima di inviare un ordine d’acquisto: l’ordine è fermo all’invio.",
+      "COMPLIANCE_EXPIRES_BEFORE_NEED": "Un documento o un certificato scade prima che una riga serva: chiedi il rinnovo (un avviso).",
+      "COMPLIANCE_RULE_WARNING": "Manca un documento che l’azienda chiede (un avviso).",
+      "COMPLIANCE_OVERRIDDEN": "Inviato senza un documento valido con il sì di una seconda persona (un avviso).",
+      "COMPLIANCE_OVERRIDE_WAITING": "Una richiesta di inviarlo senza il documento attende il sì di una seconda persona.",
       "pass": {
         "supplierActive": "Il fornitore è attivo",
         "linesPriced": "Ogni riga ha un prezzo",
