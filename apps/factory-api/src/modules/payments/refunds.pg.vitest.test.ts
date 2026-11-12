@@ -338,7 +338,14 @@ describe('refunds (FIN-127)', () => {
 
 describe('carry the credit: an overpayment becomes the credit balance (FIN-122)', () => {
   it("the credited invoice's excess goes back to its newest allocations' payments; then it is refunded or kept", async () => {
-    // The newest allocations first: the seed's on-account allocation is dated 10 Nov (after today's), then today's.
+    // The newest allocations first: the seed's on-account allocation, then this file's own (S.payment, made today).
+    // B-W2b-F29: the seed dates its allocation on FT1 2026-11-10 09:00 UTC, so from then on today's was the newer one and
+    // the order flipped (a time bomb, as alerts.pg's in B-W2b-F26). The seed's is made the newest whatever today is: one
+    // UPDATE of this throwaway database, with the ledger's append-only guard set aside inside that transaction only.
+    await admin('BEGIN')
+    await admin('SET LOCAL session_replication_role = replica')
+    await admin(`UPDATE "PaymentAllocation" SET "createdAt" = (SELECT max("createdAt") FROM "PaymentAllocation" WHERE "invoiceId" = $2) + interval '1 millisecond' WHERE id = $1`, [seeded.money.onAccountAllocationId, FT1()])
+    await admin('COMMIT')
     const onAccount = seeded.money.onAccountPaymentId
     const released = await as('POST', '/payments/release-overpayment', { invoiceId: FT1(), note: 'The customer keeps the credit of the return.' })
     expect(released).toMatchObject({ releasedAmount: 30500, invoice: { paidAmount: 30500, worthAmount: 30500 } })
