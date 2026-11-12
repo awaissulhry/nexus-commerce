@@ -7,8 +7,11 @@ import type { HoldPreview } from './daily/api'
 import type { HoldDialogModel } from './daily/dialog-model'
 import { blankHold } from './daily/model'
 import { HOLD_REASONS, holdOf } from './demo/fixtures'
-import { dailyCan, holdSubjectsOf, stockAddressOf, stockLines, type StockAddress, type StockPageModel } from './model'
+import { dailyCan, holdSubjectsOf, stockAddressOf, stockLines, type StockAddress, type StockLine, type StockPageModel } from './model'
 import { StockView } from './view/StockView'
+// B-W2b-327: why is it this number, In transit, Below minimum, Move…, the approval banner, the posting day, waiting for a yes.
+import { LOW_ROWS, PLACES as DEPTH_PLACES, POSTING_HARD, POSTING_OK, POSTING_SOFT, POSTING_TOO_FAR, RULES, TRANSIT_ROW, WAITING, WHY_GAP, WHY_LINING } from './depth/demo/fixtures'
+import { approvalNoticeOf, movePlan, moveTargets, type MoveDialogModel } from './depth/model'
 
 /**
  * SCR-060 — Stock (design warehouse.stock) with made-up data only: a released nappa lot in two places (hides one by
@@ -109,6 +112,9 @@ function page(role: RoleCase, over: Partial<StockPageModel> = {}, address: Parti
       timeZone: TIME_ZONE,
       notice: null,
       adjust: null,
+      // B-W2b-327: the places with their kinds and blocks (bin A1 is being counted), the materials below their minimum.
+      places: DEPTH_PLACES,
+      low: { status: 'ready', value: { count: LOW_ROWS.length, rows: LOW_ROWS, alertsOff: false } },
       ...over,
     },
   }
@@ -144,6 +150,53 @@ const hold = (over: Partial<HoldDialogModel> = {}): HoldDialogModel => ({
 })
 const REJECTED_PREVIEW: HoldPreview = { ...PREVIEW, subjects: [{ ...PREVIEW.subjects[0]!, state: 'REJECTED', problem: 'Lot is rejected.' }, ...PREVIEW.subjects.slice(1)] }
 const lineId = (row: StockRow) => `${SITE.id}|${row.location.id}|${row.item.id}|${row.colour?.id ?? '-'}|${row.lot?.id ?? '-'}|-`
+
+// ---- B-W2b-327 ------------------------------------------------------------------------------------------------------------
+const LINES: StockLine[] = stockLines(RESERVED_ROWS, false, false)
+const lineAt = (n: number) => LINES.find((line) => line.id === lineId(ROWS[n]!))!
+const LINING_LINE = lineAt(12)
+const CUT_LEATHER = lineAt(5)
+const COUNTED_LEATHER = lineAt(0)
+const move = (lines: StockLine[], over: Partial<MoveDialogModel> = {}): MoveDialogModel => ({
+  lines,
+  planned: movePlan(lines, RESERVED_ROWS),
+  draft: { toLocationId: '', quantity: lines.length === 1 && lines[0]!.item.tracking !== 'HIDE' ? String(Number(lines[0]!.onHand)) : '', note: '' },
+  targets: moveTargets(DEPTH_PLACES, SITE.id),
+  posting: false,
+  problem: null,
+  done: null,
+  ...over,
+})
+const APPROVAL_OWNER = approvalNoticeOf(RULES, [{ name: 'Amministrazione' }])
+const APPROVAL_HELD = approvalNoticeOf({ ...RULES, adjustmentApproval: { ...RULES.adjustmentApproval, inForce: { set: true }, held: 'Needs the cost grain.' } }, [{ name: 'Amministrazione' }])
+const LINING_ADJUST = (over: Partial<AdjustDialogModel> = {}, withCost = false) => adjust({ draft: { ...blankDraft(LINING_TARGET), direction: 'IN', quantity: '300', note: 'Rotoli ritrovati nel soppalco' }, today: '2026-10-30', ...over }, LINING_TARGET, withCost)
+const W2B_CASES: { id: string; label: string; model: Case; note?: string }[] = [
+  { id: 'w2b-why', label: 'W2b · Why is it 120 m? — the quantity’s popover: the formula, the table by reason, adds up ✓, the last moves, Open all 6 moves', model: page('warehouse', { why: { lineId: LINING_LINE.id, state: { status: 'ready', value: WHY_LINING } } }), note: 'Every on-hand figure opens it (key w on a focused row).' },
+  { id: 'w2b-why-gap', label: 'W2b · Why — a figure that does not add up: the gap in words (a fault, reported)', model: page('owner', { why: { lineId: LINING_LINE.id, state: { status: 'ready', value: WHY_GAP } } }) },
+  { id: 'w2b-why-loading', label: 'W2b · Why — the moves being added up', model: page('warehouse', { why: { lineId: LINING_LINE.id, state: { status: 'loading' } } }) },
+  { id: 'w2b-why-error', label: 'W2b · Why — the read failed: in words with Try again', model: page('warehouse', { why: { lineId: LINING_LINE.id, state: { status: 'error', problem: 'problem.offline' } } }) },
+  { id: 'w2b-in-transit', label: 'W2b · In transit: 25 m of lining on its way to the south site (the transit place; a link to the transfers)', model: page('owner', { rows: [...RESERVED_ROWS, TRANSIT_ROW] }, { view: 'location' }) },
+  { id: 'w2b-low', label: 'W2b · Tile Below minimum pressed: the materials whose position is below their minimum (one with no stock at all)', model: page('warehouse', {}, { tile: 'low' }) },
+  { id: 'w2b-low-none', label: 'W2b · Below minimum: nothing below (low-stock alerts are off in the warehouse rules)', model: page('warehouse', { low: { status: 'ready', value: { count: 0, rows: [], alertsOff: true } } }, { tile: 'low' }) },
+  { id: 'w2b-low-loading', label: 'W2b · Below minimum being read (the tile says —, never 0)', model: page('warehouse', { low: { status: 'loading' } }, { tile: 'low' }) },
+  { id: 'w2b-low-error', label: 'W2b · Below minimum could not be read', model: page('warehouse', { low: { status: 'error', problem: 'problem.offline' } }, { tile: 'low' }) },
+  { id: 'w2b-select-move', label: 'W2b · Two rows selected: Move 2 beside Export and Put on hold', model: page('warehouse', { selected: [lineId(ROWS[12]!), lineId(ROWS[15]!)] }) },
+  { id: 'w2b-move', label: 'W2b · Move… one row of lining: 120 m by default, to the goods-in dock', model: page('warehouse', { move: move([LINING_LINE], { draft: { toLocationId: DEPTH_PLACES[4]!.id, quantity: '40', note: 'Per la commessa WO-D-0032' } }) }) },
+  { id: 'w2b-move-leather', label: 'W2b · Move… a leather row: its 2 hides move whole, hide by hide', model: page('warehouse', { move: move([CUT_LEATHER], { draft: { toLocationId: DEPTH_PLACES[3]!.id, quantity: '', note: '' } }) }) },
+  { id: 'w2b-move-to-blocked', label: 'W2b · Move… held: bin A1 is being counted (it takes nothing in)', model: page('warehouse', { move: move([LINING_LINE], { draft: { toLocationId: DEPTH_PLACES[2]!.id, quantity: '120', note: '' } }) }) },
+  { id: 'w2b-move-from-blocked', label: 'W2b · Move… held: the hides lie in bin A1, blocked by a count (nothing moves out)', model: page('warehouse', { move: move([COUNTED_LEATHER], { draft: { toLocationId: DEPTH_PLACES[3]!.id, quantity: '', note: '' } }) }) },
+  { id: 'w2b-move-refused', label: 'W2b · Move refused: the stock went meanwhile (409, in our words; the dialog stays)', model: page('warehouse', { move: move([LINING_LINE], { draft: { toLocationId: DEPTH_PLACES[6]!.id, quantity: '120', note: '' }, problem: { key: 'wd.move.problem.notEnough' } }) }) },
+  { id: 'w2b-move-done', label: 'W2b · Moved: 1 of 2 hides moved, 1 refused (the stock went meanwhile)', model: page('warehouse', { move: move([CUT_LEATHER], { draft: { toLocationId: DEPTH_PLACES[3]!.id, quantity: '', note: '' }, done: { moved: 1, refused: [{ label: 'HD-DEMO-0007', problem: { key: 'wd.move.problem.notEnough' } }] } }) }) },
+  { id: 'w2b-move-read-only', label: 'W2b · Read-only: Move held with the reason (no inventory.transfer)', model: page('readOnly', { selected: [lineId(ROWS[12]!)] }) },
+  { id: 'w2b-adjust-approval', label: 'W2b · Adjust: “Needs approval above € 500,00 · Who approves: Amministrazione” (owner, cost grain)', model: page('owner', { adjust: LINING_ADJUST({ approval: APPROVAL_OWNER, withCost: true }, true) }) },
+  { id: 'w2b-adjust-approval-held', label: 'W2b · Adjust (warehouse, no cost grain): the value held, who approves said', model: page('warehouse', { adjust: LINING_ADJUST({ approval: APPROVAL_HELD }) }) },
+  { id: 'w2b-adjust-posting', label: 'W2b · Adjust with a posting date two days back: checked, “Counts on 28 Oct”', model: page('warehouse', { adjust: LINING_ADJUST({ draft: { ...blankDraft(LINING_TARGET), quantity: '2', note: 'Rotolo rovinato', postingDay: '2026-10-28' }, postingCheck: { status: 'ready', value: POSTING_OK } }) }) },
+  { id: 'w2b-adjust-posting-far', label: 'W2b · Adjust: a posting date further back than the warehouse rules allow — held, the earliest day said', model: page('warehouse', { adjust: LINING_ADJUST({ draft: { ...blankDraft(LINING_TARGET), quantity: '2', note: 'Rotolo rovinato', postingDay: '2026-10-20' }, postingCheck: { status: 'ready', value: POSTING_TOO_FAR } }) }) },
+  { id: 'w2b-adjust-posting-soft', label: 'W2b · Adjust into a soft-locked month: the reason is asked', model: page('warehouse', { adjust: LINING_ADJUST({ draft: { ...blankDraft(LINING_TARGET), quantity: '2', note: 'Rotolo rovinato', postingDay: '2026-09-30' }, postingCheck: { status: 'ready', value: POSTING_SOFT } }) }) },
+  { id: 'w2b-adjust-posting-closed', label: 'W2b · Adjust into a closed month: held (Finance reopens a month)', model: page('warehouse', { adjust: LINING_ADJUST({ draft: { ...blankDraft(LINING_TARGET), quantity: '2', note: 'Rotolo rovinato', postingDay: '2026-09-30' }, postingCheck: { status: 'ready', value: POSTING_HARD } }) }) },
+  { id: 'w2b-waiting', label: 'W2b · Adjusted above the value: “Waiting for approval by Amministrazione since …” + Open request (nothing posted)', model: page('warehouse', { waiting: WAITING }) },
+  { id: 'w2b-keys', label: 'W2b · The keys: w = why is this number', model: page('warehouse', { helpOpen: true }) },
+]
 
 function StockDesign({ model }: { model: Case }) {
   return inShell('/warehouse/stock', createElement(StockView, { model: model.page }), model.role)
@@ -203,6 +256,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'phone', label: 'Phone (open at 390): the same rows as cards (the list frame’s DS card list), with search and Rows ▾', model: page('warehouse') },
     { id: 'phone-select', label: 'Phone (open at 390): Select mode, two cards ticked, the bulk actions', model: page('quality', { selected: [lineId(ROWS[0]!), lineId(ROWS[12]!)] }) },
     { id: 'sales', label: 'Sales: no inventory.stock.view — the page says so', model: page('sales') },
+    ...W2B_CASES,
   ],
 })
 

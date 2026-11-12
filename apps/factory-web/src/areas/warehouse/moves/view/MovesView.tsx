@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Download, MoreHorizontal, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, MetricStrip, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, DetailPopover, EmptyState, Menu, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, Pill, Select, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
-import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
@@ -23,6 +23,13 @@ import { DAILY_NAMESPACE, reasonLabel } from '../../stock/daily/model'
 import { WriteOffDialog } from '../../stock/daily/WriteOffDialog'
 import { explainsFigure, hasKey, MOVE_TILES, PERIODS, runningBalances, sideKey, tileActive, tileCount, tileFilter, writeOffHeldKey, type MovesAddress, type MovesPageActions, type MovesPageModel, type Period } from '../model'
 import { MoveDetailModal, ReverseDialog } from './MoveDialogs'
+// B-W2b-327: the balance bridge, posting days, adjustments waiting for a yes.
+import { DEPTH_NAMESPACE } from '../../stock/depth/model'
+import { BalanceBridge } from '../../stock/depth/view/BalanceBridge'
+import { WaitingBanner, waitingWords } from '../../stock/depth/view/AdjustParts'
+import { requestHref } from '../../stock/depth/model'
+import type { MoveRow } from '../model'
+import '../../stock/depth/depth.css'
 import '../../../_shared/stock/stock.css'
 import '../../stock/stock-pages.css'
 
@@ -41,7 +48,7 @@ export type { MovesPageActions, MovesPageModel } from '../model'
  */
 export function MovesView({ model, actions, adjustActions, writeOffActions }: { model: MovesPageModel; actions?: MovesPageActions; adjustActions?: AdjustActions; writeOffActions?: WriteOffActions }) {
   return (
-    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE, DEPTH_NAMESPACE]}>
       <Moves model={model} actions={actions} adjustActions={adjustActions} writeOffActions={writeOffActions} />
     </StockMessages>
   )
@@ -53,6 +60,7 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
   const t = useT('warehouse-stock')
   const s = useT('stock')
   const d = useT(DAILY_NAMESPACE)
+  const w = useT(DEPTH_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -101,13 +109,16 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
       const key = sideKey(side)
       return key ? { main: s(key), sub: '' } : { main: side.location?.code ?? '—', sub: side.location?.name ?? '' }
     }
-    const WhenCell = ({ data }: ICellRendererParams<LedgerRow>) =>
-      data ? (
+    // B-W2b-327 (SCM-196): a move dated apart says the day it counts on in the books under the day it happened.
+    const WhenCell = ({ data }: ICellRendererParams<LedgerRow>) => {
+      const postingDate = (data as MoveRow | undefined)?.postingDate ?? null
+      return data ? (
         <span className="fw-st-cell" title={t('mv.clocks', { device: formatDateTime(data.occurredAt, place), server: formatDateTime(data.createdAt, place) })}>
           <span className="fw-st-num">{formatDateTime(data.occurredAt, place)}</span>
-          <span className="fw-st-sub">{data.siteCode}</span>
+          <span className={postingDate ? 'fw-st-sub fw-st-warning' : 'fw-st-sub'}>{postingDate ? w('wd.posting.countsOnShort', { day: formatDate(`${postingDate}T12:00:00Z`, { locale, timeZone: 'UTC' }) }) : data.siteCode}</span>
         </span>
       ) : null
+    }
     const ReasonCell = ({ data }: ICellRendererParams<LedgerRow>) =>
       data ? (
         <span className="fw-st-cell">
@@ -239,7 +250,7 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
       { colId: 'more', headerName: t('st.col.actions'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, s, locale, model.prefix, can, balances, address.item, address.lot, address.hide, address.location, writeOffReasons])
+  }, [t, s, w, locale, model.prefix, can, balances, address.item, address.lot, address.hide, address.location, writeOffReasons])
 
   if (!can.stockView) {
     return (
@@ -259,13 +270,13 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
   if (address.location) chips.push({ name: 'location', label: t('mv.chip.location', { code: explain?.location?.code ?? (firstRow?.to.location?.id === address.location ? firstRow.to.location.code : firstRow?.from.location?.code) ?? '…' }) })
   for (const reason of address.reasons) chips.push({ name: 'reasons', reason, label: t('mv.chip.reason', { reason: s(`reason.${reason}`) }) })
 
-  const filtered = chips.length > 0 || address.note !== null || address.reversed !== null || address.writeOffs !== null || address.q.trim() !== '' || address.period !== (hasKey(address) ? 'all' : '30d')
+  const filtered = chips.length > 0 || address.note !== null || address.reversed !== null || address.writeOffs !== null || address.dated !== null || address.q.trim() !== '' || address.period !== (hasKey(address) ? 'all' : '30d')
   const clearFilters = (
     <Button
       size="sm"
       onClick={() => {
         setQuery('')
-        actions?.onAddress?.({ item: null, colour: null, lot: null, hide: null, location: null, reasons: [], note: null, reversed: null, writeOffs: null, q: '', period: '30d' })
+        actions?.onAddress?.({ item: null, colour: null, lot: null, hide: null, location: null, reasons: [], note: null, reversed: null, writeOffs: null, dated: null, by: 'entry', q: '', period: '30d' })
       }}
     >
       {s('common.clearFilters')}
@@ -339,6 +350,16 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
         <option value="yes">{t('mv.reversed.yes')}</option>
         <option value="no">{t('mv.reversed.no')}</option>
       </Select>
+      {/* B-W2b-327 (SCM-196): the period by the day it happened or the day it counts on in the books; moves dated apart. */}
+      <Select size="sm" aria-label={w('wd.posting.byLabel')} value={address.by} onChange={(event) => actions?.onAddress?.({ by: event.target.value === 'posting' ? 'posting' : 'entry' })}>
+        <option value="entry">{w('wd.posting.byEntry')}</option>
+        <option value="posting">{w('wd.posting.byPosting')}</option>
+      </Select>
+      <Select size="sm" aria-label={w('wd.posting.datedLabel')} value={address.dated ?? ''} onChange={(event) => actions?.onAddress?.({ dated: (event.target.value || null) as MovesAddress['dated'] })}>
+        <option value="">{w('wd.posting.datedAny')}</option>
+        <option value="back">{w('wd.posting.datedBack')}</option>
+        <option value="same">{w('wd.posting.datedSame')}</option>
+      </Select>
     </span>
   )
 
@@ -380,6 +401,7 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
               ))}
             </Select>
           )}
+          <WaitingPopover model={model} actions={actions} />
         </span>
         <span className="fw-st-actions">
           <Menu
@@ -401,6 +423,7 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
       </div>
 
       {model.notice && <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} onDismiss={() => actions?.onNotice?.()} />}
+      {model.waitingNotice && <WaitingBanner waiting={model.waitingNotice} prefix={model.prefix} timeZone={model.timeZone} onDismiss={() => actions?.onDismissWaitingNotice?.()} />}
 
       {explainsFigure(address) && <WhyPanel model={model} actions={actions} />}
 
@@ -495,10 +518,15 @@ function Moves({ model, actions, adjustActions, writeOffActions }: { model: Move
   )
 }
 
-/** "Why is it this number" (design mv-why): the figure, the moves summed by reason, adds up ✓ or the gap in words. */
+/**
+ * "Why is it this number" (design mv-why): the figure, the moves summed by reason (a reason filters the grid to it), adds
+ * up ✓ or the gap in words — and since B-W2b-327 the balance bridge (start → each reason → on hand, the DS Waterfall) over
+ * the address's period, read from `GET /inventory/why` (by the days the moves happened, or count on in the books).
+ */
 function WhyPanel({ model, actions }: { model: MovesPageModel; actions?: MovesPageActions }) {
   const t = useT('warehouse-stock')
   const s = useT('stock')
+  const w = useT(DEPTH_NAMESPACE)
   const locale = useLocale()
   const loaded = model.explain
   if (!loaded || loaded.status === 'loading') {
@@ -511,47 +539,51 @@ function WhyPanel({ model, actions }: { model: MovesPageModel; actions?: MovesPa
     )
   }
   if (loaded.status === 'error') return <ReadFailed problem={loaded.problem} onRetry={() => actions?.onRetry?.()} />
-  const explain = loaded.value
-  const unit = s(`uom.${explain.item.baseUom}`)
-  const what = [`${explain.item.code} · ${explain.item.name}`, explain.colour?.name, explain.lot ? t('adj.lot', { code: explain.lot.code }) : null, explain.hide ? t('adj.hide', { code: explain.hide.code }) : null, explain.location ? explain.location.code : t('mv.why.wholeSite')].filter(Boolean).join(' · ')
+  const why = loaded.value
+  const unit = s(`uom.${why.uom}`)
+  const what = [`${why.item.code} · ${why.item.name}`, why.colour?.name, why.lot ? t('adj.lot', { code: why.lot.code }) : null, why.hide ? t('adj.hide', { code: why.hide.code }) : null, why.location ? why.location.code : t('mv.why.wholeSite')].filter(Boolean).join(' · ')
   const q = (value: string) => quantity(value, locale)
+  const day = (value: string) => formatDate(`${value}T12:00:00Z`, { locale, timeZone: 'UTC' })
   const pickReason = (reason: MoveReason) => actions?.onAddress?.({ reasons: model.address.reasons.length === 1 && model.address.reasons[0] === reason ? [] : [reason] })
   return (
     <Card padded>
       <div className="fw-stk-why">
-        <SummaryTable
-          label={t('mv.why.tableLabel')}
-          columns={[t('mv.why.col.reason'), t('mv.why.col.moves'), t('mv.why.col.in'), t('mv.why.col.out'), t('mv.why.col.net')]}
-          align={['left', 'right', 'right', 'right', 'right']}
-          widths={['34%', undefined, undefined, undefined, undefined]}
-          stackOnPhone
-          rows={[
-            ...explain.byReason.map((row) => ({
-              id: row.reason,
-              cells: [
-                <button key="r" type="button" className="fw-stk-reason-button" aria-pressed={model.address.reasons.includes(row.reason)} onClick={() => pickReason(row.reason)}>
-                  {s(`reason.${row.reason}`)}
-                </button>,
-                String(row.moves),
-                `${q(row.in)} ${unit}`,
-                `${q(row.out)} ${unit}`,
-                `${signed(row.net, locale)} ${unit}`,
-              ],
-            })),
-            { id: 'sum', cells: [<b key="s">{t('mv.why.sum')}</b>, String(explain.moves), '', '', <b key="n">{`${signed(explain.sum, locale)} ${unit}`}</b>] },
-          ]}
-        />
+        <div className="fw-wd-stack">
+          <SummaryTable
+            label={t('mv.why.tableLabel')}
+            columns={[t('mv.why.col.reason'), t('mv.why.col.moves'), t('mv.why.col.in'), t('mv.why.col.out'), t('mv.why.col.net')]}
+            align={['left', 'right', 'right', 'right', 'right']}
+            widths={['34%', undefined, undefined, undefined, undefined]}
+            stackOnPhone
+            rows={[
+              ...(why.period.from ? [{ id: 'start', cells: [w('wd.why.startOn', { day: day(why.period.from) }), '', '', '', `${q(why.start)} ${unit}`] }] : []),
+              ...why.steps.map((row) => ({
+                id: row.reason,
+                cells: [
+                  <button key="r" type="button" className="fw-stk-reason-button" aria-pressed={model.address.reasons.includes(row.reason)} onClick={() => pickReason(row.reason)}>
+                    {s(`reason.${row.reason}`)}
+                  </button>,
+                  String(row.moves),
+                  `${q(row.in)} ${unit}`,
+                  `${q(row.out)} ${unit}`,
+                  `${signed(row.net, locale)} ${unit}`,
+                ],
+              })),
+              { id: 'sum', cells: [<b key="s">{t('mv.why.sum')}</b>, String(why.moves), '', '', <b key="n">{`${q(why.sum)} ${unit}`}</b>] },
+            ]}
+          />
+          <BalanceBridge why={why} prefix={model.prefix} />
+        </div>
         <div className="fw-stk-why-sum">
           <span className="fw-stk-hint">{t('mv.why.title')}</span>
-          <p className="fw-stk-why-figure">{`${q(explain.onHand)} ${unit}`}</p>
+          <p className="fw-stk-why-figure">{`${q(why.end)} ${unit}`}</p>
           <span className="fw-st-sub" title={what}>
             {what}
           </span>
-          {explain.addsUp ? (
-            <Banner tone="success" title={t('mv.why.addsUp', { quantity: q(explain.onHand), unit })} />
-          ) : (
-            <Banner tone="danger" title={t('mv.why.gap', { gap: signed(explain.gap, locale), unit })} />
-          )}
+          <span className="fw-stk-hint">{why.period.from ? w('wd.why.period', { from: day(why.period.from), to: day(why.period.to) }) : w('wd.why.periodAll', { to: day(why.period.to) })}</span>
+          <span className="fw-stk-hint">{w(why.basis === 'POSTING' ? 'wd.why.basisPosting' : 'wd.why.basisEntry')}</span>
+          {why.addsUp ? <Banner tone="success" title={t('mv.why.addsUp', { quantity: q(why.end), unit })} /> : <Banner tone="danger" title={t('mv.why.gap', { gap: signed(why.gap, locale), unit })} />}
+          {why.end !== why.onHandNow && <span className="fw-stk-hint">{w('wd.why.now', { quantity: q(why.onHandNow), unit })}</span>}
           <span className="fw-stk-hint">{t('mv.why.formula')}</span>
         </div>
       </div>
@@ -559,3 +591,73 @@ function WhyPanel({ model, actions }: { model: MovesPageModel; actions?: MovesPa
   )
 }
 
+/**
+ * Waiting for approval (design warehouse.moves pop:mv-approval; page.conn Approvals): the adjustments worth more than the
+ * warehouse rules' value that wait for a yes — what, the stock from → to, "Waiting for approval by Finance since 10:42" and
+ * Open request (Home › Approvals). Shown once there is one; `?waiting=` opens it (Approvals links a request's subject here).
+ */
+const noSubscribe = () => () => {}
+const onClient = () => true
+const onServer = () => false
+
+function WaitingPopover({ model, actions }: { model: MovesPageModel; actions?: MovesPageActions }) {
+  const w = useT(DEPTH_NAMESPACE)
+  const s = useT('stock')
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  // Opened from the address (`?waiting=`) only once the page is hydrated: a popover open on the server's first render
+  // would draw a portal the server's HTML does not have.
+  const hydrated = useSyncExternalStore(noSubscribe, onClient, onServer)
+  const waiting = model.waiting
+  if (!waiting || waiting.status === 'loading') return null
+  const count = waiting.status === 'ready' ? waiting.value.count : null
+  if (count === 0) return null
+  const rows = waiting.status === 'ready' ? waiting.value.rows : []
+  const focus = model.address.waiting && model.address.waiting !== 'all' ? model.address.waiting : null
+  return (
+    <DetailPopover
+      trigger={
+        <span className="fw-st-inline">
+          <Pill tone={count === null ? 'danger' : 'warning'}>{count === null ? '!' : String(count)}</Pill> {w('wd.waiting.button')}
+        </span>
+      }
+      triggerLabel={count === null ? w('wd.waiting.buttonFailed') : w('wd.waiting.buttonLabel', { count })}
+      label={w('wd.waiting.title')}
+      hoverDelay={0}
+      open={hydrated && model.address.waiting !== null}
+      onOpenChange={(open) => actions?.onWaiting?.(open)}
+    >
+      <div className="fw-wd-why">
+        <h3 className="fw-wd-h3">{w('wd.waiting.title')}</h3>
+        {waiting.status === 'error' ? (
+          <Banner
+            tone="danger"
+            title={s(waiting.problem)}
+            action={
+              <Button size="sm" onClick={() => actions?.onRetryWaiting?.()}>
+                {s('problem.retry')}
+              </Button>
+            }
+          />
+        ) : (
+          <ul className="fw-wd-moves">
+            {rows.map((row) => (
+              <li key={row.requestId} aria-current={focus === row.requestId || focus === row.taskId ? 'true' : undefined}>
+                <span className="fw-st-cell">
+                  <b>{`${row.item.code} · ${row.location.code}`}</b>
+                  <span className="fw-st-sub">{w(row.direction === 'IN' ? 'wd.waiting.up' : 'wd.waiting.down', { quantity: quantity(row.baseQuantity, locale), unit: s(`uom.${row.item.baseUom}`), from: quantity(row.onHand.from, locale), to: quantity(row.onHand.to, locale) })}</span>
+                  <span className="fw-st-sub">{waitingWords(w, row, place)}</span>
+                </span>
+                <Link className="fw-st-link" href={requestHref(model.prefix, row.taskId)}>
+                  {w('wd.waiting.open')}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {waiting.status === 'ready' && waiting.value.count > rows.length && <p className="fw-wd-muted">{w('wd.waiting.more', { count: waiting.value.count - rows.length })}</p>}
+        <p className="fw-wd-muted">{w('wd.waiting.note')}</p>
+      </div>
+    </DetailPopover>
+  )
+}

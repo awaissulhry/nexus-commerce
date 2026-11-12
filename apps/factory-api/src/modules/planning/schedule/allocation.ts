@@ -23,6 +23,8 @@ import { slotMinutes } from './slots'
 import { laneFacts, lockedWorkingPlan } from './store'
 // B-W2b-312: a pinned slot stays where it is (PLN-139).
 import { pinnedRefusal } from '../schedule-depth/pins'
+// B-W2b-329 (PLN-149): a part added or taken off and a bar that follows the new line join the board's change log.
+import { logChanges, type LoggedChange } from '../schedule-depth/log'
 
 /**
  * Allocation to lines and workshops (B-W2a-34; PLN-160; design planning.allocation "Lanes", "Allocation board"; factory-
@@ -149,6 +151,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
     const end = new Date(Math.max(start.getTime() + 60 * MINUTE_MS, schedule.latestFinish ?? start.getTime() + 24 * 60 * MINUTE_MS))
     const existing = world.slots.filter((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === null)
     const audits: { slotId: string; change: string; lane: LaneRef; pieces: number | null }[] = []
+    const logged: LoggedChange[] = [] // B-W2b-329
     // The parts: one whole-order slot per lane.
     for (const part of body.parts) {
       const there = existing.find((slot) => laneKey(laneOfSlot(slot)) === laneKey(part.lane))
@@ -164,6 +167,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
           select: { id: true },
         })
         audits.push({ slotId: id, change: 'ADDED', lane: part.lane, pieces: part.pieces })
+        logged.push({ kind: 'PLACE', slotId: id, workOrderId: workOrder.id, operationId: null, to: { lane: part.lane, startAt: start, endAt: end } }) // B-W2b-329
       }
     }
     for (const slot of existing) {
@@ -171,6 +175,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
       if (slot.pinned) throw await pinnedRefusal(tx, slot, 'remove', target.site.timezone) // B-W2b-312 (PLN-139): a pinned part stays
       await tx.scheduleSlot.delete({ where: { id: slot.id }, select: { id: true } })
       audits.push({ slotId: slot.id, change: 'REMOVED', lane: laneOfSlot(slot), pieces: slot.pieces })
+      logged.push({ kind: 'REMOVE', slotId: slot.id, workOrderId: workOrder.id, operationId: null, from: { lane: laneOfSlot(slot), startAt: slot.startAt, endAt: slot.endAt } }) // B-W2b-329
     }
     // The line: the work order's own; its bars on the old line follow it when the new line does their operation.
     let barsMoved = 0
@@ -184,11 +189,13 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
           if (slot.pinned) continue // B-W2b-312 (PLN-139): a pinned bar stays on its lane
           await tx.scheduleSlot.update({ where: { id: slot.id }, data: { lineId: next.ref.id, overloadReason: null, version: slot.version + 1, updatedAt: now, updatedById: context.actorId }, select: { id: true } })
           audits.push({ slotId: slot.id, change: 'FOLLOWED_LINE', lane: next.ref, pieces: null })
+          logged.push({ kind: 'MOVE', slotId: slot.id, workOrderId: workOrder.id, operationId: slot.workOrderOperationId, from: { lane: laneOfSlot(slot), startAt: slot.startAt, endAt: slot.endAt }, to: { lane: next.ref, startAt: slot.startAt, endAt: slot.endAt } }) // B-W2b-329
           barsMoved += 1
         }
       }
     }
     if (audits.length === 0 && body.lineId === row.lineId) throw new ScheduleRefusal('ALREADY_ALLOCATED', `${row.number} is already allocated so.`)
+    await logChanges(tx, target.site, plan.id, logged, context.actorId, now) // B-W2b-329
     tools.audit({
       action: 'planning.schedule.allocate',
       recordType: 'WorkOrder',
