@@ -51,6 +51,8 @@ import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
 import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
+// B-W2b-301
+import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -96,6 +98,8 @@ import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
 // B-W2b-356: warehouse reports (the warehouse, buyer, planner, production manager and finance read them).
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
+// B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
+import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -953,6 +957,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-301
+  ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -966,6 +972,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
   // B-W2b-319
   ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : []),
+  // B-W2b-350
+  ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-326
   ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : [])]
 /**

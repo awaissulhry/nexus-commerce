@@ -7,6 +7,8 @@ import { INVOICES_VIEW } from '../invoicing/permissions'
 // B-W2b-42: a working-time limit alert names a site and a limit, never a person: the roster's own reading permission.
 import { PEOPLE_SHIFTS_VIEW } from '../people/shifts/permissions'
 import { PLANNING_VIEW } from '../planning/permissions'
+// B-W2b-350: a supplier's status change is seen on its record, the party (parties.view).
+import { PARTIES_VIEW } from '../parties/permissions'
 import { PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_HOLDS_VIEW } from '../quality/holds/permissions'
 import { ORDERS_VIEW } from '../sales/orders/permissions'
@@ -40,7 +42,9 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-24: INTEGRATION_FAILING (the design's last built-in), from the connections' health.
 // B-W2b-42: WORKING_TIME_LIMIT (MES-232), a site's people close to or over a working-time limit.
 // B-W2b-314: LOW_STOCK (SCM-281), a material below its planning minimum at a site.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK'] as const
+// B-W2b-350: the supply alerts (SCM-174) beside PO_NOT_CONFIRMED (not confirmed in time): PO_CONFIRMED_LATE (confirmed later
+// than needed) and SUPPLIER_STATUS_CHANGED (a supplier put on hold, blocked, limited or made inactive).
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -232,6 +236,41 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     label: { en: 'Materials below their minimum', it: 'Materiali sotto il minimo' },
     // Evaluated with every pass (the low-stock alerts are daily running): a recheck on every stock move would be too often.
     recheck: [],
+  }),
+  // B-W2b-350 (SCM-174 supply alerts; design purchasing.reports "alerts replace the buyer's own lists").
+  PO_CONFIRMED_LATE: spec({
+    kind: 'PO_CONFIRMED_LATE',
+    trigger: 'CONDITION',
+    // One alert per purchase order: an open line of a sent order (its next delivery, B-W2b-296's schedule) the supplier
+    // confirmed at least this many days later than the day it is needed (the expediting worklist's CONFIRMED_LATE,
+    // purchasing/expediting/worklist confirmedLaterByOf); the facts say the worst line and the customer orders it puts at risk.
+    recordType: 'PurchaseOrder',
+    view: PURCHASING_VIEW,
+    threshold: z.strictObject({ days: whole(1, 60).default(1) }),
+    builtIn: { name: { en: 'Purchase order confirmed later than needed', it: 'Ordine di acquisto confermato più tardi del necessario' }, threshold: { days: 1 }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'buyer' },
+    label: { en: 'Purchase orders confirmed later than needed', it: 'Ordini di acquisto confermati più tardi del necessario' },
+    recheck: [
+      { event: 'purchase_order.confirmed', key: 'purchaseOrderId' },
+      { event: 'purchase_order.dates_confirmed', key: 'purchaseOrderId' },
+      { event: 'purchase_order.date_changed', key: 'purchaseOrderId' },
+      { event: 'purchase_order.lines_cancelled', key: 'purchaseOrderId' },
+      { event: 'purchase_order.lines_closed_short', key: 'purchaseOrderId' },
+      { event: 'purchase_order.revision_started', key: 'purchaseOrderId' },
+      { event: 'purchase_order.cancelled', key: 'purchaseOrderId' },
+    ],
+  }),
+  SUPPLIER_STATUS_CHANGED: spec({
+    kind: 'SUPPLIER_STATUS_CHANGED',
+    trigger: 'CONDITION',
+    // One alert per supplier (the party): its supplier status (B-W2b-311, SCM-008) was set to approved with conditions, on
+    // hold, blocked or inactive within this many days, and it still has it; it clears when the status goes back (approved,
+    // prospect) or the days pass. A new supplier's first status (prospect or approved, by the system) is no such change.
+    recordType: 'Party',
+    view: PARTIES_VIEW,
+    threshold: z.strictObject({ days: whole(1, 90).default(7) }),
+    builtIn: { name: { en: 'Supplier put on hold, blocked or limited', it: 'Fornitore sospeso, bloccato o con condizioni' }, threshold: { days: 7 }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'buyer' },
+    label: { en: 'Supplier status changes', it: 'Cambi di stato dei fornitori' },
+    recheck: [{ event: 'supplier.status_changed', key: 'partyId' }],
   }),
 })
 

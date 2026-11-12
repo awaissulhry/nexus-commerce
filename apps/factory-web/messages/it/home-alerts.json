@@ -16,6 +16,13 @@
     "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.",
     "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.",
     "alerts.LOW_STOCK": "{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.",
+    "alerts.PO_CONFIRMED_LATE": "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate}).",
+    "alerts.PO_CONFIRMED_LATE.AT_RISK": "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate}): mette a rischio l'ordine cliente {salesOrder}.",
+    "alerts.SUPPLIER_STATUS_CHANGED": "Lo stato del fornitore {label} è cambiato il {changedOn}.",
+    "alerts.SUPPLIER_STATUS_CHANGED.CONDITIONAL": "Il fornitore {label} è approvato con condizioni dal {changedOn}.",
+    "alerts.SUPPLIER_STATUS_CHANGED.ON_HOLD": "Il fornitore {label} è sospeso dal {changedOn}: nessun nuovo ordine di acquisto finché non viene approvato di nuovo.",
+    "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Il fornitore {label} è bloccato dal {changedOn}: nessun nuovo ordine di acquisto.",
+    "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Il fornitore {label} è inattivo dal {changedOn}: nessun nuovo ordine di acquisto.",
     "alerts.UNKNOWN": "Avviso su {label}."
   },
   "refused": {
@@ -163,7 +170,9 @@
       "INVOICE_DEADLINE": "{record}: scadenza di fatturazione vicina",
       "INTEGRATION_FAILING": "{record} è in errore",
       "WORKING_TIME_LIMIT": "{record}: limite di orario vicino",
-      "LOW_STOCK": "{record} sotto il minimo"
+      "LOW_STOCK": "{record} sotto il minimo",
+      "PO_CONFIRMED_LATE": "{record} confermato più tardi del necessario",
+      "SUPPLIER_STATUS_CHANGED": "{record}: stato del fornitore cambiato"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",
