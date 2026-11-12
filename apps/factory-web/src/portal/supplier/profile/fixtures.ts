@@ -12,6 +12,10 @@ import { profileBandOf } from './band'
 import { addressLines, addressProblems, contactLines, contactProblems, EMPTY_ADDRESS, EMPTY_CONTACT, NO_EDITS, NS, sameEmails, sendHeld, type ChangeFacts, type ProfileEdits } from './model'
 import type { ProfileDialog } from './view/ProfileDialogs'
 import { ProfileCase, type ProfileCaseBuilder } from './view/ProfileCase'
+// B-W2b-334: Profile › Bank details (made-up test IBANs in bank/demo.ts).
+import { bankOf, IN_USE, REFUSED, TYPED as TYPED_IBAN, WAITING } from './bank/demo'
+import { changeHeld as bankHeld, EMPTY_DRAFT, hasWaiting } from './bank/model'
+import type { BankSectionModel } from './bank/view/BankSection'
 import type { ProfileViewModel } from './view/ProfileView'
 
 /**
@@ -196,6 +200,28 @@ const NEW_ADDRESS = { ...EMPTY_ADDRESS, name: 'Deposito Nord', line1: 'Via Esemp
 const BAD_ADDRESS = { ...EMPTY_ADDRESS, kinds: [], line1: 'Via Esempio 20', postalCode: '5602', city: '' }
 const INVITE: InviteDraft = { displayName: '', email: '', locale: 'it', roleKey: 'supplier-orders' }
 
+/** B-W2b-334: a case with the Bank details section (its own model beside the page's). */
+const bankCase = (bank: (locale: Locale) => Partial<BankSectionModel> & { read?: ReturnType<typeof bankOf> | null }, over: { admin?: boolean; preview?: boolean } = {}): ProfileCaseBuilder => {
+  const base = pageCase(() => ({ ...(over.admin === false ? { admin: false, read: profile({ mayChange: false }) } : {}), ...(over.preview ? { preview: true, facts: { preview: true } } : {}) }))
+  return (locale) => {
+    const built = base(locale)
+    if (built.body.kind !== 'page') return built
+    const input = bank(locale)
+    const read = input.read === undefined ? bankOf([IN_USE]) : input.read
+    const value = read ? { ...read, mayPropose: over.admin === false ? false : read.mayPropose } : null
+    const model: BankSectionModel = {
+      state: value ? 'ready' : 'loading',
+      slow: false,
+      bank: value,
+      held: value ? bankHeld({ preview: over.preview === true, offline: false, mayPropose: value.mayPropose, waiting: hasWaiting(value) }) : null,
+      dialog: null,
+      receipt: null,
+      ...input,
+    }
+    return { ...built, body: { ...built.body, bank: model } }
+  }
+}
+
 export const designScreen = defineDesignScreen<ProfileCaseBuilder>({
   screen: 'SCR-191',
   title: 'Profile (supplier portal)',
@@ -232,6 +258,19 @@ export const designScreen = defineDesignScreen<ProfileCaseBuilder>({
     { id: 'deactivate', label: 'Pop-up: Deactivate Sara Esempio?', model: dialogCase(() => ({ kind: 'deactivate', people: [{ id: id(2), name: 'Sara Esempio' }], state: 'ready', summary: { open: 2, assigned: 1, alone: [], options: [{ id: ME, name: 'Luca Prova' }, { id: id(3), name: 'Elena Campione' }] }, choice: ME, busy: false, failed: null })) },
     { id: 'end-others', label: 'Pop-up: Sign out the others', model: dialogCase(() => ({ kind: 'endOthers', count: 1, busy: false, failed: null })) },
     { id: 'step-up', label: 'Pop-up: Confirm it’s you (code by e-mail)', model: dialogCase(() => ({ kind: 'stepUp', to: 'l…a@conceria-prova.example', busy: false, error: null })), note: 'Asked before an admin act when the session has no fresh code (5 minutes).' },
+    { id: 'w2b-334-bank', label: 'W2b Bank details: the account in use (masked), Last changed', model: bankCase(() => ({})), note: 'Between the contacts and the portal users; Change bank details asks a code by e-mail first.' },
+    { id: 'w2b-334-bank-waiting', label: 'W2b Bank details: a change waiting for our call-back', model: bankCase(() => ({ read: bankOf([IN_USE, WAITING]) })), note: '"Waiting: we call you on your registered number …"; Change bank details held: one change at a time.' },
+    { id: 'w2b-334-bank-refused', label: 'W2b Bank details: the last change refused, with why', model: bankCase(() => ({ read: bankOf([IN_USE, REFUSED]) })) },
+    { id: 'w2b-334-bank-none', label: 'W2b Bank details: no account with us yet', model: bankCase(() => ({ read: bankOf([]) })) },
+    { id: 'w2b-334-bank-colleague', label: 'W2b Bank details: a colleague (only the admin changes them)', model: bankCase(() => ({}), { admin: false }) },
+    { id: 'w2b-334-bank-preview', label: 'W2b Bank details: an office preview (held)', model: bankCase(() => ({}), { preview: true }) },
+    { id: 'w2b-334-bank-step-up', label: 'W2b Bank details: Confirm it’s you (a code by e-mail)', model: bankCase(() => ({ dialog: { kind: 'stepUp', to: 'l…a@conceria-prova.example', busy: false, error: null } })) },
+    { id: 'w2b-334-bank-form', label: 'W2b New bank details: the IBAN checked as typed (a digit wrong)', model: bankCase(() => ({ dialog: { kind: 'form', draft: { ...EMPTY_DRAFT, iban: 'IT11 X000 0000 0000 0000 0315 002', holder: 'Conceria Prova S.p.A.' }, tried: true } })) },
+    { id: 'w2b-334-bank-review', label: 'W2b New bank details: the review old → new, both masked', model: bankCase(() => ({ dialog: { kind: 'review', draft: { ...EMPTY_DRAFT, iban: TYPED_IBAN, holder: 'Conceria Prova S.p.A.', bankName: 'Banca Prova' }, sending: false, failed: null } })) },
+    { id: 'w2b-334-bank-refused-send', label: 'W2b New bank details: the send refused (a change waits already)', model: bankCase(() => ({ dialog: { kind: 'review', draft: { ...EMPTY_DRAFT, iban: TYPED_IBAN, holder: 'Conceria Prova S.p.A.' }, sending: false, failed: 'portalBank.failed.clash' } })) },
+    { id: 'w2b-334-bank-sent', label: 'W2b Bank details: sent for our check', model: bankCase((locale) => ({ read: bankOf([IN_USE, WAITING]), receipt: words(locale, 'purchasing-suppliers-depth')('portalBank.sent') })) },
+    { id: 'w2b-334-bank-loading', label: 'W2b Bank details: loading', model: bankCase(() => ({ read: null })) },
+    { id: 'w2b-334-bank-error', label: "W2b Bank details: couldn't load", model: bankCase(() => ({ read: null, state: 'error' })) },
     { id: 'step-up-wrong', label: 'Pop-up: a wrong code', model: dialogCase((locale) => ({ kind: 'stepUp', to: 'l…a@conceria-prova.example', busy: false, error: words(locale, 'portal-account')('stepUp.wrong') })) },
   ],
 })

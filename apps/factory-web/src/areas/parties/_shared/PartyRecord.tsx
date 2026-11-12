@@ -55,7 +55,7 @@ import {
   type RecordDialog,
   type Side,
 } from './model'
-import { PartyRecordView, type OverviewSlot } from './view/PartyRecordView'
+import { PartyRecordView, type OverviewSlot, type SupplierDepth } from './view/PartyRecordView'
 
 /**
  * The record container of both sides (`/w/<company>/sales/customers/<id>` SCR-033, `/w/<company>/purchasing/
@@ -73,16 +73,18 @@ export type ItemsSlot = (party: Party, reload: () => void) => ReactNode
 export type PortalSlot = (party: Party) => ReactNode
 /** B-W2b-172: a supplier's Questionnaire tab (areas/purchasing/suppliers/questionnaire), drawn with the party read. */
 export type QuestionnaireSlot = (party: Party) => ReactNode
+/** B-W2b-334: a supplier's W2b parts (areas/purchasing/suppliers/depth), drawn with the party read, and how to read it again. */
+export type DepthSlot = (party: Party, reload: () => void) => SupplierDepth
 
-export function PartyRecord({ side, partyId, terms, items, overview, portal, questionnaire }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot }) {
+export function PartyRecord({ side, partyId, terms, items, overview, portal, questionnaire, depth }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms, items, overview, portal, questionnaire }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot }) {
+function PartyRecordContainer({ side, partyId, terms, items, overview, portal, questionnaire, depth }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot; portal?: PortalSlot; questionnaire?: QuestionnaireSlot; depth?: DepthSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -101,6 +103,8 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     threads: held.has('threads.read'),
     partners: !!portal && held.has('partners.view'), // B-W2b-180
     questionnaire: !!questionnaire && held.has('purchasing.questionnaire.view'), // B-W2b-172
+    depth: !!depth, // B-W2b-334
+    bank: !!depth && held.has('purchasing.bank.view'), // B-W2b-334
   }
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(config.tabs)
@@ -345,6 +349,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
       items={party && items ? items(party, () => void load()) : null}
       portal={party && portal && tab === 'portal' ? portal(party) : null}
       questionnaire={party && questionnaire && tab === 'questionnaire' ? questionnaire(party) : null}
+      depth={party && depth ? depth(party, () => void load()) : undefined}
       overview={overview}
       actions={{
         onRetry: () => {
