@@ -135,6 +135,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/demand': 'planning.view', // GET /planning/demand (B-W2b-339)
       '/planning/mps': 'planning.view', // GET /planning/strategy (B-W2b-339)
       '/planning/promise': 'planning.promise.view', // GET /planning/promises (B-W2b-336)
+      '/planning/reports': 'planning.reports.view', // GET /planning/reports/adherence (B-W2b-349)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)

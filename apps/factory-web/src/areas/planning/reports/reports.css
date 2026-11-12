@@ -1,0 +1,205 @@
+/*
+ * Planning › Reports (SCR-254) and its print view (SCR-409) LAYOUT: the band, the scope row, the panels' heads, the skeletons, the
+ * charts and the weeks below them, the cells that open the work orders behind them, the drill, the keys and the print notes. The
+ * controls are the design system's; this file only places them, with semantic tokens (no colours of its own). No page max-width
+ * (Owner rule 2026-10-29): the page fills the shell's main area and every panel starts full width.
+ */
+.fw-plr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-plr-band,
+.fw-plr-scope,
+.fw-plr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-plr-scope {
+  justify-content: flex-start;
+}
+
+.fw-plr-company {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-plr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-plr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-plr-head-controls,
+.fw-plr-status,
+.fw-plr-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-plr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-plr-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-plr-hint,
+.fw-plr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-plr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-plr-sections {
+  min-width: 0;
+}
+
+.fw-plr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-plr-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-width: 0;
+}
+
+/* The weeks under a chart: each opens the work orders behind its bar (Enter on a focused one). */
+.fw-plr-weeks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-plr-week {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-plr-week-quiet {
+  cursor: default;
+  border-style: dashed;
+}
+
+.fw-plr-week:focus-visible,
+.fw-plr-cell-link:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-plr-week-label {
+  font-weight: 600;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-plr-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-plr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* A table cell opens the work orders behind it: a text button that reads as a link. */
+.fw-plr-cell-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--nds-primary);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-plr-drill,
+.fw-plr-drill-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-plr-drill-part {
+  gap: var(--nds-space-8);
+}
+
+.fw-plr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-plr-keymap > div {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+
+.fw-plr-keymap dd {
+  margin: 0;
+}
+
+.fw-plr-print-note {
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-sm);
+}

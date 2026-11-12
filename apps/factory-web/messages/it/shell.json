@@ -201,6 +201,8 @@
       "longRange": "Lungo periodo",
       "demand": "Domanda e previsioni",
       "mps": "Piano principale e S&OP",
+      "reportsGroup": "Report",
+      "reports": "Report pianificazione",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

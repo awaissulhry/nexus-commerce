@@ -214,6 +214,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.mps', title: 'Master schedule & S&OP', titleIt: 'Piano principale e S&OP', wave: 'W2b', href: '/planning/mps' },
         ],
       },
+      // W2b: B-W2b-349 Planning reports (SCR-254), the design's group "Reports", before Settings.
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'planning.reports', title: 'Planning reports', titleIt: 'Report pianificazione', wave: 'W2b', href: '/planning/reports' }] },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
       {
         label: 'Settings',

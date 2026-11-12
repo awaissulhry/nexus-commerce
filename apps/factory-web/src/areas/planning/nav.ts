@@ -1,4 +1,6 @@
 import { CalendarCheck, CalendarClock, CalendarRange, ChartGantt, Gauge, Layers, ListChecks, Network, Scissors, Siren, SlidersHorizontal, TrendingUp } from 'lucide-react'
+// B-W2b-349: the Reports group's icon.
+import { BarChart3 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -53,6 +55,13 @@ export const officeArea: OfficeAreaNav = {
           { id: 'planning-demand', label: 'shell:nav.planning.demand', href: '/planning/demand', icon: TrendingUp, permission: 'planning.view' },
           { id: 'planning-mps', label: 'shell:nav.planning.mps', href: '/planning/mps', icon: Layers, permission: 'planning.view' },
         ],
+      },
+      // B-W2b-349: Reports › Planning reports (SCR-254; GET /planning/reports/adherence, /utilisation, /cover), the design's group
+      // "Planning › Reports", before Settings.
+      {
+        id: 'planning-reports',
+        label: 'shell:nav.planning.reportsGroup',
+        items: [{ id: 'planning-reports', label: 'shell:nav.planning.reports', href: '/planning/reports', icon: BarChart3, permission: 'planning.reports.view' }],
       },
       // B-W2a-59: Settings › Planning settings (SCR-124 calendars & shifts, SCR-127 item planning settings).
       {
