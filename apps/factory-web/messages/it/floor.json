@@ -761,6 +761,8 @@
       "taskTake": "Compito di magazzino preso",
       "taskGiveBack": "Compito di magazzino restituito",
       "taskDone": "Compito di magazzino fatto",
+      "countScan": "Unità scansionata in un inventario",
+      "countFinishBin": "Contenitore di un inventario chiuso",
       "pickIssue": "Prelevato dalla lista di prelievo",
       "substituteIssue": "Sostituto approvato prelevato"
     },

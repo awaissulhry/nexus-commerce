@@ -64,6 +64,8 @@ import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-326: transfers between sites (the warehouse).
 import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
+// B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
+import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -975,7 +977,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-350
   ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-326
-  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
+  // B-W2b-299
+  ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

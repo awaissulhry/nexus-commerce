@@ -286,6 +286,11 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { target: text(p.taskId, 40) }
     case 'inventory.task.done':
       return { target: text(p.taskId, 40), code: text(p.placeCode, 64) }
+    // B-W2b-299: the count and what was scanned (a unit's tag, or the bin's label); never who, never a quantity's worth.
+    case 'inventory.count.scan':
+      return { target: text(p.countId, 40), code: text(p.code) ?? text(p.placeCode, 64) }
+    case 'inventory.count.finishBin':
+      return { target: text(p.countId, 40), code: text(p.placeCode, 64) }
     // B-W2b-298: what was scanned (or the stock named) and the work order; a substitute's issue its substitute.
     case 'inventory.pick.issue':
       return { code: text(p.code) ?? text(p.hideId, 40) ?? text(p.lotId, 40) ?? text(p.itemId, 40), ...(workOrderId ? { workOrderId } : {}) }
