@@ -200,6 +200,8 @@ import { SALES_INQUIRIES_DEFINITIONS, SALES_INQUIRIES_PERMISSIONS } from '../../
 import { INVENTORY_RULES_DEFINITIONS, INVENTORY_RULES_PERMISSIONS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (planning.planned.convert).
 import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../../planning/planned-orders/permissions'
+// B-W2b-301: promise dates (planning.promise.view, planning.promise.manage).
+import { PLANNING_PROMISE_DEFINITIONS, PLANNING_PROMISE_PERMISSIONS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (purchasing.suppliers.status).
 import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (inventory.tasks.manage: tasks by hand, handed out, changed, cancelled).
@@ -925,6 +927,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_RULES_DEFINITIONS,
   // B-W2b-293: planned work and subcontract orders (area `planning`, declared above).
   PLANNING_PLANNED_DEFINITIONS,
+  PLANNING_PROMISE_DEFINITIONS,
   // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
   SUPPLIERS_DEPTH_DEFINITIONS,
   // B-W2b-292: the warehouse task inbox (area `inventory`).
@@ -1255,6 +1258,7 @@ for (const name of SALES_INQUIRIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-293: planned work and subcontract orders.
 for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PLANNING_PROMISE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-311: suppliers in depth.
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-292: the warehouse task inbox.

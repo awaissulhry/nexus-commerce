@@ -93,6 +93,15 @@ export const manifest = defineManifest({
   'GET /planning/planned-orders/:plannedOrderId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'POST /planning/planned-orders/:plannedOrderId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   'POST /planning/planned-orders/:plannedOrderId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  // B-W2b-301: promise dates (./promise): read with planning.promise.view over the site (a quote also with quotes.view, an
+  // order line with orders.view over its order); an order line's promise per size recorded with planning.promise.manage. The
+  // calculator is a POST that writes nothing.
+  'GET /planning/promise/atp': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/atp/styles': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promise/calculate': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/quotes/:quoteId': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promise/order-lines/:orderLineId': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promise/order-lines/:orderLineId': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
   // B-W2b-319: one demand view (./demand), read with planning.view over the site (each source over its customer too); the production
   // strategy per item (./strategy), read with planning.view, kept with planning.strategy.manage over the site.
   'GET /planning/demand': { audiences: ['office'], permission: 'planning.view', scope: 'record' },

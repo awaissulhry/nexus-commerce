@@ -51,6 +51,8 @@ import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
 import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
+// B-W2b-301
+import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -951,6 +953,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-301
+  ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292

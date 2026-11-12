@@ -55,6 +55,10 @@ import { convertPlannedOrdersContract, firmPlannedOrderContract, getPlannedOrder
 import { convertPlannedOrders } from './planned-orders/convert'
 import { firmPlannedOrder, unfirmPlannedOrder } from './planned-orders/firm'
 import { getPlannedOrder, listPlannedOrders } from './planned-orders/read'
+// B-W2b-301: promise dates (available to promise, the promise calculator, a quote's suggested dates, an order line's promise per size).
+import { atpContract, atpStylesContract, calculateContract, orderLineContract, quoteContract, recordContract } from './promise/contract'
+import { orderLinePromise, recordPromise } from './promise/order-lines'
+import { availableToPromise, calculatePromise, quoteSuggestion, stockStyles } from './promise/read'
 // B-W2b-319: one demand view and the production strategy per item.
 import { demandContract, demandRowsContract } from './demand/contract'
 import { readDemand, readDemandRows } from './demand/demand'
@@ -169,6 +173,13 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/planned-orders/:plannedOrderId', { schema: getPlannedOrderContract }, async (request) => getPlannedOrder(request, request.params.plannedOrderId))
   app.post('/planning/planned-orders/:plannedOrderId/firm', { schema: firmPlannedOrderContract }, async (request) => firmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/planned-orders/:plannedOrderId/unfirm', { schema: firmPlannedOrderContract }, async (request) => unfirmPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-301: promise dates.
+  app.get('/planning/promise/atp', { schema: atpContract }, async (request) => availableToPromise(request, request.query))
+  app.get('/planning/promise/atp/styles', { schema: atpStylesContract }, async (request) => stockStyles(request, request.query))
+  app.post('/planning/promise/calculate', { schema: calculateContract }, async (request) => calculatePromise(request, request.body))
+  app.get('/planning/promise/quotes/:quoteId', { schema: quoteContract }, async (request) => quoteSuggestion(request, request.params.quoteId, request.query))
+  app.get('/planning/promise/order-lines/:orderLineId', { schema: orderLineContract }, async (request) => orderLinePromise(request, request.params.orderLineId))
+  app.post('/planning/promise/order-lines/:orderLineId', { schema: recordContract }, async (request) => recordPromise(request, request.params.orderLineId, request.body, idempotencyKeyFrom(request)))
   // B-W2b-319: one demand view (orders, quotes likely to win, made-to-measure units, samples, remakes by week) and the
   // production strategy per item.
   app.get('/planning/demand', { schema: demandContract }, async (request) => readDemand(request, request.query))
