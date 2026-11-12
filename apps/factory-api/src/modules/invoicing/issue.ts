@@ -23,6 +23,8 @@ import { reviewIssue } from './facts'
 import { makeInvoiceFiles } from './invoice-files'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type Reader } from './store'
 import { storedSourceOf, termsJsonOf } from './terms'
+// B-W2b-330 (SAL-181): a fee is invoiced once.
+import { feesBilledTwice } from '../sales/price-waterfall/fee-invoicing'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -78,6 +80,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   // are read under them.
   const lines = await readLines(tx, invoice.id)
   await lockInvoicing(tx, context, 'ddt', lines.flatMap((line) => (line.ddtId ? [line.ddtId] : [])))
+  // B-W2b-330 (SAL-181): the fees it bills (their locks after the DDTs'): one another issued invoice bills is refused.
+  const feeProblems = invoice.docType === 'TD01' || invoice.docType === 'TD24' ? await feesBilledTwice(tx, context, invoice.id, lines) : []
   if (invoice.docType === 'TD02' && invoice.depositRequestId) await lockMoney(tx, context, 'deposit', invoice.depositRequestId)
   if (invoice.docType === 'TD04' && invoice.creditOfId) await lockMoney(tx, context, 'invoice', invoice.creditOfId)
   await lockAll(tx, context, 'invoice', lines.flatMap((line) => (line.depositInvoiceId ? [line.depositInvoiceId] : [])))
@@ -88,7 +92,7 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   // B-W2a-F1: today inside a HARD period lock of the company is a problem of the issue (409 in words, no number taken),
   // before the database's Invoice_period_lock refuses it.
   const locked = await hardLockOn(tx, context, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate' }])
-  const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : [])]
+  const problems = [...review.problems, ...feeProblems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : [])]
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
   // B-W2a-F8: today inside a SOFT period lock needs the override reason (409 period/SOFT_LOCKED without it; audited with it).
   await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate', record: { type: 'Invoice', id: invoice.id } }], periodLockOverride)
