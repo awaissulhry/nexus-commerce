@@ -2,6 +2,8 @@ import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, P
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 // B-W2b-356: the Reports section's icon (its own line: a merge point).
 import { BarChart3 } from 'lucide-react'
+// B-W2b-355: the Warehouse rules row's icon (its own line: a merge point).
+import { SlidersHorizontal } from 'lucide-react'
 
 /**
  * Warehouse (design 01 area 6 "Warehouse / Magazzino": Main (Stock, Hides, Lots & traceability, Movements), Inbound (Receipts),
@@ -73,6 +75,9 @@ export const officeArea: OfficeAreaNav = {
         items: [
           { id: 'warehouse-locations', label: 'shell:nav.warehouse.locations', href: '/warehouse/locations', icon: MapPin, permission: 'inventory.locations.view' },
           { id: 'warehouse-shipping', label: 'shell:nav.warehouse.shipping', href: '/warehouse/shipping', icon: Settings, permission: 'shipping.settings.view' },
+          // B-W2b-355: SCR-258 Warehouse rules — separation of duties, default places, adjustment approval, posting dates
+          // (GET /inventory/rules: inventory.stock.view).
+          { id: 'warehouse-rules', label: 'shell:nav.warehouse.rules', href: '/warehouse/settings', icon: SlidersHorizontal, permission: 'inventory.stock.view' },
         ],
       },
     ],

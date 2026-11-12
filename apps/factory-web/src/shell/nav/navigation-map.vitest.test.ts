@@ -155,6 +155,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/locations': 'inventory.locations.view', // GET /inventory/locations
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/warehouse/reports': 'inventory.reports.view', // GET /inventory/reports/ageing (B-W2b-356)
+      '/warehouse/settings': 'inventory.stock.view', // GET /inventory/rules (B-W2b-355)
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
       '/production/reports': 'production.reports.view', // GET /production/reports/daily
@@ -264,6 +265,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/reports',
       '/warehouse/locations',
       '/warehouse/shipping',
+      // B-W2b-355: Warehouse rules (inventory.stock.view).
+      '/warehouse/settings',
       '/admin/import',
     ])
     // The sales role: all of Sales, Home's approvals and mail; of Quality only Nonconformances (B-W2a-68: sales raise NCRs

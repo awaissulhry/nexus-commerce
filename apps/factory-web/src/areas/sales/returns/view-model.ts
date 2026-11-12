@@ -32,6 +32,10 @@ import type {
   Words,
 } from './model'
 
+import type { RmaDepthActions, RmaDepthModel } from './depth/view-model'
+import type { FinishOption } from './depth/model'
+import type { EstimateActions, EstimateModel } from './estimate/view-model'
+
 /**
  * The view models of Sales › Returns & repairs (SCR-111 list, SCR-112 the RMA and the repair order): what each view
  * draws, nothing it fetches. The containers (ReturnsPage, ReturnRecord, RepairRecord) read the API and fill these; the
@@ -87,6 +91,8 @@ export interface CloseModel {
   readonly warnings: number | null
   /** B-W2b-16: what the close would leave behind, said before the click (the record's closeWarnings); null: not read yet. */
   readonly pending?: Rma['closeWarnings'] | null
+  /** B-W2b-352: every finish reason, the suggested first, each allowed or held with why (the outcomes'); null: not read yet. */
+  readonly options?: readonly FinishOption[] | null
 }
 
 /** B-W2b-16: Add lines on an open RMA (design rma.lines "Add lines by picking from the customer's invoiced lines"). */
@@ -106,7 +112,8 @@ export interface ReturnsListModel {
   readonly me: string
   readonly address: ListAddress
   readonly rows: { readonly items: readonly AfterSalesRow[] | null; readonly problem: string | null; readonly truncated: boolean }
-  readonly counts: { readonly returns: ReturnCounts | null; readonly repairs: RepairCounts | null; readonly failed: boolean }
+  /** `arrivedLate` (B-W2b-352): the open returns that arrived after their deadline (null: not counted; absent: not read). */
+  readonly counts: { readonly returns: ReturnCounts | null; readonly repairs: RepairCounts | null; readonly failed: boolean; readonly arrivedLate?: number | null }
   readonly people: readonly Person[]
   readonly asOf: string | null
   readonly live: LiveState
@@ -202,9 +209,11 @@ export interface RmaModel {
   /** B-W2b-16: Add lines (null: closed). */
   readonly addLines?: AddLinesModel | null
   readonly dockOpen: boolean
+  /** B-W2b-352: the W2b parts (policy, deadline, credit without the goods, fees, split, size exchange, remake asked). */
+  readonly depth?: RmaDepthModel
 }
 
-export interface RmaActions extends CloseActions, NewRepairActions {
+export interface RmaActions extends CloseActions, NewRepairActions, RmaDepthActions {
   /** B-W2b-16: Add lines on an open RMA. */
   onAddLinesOpen?: () => void
   onAddLinesLine?: (key: string, patch: Partial<NewReturnLineDraft>) => void
@@ -228,7 +237,8 @@ export interface RmaActions extends CloseActions, NewRepairActions {
 
 // ---- the repair record ------------------------------------------------------------------------------------------------------
 
-export const REPAIR_TABS = ['intake', 'work', 'safety', 'return', 'activity'] as const
+/** B-W2b-352: `estimate` (the repair's estimate of parts and labour, SAL-387). */
+export const REPAIR_TABS = ['intake', 'estimate', 'work', 'safety', 'return', 'activity'] as const
 export type RepairTab = (typeof REPAIR_TABS)[number]
 
 export interface IntakeDraft {
@@ -276,9 +286,11 @@ export interface RepairModel {
   readonly dialogBusy: boolean
   readonly dialogProblem: Words | null
   readonly dockOpen: boolean
+  /** B-W2b-352: the Estimate tab (its revisions, lines, sends and answers). */
+  readonly estimate?: EstimateModel
 }
 
-export interface RepairActions {
+export interface RepairActions extends EstimateActions {
   onReload?: () => void
   onDismissReceipt?: () => void
   onDock?: () => void

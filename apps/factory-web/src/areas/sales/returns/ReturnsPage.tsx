@@ -8,7 +8,6 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadText, liveMatches, useLive } from '../../quality/_shared/hooks'
 import { problemKey } from '../../quality/_shared/model'
 import {
-  closeReturn,
   createRepair,
   createReturn,
   getReturn,
@@ -31,7 +30,6 @@ import {
 import {
   BLANK_REPAIR,
   BLANK_RETURN,
-  closeReasonText,
   LIVE_TYPES,
   mergedRows,
   newRepairBody,
@@ -55,13 +53,17 @@ import {
 import type { CloseModel, NewRepairModel, NewReturnModel, Notice, ReturnsListModel } from './view-model'
 import { ReturnsMessages, say, useWords } from './view/parts'
 import { ReturnsView } from './view/ReturnsView'
+import { finishReturn, getOutcomes, listArrivedLate } from './depth/api'
+import { finishOptionsOf, lateRowsOf } from './depth/model'
 
 /**
  * `/w/<company>/sales/returns` (SCR-111): reads the view of the address from both sources — `GET /sales/returns` and
  * `GET /sales/repairs` with their own views (two sources, one grid; the repairs only with sales.repairs.view) — the tiles
  * (`…/counts` of each), the office people (owners' names) and listens to the live stream: a new or changed return or
  * repair waits behind "N updates · Show" (rows never move under the cursor) while the tiles read at once. `?new=return`
- * and `?new=repair` open the dialogs; every create sends an Idempotency-Key and opens the new record.
+ * and `?new=repair` open the dialogs; every create sends an Idempotency-Key and opens the new record. B-W2b-352: the tile
+ * "Arrived after the deadline" (`GET /sales/returns/arrived-late`; its view keeps the open returns it names) and the close
+ * through `POST …/finish` with the reasons the return's outcomes allow.
  */
 export function ReturnsPage() {
   return (
@@ -111,6 +113,8 @@ function ReturnsContainer() {
   const [repairs, setRepairs] = useState<{ items: RepairRow[] | null; truncated: boolean; people: Person[] }>({ items: null, truncated: false, people: [] })
   const [rowsProblem, setRowsProblem] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ returns: ReturnCounts | null; repairs: RepairCounts | null; failed: boolean }>({ returns: null, repairs: null, failed: false })
+  // B-W2b-352: the open returns that arrived after their deadline (undefined: not read yet; null: couldn't count).
+  const [late, setLate] = useState<{ ids: string[]; count: number; truncated: boolean } | null | undefined>(undefined)
   const [people, setPeople] = useState<Person[]>([])
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
@@ -130,6 +134,9 @@ function ReturnsContainer() {
 
   const loadCounts = useCallback(async () => {
     if (!can.view) return
+    listArrivedLate(api, 'open')
+      .then((answer) => setLate({ ids: answer.rows.map((row) => row.id), count: answer.count, truncated: answer.truncated }))
+      .catch(() => setLate(null))
     try {
       const [returnsAnswer, repairsAnswer] = await Promise.all([returnCounts(api), can.repairsView ? repairCounts(api) : Promise.resolve(null)])
       setCounts({ returns: returnsAnswer.counts, repairs: repairsAnswer?.counts ?? null, failed: false })
@@ -185,7 +192,13 @@ function ReturnsContainer() {
     },
   )
 
-  const items = useMemo(() => (returns.items === null || repairs.items === null ? null : mergedRows(returns.items, repairs.items)), [returns.items, repairs.items])
+  const lateView = address.view === 'arrivedLate'
+  const lateRows = useMemo(() => (lateView && returns.items && late ? lateRowsOf(returns.items, { rows: late.ids.map((id) => ({ id })), truncated: late.truncated }) : null), [lateView, returns.items, late])
+  const items = useMemo(() => {
+    if (returns.items === null || repairs.items === null) return null
+    if (!lateView) return mergedRows(returns.items, repairs.items)
+    return late === undefined ? null : mergedRows(lateRows?.rows ?? [], [])
+  }, [returns.items, repairs.items, lateView, late, lateRows])
 
   // ---- notices: one at a time, the most serious first; dismissed by value -------------------------------------------------
   const notices = useMemo<Notice[]>(() => {
@@ -195,9 +208,10 @@ function ReturnsContainer() {
     if (counts.returns && counts.returns.toDecide > 0) out.push({ id: `decide:${counts.returns.toDecide}`, tone: 'info', words: { key: 'notice.toDecide', params: { count: counts.returns.toDecide } } })
     if (counts.repairs && counts.repairs.toShip > 0) out.push({ id: `ship:${counts.repairs.toShip}`, tone: 'info', words: { key: 'notice.toShip', params: { count: counts.repairs.toShip } } })
     if (returns.truncated || repairs.truncated) out.push({ id: 'truncated', tone: 'info', words: { key: 'notice.truncated' } })
+    if (lateView && late === null) out.push({ id: 'lateFailed', tone: 'warning', words: { key: 'depth:late.failed' } })
     if (!can.repairsView) out.push({ id: 'noRepairs', tone: 'info', words: { key: 'notice.noRepairs' } })
     return out.filter((notice) => !dismissed.includes(notice.id))
-  }, [counts, returns.truncated, repairs.truncated, can.repairsView, dismissed, prefix])
+  }, [counts, returns.truncated, repairs.truncated, can.repairsView, dismissed, prefix, lateView, late])
 
   // ---- New return -------------------------------------------------------------------------------------------------------------
   const [newReturn, setNewReturn] = useState<NewReturnModel | null>(null)
@@ -332,14 +346,14 @@ function ReturnsContainer() {
     setClose({ ...current, busy: true, problem: null })
     try {
       const rma = await getReturn(api, current.id)
-      const answer = await closeReturn(api, rma, closeReasonText(t(`finish.${current.reason}`), current.note), closeKey.current ?? newIdempotencyKey())
+      const answer = await finishReturn(api, rma, { finishReason: current.reason, reason: current.note.trim() || null }, closeKey.current ?? newIdempotencyKey())
       setClose({ ...current, busy: false, warnings: answer.warnings.length })
       void load()
       void loadCounts()
     } catch (error) {
       setClose((latest) => (latest ? { ...latest, busy: false, problem: refusalOf(error) } : latest))
     }
-  }, [api, close, load, loadCounts, t])
+  }, [api, close, load, loadCounts])
 
   // `?new=return|repair` (a link from elsewhere, the empty state) opens a dialog once; then the address forgets it.
   useEffect(() => {
@@ -362,8 +376,8 @@ function ReturnsContainer() {
     can,
     me,
     address,
-    rows: { items, problem: rowsProblem, truncated: returns.truncated || repairs.truncated },
-    counts,
+    rows: { items, problem: rowsProblem, truncated: returns.truncated || repairs.truncated || (lateView && (lateRows?.truncated ?? false)) },
+    counts: { ...counts, arrivedLate: late === undefined ? undefined : late === null ? null : late.count },
     people: [...people, ...repairs.people.filter((person) => !people.some((known) => known.id === person.id))],
     asOf,
     live,
@@ -424,11 +438,16 @@ function ReturnsContainer() {
         onNewRepairClose: () => setNewRepair(null),
         onClose: (row) => {
           closeKey.current = newIdempotencyKey()
-          // B-W2b-16: what the close would leave behind is read from the record and said before the click.
-          setClose({ id: row.id, number: row.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null })
-          void getReturn(api, row.id)
-            .then((rma) => setClose((current) => (current && current.id === row.id ? { ...current, pending: rma.closeWarnings } : current)))
-            .catch(() => setClose((current) => (current && current.id === row.id ? { ...current, pending: [] } : current)))
+          // B-W2b-16: what the close would leave behind is read from the record and said before the click; B-W2b-352: the
+          // finish reasons the outcomes allow (the suggested one picked).
+          setClose({ id: row.id, number: row.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null, options: null })
+          void Promise.all([getReturn(api, row.id), getOutcomes(api, row.id)])
+            .then(([rma, outcomes]) => {
+              const options = finishOptionsOf(outcomes, rma)
+              const suggested = options.find((option) => option.reason === outcomes.finish.suggested && option.held === null)?.reason ?? ''
+              setClose((current) => (current && current.id === row.id ? { ...current, pending: rma.closeWarnings, options, reason: current.reason || suggested } : current))
+            })
+            .catch((error) => setClose((current) => (current && current.id === row.id ? { ...current, pending: [], options: [], problem: refusalOf(error) } : current)))
         },
         onCloseDraft: (patch) => setClose((current) => (current ? { ...current, ...patch } : current)),
         onCloseSubmit: () => void submitClose(),

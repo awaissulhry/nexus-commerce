@@ -354,6 +354,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-356: Warehouse › Reports › Warehouse reports (SCR-257) and its print view (SCR-353, a new tab, no navigation row).
   '/warehouse/reports',
   '/warehouse/reports/print',
+  // B-W2b-355: Warehouse › Settings › Warehouse rules (SCR-258).
+  '/warehouse/settings',
   // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
   '/search',
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
