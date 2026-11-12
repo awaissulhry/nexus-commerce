@@ -191,7 +191,9 @@ describe('versions by batch (PRD-295)', () => {
 
   it('records a work order batch only with its own revision, issued', () => {
     expect(recordRefusal({ document, workOrder: order, batchNumber: null, shipment: null })).toBeNull()
-    expect(recordRefusal({ document: { ...document, status: 'SUPERSEDED' }, workOrder: order, batchNumber: null, shipment: null })?.code).toBe('NOT_ISSUED')
+    // B-W2b-288 (FU2:04): a superseded document keeps a batch made while it was in force (its work order froze its revision).
+    expect(recordRefusal({ document: { ...document, status: 'SUPERSEDED' }, workOrder: order, batchNumber: null, shipment: null })).toBeNull()
+    expect(recordRefusal({ document: { ...document, status: 'DRAFT' }, workOrder: order, batchNumber: null, shipment: null })?.code).toBe('NOT_ISSUED')
     expect(recordRefusal({ document, workOrder: { ...order, frozenRevision: 1 }, batchNumber: null, shipment: null })?.message).toBe(
       "Work order DEMO-WO-1 made revision 1; this document is of revision 2: record the batch with its own revision's document.",
     )

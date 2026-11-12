@@ -192,7 +192,18 @@ import { setStatus, statusReach } from './suppliers-depth/status'
 import { registerLinkRenewer } from '../../platform/links/renew'
 // B-W2b-219: the leather area tolerance where a PO line names none (PurchasingSettings.leatherAreaTolerancePct).
 import { getLeatherTolerance, getLeatherToleranceContract, putLeatherTolerance, putLeatherToleranceContract } from '../inventory/hides/tolerance'
+// B-W2b-296: purchase orders in depth (po-depth/).
+import * as poDepthContracts from './po-depth/contract'
+import { putRate } from './po-depth/currency'
+import { recordSupplierDate } from './po-depth/dates'
+import { getDepth } from './po-depth/read'
+import { clearSchedule, putSchedule } from './po-depth/schedule'
+import { putShipTo } from './po-depth/ship-to'
+import { createTolerance, listTolerances, moveTolerance, updateTolerance } from './po-depth/tolerances'
 
+// B-W2b-332: ask to buy (./ask-to-buy).
+import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
+import * as askContracts from './ask-to-buy/contract'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -430,6 +441,21 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/settings/leather-tolerance', { schema: getLeatherToleranceContract }, async (request) => getLeatherTolerance(request, request.query))
   app.put('/purchasing/settings/leather-tolerance', { schema: putLeatherToleranceContract }, async (request) => putLeatherTolerance(request, request.body, idempotencyKeyFrom(request)))
 
+  // B-W2b-296 (SCM-052, SCM-061, SCM-065, SCM-066, SCM-088, SCM-147): purchase orders in depth (po-depth/): the delivery
+  // schedule per line, the supplier's days and their history, the rate at order, ship to a third party or a workshop, the
+  // delivery tolerances. The send checks and prints them (views.ts, send.ts); a receipt reads the tolerances (receiving.ts).
+  app.get('/purchasing/orders/:purchaseOrderId/depth', { schema: poDepthContracts.getDepthContract }, async (request) => getDepth(request, request.params.purchaseOrderId))
+  app.put('/purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries', { schema: poDepthContracts.putScheduleContract }, async (request) => putSchedule(request, request.params.purchaseOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries', { schema: poDepthContracts.clearScheduleContract }, async (request) => clearSchedule(request, request.params.purchaseOrderId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/lines/:lineId/supplier-date', { schema: poDepthContracts.supplierDateContract }, async (request) => recordSupplierDate(request, request.params.purchaseOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.put('/purchasing/orders/:purchaseOrderId/rate', { schema: poDepthContracts.putRateContract }, async (request) => putRate(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.put('/purchasing/orders/:purchaseOrderId/ship-to', { schema: poDepthContracts.putShipToContract }, async (request) => putShipTo(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/tolerances', { schema: poDepthContracts.listTolerancesContract }, async (request) => listTolerances(request, request.query))
+  app.post('/purchasing/tolerances', { schema: poDepthContracts.createToleranceContract }, async (request, reply) => reply.code(201).send(await createTolerance(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/tolerances/:toleranceId', { schema: poDepthContracts.updateToleranceContract }, async (request) => updateTolerance(request, request.params.toleranceId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/tolerances/:toleranceId/archive', { schema: poDepthContracts.moveToleranceContract }, async (request) => moveTolerance(request, request.params.toleranceId, 'archive', request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/tolerances/:toleranceId/reactivate', { schema: poDepthContracts.moveToleranceContract }, async (request) => moveTolerance(request, request.params.toleranceId, 'reactivate', request.body, idempotencyKeyFrom(request)))
+
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }
 
@@ -555,6 +581,22 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     const { pdf, fileName } = await questionnaireLink.linkCodeOfConduct(request, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+
+  // B-W2b-332 (SCM-035, SCM-037): ask to buy — what the dialog offers, one's requests, one request, "Send request", a line of
+  // the shortage list asked (or drafted at once by a buyer), take requests back, refuse them (the buyer).
+  app.get('/purchasing/ask-to-buy/options', { schema: askContracts.optionsContract }, async (request) => askOptions(request, request.query))
+
+  app.get('/purchasing/ask-to-buy', { schema: askContracts.listContract }, async (request) => listAsked(request, request.query))
+
+  app.get('/purchasing/ask-to-buy/:requestId', { schema: askContracts.getContract }, async (request) => getAsked(request, request.params.requestId))
+
+  app.post('/purchasing/ask-to-buy', { schema: askContracts.askContract }, async (request, reply) => reply.code(201).send(await askToBuy(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/purchasing/ask-to-buy/from-shortage', { schema: askContracts.fromShortageContract }, async (request, reply) => reply.code(201).send(await askFromShortage(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
   // B-W2b-311 (SCM-002, SCM-004, SCM-008, SCM-012, SCM-016): suppliers in depth (./suppliers-depth).
   app.get('/purchasing/suppliers', { schema: suppliersDepthContracts.listSuppliersContract }, async (request) => listSuppliers(request, request.query))
 

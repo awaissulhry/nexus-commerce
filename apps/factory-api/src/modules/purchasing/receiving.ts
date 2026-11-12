@@ -1,6 +1,7 @@
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
+import { receiptToleranceOf, toleranceFor, type ReceiptTolerance, type ToleranceRule } from '@nexus/factory-domain/purchasing/po-depth/tolerances'
 import type { CommandTools, CommandTx } from '../../core/command'
 import { closeConfirmTasks } from './portal-orders/tasks'
 
@@ -100,3 +101,35 @@ export async function receiptStopsCancel(tx: CommandTx, orderId: string): Promis
   if (receipts.length === 0) return null
   return `Goods were received against this order (${receipts.map((receipt) => receipt.number).join(', ')}): it is closed, never cancelled. Reverse a wrong receipt first.`
 }
+
+/**
+ * B-W2b-296 (SCM-061): the tolerance each order line is received with, read under the receipt's lock in the caller's
+ * session (office, floor or system: each may read the tolerances): the line's own (a leather line's area tolerance, both
+ * ways, W1's rule beyond it), else the most specific ACTIVE delivery tolerance of the order's company, supplier and the
+ * line's material or kind (factory-domain purchasing/po-depth/tolerances), else none (exactly as ordered). The receipt's
+ * difference, its refusal beyond the tolerance over and the order's state after it (received within the tolerance under)
+ * all read this one answer.
+ */
+export async function receiptTolerancesOf(tx: Pick<CommandTx, 'item' | 'deliveryTolerance'>, order: Pick<OrderForReceipt, 'companyId' | 'partyId'>, lines: readonly { readonly id: string; readonly itemId: string; readonly areaTolerancePct: { toString(): string } | null }[]): Promise<Map<string, ReceiptTolerance>> {
+  const itemIds = [...new Set(lines.map((line) => line.itemId))]
+  const items = itemIds.length === 0 ? [] : await tx.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, kind: true } })
+  const kinds = new Map(items.map((item) => [item.id, item.kind as string]))
+  const rows = await tx.deliveryTolerance.findMany({
+    where: { status: 'ACTIVE', OR: [{ companyId: null }, { companyId: order.companyId }], AND: [{ OR: [{ supplierId: null }, { supplierId: order.partyId }] }] },
+    select: { id: true, companyId: true, supplierId: true, itemId: true, itemKind: true, overPct: true, underPct: true, whenBeyond: true, status: true },
+  })
+  const rules: ToleranceRule[] = rows.map((row) => ({ ...row, itemKind: row.itemKind as string | null, overPct: row.overPct.toString(), underPct: row.underPct.toString() }))
+  return new Map(
+    lines.map((line) => [
+      line.id,
+      receiptToleranceOf(
+        { areaTolerancePct: line.areaTolerancePct === null ? null : line.areaTolerancePct.toString() },
+        toleranceFor(rules, { companyId: order.companyId, supplierId: order.partyId, itemId: line.itemId, itemKind: kinds.get(line.itemId) ?? '' }),
+      ),
+    ]),
+  )
+}
+
+/** A line's tolerance as factory-domain inventory/receipts lineDifference and orderStatusAfter take it. */
+export const differenceTolerance = (tolerance: ReceiptTolerance | undefined, areaTolerancePct: { toString(): string } | null): { tolerancePct: string | null; underPct: string | null } =>
+  tolerance ? { tolerancePct: tolerance.overPct, underPct: tolerance.underPct } : { tolerancePct: areaTolerancePct?.toString() ?? null, underPct: null }

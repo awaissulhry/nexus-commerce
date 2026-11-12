@@ -6,7 +6,7 @@ import { ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller } from '../../../core/command'
 import type { FloorContext } from '../../../core/context'
 import { asTenantSystem } from '../../production/bundles/codes'
-import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/receiving'
+import { differenceTolerance, lockOrderForReceipt, receiptTolerancesOf, setOrderReceiptProgress } from '../../purchasing/receiving'
 import { readOrderLines } from '../receipts/store'
 
 /**
@@ -36,12 +36,14 @@ export async function moveOrderAfterFloorReceipt(
       const order = await lockOrderForReceipt(tools, receipt.purchaseOrderId)
       if (!order) throw new NotFoundError('Purchase order not found.')
       const after = await readOrderLines(tools.tx, order.id)
+      const tolerances = await receiptTolerancesOf(tools.tx, order, after.lines)
       const to = orderStatusAfter(
         { status: order.status, confirmed: order.confirmed },
         after.lines.map((line) => ({
           expected: expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }),
           received: after.received.get(line.id) ?? ZERO,
-          tolerancePct: line.areaTolerancePct?.toString() ?? null,
+          // B-W2b-296 (SCM-061): received within the line's tolerance under (its own, else the delivery tolerance).
+          ...differenceTolerance(tolerances.get(line.id), line.areaTolerancePct),
           // B-W2a-52: a cancelled or closed-short line takes no more goods: it counts as complete.
           ended: line.cancelledAt !== null || line.closedShortAt !== null,
         })),

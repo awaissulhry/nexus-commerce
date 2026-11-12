@@ -1,0 +1,202 @@
+{
+  "ppe": {
+    "title": "Modelli dei testi DPI generati",
+    "note": "Un consulente DPI controlla ogni modello una volta: registra qui il suo sì con il file del consulente.",
+    "failed": "Non è stato possibile leggere i modelli.",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "search": "Cerca modello o etichetta",
+    "filter": {
+      "kind": "Tipo di testo",
+      "allKinds": "Ogni tipo di testo"
+    },
+    "kind": {
+      "DOC": "Dichiarazione di conformità",
+      "USER_INFORMATION": "Nota informativa",
+      "LABEL_WARNING": "Avvertenze di classe in etichetta"
+    },
+    "template": {
+      "DOC": "Dichiarazione di conformità (generata)",
+      "USER_INFORMATION": "Nota informativa (generata)",
+      "generatorDetail": "modello {key} · versione {version}",
+      "labelTitle": "Avvertenze di classe dell'etichetta {code}",
+      "labelDetail": "revisione {revision} · {name}"
+    },
+    "col": {
+      "template": "Modello",
+      "kind": "Tipo di testo",
+      "whose": "Di chi",
+      "languages": "Controllato in",
+      "state": "Sì del consulente",
+      "approvals": "Registrazioni"
+    },
+    "whose": {
+      "generator": "Ogni modello di capo",
+      "company": "Etichetta di un'azienda",
+      "every": "Tutte le aziende",
+      "thisCompany": "Questa azienda ({company})",
+      "thisCompanyWhat": "Il sì copre solo i testi generati di questa azienda.",
+      "everyWhat": "Il sì copre i testi generati di tutte le aziende, anche quelli comuni a tutte.",
+      "otherCompany": "Un'altra azienda"
+    },
+    "state": {
+      "APPROVED": "Sì in vigore",
+      "WITHDRAWN": "Ritirato",
+      "NONE": "Non ancora controllato"
+    },
+    "approvals": {
+      "count_one": "{count} registrazione",
+      "count_other": "{count} registrazioni"
+    },
+    "emptyTitle": "Nessun modello di testi DPI generati",
+    "empty": "La dichiarazione e la nota informativa ci sono sempre; un'etichetta di capo DPI compare quando esiste.",
+    "noneFiltered": "Nessun modello corrisponde a questi filtri.",
+    "keys": {
+      "record": "Registra il sì di un consulente"
+    },
+    "gate": {
+      "title": "I testi generati restano bozze finché un consulente DPI non dice sì (GATE-PPE-TEXTS)",
+      "body": "Una dichiarazione, una nota informativa o un'avvertenza in etichetta generate possono uscire dalla bozza solo nelle lingue e per le aziende coperte da un sì in vigore. Il sì è una tua decisione: registralo solo quando il consulente ha controllato il modello. Ritirarlo ferma subito i nuovi testi; quelli emessi prima restano emessi."
+    },
+    "record": {
+      "open": "Registra il sì di un consulente",
+      "title": "Registra il sì di un consulente DPI",
+      "gateTitle": "Questo apre l'emissione dei testi generati",
+      "gateBody": "Da ora i testi generati di questo modello in queste lingue possono uscire dalla bozza per le aziende che scegli. Chiede un codice nuovo dall'app di autenticazione.",
+      "save": "Registra il sì",
+      "saving": "Registrazione…"
+    },
+    "field": {
+      "template": "Modello",
+      "whose": "Di chi sono i testi generati",
+      "languages": "Lingue controllate dal consulente",
+      "languagesHint": "Codici di lingua, per esempio it, en, de.",
+      "languagesLabel": "L'etichetta stampa {languages}.",
+      "checkedBy": "Chi ha controllato i testi",
+      "checkedByHint": "Nome e studio del consulente, come sul suo file.",
+      "file": "Il file del consulente"
+    },
+    "file": {
+      "choose": "Scegli il file",
+      "change": "Scegli un altro file",
+      "none": "Nessun file scelto",
+      "hint": "Il controllo firmato dal consulente: un PDF o una scansione (JPEG, PNG)."
+    },
+    "window": {
+      "title": "Modello",
+      "notFound": "Questo modello non c'è più.",
+      "approved": "Un sì è in vigore: {languages}",
+      "waiting": "Nessun sì in vigore: i testi generati restano bozze",
+      "what": {
+        "DOC": "Le dichiarazioni di conformità generate indicano questo modello. Una bozza in una lingua coperta può uscire dalla bozza; le altre restano bozze e il PDF firmato resta la dichiarazione in uso.",
+        "USER_INFORMATION": "Le note informative generate indicano questo modello. Una nota in una lingua coperta può uscire dalla bozza; le altre restano bozze e il PDF firmato resta la nota in uso.",
+        "LABEL_WARNING": "Le avvertenze di classe dell'etichetta (EN 17092) si stampano solo nelle lingue coperte da un sì; per le altre i controlli dell'etichetta restano in attesa."
+      },
+      "approvals_one": "{count} registrazione del sì di un consulente",
+      "approvals_other": "{count} registrazioni del sì di un consulente",
+      "none": "Per questo modello non è ancora registrato il sì di un consulente."
+    },
+    "label": {
+      "code": "Etichetta",
+      "revision": "revisione {revision}",
+      "name": "Nome",
+      "languages": "Stampa",
+      "whose": "Di chi è l'etichetta"
+    },
+    "approval": {
+      "live": "In vigore",
+      "withdrawn": "Ritirato",
+      "languages": "Controllato in",
+      "checkedBy": "Controllato da",
+      "recorded": "Registrato",
+      "withdrawnAt": "Ritirato",
+      "reason": "Perché",
+      "file": "Apri {name}"
+    },
+    "withdraw": {
+      "open": "Ritira…",
+      "reason": "Perché viene ritirato",
+      "hint": "I testi generati di questo modello smettono subito di uscire dalla bozza; quelli emessi prima restano emessi.",
+      "save": "Ritira il sì"
+    },
+    "stepUp": {
+      "record": "Registrare il sì di un consulente DPI apre l'emissione dei testi generati: conferma con un codice nuovo.",
+      "confirm": "Conferma"
+    },
+    "notice": {
+      "recorded": "Il sì del consulente è registrato per {languages}.",
+      "withdrawn": "Il sì del consulente è ritirato: i nuovi testi di questo modello restano bozze.",
+      "fileFailed": "Non è stato possibile aprire il file del consulente. Riprova."
+    },
+    "held": {
+      "manage": "Solo il titolare registra o ritira il sì di un consulente DPI (compliance.ppeTexts.manage).",
+      "offline": "Offline: le modifiche aspettano di essere inviate.",
+      "busy": "In corso…",
+      "template": "Scegli il modello.",
+      "company": "Il tuo ruolo non può registrare un sì per questa azienda.",
+      "everyCompany": "Solo un ruolo su tutte le aziende registra un sì per tutte le aziende.",
+      "languages": "Scrivi le lingue controllate dal consulente.",
+      "languageCodes": "Scrivi codici di lingua (it, en, de), al massimo 20.",
+      "checkedBy": "Scrivi chi ha controllato i testi (una riga, al massimo 300 caratteri).",
+      "file": "Scegli il file del consulente.",
+      "reason": "Scrivi perché viene ritirato (almeno 3 caratteri).",
+      "withdrawn": "Questo sì è già ritirato.",
+      "filesRead": "Per aprire i file serve files.read.",
+      "fileState": "Il file non è disponibile."
+    },
+    "problem": {
+      "cancelled": "Non è stato registrato nulla: il codice non è stato dato.",
+      "conflict": "Questo è in conflitto con quanto registrato ora. Rileggi la pagina.",
+      "stale": "Qualcuno lo ha cambiato nel frattempo. Rileggi la pagina.",
+      "failed": "Non ha funzionato. Riprova.",
+      "forbidden": "Il tuo ruolo non può farlo.",
+      "signedOut": "La sessione è terminata. Accedi di nuovo.",
+      "notFound": "Non c'è più.",
+      "invalid": "Controlla quello che hai scritto.",
+      "unavailable": "Nexus non risponde. Riprova.",
+      "field": {
+        "templateKey": "Questo modello non può essere approvato: scegline uno dall'elenco.",
+        "templateVersion": "Questa versione del modello non può essere approvata.",
+        "templateKind": "Scegli il tipo di testo.",
+        "languages": "Controlla le lingue: codici ISO, ognuno una volta.",
+        "checkedBy": "Controlla chi ha controllato i testi.",
+        "fileId": "Il file del consulente non è arrivato: sceglilo di nuovo.",
+        "reason": "Scrivi perché viene ritirato.",
+        "companyId": "Scegli di chi sono i testi coperti dal sì."
+      }
+    },
+    "refusal": {
+      "RECORDED": "Questo sì è già registrato.",
+      "WITHDRAWN": "Questo sì è già stato ritirato.",
+      "DATABASE": "I registri lo hanno rifiutato: rileggi la pagina."
+    },
+    "common": {
+      "close": "Chiudi",
+      "cancel": "Annulla",
+      "choose": "Scegli…",
+      "clearFilters": "Togli i filtri"
+    }
+  },
+  "notSold": {
+    "cell": {
+      "title": "Non venduto in {market}",
+      "notSold": "Questo modello si vende in {markets}: {market} non chiede nulla e non conta mai come mancanza.",
+      "everyMarket": "Questo modello non indica mercati, quindi si controllano tutti i mercati.",
+      "change": "Cambia dove si vende (Panoramica del modello)",
+      "changeHeld": "Dove si vende si cambia nella Panoramica del modello (Prodotti › Modelli)."
+    }
+  },
+  "labCost": {
+    "field": "Prezzo del laboratorio (facoltativo)",
+    "fieldHint": "Quanto ha fatturato il laboratorio per questo risultato. Lo vedono solo i ruoli con il grano dei costi; non arriva mai al reparto né a un portale.",
+    "amount": "Importo",
+    "currency": "Valuta",
+    "result": "Prezzo del laboratorio",
+    "column": "Costo laboratorio",
+    "problem": {
+      "amount": "Scrivi il prezzo come importo, per esempio 85,50.",
+      "tooLarge": "Al massimo 1.000.000 per un risultato.",
+      "currency": "Scegli la valuta."
+    }
+  }
+}

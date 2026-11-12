@@ -15,6 +15,8 @@ import { factsOf, type Reader, type TemplateRow } from '../labels/store'
 import { rowFacts } from '../operators/operators'
 import { approvedTexts } from '../phrases/store'
 import { readMatchFacts } from '../public-doc/facts'
+// B-W2b-288 (FU2:01): the label class warnings read the PPE consultant's yes per label template (office only).
+import { labelLanguagesApproved } from '../ppe-texts/store'
 
 /**
  * The facts of a label's marking checks (B-W2b-253), read with the caller's client one query after another: the template
@@ -187,6 +189,9 @@ export async function readRuleFacts(db: Reader, question: FactsQuestion): Promis
     texts: byKey,
     qr: { qr, origin, live },
     ppeTextsApproved: false,
+    // B-W2b-288 (FU2:01): the languages a PPE consultant's yes covers for this label's code and revision (Compliance › Rules &
+    // markets › Templates); the floor has no grant on the approvals: null there (the warnings wait, as before).
+    ppeTextLanguages: question.office ? await labelLanguagesApproved(db, { code: question.template.code, revision: question.template.revision, companyId: question.template.companyId }) : null,
   }
 }
 

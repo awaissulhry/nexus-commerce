@@ -8,6 +8,8 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  */
 export const officeArea: OfficeAreaNav = {
   order: 5,
+  // B-W2b-332: a person who asks to buy (purchasing.requests.ask) opens Requests to buy too, and sees their own requests there.
+  alsoOpens: { 'purchasing-requests': ['purchasing.requests.ask'] },
   area: {
     id: 'purchasing',
     label: 'shell:nav.purchasing.area',

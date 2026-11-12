@@ -26,10 +26,13 @@ import {
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { defaultPlaceOf, finishedItemFor, finishedPlaces, readSkus, skuKey, standardCostFor, type SkuRow } from '../../inventory/finished/post'
+import { decisionFees } from '../returns-depth/fees'
 import { officeReturn } from './access'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockReturn, recordOf, touchReturn } from './rma'
 import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLines, soldFactsOf, type LineRow, type Reader, type ReturnView, type RmaRow, type SoldFacts } from './store'
+// B-W2b-289 (SCM-179): the site's default quality place for finished garments when none is named.
+import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
 /**
  * The decision (B-W2a-43; SAL-341 "Disposition decides the outcome"; design rma.inspection "Each line inspected and
@@ -90,6 +93,9 @@ interface PlannedDecision {
   readonly place: { readonly id: string; readonly code: string } | null
   readonly sku: SkuRow | null
   readonly problems: Issue[]
+  /** B-W2b-341 (SAL-343): the fee withheld from the credit (creditAmount is after it) and its rule; null: none. */
+  readonly feeRuleId: string | null
+  readonly feeAmount: number | null
 }
 
 const gradedOf = (line: LineRow, sold: SoldFacts | undefined) =>
@@ -115,7 +121,8 @@ async function placeFor(db: Reader, siteId: string, outcome: GoodsOutcome, toLoc
   }
   if (outcome === 'QUARANTINE') {
     const places = await db.location.findMany({ where: { siteId, kind: 'QUARANTINE', status: 'ACTIVE' }, select: { id: true, code: true } })
-    const place = toLocationId ? places.find((entry) => entry.id === toLocationId) : places.length === 1 ? places[0] : undefined
+    const preset = toLocationId ? null : await defaultPlaceFor(db, { siteId, purpose: 'QUALITY', itemKinds: ['FINISHED'] })
+    const place = toLocationId ? places.find((entry) => entry.id === toLocationId) : (places.find((entry) => entry.id === preset?.id) ?? (places.length === 1 ? places[0] : undefined))
     if (!place) return { place: null, problems: [{ path: `${at}/toLocationId`, message: places.length === 0 ? 'The site has no quarantine place: add one in the warehouse, or decide another outcome.' : 'Pick a quarantine place of the site.' }] }
     return { place, problems: [] }
   }
@@ -124,7 +131,7 @@ async function placeFor(db: Reader, siteId: string, outcome: GoodsOutcome, toLoc
   return { place: { id: place.id, code: place.code }, problems: [] }
 }
 
-async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId'>, body: Pick<DecisionsBody, 'lines'>): Promise<PlannedDecision[]> {
+async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId' | 'companyId' | 'policyId'>, body: Pick<DecisionsBody, 'lines'>): Promise<PlannedDecision[]> {
   const lines = await readLines(db, rma.id)
   const byId = new Map(lines.map((line) => [line.id, line]))
   const sold = await soldFactsOf(db, lines)
@@ -157,9 +164,14 @@ async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId'>, bod
         if (!sku) problems.push({ path: `${at}/goodsOutcome`, message: `${facts?.style?.code ?? 'The style'} ${facts?.colourway?.code ?? ''} size ${line.size} has no SKU: generate the style's SKU matrix first.` })
       }
     }
-    planned.push({ index, line, sold: facts, disposition, goodsOutcome, creditAmount, value, place, sku, problems })
+    planned.push({ index, line, sold: facts, disposition, goodsOutcome, creditAmount, value, place, sku, problems, feeRuleId: null, feeAmount: null })
   }
-  return planned
+  // B-W2b-341 (SAL-343): on a return checked against a policy, the fee rules withhold their fee from each credit.
+  const fees = await decisionFees(db, rma, planned.map((entry) => ({ lineId: entry.line.id, reasonCode: entry.line.reasonCode, cause: entry.line.cause as ReturnCause | null, credit: entry.creditAmount, currency: currencyOf(entry.sold) })))
+  return planned.map((entry) => {
+    const fee = fees.get(entry.line.id)
+    return fee ? { ...entry, creditAmount: fee.creditAfter, feeRuleId: fee.ruleId, feeAmount: fee.amount } : entry
+  })
 }
 
 const amountText = (amount: number | null, currency: string | null): string | null => (amount !== null && currency ? `${fromMinorUnits(amount, currency).toFixed(2)} ${currency}` : null)
@@ -263,7 +275,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     for (const entry of planned) {
       await tx.returnLine.update({
         where: { id: entry.line.id },
-        data: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, decidedAt: now, decidedById: actorId, creditAmount: entry.creditAmount, updatedAt: now, version: { increment: 1 } },
+        data: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, decidedAt: now, decidedById: actorId, creditAmount: entry.creditAmount, ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: entry.feeAmount } : {}), updatedAt: now, version: { increment: 1 } },
         select: { id: true },
       })
       tools.audit({
@@ -273,7 +285,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
         companyId: rma.companyId,
         siteId: rma.siteId,
         before: { disposition: null },
-        after: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, creditAmount: markMoney('price', entry.creditAmount), placeId: entry.place?.id ?? null, moveIds: moves.filter((move) => move.lineId === entry.line.id).map((move) => move.moveId) },
+        after: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, creditAmount: markMoney('price', entry.creditAmount), ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: markMoney('price', entry.feeAmount) } : {}), placeId: entry.place?.id ?? null, moveIds: moves.filter((move) => move.lineId === entry.line.id).map((move) => move.moveId) },
       })
     }
     const after = await tx.returnLine.findMany({ where: { returnId: rma.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })
