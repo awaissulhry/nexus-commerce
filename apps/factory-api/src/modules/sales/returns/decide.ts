@@ -27,6 +27,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { defaultPlaceOf, finishedItemFor, finishedPlaces, readSkus, skuKey, standardCostFor, type SkuRow } from '../../inventory/finished/post'
 import { decisionFees } from '../returns-depth/fees'
+import { exchangeProblemsFor } from '../returns-outcomes/exchange'
 import { officeReturn } from './access'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockReturn, recordOf, touchReturn } from './rma'
@@ -73,6 +74,8 @@ export interface DecisionLine {
   readonly creditAmount?: number | null | undefined
   /** Where stock goes: a finished-goods place (RESTOCK), a place of the site (SECOND_QUALITY), a quarantine place. */
   readonly toLocationId?: string | null | undefined
+  /** B-W2b-346 (SAL-351): SIZE_EXCHANGE: the size the customer gets instead. */
+  readonly exchangeSize?: string | null | undefined
 }
 
 export interface DecisionsBody {
@@ -96,6 +99,8 @@ interface PlannedDecision {
   /** B-W2b-341 (SAL-343): the fee withheld from the credit (creditAmount is after it) and its rule; null: none. */
   readonly feeRuleId: string | null
   readonly feeAmount: number | null
+  /** B-W2b-346 (SAL-351): the size a SIZE_EXCHANGE gives instead; null for every other disposition. */
+  readonly exchangeSize: string | null
 }
 
 const gradedOf = (line: LineRow, sold: SoldFacts | undefined) =>
@@ -164,7 +169,10 @@ async function planDecisions(db: Reader, rma: Pick<RmaRow, 'id' | 'siteId' | 'co
         if (!sku) problems.push({ path: `${at}/goodsOutcome`, message: `${facts?.style?.code ?? 'The style'} ${facts?.colourway?.code ?? ''} size ${line.size} has no SKU: generate the style's SKU matrix first.` })
       }
     }
-    planned.push({ index, line, sold: facts, disposition, goodsOutcome, creditAmount, value, place, sku, problems, feeRuleId: null, feeAmount: null })
+    // B-W2b-346 (SAL-351): a size exchange names another size of the style; no other disposition names one.
+    const exchange = await exchangeProblemsFor(db, line, facts, disposition, entry.exchangeSize, at)
+    problems.push(...exchange.problems)
+    planned.push({ index, line, sold: facts, disposition, goodsOutcome, creditAmount, value, place, sku, problems, feeRuleId: null, feeAmount: null, exchangeSize: exchange.size })
   }
   // B-W2b-341 (SAL-343): on a return checked against a policy, the fee rules withhold their fee from each credit.
   const fees = await decisionFees(db, rma, planned.map((entry) => ({ lineId: entry.line.id, reasonCode: entry.line.reasonCode, cause: entry.line.cause as ReturnCause | null, credit: entry.creditAmount, currency: currencyOf(entry.sold) })))
@@ -275,7 +283,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     for (const entry of planned) {
       await tx.returnLine.update({
         where: { id: entry.line.id },
-        data: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, decidedAt: now, decidedById: actorId, creditAmount: entry.creditAmount, ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: entry.feeAmount } : {}), updatedAt: now, version: { increment: 1 } },
+        data: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, decidedAt: now, decidedById: actorId, creditAmount: entry.creditAmount, ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: entry.feeAmount } : {}), ...(entry.exchangeSize ? { exchangeSize: entry.exchangeSize } : {}), updatedAt: now, version: { increment: 1 } },
         select: { id: true },
       })
       tools.audit({
@@ -285,7 +293,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
         companyId: rma.companyId,
         siteId: rma.siteId,
         before: { disposition: null },
-        after: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, creditAmount: markMoney('price', entry.creditAmount), ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: markMoney('price', entry.feeAmount) } : {}), placeId: entry.place?.id ?? null, moveIds: moves.filter((move) => move.lineId === entry.line.id).map((move) => move.moveId) },
+        after: { disposition: entry.disposition, goodsOutcome: entry.goodsOutcome, creditAmount: markMoney('price', entry.creditAmount), ...(entry.feeRuleId ? { feeRuleId: entry.feeRuleId, feeAmount: markMoney('price', entry.feeAmount) } : {}), ...(entry.exchangeSize ? { exchangeSize: entry.exchangeSize } : {}), placeId: entry.place?.id ?? null, moveIds: moves.filter((move) => move.lineId === entry.line.id).map((move) => move.moveId) },
       })
     }
     const after = await tx.returnLine.findMany({ where: { returnId: rma.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })

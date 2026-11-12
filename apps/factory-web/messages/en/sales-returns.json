@@ -202,7 +202,8 @@
     "REPAIR": "Repair",
     "REPLACE": "Replace",
     "RETURN_UNCHANGED": "Return unchanged",
-    "SCRAP": "Scrap"
+    "SCRAP": "Scrap",
+    "SIZE_EXCHANGE": "Size exchange"
   },
   "done": {
     "cancelled": "{number} is cancelled.",

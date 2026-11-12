@@ -14,6 +14,8 @@ import { companyLegalOf } from '../../platform/documents/documents'
 import { confirmLinksOf } from './confirm-links'
 // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/store.ts).
 import { depthChecks, readDepthFacts, type DepthFacts } from './po-depth/store'
+// B-W2b-328: the lines by kind: rolls, a protector's certificate, a variant (line-kinds/store.ts).
+import { kindChecks, readKindFacts, type LineKindFacts } from './line-kinds/store'
 // B-W2b-347: a sample order's development project (sample-orders/store.ts): its PDF and the record say it.
 import { readSampleFacts, sampleViewOf, type SampleFacts } from './sample-orders/store'
 import {
@@ -60,6 +62,8 @@ export interface OrderFacts {
   readonly today?: string | undefined
   /** B-W2b-296: the lines' delivery schedules, the rate at order with the company's currency, and the ship-to. */
   readonly depth?: DepthFacts | undefined
+  /** B-W2b-328: each line's rolls, certificate and variant, with the register's coverages and the materials' variants. */
+  readonly kinds?: LineKindFacts | undefined
   /** B-W2b-347: a sample order's style and sample round (null for a production order). */
   readonly sample?: SampleFacts | null | undefined
 }
@@ -112,8 +116,9 @@ export async function readFacts(db: Reader, order: OrderRow, today?: string): Pr
     supplierCalendar = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(today, Math.min(longest, 400), 'forward'))).get(party.id)?.calendar ?? null
   }
   const depth = await readDepthFacts(db, order, lines)
+  const kinds = await readKindFacts(db, order, lines)
   const sample = await readSampleFacts(db, order.id)
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, sample }
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, kinds, sample }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -159,7 +164,9 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
   })
   // B-W2b-296: the schedules of the lines sent, the rate at order, the ship-to.
   const depth = facts.depth ? depthChecks(facts.depth, facts.lines.filter((line) => !isCancelledLine(line)), facts.items, today) : []
-  const checks = [...w1.checks, ...depth]
+  // B-W2b-328: the rolls, the protectors' certificates and the variants of the lines sent.
+  const kinds = facts.kinds ? kindChecks(facts.kinds, facts.lines.filter((line) => !isCancelledLine(line)), party.id, today) : []
+  const checks = [...w1.checks, ...depth, ...kinds]
   return { ready: !checks.some((check) => check.severity === 'BLOCKS'), checks }
 }
 

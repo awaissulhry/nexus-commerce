@@ -1,0 +1,184 @@
+{
+  "common": {
+    "loading": "Reading…",
+    "retry": "Try again"
+  },
+  "noAccess": {
+    "title": "Warehouse reports are not in your role",
+    "body": "Ask the administrator for the warehouse reports."
+  },
+  "notInRole": {
+    "title": "Not in your role",
+    "stock": "The stock of this company's sites is not in your role, so no figure is shown."
+  },
+  "problem": {
+    "read": "The report could not be read. Try again in a moment.",
+    "forbidden": "This report is not in your role.",
+    "offline": "No answer from the server: you may be offline.",
+    "gone": "This site or company is not there any more."
+  },
+  "band": {
+    "label": "Report actions",
+    "reading": "Reading…",
+    "arrange": "Arrange",
+    "print": "Print",
+    "more": "More actions",
+    "monday": "Email me this every Monday",
+    "mondayHeld": "Scheduled e-mails of a report come later: print it or save the PDF meanwhile.",
+    "csv": {
+      "ageing": "Export stock ageing (CSV)",
+      "leather": "Export leather use (CSV)"
+    },
+    "csvHeld": "Waits until the panel is read.",
+    "keys": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: figures may be old"
+  },
+  "scope": {
+    "label": "What the report covers",
+    "quick": {
+      "thisMonth": "This month so far",
+      "lastMonth": "Last month"
+    },
+    "asAt": "Stock aged as at {day}"
+  },
+  "section": {
+    "ageing": "Stock ageing",
+    "leather": "Leather use"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "arrange": "Arrange panels",
+    "print": "Print view (new tab)",
+    "help": "This list"
+  },
+  "csv": {
+    "shareOf": "{bucket} share",
+    "valueOf": "{bucket} value"
+  },
+  "type": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Textile",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trims",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protectors",
+    "LABEL": "Labels",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Components",
+    "FINISHED": "Finished garments"
+  },
+  "bucket": {
+    "d0to90": "0–90 days",
+    "d91to180": "91–180 days",
+    "d181to365": "181–365 days",
+    "overYear": "Over a year"
+  },
+  "col": {
+    "type": "Material type",
+    "article": "Article",
+    "whole": "On hand",
+    "value": "Value",
+    "averageDays": "Average age (days)",
+    "oldestDays": "Oldest"
+  },
+  "ageing": {
+    "hint": "How old the stock is on {day}, by material type.",
+    "hintLoading": "How old the stock is, by material type.",
+    "series": "Show",
+    "seriesOf": {
+      "share": "Share of quantity",
+      "value": "Value"
+    },
+    "failed": "The stock ageing could not be read",
+    "empty": "Nothing in stock on {day}",
+    "emptyHint": "No stock lies at the sites of this report.",
+    "chartLabel": "Stock by age bucket per material type",
+    "axisShare": "Share of the quantity (%)",
+    "axisValue": "Value",
+    "axisDays": "Average age (days)",
+    "averageDays": "Average age (days)",
+    "captionShare": "Each bar is one material type's quantity split by age; the line is its average age.",
+    "captionValue": "Each bar is one material type's value ({currency}) split by age; the line is its average age.",
+    "leftOut": "Not drawn (more than one unit, see the table): {types}.",
+    "noChart": "No material type is in one unit: the table says the quantities.",
+    "tableLabel": "Stock ageing by material type",
+    "mixedCurrencies": "Several currencies",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "definition": "A lot is as old as its receipt (opening stock: its first move into stock); an article without lots is aged first in, first out. Quantities are added per unit, never across units.",
+    "customerOwned_one": "{count} stock line is a customer's own material: counted, never valued.",
+    "customerOwned_other": "{count} stock lines are customers' own material: counted, never valued.",
+    "unvalued_one": "{count} part has no value yet.",
+    "unvalued_other": "{count} parts have no value yet.",
+    "allValue": "All the stock together: {value}.",
+    "noCost": "Values need the cost grain.",
+    "articlesOf": "Articles of {type}",
+    "pickType": "Material type",
+    "moves": "Moves",
+    "more_one": "{count} more article is not listed.",
+    "more_other": "{count} more articles are not listed.",
+    "drill": "An article opens Stock searched by its code, Moves its movements. Stock takes no age or type filter yet."
+  },
+  "leather": {
+    "hint": "Area received, cut, back as remnant, scrapped and on hand from {from} to {to}, by article and supplier lot.",
+    "measure": "Bars show",
+    "col": {
+      "article": "Article · supplier lot",
+      "lot": "Supplier lot",
+      "unit": "Unit",
+      "start": "On hand at the start",
+      "received": "Received",
+      "cut": "Cut",
+      "remnant": "Back as remnant",
+      "scrapped": "Scrapped",
+      "other": "Other",
+      "end": "On hand",
+      "hidesReceived": "Hides received",
+      "hidesOnHand": "Hides on hand",
+      "valueReceived": "Value received",
+      "valueCut": "Value cut",
+      "valueScrapped": "Value scrapped",
+      "valueEnd": "Value on hand"
+    },
+    "failed": "The leather use could not be read",
+    "empty": "No leather moved or lay in stock in the period",
+    "emptyHint": "Pick another period or site.",
+    "barSub": "Supplier lots: {lots} · hides on hand: {hides}",
+    "noLot": "No lot",
+    "children_one": "{count} child lot counted with it",
+    "children_other": "{count} child lots counted with it",
+    "dyeBatch": "Dye batch {batch}",
+    "barsLabel": "{measure} per article",
+    "barsHint": "{measure} per article, in m². A bar opens the article's hides.",
+    "notAdding": "A lot does not add up: start + received − cut − scrapped + other is not what is on hand. Check its moves.",
+    "tableLabel": "Leather use by article and supplier lot",
+    "all": "All leather",
+    "definition": "Cut is what went to work orders less what came back whole or as a remnant. Other is opening stock, adjustments, counts, transfers between sites and returns to the supplier. A split lot's child lots count with their parent. Start + received − cut − scrapped + other = on hand.",
+    "more_one": "{count} more supplier lot is not listed.",
+    "more_other": "{count} more supplier lots are not listed.",
+    "unvalued_one": "{count} move of the period has no value yet.",
+    "unvalued_other": "{count} moves of the period have no value yet.",
+    "noCost": "Values need the cost grain.",
+    "severalUnits": "The articles are in more than one unit: no total area is said.",
+    "drill": "An article or a lot opens its hides."
+  },
+  "print": {
+    "title": "Warehouse reports",
+    "period": "Period",
+    "asAt": "Stock aged as at",
+    "site": "Site",
+    "allSites": "All sites",
+    "held": "Still reading the report",
+    "back": "Back to the report",
+    "failed": "The report could not be read",
+    "ageingTitle": "Stock ageing on {day}",
+    "leatherTitle": "Leather use from {from} to {to}"
+  }
+}

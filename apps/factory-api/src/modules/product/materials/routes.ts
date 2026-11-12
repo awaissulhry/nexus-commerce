@@ -14,6 +14,8 @@ import {
 } from './contract'
 import { manifest } from './manifest'
 import { createMaterial, getMaterial, listMaterials, moveMaterial, setStandardCost, updateMaterial } from './materials'
+// B-W2b-328 (SCM-186): colour and size variants of one material.
+import { addVariants, addVariantsContract, bomSizes, bomSizesContract, listVariants, listVariantsContract, updateVariant, updateVariantContract } from './variants'
 
 /**
  * The material library (product module, B-W1-09; A2 SCR-047 "Materials & trims", SCR-048 "Material record"): leather,
@@ -53,4 +55,14 @@ export default defineRoutes('product.materials', manifest, async (app) => {
   app.patch('/product/materials/:materialId/colours/:colourId', { schema: updateColourContract }, async (request) => ({
     material: await updateColour(request, request.params.materialId, request.params.colourId, request.body, idempotencyKeyFrom(request)),
   }))
+
+  // B-W2b-328 (SCM-186): the material's colour and size variants (./variants.ts): a purchase order line, a lot and a BOM size
+  // line name one.
+  app.get('/product/materials/:materialId/variants', { schema: listVariantsContract }, async (request) => listVariants(request, request.params.materialId, request.query))
+
+  app.post('/product/materials/:materialId/variants', { schema: addVariantsContract }, async (request, reply) => reply.code(201).send(await addVariants(request, request.params.materialId, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/product/materials/:materialId/variants/:variantId', { schema: updateVariantContract }, async (request) => updateVariant(request, request.params.materialId, request.params.variantId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/product/materials/:materialId/variants/bom-sizes', { schema: bomSizesContract }, async (request) => bomSizes(request, request.params.materialId))
 })

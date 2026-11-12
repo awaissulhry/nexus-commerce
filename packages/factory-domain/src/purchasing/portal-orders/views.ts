@@ -42,6 +42,8 @@ export function supplierStateOf(status: PurchaseOrderStatus | string): SupplierS
     case 'DECLINED':
       return 'DECLINED'
     case 'DRAFT':
+    // B-W2b-305: waiting for its yes is still being changed (a revision 1 waiting is never shown: it was never sent).
+    case 'PENDING_APPROVAL':
       return 'BEING_CHANGED'
     case 'PARTLY_RECEIVED':
       return 'PARTLY_DELIVERED'
@@ -93,6 +95,7 @@ export function portalAnswerProblem(status: PurchaseOrderStatus | string): strin
     case 'DECLINED':
       return 'You declined this order: the buyer changes it or cancels it.'
     case 'DRAFT':
+    case 'PENDING_APPROVAL':
       return 'We are changing this order: its new version comes to you to confirm.'
     case 'PARTLY_RECEIVED':
     case 'RECEIVED':
