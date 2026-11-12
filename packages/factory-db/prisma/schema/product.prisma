@@ -232,6 +232,8 @@ model Item {
   supplierItems        SupplierItem[]
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
+  // W2b-5 service.prisma (wave 43/44): the repair estimate lines that use it as a part.
+  repairEstimateLines  RepairEstimateLine[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from BOM lines and the item's colours.
@@ -560,6 +562,10 @@ model Style {
   priceListEntries    PriceListEntry[]
   repairOrders        RepairOrder[]
   complaints          Complaint[]
+  // W2b-5 service.prisma (wave 43/44): the service cases, product-safety reports and accident log entries about it.
+  serviceCases        ServiceCase[]         @relation("ServiceCaseStyle")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportStyle")
+  accidentLogEntries  AccidentLogEntry[]    @relation("AccidentLogEntryStyle")
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
   // W2b-4 changes.prisma and samples.prisma (wave 29/33): its change requests and orders, sample rounds and swatches.
@@ -660,6 +666,9 @@ model Colourway {
   /// @not-money the relation to its price list entries
   priceListEntries PriceListEntry[]
   repairOrders     RepairOrder[]
+  // W2b-5 service.prisma (wave 43/44): the service cases and product-safety reports about it.
+  serviceCases         ServiceCase[]         @relation("ServiceCaseColourway")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportColourway")
 
   @@unique([tenantId, styleId, code])
   // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.

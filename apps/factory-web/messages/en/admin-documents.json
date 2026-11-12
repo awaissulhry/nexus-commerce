@@ -283,6 +283,8 @@
       "EVIDENCE_PACK": "Evidence pack",
       "RECALL": "Recall or withdrawal",
       "AUTHORITY_REQUEST": "Authority request",
+      "SERVICE_CASE": "Service case",
+      "SAFETY_REPORT": "Product-safety report",
       "PAYROLL_EXPORT": "Payroll export",
       "PORTAL_REQUEST": "Portal order request"
     },

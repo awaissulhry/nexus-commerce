@@ -130,6 +130,11 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // (B-W2b-260): without them, a recall cannot be set up nor a request logged. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:RECALL:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'RECALL', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'RCL-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:AUTHORITY_REQUEST:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'AUTHORITY_REQUEST', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'AR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-5 wave 43/44: service cases and product-safety reports are numbered from these when they are made (B-W2b-345,
+      // B-W2b-351): without them, a case cannot be opened nor a report taken. SVC, not SC (subcontract orders' prefix). Eight
+      // f's as above.
+      { id: `ffffffff${id(`series:${company}:SERVICE_CASE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SERVICE_CASE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SVC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:SAFETY_REPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SAFETY_REPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PSR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

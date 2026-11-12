@@ -283,6 +283,8 @@
       "EVIDENCE_PACK": "Pacchetto di evidenze",
       "RECALL": "Richiamo o ritiro",
       "AUTHORITY_REQUEST": "Richiesta dell'autorità",
+      "SERVICE_CASE": "Caso di assistenza",
+      "SAFETY_REPORT": "Segnalazione di sicurezza del prodotto",
       "PAYROLL_EXPORT": "Esportazione paghe",
       "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },

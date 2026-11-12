@@ -281,6 +281,9 @@ enum FileCategory {
   QUESTIONNAIRE
   PROOF
   SAMPLE_PHOTO
+  /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-385): a photo of a garment's damage at a repair's intake (a repair order's
+  /// file; the claim link and the portal ask at least two).
+  DAMAGE_PHOTO
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it
