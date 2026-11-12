@@ -107,10 +107,6 @@
     "allDone": {
       "title": "Tutto il previsto qui è fatto",
       "body": "Scansiona un fascio per lavorarlo."
-    },
-    "warehouse": {
-      "title": "Qui non c'è ancora l'elenco dei compiti di magazzino",
-      "body": "Arriva con il prelievo e la messa a stock. Lavora dai riquadri della Home. Se questo tablet appartiene a una postazione, lo colloca l'ufficio (Sistema › Dispositivi e stampanti)."
     }
   },
   "noPermission": {

@@ -77,7 +77,7 @@
     "count_one": "{count} cliente",
     "count_other": "{count} clienti",
     "more": "Mostra altri",
-    "creditLater": "I fidi (limite, usato, disponibile, ordini bloccati) arrivano con una versione successiva."
+    "creditLater": "Fido utilizzato: la parte del fido del cliente con la società occupata dai suoi ordini aperti e dalle fatture non pagate. I fidi sono sotto, in Fidi."
   },
   "filter": {
     "clear": "Togli il filtro {name}",
@@ -106,7 +106,8 @@
     "credit": "Avere",
     "balance": "Saldo",
     "issued": "Emessa",
-    "openNow": "Aperto ora"
+    "openNow": "Aperto ora",
+    "creditUsed": "Fido utilizzato"
   },
   "row": {
     "noDue": "Nessuna scadenza",
@@ -120,7 +121,8 @@
     "remindersWaiting_other": "{count} in attesa",
     "lastReminder": "Ultimo il {date}",
     "invoices_one": "{count} fattura aperta",
-    "invoices_other": "{count} fatture aperte"
+    "invoices_other": "{count} fatture aperte",
+    "noCreditLimit": "Nessun fido"
   },
   "bulk": {
     "print_one": "Stampa {count} estratto conto",

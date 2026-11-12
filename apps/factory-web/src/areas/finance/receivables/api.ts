@@ -83,7 +83,8 @@ export const ageingRowSchema = z.object({
   remindersSent: z.number(),
   lastReminderAt: z.string().nullable(),
   remindersWaiting: z.number(),
-  creditLimitUsed: z.null(),
+  // B-W2b-304: the share of the credit limit used (whole percent), null without a limit or the price grain.
+  creditLimitUsed: z.number().int().nullable(),
 })
 export type AgeingRow = z.infer<typeof ageingRowSchema>
 

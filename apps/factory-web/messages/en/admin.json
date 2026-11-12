@@ -2107,11 +2107,15 @@
     "sales_samples_measure": "Measure a sample round's fit against the measurement spec and keep its fit comments",
     "sales_inquiries_view": "See inquiries and requests for quotation: who asks, what is asked by size, the mail they came from, their files and the brand tech pack in force, and the quote each became (the target price only with prices)",
     "sales_inquiries_manage": "Type inquiries and make them from received mail, change what is asked, match a prospect to a customer, assign them, ask the customer for more information, decline them with the reason or mark them lost, and make their quote",
+    "sales_credit_view": "See a customer's credit with a company: the limit, what is used, what is still available, the overdue part, the orders held for credit, and the credit checks of quotes, orders, work orders and shipments (the amounts only with prices)",
+    "sales_credit_limits": "Set, change or clear a customer's credit limit with a company; the orders held for credit are checked again at once",
+    "sales_credit_checks": "Check a record held for credit again, and ask for a yes to let it through (someone else approves it, never you)",
     "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
     "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement",
     "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests",
-    "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them"
+    "inventory_tasks_manage": "Make the warehouse's floor tasks by hand (receive, put away, pick, move, count), hand them to a floor role or one worker, change and cancel them",
+    "inventory_counts_scan": "Count a running stock count by scanning every unit (a hide's area, a roll's length, pieces typed), see a bin's differences after Bin done, finish the bin and recount a line someone else counted"
   }
 }

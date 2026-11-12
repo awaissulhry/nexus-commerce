@@ -8,6 +8,8 @@ import { payablesSettingsFor } from './settings'
 import { actorIdOf, invoiceInCommand, lockOrders, readLines, readMatches, RECORD, type InvoiceRow, type LineRow, type Reader } from './store'
 // B-W2b-111 (QHS-036): goods back from a workshop waiting for their incoming inspection are not matched good yet.
 import { heldGoodByOperation } from '../purchasing/subcontracting/held'
+// B-W2b-299 (SCM-293): the receiver's separation rule of the warehouse rules.
+import { receiverProblem, separationInForce } from '@nexus/factory-domain/inventory/counts-depth/separation'
 
 /**
  * The three-way match in the database (B-W2a-62; FIN-137; the rule: factory-domain payables/match). Inside the caller's
@@ -259,3 +261,33 @@ export async function invoicesBilling(db: Reader, refs: { readonly purchaseOrder
 }
 
 export { MATCH_SETTINGS }
+
+// ---- B-W2b-299 (SCM-293): the receiver never approves their invoice's match ---------------------------------------------------
+
+/**
+ * Separation of duties, the receiver's rule (InventorySettings.receiverNotMatcher: the company's row, else the tenant-wide row,
+ * else ON; switched in the warehouse rules, modules/inventory/counts-depth/separation.ts): who received the goods an invoice
+ * bills (posted or made a POSTED receipt of its order lines, or received the work back from the workshop for its subcontract
+ * orders; a floor worker as the office user they are) never approves that invoice nor accepts a difference of its match. No
+ * database rule: payables' approve and accept read it here (approval.ts, views.ts, one line each).
+ */
+export async function receiverRefusals(db: Reader, invoice: Pick<InvoiceRow, 'id' | 'companyId' | 'number'>, personId: string, acting: 'APPROVE' | 'ACCEPT'): Promise<{ code: string; message: string }[]> {
+  const rows = await db.inventorySettings.findMany({ where: { OR: [{ companyId: invoice.companyId }, { companyId: null }] }, select: { companyId: true, counterNotApprover: true, receiverNotMatcher: true, separationOffReason: true } })
+  const switches = separationInForce(rows.find((row) => row.companyId === invoice.companyId) ?? null, rows.find((row) => row.companyId === null) ?? null)
+  if (!switches.RECEIVER_NOT_MATCHER.on) return []
+  const matches = await db.supplierInvoiceMatch.findMany({ where: { invoiceId: invoice.id }, select: { goodsReceiptLineId: true, purchaseOrderLineId: true, subcontractOrderId: true } })
+  const receiptLineIds = matches.flatMap((match) => (match.goodsReceiptLineId ? [match.goodsReceiptLineId] : []))
+  const orderLineIds = matches.flatMap((match) => (match.purchaseOrderLineId && !match.goodsReceiptLineId ? [match.purchaseOrderLineId] : []))
+  const subcontractIds = matches.flatMap((match) => (match.subcontractOrderId ? [match.subcontractOrderId] : []))
+  const receipts = receiptLineIds.length + orderLineIds.length === 0 ? [] : await db.goodsReceipt.findMany({
+    where: { status: 'POSTED', lines: { some: { OR: [...(receiptLineIds.length > 0 ? [{ id: { in: receiptLineIds } }] : []), ...(orderLineIds.length > 0 ? [{ purchaseOrderLineId: { in: orderLineIds } }] : [])] } } },
+    select: { postedById: true, createdById: true },
+  })
+  const backs = subcontractIds.length === 0 ? [] : await db.subcontractReceipt.findMany({ where: { subcontractOrderId: { in: subcontractIds } }, select: { createdById: true } })
+  const ids = [...new Set([...receipts.flatMap((row) => [row.postedById, row.createdById]), ...backs.map((row) => row.createdById)].filter((id): id is string => id !== null))]
+  if (ids.length === 0) return []
+  const workers = await db.worker.findMany({ where: { id: { in: ids } }, select: { id: true, userId: true } })
+  const receiverIds = [...ids, ...workers.flatMap((worker) => (worker.userId ? [worker.userId] : []))]
+  const refusal = receiverProblem({ switchOn: true, personId, receiverIds, number: invoice.number, acting })
+  return refusal ? [refusal] : []
+}
