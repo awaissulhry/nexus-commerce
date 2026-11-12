@@ -6,6 +6,8 @@ import { DomainError, type ErrorCode, type Issue } from '@nexus/factory-domain/c
 import { databaseLockWords, LOCKED_ISSUE } from '@nexus/factory-domain/product/versions/lock'
 // B-W2b-277 (W2b-5 schema wave 36/44): a move that reached the database's warehouse rules is a 409 in words.
 import { databaseWarehouseRefusal } from '@nexus/factory-domain/inventory/warehouse/refusals'
+// B-W2b-279 (W2b-5 schema wave 37/44): a contact or party write that reached the database's party rules is a 409 in words.
+import { databasePartyRefusal } from '@nexus/factory-domain/parties/refusals'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -160,6 +162,20 @@ function warehouseRefusal(error: unknown): MappedError | null {
   return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
 }
 
+/**
+ * B-W2b-279 (W2b-5 schema wave 37/44): the database's own refusal of a contact or party write by the party rules
+ * (…_sales_intake_w2b_guards: check_violation 'parties: contact … was erased', 'parties: party … rides for a team, so it is a
+ * person', 'parties: party … has riders, so it stays an organisation'), when a write reached it without its command's check
+ * (W1's contact and party routes, the importer, a supplier's profile change): a 409 in words (factory-domain
+ * parties/refusals), never a 500.
+ */
+function partyRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const words = databasePartyRefusal(cause.originalMessage)
+  return words ? { status: STATUS_OF.conflict, code: 'conflict', message: words.message, issues: [{ path: words.path, message: words.message }], unexpected: false } : null
+}
+
 /** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
 export function mapError(error: unknown): MappedError {
   if (error instanceof DomainError) {
@@ -171,6 +187,8 @@ export function mapError(error: unknown): MappedError {
   }
   const closedMonth = hardPeriodLockRefusal(error)
   if (closedMonth) return closedMonth
+  const party = partyRefusal(error)
+  if (party) return party
   const lockedRevision = lockedRevisionRefusal(error)
   if (lockedRevision) return lockedRevision
   const warehouse = warehouseRefusal(error)
