@@ -9,6 +9,8 @@
 
 import type { FileDepthModel } from './files/model'
 import type { ApprovalsPanelModel } from './approvals/model'
+// B-W2b-307 (PLT-104): the record's approval history in the Approvals tab.
+import type { ApprovalHistoryModel } from '../shell/panels/approvals/model'
 // B-W2b-200
 import type { SharesPanelModel } from './share/model'
 
@@ -292,6 +294,8 @@ export interface RecordPanelsViewModel {
   approvals?: ApprovalsPanelModel
   /** B-W2b-200: the partners invited to the record by link (absent: no Partners tab). */
   shares?: SharesPanelModel
+  /** B-W2b-307 (PLT-104): every approval of the record, newest first (absent: a type without approvals, or no approvals.view). */
+  approvalHistory?: ApprovalHistoryModel
 }
 
 // ── tasks and followers on the record (B-W2a-40; COL-037, COL-011; design shell.panels side panel, popups) ────────────

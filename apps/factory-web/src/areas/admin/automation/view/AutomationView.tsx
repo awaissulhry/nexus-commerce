@@ -12,6 +12,9 @@ import type { RuleDraft } from '../../../_shared/rules/model'
 import { RuleDialog } from '../../../_shared/rules/view/RuleDialog'
 import { RulesList } from '../../../_shared/rules/view/RulesList'
 import { BUILT, isDateRule, KNOWN_MODULE_TIMERS, LATER, moduleTimerKey, newHeld, VIEWS, viewOfKey, type AutomationView as View, type AutomationViewModel } from '../model'
+// B-W2b-307: Approval rules.
+import { newHeld as approvalNewHeld } from '../approval-rules/model'
+import { ApprovalRules, type ApprovalRulesActions } from '../approval-rules/view/ApprovalRules'
 import '../automation.css'
 
 export type { AutomationViewModel } from '../model'
@@ -29,6 +32,8 @@ export interface AutomationActions {
   onRetryTimers?: () => void
   onHelp?: (open: boolean) => void
   onDismissNotice?: () => void
+  /** B-W2b-307: Approval rules' list and pop-up. */
+  approvals?: ApprovalRulesActions
 }
 
 /**
@@ -41,7 +46,7 @@ export interface AutomationActions {
  */
 export function AutomationView({ model, actions }: { model: AutomationViewModel; actions?: AutomationActions }) {
   return (
-    <WithMessages namespaces={['admin-automation', 'rules', 'lists']}>
+    <WithMessages namespaces={['admin-automation', 'rules', 'lists', 'approvals-depth']}>
       <Automation model={model} actions={actions} />
     </WithMessages>
   )
@@ -50,6 +55,7 @@ export function AutomationView({ model, actions }: { model: AutomationViewModel;
 function Automation({ model, actions }: { model: AutomationViewModel; actions?: AutomationActions }) {
   const t = useT('admin-automation')
   const r = useT('rules')
+  const apd = useT('approvals-depth')
   const [ownHelp, setOwnHelp] = useState(model.help)
   useEffect(() => setOwnHelp(model.help), [model.help])
   const help = actions?.onHelp ? model.help : ownHelp
@@ -63,6 +69,13 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
       if (model.ruleDialog !== null || help || event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], .ag-cell-inline-editing')) return
+      if (event.key === 'c' && model.view === 'approvals' && model.approvalRules) {
+        if (approvalNewHeld(model.approvalRules) === null) {
+          event.preventDefault()
+          actions?.approvals?.onRule?.('new')
+        }
+        return
+      }
       if (event.key === 'c' && held === null) {
         event.preventDefault()
         actions?.onRule?.('new')
@@ -105,16 +118,18 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
               { id: 'keys', label: t('band.keys'), onSelect: () => setHelp(true) },
             ]}
           />
-          <Button variant="primary" heldReason={heldText} onClick={() => actions?.onRule?.('new')} aria-keyshortcuts="c">
-            <Plus size={14} aria-hidden /> {t('band.new')}
-          </Button>
+          {model.view !== 'approvals' && (
+            <Button variant="primary" heldReason={heldText} onClick={() => actions?.onRule?.('new')} aria-keyshortcuts="c">
+              <Plus size={14} aria-hidden /> {t('band.new')}
+            </Button>
+          )}
         </div>
       </div>
 
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={model.notice.key.startsWith('rules:') ? r(model.notice.key.slice(6), model.notice.params) : t(model.notice.key, model.notice.params)}
+          title={model.notice.key.startsWith('rules:') ? r(model.notice.key.slice(6), model.notice.params) : model.notice.key.startsWith('approvals:') ? apd(model.notice.key.slice(10), model.notice.params) : t(model.notice.key, model.notice.params)}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
@@ -137,7 +152,7 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
               value: view,
               label: t(`views.${view}`),
               disabled: !BUILT.has(view),
-              title: BUILT.has(view) ? undefined : t(`later.${LATER[view as Exclude<View, 'timers'>]}`),
+              title: BUILT.has(view) ? undefined : t(`later.${LATER[view as Exclude<View, 'timers' | 'approvals'>]}`),
             }))}
           />
           <InfoTip tip={t('views.later')} />
@@ -145,6 +160,19 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
         <p className="fw-automation-muted">{t('views.later')}</p>
       </section>
 
+      {model.view === 'approvals' && (
+        <section className="fw-automation-section" aria-labelledby="fw-automation-approvals">
+          <h2 id="fw-automation-approvals" className="fw-automation-h">
+            {t('views.approvals')}
+          </h2>
+          {model.approvalRules ? <ApprovalRules model={model.approvalRules} actions={actions?.approvals} /> : <EmptyState icon={<Workflow size={24} aria-hidden />} title={t('refused.title')} description={t('refused.body')} />}
+        </section>
+      )}
+
+      {model.view === 'timers' && model.timersAllowed === false && <EmptyState icon={<Workflow size={24} aria-hidden />} title={t('refused.title')} description={t('refused.body')} />}
+
+      {model.view === 'timers' && model.timersAllowed !== false && (
+      <>
       <section className="fw-automation-section" aria-labelledby="fw-automation-timers">
         <h2 id="fw-automation-timers" className="fw-automation-h">
           {t('timers.title')}
@@ -185,6 +213,8 @@ function Automation({ model, actions }: { model: AutomationViewModel; actions?: 
           </ul>
         </Card>
       </section>
+      </>
+      )}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('keysTitle')} size="sm">

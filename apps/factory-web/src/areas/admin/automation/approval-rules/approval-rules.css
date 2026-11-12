@@ -1,0 +1,89 @@
+/*
+ * Admin › Automation › Approval rules (B-W2b-307, SCR-167) LAYOUT: the band, the locked rule, the list, the rule pop-up
+ * and its test. It fills the main area (no max-width: Owner rule 2026-10-29); semantic tokens only.
+ */
+.fw-apr,
+.fw-apr-dialog,
+.fw-apr-test {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-apr-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-apr-fixed {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.fw-apr-fixed > .fw-apr-cell {
+  flex: 1;
+}
+
+.fw-apr-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-apr-sub,
+.fw-apr-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-apr-sub {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-apr-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-apr a.fw-apr-link,
+.fw-apr-dialog a.fw-apr-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-apr a.fw-apr-link:hover,
+.fw-apr-dialog a.fw-apr-link:hover {
+  text-decoration: underline;
+}
+
+.fw-apr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-apr-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-apr-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}

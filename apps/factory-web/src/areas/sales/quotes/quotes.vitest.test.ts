@@ -212,10 +212,15 @@ describe('approvals and the accept link', () => {
 
 describe('the navigation: Sales › Quotes and Home › Approvals', () => {
   it('a sales person opens Approvals first, then Quotes', () => {
-    const nav = officeNavFor(permissionCheck(['quotes.view', 'quotes.manage']))
-    expect(navPages(nav).map((page) => page.href)).toEqual(['/home/approvals', '/sales/quotes', '/sales/settings'])
+    // B-W2b-307: Home › Approvals is every request's inbox, reached with home.view (every office template holds it).
+    const nav = officeNavFor(permissionCheck(['home.view', 'quotes.view', 'quotes.manage']))
+    const pages = navPages(nav).map((page) => page.href)
+    expect(pages.indexOf('/home/approvals')).toBeGreaterThan(-1)
+    expect(pages.indexOf('/home/approvals')).toBeLessThan(pages.indexOf('/sales/quotes'))
+    expect(pages.slice(pages.indexOf('/sales/quotes'))).toEqual(['/sales/quotes', '/sales/settings'])
     expect(firstOfficePage(nav, { areaId: 'sales' })).toBe('/sales/quotes')
-    expect(firstOfficePage(nav)).toBe('/home/approvals')
+    // Home's first page is Today (home.view); Approvals follows it.
+    expect(firstOfficePage(nav)).toBe('/home/today')
   })
 })
 
@@ -229,10 +234,11 @@ function sources(dir: string): string[] {
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.test.') && entry.name !== 'fixtures.ts' ? [path] : []
   })
 }
-function literalKeys(dirs: readonly string[], prefixes: readonly string[]): string[] {
+/** `skip`: files of the folder whose words are another catalogue's (B-W2b-307: the inbox in depth is `approvals-depth`). */
+function literalKeys(dirs: readonly string[], prefixes: readonly string[], skip?: RegExp): string[] {
   const pattern = new RegExp(`['"\`]((?:${prefixes.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
-  for (const dir of dirs) for (const file of sources(join(SRC, dir))) for (const match of readFileSync(file, 'utf8').matchAll(pattern)) keys.add(match[1]!)
+  for (const dir of dirs) for (const file of sources(join(SRC, dir)).filter((path) => !skip?.test(path))) for (const match of readFileSync(file, 'utf8').matchAll(pattern)) keys.add(match[1]!)
   return [...keys].sort()
 }
 const has = (namespace: string, key: string) =>
@@ -284,7 +290,9 @@ describe('every key the quote screens name exists in it and en', () => {
     expect(keys.filter((key) => !has('sales', key))).toEqual([])
   })
   it('approvals', () => {
-    const keys = [...literalKeys(['areas/home/approvals'], ['tile', 'tableLabel', 'empty', 'col', 'sentence', 'held', 'heldShort', 'review', 'rule', 'rejectDialog', 'notice']), ...approvalsBuilt]
+    // B-W2b-307: the inbox in depth (its container, its views and its rules) speaks `approvals-depth` (tested in inbox.vitest).
+    const depth = /home[\\/]approvals[\\/](Approvals\.tsx|api\.ts|inbox\.ts|view[\\/](InboxView|TaskReview|BulkApprove)\.tsx)$/
+    const keys = [...literalKeys(['areas/home/approvals'], ['tile', 'tableLabel', 'empty', 'col', 'sentence', 'held', 'heldShort', 'review', 'rule', 'rejectDialog', 'notice'], depth), ...approvalsBuilt]
     expect(keys.length).toBeGreaterThan(50)
     expect(keys.filter((key) => !has('approvals', key))).toEqual([])
   })

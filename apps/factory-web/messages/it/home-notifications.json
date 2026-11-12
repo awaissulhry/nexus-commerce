@@ -223,7 +223,10 @@
       "approval": {
         "quote_requested": "{actor} ti chiede di approvare il preventivo {record}{figure}",
         "quote_decided": "{actor} ha {status} la tua richiesta di approvazione del preventivo {record}",
-        "nudged": "{actor} ti ricorda: il preventivo {record} aspetta ancora la tua approvazione"
+        "nudged": "{actor} ti ricorda: il preventivo {record} aspetta ancora la tua approvazione",
+        "taskAsked": "{actor} chiede il tuo sì su {record}: {title}",
+        "taskDecided": "{actor} ha {status} la tua richiesta su {record}: {title}",
+        "smvAsked": "{actor} ti chiede di approvare una modifica del tempo standard dell’operazione {record}: {title}"
       },
       "plant": {
         "reported": "Segnalato un problema sulla macchina {record}: {title}",
