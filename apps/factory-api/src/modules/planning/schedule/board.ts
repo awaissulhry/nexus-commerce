@@ -21,6 +21,9 @@ import type { BoardQuery, WorkOrderView } from './contract'
 import { holdViewOf, NO_PERMISSION_HOLD, publishDiff, publishHoldOf, rangeOf, siteViewOf, storedSlotView, versionHeaderOf, type PublishHold } from './publish'
 import { durationOn, scheduleWorld, standardOf, type BoardWorkOrder, type ScheduleWorld } from './service'
 import { diffSlotOf, publishedOf, slotsOf, userNamesOf, type SlotRow } from './store'
+// B-W2b-312: the earliest start with material (PLN-134) and the problems list's three W2b kinds.
+import { materialStartsOf, materialStartViewOf } from '../schedule-depth/material'
+import { depthProblemsOf } from '../schedule-depth/problems'
 
 /**
  * The planning board's reads (B-W2a-34; PLN-129, PLN-131, PLN-132; design planning.board "Board controls", "Load per
@@ -202,8 +205,10 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
     const lanes = laneViewsOf(world, { from, to, buckets })
     const window = { start: businessDayStart(from, site.timezone), end: businessDayStart(plusDays(to, 1), site.timezone) }
     const shown = world.slots.filter((slot) => slot.startAt < window.end && slot.endAt > window.start)
-    const names = await userNamesOf(db, shown.map((slot) => slot.updatedById))
-    const workOrders = world.workOrders.map((workOrder) => workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null))
+    const names = await userNamesOf(db, shown.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
+    // B-W2b-312: per work order its earliest start with material, from the readiness read above.
+    const starts = query.readiness === 'false' || world.workOrders.length === 0 ? null : await materialStartsOf(db, world, world.workOrders.map((workOrder) => workOrder.id), readiness)
+    const workOrders = world.workOrders.map((workOrder) => ({ ...workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null), materialStart: starts ? materialStartViewOf(world, workOrder, starts.get(workOrder.id)!) : null }))
     const header = await planHeaderOf(db, world, context)
     const tray = world.workOrders
       .map((workOrder) => ({ workOrder, schedule: world.schedules.get(workOrder.id)! }))
@@ -241,6 +246,8 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
       ...world.workOrders
         .filter((workOrder) => world.schedules.get(workOrder.id)!.status === 'LATE')
         .map((workOrder) => ({ kind: 'FINISHES_LATE' as const, words: world.schedules.get(workOrder.id)!.words, lane: null, date: workOrder.dueDate, bucketKey: null, overMinutes: null, loadPct: null, workOrderId: workOrder.id, daysLate: daysLateOf(world, workOrder) })),
+      // B-W2b-312: operations in the past, material not in time, gate not passed.
+      ...(await depthProblemsOf(db, world, starts)),
     ]
     return {
       site: siteViewOf(site),
@@ -311,12 +318,13 @@ export async function workOrderSchedule(caller: CommandCaller, workOrderId: stri
     if (!workOrder) throw new NotFoundError('The work order is not open: it is not on the board.')
     const [readiness] = await readinessFor(db, row!.site, [workOrder.id])
     const slots = world.slots.filter((slot) => slot.workOrderId === workOrder.id)
-    const names = await userNamesOf(db, slots.map((slot) => slot.updatedById))
+    const names = await userNamesOf(db, slots.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
     const laneKeys = new Set([...slots.map((slot) => laneKey(laneOfSlot(slot))), ...workOrder.operations.map((operation) => laneKey(world.operationLanes.get(operation.id)!))])
     return {
       site: siteViewOf(row!.site),
       asOf: toUtcIso(now),
-      workOrder: workOrderViewOf(world, workOrder, readiness ?? null),
+      // B-W2b-312: the earliest start with material (PLN-134).
+      workOrder: { ...workOrderViewOf(world, workOrder, readiness ?? null), materialStart: materialStartViewOf(world, workOrder, (await materialStartsOf(db, world, [workOrder.id], readiness ? [readiness] : [])).get(workOrder.id)!) },
       sizes: row!.sizes.map((size) => ({ colourway: size.colourway.code, size: size.size, quantity: size.quantity })),
       slots: slots.map((slot) => slotViewOf(world, slot, names)),
       lanes: [...world.lanes.values()]
