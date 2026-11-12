@@ -173,6 +173,15 @@ describe('the supplier columns of the parties import (SCM-289)', () => {
     expect(plan(row, party())).toEqual({ action: 'UNCHANGED' })
   })
 
+  it('read a record’s kinds and tannages back as the same set, whatever order it holds them in (a file for re-import)', () => {
+    const unordered = party({ supplier: { ...supplier, kinds: ['SUBCONTRACTOR', 'TANNERY'], tannages: ['CHROME_FREE', 'VEGETABLE'] } })
+    const values = importRecordValues(unordered)
+    expect(values).toMatchObject({ supplierKinds: 'TANNERY; SUBCONTRACTOR', tannages: 'VEGETABLE; CHROME_FREE' })
+    const row = Object.fromEntries(Object.entries(values).filter(([name, value]) => !name.startsWith('$') && value !== null)) as RowValues
+    expect(plan(row, unordered)).toEqual({ action: 'UNCHANGED' })
+    expect(plan({ code: 'S-1', tannages: 'vegetale; senza cromo' }, unordered)).toEqual({ action: 'UNCHANGED' })
+  })
+
   it('create a supplier with Italian words for its kinds, status and tannages', () => {
     const row = { code: 'S-2', legalName: 'Laboratorio Esempio', roles: 'fornitore; terzista', supplierKinds: 'Conceria; terzista', supplierStatus: 'approvato', tannages: 'vegetale; senza cromo', hideOriginCountries: 'it; es' }
     const parsed = { ...row, supplierStatus: partiesImporter.columns.supplierStatus.type.parse({ raw: 'approvato', context: { numberFormat: 'it' } }) }

@@ -11,6 +11,8 @@ import {
   hasSupplierRole,
   LIMITS,
   normaliseCountries,
+  normaliseKinds,
+  normaliseTannages,
   REASON_MAX,
   statusChangeProblems,
   SUPPLIER_KINDS,
@@ -109,7 +111,8 @@ function wordsOf<Value extends string>(text: string, lookup: Readonly<Record<str
 export function supplierColumnsOf(supplier: ImportedSupplier | null | undefined, roles: readonly string[]): Record<SupplierColumn, CellValue | null> {
   if (!supplier || !hasSupplierRole(roles)) return Object.fromEntries(SUPPLIER_COLUMN_NAMES.map((name) => [name, null])) as Record<SupplierColumn, null>
   return {
-    supplierKinds: joined(supplier.kinds),
+    // Kinds and tannages in their enum's order (the record may hold another order): a file for re-import reads back the same.
+    supplierKinds: joined(normaliseKinds(supplier.kinds)),
     supplierStatus: supplier.supplierStatus,
     supplierStatusReason: supplier.supplierStatusReason,
     leadTimeDays: supplier.leadTimeDays,
@@ -117,7 +120,7 @@ export function supplierColumnsOf(supplier: ImportedSupplier | null | undefined,
     originRegion: supplier.originRegion,
     originNote: supplier.originNote,
     hideOriginCountries: joined(supplier.hideOriginCountries),
-    tannages: joined(supplier.tannages),
+    tannages: joined(normaliseTannages(supplier.tannages)),
   }
 }
 

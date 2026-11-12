@@ -221,7 +221,9 @@ export function changeProfile(current: SupplierProfile, patch: ProfilePatch, rol
   if (next.leadTimeDays !== null && (!Number.isSafeInteger(next.leadTimeDays) || next.leadTimeDays < 0 || next.leadTimeDays > LIMITS.leadTimeDays)) issues.push({ path: 'leadTimeDays', message: `Whole days from 0 to ${LIMITS.leadTimeDays}.` })
   issues.push(...originProblems(next, next.kinds))
   if (issues.length > 0) return { ok: false, issues }
-  const same = (field: ProfileField) => JSON.stringify(current[field]) === JSON.stringify(next[field])
+  // Kinds and tannages are sets (each once): another order of the same ones is no change.
+  const comparable = (profile: SupplierProfile, field: ProfileField) => (field === 'kinds' ? normaliseKinds(profile.kinds) : field === 'tannages' ? normaliseTannages(profile.tannages) : profile[field])
+  const same = (field: ProfileField) => JSON.stringify(comparable(current, field)) === JSON.stringify(comparable(next, field))
   return { ok: true, profile: next, changed: PROFILE_FIELDS.filter((field) => !same(field)) }
 }
 
