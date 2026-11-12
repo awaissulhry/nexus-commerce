@@ -44,7 +44,8 @@ async function readBackorders(db: Reader, orderIds: readonly string[], shipmentI
   if (orderIds.length === 0) return new Map<string, ReturnType<typeof lineView>[]>()
   // One query after another: a transaction's client has one connection.
   const lines = await db.salesOrderLine.findMany({
-    where: { orderId: { in: [...orderIds] } },
+    // B-W2b-330 (SAL-181): a fee is never shipped.
+    where: { orderId: { in: [...orderIds] }, kind: { not: 'FEE' } },
     select: {
       id: true,
       orderId: true,
