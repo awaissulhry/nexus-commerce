@@ -28,6 +28,8 @@ import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { detailOf, emitHoldChanged, lockActiveHold, officeOf, placeHoldInCommand, refuse, visibleHold } from './holds'
 import { genealogyStart, groupViewOf, impactOf } from './impact'
 import { HOLD_COLUMNS, readHold, type HoldRow, type Reader } from './store'
+// B-W2b-289 (SCM-179): the site's default quality place when none is named.
+import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
 /**
  * Holds in depth, the writes (B-W2b-114; QHS-075, QHS-077, QHS-078). Each is ONE command(); the refusals come first in
@@ -155,7 +157,7 @@ export async function askQuarantine(caller: CommandCaller, holdId: string, body:
     const current = await lockActiveHold(tools, row.id, body.version)
     if (current.quarantine === 'MOVED') throw new InvalidStateError('The goods lie in quarantine already: the move was confirmed.')
     const places = await quarantinePlaces(tx, current.siteId)
-    const placeId = body.locationId ?? (places.length === 1 ? places[0]!.id : null)
+    const placeId = body.locationId ?? (await defaultPlaceFor(tx, { siteId: current.siteId, purpose: 'QUALITY' }))?.id ?? (places.length === 1 ? places[0]!.id : null)
     if (!placeId || !places.some((place) => place.id === placeId)) {
       refuse([{ path: 'body/locationId', message: places.length === 0 ? 'The site has no quarantine place: add one in the warehouse first.' : 'Pick a quarantine place of the site.' }], 'The quarantine place is not one of the site.')
     }

@@ -8,6 +8,7 @@ import type { ShipmentHeader } from '../store'
 import { closedShortLinesOf, lockOrderLinesForShipping } from './backorder'
 import { applyFreightInCommand } from './freight'
 import { shippedCells, takeFromFinishedGoodsInCommand } from './stock'
+import { assertNotOnHold } from '../../parties/holds/stops'
 
 /**
  * What happens when a shipment leaves, every day (B-W2a-48), inside the ONE leaving command (modules/shipping/ddt's
@@ -25,6 +26,8 @@ import { shippedCells, takeFromFinishedGoodsInCommand } from './stock'
  * One audit row (`shipping.left`) says what came from stock and what from the release, cell by cell.
  */
 export async function whenShipped(tools: CommandTools, shipment: ShipmentHeader, periodLockOverride?: PeriodLockOverride | null): Promise<void> {
+  // B-W2b-290 (SAL-023): a shipment does not leave while its customer is on hold for its company (409 in words).
+  await assertNotOnHold(tools.tx, { partyId: shipment.partyId, companyId: shipment.companyId }, 'SHIPMENT')
   const tenantId = tenantOf(tools.context)
   const cells = await shippedCells(tools.tx, shipment.id)
   const repairs = cells.filter((cell) => cell.repair)

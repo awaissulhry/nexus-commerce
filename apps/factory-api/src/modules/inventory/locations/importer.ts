@@ -8,6 +8,9 @@ import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/fac
 import type { CommandTx } from '../../../core/command'
 // W2b (B-W2b-25): the Workshop column (load, check, write).
 import { checkWorkshops, workshopCodesOf, workshopForWrite } from '../../../platform/imports/importers/locations-workshop'
+// B-W2b-289 (SCM-177): a CUSTOMER location names its customer or brand in the same column (check, write).
+import { checkCustomers, customerForWrite } from '../../../platform/imports/importers/locations-customer'
+import { LOCATION_KIND_PROFILES } from '@nexus/factory-domain/inventory/locations-depth/kinds'
 import type { ImportAdapter, ImportScope } from '../../../platform/imports/registry'
 import { locationChanged } from './locations'
 
@@ -33,10 +36,12 @@ async function siteByCode(tx: CommandTx, code: string, scope: ImportScope) {
 }
 
 async function parentOf(tx: CommandTx, siteId: string, code: string, locationId: string | null): Promise<string> {
-  const siteLocations = await tx.location.findMany({ where: { siteId }, select: { id: true, parentId: true, code: true, status: true } })
+  const siteLocations = await tx.location.findMany({ where: { siteId }, select: { id: true, parentId: true, code: true, status: true, kind: true } })
   const parent = siteLocations.find((location) => location.code === code)
   if (!parent) throw new Error(`Parent ${code} is not a location of the site yet; list it before the locations inside it.`)
   if (parent.status !== 'ACTIVE') throw new Error(`Parent ${code} is archived; nothing goes inside it.`)
+  // B-W2b-289 (SCM-177): nothing sits inside an outside or transit place, nor inside a pick face.
+  if (!LOCATION_KIND_PROFILES[parent.kind].container) throw new Error(`Parent ${code} is a ${parent.kind} place; nothing goes inside it.`)
   if (locationId && wouldCycle(locationId, parent.id, siteLocations)) throw new Error(`Location ${code} cannot be its own parent's parent.`)
   return parent.id
 }
@@ -45,7 +50,12 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
   importer: locationsImporter,
   permission: INVENTORY_LOCATIONS_MANAGE,
   viewPermission: INVENTORY_LOCATIONS_VIEW,
-  check: (client, rows, scope) => checkWorkshops(client, rows, scope),
+  // B-W2b-289: the workshops of Subcontractor rows and the customers of Customer rows (each row's issues together).
+  check: async (client, rows, scope) => {
+    const workshops = await checkWorkshops(client, rows, scope)
+    const customers = await checkCustomers(client, rows, scope)
+    return workshops.map((issues, index) => [...issues, ...(customers[index] ?? [])])
+  },
   async load(client, keys, scope) {
     const siteCodes = [...new Set(keys.map((key) => String(key.site)))]
     const sites = await client.site.findMany({ where: { code: { in: siteCodes }, ...(scope.companyId ? { companyId: scope.companyId } : {}) }, select: { id: true, code: true } })
@@ -68,6 +78,11 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
     if (row.action !== 'CREATE' && values.kind !== undefined && (values.kind === 'SUBCONTRACTOR') !== (row.before?.kind === 'SUBCONTRACTOR')) {
       throw new Error(`Location ${String(row.key.code)}: a workshop location stays one (its workshop never changes); make a new location instead.`)
     }
+    // B-W2b-289: a customer's or transit place stays one too, and no place turns into one.
+    const fixed = (kind: unknown) => typeof kind === 'string' && kind in LOCATION_KIND_PROFILES && LOCATION_KIND_PROFILES[kind as LocationKind].fixed
+    if (row.action !== 'CREATE' && values.kind !== undefined && values.kind !== row.before?.kind && (fixed(values.kind) || fixed(row.before?.kind))) {
+      throw new Error(`Location ${String(row.key.code)}: a customer's, workshop's or transit place stays one; make a new location instead.`)
+    }
     if (row.action !== 'CREATE' && values.workshop !== undefined) {
       throw new Error(`Location ${String(row.key.code)}: its workshop never changes; make a new location for another workshop.`)
     }
@@ -75,11 +90,15 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
       const site = await siteByCode(tx, String(row.key.site), scope)
       const id = newId()
       const workshopCode = text(values.workshop)
-      if ((values.kind === 'SUBCONTRACTOR') !== (workshopCode !== undefined)) {
-        throw new Error(`Location ${String(row.key.code)}: ${values.kind === 'SUBCONTRACTOR' ? 'a Subcontractor location names its workshop' : 'only a Subcontractor location names a workshop'}.`)
+      // B-W2b-289: a Customer location names its customer in the same column.
+      const namesParty = values.kind === 'SUBCONTRACTOR' || values.kind === 'CUSTOMER'
+      if (namesParty !== (workshopCode !== undefined)) {
+        throw new Error(`Location ${String(row.key.code)}: ${namesParty ? 'a Subcontractor location names its workshop, a Customer location its customer' : 'only a Subcontractor or Customer location names a party'}.`)
       }
-      const partyId = workshopCode === undefined ? null : await workshopForWrite(tx, workshopCode, site, String(row.key.code))
+      const partyId =
+        workshopCode === undefined ? null : values.kind === 'CUSTOMER' ? await customerForWrite(tx, workshopCode, site, String(row.key.code)) : await workshopForWrite(tx, workshopCode, site, String(row.key.code))
       const parentCode = text(values.parent)
+      if (parentCode && LOCATION_KIND_PROFILES[String(values.kind) as LocationKind]?.atTop) throw new Error(`Location ${String(row.key.code)}: a Customer or Transit location sits at the top of the site.`)
       const made = await tx.location.create({
         data: {
           id,

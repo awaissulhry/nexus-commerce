@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CrViEvidence, CrViMethod, LabTest, Verdict } from '@nexus/factory-domain/quality/lab/rules'
+import { markMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTools } from '../../../core/command'
 import { dayOf, decimalOrNull, type Reader } from './store'
 
@@ -42,6 +43,26 @@ export interface LabResultRow {
   readonly note: string | null
   readonly createdAt: string
   readonly createdById: string | null
+  /**
+   * B-W2b-288 (FU2:03): the lab's price of this result, typed with it (money.cost: minor units + ISO 4217 currency), or none.
+   * Written once with the row (append-only); never read by `list` or `byFile` (the floor's grant hides it): `costs` reads it,
+   * for the office with the cost grain.
+   */
+  readonly cost?: LabCost | null
+}
+
+/** B-W2b-288 (FU2:03): the lab's price of one result. */
+export interface LabCost {
+  /** Minor units (cents), 0 or more (a contract field named `cents`: not a money-looking name, the object is the cost grain). */
+  readonly cents: number
+  /** ISO 4217 ("EUR"). */
+  readonly currency: string
+}
+
+/** B-W2b-288 (FU2:03): one result's lab price, as the office reads it. */
+export interface LabResultCost extends LabCost {
+  readonly resultId: string
+  readonly lotId: string
 }
 
 export interface LabResultStore {
@@ -51,6 +72,11 @@ export interface LabResultStore {
   list(client: Reader, lotId: string): Promise<LabResultRow[]>
   /** The results that rest on this report file (a supplier report reused for another lot of the article). */
   byFile(client: Reader, fileId: string): Promise<LabResultRow[]>
+  /**
+   * B-W2b-288 (FU2:03): the lab prices of these lots' results (the ones that have one), newest first. OFFICE ONLY and only
+   * for a caller with the cost grain (money.cost): the floor's grant on LabResult hides both cost columns.
+   */
+  costs(client: Reader, lotIds: readonly string[]): Promise<LabResultCost[]>
 }
 
 const COLUMNS = {
@@ -104,9 +130,10 @@ const NEWEST_FIRST = [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
 
 /** The table. */
 export const TABLE_LAB_RESULTS: LabResultStore = Object.freeze({
-  record: async (tools: Pick<CommandTools, 'tx' | 'audit'>, row: LabResultRow) => {
+  record: async (tools: Pick<CommandTools, 'tx' | 'audit'>, { cost, ...row }: LabResultRow) => {
     await tools.tx.labResult.create({
-      data: { ...row, testedOn: day(row.testedOn)!, periodFrom: day(row.periodFrom), periodTo: day(row.periodTo), createdAt: new Date(row.createdAt) },
+      // B-W2b-288 (FU2:03): the lab's price, both columns or neither (the LabResult_w2b5_cost guard).
+      data: { ...row, testedOn: day(row.testedOn)!, periodFrom: day(row.periodFrom), periodTo: day(row.periodTo), createdAt: new Date(row.createdAt), costAmount: cost?.cents ?? null, costCurrency: cost?.currency ?? null },
       select: { id: true },
     })
     tools.audit({
@@ -115,12 +142,61 @@ export const TABLE_LAB_RESULTS: LabResultStore = Object.freeze({
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      after: { lotId: row.lotId, test: row.test, method: row.method, valueMgKg: row.valueMgKg, belowDetectionLimit: row.belowDetectionLimit, detectionLimitMgKg: row.detectionLimitMgKg, limitMgKg: row.limitMgKg, verdict: row.verdict, lab: row.lab, reportNumber: row.reportNumber, testedOn: row.testedOn, evidence: row.evidence, article: row.article, periodFrom: row.periodFrom, periodTo: row.periodTo, fileId: row.fileId, supersedesId: row.supersedesId },
+      after: {
+        lotId: row.lotId,
+        test: row.test,
+        method: row.method,
+        valueMgKg: row.valueMgKg,
+        belowDetectionLimit: row.belowDetectionLimit,
+        detectionLimitMgKg: row.detectionLimitMgKg,
+        limitMgKg: row.limitMgKg,
+        verdict: row.verdict,
+        lab: row.lab,
+        reportNumber: row.reportNumber,
+        testedOn: row.testedOn,
+        evidence: row.evidence,
+        article: row.article,
+        periodFrom: row.periodFrom,
+        periodTo: row.periodTo,
+        fileId: row.fileId,
+        supersedesId: row.supersedesId,
+        // B-W2b-288 (FU2:03): the lab's price in the audit row, marked with its grain.
+        ...(cost ? { cost: markMoney('cost', cost) } : {}),
+      },
     })
   },
   list: async (client: Reader, lotId: string) => (await client.labResult.findMany({ where: { lotId, ...CR_VI_ONLY }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
   byFile: async (client: Reader, fileId: string) => (await client.labResult.findMany({ where: { fileId, ...CR_VI_ONLY }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
+  // B-W2b-288 (FU2:03): office only (the floor cannot select these columns).
+  costs: async (client: Reader, lotIds: readonly string[]) =>
+    lotIds.length === 0
+      ? []
+      : (await client.labResult.findMany({ where: { lotId: { in: [...lotIds] }, costAmount: { not: null }, ...CR_VI_ONLY }, select: { id: true, lotId: true, costAmount: true, costCurrency: true }, orderBy: NEWEST_FIRST })).map((row) => ({
+          resultId: row.id,
+          lotId: row.lotId,
+          cents: row.costAmount!,
+          currency: row.costCurrency!,
+        })),
 })
+
+/** B-W2b-288 (FU2:03): a lot's lab prices in one currency. */
+export interface LabCostSum {
+  readonly currency: string
+  readonly cents: number
+  readonly results: number
+}
+
+/** B-W2b-288 (FU2:03): the lab prices of each lot's results, summed per currency (currency order). */
+export function labCostsByLot(costs: readonly LabResultCost[]): Map<string, LabCostSum[]> {
+  const out = new Map<string, Map<string, { cents: number; results: number }>>()
+  for (const cost of costs) {
+    const lot = out.get(cost.lotId) ?? new Map<string, { cents: number; results: number }>()
+    const sum = lot.get(cost.currency) ?? { cents: 0, results: 0 }
+    lot.set(cost.currency, { cents: sum.cents + cost.cents, results: sum.results + 1 })
+    out.set(cost.lotId, lot)
+  }
+  return new Map([...out].map(([lotId, sums]) => [lotId, [...sums].sort(([a], [b]) => a.localeCompare(b)).map(([currency, sum]) => ({ currency, ...sum }))]))
+}
 
 let configured: LabResultStore | undefined
 

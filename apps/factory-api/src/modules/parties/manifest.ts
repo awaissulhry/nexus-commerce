@@ -1,4 +1,4 @@
-import { defineManifest } from '../../core/manifest'
+import { defineManifest, SIGNED_IN } from '../../core/manifest'
 
 /**
  * The parties' routes (A2 SCR-032 Customers, SCR-033 Customer record, SCR-056 Suppliers, SCR-057 Supplier record): one
@@ -30,4 +30,28 @@ export const manifest = defineManifest({
   // B-W2a-19 (SAL-012): the customer's commercial terms; a price list given also needs pricelists.manage (checked inside).
   'GET /parties/:partyId/commercial-terms': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'PATCH /parties/:partyId/commercial-terms': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // B-W2b-290 (SAL-014): requirements; the record read checks the record's own view permission inside (a quote's
+  // quotes.view, an order's orders.view, a shipment's shipping.view, an invoice's invoices.view).
+  'GET /parties/:partyId/requirements': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'POST /parties/:partyId/requirements': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'POST /parties/:partyId/requirements/:requirementId/replace': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'POST /parties/:partyId/requirements/:requirementId/end': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'GET /parties/requirements/for/:recordType/:recordId': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  // B-W2b-290 (SAL-023): account holds (parties.hold over the party and the company named).
+  'GET /parties/:partyId/holds': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'POST /parties/:partyId/holds': { audiences: ['office'], permission: 'parties.hold', scope: 'record' },
+  'POST /parties/:partyId/holds/:holdId/release': { audiences: ['office'], permission: 'parties.hold', scope: 'record' },
+  // B-W2b-290 (SAL-028, SAL-013): terms per company (over the party and that company; a price list also pricelists.manage).
+  'GET /parties/:partyId/company-terms': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PUT /parties/:partyId/company-terms/:companyId': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  'POST /parties/:partyId/company-terms/:companyId/end': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // B-W2b-290 (SAL-022): the contacts' personal data; the erasure also asks a fresh code (risk stepUp).
+  'GET /parties/:partyId/contacts/privacy': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PUT /parties/:partyId/contacts/:contactId/lawful-basis': { audiences: ['office'], permission: 'parties.privacy', scope: 'record' },
+  'POST /parties/:partyId/contacts/:contactId/objection': { audiences: ['office'], permission: 'parties.privacy', scope: 'record' },
+  'POST /parties/:partyId/contacts/:contactId/access-copy': { audiences: ['office'], permission: 'parties.privacy', scope: 'record' },
+  'POST /parties/:partyId/contacts/:contactId/erase': { audiences: ['office'], permission: 'parties.erase', scope: 'record' },
+  // B-W2b-290 (SAL-021): riders under a team or dealer.
+  'GET /parties/:partyId/riders': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PUT /parties/:partyId/team': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
 })

@@ -176,6 +176,8 @@ function RequestBody({ model, request, loaded, chosen, actions, place }: { model
         </Card>
       </div>
 
+      {request.asked && <AskedCard model={model} request={request} place={place} />}
+
       {request.plan && (request.plan.orders.length > 0 || request.plan.workOrders.length > 0) && (
         <Card padded>
           <h3 className="fw-by-h3">{t('detail.forWhat')}</h3>
@@ -294,5 +296,43 @@ function RequestBody({ model, request, loaded, chosen, actions, place }: { model
         </ul>
       </Card>
     </>
+  )
+}
+
+/** B-W2b-332: a request asked in the office — who asked, when and why, what exactly, the work order, the shortage as seen. */
+function AskedCard({ model, request, place }: { model: RequestsModel; request: BuyRequest; place: { locale: 'it' | 'en'; timeZone?: string } }) {
+  const t = useT('purchasing-requests')
+  const locale = useLocale()
+  const asked = request.asked!
+  return (
+    <Card padded>
+      <h3 className="fw-by-h3">{t('asked.title')}</h3>
+      {asked.status === 'PENDING_APPROVAL' && <Banner tone="warning" title={t('asked.waiting')} />}
+      <KeyValue
+        dense
+        items={[
+          { label: t('asked.by'), value: asked.requestedBy.name, hint: formatDateTime(asked.requestedAt, place) },
+          { label: t('asked.quantity'), value: `${quantity(asked.quantity, locale)} ${t(`uom.${asked.uom}`)}` },
+          { label: t('asked.reason'), value: asked.reason },
+          ...(asked.description ? [{ label: t('asked.description'), value: asked.description }] : []),
+          ...(asked.workOrder
+            ? [
+                {
+                  label: t('asked.workOrder'),
+                  value: (
+                    <Link className="fw-by-link" href={`${model.prefix}/production/work-orders/${encodeURIComponent(asked.workOrder.id)}`} target="_blank" rel="noopener noreferrer">
+                      {asked.workOrder.number}
+                    </Link>
+                  ),
+                },
+              ]
+            : []),
+          ...(asked.shortage
+            ? [{ label: t('asked.shortage'), value: `${quantity(asked.shortage.short, locale)} ${t(`uom.${asked.shortage.uom}`)}`, hint: t(`asked.word.${asked.shortage.word}`, { date: formatDate(dayAt(asked.shortage.needDate), place) }) }]
+            : []),
+          ...(asked.rejected ? [{ label: t('asked.refused'), value: asked.rejected.reason, hint: formatDateTime(asked.rejected.at, place) }] : []),
+        ]}
+      />
+    </Card>
   )
 }

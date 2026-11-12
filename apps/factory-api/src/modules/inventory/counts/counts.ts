@@ -58,6 +58,8 @@ import {
   type LineRow,
 } from './store'
 import { factsOf, lineViews, peopleNames, recordView, scopeOf } from './views'
+// B-W2b-289 (SCM-181): a count of a place blocks it (and the places inside) while it counts.
+import { blockForCount, releaseForCount } from '../locations-depth/blocks'
 
 /**
  * Stock counts and the year-end physical inventory, office side (B-W2a-15; SCM-224, SCM-230; SCM-229, SCM-293). Every
@@ -307,6 +309,7 @@ async function startInCommand(tools: CommandTools, row: CountRow): Promise<Count
     throw refuse(`Count ${row.number} cannot start.`, 'HELD_BY_OTHER_COUNT', `${taken.length} of its stock keys are being counted by ${numbers.join(', ')}; finish or cancel ${numbers.length === 1 ? 'that count' : 'those counts'} first, or narrow the scope.`)
   }
   const started = await updateCount(tools, row, { status: 'COUNTING', startedAt: now, snapshotAt: snapshot.at }, { action: 'inventory.counts.start' })
+  await blockForCount(tools, started)
   await insertSnapshotLines(
     tx,
     now,
@@ -601,6 +604,7 @@ export async function submitCount(caller: CommandCaller, countId: string, body: 
       if (problems.length > 0) throw new CountRefusedError(`Count ${row.number} is not ready to submit.`, problems)
       const { value, required } = await valueOf(tools.tx, row, lines)
       const written = await updateCount(tools, row, { status: 'SUBMITTED', submittedAt: tools.now, submittedById: context.actorId, differenceAmount: value.amount, approvalRequired: required })
+      await releaseForCount(tools, written)
       changed(tools, written, 'SUBMITTED', row.status, lines.length)
       return { countId }
     },
@@ -640,6 +644,7 @@ export async function sendBack(caller: CommandCaller, countId: string, body: { r
       { status: 'COUNTING', submittedAt: null, submittedById: null, differenceAmount: null, approvalRequired: true, rejectedAt: tools.now, rejectedById: context.actorId, rejectReason: body.reason },
       { reason: body.reason },
     )
+    await blockForCount(tools, written)
     const asked = recount.length > 0 ? await recountInCommand(tools, written, recount, context.actorId, 'body/recountLineIds') : []
     const totals = await lineTotals(tools.tx, countId)
     changed(tools, written, 'SENT_BACK', row.status, totals.lines)
@@ -659,6 +664,7 @@ export async function cancelCount(caller: CommandCaller, countId: string, body: 
       throw refuse(`Count ${row.number} is ${row.status}.`, 'NOT_CANCELLABLE', row.status === 'CANCELLED' ? 'It is cancelled already.' : 'Its differences are posted; reverse a move in Movements instead.')
     }
     const written = await updateCount(tools, row, { status: 'CANCELLED', cancelledAt: tools.now, cancelReason: body.reason }, { reason: body.reason })
+    if (row.status === 'COUNTING') await releaseForCount(tools, written)
     changed(tools, written, 'CANCELLED', row.status, (await lineTotals(tools.tx, countId)).lines)
     return { countId }
   })

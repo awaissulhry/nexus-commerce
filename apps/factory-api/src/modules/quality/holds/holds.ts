@@ -34,6 +34,8 @@ import { makersOf } from '../final/store'
 import { activeHoldsOf } from './checks'
 import { placerMayReleaseOf } from './settings'
 import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
+// B-W2b-289 (SCM-179): the site's default quality place when none is named.
+import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
 /**
  * Quality holds: place, change, release, close (B-W2a-26; QHS-074, MES-008; design quality.holds qh-place, qh-release,
@@ -271,11 +273,12 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
     const owner = isUuid(input.ownerId) ? await tx.user.findUnique({ where: { id: input.ownerId }, select: { status: true } }) : null
     if (!owner || owner.status !== 'ACTIVE') refuse([{ path: 'body/ownerId', message: 'The owner is an active person of the office.' }], 'The owner is not an active person.')
   }
-  // The move to quarantine: a QUARANTINE place of the site (the site's one, when only one and none is named).
+  // The move to quarantine: a QUARANTINE place of the site (B-W2b-289: the site's default quality place, else the site's
+  // one, when none is named).
   let quarantineLocationId: string | null = null
   if (input.askQuarantine && STOCK_SUBJECTS.includes(input.subjectType)) {
     const places = await tx.location.findMany({ where: { siteId, kind: 'QUARANTINE', status: 'ACTIVE' }, select: { id: true } })
-    quarantineLocationId = input.quarantineLocationId ?? (places.length === 1 ? places[0]!.id : null)
+    quarantineLocationId = input.quarantineLocationId ?? (await defaultPlaceFor(tx, { siteId, purpose: 'QUALITY' }))?.id ?? (places.length === 1 ? places[0]!.id : null)
     if (!quarantineLocationId || !places.some((place) => place.id === quarantineLocationId)) {
       refuse([{ path: 'body/quarantineLocationId', message: places.length === 0 ? 'The site has no quarantine place: add one in the warehouse first, or do not ask for the move.' : 'Pick a quarantine place of the site.' }], 'The quarantine place is not one of the site.')
     }

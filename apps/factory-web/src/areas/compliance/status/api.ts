@@ -1,4 +1,6 @@
 import { z } from 'zod'
+// B-W2b-288 (FU2:02): where a style stands in a market.
+import { MARKET_STANDINGS } from '@nexus/factory-domain/product/markets/rules'
 import type { ApiClient } from '../../../lib/api/client'
 
 /**
@@ -11,7 +13,8 @@ import type { ApiClient } from '../../../lib/api/client'
 
 export const GATES = ['WORK_ORDER_RELEASE', 'LABEL_PRINT', 'FINAL_RELEASE', 'SHIPMENT'] as const
 export type Gate = (typeof GATES)[number]
-export const CELL_STATES = ['READY', 'MISSING', 'BLOCKED', 'EXPIRING'] as const
+// B-W2b-288 (FU2:02): NOT_SOLD — a market the style is not sold in (Style.marketCodes): "Not sold there", not a gap.
+export const CELL_STATES = ['READY', 'MISSING', 'BLOCKED', 'EXPIRING', 'NOT_SOLD'] as const
 export type CellState = (typeof CELL_STATES)[number]
 export const LINE_STATES = ['OK', 'MISSING', 'EXPIRING', 'NOT_NEEDED', 'MANUAL', 'OVERRIDDEN'] as const
 export type LineState = (typeof LINE_STATES)[number]
@@ -46,7 +49,8 @@ export type ActionLine = z.infer<typeof action>
 const ref = z.object({ id: z.string(), code: z.string(), name: z.string() })
 export type Ref = z.infer<typeof ref>
 const row = z.object({
-  style: z.object({ id: z.string(), code: z.string(), name: z.string(), companyId: z.string().nullable(), ppeCategory: z.string(), productType: z.string(), brand: ref.nullable(), soldUnderOurName: z.boolean() }),
+  // B-W2b-288 (FU2:02): marketCodes — the markets the style is sold in ([]: every market).
+  style: z.object({ id: z.string(), code: z.string(), name: z.string(), companyId: z.string().nullable(), ppeCategory: z.string(), productType: z.string(), brand: ref.nullable(), soldUnderOurName: z.boolean(), marketCodes: z.array(z.string()).default([]) }),
   cells: z.array(cell),
   ready: z.boolean(),
   blocked: z.boolean(),
@@ -95,8 +99,10 @@ const item = z.object({
 })
 export type CellItem = z.infer<typeof item>
 const cellSchema = z.object({
-  style: z.object({ id: z.string(), code: z.string(), name: z.string(), ppeCategory: z.string(), productType: z.string() }),
+  // B-W2b-288 (FU2:02): the markets it is sold in and where it stands in this one.
+  style: z.object({ id: z.string(), code: z.string(), name: z.string(), ppeCategory: z.string(), productType: z.string(), marketCodes: z.array(z.string()).default([]) }),
   market,
+  standing: z.enum(MARKET_STANDINGS).default('EVERY_MARKET'),
   cell,
   items: z.array(item),
   asOf: z.string(),

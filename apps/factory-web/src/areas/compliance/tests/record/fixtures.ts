@@ -9,6 +9,8 @@ import type { Lot } from '../../../quality/_shared/lots'
 import { demoChecklist, demoDetail, demoDocument, demoResult, lotByCode, STRICT } from '../fixtures'
 import { blankDocument, blankResult, type LotRecordModel } from '../model'
 import { LotRecordView } from './view/LotRecordView'
+// B-W2b-288 (FU2:03): the lab's price.
+import { labCostLotCases } from '../lab-cost/fixtures'
 
 /**
  * SCR-054-lot — the lot record of Tests & substances, made-up data only (the DEMO-L-… lots of SCR-054). Each case is one
@@ -204,5 +206,7 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'error', label: "The API didn't answer", model: lotCase(pending, { detail: failedRead('problem.unavailable') }, 'owner', false) },
     { id: 'not-found', label: 'Not found (another company’s lot)', model: lotCase(pending, { detail: failedRead('problem.notFound') }, 'owner', false) },
     { id: 'shortcuts', label: 'The keys (?)', model: lotCase(ready232, { detail: ready(readyDetail), dialog: { kind: 'shortcuts' } }) },
+    // B-W2b-288 (FU2:03): the lab's price typed with a result and read back.
+    ...labCostLotCases(lotCase, pending, pendingDetail, passDraft, readyDetail),
   ],
 })

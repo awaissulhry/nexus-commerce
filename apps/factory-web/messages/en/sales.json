@@ -49,7 +49,8 @@
     "NO_BILL_TO": "Choose the invoice address.",
     "NO_SHIP_TO": "Choose the delivery address.",
     "NO_CONTACT_EMAIL": "The contact has no email: the quote and its link go by email.",
-    "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49)."
+    "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49).",
+    "ACCOUNT_ON_HOLD": "The customer's account is on hold: the quote may go on, new orders and shipments wait until the hold is released."
   },
   "check": {
     "fix": "Fix",
@@ -68,6 +69,7 @@
     "NO_SHIP_TO": "Choose the delivery address.",
     "NO_CONTACT_EMAIL": "The contact has no email: the quote and its link go by email.",
     "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49).",
+    "ACCOUNT_ON_HOLD": "The customer's account is on hold: orders and shipments wait until it is released.",
     "COMPANY_LEGAL": "The company's letterhead data is incomplete (Admin › Companies & sites).",
     "BILL_TO_INCOMPLETE": "The invoice address needs street, postal code, city and country.",
     "SHIP_TO_INCOMPLETE": "The delivery address needs street, postal code, city and country.",

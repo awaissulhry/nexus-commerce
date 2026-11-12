@@ -11,6 +11,9 @@ import { CheckList, Facts } from '../../../../quality/_shared/parts'
 import type { LotChecklist, LotDecision } from '../../api'
 import { CR_VI_METHODS, documentProblems, LEGAL_LIMIT, liveVerdict, mgKg, reasonProblem, resultProblems, type DocumentDraft, type ResultDraft } from '../../model'
 import { FileChooser } from '../../view/parts'
+// B-W2b-288 (FU2:03): the lab's price, typed with the result (the cost grain only).
+import { BLANK_LAB_COST, LAB_COST_NAMESPACE, labCostProblem } from '../../lab-cost/lab-cost'
+import { LabCostField } from '../../lab-cost/view/LabCostField'
 
 /**
  * The lot record's dialogs (design ts-record, ts-release, ts-reject, ts-later-fail; lt-block, lt-status): record a
@@ -65,6 +68,7 @@ export function ResultDialog({
   onFile,
   onSave,
   onClose,
+  costGrain,
 }: {
   open: boolean
   lot: Lot
@@ -80,9 +84,13 @@ export function ResultDialog({
   onFile: (file: File) => void
   onSave: () => void
   onClose: () => void
+  /** B-W2b-288 (FU2:03): the person holds the cost grain: the lab's price may be typed. */
+  costGrain?: boolean
 }) {
   const t = useT('lab')
   const q = useT('quality')
+  // B-W2b-288 (FU2:03)
+  const w = useT(LAB_COST_NAMESPACE)
   const locale = useLocale()
   const [tried, setTried] = useState(false)
   useEffect(() => {
@@ -91,6 +99,8 @@ export function ResultDialog({
   const limit = lot.crVi.limitMgKg
   const problems = resultProblems(draft, today, rule, limit)
   const first = Object.values(problems)[0] ?? null
+  // B-W2b-288 (FU2:03): a price that is not an amount holds Save (said in the field and on the button).
+  const costProblem = costGrain ? labCostProblem(draft.labCost) : null
   const shown = (field: string): string | undefined => {
     const key = problems[field]
     if (!key) return undefined
@@ -115,9 +125,9 @@ export function ResultDialog({
             variant="primary"
             onClick={() => {
               setTried(true)
-              if (!first) onSave()
+              if (!first && !costProblem) onSave()
             }}
-            heldReason={busy ? t('result.saving') : tried && first ? t(first, { limit: mgKg(limit ?? LEGAL_LIMIT, locale), lod: mgKg(draft.detectionLimitMgKg.replace(',', '.') || '0', locale) }) : null}
+            heldReason={busy ? t('result.saving') : tried && first ? t(first, { limit: mgKg(limit ?? LEGAL_LIMIT, locale), lod: mgKg(draft.detectionLimitMgKg.replace(',', '.') || '0', locale) }) : costProblem ? w(costProblem) : null}
           >
             {draft.thenRelease ? t('result.saveThenRelease') : t('result.save')}
           </Button>
@@ -129,13 +139,13 @@ export function ResultDialog({
         onSubmit={(event) => {
           event.preventDefault()
           setTried(true)
-          if (!first) onSave()
+          if (!first && !costProblem) onSave()
         }}
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault()
             setTried(true)
-            if (!first && !busy) onSave()
+            if (!first && !costProblem && !busy) onSave()
           }
         }}
       >
@@ -210,6 +220,8 @@ export function ResultDialog({
         <Field label={t('result.note')}>
           <Textarea value={draft.note} onChange={(event) => set({ note: event.target.value })} rows={2} limit={500} counterLabel={(used, max) => t('common.counter', { used, max })} />
         </Field>
+        {/* B-W2b-288 (FU2:03): the lab's price (money.cost), only for a person with the cost grain. */}
+        {costGrain && <LabCostField value={draft.labCost ?? BLANK_LAB_COST} problem={costProblem} onChange={(labCost) => set({ labCost })} />}
         <FileChooser label={t('result.file')} hint={t('result.fileHint')} name={draft.fileName} onFile={onFile} error={tried ? (problems.file ? t(problems.file) : null) : null} />
         {canThenRelease && (
           <label className="fw-q-cell-row">

@@ -6,6 +6,7 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { MAX_CONVERT, REORDER_METHODS, REQUEST_HOLDS, REQUEST_KINDS, REQUEST_STATUSES, REQUEST_WARNINGS } from '@nexus/factory-domain/purchasing/requests/requests'
 import { SOURCE_PREFERENCES } from '@nexus/factory-domain/purchasing/sources/sources'
+import { PURCHASE_REQUEST_SOURCES, PURCHASE_REQUEST_STATUSES } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 
 /**
  * Requests to buy (B-W2a-10; SCM-034, SCM-036; design purchasing.requests "Requests to buy": tiles, the queue, the
@@ -18,10 +19,10 @@ const version = z.number().int().min(1)
 const step = output({ rule: z.string(), quantity: z.string() })
 
 const requestView = output({
-  /** `plan:<requirement id>` or `reorder:<item planning id>`. */
+  /** `plan:<requirement id>`, `reorder:<item planning id>` or `asked:<purchase request id>` (B-W2b-332). */
   id: z.string(),
   kind: z.enum(REQUEST_KINDS),
-  /** The row behind it: the plan line (MaterialRequirement) or the site's reorder rule (ItemPlanning). */
+  /** The row behind it: the plan line (MaterialRequirement), the site's reorder rule (ItemPlanning) or the request asked (PurchaseRequest). */
   refId: id(),
   version: z.number().int(),
   status: z.enum(REQUEST_STATUSES),
@@ -97,6 +98,25 @@ const requestView = output({
     why: z.string(),
     note: z.string().nullable(),
   }).nullable(),
+  /** B-W2b-332: a request asked in the office: who asked, when and why, what exactly, the work order, the shortage as seen. */
+  asked: output({
+    purchaseRequestId: id(),
+    source: z.enum(PURCHASE_REQUEST_SOURCES),
+    status: z.enum(PURCHASE_REQUEST_STATUSES),
+    requestedBy: output({ id: id(), name: z.string() }),
+    requestedAt: instant(),
+    reason: z.string(),
+    description: z.string().nullable(),
+    /** What was asked, in the unit asked (the queue's quantity is what it buys). */
+    quantity: z.string(),
+    uom: z.enum(UOMS),
+    workOrder: output({ id: id(), number: z.string() }).nullable(),
+    shortage: output({ word: z.enum(['NOT_ENOUGH', 'DELAYED']), short: z.string(), uom: z.string(), needDate: z.string(), runId: z.string().nullable(), workOrderNumber: z.string() }).nullable(),
+    approvalTaskId: id().nullable(),
+    rejected: output({ at: instant(), reason: z.string() }).nullable(),
+    convertedAt: instant().nullable(),
+    purchaseOrder: output({ id: id(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES) }).nullable(),
+  }).nullable(),
 })
 
 const filters = {
@@ -132,15 +152,15 @@ export const requestCountsContract = defineContract({
       /** Open requests: what is still to buy. */
       open: z.number().int(),
       needWithin14Days: z.number().int(),
-      /** Staff requests waiting for an approval: W2b; null until then (drawn as '—'). */
-      waitingApproval: z.null(),
+      /** Requests asked in the office that wait for a yes (B-W2b-332). */
+      waitingApproval: z.number().int(),
       convertedToday: z.number().int(),
     }),
   },
 })
 
 export const getRequestContract = defineContract({
-  params: input({ kind: z.enum(['plan', 'reorder']), refId: id() }),
+  params: input({ kind: z.enum(['plan', 'reorder', 'asked']), refId: id() }),
   response: {
     200: output({
       request: requestView,
