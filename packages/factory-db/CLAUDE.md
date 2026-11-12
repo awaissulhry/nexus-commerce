@@ -209,7 +209,18 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    redefines W1's `factory_lot_guard` (a REJECTED lot's lifecycle moves), W2a's `factory_location_party_guard` (CUSTOMER),
    `factory_stock_move_period_lock` (the posting date), `factory_stock_count_guard` (freezeMoves chosen while DRAFT, the count's lock
    when it leaves COUNTING, the counter-not-approver switch and scans) and `factory_stock_count_line_guard` (a floor session: the
-   count's lock instead of its row, ADDED lines and its count only; frozenAt; a recount by another person)): triggers, partial unique indexes and deferred
+   count's lock instead of its row, ADDED lines and its count only; frozenAt; a recount by another person)),
+   `…_sales_intake_w2b_guards` (W2b-5 schema wave 37/44, B-W2b-279, sales intake and customers: inquiries numbered (INQUIRY),
+   logged open, NEW → ASSIGNED ⇄ NEED_INFO → QUOTED (with the quote, one inquiry per quote) | DECLINED (with the reason) | LOST
+   (with words), then frozen but the note and the prospect's erasure; a party or a prospect with its lawful basis, one inquiry per
+   mail (partial uniques), the tech pack's files of the inquiry or its mail, the prospect blank for good once erased; their lines
+   only while open, sizes and total that agree; customer requirements fixed once written, ended once, superseded by a new row
+   (once: a partial unique); holds placed with words, never edited, released once (one in force per party, company and reason:
+   a partial unique); terms per company of a tenant-wide customer (one live per party and company: a partial unique), frozen
+   once ended; seasons with their code fixed, CLOSED with its time; its own triggers on QuoteVersion and SalesOrder (an OPEN
+   season of their company), Party (a rider under a team is a PERSON, a team with riders stays an ORGANISATION) and
+   PartyContact (consent with when and how; an erased contact archived and blank for good); no earlier function redefined):
+   triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
