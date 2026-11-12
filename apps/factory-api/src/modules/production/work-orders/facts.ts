@@ -84,7 +84,8 @@ export async function readBasics(db: Reader, workOrder: Header): Promise<Basics>
   const style = await db.style.findUniqueOrThrow({ where: { id: workOrder.styleId }, select: STYLE_COLUMNS })
   const site = await db.site.findUniqueOrThrow({ where: { id: workOrder.siteId }, select: SITE_COLUMNS })
   const cells = await readCells(db, workOrder.id, style.sizes)
-  const orders = await readOrders(db, cells.map((cell) => cell.salesOrderId))
+  // B-W2b-284: a SAMPLE cell of an internal or uncharged round names no order.
+  const orders = await readOrders(db, cells.flatMap((cell) => (cell.salesOrderId === null ? [] : [cell.salesOrderId])))
   const revision = await readRevision(db, workOrder.styleRevisionId)
   // A released work order carries its frozen label template; a draft shows its revision's.
   const label = await readLabel(db, workOrder.labelTemplateId ?? revision?.labelTemplateId ?? null)
@@ -374,7 +375,7 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
       facts.scope,
       cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), colourwayId: cell.colourwayId, size: cell.size })),
     ),
-    depositCheck(facts.deposits),
+    depositCheck(facts.deposits, facts.workOrder.kind), // B-W2b-284: a sample of no order line needs no deposit
     materialReadinessCheck(facts.material, materialReadinessOf(facts.blockers.readiness), override),
     batchCheck(facts.batchSeries),
     holdsCheck(facts.workOrder.number, facts.blockers.holds),

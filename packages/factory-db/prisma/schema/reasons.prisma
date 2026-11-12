@@ -63,4 +63,8 @@ enum ReasonList {
   CLAIM
   /// Why goods were downgraded to a lower quality.
   DOWNGRADE
+  /// W2b-5 (approvals.prisma, wave 35/44): why an approver said no to a request (ApprovalTask.rejectReasonCode).
+  APPROVAL_REJECT
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-175): why a line's price was changed by hand (QuoteLine.priceSteps' MANUAL step).
+  PRICE_ADJUSTMENT
 }

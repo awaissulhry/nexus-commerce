@@ -125,6 +125,9 @@ model OptionGroup {
   values  OptionValue[]
   rules   OptionRule[]
   styles  StyleOptionGroup[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the options of it chosen on quote and order lines.
+  quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionGroup")
+  salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionGroup")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from its values, rules and the styles that offer it.
@@ -165,6 +168,9 @@ model OptionValue {
   effects       OptionEffect[]
   // The styles that take it when nothing is chosen.
   styleDefaults StyleOptionGroup[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): the quote and order lines it was chosen on.
+  quoteLineOptions      QuoteLineOption[]      @relation("QuoteLineOptionValue")
+  salesOrderLineOptions SalesOrderLineOption[] @relation("SalesOrderLineOptionValue")
   // product.prisma: the BOM lines only for it.
   bomLines      BomLine[]
 

@@ -22,7 +22,21 @@ export type RecordDialog =
   | { kind: 'change'; title: string; reason: string; busy: boolean; notice: Notice | null }
   | { kind: 'testResult'; result: 'PASSED' | 'FAILED' | null; busy: boolean; notice: Notice | null }
   | { kind: 'shipment'; direction: 'OUTBOUND' | 'RETURN'; carrierName: string; trackingNumber: string; trackingUrl: string; note: string; busy: boolean; notice: Notice | null; lines: readonly Phrase[] }
-  | { kind: 'workOrder'; options: WorkOrderOptions | null; problem: string | null; lineIds: readonly string[]; siteId: string; dueDate: string; busy: boolean; notice: Notice | null; made: { id: string; number: string } | null }
+  | {
+      kind: 'workOrder'
+      options: WorkOrderOptions | null
+      problem: string | null
+      /** B-W2b-284: on order lines, or without one (an internal or uncharged proto, fit or salesman round). */
+      mode: 'lines' | 'none'
+      lineIds: readonly string[]
+      /** "none" only: the colourway of the round's cells of any colourway. */
+      colourwayId: string
+      siteId: string
+      dueDate: string
+      busy: boolean
+      notice: Notice | null
+      made: { id: string; number: string } | null
+    }
 
 export interface FitState {
   part: Part<FitView>

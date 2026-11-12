@@ -7,7 +7,7 @@
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["lostReason", "internalNote", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["lostReason", "internalNote", "templateId", "createdById"] }
       }
     },
     "QuoteVersion": {
@@ -32,7 +32,7 @@
         "factory_partner_runtime": {
           "privileges": ["select"],
           "scopedBy": ["party"],
-          "hiddenColumns": ["adjustmentReason", "unitCost", "costAmount", "marginAmount", "marginPct", "costSnapshot", "createdById"]
+          "hiddenColumns": ["adjustmentReason", "priceSteps", "unitCost", "costAmount", "marginAmount", "marginPct", "costSnapshot", "createdById"]
         }
       }
     },
@@ -72,25 +72,25 @@
       }
     },
     "SalesOrder": {
-      "about": "The office (or the system context) makes an order from an accepted version, amends, moves, closes and cancels it. A portal or link session reads its own party's orders without the cost or the internal note.",
+      "about": "The office (or the system context) makes an order from an accepted version, amends, moves, closes and cancels it; W2b-5 (B-W2b-281): an order may wait for a yes (PENDING_APPROVAL), carries the office's priority and the confirmation sent. A portal or link session reads its own party's orders without the cost, the internal note or the office's priority and its reason.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "createdById", "backlogRank"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "priorityLevel", "urgentReason", "createdById", "backlogRank"] }
       }
     },
     "SalesOrderLine": {
-      "about": "The office writes an order's lines (an amendment deletes one) while the order is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's order lines with their prices, never their cost.",
+      "about": "The office writes an order's lines (an amendment deletes one) while the order waits for a yes (PENDING_APPROVAL, W2b-5) or is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's order lines with their prices, never their cost.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "closedShortById", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["priceSteps", "unitCost", "costAmount", "closedShortById", "createdById"] }
       }
     },
     "SalesOrderLineSize": {
-      "about": "The office writes the size quantities of an order's lines while the order is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's.",
+      "about": "The office writes the size quantities of an order's lines while the order waits for a yes (PENDING_APPROVAL, W2b-5) or is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {

@@ -253,8 +253,12 @@ model WorkOrder {
   repairOrders  RepairOrder[]
   // W2a subcontract.prisma: the work sent out of it to workshops.
   subcontractOrders SubcontractOrder[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the requests to buy for it (its shortages).
+  purchaseRequests  PurchaseRequest[]
   // W2b kits.prisma (B-W2b-01): its material kit (staging place, marked complete).
   kits              WorkOrderKit[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the substitutes used on it.
+  materialSubstitutions MaterialSubstitution[]
   // W2a rework.prisma, schedule.prisma: its rework, the replacements of its scrap, its slots on the planning board.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
@@ -313,6 +317,11 @@ model WorkOrderSize {
   /// The work order's style.
   styleId              String   @db.Uuid
   colourwayId          String   @db.Uuid
+  /// W2b-5 (schema wave 38/44, B-W2b-280; B-W2b-225): the option values its garments are made with, copied from its order
+  /// line's chosen options (SalesOrderLineOption) when the cell is made, so that a routing step only for some options
+  /// (RoutingOperation.appliesToOptionValueIds) applies; each an OptionValue of the tenant, once, and one chosen on the
+  /// cell's order line when it names one. Empty: no option (every cell before W2b-5).
+  optionValueIds       String[] @default([]) @db.Uuid
   /// A size code of the style's range (for a made-to-measure unit: the base size it is graded from).
   size                 String
   /// Pieces, above 0.

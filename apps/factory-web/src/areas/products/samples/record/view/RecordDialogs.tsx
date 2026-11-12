@@ -1,26 +1,17 @@
 'use client'
 
-import Link from 'next/link'
-import { Banner, Field, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Select, Skeleton } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, RadioCard, Select } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
-import type { RoundView, WorkOrderOptions } from '../../api'
+import type { RoundView } from '../../api'
 import { shipmentValueProblem, type Phrase } from '../../model'
 import { NoticeLine, useWords } from '../../parts'
+import { workOrderFacts } from '../../work-order/model'
+import { WorkOrderDialog } from '../../work-order/WorkOrderDialog'
 import type { RecordDialog, SampleRecordActions, SampleRecordModel } from '../view-model'
 
-/** The make dialog's facts said in our words (the API's `blockers` and `warnings` are English sentences without codes). */
-export function workOrderFacts(options: WorkOrderOptions, chosen: readonly string[]): { blockers: Phrase[]; warnings: Phrase[] } {
-  const blockers: Phrase[] = []
-  const warnings: Phrase[] = []
-  if (options.lines.length === 0) blockers.push({ key: options.round.partyId ? 'wo.blocker.noLinesCustomer' : 'wo.blocker.noLines' })
-  if (options.sites.length === 0) blockers.push({ key: 'wo.blocker.noSites' })
-  if (options.lines.length > 0 && chosen.length === 0) blockers.push({ key: 'wo.blocker.pickLine' })
-  if (options.lines.length > 0 && options.sites.length > 0 && options.blockers.length > 0 && blockers.length === 0) blockers.push({ key: 'wo.blocker.other', params: { count: options.blockers.length } })
-  if (options.round.revision.status === 'DRAFT') warnings.push({ key: 'wo.warning.draft', params: { revision: options.round.revision.revision } })
-  if (options.warnings.length > 0 && options.round.revision.status !== 'DRAFT') warnings.push({ key: 'wo.warning.other', params: { count: options.warnings.length } })
-  return { blockers, warnings }
-}
+/** B-W2b-284: the make dialog's facts live with the dialog (work-order/model.ts); re-exported for the area's tests. */
+export { workOrderFacts }
 
 /** Why the open dialog's primary is held (null: it may be pressed). */
 export function dialogHeld(dialog: RecordDialog, offline: boolean): Phrase | null {
@@ -40,7 +31,7 @@ export function dialogHeld(dialog: RecordDialog, offline: boolean): Phrase | nul
     case 'workOrder': {
       if (dialog.made) return null
       if (!dialog.options) return { key: dialog.problem ?? 'common.reading' }
-      const facts = workOrderFacts(dialog.options, dialog.lineIds)
+      const facts = workOrderFacts(dialog.options, dialog.lineIds, dialog)
       return facts.blockers[0] ?? (dialog.siteId ? null : { key: 'wo.blocker.pickSite' })
     }
   }
@@ -160,79 +151,6 @@ export function RecordDialogs({ model, round, actions }: { model: SampleRecordMo
       </Modal>
     )
 
-  // Make sample work order.
-  const options = dialog.options
-  const facts = options ? workOrderFacts(options, dialog.lineIds) : null
-  return (
-    <Modal open onClose={close} title={t('wo.title')} subtitle={round.number} size="xl" footer={footer(t('wo.submit'))}>
-      <div className="fw-smp-form">
-        {dialog.made ? (
-          <Banner tone="success" title={t('wo.made', { number: dialog.made.number })}>
-            {model.can.workOrdersView ? (
-              <Link className="fw-smp-link" href={`${model.prefix}/production/work-orders/${encodeURIComponent(dialog.made.id)}`}>
-                {t('wo.open', { number: dialog.made.number })}
-              </Link>
-            ) : null}
-          </Banner>
-        ) : !options ? (
-          dialog.problem ? (
-            <Banner tone="danger" title={t('wo.failed')}>
-              {t(dialog.problem)}
-            </Banner>
-          ) : (
-            <Skeleton height={160} />
-          )
-        ) : (
-          <>
-            <p className="fw-smp-hint">{t('wo.body', { revision: options.round.revision.revision })}</p>
-            {facts!.blockers.map((line) => (
-              <Banner key={line.key} tone="danger" title={say(line)} />
-            ))}
-            {facts!.warnings.map((line) => (
-              <Banner key={line.key} tone="warning" title={say(line)} />
-            ))}
-            {options.lines.length > 0 && (
-              <SummaryTable
-                label={t('wo.lines')}
-                density="roomy"
-                stackOnPhone
-                columns={[t('wo.col.take'), t('wo.col.line'), t('wo.col.colourway'), t('wo.col.open'), t('wo.col.takes')]}
-                rows={options.lines.map((line) => ({
-                  id: line.id,
-                  cells: [
-                    <Checkbox
-                      key="c"
-                      aria-label={t('wo.takeLine', { order: line.orderNumber, seq: line.seq })}
-                      checked={dialog.lineIds.includes(line.id)}
-                      onChange={(event) => patch({ lineIds: event.target.checked ? [...dialog.lineIds, line.id] : dialog.lineIds.filter((id) => id !== line.id) })}
-                    />,
-                    t('wo.lineName', { order: line.orderNumber, seq: line.seq }),
-                    line.colourwayCode,
-                    line.open.map((size) => `${size.size}: ${size.open}`).join(' · ') || '—',
-                    line.proposed.map((size) => `${size.size} × ${size.quantity}`).join(' · ') || t('wo.takesNothing'),
-                  ],
-                }))}
-              />
-            )}
-            <div className="fw-smp-form-grid">
-              <Field label={t('wo.site')} required>
-                <Select size="sm" value={dialog.siteId} onChange={(event) => patch({ siteId: event.target.value })}>
-                  <option value="">{t('wo.pickSite')}</option>
-                  {options.sites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} · {site.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={t('wo.due')} hint={t('wo.dueHint')}>
-                <DateField value={dialog.dueDate} clearable onChange={(value) => patch({ dueDate: value })} />
-              </Field>
-            </div>
-          </>
-        )}
-        <NoticeLine notice={dialog.notice} />
-      </div>
-    </Modal>
-  )
+  // Make sample work order (B-W2b-284: on an order line, or without one; work-order/WorkOrderDialog.tsx).
+  return <WorkOrderDialog model={model} round={round} dialog={dialog} footer={footer(t('wo.submit'))} onClose={close} onPatch={(value) => patch(value)} />
 }

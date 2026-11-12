@@ -336,8 +336,15 @@ export async function placeLine(caller: CommandCaller, shipmentId: string, lineI
 export async function packSerial(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; serial: string; parcelId?: string | undefined }, idempotencyKey?: string) {
   return packCommand(caller, shipmentId, { name: 'shipping.packSerial', idempotencyKey, input: body, version: body.version, change: 'serials' }, async (tools, shipment) => {
     await lockedStatus(tools, shipment.id, ['DRAFT'], 'serials are packed')
-    const serial = await tools.tx.garmentSerial.findFirst({ where: { serial: body.serial }, select: { id: true, serial: true, status: true, shipmentLineId: true, workOrderSizeId: true } })
+    const serial = await tools.tx.garmentSerial.findFirst({
+      where: { serial: body.serial },
+      select: { id: true, serial: true, status: true, shipmentLineId: true, workOrderSizeId: true, workOrderSize: { select: { salesOrderLineId: true, workOrder: { select: { number: true } } } } },
+    })
     if (!serial) throw new NotFoundError(`Serial ${body.serial} not found.`)
+    // B-W2b-284: a sample made for no order line (an internal or uncharged round's) never ships on an order's shipment.
+    if (serial.workOrderSize.salesOrderLineId === null) {
+      throw new ConflictError(`Serial ${serial.serial} is a sample of work order ${serial.workOrderSize.workOrder.number}, made for no order line: samples do not ship on an order's shipment.`)
+    }
     if (serial.status !== 'RELEASED') throw new ConflictError(`Serial ${serial.serial} is ${serial.status}: only garments quality released are packed (QHS-073).`)
     const { lines, parcels } = await readContents(tools.tx, shipment.id)
     if (serial.shipmentLineId !== null) {

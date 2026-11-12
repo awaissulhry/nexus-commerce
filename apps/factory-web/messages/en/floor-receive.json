@@ -43,6 +43,7 @@
   },
   "status": {
     "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Waiting for a yes",
     "SENT": "Sent",
     "CONFIRMED": "Confirmed",
     "CHANGES_PROPOSED": "Changes proposed",

@@ -178,6 +178,13 @@ export const pointRefusal = (code: string, size: string, revision: number): Deci
 export const specPointRefusal = (code: string, revision: number): DecisionRefusal =>
   refusal('POINT_NOT_IN_SPEC', `${code} is not a point of the measurement spec of revision ${revision}: comment on one of its points, or on a body area.`)
 
+/**
+ * B-W2b-284: a point id that is none of the spec's points (an unknown id too: SampleMeasurement / SampleComment.pointOfMeasureId
+ * are foreign keys since W2b-5 wave 34, so the module reads the points from the spec alone, no library look-up of its own).
+ */
+export const notASpecPointRefusal = (revision: number): DecisionRefusal =>
+  refusal('POINT_NOT_IN_SPEC', `That point of measure is not in the measurement spec of revision ${revision}: pick one of its points.`)
+
 export const sizeRefusal = (size: string, number: string): DecisionRefusal => refusal('SIZE_NOT_IN_ROUND', `Size ${size} is not made in sample round ${number}: measure one of its sizes.`)
 
 const D = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP, toExpNeg: -40, toExpPos: 40 })

@@ -6,6 +6,7 @@ import { whenWords } from '@nexus/factory-domain/planning/schedule/time'
 import type { OrderLineFacts } from '@nexus/factory-domain/production/work-orders/cells'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import type { PlannedOperation } from '@nexus/factory-domain/production/work-orders/spec'
+import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 
@@ -108,10 +109,11 @@ export interface CellRow {
   readonly colourwayName: string
   readonly size: string
   readonly quantity: number
-  readonly salesOrderLineId: string
-  readonly partyId: string
-  readonly lineSeq: number
-  readonly salesOrderId: string
+  /** B-W2b-284: null (all four) for a SAMPLE cell of an internal or uncharged round: it makes no order line. */
+  readonly salesOrderLineId: string | null
+  readonly partyId: string | null
+  readonly lineSeq: number | null
+  readonly salesOrderId: string | null
 }
 
 /** The work order's cells: colourways in code order, sizes in the style's range order (then by code). */
@@ -132,14 +134,11 @@ export async function readCells(db: Reader, workOrderId: string, styleSizes: rea
   return rows
     .map((row) => ({
       ...row,
-      // B-W2b-275: every cell names its order line but a SAMPLE cell of an internal or uncharged round, which no command makes
-      // yet: B-W2b-284 widens this row (and the work order's view) for it.
-      salesOrderLineId: row.salesOrderLineId!,
-      partyId: row.partyId!,
+      // B-W2b-284: a SAMPLE cell of an internal or uncharged round names no order line (B-W2b-275's nullable cell).
       colourwayCode: colourwayOf.get(row.colourwayId)?.code ?? '',
       colourwayName: colourwayOf.get(row.colourwayId)?.name ?? '',
-      lineSeq: lineOf.get(row.salesOrderLineId!)?.seq ?? 0,
-      salesOrderId: lineOf.get(row.salesOrderLineId!)?.orderId ?? '',
+      lineSeq: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.seq ?? 0),
+      salesOrderId: row.salesOrderLineId === null ? null : (lineOf.get(row.salesOrderLineId)?.orderId ?? ''),
     }))
     .sort((a, b) => a.colourwayCode.localeCompare(b.colourwayCode) || place(a.size) - place(b.size) || a.size.localeCompare(b.size, undefined, { numeric: true }))
 }
@@ -188,12 +187,13 @@ export interface LineRow extends OrderLineFacts {
 /**
  * These order lines with their size grids and orders, and the pieces of each size already on work orders that are not
  * CANCELLED, other than `exceptWorkOrderId`. A REPAIR work order's cell (B-W2a-12, MES-019) repairs a garment the line
- * sold: it is not production of the line and never counts here.
+ * sold: it is not production of the line and never counts here. W2b-5 (B-W2b-280): a FEE line is never made, so it is
+ * not read here (the callers find no such line).
  */
 export async function readOrderLines(db: Reader, lineIds: readonly string[], exceptWorkOrderId?: string): Promise<Map<string, LineRow>> {
   const ids = [...new Set(lineIds)].filter(isUuid)
   if (ids.length === 0) return new Map()
-  const lines = await db.salesOrderLine.findMany({
+  const found = await db.salesOrderLine.findMany({
     where: { id: { in: ids } },
     select: {
       id: true,
@@ -212,6 +212,7 @@ export async function readOrderLines(db: Reader, lineIds: readonly string[], exc
       priority: true,
     },
   })
+  const lines = found.filter(isGoodsLine)
   if (lines.length === 0) return new Map()
   const sizes = await db.salesOrderLineSize.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, size: true, quantity: true }, orderBy: { id: 'asc' } })
   const taken = await db.workOrderSize.groupBy({

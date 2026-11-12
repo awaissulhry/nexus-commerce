@@ -1,0 +1,285 @@
+// Approvals and workflow (W2b-5, schema wave 35/44, B-W2b-276; features PLT-042, PLT-086, PLT-091, PLT-093, PLT-104,
+// PLT-105): ONE approval engine for every new kind of yes, so a new approval needs a rule, not a table. A domain that has
+// its own approval table keeps it (quotes: sales.prisma QuoteApproval; change orders: changes.prisma ChangeApproval; SMV
+// changes, NCR decisions, scrap: labour.prisma ScrapApproval; timesheets: time.prisma TimesheetApproval; inspection plan and
+// work instruction versions); the purchase orders, sales orders, stock adjustments, count variances, substitutions, credit
+// overrides and the other kinds of W2b-5 ask through these tables. Not to be confused with links-depth.prisma's
+// ApprovalRequest: that one asks a PARTNER (a customer, a supplier) through the portal or a link; these ask a person of the
+// factory's own office.
+//
+//   ApprovalRule   when a request of a kind needs a yes and from whom (PLT-086): a condition on the facts the kind exposes
+//                  (the RuleBuilder's rows joined by AND or OR), the approver (a role or a named person), the meaning of
+//                  the signature and the step-up the yes asks, an order among the kind's rules, a time to decide. Built
+//                  OFF (`active` false): no request needs a yes until the Owner switches a rule on (Owner answers 11-10,
+//                  Q3 and the gate "Approval rules"); without a rule everything works as today.
+//   ApprovalTask   one request for a yes (PLT-093): its kind and subject (record type + id), the rules that asked, the
+//                  approver and meaning they named, the change as it will be written (a preview) with its SHA-256
+//                  fingerprint, who asked and when; PENDING → APPROVED | REJECTED | WITHDRAWN | STALE (the subject changed
+//                  before the decision, so the yes would not be the yes to what was shown); a no with a reason code and
+//                  words, a yes with an optional comment (PLT-091), the step-up time where the rule asks one (PLT-105).
+//                  NOBODY decides their own request, the Owner included (Owner answer 11-10, Q3 = A; PLT-042): the
+//                  database refuses it on every path, for every login.
+//   ApprovalEvent  the history on the record (PLT-104), append-only: what happened to a task, or to a domain approval of a
+//                  record (a change order, a quote version …) when its step writes it here; who, when, the words, the
+//                  meaning signed. Its decisions follow the same rule: never by the person who asked.
+//
+// The reject reasons are a coded list: reasons.prisma ReasonList APPROVAL_REJECT (a task keeps the code as text, as every
+// record keeps its reason code). apps/factory-api's platform/approvals (B-W2b-282) writes these tables through command();
+// the hand-written …_approvals_w2b_guards migration holds their rules for every login, the owner included. Records of other
+// waves are named by record type + id (a later W2b-5 wave names an approval kind by its code), never by a foreign key.
+//
+// Who sees what (ownership/approvals.json): the office reads the rules and the tasks and events of its companies and sites
+// (the API keeps a reader to the companies and sites its grants name; the row wall is the tenant) and writes them only
+// through the platform's approval command; the floor, the portal and links read nothing (a request asked on the floor is
+// written by the API for the worker, who is named as its requester). No money column: amounts and margins live in the
+// preview's facts, each with its grain, and the API shows them only to a reader with that grain.
+
+/// The platform's approval kinds (W2b-5): what a request asks a yes for. A new kind is a value here and a kind file of
+/// apps/factory-api platform/approvals/kinds (B-W2b-282), never a new table.
+enum ApprovalTaskKind {
+  /// A purchase order before it is sent (SCM-078).
+  PURCHASE_ORDER
+  /// A change to an approved purchase order above the rule (SCM-080).
+  PURCHASE_ORDER_CHANGE
+  /// A sales order before it goes on (SAL-205).
+  SALES_ORDER
+  /// A change to an approved sales order (SAL-190).
+  SALES_ORDER_CHANGE
+  /// A price change (a list or a line price).
+  PRICE_CHANGE
+  /// A stock adjustment above the warehouse rule's value (the design's ws-adjust).
+  STOCK_ADJUSTMENT
+  /// A count difference above the rule, after its recount (SCM-229).
+  COUNT_VARIANCE
+  /// Another material in place of the BOM's (MES-139).
+  MATERIAL_SUBSTITUTION
+  /// An order over the customer's credit limit going on (SAL-241).
+  CREDIT_OVERRIDE
+  /// A credit note without the goods coming back (SAL-342).
+  CREDIT_WITHOUT_RETURN
+  /// A supplier's new bank account (SCM-007).
+  SUPPLIER_BANK_CHANGE
+  /// Someone's request to buy (ask to buy).
+  PURCHASE_REQUEST
+}
+
+/// What a signature means (PLT-105; 21 CFR 11.50 style): the yes is signed with it, and shown with it in the history.
+enum ApprovalMeaning {
+  REVIEWED
+  APPROVED
+  RELEASED
+  VERIFIED
+}
+
+/// PENDING → APPROVED | REJECTED | WITHDRAWN | STALE; the last four are final (a new request is a new task).
+enum ApprovalTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  /// Taken back before a decision (by the person who asked, or by the system when the subject went away).
+  WITHDRAWN
+  /// The subject changed after it was asked (its fingerprint differs): the yes would not be the yes to what was shown.
+  STALE
+}
+
+/// What one line of the history says.
+enum ApprovalEventAction {
+  REQUESTED
+  COMMENTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  STALE
+  /// The yes signed with its meaning (beside its APPROVED line).
+  SIGNED
+}
+
+/// When a request of one kind needs a yes, and from whom (PLT-086; design admin.automation "Approval rules" and its rule
+/// popup): the condition on the facts the kind exposes, as the RuleBuilder keeps it ({ "combinator": "and" | "or",
+/// "rows": [{ "field", "operator", "value" }] }; no row: every request of the kind), the approver (a role of the office,
+/// or one named person), the meaning of the signature and whether the yes asks a fresh step-up, the order among the kind's
+/// rules (the first that matches names the approver: B-W2b-282), the hours to decide (the inbox's Overdue), and from when
+/// it applies. Built switched OFF: nothing needs a yes until a person switches a rule on. "Nobody approves their own
+/// request" is not a rule row: the database holds it on every task (shown as a locked rule). Edited and switched off,
+/// never deleted (the tasks name the rules that asked).
+model ApprovalRule {
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose requests it reads; null: every company of the tenant. Never changes.
+  companyId        String?          @db.Uuid
+  /// Never changes.
+  kind             ApprovalTaskKind
+  /// Its title in the rules list (1 to 120 characters, one line).
+  name             String
+  /// The RuleBuilder's condition: { "combinator": "and" | "or", "rows": [...] } with at most 50 rows, each { "field" (the
+  /// kind's fact, `^[a-z][A-Za-z0-9_.]*$`), "operator" (eq, ne, lt, lte, gt, gte, in, notIn, contains, isTrue,
+  /// isFalse), "value" (text, a list of texts for in / notIn, null for isTrue / isFalse), "id"? }. A threshold in money
+  /// is read and edited only with the grain of its fact (the API's).
+  condition        Json
+  /// Who decides: the holders of this office role over the request's company, or this one person; exactly one.
+  approverRoleId   String?          @db.Uuid
+  approverUserId   String?          @db.Uuid
+  /// The yes is a signature with this meaning (null: a plain yes).
+  signatureMeaning ApprovalMeaning?
+  /// The yes asks a fresh step-up (an authenticator code) within the 15 minutes before it.
+  requireStepUp    Boolean          @default(false)
+  /// The order among the kind's rules (1 to 9999, lower first).
+  sequence         Int              @default(100)
+  /// The hours the approver has to decide (1 to 2160; null: no time): the task's due time.
+  dueHours         Int?
+  /// Switched on by a person; built OFF.
+  active           Boolean          @default(false)
+  /// From when it applies (null: as soon as it is on).
+  effectiveFrom    DateTime?        @db.Timestamptz(3)
+  version          Int              @default(1)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?          @db.Uuid
+  /// Who changed it last ("Changed by" on the rule).
+  updatedById      String?          @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company      Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  approverRole Role?    @relation("ApprovalRuleApproverRole", fields: [tenantId, approverRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  approverUser User?    @relation("ApprovalRuleApproverUser", fields: [tenantId, approverUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The rules the engine reads for a kind (switched on, in order).
+  @@index([tenantId, kind, active])
+  @@index([tenantId, companyId])
+}
+
+/// One request for a yes (PLT-093; design home.approvals "Requests" and its review popup): of one kind, about one subject
+/// (its model name and id; the subject's company, and its site when it has one), asked by a person (an office user, or a
+/// floor worker on the floor; exactly one) at a time, because of the rules that asked (their ids, when a rule asked; a
+/// domain switch may ask without one). It carries what the approver needs and never changes after it was asked: the
+/// approver the first matching rule named (a role or a person), the meaning and step-up the yes asks, the due time, the
+/// request in words, the change as it will be written and the SHA-256 fingerprint of it. At the yes the engine reads the
+/// subject again: a subject whose fingerprint differs is STALE, not approved. Decided once: APPROVED (when and by whom; a
+/// comment; the step-up time where asked) or REJECTED (when and by whom, a reason code of the APPROVAL_REJECT list and the
+/// words); or WITHDRAWN or STALE (when). Never decided by the person who asked or wrote it (nor, for a floor request, the
+/// office account of the worker who asked), the Owner included: the database's rule, on every path. A named approver is
+/// the only one who decides; a role's holders are checked by the API. Never deleted.
+model ApprovalTask {
+  id                  String             @id @db.Uuid
+  tenantId            String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  kind                ApprovalTaskKind
+  /// The subject: its model name ("PurchaseOrder", "SalesOrder", "StockCountLine" …) and id.
+  recordType          String
+  recordId            String             @db.Uuid
+  /// The subject's company, and its site when it has one (always for a request asked on the floor).
+  companyId           String             @db.Uuid
+  siteId              String?            @db.Uuid
+  /// The rules that asked (ApprovalRule ids of the kind, of the company or tenant-wide), each once, at most 20; empty: a
+  /// domain switch asked (Warehouse rules' adjustment value …).
+  ruleIds             String[]           @default([]) @db.Uuid
+  /// The request in words, one line (1 to 500 characters), without a money figure ("PO-2026-0042 to Conceria Seed — 3
+  /// lines"): the API adds the amounts from the preview's facts for a reader with their grain.
+  summary             String
+  /// The change as it will be written (an object, at most 256 KiB): { "changes": [{ "field", "from", "to", "grain"? }],
+  /// "facts"?: [{ "field", "value", "grain"? }] } — each money figure with its grain (price, cost, margin), which the API
+  /// drops for a reader without it; "facts" are the rule's values ("margin 18 % · floor 25 %").
+  preview             Json
+  /// The SHA-256 (64 lower-case hex) of the subject as it will be written: the yes is re-checked against it.
+  fingerprint         String
+  /// Who asked: an office user, or a floor worker (on the floor; the task names the worker's site); exactly one.
+  requestedById       String?            @db.Uuid
+  requestedByWorkerId String?            @db.Uuid
+  requestedAt         DateTime           @default(now()) @db.Timestamptz(3)
+  /// Who decides (from the rule that matched): an office role's holders over the company, or one named person; exactly
+  /// one. A named person is never the person who asked.
+  approverRoleId      String?            @db.Uuid
+  approverUserId      String?            @db.Uuid
+  /// The yes is a signature with this meaning (null: a plain yes); it asks a fresh step-up when requireStepUp.
+  signatureMeaning    ApprovalMeaning?
+  requireStepUp       Boolean            @default(false)
+  /// Decide by then (the rule's hours after the request; null: no time): "Overdue" after it.
+  dueAt               DateTime?          @db.Timestamptz(3)
+  status              ApprovalTaskStatus @default(PENDING)
+  /// APPROVED or REJECTED: when and by whom (an office user who neither asked nor wrote the request).
+  decidedAt           DateTime?          @db.Timestamptz(3)
+  decidedById         String?            @db.Uuid
+  /// APPROVED: the approver's comment (optional, 1 to 2000 characters).
+  comment             String?
+  /// REJECTED: a code of the APPROVAL_REJECT reason list (`^[A-Z][A-Z0-9_]*$`) and the words (1 to 2000), both required.
+  rejectReasonCode    String?
+  rejectReason        String?
+  /// APPROVED with requireStepUp: when the approver proved the step-up (within the 15 minutes before the decision).
+  stepUpAt            DateTime?          @db.Timestamptz(3)
+  /// WITHDRAWN: when, and by whom (null: the system, when the subject went away).
+  withdrawnAt         DateTime?          @db.Timestamptz(3)
+  withdrawnById       String?            @db.Uuid
+  /// STALE: when the engine found that the subject changed.
+  staleAt             DateTime?          @db.Timestamptz(3)
+  version             Int                @default(1)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who wrote it (the person who asked, or the office user who asked on someone's behalf).
+  createdById         String?            @db.Uuid
+
+  company           Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site              Site?           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A worker of the task's site (the key pins it).
+  requestedByWorker Worker?         @relation("ApprovalTaskRequestedByWorker", fields: [tenantId, siteId, requestedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  approverRole      Role?           @relation("ApprovalTaskApproverRole", fields: [tenantId, approverRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  approverUser      User?           @relation("ApprovalTaskApproverUser", fields: [tenantId, approverUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  events            ApprovalEvent[]
+  // W2b-5 sales.prisma, sales-orders-depth.prisma (wave 39/44): the order amendments whose new yes it is, the credit checks
+  // whose override it is.
+  salesOrderReapprovals SalesOrderAmendment[] @relation("SalesOrderAmendmentReapproval")
+  creditOverrides       CreditCheck[]         @relation("CreditCheckOverrideTask")
+
+  // The target of the events' reference: an event names a task of its own company.
+  @@unique([tenantId, companyId, id])
+  // What waits for a role's holders or for one person ("Waiting for me"), and what a person asked ("Asked by me").
+  @@index([tenantId, status, approverRoleId])
+  @@index([tenantId, status, approverUserId])
+  @@index([tenantId, requestedById, status])
+  // A subject's requests.
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, companyId, status])
+}
+
+/// One line of a record's approval history (PLT-104; design home.approvals review "History", the record panels'
+/// Approvals): a task's (REQUESTED, COMMENTED, APPROVED, REJECTED, WITHDRAWN, STALE, SIGNED: the task's subject is the
+/// record) or a domain approval's, named by its record type + id (a change order, a quote version …), when its step
+/// writes it here. Who (an office user, a floor worker who asked on the floor, or nobody: the system's WITHDRAWN and
+/// STALE), when, the words (the request's note, a comment, the reason of a no), a reject reason code, the meaning signed.
+/// A task's line agrees with its task (its state, its requester, its decider); a decision is never by the person who
+/// asked (a task's requester; for a domain approval, the person of the record's last REQUESTED line). Never changed or
+/// removed (the triggers, for every login).
+/// @append-only
+model ApprovalEvent {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company (a task's: the task's).
+  companyId   String              @db.Uuid
+  /// The task, for a task's line (its company pinned by the key); null: a domain approval's line.
+  taskId      String?             @db.Uuid
+  /// The record whose history it is: a task's subject (equal to the task's), or the domain record.
+  recordType  String
+  recordId    String              @db.Uuid
+  action      ApprovalEventAction
+  /// Who: an office user, or a floor worker (a request asked on the floor); at most one. Neither: the system (WITHDRAWN,
+  /// STALE only).
+  byId        String?             @db.Uuid
+  byWorkerId  String?             @db.Uuid
+  /// When it happened (not in the future).
+  at          DateTime            @default(now()) @db.Timestamptz(3)
+  /// The words (1 to 4000 characters, line breaks allowed): required for COMMENTED and REJECTED.
+  words       String?
+  /// REJECTED: the APPROVAL_REJECT code (a task's: required, the task's).
+  reasonCode  String?
+  /// SIGNED: the meaning signed (required); APPROVED: the meaning when the yes was signed; never on another line.
+  meaning     ApprovalMeaning?
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  company Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  task    ApprovalTask? @relation(fields: [tenantId, companyId, taskId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A record's history, newest first.
+  @@index([tenantId, recordType, recordId, at])
+  @@index([tenantId, taskId])
+}

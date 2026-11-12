@@ -1,11 +1,13 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { NOW, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../library/demo'
+import { NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../library/demo'
 import type { ProductSettings } from './api'
 import { AUDIT, CHANGED, COMPANY_FRESH, COMPANY_ID, COMPANY_SETTINGS, COSTING, COSTING_NO_GRAIN, LABELS, SCALES, TENANT_ID, TENANT_SETTINGS, TYPES, typeOf } from './demo'
-import { changedByOf, inheritedRules, mayKeepTypeOf, NO_ADDRESS, ready, rulesDraftOf, rulesLoosenings, toleranceDraftOf, typeDraftOf, type Address, type RulesDraft, type ToleranceDraft, type TypeDraft } from './model'
+import { changedByOf, failed, inheritedRules, mayKeepTypeOf, NO_ADDRESS, ready, rulesDraftOf, rulesLoosenings, toleranceDraftOf, typeDraftOf, type Address, type RulesDraft, type ToleranceDraft, type TypeDraft } from './model'
 import type { ProductSettingsModel, SettingsCan, TypeDialogState } from './view-model'
 import { ProductSettingsView } from './view/ProductSettingsView'
+// B-W2b-283 (FU1:03, FU1:04): the measurement templates a type picks from; "Changed by" without audit.read.
+import { DEMO_TEMPLATES, JACKET_TEMPLATE_A, OLD_JACKET_TEMPLATE } from './template-picker/fixtures'
 
 /**
  * SCR-251 Products › Settings › Product settings — made-up data only (DEMO- codes, "Demo" names). Each case is a state the
@@ -60,6 +62,7 @@ function page(over: Partial<ProductSettingsModel> = {}, role: DesignModel['role'
       typeDialog: null,
       scales: ready(SCALES),
       labels: can.labels ? ready(LABELS) : null,
+      templates: ready(DEMO_TEMPLATES), // B-W2b-283
       costing: can.costing ? ready(can.cost ? COSTING : COSTING_NO_GRAIN) : null,
       changed: can.audit ? { rules: changedByOf(AUDIT, 'editRule'), tolerance: changedByOf(AUDIT, 'consumptionTolerance'), types: CHANGED.types } : { rules: { at: CHANGED.rules.at, by: null }, tolerance: { at: CHANGED.rules.at, by: null }, types: { at: CHANGED.types.at, by: null } },
       busy: null,
@@ -179,5 +182,28 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'costing-error', label: 'The costing defaults could not be read', model: page({ costing: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'offline', label: 'Offline: the last copy, every change held (kept on this page)', model: page({ live: 'offline', rules: TIGHTER }) },
     { id: 'keys', label: 'The keys', model: page({ keysOpen: true }) },
+    // B-W2b-283 (FU1:03): a type's measurement template is picked here (the active ones of its garment and company).
+    { id: 'w2b-283-template-pick', label: 'W2b-283 A type picks its measurement template', model: page({ typeDialog: dialog(typeDraftOf(TOUR, TOUR.companyId)), address: address({ type: TOUR.id }) }), note: 'Jacket templates of this company and every company, with their points and whether their made-to-measure rules are on; archived and other garments’ templates are not offered.' },
+    { id: 'w2b-283-template-picked', label: 'W2b-283 A template picked (Save offered)', model: page({ typeDialog: dialog({ ...typeDraftOf(TOUR, TOUR.companyId), measurementTemplateId: JACKET_TEMPLATE_A.id }), address: address({ type: TOUR.id }) }) },
+    { id: 'w2b-283-template-kept', label: 'W2b-283 A type naming an archived template', model: page({ typeDialog: dialog({ ...typeDraftOf(TOUR, TOUR.companyId), measurementTemplateId: OLD_JACKET_TEMPLATE.id }), address: address({ type: TOUR.id }) }), note: 'Kept as an option "no longer offered" until another is picked or it is cleared.' },
+    { id: 'w2b-283-template-none', label: 'W2b-283 No template for this garment yet', model: page({ typeDialog: dialog({ ...NEW_TYPE, code: 'DEMO-GLV-2', name: 'Winter gloves', productType: 'GLOVES' }) }), note: 'Said in words; the made-to-measure office adds templates (B-W2b-358).' },
+    { id: 'w2b-283-template-reading', label: 'W2b-283 The templates are read', model: page({ templates: { value: null, problem: null }, typeDialog: dialog(typeDraftOf(TOUR, TOUR.companyId)), address: address({ type: TOUR.id }) }) },
+    { id: 'w2b-283-template-failed', label: 'W2b-283 The templates could not be read', model: page({ templates: failed('problem.read.unavailable'), typeDialog: dialog(typeDraftOf(TOUR, TOUR.companyId)), address: address({ type: TOUR.id }) }), note: 'The value stays as text with why; nothing else is held.' },
+    // B-W2b-283 (FU1:04): "Changed by" from the rows themselves, for a role without audit.read.
+    {
+      id: 'w2b-283-changed-by',
+      label: 'W2b-283 Changed by, without audit.read (the row’s own last changer)',
+      model: page(
+        {
+          settings: ready({ ...COMPANY, changedBy: { id: uid('9283', 1), name: 'Anna Demo' } }),
+          types: ready(TYPES.map((type) => (type.id === TOUR.id ? { ...type, changedBy: { id: uid('9283', 2), name: 'Marco Demo' } } : type))),
+          changed: { rules: { at: CHANGED.rules.at, by: 'Anna Demo' }, tolerance: { at: CHANGED.rules.at, by: 'Anna Demo' }, types: { at: CHANGED.types.at, by: 'Marco Demo' } },
+          typeDialog: dialog(typeDraftOf(TOUR, TOUR.companyId)),
+          address: address({ type: TOUR.id }),
+        },
+        'quality',
+      ),
+      note: 'The quality inspector reads no audit trail: each card and the type say who saved them last (no link to the audit log).',
+    },
   ],
 })

@@ -200,6 +200,8 @@ model StoredFile {
   // W2b-4 styles-depth.prisma (wave 26/33): the style pictures and the revision pattern, marker and CAD files it is.
   styleImages           StyleImage[]        @relation("StyleImageFile")
   styleRevisionFiles    StyleRevisionFile[] @relation("StyleRevisionFileFile")
+  // W2b-5 sales-intake.prisma (wave 37/44): the customer requirements whose document (a routing guide) it is.
+  customerRequirements   CustomerRequirement[] @relation("CustomerRequirementFile")
   // W2b-4 substances.prisma (wave 31/33): the declaration requests whose answer (by link or by hand) it is.
   supplierDeclarationAnswers SupplierDeclarationRequest[] @relation("SupplierDeclarationRequestAnswerFile")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
@@ -212,6 +214,8 @@ model StoredFile {
   purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
   // W2b gendocs.prisma (B-W2b-01): the generated document versions it is the file of.
   generatedDocuments     GeneratedDocument[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the transfers whose DDT PDF it is.
+  transferDdts           TransferOrder[]     @relation("TransferOrderDdtFile")
   // W2b parties.prisma (wave 21/22): the measurement revisions whose front, side or back photo it is.
   measurementPhotosFront MeasurementProfile[] @relation("MeasurementProfilePhotoFront")
   measurementPhotosSide  MeasurementProfile[] @relation("MeasurementProfilePhotoSide")
@@ -281,6 +285,9 @@ enum FileCategory {
   QUESTIONNAIRE
   PROOF
   SAMPLE_PHOTO
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-140): the customer's logo or artwork for a configured quote or order line (a
+  /// QuoteLine's or SalesOrderLine's file), for cutting or printing.
+  ARTWORK
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

@@ -82,6 +82,8 @@ model Device {
   inspectionMeasurements InspectionMeasurement[] @relation("InspectionMeasurementDevice")
   // W2b leather.prisma (wave 12/16): the hide measures recorded on it.
   hideMeasures           HideMeasure[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the count scans recorded on it.
+  countScans             StockCountScan[]
   // production.prisma: the notice acknowledgements, cut logs, bundles and scans recorded on it.
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
@@ -240,8 +242,17 @@ model Worker {
   // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
+  // W2b-5 approvals.prisma (wave 35/44): the requests for a yes they asked on the floor.
+  approvalTasksRequested ApprovalTask[]        @relation("ApprovalTaskRequestedByWorker")
   // floor-sync.prisma: its refused queued actions (a site that names workers).
   refusedActions         FloorRefusedAction[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the units it scanned in counts, the warehouse tasks given to it, taken and done
+  // by it, the substitutes it asked for.
+  countScans             StockCountScan[]
+  warehouseTasks         WarehouseTask[]        @relation("WarehouseTaskAssigned")
+  warehouseTasksTaken    WarehouseTask[]        @relation("WarehouseTaskTaken")
+  warehouseTasksDone     WarehouseTask[]        @relation("WarehouseTaskDone")
+  substitutionsRequested MaterialSubstitution[] @relation("MaterialSubstitutionRequested")
   // W2b time.prisma (wave 5/7): the worker's clock events and overtime answers on the site's tablets.
   clockEvents            ClockEvent[]
   overtimeAgreements     OvertimeAgreement[]

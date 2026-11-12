@@ -393,17 +393,6 @@ export function approvalProblems(values: readonly Pick<SpecValue, 'pointOfMeasur
   return problems
 }
 
-/**
- * The band nominal − minus … nominal + plus as one nominal ± one tolerance (what an inspection's measurement keeps:
- * InspectionMeasurement has one tolerance): the band's centre and half its width, 3 decimals. The same band exactly; a
- * symmetric tolerance keeps its nominal.
- */
-export function bandOf(nominal: string, minus: string, plus: string): { readonly nominal: string; readonly tolerance: string } {
-  const low = new D(nominal).minus(new D(minus))
-  const high = new D(nominal).plus(new D(plus))
-  return { nominal: low.plus(high).div(2).toFixed(3), tolerance: high.minus(low).div(2).toFixed(3) }
-}
-
 /** "58 −1/+1.5 cm", "58 ± 1 cm". */
 export function toleranceWords(nominal: string, minus: string, plus: string, uom: string): string {
   const unit = uom.toLowerCase()

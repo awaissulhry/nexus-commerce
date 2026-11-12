@@ -474,6 +474,7 @@
       "PLAN": "il piano",
       "SIZE_CHART": "la tabella taglie",
       "PROFILE": "il profilo del cliente",
+      "SPEC": "la specifica di misura approvata",
       "TYPED": "scritto"
     },
     "cellFor": "{point}, unità {unit}",
