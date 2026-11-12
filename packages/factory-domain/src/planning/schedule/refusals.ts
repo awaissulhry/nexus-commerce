@@ -60,6 +60,13 @@ export const SCHEDULE_REFUSALS = [
   'WHAT_IF_CONFLICTS',
   /** What-if: the scenario is applied or discarded; it never changes. */
   'WHAT_IF_CLOSED',
+  // B-W2b-329 (PLN-149): the undo of a change of the board's log (planning/schedule-log/changes UNDO_HOLDS).
+  /** A publish, an undo or a part's removal is not undone. */
+  'NOT_UNDOABLE',
+  /** The change is already undone (once per change). */
+  'ALREADY_UNDONE',
+  /** The slot changed since the change: only the latest change of a bar is undone, while the bar is where it left it. */
+  'CHANGED_SINCE',
 ] as const
 export type ScheduleRefusalCode = (typeof SCHEDULE_REFUSALS)[number]
 
