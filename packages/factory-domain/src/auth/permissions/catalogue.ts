@@ -206,6 +206,8 @@ import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../
 import { INVENTORY_TASKS_DEFINITIONS, INVENTORY_TASKS_PERMISSIONS } from '../../inventory/tasks/permissions'
 // B-W2b-331: subcontracting in depth (purchasing.subcontract.terms | balance | cost).
 import { SUBCONTRACT_DEPTH_DEFINITIONS, SUBCONTRACT_DEPTH_PERMISSIONS } from '../../purchasing/subcontract-depth/permissions'
+// B-W2b-356: warehouse reports (inventory.reports.view: stock ageing and leather use; each figure also inventory.stock.view).
+import { INVENTORY_REPORTS_DEFINITIONS, INVENTORY_REPORTS_PERMISSIONS } from '../../inventory/reports/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -924,6 +926,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_TASKS_DEFINITIONS,
   // B-W2b-331: subcontracting in depth (area `purchasing`, declared above).
   SUBCONTRACT_DEPTH_DEFINITIONS,
+  // B-W2b-356: warehouse reports (area `inventory`, declared above).
+  INVENTORY_REPORTS_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1244,6 +1248,8 @@ for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of INVENTORY_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-331: subcontracting in depth.
 for (const name of SUBCONTRACT_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-356: warehouse reports.
+for (const name of INVENTORY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

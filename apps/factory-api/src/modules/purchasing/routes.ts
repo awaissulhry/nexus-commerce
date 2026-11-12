@@ -218,6 +218,10 @@ import { expeditingWorklist, orderDemand } from './expediting/worklist'
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
 import * as askContracts from './ask-to-buy/contract'
+// B-W2b-328: purchase lines by kind (./line-kinds).
+import { getLineKindsContract, putLineKindContract } from './line-kinds/contract'
+import { putLineKind } from './line-kinds/kind'
+import { getLineKinds } from './line-kinds/read'
 // B-W2b-347: sample and development orders (./sample-orders).
 import { sampleChoices } from './sample-orders/choices'
 import * as sampleContracts from './sample-orders/contract'
@@ -657,6 +661,7 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
+
   // B-W2b-311 (SCM-002, SCM-004, SCM-008, SCM-012, SCM-016): suppliers in depth (./suppliers-depth).
   app.get('/purchasing/suppliers', { schema: suppliersDepthContracts.listSuppliersContract }, async (request) => listSuppliers(request, request.query))
 
@@ -682,4 +687,11 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     const { pdf, fileName } = await sampleOrderPdf(request, request.params.purchaseOrderId, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+
+  // B-W2b-328 (SCM-076, SCM-077, SCM-186): purchase lines by kind (./line-kinds) — a fabric or trim line by rolls, a
+  // protector line's certificate, a material variant. The send checks and prints them (views.ts, send.ts); a receipt checks
+  // the certificate again and gives the lots their variant (inventory/receipts/record.ts).
+  app.get('/purchasing/orders/:purchaseOrderId/line-kinds', { schema: getLineKindsContract }, async (request) => getLineKinds(request, request.params.purchaseOrderId))
+
+  app.put('/purchasing/orders/:purchaseOrderId/lines/:lineId/kind', { schema: putLineKindContract }, async (request) => putLineKind(request, request.params.purchaseOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
 })

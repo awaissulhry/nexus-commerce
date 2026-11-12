@@ -251,6 +251,10 @@ export const manifest = defineManifest({
   'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-328 (SCM-076, SCM-077, SCM-186): purchase lines by kind (./line-kinds), office only; the order checked with can() over
+  // its company, site and supplier, as every order route.
+  'GET /purchasing/orders/:purchaseOrderId/line-kinds': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/lines/:lineId/kind': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   // B-W2b-311: suppliers in depth. Office only, can() over the supplier's company AND the supplier in the handler: reads
   // parties.view (the supplier record is the party record); kinds, lead time, origin and what each contact receives
   // parties.manage; where it stands with us purchasing.suppliers.status.
