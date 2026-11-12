@@ -1,0 +1,187 @@
+{
+  "title": {
+    "office": "Chiedi di acquistare",
+    "shortage": "Acquista per una mancanza"
+  },
+  "common": {
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "retry": "Riprova",
+    "reading": "Lettura in corso…",
+    "more": "Mostra altri"
+  },
+  "band": {
+    "ask": "Chiedi di acquistare"
+  },
+  "foot": "I buyer la vedono in Richieste d'acquisto. Non si ordina ancora nulla al fornitore.",
+  "action": {
+    "send": "Invia la richiesta",
+    "draft": "Prepara l'ordine d'acquisto"
+  },
+  "options": {
+    "failed": "Impossibile leggere materiali e ordini di produzione"
+  },
+  "field": {
+    "site": "Sede",
+    "material": "Materiale",
+    "materialHint": "Un materiale della libreria che acquistiamo (non un prodotto finito).",
+    "materialMore": "Sono mostrati i primi materiali: scrivi per trovare quello che serve.",
+    "materialPlaceholder": "Scrivi un codice o un nome…",
+    "colour": "Colore",
+    "colourPick": "Scegli un colore",
+    "quantity": "Quanto",
+    "unit": "Unità",
+    "unitFirst": "Scegli prima un materiale",
+    "needDate": "Serve entro",
+    "needDateHint": "Il giorno in cui deve essere in sede.",
+    "description": "Che cosa esattamente (facoltativo)",
+    "descriptionHint": "Taglia, modello, marca: parole per il buyer.",
+    "workOrder": "Ordine di produzione",
+    "workOrderHint": "L'ordine di produzione aperto per cui serve, se c'è.",
+    "noWorkOrder": "Nessuno",
+    "reason": "Perché",
+    "reasonHint": "A che cosa serve, perché il buyer possa decidere.",
+    "note": "Nota per chi approva (facoltativa)",
+    "noteHint": "Letta solo se una regola di approvazione chiede prima un sì."
+  },
+  "shortage": {
+    "short": "Mancano",
+    "neededBy": "Serve entro",
+    "notEnough": "Materiale insufficiente per questo ordine di produzione: la giacenza e gli ordini in corso non bastano.",
+    "delayed": "Quanto è ordinato arriva troppo tardi per questo ordine di produzione.",
+    "then": "Che cosa fare",
+    "reason": "Mancanza per {number}: {material}"
+  },
+  "then": {
+    "DRAFT": {
+      "title": "Prepara ora l'ordine d'acquisto",
+      "body": "Aggiunge una riga alla bozza aperta del fornitore (o a una nuova bozza). Al fornitore non si invia ancora nulla."
+    },
+    "REQUEST": {
+      "title": "Invia ai buyer",
+      "body": "Resta in Richieste d'acquisto; una regola di approvazione può chiedere prima un sì."
+    }
+  },
+  "done": {
+    "sent": {
+      "title": "Richiesta inviata",
+      "body": "Attende i buyer in Richieste d'acquisto."
+    },
+    "waiting": {
+      "title": "Inviata: attende prima un sì",
+      "body": "Una regola di approvazione chiede un sì prima che i buyer la vedano. Decide una persona diversa da te."
+    },
+    "drafted": {
+      "title": "Ordine d'acquisto preparato",
+      "new": "È stata creata una nuova bozza {number} con questa riga.",
+      "added": "La riga è stata aggiunta alla bozza {number}.",
+      "open": "Apri {number}"
+    },
+    "another": "Chiedi qualcos'altro",
+    "inQueue": "Puoi seguirla in Richieste d'acquisto."
+  },
+  "held": {
+    "noAsk": "Per chiedere di acquistare serve purchasing.requests.ask. Chiedi a un amministratore.",
+    "noDraft": "Preparare un ordine d'acquisto spetta ai buyer (purchasing.manage): inviala ai buyer.",
+    "busy": "Invio in corso…",
+    "offline": "Offline: inviala quando la connessione torna.",
+    "done": "Già inviata.",
+    "loading": "Sto ancora leggendo i materiali.",
+    "site": "Scegli prima la sede.",
+    "material": "Scegli prima il materiale.",
+    "colour": "Scegli prima il colore.",
+    "quantity": "Scrivi quanto: un numero maggiore di 0, al massimo quattro decimali.",
+    "unit": "Scegli l'unità.",
+    "needDate": "Scegli un giorno da oggi in poi.",
+    "reason": "Di' perché serve.",
+    "selectFirst": "Seleziona prima le richieste."
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un'altra azienda.",
+    "write": "Non è stata inviata. Riprova.",
+    "changed": "Qualcuno l'ha cambiata nel frattempo: rileggila e riprova.",
+    "invalid": "Qualcosa non è stato accettato. Controlla e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova."
+  },
+  "refused": {
+    "quantity": "La quantità non è stata accettata: un numero maggiore di 0, al massimo quattro decimali.",
+    "needDate": "Il giorno non è stato accettato: da oggi, al massimo fra due anni.",
+    "reason": "Di' perché serve (al massimo 2000 caratteri).",
+    "description": "Il testo è troppo lungo (al massimo 2000 caratteri).",
+    "itemId": "Questo materiale non si può acquistare: è archiviato, o è un prodotto finito.",
+    "itemColourId": "Questo colore non è un colore attivo del materiale.",
+    "uom": "Il materiale non si conta in questa unità.",
+    "workOrderId": "L'ordine di produzione non è un ordine aperto di questa sede.",
+    "siteId": "Per questa sede non si può chiedere.",
+    "shortageGone": "Questo ordine di produzione non manca più di questo materiale: non c'è nulla da chiedere.",
+    "shortageAsked": "Questa mancanza è già stata chiesta: la sua richiesta attende i buyer.",
+    "approverSelf": "Ogni regola di approvazione che vale indica te come approvatore: chiedi a un amministratore di cambiare la regola."
+  },
+  "status": {
+    "OPEN": "Attende i buyer",
+    "PENDING_APPROVAL": "Attende un sì",
+    "CONVERTED": "In un ordine d'acquisto",
+    "inOrder": "In {number}",
+    "REJECTED": "Rifiutata",
+    "CANCELLED": "Ritirata"
+  },
+  "source": {
+    "OFFICE": "Chiesta a mano",
+    "SHORTAGE": "Da una mancanza"
+  },
+  "mine": {
+    "lead": "Le tue richieste d'acquisto",
+    "label": "Le mie richieste d'acquisto",
+    "count_one": "{count} richiesta",
+    "count_other": "{count} richieste",
+    "by": "entro il {date}",
+    "noWorkOrder": "Nessun ordine di produzione",
+    "col": {
+      "material": "Materiale",
+      "quantity": "Quanto",
+      "for": "Per",
+      "status": "A che punto è",
+      "asked": "Chiesta"
+    },
+    "noAccess": {
+      "title": "Le richieste d'acquisto non fanno parte del tuo ruolo",
+      "body": "Per chiedere di acquistare serve purchasing.requests.ask. Chiedi a un amministratore."
+    },
+    "failed": "Impossibile caricare le tue richieste",
+    "empty": {
+      "title": "Non hai ancora chiesto nulla",
+      "body": "Chiedi ai buyer un materiale: che cosa, quanto, entro quando e perché."
+    },
+    "takeBack_one": "Ritira {count}",
+    "takeBack_other": "Ritira {count}",
+    "takeBackTitle_one": "Ritira {count} richiesta",
+    "takeBackTitle_other": "Ritira {count} richieste",
+    "takeBackBody": "I buyer non la vedranno più. Una richiesta che attende un sì viene ritirata insieme.",
+    "reason": "Perché",
+    "reasonFirst": "Di' prima perché.",
+    "notYours": "Solo chi l'ha chiesta (o un buyer) può ritirarla.",
+    "decided": "È già decisa: non si può ritirare."
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

@@ -38,6 +38,10 @@ import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 // B-W2b-282: one approval engine.
 import { APPROVALS_ADDS } from '../../approvals/permissions'
+// B-W2b-296: the delivery tolerances (the buyer keeps them).
+import { PO_DEPTH_ADDS } from '../../purchasing/po-depth/permissions'
+// B-W2b-332: ask to buy (every office template that works in the office).
+import { ASK_TO_BUY_ADDS } from '../../purchasing/ask-to-buy/permissions'
 // B-W2b-331: subcontracting in depth (the buyer: terms, balance, cost; the warehouse: balance).
 import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
@@ -68,6 +72,8 @@ import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
+// B-W2b-313: lots in depth (the warehouse and quality sort hides into shade lots; quality makes the trace report).
+import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -910,6 +916,12 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_BRANDING_ADDS[key] ?? []) : []),
   // B-W2b-282
   ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-296
+  ...(audience === 'office' ? (PO_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-332
+  ...(audience === 'office' ? (ASK_TO_BUY_ADDS[key] ?? []) : []),
+  // B-W2b-313
+  ...(audience === 'office' ? (INVENTORY_LOTS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-331
   ...(audience === 'office' ? (SUBCONTRACT_DEPTH_ADDS[key] ?? []) : [])]
 /**

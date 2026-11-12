@@ -228,4 +228,27 @@ export const manifest = defineManifest({
   'POST /link/supplier-questionnaire/documents': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
   'POST /link/supplier-questionnaire/documents/:fileId/complete': { audiences: ['link'], permission: 'links.submit', scope: 'record' },
   'GET /link/supplier-questionnaire/code-of-conduct': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  // B-W2b-296 (po-depth/): purchase orders in depth, office only (a receipt reads the tolerances inside its own command). An
+  // order's depth is checked with can() over the order's company, site and supplier, as every order route; a delivery
+  // tolerance over its company (every company's: a role over every company).
+  'GET /purchasing/orders/:purchaseOrderId/depth': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'DELETE /purchasing/orders/:purchaseOrderId/lines/:lineId/deliveries': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/lines/:lineId/supplier-date': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/rate': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'PUT /purchasing/orders/:purchaseOrderId/ship-to': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/tolerances': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/tolerances': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'PATCH /purchasing/tolerances/:toleranceId': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'POST /purchasing/tolerances/:toleranceId/archive': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  'POST /purchasing/tolerances/:toleranceId/reactivate': { audiences: ['office'], permission: 'purchasing.tolerances.manage', scope: 'record' },
+  // B-W2b-332 (SCM-035, SCM-037): ask to buy (./ask-to-buy): anyone in the office asks; from a shortage also needs
+  // planning.view (and "Draft a purchase order now" purchasing.manage), refusing purchasing.manage, checked in the handler.
+  'GET /purchasing/ask-to-buy/options': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'GET /purchasing/ask-to-buy': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'GET /purchasing/ask-to-buy/:requestId': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
+  'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
 })

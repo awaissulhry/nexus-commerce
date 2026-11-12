@@ -1,0 +1,187 @@
+{
+  "title": {
+    "office": "Ask to buy",
+    "shortage": "Buy from a shortage"
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "reading": "Reading…",
+    "more": "Show more"
+  },
+  "band": {
+    "ask": "Ask to buy"
+  },
+  "foot": "The buyers see it in Requests to buy. Nothing is ordered from a supplier yet.",
+  "action": {
+    "send": "Send request",
+    "draft": "Draft the purchase order"
+  },
+  "options": {
+    "failed": "Couldn’t read the materials and work orders"
+  },
+  "field": {
+    "site": "Site",
+    "material": "Material",
+    "materialHint": "A material of the library we buy (not a finished product).",
+    "materialMore": "Showing the first materials: type to find the one you need.",
+    "materialPlaceholder": "Type a code or a name…",
+    "colour": "Colour",
+    "colourPick": "Pick a colour",
+    "quantity": "How much",
+    "unit": "Unit",
+    "unitFirst": "Pick a material first",
+    "needDate": "Needed by",
+    "needDateHint": "The day it must be at the site.",
+    "description": "What exactly (optional)",
+    "descriptionHint": "Size, model, brand — words for the buyer.",
+    "workOrder": "Work order",
+    "workOrderHint": "The open work order it is for, if any.",
+    "noWorkOrder": "None",
+    "reason": "Why",
+    "reasonHint": "What it is for, so the buyer can decide.",
+    "note": "Note for the approver (optional)",
+    "noteHint": "Read only if an approval rule asks a yes first."
+  },
+  "shortage": {
+    "short": "Short",
+    "neededBy": "Needed by",
+    "notEnough": "Not enough material for this work order: the stock and what is on order do not cover it.",
+    "delayed": "What is on order arrives too late for this work order.",
+    "then": "What to do",
+    "reason": "Short for {number}: {material}"
+  },
+  "then": {
+    "DRAFT": {
+      "title": "Draft the purchase order now",
+      "body": "Adds a line to the supplier’s open draft (or a new draft). Nothing is sent to the supplier yet."
+    },
+    "REQUEST": {
+      "title": "Send to the buyers",
+      "body": "It waits in Requests to buy; an approval rule may ask a yes first."
+    }
+  },
+  "done": {
+    "sent": {
+      "title": "Request sent",
+      "body": "It waits for the buyers in Requests to buy."
+    },
+    "waiting": {
+      "title": "Sent — it waits for a yes first",
+      "body": "An approval rule asks a yes before the buyers see it. Someone other than you decides."
+    },
+    "drafted": {
+      "title": "Purchase order drafted",
+      "new": "A new draft {number} was made with this line.",
+      "added": "The line was added to the draft {number}.",
+      "open": "Open {number}"
+    },
+    "another": "Ask for something else",
+    "inQueue": "You can follow it in Requests to buy."
+  },
+  "held": {
+    "noAsk": "Asking to buy needs purchasing.requests.ask. Ask an administrator.",
+    "noDraft": "Drafting a purchase order is for buyers (purchasing.manage): send it to the buyers instead.",
+    "busy": "Sending…",
+    "offline": "Offline — send it when the connection is back.",
+    "done": "Sent already.",
+    "loading": "Still reading the materials.",
+    "site": "Pick the site first.",
+    "material": "Pick the material first.",
+    "colour": "Pick the colour first.",
+    "quantity": "Type how much: a number above 0, at most four decimals.",
+    "unit": "Pick the unit.",
+    "needDate": "Pick a day from today on.",
+    "reason": "Say why it is needed.",
+    "selectFirst": "Select requests first."
+  },
+  "problem": {
+    "read": "The server did not answer as expected. Try again.",
+    "forbidden": "Your role cannot see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or belongs to another company.",
+    "write": "It was not sent. Try again.",
+    "changed": "Someone changed it meanwhile: read it again and try once more.",
+    "invalid": "Something was not accepted. Check and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "refused": {
+    "quantity": "The quantity was not accepted: a number above 0, at most four decimals.",
+    "needDate": "The day was not accepted: from today, at most two years ahead.",
+    "reason": "Say why it is needed (at most 2000 characters).",
+    "description": "The words are too long (at most 2000 characters).",
+    "itemId": "This material cannot be bought: it is archived, or a finished product.",
+    "itemColourId": "This colour is not an active colour of the material.",
+    "uom": "The material is not counted in this unit.",
+    "workOrderId": "The work order is not an open work order of this site.",
+    "siteId": "This site cannot be asked for.",
+    "shortageGone": "This work order is not short of this material any more: nothing to ask.",
+    "shortageAsked": "This shortage was asked already: its request waits for the buyers.",
+    "approverSelf": "Every approval rule that holds names you as the approver: ask an administrator to change the rule."
+  },
+  "status": {
+    "OPEN": "Waits for the buyers",
+    "PENDING_APPROVAL": "Waits for a yes",
+    "CONVERTED": "In a purchase order",
+    "inOrder": "In {number}",
+    "REJECTED": "Refused",
+    "CANCELLED": "Taken back"
+  },
+  "source": {
+    "OFFICE": "Asked by hand",
+    "SHORTAGE": "From a shortage"
+  },
+  "mine": {
+    "lead": "Your requests to buy",
+    "label": "My requests to buy",
+    "count_one": "{count} request",
+    "count_other": "{count} requests",
+    "by": "by {date}",
+    "noWorkOrder": "No work order",
+    "col": {
+      "material": "Material",
+      "quantity": "How much",
+      "for": "For",
+      "status": "Where it stands",
+      "asked": "Asked"
+    },
+    "noAccess": {
+      "title": "Requests to buy are not in your role",
+      "body": "Asking to buy needs purchasing.requests.ask. Ask an administrator."
+    },
+    "failed": "Couldn’t load your requests",
+    "empty": {
+      "title": "You have asked for nothing yet",
+      "body": "Ask the buyers for a material: what, how much, by when and why."
+    },
+    "takeBack_one": "Take back {count}",
+    "takeBack_other": "Take back {count}",
+    "takeBackTitle_one": "Take back {count} request",
+    "takeBackTitle_other": "Take back {count} requests",
+    "takeBackBody": "The buyers will not see it any more. A request that waits for a yes is withdrawn with it.",
+    "reason": "Why",
+    "reasonFirst": "Say why first.",
+    "notYours": "Only the person who asked (or a buyer) can take it back.",
+    "decided": "It is decided already: it cannot be taken back."
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}

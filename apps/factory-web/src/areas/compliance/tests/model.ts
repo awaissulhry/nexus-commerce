@@ -3,6 +3,8 @@ import type { StepUpState } from '../../quality/_shared/hooks'
 import { LIST_MAX, type Lot, type LotQuery, type LotStatus } from '../../quality/_shared/lots'
 import type { LiveState, Notice, QualityCan, Read } from '../../quality/_shared/model'
 import type { LabResult, LabSettings, LotDecision, LotDetail, RecordAnswer, WorkOrderUse } from './api'
+// B-W2b-288 (FU2:03): the lab's price of a result.
+import { BLANK_LAB_COST, type LabCostDraft } from './lab-cost/lab-cost'
 
 /**
  * Tests & substances (SCR-054; design compliance.tests W1; B-W1-34 part 2) without React: the saved views and the tiles
@@ -233,6 +235,8 @@ export interface ResultDraft {
   readonly fileName: string | null
   /** Release the lot right after (a second step that still asks for the typed code). */
   readonly thenRelease: boolean
+  /** B-W2b-288 (FU2:03): the lab's price as typed (the cost grain only; empty: none). */
+  readonly labCost?: LabCostDraft
 }
 
 export const blankResult = (today: string): ResultDraft => ({
@@ -250,6 +254,8 @@ export const blankResult = (today: string): ResultDraft => ({
   note: '',
   fileName: null,
   thenRelease: false,
+  // B-W2b-288 (FU2:03)
+  labCost: BLANK_LAB_COST,
 })
 
 /** What a result draft lacks, field → message key (every problem at once; the API checks again). */
@@ -408,6 +414,8 @@ export interface LotRecordModel {
   /** The work orders a block reached. */
   readonly blocked?: readonly WorkOrderUse[] | null
   readonly dockOpen?: boolean
+  /** B-W2b-288 (FU2:03): the viewer holds the cost grain (the lab's price is typed and shown). */
+  readonly costGrain?: boolean
 }
 
 export { CR_VI_METHODS, LOT_DOCUMENT_KINDS }

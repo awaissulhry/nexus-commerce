@@ -10,6 +10,9 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { BoardRow, CellDetail, CellItem, LineState } from '../api'
 import { cellWalk, fixHeld, fixHref, marketName, recordHref } from '../model'
 import { CellMark } from './Panels'
+// B-W2b-288 (FU2:02): where the style is sold (Not sold there).
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
+import { NotSoldNote } from '../not-sold/view/NotSoldNote'
 import type { StatusActions, StatusModel } from './types'
 
 /** The checklist's state per line (DS CheckList): Present ✓ · Missing ✕ · Expiring ! · Not needed – · checked by a person ?. */
@@ -132,10 +135,11 @@ export function CellModal({ model, actions }: { model: StatusModel; actions?: St
               <Tag tone="danger">{t('cell.BLOCKED')}</Tag> {t('cell.blockedAt', { gates: detail.cell.blockedGates.map((gate) => t(`gate.${gate}`)).join(', ') })}
             </p>
           ) : null}
-          <p className="fw-cs-hint">{t('cell.intro', { market })}</p>
-          <CheckList label={t('cell.listLabel', { style: styleCode, market })} checks={checks} summary labels={{ ...ds.checkList, states }} />
+          {/* B-W2b-288 (FU2:02): a market the style is not sold in asks nothing; the note says where its markets are picked. */}
+          <NotSoldNote standing={detail.standing} styleId={detail.style.id} marketCodes={detail.style.marketCodes} market={market} prefix={model.prefix} stylesView={model.can.styles} built={OFFICE_PAGES} name={(code) => marketName(code, markets, locale)} />
+          {detail.standing !== 'NOT_SOLD_THERE' ? <p className="fw-cs-hint">{t('cell.intro', { market })}</p> : null}
+          {detail.standing !== 'NOT_SOLD_THERE' ? <CheckList label={t('cell.listLabel', { style: styleCode, market })} checks={checks} summary labels={{ ...ds.checkList, states }} /> : null}
           {!detail.market.switchedOn ? <p className="fw-cs-hint">{t('cell.marketOff')}</p> : null}
-          <p className="fw-cs-hint">{t('cell.notSold')}</p>
         </div>
       ) : null}
     </DetailModal>

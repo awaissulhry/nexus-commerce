@@ -1,4 +1,4 @@
-import type { Prisma, StockMoveReason, StockValuationMethod, Uom } from '@nexus/factory-db'
+import type { ItemKind, Prisma, StockMoveReason, StockValuationMethod, Uom } from '@nexus/factory-db'
 import { dayWords } from '@nexus/factory-domain/accounting/periods'
 import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
@@ -26,6 +26,8 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { standardCostFor } from '../finished/post'
 import { postedBy, stockContextOf, type StockContext } from './access'
 import { remnantsFollowTransfers } from '../remnants/lifecycle'
+// B-W2b-289 (SCM-177, SCM-181): what each kind of place holds, and a blocked place, said before the database's guard.
+import { placeRefusals } from '../locations-depth/moves'
 
 /**
  * postMoves(): the ONE writer of the stock ledger (plan A1 §2.1, §2.6; SCM-189, SCM-192, SCM-194), called INSIDE the
@@ -149,10 +151,12 @@ export class InsufficientStockError extends ConflictError {
 
 // ---- the rows a batch names --------------------------------------------------------------------------------------------
 
-const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true, currency: true } as const
+const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true, currency: true, kind: true } as const
 type ItemRow = {
   id: string
   code: string
+  /** B-W2b-289: what a place may hold is read by the item's kind. */
+  kind: ItemKind
   tracking: ItemTracking
   baseUom: Uom
   purchaseUom: Uom
@@ -164,7 +168,8 @@ type ItemRow = {
 }
 const LOT_SELECT = { id: true, siteId: true, itemId: true, itemColourId: true, code: true, qualityStatus: true, receiptLineId: true } as const
 const HIDE_SELECT = { id: true, siteId: true, lotId: true, itemId: true, code: true, state: true } as const
-const LOCATION_SELECT = { id: true, siteId: true, code: true, status: true } as const
+// B-W2b-289: its kind and block too.
+const LOCATION_SELECT = { id: true, siteId: true, code: true, status: true, kind: true, blockedAt: true, blockReason: true, blockedUntil: true } as const
 export const LEDGER_SELECT = {
   id: true,
   companyId: true,
@@ -288,6 +293,8 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
     (entry.problem ? [entry.problem] : checkDraft(entry.move, index, facts, moves)).map((issue) => ({ path: `${at(index)}/${issue.path}`, message: issue.message })),
   )
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These moves break the stock rules.', problems)
+  // B-W2b-289: a place of a kind that does not hold the item (400), a blocked place (409), in words.
+  placeRefusals(moves, facts, at)
 
   const rows = moves.map((move, index) => rowOf(move, index, facts, context, tools.now, options.key ?? null))
   const keys = rows.map((row) => row.idempotencyKey)

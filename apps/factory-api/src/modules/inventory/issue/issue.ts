@@ -21,6 +21,8 @@ import { asksOneShadePerOrder, shadeRefusal } from '@nexus/factory-domain/invent
 import { heldShades, shadeFactsOf, shadeOverrideOf, shadeRuleFor } from '../reservations/shade'
 // B-W2b-219: the site's smallest remnant (ProductionSettings).
 import { remnantSizeRefusalAt } from '../remnants/size'
+// B-W2b-289 (SCM-179): the site's default issue place (taken from first) and return place (when none is named).
+import { defaultPlaceFor } from '../locations-depth/defaults'
 import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnIssue, remnantsOnIssueReversed, remnantsOnMoveReversed, remnantsOnWholeReturn, tagRemnantInCommand } from '../remnants/lifecycle'
 import {
   itemUnitsOf,
@@ -96,6 +98,13 @@ const contextOf = (tools: Pick<CommandTools, 'context'>): StockContext =>
 const dec = (value: { toString(): string }): Decimal => new Dec(value.toString())
 const labelOf = (item: ItemRow, colour: { code: string } | undefined) => `${item.code}${colour ? ` ${colour.code}` : ''}`
 const keyFor = (name: string, key: string | undefined) => `${name}:${key ?? `g-${newId()}`}`
+
+/** B-W2b-289 (SCM-179): the site's default place of a purpose for this material's kind, or null. */
+async function defaultFor(tx: CommandTx, siteId: string, itemId: string, purpose: 'ISSUE' | 'RETURN'): Promise<string | null> {
+  const item = await tx.item.findUnique({ where: { id: itemId }, select: { kind: true } })
+  return item ? ((await defaultPlaceFor(tx, { siteId, purpose, itemKinds: [item.kind] }))?.id ?? null) : null
+}
+const defaultIssuePlace = (tx: CommandTx, siteId: string, itemId: string) => defaultFor(tx, siteId, itemId, 'ISSUE')
 
 /** The stock a request names, at the work order's site (another site's stock is not found). */
 async function resolveStock(tx: CommandTx, workOrder: PickHeader, ref: StockRef, path: string): Promise<Resolved> {
@@ -270,9 +279,13 @@ export async function issueInCommand(
     }
   }
 
-  // Where it is taken from: a hide from every location holding it (whole), a quantity location by location by code.
+  // Where it is taken from: a hide from every location holding it (whole), a quantity location by location by code
+  // (B-W2b-289: the site's default issue place for the material's kind first, when none is asked).
   const locations = await readLocations(tx, balances.map((balance) => balance.locationId))
-  const sorted = [...balances].sort((a, b) => ((locations.get(a.locationId)?.code ?? '') < (locations.get(b.locationId)?.code ?? '') ? -1 : 1))
+  const preferred = hide === null && !body.fromLocationId && balances.length > 1 ? await defaultIssuePlace(tx, workOrder.siteId, item.id) : null
+  const sorted = [...balances].sort((a, b) =>
+    a.locationId === preferred && b.locationId !== preferred ? -1 : b.locationId === preferred && a.locationId !== preferred ? 1 : (locations.get(a.locationId)?.code ?? '') < (locations.get(b.locationId)?.code ?? '') ? -1 : 1,
+  )
   let left = new Dec(decision.baseQuantity)
   const takes: { locationId: string; baseQuantity: string }[] = []
   for (const balance of sorted) {
@@ -408,7 +421,8 @@ export interface ReturnInput extends StockRef {
   readonly quantity: string
   readonly uom?: Uom | undefined
   readonly baseQuantity?: string | undefined
-  readonly toLocationId: string
+  /** B-W2b-289 (SCM-179): left out, the site's default return place for the material's kind. */
+  readonly toLocationId?: string | undefined
   readonly note?: string | null | undefined
   readonly occurredAt?: string | undefined
   /** B-W2a-F8: the reason a return dated inside a SOFT-locked month is posted anyway. */
@@ -426,6 +440,9 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
       const { tx } = tools
       const { item, itemColourId, lot, hide } = await resolveStock(tx, workOrder, body, 'body')
       const measured = quantityOf(item, body, 'body')!
+      // B-W2b-289 (SCM-179): where it goes back to: the place named, else the site's default return place.
+      const toLocationId = body.toLocationId ?? (await defaultFor(tx, workOrder.siteId, item.id, 'RETURN'))
+      if (!toLocationId) throw new ValidationError('Name the place it goes back to: the site has no default return place for this material.', [{ path: 'body/toLocationId', message: 'Name the location.' }])
       if (hide) await lockHideCuts(tx, context.tenantId, workOrder.siteId, hide.id)
       const at = (await readAtWorkOrder(tx, workOrder.siteId, workOrder.id, { itemId: item.id, itemColourId, lotId: lot?.id ?? null, hideId: hide?.id ?? null })).reduce((sum, row) => sum.plus(new Dec(row.quantity)), ZERO)
       const cut = hide ? ((await readCuts(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id) ?? '0') : '0'
@@ -455,7 +472,7 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
             itemColourId,
             lotId: lot?.id ?? null,
             hideId: hide?.id ?? null,
-            toLocationId: body.toLocationId,
+            toLocationId,
             quantity: measured.quantity,
             uom: measured.uom,
             baseQuantity: measured.baseQuantity,
@@ -483,7 +500,7 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
         const row = await tagRemnantInCommand(tools, { move: move!, hide: { id: hide.id, lotId: hide.lotId, itemId: hide.itemId }, baseUom: item.baseUom, source: 'RETURN', note: body.note ?? null })
         remnant = { id: row.id, code: row.code, baseArea: row.baseArea.toFixed(4) }
       } else if (hide) {
-        await remnantsOnWholeReturn(tools, hide.id, workOrder.id, body.toLocationId)
+        await remnantsOnWholeReturn(tools, hide.id, workOrder.id, toLocationId)
       }
       tools.audit({
         action: 'inventory.return',
@@ -491,7 +508,7 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
         recordId: workOrder.id,
         companyId: workOrder.companyId,
         siteId: workOrder.siteId,
-        after: { returnId: move!.id, reason: decision.reason, itemId: item.id, itemColourId, lotId: move!.lotId, hideId: move!.hideId, baseQuantity: move!.baseQuantity, toLocationId: body.toLocationId, hideState, remnantId: remnant?.id ?? null },
+        after: { returnId: move!.id, reason: decision.reason, itemId: item.id, itemColourId, lotId: move!.lotId, hideId: move!.hideId, baseQuantity: move!.baseQuantity, toLocationId, hideState, remnantId: remnant?.id ?? null },
       })
       tools.emit({
         type: 'inventory.returned',
@@ -506,7 +523,7 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
           itemColourId,
           lotId: move!.lotId,
           hideId: move!.hideId,
-          toLocationId: body.toLocationId,
+          toLocationId,
           baseQuantity: move!.baseQuantity,
           hideState,
           remnantId: remnant?.id ?? null,

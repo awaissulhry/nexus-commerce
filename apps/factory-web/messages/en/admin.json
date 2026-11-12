@@ -1693,6 +1693,7 @@
     "compliance_reports_view": "See a company's compliance reports: certificate coverage of styles and markets, shipped styles covered, open gaps by type, gate refusals, the expiry calendar, chromium VI per supplier, the register summary and the annual review (only from records you may see)",
     "compliance_claims_manage": "Keep the sustainability claims register: draft claims with their words, scope, evidence and expiry, record where they are used, withdraw them",
     "compliance_claims_approve": "Approve a sustainability claim once its evidence is there and still holds (with a fresh code)",
+    "compliance_ppeTexts_manage": "Record a PPE consultant's yes to a template of generated PPE texts, with the consultant's file (with a fresh code), and withdraw it",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",
@@ -1736,6 +1737,8 @@
     "inventory_reserve": "Reserve stock and release it",
     "inventory_hides_manage": "Correct a hide's grade and shade, re-measure it",
     "inventory_shade_override": "Let a hide of another shade lot into an order, with the reason",
+    "inventory_lots_manage": "Split a lot of hides into shade groups and regroup them, record a lot's attributes, check its lifecycle",
+    "inventory_trace_report": "Make the dated trace report for a customer, a notified body or an authority (PDF or CSV)",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",
@@ -1767,6 +1770,7 @@
     "purchasing_claims_manage": "Prepare, send, answer and close supplier claims",
     "purchasing_claims_return": "Send the goods of a return back to the supplier with the return DDT",
     "purchasing_reminders_switch": "Switch a company’s automatic purchase order confirmation reminders to suppliers on or off (step-up)",
+    "purchasing_tolerances_manage": "Keep the delivery tolerances: how far over or under the ordered quantity a receipt may be, and what happens beyond",
     "invoices_view": "See invoices and credit notes",
     "invoices_manage": "Prepare draft invoices",
     "invoices_issue": "Issue an invoice (it can never change again)",
@@ -2083,6 +2087,7 @@
     "production_instructions_view": "See the work instructions of the operations: steps, photos and videos, versions, the printed sheet, and how many saw a version (counts, never a name)",
     "production_instructions_manage": "Write work instructions: a draft with steps per language, critical points, safety notes, icons, the ticks the tablet asks, photos and videos; discard a draft, archive or restore; bring the typed step lines of the routings in",
     "production_instructions_approve": "Approve another person's draft of a work instruction: the floor shows it from then on (never your own draft)",
-    "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement"
+    "production_instructions_people": "A training record: see by name who saw which version of a work instruction (where the site allows a name) and record a paper acknowledgement",
+    "purchasing_requests_ask": "Ask the buyers to buy a material (also from a work order’s shortage); see and take back your own requests"
   }
 }
