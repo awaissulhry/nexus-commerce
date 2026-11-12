@@ -1,0 +1,217 @@
+{
+  "common": {
+    "stillLoading": "Still loading…",
+    "retry": "Try again",
+    "reading": "Reading…",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "access": {
+    "title": "You cannot open RFQs & sourcing",
+    "body": "Reading sample and development orders needs the right to see purchase orders (purchasing.view). An administrator of your company can give it to you."
+  },
+  "band": {
+    "label": "RFQs & sourcing",
+    "reading": "Reading the sample orders…",
+    "add": "New sample order",
+    "more": "More actions",
+    "export": "Export",
+    "exportHint": "From the list: Export ▾ in its toolbar, or Export N with rows selected."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "add": "New sample order",
+    "close": "Close the dialog"
+  },
+  "samples": {
+    "title": "Sample and development orders",
+    "note": "Sample hides, swatches and colour cards for a style or a sample round: not counted in production spend, and never planned against production.",
+    "failed": "Couldn’t load sample and development orders"
+  },
+  "col": {
+    "number": "Number",
+    "supplier": "Supplier",
+    "project": "Project",
+    "items": "Items",
+    "status": "Status",
+    "value": "Cost",
+    "more": "More"
+  },
+  "project": {
+    "round": "{number} · {kind}, round {round}",
+    "styleOnly": "For the style (no sample round)"
+  },
+  "items": {
+    "none": "No lines yet",
+    "more_one": "and {count} more line",
+    "more_other": "and {count} more lines"
+  },
+  "row": {
+    "menu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "pdf": "Sample order PDF",
+    "pdfSent": "The PDF as it was sent to the supplier (a new tab)",
+    "pdfDraft": "The draft as the supplier would get it today (a new tab)"
+  },
+  "list": {
+    "search": "Number, supplier or style",
+    "filterStatus": "Which orders",
+    "count_one": "{count} sample order",
+    "count_other": "{count} sample orders",
+    "more": "Show more",
+    "noneFiltered": "No sample order matches",
+    "noneFilteredHint": "Change the words or the status, or clear the filters.",
+    "clearFilters": "Clear filters",
+    "emptyTitle": "No sample orders",
+    "empty": "Buy sample hides, swatches and colour cards for a style or a sample round: they stay apart from production buying."
+  },
+  "rows": {
+    "OPEN": "Open orders",
+    "ALL": "Every order"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Waiting for a yes",
+    "SENT": "Sent",
+    "CHANGES_PROPOSED": "Changes proposed",
+    "CONFIRMED": "Confirmed",
+    "DECLINED": "Declined",
+    "PARTLY_RECEIVED": "Partly received",
+    "RECEIVED": "Received",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "new": {
+    "title": "New sample order",
+    "foot": "A draft purchase order of type Sample: prices, the PDF and the send are on its record.",
+    "create": "Create draft",
+    "choicesFailed": "Couldn’t load what a sample order can name",
+    "incomplete": "Some lists are longer than shown: type more of a name to find it, or ask an administrator to archive what is no longer used.",
+    "refused": "The draft was not made"
+  },
+  "field": {
+    "supplier": "Supplier",
+    "supplierPlaceholder": "Find a supplier",
+    "site": "Delivered to",
+    "siteOnly": "Your company’s only site.",
+    "sitePick": "Choose a site",
+    "style": "Style",
+    "styleHint": "The style in development the samples are for.",
+    "stylePlaceholder": "Find a style",
+    "round": "Sample round",
+    "roundHint": "An open sample round of the style, or none: for the style alone.",
+    "roundNone": "The style has no open sample round: the order is for the style alone.",
+    "roundStyleOnly": "No round: for the style",
+    "requestedDate": "Wanted by",
+    "requestedHint": "Optional: the day you would like the samples.",
+    "note": "Words for the supplier",
+    "noteHint": "Printed on the sample order.",
+    "what": "What",
+    "material": "Material",
+    "materialHide": "Only leathers: a sample hide is a hide.",
+    "materialPlaceholder": "Find a material",
+    "colour": "Colour",
+    "colourAny": "No particular colour",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "unitFirst": "Choose the material first",
+    "needDate": "Needed by",
+    "description": "Your words",
+    "descriptionHint": "After the sample words on the line (“20 × 20 cm”)."
+  },
+  "what": {
+    "HIDE": "Sample hide",
+    "SWATCH": "Swatch",
+    "COLOUR_CARD": "Colour card"
+  },
+  "lines": {
+    "title": "What it buys",
+    "hint": "Each line says to the supplier what it is (sample hide, swatch, colour card) in the supplier’s language.",
+    "add": "Add a line",
+    "line": "Line {n}",
+    "remove": "Remove line {n}"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "held": {
+    "manage": "Drafting a sample order needs the right to manage purchase orders (purchasing.manage).",
+    "company": "Choose a company first: a sample order is made by one company.",
+    "choices": "Wait until the suppliers, styles and materials are read.",
+    "busy": "Working on it…",
+    "supplier": "Choose the supplier.",
+    "site": "Choose where it is delivered.",
+    "style": "Choose the style the samples are for.",
+    "lines": "Add at least one line.",
+    "requestedPast": "The day wanted is today or later.",
+    "lineMaterial": "Choose the material of every line.",
+    "lineUnit": "Choose the unit of every line.",
+    "lineQuantity": "Give every line a quantity above 0 (at most four decimals).",
+    "lineDate": "Give every line the day it is needed.",
+    "linePast": "Every line is needed today or later.",
+    "maxLines": "At most 20 lines here: add more on the order’s record.",
+    "lastLine": "A sample order has at least one line.",
+    "pdfCost": "The PDF prints the prices: it needs the cost rights.",
+    "valueCost": "needs the cost rights"
+  },
+  "refusal": {
+    "NOT_A_SAMPLE_ORDER": "This order is not a sample order.",
+    "STYLE_CLOSED": "This style is archived or discontinued: no samples are bought for it.",
+    "ROUND_CLOSED": "This sample round is decided or cancelled: buy for an open round, or for the style alone.",
+    "ROUND_OF_ANOTHER_STYLE": "This sample round is another style’s: choose a round of the style.",
+    "HIDE_NOT_LEATHER": "A sample hide is a hide of a leather: choose a leather, or say it is a swatch or a colour card.",
+    "NOT_A_MATERIAL": "A sample order buys materials, never a finished garment.",
+    "SAMPLE_ORDER_TAKES_NO_PLAN_LINES": "A sample order takes no lines of the plan or of a request: they go on a production order."
+  },
+  "invalid": {
+    "partyId": "This supplier cannot take an order now: choose another.",
+    "siteId": "This site cannot take deliveries: choose another.",
+    "developmentStyleId": "This style is not one of your company’s.",
+    "sampleRoundId": "This sample round is not one of your company’s.",
+    "requestedDate": "The day wanted is today or later.",
+    "note": "The words for the supplier are too long.",
+    "contactId": "The supplier’s contact cannot take orders.",
+    "line": {
+      "itemId": "This material cannot be bought: choose another.",
+      "itemColourId": "Choose an active colour of the material.",
+      "quantity": "A quantity above 0, at most four decimals.",
+      "uom": "The material is not bought in this unit: choose one of its units.",
+      "needDate": "The day it is needed is today or later.",
+      "description": "Your words are too long.",
+      "unitPrice": "The price is not one this line can take."
+    }
+  },
+  "problem": {
+    "read": "The list could not be read. Try again in a moment.",
+    "write": "The draft could not be made. Try again in a moment.",
+    "invalid": "Something in the draft was refused: check the fields.",
+    "conflict": "Something changed meanwhile: read again and try once more.",
+    "gone": "It is no longer there: read again.",
+    "forbidden": "Your rights do not allow this.",
+    "signedOut": "Your session ended: sign in again.",
+    "slowDown": "Too many tries: wait a moment.",
+    "offline": "No answer from the server: check the connection and try again."
+  },
+  "notice": {
+    "drafted": "Sample order {number} drafted.",
+    "draftedNext": "Check its prices, then send it from its record (the PDF goes with the mail).",
+    "open": "Open"
+  }
+}

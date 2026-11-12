@@ -14,6 +14,8 @@ import { companyLegalOf } from '../../platform/documents/documents'
 import { confirmLinksOf } from './confirm-links'
 // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/store.ts).
 import { depthChecks, readDepthFacts, type DepthFacts } from './po-depth/store'
+// B-W2b-347: a sample order's development project (sample-orders/store.ts): its PDF and the record say it.
+import { readSampleFacts, sampleViewOf, type SampleFacts } from './sample-orders/store'
 import {
   CONTACT_COLUMNS,
   dayOf,
@@ -58,6 +60,8 @@ export interface OrderFacts {
   readonly today?: string | undefined
   /** B-W2b-296: the lines' delivery schedules, the rate at order with the company's currency, and the ship-to. */
   readonly depth?: DepthFacts | undefined
+  /** B-W2b-347: a sample order's style and sample round (null for a production order). */
+  readonly sample?: SampleFacts | null | undefined
 }
 
 /** B-W2a-52: a line cancelled or closed short takes no goods and is no part of what is sent. */
@@ -108,7 +112,8 @@ export async function readFacts(db: Reader, order: OrderRow, today?: string): Pr
     supplierCalendar = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(today, Math.min(longest, 400), 'forward'))).get(party.id)?.calendar ?? null
   }
   const depth = await readDepthFacts(db, order, lines)
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth }
+  const sample = await readSampleFacts(db, order.id)
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, sample }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -259,6 +264,8 @@ export async function orderDetail(db: Reader, context: RequestContext, order: Or
     updatedAt: toUtcIso(order.updatedAt),
     createdById: order.createdById,
     lines: facts.lines.map((line) => lineView(facts, line, received)),
+    // B-W2b-347: a PO of type Sample names the style and sample round it buys for (null: a production order).
+    sample: sampleViewOf(facts.sample),
     send,
     confirmLinks: await confirmLinksOf(db, order.id, now),
   }

@@ -230,4 +230,10 @@ export const manifest = defineManifest({
   'POST /purchasing/ask-to-buy/from-shortage': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/cancel': { audiences: ['office'], permission: 'purchasing.requests.ask', scope: 'record' },
   'POST /purchasing/ask-to-buy/reject': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  // B-W2b-347 (SCM-043): sample and development orders (./sample-orders): purchase orders of kind SAMPLE, can() over the
+  // order's (or the body's) company, site and supplier in the handler, as every order route; the PDF also asks the cost grain.
+  'GET /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/sample-orders/choices': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/sample-orders': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/sample-orders/:purchaseOrderId/pdf': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
 })

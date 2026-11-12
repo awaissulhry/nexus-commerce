@@ -198,6 +198,12 @@ import { createTolerance, listTolerances, moveTolerance, updateTolerance } from 
 // B-W2b-332: ask to buy (./ask-to-buy).
 import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
 import * as askContracts from './ask-to-buy/contract'
+// B-W2b-347: sample and development orders (./sample-orders).
+import { sampleChoices } from './sample-orders/choices'
+import * as sampleContracts from './sample-orders/contract'
+import { createSampleOrder } from './sample-orders/create'
+import { listSampleOrders } from './sample-orders/list'
+import { sampleOrderPdf } from './sample-orders/pdf'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -591,4 +597,15 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-347 (SCM-043): sample and development orders (./sample-orders) — the list (RFQs & sourcing, SCR-222), what New sample
+  // order offers, the draft it makes (kind SAMPLE, for a style or a sample round) and the sample order PDF (a new tab). The rest
+  // of a sample order is W1's on its record; the send prints it as the sample order (send.ts); planning never nets it.
+  app.get('/purchasing/sample-orders', { schema: sampleContracts.listSampleOrdersContract }, async (request) => listSampleOrders(request, request.query))
+  app.get('/purchasing/sample-orders/choices', { schema: sampleContracts.sampleChoicesContract }, async (request) => sampleChoices(request, request.query))
+  app.post('/purchasing/sample-orders', { schema: sampleContracts.createSampleOrderContract }, async (request, reply) => reply.code(201).send(await createSampleOrder(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/purchasing/sample-orders/:purchaseOrderId/pdf', { schema: sampleContracts.sampleOrderPdfContract }, async (request, reply) => {
+    const { pdf, fileName } = await sampleOrderPdf(request, request.params.purchaseOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 })
