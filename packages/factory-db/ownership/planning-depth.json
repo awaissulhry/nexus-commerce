@@ -1,0 +1,53 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/planning-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 41/44 (B-W2b-286): planning in depth. The office (planners, buyers, sales for promises; the worker and scheduler in the tenant's system context for the nightly run) writes them through apps/factory-api's modules/planning (B-W2b-293, -301, -306, -312, -317, -318, -319, -321, -329), always through command(); the API keeps staff to the companies and sites their grants reach, and a what-if to its owner (the database knows no actor). Office only: the floor sees nothing of the plan until the board publishes it (Owner answer P3; schedule.prisma's published versions), and portal and link sessions read nothing (a promise reaches the customer through the order, its confirmation and its thread). No money column and no figure per person: capacity is per workshop. PromiseRecord and ScheduleChange are append-only (`@append-only`; the …_planning_depth_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). The office removes a planned work order the run no longer needs (never a firm, protected or converted one) and a workshop's capacity row; nothing else is deleted. The columns named partyId are a workshop (PlannedWorkOrder, SubcontractorCapacity) or the order line's customer (PromiseRecord): keyColumns.party, which check-ownership requires for the column; no partner access. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PlannedWorkOrder": {
+      "about": "A planning run proposes planned work orders and planned subcontract orders and moves them on run after run; the office edits, firms, protects, resets, removes and makes them real (a work order and its subcontract order). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MrpActionMessage": {
+      "about": "A planning run writes action messages on existing orders (expedite, defer, cancel, more, less, new); the office marks each DONE or IGNORED. Office only; never removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PromiseRecord": {
+      "about": "The office (sales, planning) records each promise of a delivery date to the customer of an order line: the first one kept forever, every re-promise a new row. Office only; nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "ScheduleChange": {
+      "about": "The office (planners on the board) logs every change of a site's working plan: placed, moved, removed, pinned, unpinned, published, undone. Office only; nobody changes or removes a row (an undo is a new row).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "WhatIfScenario": {
+      "about": "A planner keeps private what-if moves on a copy of a site's plan, then applies or discards them (the API shows a scenario to its owner only). Office only; never removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SubcontractorCapacity": {
+      "about": "The office keeps each workshop's weekly capacity per kind of work, in minutes or garments, from a day until a day; it removes a row typed by mistake. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

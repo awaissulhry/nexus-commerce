@@ -238,6 +238,7 @@
     },
     "kind": {
       "QUOTE": "Preventivo",
+      "INQUIRY": "Richiesta di offerta",
       "SALES_ORDER": "Ordine cliente",
       "PURCHASE_ORDER": "Ordine fornitore",
       "GOODS_RECEIPT": "Ricevimento merce",
@@ -283,6 +284,7 @@
       "EVIDENCE_PACK": "Pacchetto di evidenze",
       "RECALL": "Richiamo o ritiro",
       "AUTHORITY_REQUEST": "Richiesta dell'autorità",
+      "TRANSFER": "Trasferimento tra stabilimenti",
       "SERVICE_CASE": "Caso di assistenza",
       "SAFETY_REPORT": "Segnalazione di sicurezza del prodotto",
       "PAYROLL_EXPORT": "Esportazione paghe",

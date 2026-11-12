@@ -74,7 +74,9 @@
     "CUSTOMER_RETURN": "Customer return",
     "SUPPLIER_RETURN": "Return to supplier",
     "SHIPMENT": "Shipment",
-    "REMNANT": "Offcut from work order"
+    "REMNANT": "Offcut from work order",
+    "TRANSFER_OUT": "Sent to another site",
+    "TRANSFER_IN": "Received from another site"
   },
   "quality": {
     "QUARANTINE": "Quarantine",
@@ -112,7 +114,11 @@
     "PRODUCTION": "Line side",
     "SHIPPING": "Shipping",
     "SUBCONTRACTOR": "Subcontractor",
-    "FINISHED_GOODS": "Finished goods"
+    "FINISHED_GOODS": "Finished goods",
+    "CUSTOMER": "At a customer",
+    "TRANSIT": "In transit",
+    "PICK_FACE": "Pick face",
+    "BULK": "Bulk storage"
   },
   "locationStatus": {
     "ACTIVE": "Active",

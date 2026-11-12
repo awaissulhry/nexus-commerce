@@ -1,0 +1,74 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/warehouse-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5 schema wave 36/44 (B-W2b-277): the warehouse in depth. The office writes these tables through apps/factory-api's modules/inventory (B-W2b-289, -292, -298, -299, -300, -313, -314, -326), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only: it reads the site's default locations (put-away suggestions), reads, adds and works the site's warehouse tasks (taken, given back, done; the …_warehouse_depth_w2b_guards trigger keeps a floor session to those moves), scans units into the site's counts (append-only), asks for a substitute and issues an approved one (the trigger keeps a floor session to the request and the issue), and reads the warehouse rules but the adjustment threshold (a cost: hidden; the posting-date limit and the separation switches are read by the triggers of its own writes). Transfers between sites and count schedules are the office's. Portal and link sessions read nothing here. StockCountScan is append-only (`@append-only`): no role updates or deletes it. Nobody deletes a default (kept inactive), a transfer (cancelled while DRAFT), a schedule (retired), a task (cancelled), a substitution (refused or withdrawn) or the settings; the office deletes only the lines of a DRAFT transfer. Who took, did, scanned or asked is a person inside the one record (Owner answer W1: never a per-person figure, filter, group or total), as a hide measure names who measured it: no `personal` entry. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "DefaultLocation": {
+      "about": "The office keeps each site's default locations per kind of material and purpose (Warehouse rules, SCM-179); an old default is kept inactive. The floor reads its own site's (the put-away suggestion).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "TransferOrder": {
+      "about": "The office drafts a transfer between two sites, ships it (its DDT) and receives it at the other site, or cancels a draft (SCM-219, SCM-220). Office only: no site key, the two sites are its from and to.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "TransferLine": {
+      "about": "The office writes a draft transfer's lines (and removes one then), sets what left with the ship, and records what arrived, where it was put, what the receipt made at the other site and how a difference was settled. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "CountSchedule": {
+      "about": "The office keeps how often a location, a class or a kind of material is counted, sets the next day when a count of it closes, and retires a schedule (SCM-227). Office only: its due counts reach the floor as COUNT tasks.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "StockCountScan": {
+      "about": "The office and the site's floor scan units into a COUNTING count (SCM-228), each with its own area or length; both read the site's scans. Nobody changes or removes one: a wrong count is recounted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "InventorySettings": {
+      "about": "The office keeps the warehouse rules of a company or of the tenant (back-dating limit, adjustment threshold, separation of duties, low-stock alerts; SCR-258). The floor reads them but the adjustment threshold, a cost: the triggers of its own moves and scans read the posting-date limit and the separation switches.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["adjustmentApprovalAmount"] }
+      }
+    },
+    "WarehouseTask": {
+      "about": "The office and the site's floor make warehouse tasks from their sources (a posted receipt, a pick list, a due count, a hold, a transfer) or by hand; the floor takes, gives back and does its site's tasks; the office also reassigns and cancels (SCM-274).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "MaterialSubstitution": {
+      "about": "The office or the site's floor asks for a substitute on a work order (MES-139); the office records its yes or no (never the person who asked) and withdraws one; the office or the floor issues an approved one with its moves.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

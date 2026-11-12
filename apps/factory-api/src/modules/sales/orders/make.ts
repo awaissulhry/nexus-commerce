@@ -94,6 +94,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
       id: true,
       seq: true,
       kind: true,
+      feeKind: true,
       styleId: true,
       styleRevisionId: true,
       colourwayId: true,
@@ -121,6 +122,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
     id: line.id,
     seq: line.seq,
     kind: line.kind,
+    feeKind: line.feeKind,
     styleId: line.styleId,
     styleRevisionId: line.styleRevisionId,
     revisionReleased: line.styleRevisionId !== null && released.has(line.styleRevisionId),
@@ -204,6 +206,9 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
         partyId: version.partyId,
         seq: line.seq,
         kind: line.kind,
+        // W2b-5 (B-W2b-280): a FEE line keeps its fee kind (the database asks for it); its waterfall, options and schedule
+        // are copied by the steps that write them (B-W2b-330, -340, -294).
+        feeKind: line.feeKind ?? null,
         quoteLineId: line.quoteLineId,
         styleId: line.styleId,
         styleRevisionId: line.styleRevisionId,

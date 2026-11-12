@@ -129,14 +129,15 @@ export async function amendableRows(db: Reader, record: AmendedRecordRow): Promi
     })
   }
 
-  const measurements = await db.inspectionMeasurement.findMany({ where, select: { id: true, pointCode: true, size: true, sampleIndex: true, nominal: true, tolerance: true, measured: true, pass: true }, orderBy: [{ pointCode: 'asc' }, { size: 'asc' }, { sampleIndex: 'asc' }] })
+  // B-W2b-283 (FU1:05): with its band, so a correction is judged against what the database's `pass` reads.
+  const measurements = await db.inspectionMeasurement.findMany({ where, select: { id: true, pointCode: true, size: true, sampleIndex: true, nominal: true, tolerance: true, toleranceMinus: true, tolerancePlus: true, measured: true, pass: true }, orderBy: [{ pointCode: 'asc' }, { size: 'asc' }, { sampleIndex: 'asc' }] })
   for (const row of measurements) {
     rows.push({
       type: 'InspectionMeasurement',
       id: row.id,
       label: `${row.pointCode}${row.size ? ` · size ${row.size}` : ''} · unit ${row.sampleIndex}`,
       values: { measured: normalValue('decimal', row.measured.toFixed(3)) },
-      facts: { measurement: { pointCode: row.pointCode, nominal: row.nominal.toFixed(3), tolerance: row.tolerance.toFixed(3), pass: row.pass } },
+      facts: { measurement: { pointCode: row.pointCode, nominal: row.nominal.toFixed(3), tolerance: row.tolerance.toFixed(3), band: row.toleranceMinus && row.tolerancePlus ? { minus: row.toleranceMinus.toFixed(3), plus: row.tolerancePlus.toFixed(3) } : null, pass: row.pass } },
     })
   }
 

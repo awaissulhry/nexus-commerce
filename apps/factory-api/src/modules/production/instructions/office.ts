@@ -11,6 +11,7 @@ import { workerGatesFor } from '../../people/privacy/worker-gate'
 import { settingsOf } from './lookup'
 import {
   classesOf,
+  editorsOf,
   filesOf,
   INSTRUCTION,
   kindOf,
@@ -222,6 +223,7 @@ export async function recordIn(db: Db, context: OfficeContext, instructionId: st
         number: draft.number,
         status: statusOf(draft),
         authorId: draft.authorId,
+        editorIds: (await editorsOf(db, [draft.id])).get(draft.id) ?? [],
         approverId: context.actorId,
         instructionNumber: instruction.number,
         instructionActive: instruction.status === 'ACTIVE',

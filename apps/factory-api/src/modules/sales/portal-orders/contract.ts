@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
-import { DEPOSIT_KINDS, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
@@ -149,7 +149,7 @@ export const recordContract = defineContract({
       promiseHistory: z.array(
         output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }) }),
       ),
-      deposits: z.array(output({ id: id(), kind: z.enum(DEPOSIT_KINDS), status: z.string(), amount: money.price(z.number().int()), currency: z.string(), dueDate: day, paidAt: instant().nullable() })),
+      deposits: z.array(output({ id: id(), kind: z.enum(STORED_DEPOSIT_KINDS), status: z.string(), amount: money.price(z.number().int()), currency: z.string(), dueDate: day, paidAt: instant().nullable() })),
       lines: z.array(line),
       pieces: pieces.extend({ closedShort: z.number().int() }),
       /** The customer sees production progress (C1): GET …/progress answers. */

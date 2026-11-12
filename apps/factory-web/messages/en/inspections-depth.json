@@ -474,6 +474,7 @@
       "PLAN": "the plan",
       "SIZE_CHART": "the size chart",
       "PROFILE": "the rider's profile",
+      "SPEC": "the approved measurement spec",
       "TYPED": "typed"
     },
     "cellFor": "{point}, unit {unit}",

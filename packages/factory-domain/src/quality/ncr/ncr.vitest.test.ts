@@ -12,6 +12,7 @@ import {
   closeStatement,
   containmentOverdue,
   decidedOf,
+  decisionEditorRefusal,
   decisionProblems,
   decisionState,
   doneProblems,
@@ -115,6 +116,10 @@ describe('NCR content, containment and decisions (QHS-081, QHS-082, QHS-083)', (
     expect(approveProblem({ ...base, approverId: 'u1' })).toBe('You decided this: another person approves it (four eyes).')
     expect(approveProblem({ ...base, approverId: 'u2' })).toBeNull()
     expect(approveProblem({ ...base, approvalRequired: false, approverId: 'u2' })).toBe('This decision needs no approval.')
+    // Nobody approves their own work (B-W2b-F24; Owner W2b-5 Q3): who changed the decision since does not approve it either.
+    expect(decisionEditorRefusal({ seq: 2, editorIds: ['u2'], approverId: 'u2' })).toEqual({ code: 'EDITED_DECISION', message: 'You changed decision 2: a person who neither decided nor changed it approves it (four eyes).' })
+    expect(decisionEditorRefusal({ seq: 2, editorIds: ['u2'], approverId: 'u3' })).toBeNull()
+    expect(decisionEditorRefusal({ seq: 2, editorIds: [], approverId: 'u2' })).toBeNull()
     expect(carryOutProblem(base)).toBe("This decision waits for another person's approval.")
     expect(carryOutProblem({ ...base, approved: true })).toBeNull()
     expect(decisionState({ approvalRequired: true, approved: false, done: false })).toBe('WAITING_APPROVAL')

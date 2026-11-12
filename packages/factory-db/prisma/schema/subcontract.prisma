@@ -60,6 +60,9 @@ model SubcontractOrder {
   orderDate        DateTime               @db.Date
   /// When the goods are due back at the site.
   expectedBackDate DateTime?              @db.Date
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-164, the kit-timing popover): when the kit must leave for the work to start
+  /// on time (not after the day the goods are due back); one of the order's terms (changed while DRAFT); null: not planned.
+  kitDueAt         DateTime?              @db.Timestamptz(3)
   /// ISO 4217: the currency of its fees.
   currency         String                 @default("EUR")
   /// The sum of its operations' amounts, in minor units; fixed when it is issued (the triggers check the sum).
@@ -107,6 +110,10 @@ model SubcontractOrder {
   workOrder  WorkOrder              @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operations SubcontractOperation[]
   kitLines   SubcontractKitLine[]
+  // W2b-5 production.prisma, planning-depth.prisma (wave 41/44): the work order's operations outsourced to it, and the
+  // planned work order it was made from.
+  outsourcedOperations WorkOrderOperation[] @relation("WorkOrderOperationOutsourced")
+  plannedWorkOrders    PlannedWorkOrder[]
   // W2b (B-W2b-01): the bundles that went out with its kit, and what came back.
   bundles    SubcontractBundle[]
   receipts   SubcontractReceipt[]
@@ -121,6 +128,11 @@ model SubcontractOrder {
   supplierInvoiceMatches SupplierInvoiceMatch[]
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries            WorkOrderCostEntry[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the material balance of its kit lines and the workshop's cost booked to the
+  // work order.
+  consumptions           SubcontractConsumption[]
+  /// @not-money the relation to the workshop's cost entries (the rows carry the grain)
+  workshopCostEntries    SubcontractCostEntry[]
 
   @@unique([tenantId, companyId, number])
   // The target of the operations' reference: an operation of the order's own work order.
@@ -188,6 +200,9 @@ model SubcontractOperation {
   receiptLines       SubcontractReceiptLine[]
   // W2b portal-supply.prisma (wave 22/22): the workshop's progress reports of it.
   progressReports    SubcontractProgressReport[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the workshop's fees for it.
+  /// @not-money the relation to the workshop's cost entries (the rows carry the grain)
+  workshopCostEntries SubcontractCostEntry[]
 
   @@unique([tenantId, subcontractOrderId, seq])
   // W2b: the target of the receipt lines' reference: an operation of the line's own work order.
@@ -244,8 +259,12 @@ model SubcontractKitLine {
   hide             Hide?            @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
   move             StockMove?       @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   ddt              Ddt?             @relation(fields: [tenantId, siteId, partyId, ddtId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 buying-depth.prisma (wave 40/44): its material balance at the workshop.
+  consumptions     SubcontractConsumption[]
 
   @@unique([tenantId, subcontractOrderId, seq])
+  // W2b-5: the target of the material balance's reference: a kit line of the row's own order, site and workshop.
+  @@unique([tenantId, siteId, partyId, subcontractOrderId, id])
 }
 
 /// PLANNED → SENT | CANCELLED; SENT → PLANNED when its transfer was reversed (the kit did not leave). CANCELLED is final.
@@ -320,6 +339,10 @@ model SubcontractReceipt {
   incomingInspections IncomingInspection[]
   // W2b portal-supply.prisma (wave 22/22): the workshop's return notices it was written from.
   returnNotices    SubcontractReturnNotice[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the material balance declared with it and the workshop's cost earned with it.
+  consumptions     SubcontractConsumption[]
+  /// @not-money the relation to the workshop's cost entries (the rows carry the grain)
+  workshopCostEntries SubcontractCostEntry[]
 
   @@unique([tenantId, subcontractOrderId, seq])
   // The target of the lines' reference: a receipt of the line's own site and work order.

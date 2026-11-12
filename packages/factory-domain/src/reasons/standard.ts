@@ -106,6 +106,16 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     ['NOT_NEEDED', 'Non necessario', 'Not needed', 'box', VIOLET],
     OTHER(),
   ],
+  // W2b-5 (B-W2b-280; SAL-175): why a line's price was changed by hand (the waterfall's MANUAL step); a note is asked too.
+  PRICE_ADJUSTMENT: [
+    ['LOYALTY', 'Fedeltà del cliente', 'Loyalty', 'award', VIOLET],
+    ['COMPETITION', 'Concorrenza', 'Competition', 'flag', RED],
+    ['VOLUME', 'Volume', 'Volume', 'package', BLUE],
+    ['GOODWILL', 'Cortesia', 'Goodwill', null, EMERALD],
+    ['REWORK', 'Rilavorazione', 'Rework', 'shirt', AMBER],
+    ['TARGET_PRICE', 'Prezzo obiettivo', 'Target price', 'percent', INDIGO],
+    OTHER(),
+  ],
 }
 
 const reasonOf = ([code, labelIt, labelEn, icon, colour, needsDetail]: Row): StandardReason => Object.freeze({ code, labelIt, labelEn, icon, colour, needsDetail: needsDetail ?? false })

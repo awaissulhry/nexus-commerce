@@ -166,13 +166,16 @@ export async function recordMeasurements(caller: CommandCaller, inspectionId: st
     const before = await measurementsOf(tx, row.id)
     const changes: unknown[] = []
     for (const input of rows) {
-      const existing = before.find((value) => value.pointCode === input.pointCode && value.size === input.size && value.sampleIndex === input.sampleIndex)
+      // B-W2b-283 (FU1:05): a point code is one code whatever its letter case.
+      const existing = before.find((value) => value.pointCode.toUpperCase() === input.pointCode.toUpperCase() && value.size === input.size && value.sampleIndex === input.sampleIndex)
       if (input.value === null) {
         if (existing) await tx.inspectionMeasurement.delete({ where: { id: existing.id }, select: { id: true } })
         changes.push({ point: input.pointCode, size: input.size, sampleIndex: input.sampleIndex, measured: null })
         continue
       }
-      const data = { nominal: input.value.nominal, tolerance: input.value.tolerance, measured: input.value.measured, uom: input.value.uom, ...recorder, recordedAt: now }
+      // B-W2b-283 (FU1:05): a spec cell whose sides differ keeps its band (the database writes `pass` from it); else none.
+      const band = { toleranceMinus: input.value.band?.minus ?? null, tolerancePlus: input.value.band?.plus ?? null }
+      const data = { nominal: input.value.nominal, tolerance: input.value.tolerance, ...band, measured: input.value.measured, uom: input.value.uom, ...recorder, recordedAt: now }
       // The point, size, unit and check of a value never change (the guard): another check or point code is a new row.
       if (existing && existing.planCheckId === input.planCheckId) {
         await tx.inspectionMeasurement.update({ where: { id: existing.id }, data: { ...data, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
@@ -180,7 +183,7 @@ export async function recordMeasurements(caller: CommandCaller, inspectionId: st
         if (existing) await tx.inspectionMeasurement.delete({ where: { id: existing.id }, select: { id: true } })
         await tx.inspectionMeasurement.create({ data: { id: newId(), siteId: row.siteId, inspectionId: row.id, planCheckId: input.planCheckId, pointCode: input.pointCode, size: input.size, sampleIndex: input.sampleIndex, ...data, createdAt: now, updatedAt: now, createdById: context.actorId }, select: { id: true } })
       }
-      changes.push({ point: input.pointCode, size: input.size, sampleIndex: input.sampleIndex, measured: input.value.measured, nominal: input.value.nominal, tolerance: input.value.tolerance, uom: input.value.uom, against: input.value.source })
+      changes.push({ point: input.pointCode, size: input.size, sampleIndex: input.sampleIndex, measured: input.value.measured, nominal: input.value.nominal, tolerance: input.value.tolerance, ...(input.value.band ? { band: input.value.band } : {}), uom: input.value.uom, against: input.value.source })
     }
     await bump(tx, context, row, now)
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { measurements: before.length }, after: { measurements: changes, ...(mtm ? { profileRevision: mtm.profile.revision } : {}) } })

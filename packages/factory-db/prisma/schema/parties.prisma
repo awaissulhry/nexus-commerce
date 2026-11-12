@@ -45,6 +45,29 @@ model Party {
   /// As a supplier, its usual lead time: calendar days from the order to the goods at our site, 0 or more (PLN-066).
   /// Planning uses it when the item names none, or the item is bought from it instead of the item's default supplier.
   leadTimeDays Int?
+  /// W2b-5 (schema wave 42/44, SCM-002; suppliers-depth.prisma): as a supplier, what kind it is, one or more, each once;
+  /// empty: not said. Only on a party with the SUPPLIER, SUBCONTRACTOR or CARRIER role (checked when the kinds change).
+  supplierKinds             SupplierKind[]   @default([])
+  /// W2b-5 (SCM-008): as a supplier, where it stands with us; null: not set (W1's party status alone). A blocked or on-hold
+  /// supplier gets no new purchase order (B-W2b-311). Set only on a party with the SUPPLIER, SUBCONTRACTOR or CARRIER role,
+  /// never cleared once set; each change records when (not in the future, later than the last) and by whom (an active
+  /// office user; null: the system).
+  supplierStatus            SupplierStatus?
+  /// Why it has that status (1 to 500 characters, one line): required for CONDITIONAL, ON_HOLD and BLOCKED. For the office
+  /// only: the partner role can neither read nor write it.
+  /// @internal
+  supplierStatusReason      String?
+  supplierStatusChangedAt   DateTime?        @db.Timestamptz(3)
+  supplierStatusChangedById String?          @db.Uuid
+  /// W2b-5 (SCM-016; Reg. (EU) 2024/3015 on forced labour, due diligence from 14 December 2027): where it makes what it sells
+  /// us: the country (ISO 3166-1 alpha-2), the region (1 to 120 characters, one line), words (1 to 2000). As a tannery
+  /// (supplierKinds has TANNERY, required for these two): the countries its raw hides come from (alpha-2, each once, at most
+  /// 50) and its tannages (each once).
+  originCountry             String?
+  originRegion              String?
+  originNote                String?
+  hideOriginCountries       String[]         @default([])
+  tannages                  Tannage[]        @default([])
   /// The commercial terms its new quotes and orders start with (SAL-012; design customer.tax.terms): its payment terms
   /// from the library (FIN-075) and its price list (SAL-165; a discount group is a GROUP list), null: none of its own.
   paymentTermsId       String?            @db.Uuid
@@ -65,6 +88,9 @@ model Party {
   /// W2b (schema wave 23, B-W2b-189's gap): its website, as printed on its profile (an http or https address, up to 200
   /// characters); null: none known.
   website              String?
+  /// W2b-5 (schema wave 37/44, SAL-021): a rider (a PERSON party) under the team or dealer it rides for (an ORGANISATION
+  /// party with the CUSTOMER or BRAND role, not archived, of the rider's company or tenant-wide); null: on its own.
+  teamPartyId          String?            @db.Uuid
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -74,6 +100,10 @@ model Party {
   createdById  String?     @db.Uuid
 
   company             Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 sales-intake (wave 37/44): the team or dealer a rider rides for, and a team's riders (Restrict, not Prisma's
+  // SetNull default for an optional relation: that would also clear tenantId).
+  team                Party?               @relation("PartyTeam", fields: [tenantId, teamPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  riders              Party[]              @relation("PartyTeam")
   addresses           PartyAddress[]
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
@@ -102,6 +132,10 @@ model Party {
   brandStyles         Style[]
   // W2b-4 options.prisma (wave 28/33): the BOM lines whose material it sends us (customer-supplied).
   customerSuppliedBomLines BomLine[] @relation("BomLineCustomerSupplied")
+  // W2b-5 inventory.prisma, sales-orders-depth.prisma (wave 39/44): the lots of its own material we hold (customer-owned
+  // stock), its credit checks.
+  ownedLots           Lot[]                @relation("LotOwner")
+  creditChecks        CreditCheck[]
   bomLines            BomLine[]
   // W2b-4 styles-depth.prisma (wave 26/33): as a private-label brand, its branding sets.
   brandingSets        BrandingSet[]
@@ -135,6 +169,10 @@ model Party {
   paymentIntents      PaymentIntent[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
+  // W2b-5 supply.prisma, buying-depth.prisma (wave 40/44): the purchase orders delivered to it as a third party (a workshop,
+  // a customer), and its delivery tolerances as a supplier.
+  shipToPurchaseOrders PurchaseOrder[]     @relation("PurchaseOrderShipToParty")
+  deliveryTolerances   DeliveryTolerance[] @relation("DeliveryToleranceSupplier")
   materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
   // W2a supply.prisma, planning.prisma: the firm planned orders that buy from it, the item parameters that prefer it.
   firmRequirements     MaterialRequirement[] @relation("MaterialRequirementFirmSupplier")
@@ -191,6 +229,12 @@ model Party {
   serviceCases         ServiceCase[]         @relation("ServiceCaseParty")
   productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportParty")
 
+  // W2b-5 sales-intake.prisma (wave 37/44): its inquiries, its requirements, holds and terms per company.
+  inquiries            Inquiry[]
+  customerRequirements CustomerRequirement[]
+  holds                PartyHold[]
+  companyTerms         PartyCompanyTerms[]
+
   // calendar.prisma: as a supplier or subcontractor, its calendar (its closed days).
   workCalendars       WorkCalendar[]
   // W2a: as a supplier, its approved sources, the discrepancies of its deliveries and the claims to it; as a
@@ -200,6 +244,9 @@ model Party {
   supplierClaims          SupplierClaim[]
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
+  // W2b-5 planning-depth.prisma (wave 41/44): as a workshop, the planned subcontract orders for it and its weekly capacity.
+  plannedWorkOrders       PlannedWorkOrder[]      @relation("PlannedWorkOrderWorkshop")
+  subcontractorCapacities SubcontractorCapacity[] @relation("SubcontractorCapacityWorkshop")
   // W2b inspection-plans.prisma (wave 10/16): as a customer, the AQL profiles assigned to it.
   aqlProfileAssignments   AqlProfileAssignment[]
   subcontractOrders       SubcontractOrder[]
@@ -208,12 +255,18 @@ model Party {
   // W2b portal-followups.prisma (schema wave 23): the documents it uploaded and the profile changes it asked for.
   supplierDocumentUploads SupplierDocumentUpload[]
   changeRequests          PartyChangeRequest[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): its bank accounts, its qualifications and, as a workshop, its written terms.
+  bankAccounts            SupplierBankAccount[]
+  supplierQualifications  SupplierQualification[]
+  subcontractAgreements   SubcontractAgreement[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
   @@unique([tenantId, id])
+  // W2b-5 (wave 37/44): a team's riders.
+  @@index([tenantId, teamPartyId])
 }
 
 enum PartyKind {
@@ -313,9 +366,13 @@ model PartyAddress {
   shipments           Shipment[]
   // W2b-4 samples.prisma (wave 29/33): the sample shipments sent to it.
   sampleShipments     SampleShipment[]
+  // W2b-5 supply.prisma (wave 40/44): the purchase orders delivered to it (a third party's address).
+  purchaseOrdersShipTo PurchaseOrder[] @relation("PurchaseOrderShipToAddress")
   // W2b portal-sales.prisma (wave 21/22): the portal order requests and the change requests that ask to deliver there.
   portalOrderRequestsShipTo PortalOrderRequest[] @relation("PortalOrderRequestShipTo")
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the bank account changes checked by calling its phone.
+  bankAccountCallBacks SupplierBankAccount[] @relation("SupplierBankAccountCallBackAddress")
 
   @@unique([tenantId, partyId, id])
 }
@@ -352,9 +409,25 @@ model PartyContact {
   phone       String?
   /// What they deal with; none is a plain contact.
   roles       PartyContactRole[] @default([])
+  /// W2b-5 (schema wave 42/44, SCM-004): what they receive from us, each once; empty: none by this routing (the purchase
+  /// order e-mail then goes to the ORDERS contacts, as in W1).
+  receives    PartyContactReceives[] @default([])
   /// The language they read, ISO 639-1; null: the party's language.
   language    String?
   status      MasterStatus       @default(ACTIVE)
+  /// W2b-5 (schema wave 37/44, SAL-022; design customer.contacts.grid "Consent and lawful basis"): why we keep the person's
+  /// data (GDPR art. 6(1)); null: not recorded yet. CONSENT needs when and how it was given (consentAt, consentSource: up
+  /// to 500 characters, both or neither, not in the future); objectedAt: when the person objected (art. 21) or withdrew
+  /// their consent (art. 7(3)), not in the future.
+  lawfulBasis    ContactLawfulBasis?
+  consentAt      DateTime?          @db.Timestamptz(3)
+  consentSource  String?
+  objectedAt     DateTime?          @db.Timestamptz(3)
+  /// W2b-5 (SAL-022; GDPR art. 17): the erasure, when and by whom (an office user), both or neither, set once, never
+  /// cleared. An erased contact is ARCHIVED with its personal fields blanked for good (name '', no e-mail, no phone): the row
+  /// stays for the quotes, invoices and DDTs that name it (they keep their own copies), and refuses new personal data.
+  erasedAt       DateTime?          @db.Timestamptz(3)
+  erasedById     String?            @db.Uuid
   version     Int                @default(1)
   createdAt   DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -362,6 +435,8 @@ model PartyContact {
 
   party               Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   measurementProfiles MeasurementProfile[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries they made.
+  inquiries           Inquiry[]
   // email-in.prisma: the mail received from this contact.
   inboundEmails       InboundEmail[]
   // sales.prisma: the quotes sent to them.
@@ -370,6 +445,8 @@ model PartyContact {
   purchaseOrders      PurchaseOrder[]
   // W2b safety.prisma (wave 15/16): the safety roles they hold as an outside contact (a consultant RSPP, the doctor).
   safetyAppointments  SafetyAppointment[]
+  // W2b-5 suppliers-depth.prisma (wave 42/44): the bank account changes checked by calling them.
+  bankAccountCallBacks SupplierBankAccount[] @relation("SupplierBankAccountCallBackContact")
   // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
   returnAuthorisations ReturnAuthorisation[]
   complaints          Complaint[]

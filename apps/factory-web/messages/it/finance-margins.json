@@ -94,7 +94,8 @@
     "PARTLY_SHIPPED": "Spedito in parte",
     "SHIPPED": "Spedito",
     "CLOSED": "Chiuso",
-    "CANCELLED": "Annullato"
+    "CANCELLED": "Annullato",
+    "PENDING_APPROVAL": "In attesa di approvazione"
   },
   "filter": {
     "customer": "Cliente",

@@ -12,9 +12,11 @@ import {
   floorRequestText,
   linkRefusal,
   orderEditRefusal,
+  ownWorkRefusal,
   releaseRefusal,
   requestEditRefusal,
   requestMoveRefusal,
+  selfNamedRefusal,
   submitRefusal,
   workInProgressRefusal,
 } from './rules'
@@ -85,12 +87,30 @@ describe('change orders (PRD-170: one approval stage, four eyes)', () => {
   it('a decision is the named approver’s, once, never the author’s, with why for a rejection', () => {
     const submitted = { ...order, status: 'SUBMITTED' as const }
     const mine = { approverId: 'q', required: true, decision: null }
-    expect(decideRefusal(submitted, mine, 'author', 'APPROVED', null)).toMatchObject({ code: 'OWN_APPROVAL' })
-    expect(decideRefusal(submitted, null, 'z', 'APPROVED', null)).toMatchObject({ code: 'NOT_APPROVER' })
-    expect(decideRefusal(submitted, { ...mine, decision: 'APPROVED' }, 'q', 'APPROVED', null)).toMatchObject({ code: 'ALREADY_DECIDED' })
-    expect(decideRefusal(submitted, mine, 'q', 'REJECTED', null)).toMatchObject({ code: 'REASON_NEEDED' })
-    expect(decideRefusal(order, mine, 'q', 'APPROVED', null)).toMatchObject({ code: 'ORDER_MOVE' })
-    expect(decideRefusal(submitted, mine, 'q', 'APPROVED', null)).toBeNull()
+    const free = { namedById: 'author', carried: [{ number: 'CR-2026-0001', raisedById: 'sales' }] }
+    expect(decideRefusal(submitted, mine, 'author', 'APPROVED', null, free)).toMatchObject({ code: 'OWN_APPROVAL' })
+    expect(decideRefusal(submitted, null, 'z', 'APPROVED', null, free)).toMatchObject({ code: 'NOT_APPROVER' })
+    expect(decideRefusal(submitted, { ...mine, decision: 'APPROVED' }, 'q', 'APPROVED', null, free)).toMatchObject({ code: 'ALREADY_DECIDED' })
+    expect(decideRefusal(submitted, mine, 'q', 'REJECTED', null, free)).toMatchObject({ code: 'REASON_NEEDED' })
+    expect(decideRefusal(order, mine, 'q', 'APPROVED', null, free)).toMatchObject({ code: 'ORDER_MOVE' })
+    expect(decideRefusal(submitted, mine, 'q', 'APPROVED', null, free)).toBeNull()
+  })
+
+  it('nobody approves their own work (B-W2b-F24; Owner W2b-5 Q3): not named by themselves, not on a request they raised', () => {
+    const submitted = { ...order, status: 'SUBMITTED' as const }
+    const mine = { approverId: 'q', required: true, decision: null }
+    const carried = [{ number: null, raisedById: null }, { number: 'CR-2026-0001', raisedById: 'q' }]
+    // Naming: nobody names themselves, the author's co-manager included; naming another person is allowed.
+    expect(selfNamedRefusal(order, 'q', 'q')).toEqual({ code: 'SELF_NAMED', message: 'Nobody names themselves an approver of change order ECO-2026-0001: someone else names who decides it (four eyes).' })
+    expect(selfNamedRefusal(order, 'author', 'q')).toBeNull()
+    expect(selfNamedRefusal(order, null, 'q')).toBeNull()
+    // Deciding: an approval they named themselves to, or a carried request they raised, is refused; a third person decides.
+    expect(ownWorkRefusal(submitted, 'q', { namedById: 'q', carried: [] })).toMatchObject({ code: 'SELF_NAMED' })
+    expect(ownWorkRefusal(submitted, 'q', { namedById: 'author', carried })).toEqual({ code: 'OWN_REQUEST', message: 'You raised change request CR-2026-0001, which change order ECO-2026-0001 carries: a person who did not ask for the change decides it (four eyes).' })
+    expect(ownWorkRefusal(submitted, 'r', { namedById: 'author', carried })).toBeNull()
+    expect(decideRefusal(submitted, mine, 'q', 'APPROVED', null, { namedById: 'q', carried: [] })).toMatchObject({ code: 'SELF_NAMED' })
+    expect(decideRefusal(submitted, mine, 'q', 'REJECTED', 'Too short', { namedById: 'author', carried })).toMatchObject({ code: 'OWN_REQUEST' })
+    expect(decideRefusal(submitted, mine, 'q', 'APPROVED', null, { namedById: 'author', carried: [{ number: null, raisedById: null }] })).toBeNull()
   })
 
   it('released once approved, not before its day; cancelled with why while still going', () => {

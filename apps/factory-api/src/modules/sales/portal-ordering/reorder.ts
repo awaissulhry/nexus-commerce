@@ -5,6 +5,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { reorderPlan, type ReorderPlan } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { priceShown } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
@@ -75,7 +76,8 @@ async function orderLinesOf(request: FastifyRequest, reader: PortalReader, order
   if (!order || order.companyId !== reader.session.company.id || order.status === 'CANCELLED') throw new NotFoundError('Order not found.')
   const revisionIds = [...new Set(order.lines.flatMap((line) => (line.styleRevisionId ? [line.styleRevisionId] : [])))]
   const revisions = revisionIds.length === 0 ? new Map<string, number>() : await reader.inTenant(async (db) => new Map((await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } })).map((row) => [row.id, row.revision])))
-  return { order, revisions }
+  // W2b-5 (B-W2b-280): a fee is not reordered: the past order shows its goods lines only.
+  return { order: { ...order, lines: order.lines.filter(isGoodsLine) }, revisions }
 }
 
 type OrderLines = Awaited<ReturnType<typeof orderLinesOf>>
