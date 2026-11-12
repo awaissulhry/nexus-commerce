@@ -224,6 +224,10 @@ model Party {
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]
   complaints           Complaint[]
+  // W2b-5 service.prisma (wave 43/44): its repair estimates, service cases and product-safety reports.
+  repairEstimates      RepairEstimate[]
+  serviceCases         ServiceCase[]         @relation("ServiceCaseParty")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportParty")
 
   // W2b-5 sales-intake.prisma (wave 37/44): its inquiries, its requirements, holds and terms per company.
   inquiries            Inquiry[]
@@ -446,6 +450,9 @@ model PartyContact {
   // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
   returnAuthorisations ReturnAuthorisation[]
   complaints          Complaint[]
+  // W2b-5 service.prisma (wave 43/44): the service cases and product-safety reports they raised.
+  serviceCases         ServiceCase[]         @relation("ServiceCaseContact")
+  productSafetyReports ProductSafetyReport[] @relation("ProductSafetyReportContact")
   // W2b ncr.prisma (wave 11/16): the concessions they were asked.
   ncrConcessions      NcrConcession[]
   // W2b links.prisma, links-depth.prisma (wave 19/22): the links sent to them, the records shared with them, the

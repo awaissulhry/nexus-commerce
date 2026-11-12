@@ -11,7 +11,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { reasonWords } from '../../../platform/reasons/service'
 import { officeOf } from './access'
-import { currencyOf, dayOrNull, lineKeyOf, RMA_COLUMNS, soldFactsOf } from './store'
+import { currencyOf, dayOrNull, lineKeyOf, RMA_COLUMNS, soldFactsOf, w2aDispositionOf } from './store'
 
 /**
  * The returns list and its tiles (B-W2a-43; design sales.returns returns.tiles "Waiting for goods", "Received — to
@@ -131,7 +131,7 @@ export async function listReturns(caller: CommandCaller, query: ListQuery) {
           reason: first && reason ? { code: first.reasonCode, labelIt: reason.labelIt, labelEn: reason.labelEn } : null,
           status: row.status,
           statusWords: statusWords({ status: row.status as ReturnStatus, goodsDueBy: dayOrNull(row.goodsDueBy), linesReceived: received.length, linesDecided: decided.length }, today),
-          dispositions: [...new Set(own.flatMap((line) => (line.disposition ? [line.disposition] : [])))],
+          dispositions: [...new Set(own.flatMap((line) => (line.disposition ? [w2aDispositionOf(line.disposition)!] : [])))],
           receivedAt: row.receivedAt ? toUtcIso(row.receivedAt) : null,
           goodsDueBy: dayOrNull(row.goodsDueBy),
           late: row.status === 'AUTHORISED' && row.goodsDueBy !== null && dayOrNull(row.goodsDueBy)! < today,

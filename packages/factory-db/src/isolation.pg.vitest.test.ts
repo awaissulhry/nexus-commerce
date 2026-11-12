@@ -74,6 +74,7 @@ import { seed as seedSalesOrdersDepth } from '../seed/sales-orders-depth'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
+import { seed as seedService } from '../seed/service'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSizesDepth } from '../seed/sizes-depth'
 import { seed as seedSkills } from '../seed/skills'
@@ -425,6 +426,12 @@ beforeAll(async () => {
   // are the plain ones a copy may repeat; with partnerScope, P1's PROPOSED account (the row a partner session inserts).
   await seedSuppliersDepth({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
   await seedSuppliersDepth({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
+  // The returns, repairs, service and product safety schema of W2b-5 (wave 43/44): return policies (the first retired: one
+  // live per company and channel) and fee rules, SEED-REP-0001's estimates (the first a DRAFT, its zip line the first line),
+  // service cases and their links, safety reports, their injuries (keys `injury:<report>`) and the accident log (the first
+  // row a second revision with its reason): the plain ones a copy may repeat. P1's repairs and estimates for the partner scope.
+  await seedService({ db: factory, namespace: 'iso-a' })
+  await seedService({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -437,6 +444,7 @@ it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
     'AbsenceCode',
     'AbsenceEntry',
+    'AccidentLogEntry',
     'AccountingExport',
     'AccountingExportFile',
     'Alert',
@@ -746,6 +754,8 @@ it('covers every classified table and every runtime role', () => {
     'ProcessingActivity',
     'ProductRiskAssessment',
     'ProductRiskRow',
+    'ProductSafetyInjury',
+    'ProductSafetyReport',
     'ProductSettings',
     'ProductTypeProfile',
     'ProductionControlTest',
@@ -788,6 +798,8 @@ it('covers every classified table and every runtime role', () => {
     'Refund',
     'RegulationOrStandard',
     'Remnant',
+    'RepairEstimate',
+    'RepairEstimateLine',
     'RepairOrder',
     'RepairStageEvent',
     'ReplacementRequest',
@@ -800,7 +812,9 @@ it('covers every classified table and every runtime role', () => {
     'RestoreDrill',
     'RestrictedSubstance',
     'ReturnAuthorisation',
+    'ReturnFeeRule',
     'ReturnLine',
+    'ReturnPolicy',
     'ReturnReceipt',
     'ReworkOrder',
     'RiskAssessment',
@@ -846,6 +860,8 @@ it('covers every classified table and every runtime role', () => {
     'Season',
     'SecondaryProcess',
     'SecretValue',
+    'ServiceCase',
+    'ServiceCaseLink',
     'Session',
     'ShadeGroup',
     'ShiftPattern',

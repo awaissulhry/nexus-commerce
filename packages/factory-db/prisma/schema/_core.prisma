@@ -187,6 +187,11 @@ model Company {
   // W2b-4 recall.prisma (wave 33/33): the requests authorities sent it, and its sustainability claims.
   authorityRequests    AuthorityRequest[]
   sustainabilityClaims SustainabilityClaim[]
+  // W2b-5 service.prisma (wave 43/44): its return policies and fee rules, service cases and product-safety reports.
+  returnPolicies       ReturnPolicy[]
+  returnFeeRules       ReturnFeeRule[]
+  serviceCases         ServiceCase[]
+  productSafetyReports ProductSafetyReport[]
   // W2b-5 ppe-texts.prisma (wave 34/44): the PPE consultant's yes per template recorded for it.
   ppeTextApprovals     PpeTextApproval[]
   // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
@@ -451,6 +456,8 @@ model Site {
   // returns.prisma: the returns coming back to it and the repairs it makes.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]
+  // W2b-5 service.prisma (wave 43/44): the estimates of its repairs.
+  repairEstimates      RepairEstimate[]
   // calendar.prisma, views.prisma, alerts.prisma: its calendar, the reports sent about it, the alert rules that look at it.
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
