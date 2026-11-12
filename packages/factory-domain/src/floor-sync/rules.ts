@@ -111,8 +111,16 @@ export function moduleRefusal(refusal: ModuleRefusal): SyncRefusal {
   return { code: refusal.code, message: refusal.message, fix: refusal.fix ?? FIXES[refusal.code] ?? (final ? DISCARD : AGAIN), final }
 }
 
+/** An issue path that names a module's refusal code (B-W2b-F31). */
+const NAMED_REFUSAL = /^(refusal|warehouse)\/[A-Z][A-Z0-9_]*$/
+
 /** A module error without a refusal of its own (a 404, a 403, a 409 in words), by the error's code. */
 export function errorRefusal(error: { readonly code: string; readonly message: string; readonly issues?: readonly { readonly path: string; readonly message: string }[] | undefined }): SyncRefusal {
+  // B-W2b-F31: a 409 that names its module's refusal in an issue path (`refusal/<CODE>`, e.g. a warehouse task step, or the
+  // database's `warehouse/<CODE>`, e.g. a blocked place or a count's frozen line) is that refusal: its own code, words and
+  // finality, so the tablet shows its words and does not send it again for ever as a generic CONFLICT.
+  const named = error.code === 'conflict' || error.code === 'invalid_state' ? error.issues?.find((issue) => NAMED_REFUSAL.test(issue.path)) : undefined
+  if (named) return moduleRefusal({ code: named.path.slice(named.path.indexOf('/') + 1), message: named.message || error.message })
   switch (error.code) {
     case 'validation_failed':
     case 'bad_request': {
