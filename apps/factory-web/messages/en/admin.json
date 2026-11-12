@@ -1740,6 +1740,7 @@
     "inventory_shade_override": "Let a hide of another shade lot into an order, with the reason",
     "inventory_lots_manage": "Split a lot of hides into shade groups and regroup them, record a lot's attributes, check its lifecycle",
     "inventory_trace_report": "Make the dated trace report for a customer, a notified body or an authority (PDF or CSV)",
+    "inventory_reports_view": "See a company's warehouse reports: stock ageing by material type and leather use by article and supplier lot (only from stock you may see; values only with the cost grain)",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",

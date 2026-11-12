@@ -1,11 +1,11 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Camera, PackageOpen, ScanLine, ShieldAlert } from 'lucide-react'
+import { Camera, PackageOpen, Ruler, ScanLine, ShieldAlert } from 'lucide-react'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, NumberStepper, RadioCard, Select } from '@nexus/ui/primitives'
 import { Textarea } from '../../../lib/i18n/ds-parts'
-import { useLocale, useT } from '../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../lib/i18n/provider'
 import type { ClaimPage, ClaimType } from '../api'
 import {
   addPhotoHeld,
@@ -26,6 +26,9 @@ import {
 } from '../model'
 import { itemFacts, itemTitle } from './items'
 import { useShown } from './shown'
+// B-W2b-346 (SAL-298, RX2:01): the remake's own steps and words.
+import { offeredTypes, REMAKE_KEYS, remakePhotoKey, typeKey } from '../types/remake/model'
+import { RemakeDetailsStep, RemakeItemStep, RemakePhotosIntro, RemakeReview } from '../types/remake/view/RemakeSteps'
 
 interface StepProps {
   page: ClaimPage
@@ -36,10 +39,11 @@ interface StepProps {
 const TYPE_ICON: Record<ClaimType, ReactNode> = {
   RETURN: <PackageOpen size={22} aria-hidden />,
   COMPLAINT: <ShieldAlert size={22} aria-hidden />,
+  REMAKE: <Ruler size={22} aria-hidden />,
 }
 
 /** A problem under a group of choices (a fieldset): said, and read with the group. */
-function GroupError({ id, text }: { id: string; text: string | undefined }) {
+export function GroupError({ id, text }: { id: string; text: string | undefined }) {
   if (!text) return null
   return (
     <p id={`${id}-error`} className="fw-cl-error" role="alert">
@@ -50,7 +54,7 @@ function GroupError({ id, text }: { id: string; text: string | undefined }) {
 
 /** Design sec:type — What do you need? Big choice cards, each with only its own questions. */
 export function TypeStep({ page, model, actions }: StepProps) {
-  const t = useT('link-claim')
+  const t = useScopedT('link-claim')
   const { error } = useShown(model, page)
   const id = fieldId('type')
   const problem = error('type')
@@ -60,7 +64,7 @@ export function TypeStep({ page, model, actions }: StepProps) {
       <fieldset className="fw-cl-fieldset" id={id} aria-describedby={problem ? `${id}-error` : undefined}>
         <legend className="fw-cl-vh">{t('step.type.title')}</legend>
         <div className="fw-cl-choices">
-          {page.types.map((type) => (
+          {offeredTypes(page).map((type) => (
             <RadioCard
               key={type}
               name="fw-cl-type"
@@ -71,22 +75,22 @@ export function TypeStep({ page, model, actions }: StepProps) {
               title={
                 <span className="fw-cl-choice">
                   <span className="fw-cl-choice-icon">{TYPE_ICON[type]}</span>
-                  <span>{t(`type.${type}.title`)}</span>
+                  <span>{t(typeKey(type, 'typeTitle'))}</span>
                 </span>
               }
-              description={type === 'RETURN' && nothingBack ? t('type.RETURN.none') : t(`type.${type}.body`)}
+              description={(type === 'RETURN' || type === 'REMAKE') && nothingBack ? t(type === 'REMAKE' ? REMAKE_KEYS.typeNone : 'type.RETURN.none') : t(typeKey(type, 'typeBody'))}
             />
           ))}
         </div>
         <GroupError id={id} text={problem} />
       </fieldset>
-      <p className="fw-cl-hint">{t('type.later', { sender: page.sender.companyName })}</p>
+      <p className="fw-cl-hint">{t(offeredTypes(page).includes('REMAKE') ? REMAKE_KEYS.later : 'type.later', { sender: page.sender.companyName })}</p>
     </>
   )
 }
 
 /** The serial: scanned from the label with the camera, or typed (design sec:item "Scan fills the serial"). */
-function SerialField({ id, value, error, onChange, onScan }: { id: string; value: string; error?: string; onChange: (value: string) => void; onScan: () => void }) {
+export function SerialField({ id, value, error, onChange, onScan }: { id: string; value: string; error?: string; onChange: (value: string) => void; onScan: () => void }) {
   const t = useT('link-claim')
   return (
     <Field label={t('item.serial')} hint={t('item.serialHint')} error={error} htmlFor={id}>
@@ -102,6 +106,7 @@ function SerialField({ id, value, error, onChange, onScan }: { id: string; value
 
 /** Design sec:item — Which item, from the order's items: what comes back (pieces, serial), or the one item of a complaint. */
 export function ItemStep({ page, model, actions }: StepProps) {
+  if (model.form.type === 'REMAKE') return <RemakeItemStep page={page} model={model} actions={actions} />
   return model.form.type === 'COMPLAINT' ? <ComplaintItem page={page} model={model} actions={actions} /> : <ReturnItems page={page} model={model} actions={actions} />
 }
 
@@ -235,6 +240,7 @@ export function DetailsStep({ page, model, actions }: StepProps) {
       <Input id={fieldId('customerRef')} value={form.customerRef} autoComplete="off" onChange={(event) => actions?.onField?.('customerRef', event.target.value)} />
     </Field>
   )
+  if (form.type === 'REMAKE') return <RemakeDetailsStep page={page} model={model} actions={actions} />
   if (form.type === 'COMPLAINT') {
     return (
       <>
@@ -307,12 +313,14 @@ export function DetailsStep({ page, model, actions }: StepProps) {
 
 /** Design sec:photos — damage and fit photos, marked to circle the problem; at least two of a damage. */
 export function PhotosStep({ page, model, actions }: StepProps) {
-  const t = useT('link-claim')
+  const t = useScopedT('link-claim')
   const { error } = useShown(model, page)
   const form = model.form
+  const remake = form.type === 'REMAKE'
   return (
     <>
       <p className="fw-cl-hint">{t('photos.intro')}</p>
+      {remake && <RemakePhotosIntro />}
       {photoGroups(form).map((group) => {
         const needed = photosNeeded(form, group)
         const shots = photosOf(model.photos, group)
@@ -325,14 +333,14 @@ export function PhotosStep({ page, model, actions }: StepProps) {
             <h3 id={`${id}-title`} className="fw-cl-h3">
               {title}
             </h3>
-            <p className="fw-cl-sub">{needed > 0 ? t('photos.needed', { needed, count: shots.length }) : t('photos.optional', { count: shots.length })}</p>
+            <p className="fw-cl-sub">{needed > 0 ? t(remake ? 'returns-remake:claim.photos.needed' : 'photos.needed', { needed, count: shots.length }) : t('photos.optional', { count: shots.length })}</p>
             {shots.length > 0 && (
               <ul className="fw-cl-photos">
                 {shots.map((shot, index) => (
                   <li key={shot.id} className="fw-cl-photo">
                     {/* A photo taken on this page (a blob address, or a made-up picture in the design cases). */}
                     <img src={shot.src} alt={t('photos.alt', { n: index + 1, title })} />
-                    <span className="fw-cl-sub">{shot.marks > 0 ? t('photos.labelMarks', { n: index + 1, count: shot.marks }) : t('photos.label', { n: index + 1 })}</span>
+                    <span className="fw-cl-sub">{remake && remakePhotoKey(index) ? t(remakePhotoKey(index)!) : shot.marks > 0 ? t('photos.labelMarks', { n: index + 1, count: shot.marks }) : t('photos.label', { n: index + 1 })}</span>
                     <Button size="sm" variant="quiet" aria-label={t('photos.removeOne', { n: index + 1, title })} onClick={() => actions?.onRemovePhoto?.(shot.id)}>
                       {t('photos.remove')}
                     </Button>
@@ -355,7 +363,7 @@ export function PhotosStep({ page, model, actions }: StepProps) {
 }
 
 /** One part of the check, with Change (back to its step). */
-function Summary({ title, step, actions, children }: { title: string; step: Step; actions?: ClaimActions; children: ReactNode }) {
+export function Summary({ title, step, actions, children }: { title: string; step: Step; actions?: ClaimActions; children: ReactNode }) {
   const t = useT('link-claim')
   return (
     <section className="fw-cl-summary" aria-label={title}>
@@ -372,7 +380,7 @@ function Summary({ title, step, actions, children }: { title: string; step: Step
 
 /** Design sec:review — Check and send, on one screen: what you need, the items, what you told us, the photos, your name. */
 export function ReviewStep({ page, model, actions }: StepProps) {
-  const t = useT('link-claim')
+  const t = useScopedT('link-claim')
   const locale = useLocale()
   const { error } = useShown(model, page)
   const form = model.form
@@ -381,9 +389,11 @@ export function ReviewStep({ page, model, actions }: StepProps) {
   return (
     <>
       <Summary title={t('review.what')} step="type" actions={actions}>
-        <p className="fw-cl-value">{form.type ? t(`type.${form.type}.title`) : none}</p>
+        <p className="fw-cl-value">{form.type ? t(typeKey(form.type, 'typeTitle')) : none}</p>
       </Summary>
-      {form.type === 'RETURN' ? (
+      {form.type === 'REMAKE' ? (
+        <RemakeReview page={page} model={model} actions={actions} />
+      ) : form.type === 'RETURN' ? (
         <>
           <Summary title={t('review.items')} step="item" actions={actions}>
             <ul className="fw-cl-review-items">
@@ -441,6 +451,7 @@ export function ReviewStep({ page, model, actions }: StepProps) {
           </Summary>
         </>
       )}
+      {form.type !== 'REMAKE' && (
       <Summary title={t('review.photos')} step="photos" actions={actions}>
         <KeyValue
           labelCase="sentence"
@@ -450,6 +461,7 @@ export function ReviewStep({ page, model, actions }: StepProps) {
           }))}
         />
       </Summary>
+      )}
       <Field label={t('review.name')} hint={t('review.nameHint')} error={error('typedName')} htmlFor={fieldId('typedName')}>
         <Input id={fieldId('typedName')} value={form.typedName} autoComplete="name" onChange={(event) => actions?.onField?.('typedName', event.target.value)} />
       </Field>

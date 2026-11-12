@@ -42,7 +42,8 @@ async function readReturn(db: Reader, returnId: string) {
 }
 type ReturnRow = NonNullable<Awaited<ReturnType<typeof readReturn>>>
 
-const RETURN_LINE_COLUMNS = { id: true, seq: true, quantity: true, receivedQuantity: true, disposition: true, creditAmount: true, salesOrderLineId: true, size: true, invoiceLineId: true } as const
+// B-W2b-346 (lead fix F28): a line credited without the goods coming back credits its pieces (none arrive).
+const RETURN_LINE_COLUMNS = { id: true, seq: true, quantity: true, receivedQuantity: true, disposition: true, creditAmount: true, salesOrderLineId: true, size: true, invoiceLineId: true, creditWithoutReturn: true } as const
 const BILLED_COLUMNS = { id: true, invoiceId: true, description: true, itemCode: true, uom: true, vatRatePct: true, vatNature: true, vatLegalRef: true, salesOrderLineId: true, size: true } as const
 
 /** The facts the plan needs: the lines, the invoice lines that billed them, the invoices, what credit notes name them. */
@@ -91,6 +92,7 @@ async function factsOf(db: Reader, rma: ReturnRow, lock?: CommandTools) {
     seq: row.seq,
     quantity: row.quantity,
     receivedQuantity: row.receivedQuantity,
+    creditWithoutReturn: row.creditWithoutReturn,
     disposition: row.disposition,
     creditAmount: row.creditAmount,
     billedBy: billedOf.get(row.id) ?? null,

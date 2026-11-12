@@ -432,6 +432,12 @@ export async function splitLot(caller: CommandCaller, lotId: string, body: Split
     for (const [index, group] of groups.entries()) {
       const source = group.source!
       const id = newId()
+      // B-W2b-328 (SCM-186): a child takes its source lot's variant (the database refuses a lot of a variant's PO line
+      // without it), and a new lot names only an ACTIVE variant: an archived one is restored first.
+      if (source.variantCode) {
+        const variant = await tx.itemVariant.findFirst({ where: { itemId: source.itemId, code: source.variantCode }, select: { status: true } })
+        if (variant && variant.status !== 'ACTIVE') throw new InvalidStateError(`Lot ${source.code} is of variant ${source.variantCode}, which is archived: restore the variant (the material's variants) before splitting its hides into new lots.`)
+      }
       await tx.lot.create({
         data: {
           id,
@@ -445,6 +451,8 @@ export async function splitLot(caller: CommandCaller, lotId: string, body: Split
           dyeBatch: source.dyeBatch,
           shade: group.label,
           receiptLineId: source.receiptLineId,
+          // B-W2b-328: the source lot's variant.
+          variantCode: source.variantCode,
           receivedAt: source.receivedAt,
           qualityStatus: source.qualityStatus === 'RELEASED' ? 'RELEASED' : 'QUARANTINE',
           qualityNote: source.qualityNote,
