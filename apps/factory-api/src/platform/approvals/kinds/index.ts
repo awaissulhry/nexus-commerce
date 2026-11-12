@@ -6,6 +6,8 @@ import { PURCHASE_ORDER_KIND } from './purchase-order'
 import { STOCK_ADJUSTMENT_KIND } from './stock-adjustment'
 // B-W2b-332: a request to buy from someone in the office.
 import { PURCHASE_REQUEST_KIND } from './purchase-request'
+// B-W2b-341: a return line credited without the goods coming back.
+import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -16,6 +18,7 @@ import { PURCHASE_REQUEST_KIND } from './purchase-request'
  *   PURCHASE_ORDER   a purchase order before it is sent (B-W2b-282 the reference kind; B-W2b-305 sends it on the yes)
  *   STOCK_ADJUSTMENT an adjustment worth more than the warehouse rules' value, posted on the yes (B-W2b-314)
  *   PURCHASE_REQUEST a request to buy from someone in the office, before the buyer sees it (B-W2b-332)
+ *   CREDIT_WITHOUT_RETURN  a return line credited without the goods coming back (B-W2b-341; the credit written on the yes)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -23,6 +26,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   STOCK_ADJUSTMENT_KIND,
   // B-W2b-332
   PURCHASE_REQUEST_KIND,
+  // B-W2b-341
+  CREDIT_WITHOUT_RETURN_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {

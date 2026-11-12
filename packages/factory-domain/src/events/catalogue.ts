@@ -139,6 +139,8 @@ import { events as purchaseRequests } from '../purchase-requests/events'
 import { events as salesInquiries } from '../sales-inquiries/events'
 // B-W2b-314: the warehouse rules and the adjustments they hold back.
 import { events as inventoryRules } from '../inventory-rules/events'
+// B-W2b-341: returns in depth (the policy check, fee rules, garments named, credit without a return, the scan code).
+import { events as returnsDepth } from '../returns-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -482,7 +484,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-295
   ...salesInquiries,
   // B-W2b-314
-  ...inventoryRules] as const satisfies readonly EventDefinition[]
+  ...inventoryRules,
+  // B-W2b-341
+  ...returnsDepth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
