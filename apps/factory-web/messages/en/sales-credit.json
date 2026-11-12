@@ -1,0 +1,145 @@
+{
+  "title": "Credit limits",
+  "hint": "Limit, used (open invoices + orders not yet invoiced), available, and what waits for credit.",
+  "rules": "Over the limit, an order, a release or a shipment is shown and goes on, unless a credit rule in Admin › Automation › Approval rules makes it wait for someone's yes. Nobody approves their own request.",
+  "wording": "The wording of the credit rule on documents waits for the accountant's word; these are the defaults.",
+  "noAccess": {
+    "title": "Credit limits",
+    "body": "Credit limits need the permission {permission}. Ask a person who manages roles."
+  },
+  "noPrice": "Amounts need the price grain ({permission}): the list shows who has a limit and what waits.",
+  "view": {
+    "label": "Show",
+    "ALL": "All",
+    "OVER": "Over the limit",
+    "HELD": "Something waits"
+  },
+  "viewCount": {
+    "ALL": "All ({count})",
+    "OVER": "Over the limit ({count})",
+    "HELD": "Something waits ({count})"
+  },
+  "search": "Search a customer by code or name",
+  "count_one": "{count} customer with a limit",
+  "count_other": "{count} customers with a limit",
+  "failed": "Couldn't load credit limits",
+  "slow": "Still loading…",
+  "empty": {
+    "title": "No credit limits set",
+    "body": "Without a limit nothing is checked, as before. Set one with Change limit on a customer's row of this list, once a customer buys on terms."
+  },
+  "noMatch": {
+    "title": "No customer matches",
+    "body": "Change the search or the view."
+  },
+  "clear": "Clear filters",
+  "more": "Show more",
+  "col": {
+    "customer": "Customer",
+    "limit": "Limit",
+    "used": "Used",
+    "available": "Available",
+    "overdue": "Overdue",
+    "held": "Waiting for credit",
+    "change": "Change"
+  },
+  "row": {
+    "over": "Over by {amount}",
+    "usedOf": "{pct}% of the limit",
+    "onHold": "On credit hold",
+    "nothingHeld": "Nothing waits",
+    "orders_one": "{count} order",
+    "orders_other": "{count} orders",
+    "releases_one": "{count} release",
+    "releases_other": "{count} releases",
+    "shipments_one": "{count} shipment",
+    "shipments_other": "{count} shipments",
+    "noPriceAmount": "—"
+  },
+  "finding": {
+    "OVER_LIMIT": "Over the limit",
+    "OVERDUE": "Invoices overdue",
+    "ON_HOLD": "On credit hold"
+  },
+  "action": {
+    "change": "Change limit",
+    "export": "Export {count}",
+    "exportFile": "Credit limits {day}",
+    "add": "Set a limit"
+  },
+  "held": {
+    "change": "Changing a credit limit needs {permission}.",
+    "price": "Amounts need the price grain ({permission}).",
+    "busy": "Saving…",
+    "pickToExport": "Choose the customers to export."
+  },
+  "change": {
+    "title": "Change the credit limit of {name}",
+    "company": "With {company}",
+    "now": "Now: {amount}",
+    "nowNone": "Now: no limit",
+    "amount": "New limit",
+    "amountHint": "In {currency}. Leave it empty and choose Clear the limit to check nothing.",
+    "currency": "Currency",
+    "clear": "Clear the limit",
+    "reason": "Why",
+    "reasonHint": "One line, kept in the log of this customer.",
+    "review": "Review",
+    "back": "Back",
+    "confirmTitle": "Change {name}'s credit limit with {company}?",
+    "confirmLabel": "Change limit",
+    "item": "Credit limit",
+    "none": "No limit",
+    "consequence": {
+      "rechecked": "Orders waiting for credit are checked again at once: those within the new limit go on.",
+      "cleared": "Without a limit, nothing is checked for this customer with this company.",
+      "logged": "The change and its reason are kept in the log."
+    },
+    "problem": {
+      "amount": "Type the limit as an amount, for example 25.000,00.",
+      "reason": "Say why the limit changes, in one line.",
+      "same": "This is the limit already.",
+      "customer": "Choose the customer."
+    },
+    "done": "{name}: credit limit saved.",
+    "doneRechecked_one": "{name}: credit limit saved; {count} order waiting for credit went on.",
+    "doneRechecked_other": "{name}: credit limit saved; {count} orders waiting for credit went on.",
+    "customer": "Customer",
+    "customerSearch": "Search a customer",
+    "customersReading": "Reading the customers…",
+    "noCustomers": "No customer of this company yet."
+  },
+  "csv": {
+    "customer": "Customer",
+    "code": "Code",
+    "company": "Company",
+    "currency": "Currency",
+    "limit": "Limit",
+    "used": "Used",
+    "available": "Available",
+    "overdue": "Overdue",
+    "orders": "Orders waiting",
+    "releases": "Releases waiting",
+    "shipments": "Shipments waiting"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "search": "Search a customer",
+    "change": "Change the limit of the focused customer"
+  },
+  "problem": {
+    "conflict": "Someone changed this meanwhile: it was read again. Check and try again.",
+    "signed_out": "You are signed out. Sign in again.",
+    "forbidden": "You don't have the permission for this.",
+    "not_found": "Not found: it may have been removed.",
+    "unavailable": "The server cannot be reached. Try again in a moment.",
+    "rate_limited": "Too many tries: wait a moment.",
+    "invalid": "This was refused as it is: check what you entered.",
+    "internal": "Something went wrong. Try again."
+  },
+  "common": {
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss"
+  }
+}

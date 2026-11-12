@@ -1,0 +1,18 @@
+/*
+ * Finance › Receivables & credit › Credit limits (SCR-151 sec:credit, B-W2b-304) LAYOUT only: the used bar with its amount
+ * under it, the change dialog's fields. The section reuses the page's own parts (fw-frv-*); colours are DS tokens.
+ */
+.fw-frc-used {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-frc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}

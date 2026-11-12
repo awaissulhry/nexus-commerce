@@ -77,7 +77,7 @@
     "count_one": "{count} customer",
     "count_other": "{count} customers",
     "more": "Show more",
-    "creditLater": "Credit limits (limit, used, available, orders on hold) come with a later release."
+    "creditLater": "Credit limit used: the share of the customer's credit limit with the company that its open orders and unpaid invoices take. The limits are under Credit limits below."
   },
   "filter": {
     "clear": "Remove the filter {name}",
@@ -106,7 +106,8 @@
     "credit": "Credit",
     "balance": "Balance",
     "issued": "Issued",
-    "openNow": "Open now"
+    "openNow": "Open now",
+    "creditUsed": "Credit limit used"
   },
   "row": {
     "noDue": "No due date",
@@ -120,7 +121,8 @@
     "remindersWaiting_other": "{count} waiting",
     "lastReminder": "Last on {date}",
     "invoices_one": "{count} invoice open",
-    "invoices_other": "{count} invoices open"
+    "invoices_other": "{count} invoices open",
+    "noCreditLimit": "No limit"
   },
   "bulk": {
     "print_one": "Print {count} statement",

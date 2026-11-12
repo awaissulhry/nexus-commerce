@@ -9,6 +9,8 @@ import { closedShortLinesOf, lockOrderLinesForShipping } from './backorder'
 import { applyFreightInCommand } from './freight'
 import { shippedCells, takeFromFinishedGoodsInCommand } from './stock'
 import { assertNotOnHold } from '../../parties/holds/stops'
+// B-W2b-304 (SAL-241): the customer's credit checked again before the goods leave.
+import { creditGateInCommand } from '../../sales/credit/check'
 
 /**
  * What happens when a shipment leaves, every day (B-W2a-48), inside the ONE leaving command (modules/shipping/ddt's
@@ -28,6 +30,9 @@ import { assertNotOnHold } from '../../parties/holds/stops'
 export async function whenShipped(tools: CommandTools, shipment: ShipmentHeader, periodLockOverride?: PeriodLockOverride | null): Promise<void> {
   // B-W2b-290 (SAL-023): a shipment does not leave while its customer is on hold for its company (409 in words).
   await assertNotOnHold(tools.tx, { partyId: shipment.partyId, companyId: shipment.companyId }, 'SHIPMENT')
+  // B-W2b-304: over the credit limit where the company holds, the shipment waits for a yes (409 in words; the caller's
+  // withCreditHolds writes the hold and asks for the yes after the rollback).
+  await creditGateInCommand(tools, { step: 'SHIPMENT', recordType: 'Shipment', recordId: shipment.id, label: `Shipment ${shipment.number}`, companyId: shipment.companyId, partyIds: [shipment.partyId] })
   const tenantId = tenantOf(tools.context)
   const cells = await shippedCells(tools.tx, shipment.id)
   const repairs = cells.filter((cell) => cell.repair)

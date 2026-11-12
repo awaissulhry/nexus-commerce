@@ -313,6 +313,8 @@ import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permi
 import { REQUIRED_DOCUMENTS_DEFINITIONS, REQUIRED_DOCUMENTS_PERMISSIONS } from '../../files/required/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
+// B-W2b-304: credit limits (sales.credit.view, .limits, .checks).
+import { SALES_CREDIT_DEFINITIONS, SALES_CREDIT_PERMISSIONS } from '../../sales/credit/permissions'
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -916,6 +918,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_PLANNED_DEFINITIONS,
   // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
   SUPPLIERS_DEPTH_DEFINITIONS,
+  // B-W2b-304: credit limits (area `sales`).
+  SALES_CREDIT_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1232,6 +1236,8 @@ for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-311: suppliers in depth.
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-304: credit limits.
+for (const name of SALES_CREDIT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

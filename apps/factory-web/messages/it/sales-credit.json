@@ -1,0 +1,145 @@
+{
+  "title": "Fidi",
+  "hint": "Fido, utilizzato (fatture aperte + ordini non ancora fatturati), disponibile, e cosa attende per il fido.",
+  "rules": "Oltre il fido, un ordine, un rilascio o una spedizione viene segnalato e prosegue, a meno che una regola sul fido in Amministrazione › Automazione › Regole di approvazione lo faccia attendere il sì di qualcuno. Nessuno approva la propria richiesta.",
+  "wording": "La formulazione della regola sul fido nei documenti attende il parere del commercialista; questi sono i testi predefiniti.",
+  "noAccess": {
+    "title": "Fidi",
+    "body": "I fidi richiedono il permesso {permission}. Chiedi a chi gestisce i ruoli."
+  },
+  "noPrice": "Gli importi richiedono la grana prezzi ({permission}): l'elenco mostra chi ha un fido e cosa attende.",
+  "view": {
+    "label": "Mostra",
+    "ALL": "Tutti",
+    "OVER": "Oltre il fido",
+    "HELD": "Qualcosa attende"
+  },
+  "viewCount": {
+    "ALL": "Tutti ({count})",
+    "OVER": "Oltre il fido ({count})",
+    "HELD": "Qualcosa attende ({count})"
+  },
+  "search": "Cerca un cliente per codice o nome",
+  "count_one": "{count} cliente con fido",
+  "count_other": "{count} clienti con fido",
+  "failed": "Impossibile caricare i fidi",
+  "slow": "Ancora in caricamento…",
+  "empty": {
+    "title": "Nessun fido impostato",
+    "body": "Senza fido non si controlla nulla, come prima. Impostalo con Modifica fido sulla riga di un cliente di questo elenco, quando un cliente compra a credito."
+  },
+  "noMatch": {
+    "title": "Nessun cliente corrisponde",
+    "body": "Cambia la ricerca o la vista."
+  },
+  "clear": "Togli i filtri",
+  "more": "Mostra altri",
+  "col": {
+    "customer": "Cliente",
+    "limit": "Fido",
+    "used": "Utilizzato",
+    "available": "Disponibile",
+    "overdue": "Scaduto",
+    "held": "In attesa per il fido",
+    "change": "Modifica"
+  },
+  "row": {
+    "over": "Oltre di {amount}",
+    "usedOf": "{pct}% del fido",
+    "onHold": "Bloccato per fido",
+    "nothingHeld": "Niente in attesa",
+    "orders_one": "{count} ordine",
+    "orders_other": "{count} ordini",
+    "releases_one": "{count} rilascio",
+    "releases_other": "{count} rilasci",
+    "shipments_one": "{count} spedizione",
+    "shipments_other": "{count} spedizioni",
+    "noPriceAmount": "—"
+  },
+  "finding": {
+    "OVER_LIMIT": "Oltre il fido",
+    "OVERDUE": "Fatture scadute",
+    "ON_HOLD": "Bloccato per fido"
+  },
+  "action": {
+    "change": "Modifica fido",
+    "export": "Esporta {count}",
+    "exportFile": "Fidi {day}",
+    "add": "Imposta un fido"
+  },
+  "held": {
+    "change": "Modificare un fido richiede {permission}.",
+    "price": "Gli importi richiedono la grana prezzi ({permission}).",
+    "busy": "Salvataggio…",
+    "pickToExport": "Scegli i clienti da esportare."
+  },
+  "change": {
+    "title": "Modifica il fido di {name}",
+    "company": "Con {company}",
+    "now": "Ora: {amount}",
+    "nowNone": "Ora: nessun fido",
+    "amount": "Nuovo fido",
+    "amountHint": "In {currency}. Lascialo vuoto e scegli Togli il fido per non controllare nulla.",
+    "currency": "Valuta",
+    "clear": "Togli il fido",
+    "reason": "Perché",
+    "reasonHint": "Una riga, conservata nel registro di questo cliente.",
+    "review": "Rivedi",
+    "back": "Indietro",
+    "confirmTitle": "Modificare il fido di {name} con {company}?",
+    "confirmLabel": "Modifica fido",
+    "item": "Fido",
+    "none": "Nessun fido",
+    "consequence": {
+      "rechecked": "Gli ordini in attesa per il fido vengono ricontrollati subito: quelli entro il nuovo fido proseguono.",
+      "cleared": "Senza fido, per questo cliente con questa società non si controlla nulla.",
+      "logged": "La modifica e il motivo restano nel registro."
+    },
+    "problem": {
+      "amount": "Scrivi il fido come importo, per esempio 25.000,00.",
+      "reason": "Di' perché cambia il fido, in una riga.",
+      "same": "Il fido è già questo.",
+      "customer": "Scegli il cliente."
+    },
+    "done": "{name}: fido salvato.",
+    "doneRechecked_one": "{name}: fido salvato; {count} ordine in attesa per il fido è proseguito.",
+    "doneRechecked_other": "{name}: fido salvato; {count} ordini in attesa per il fido sono proseguiti.",
+    "customer": "Cliente",
+    "customerSearch": "Cerca un cliente",
+    "customersReading": "Lettura dei clienti…",
+    "noCustomers": "Ancora nessun cliente di questa società."
+  },
+  "csv": {
+    "customer": "Cliente",
+    "code": "Codice",
+    "company": "Società",
+    "currency": "Valuta",
+    "limit": "Fido",
+    "used": "Utilizzato",
+    "available": "Disponibile",
+    "overdue": "Scaduto",
+    "orders": "Ordini in attesa",
+    "releases": "Rilasci in attesa",
+    "shipments": "Spedizioni in attesa"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "search": "Cerca un cliente",
+    "change": "Modifica il fido del cliente selezionato"
+  },
+  "problem": {
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "signed_out": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Non hai il permesso per questo.",
+    "not_found": "Non trovato: potrebbe essere stato rimosso.",
+    "unavailable": "Il server non risponde. Riprova tra un momento.",
+    "rate_limited": "Troppi tentativi: attendi un momento.",
+    "invalid": "È stato rifiutato così com'è: controlla cosa hai inserito.",
+    "internal": "Qualcosa è andato storto. Riprova."
+  },
+  "common": {
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "dismiss": "Chiudi"
+  }
+}
