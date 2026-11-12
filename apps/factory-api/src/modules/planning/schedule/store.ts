@@ -35,6 +35,10 @@ export const SLOT_COLUMNS = {
   minutes: true,
   overloadReason: true,
   note: true,
+  // B-W2b-312 (PLN-139): the pin.
+  pinned: true,
+  pinnedAt: true,
+  pinnedById: true,
   version: true,
   createdAt: true,
   updatedAt: true,
