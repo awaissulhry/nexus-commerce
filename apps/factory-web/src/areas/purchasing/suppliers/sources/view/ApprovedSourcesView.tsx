@@ -54,15 +54,16 @@ function useWords() {
  * Add a source. A person without purchasing.sources.manage reads the cells as text. Import price list is W2b (not drawn).
  * Fetches nothing: ApprovedSources.tsx reads and writes.
  */
-export function ApprovedSourcesView({ model, actions }: { model: ApprovedSourcesModel; actions?: ApprovedSourcesActions }) {
+/** B-W2b-334: `importAction` = Import price list (design rec:Supplier/items/sources "Import price list (W2b, ImportFlow)"), at the head. */
+export function ApprovedSourcesView({ model, actions, importAction }: { model: ApprovedSourcesModel; actions?: ApprovedSourcesActions; importAction?: ReactNode }) {
   return (
     <WithMessages namespaces={['purchasing-sources', 'lists']}>
-      <Sources model={model} actions={actions} />
+      <Sources model={model} actions={actions} importAction={importAction} />
     </WithMessages>
   )
 }
 
-function Sources({ model, actions }: { model: ApprovedSourcesModel; actions?: ApprovedSourcesActions }) {
+function Sources({ model, actions, importAction }: { model: ApprovedSourcesModel; actions?: ApprovedSourcesActions; importAction?: ReactNode }) {
   const t = useWords()
   const lists = useT('lists')
   const locale = useLocale()
@@ -233,6 +234,7 @@ function Sources({ model, actions }: { model: ApprovedSourcesModel; actions?: Ap
           <h2 className="fw-src-title">{t('title')}</h2>
           <p className="fw-src-hint">{t('intro', { supplier: model.supplier.name })}</p>
         </div>
+        {importAction}
       </div>
 
       {model.notice && (

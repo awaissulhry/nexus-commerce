@@ -215,6 +215,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   ApprovalTask: '/home/approvals?open=[id]',
   // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
   Inquiry: '/sales/inquiries/[id]',
+  // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
+  DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
 })
 
 /**
@@ -325,6 +327,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/planning/settings': '/planning/settings',
   // B-W2b-263: Time & action (SCR-253, `?view=calendar|list|orders` `?tile=` `?q=` `?open=`).
   '/planning/milestones': '/planning/milestones',
+  // B-W2b-339: the demand view and its rows (SCR-374), the production strategy per item (SCR-202).
+  '/planning/demand': '/planning/demand',
+  '/planning/demand/rows': '/planning/demand',
+  '/planning/strategy': '/planning/mps',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',
