@@ -131,7 +131,9 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   it('a record opens its own page once built, else the frame’s record page', () => {
     // B-W2b-196: our check of a delivery address opens the Account on that address.
     // B-W2b-191: a customer's sales order opens its own page; B-W2b-197: a return and a complaint too; B-W2b-195: an invoice opens Documents on it.
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'PartyAddress', 'Invoice'])
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PartyAddress', 'Invoice'])
+    // B-W2b-342: a repair opens its own page.
+    expect(recordPageOf(['CUSTOMER'], 'RepairOrder', 'p1')).toBe('/returns/repairs/p1')
     expect(recordPageOf(['CUSTOMER'], 'ReturnAuthorisation', 'r1')).toBe('/returns/r1')
     expect(recordPageOf(['CUSTOMER'], 'Complaint', 'c1')).toBe('/returns/complaints/c1')
     expect(recordPageOf(['SUPPLIER'], 'ReturnAuthorisation', 'r1')).toBeNull()

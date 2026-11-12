@@ -2,6 +2,7 @@ import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import { stageReachedWords } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { STAGES } from '@nexus/factory-domain/quality/capa/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { EMPTY_REPAIR_DRAFT, repairDirty, repairStartProblems, type RepairDraft } from './repair/model'
 import type { Locale } from '../../../lib/i18n/locales'
 import type {
   CaseChip,
@@ -189,8 +190,8 @@ export function sendPhotosHeld(picked: readonly PickedPhoto[], held: string | nu
 
 // ── start a return or a claim ────────────────────────────────────────────────────────────────────────────────────────
 export type StartStep = 'type' | 'details' | 'review'
-/** B-W2b-346 (SAL-298, RX2:02): beside a return and a complaint, a remake (remake/model.ts). */
-export type StartType = CaseType | 'REMAKE'
+/** B-W2b-342 / B-W2b-346: what the start asks — a return, a quality complaint, a repair or alteration (./repair) or a remake (SAL-298, RX2:02; remake/model.ts). */
+export type StartType = CaseType | 'REMAKE' | 'REPAIR'
 export interface StartLine {
   picked: boolean
   quantity: string
@@ -198,7 +199,7 @@ export interface StartLine {
   reasonNote: string
   serial: string
 }
-export interface StartDraft {
+export interface StartDraft extends RepairDraft {
   step: StartStep
   type: StartType | null
   lines: Readonly<Record<string, StartLine>>
@@ -217,7 +218,7 @@ export interface StartDraft {
   tried: boolean
 }
 
-export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', remakeKey: '', fit: '', tried: false }
+export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', remakeKey: '', fit: '', tried: false, ...EMPTY_REPAIR_DRAFT }
 
 export const LIMITS = { reasonNote: 500, serial: 60, customerRef: 80, note: 2000, description: 4000, batchNumber: 60, lines: 50 } as const
 
@@ -252,6 +253,8 @@ export function startProblems(draft: StartDraft, read: ReturnableRead | null): R
     if (draft.serial.trim().length > LIMITS.serial) problems.serial = 'start.problem.long'
     if (draft.batchNumber.trim().length > LIMITS.batchNumber) problems.batchNumber = 'start.problem.long'
   }
+  // B-W2b-342: the repair's fields (their keys name the returns-repair catalogue).
+  if (draft.type === 'REPAIR') Object.assign(problems, repairStartProblems(draft, read))
   if (draft.customerRef.trim().length > LIMITS.customerRef) problems.customerRef = 'start.problem.long'
   // B-W2b-346: a remake's own problems (keys of `returns-remake`).
   if (draft.type === 'REMAKE') Object.assign(problems, remakeStartProblems(draft, read))
@@ -279,7 +282,7 @@ export function complaintBodyOf(draft: StartDraft, read: ReturnableRead | null):
 /** The draft holds typed work (closing asks Discard / Stay; leaving the page asks first). */
 export const startDirty = (draft: StartDraft): boolean =>
   draft.type !== null &&
-  (Object.values(draft.lines).some((line) => line.picked) || remakeDirty(draft) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
+  (Object.values(draft.lines).some((line) => line.picked) || repairDirty(draft) || remakeDirty(draft) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
 
 /** The next step of the start, or the problems that hold it (shown at their fields). */
 export function nextStep(draft: StartDraft, read: ReturnableRead | null): { step: StartStep } | { problems: Record<string, string> } {

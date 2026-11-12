@@ -171,6 +171,8 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   // B-W2b-197: a customer's return and complaint open their own pages (Status first).
   { kinds: ['CUSTOMER'], type: 'ReturnAuthorisation', href: (id) => `/returns/${id}`, built: true },
   { kinds: ['CUSTOMER'], type: 'Complaint', href: (id) => `/returns/complaints/${id}`, built: true },
+  // B-W2b-342: a customer's repair or alteration opens its own page (Status first; SCR-358).
+  { kinds: ['CUSTOMER'], type: 'RepairOrder', href: (id) => `/returns/repairs/${id}`, built: true },
   // B-W2b-196: our check of a delivery address (F15's notification) opens the Account's Delivery addresses on that row.
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
   // B-W2b-195: an invoice (a "Pay invoice" request, a notification) opens Documents on it: its Pay pop-up, or why not.

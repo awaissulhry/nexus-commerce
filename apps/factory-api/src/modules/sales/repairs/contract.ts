@@ -203,6 +203,8 @@ export const createBody = input({
   problem: text(4000).optional(),
   ownerId: id().nullish(),
   internalNote: text(4000).nullish(),
+  /** B-W2b-342 (SAL-384, SAL-393): the work the customer asks for ("add 2 cm to the sleeve"; an alteration's). */
+  workWanted: text(2000).nullish(),
   /** The garment came with the customer (by hand or with its DDT): the repair starts RECEIVED. */
   received: input({ at: instant().optional(), inboundDdtNumber: text(80).nullish(), inboundDdtDate: businessDate().nullish() }).nullish(),
 })
@@ -255,6 +257,8 @@ export const headerContract = defineContract({
     size: text(40).nullish(),
     ownerId: id().nullish(),
     internalNote: text(4000).nullish(),
+    /** B-W2b-342: the work the customer asks for. */
+    workWanted: text(2000).nullish(),
     inboundDdtNumber: text(80).nullish(),
     inboundDdtDate: businessDate().nullish(),
   }),

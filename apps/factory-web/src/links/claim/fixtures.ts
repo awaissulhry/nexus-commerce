@@ -2,6 +2,7 @@ import { defineDesignScreen } from '../../lib/design/design-screen'
 import type { ClaimCase, ClaimItem, ClaimPage } from './api'
 import { EMPTY_FORM, type ClaimForm, type ClaimViewModel, type PhotoShot } from './model'
 import { ReportProblemView } from './view/ReportProblemView'
+import { repairClaimCases } from './types/repair/cases'
 
 /**
  * SCR-197 Report a problem — made-up data only (PLAN §3.1): an invented factory ("Officina Demo"), an invented customer
@@ -251,5 +252,7 @@ export const designScreen = defineDesignScreen<ClaimViewModel>({
     { id: 'error', label: 'Error reading the page', model: model({ page: null, problem: 'problem.read' }), note: 'Our words and Try again; never an empty form.' },
     { id: 'gone', label: 'The link no longer opens', model: model({ link: 'unavailable', page: null }) },
     { id: 'wrong-person', label: 'The wrong person', model: model({ link: 'wrong_person', page: null }) },
+    // B-W2b-342: Repair or alteration by the claim link (RR1:01).
+    ...repairClaimCases({ model, page, item: JACKET, photos: { seam: SEAM, sleeve: SLEEVE } }),
   ],
 })
