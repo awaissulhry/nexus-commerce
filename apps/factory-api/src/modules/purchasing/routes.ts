@@ -187,6 +187,9 @@ import { registerLinkRenewer } from '../../platform/links/renew'
 // B-W2b-219: the leather area tolerance where a PO line names none (PurchasingSettings.leatherAreaTolerancePct).
 import { getLeatherTolerance, getLeatherToleranceContract, putLeatherTolerance, putLeatherToleranceContract } from '../inventory/hides/tolerance'
 
+// B-W2b-332: ask to buy (./ask-to-buy).
+import { askFromShortage, askOptions, askToBuy, cancelRequests as cancelAsked, getAsked, listAsked, rejectRequests as rejectAsked } from './ask-to-buy/ask'
+import * as askContracts from './ask-to-buy/contract'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -549,4 +552,20 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     const { pdf, fileName } = await questionnaireLink.linkCodeOfConduct(request, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+
+  // B-W2b-332 (SCM-035, SCM-037): ask to buy — what the dialog offers, one's requests, one request, "Send request", a line of
+  // the shortage list asked (or drafted at once by a buyer), take requests back, refuse them (the buyer).
+  app.get('/purchasing/ask-to-buy/options', { schema: askContracts.optionsContract }, async (request) => askOptions(request, request.query))
+
+  app.get('/purchasing/ask-to-buy', { schema: askContracts.listContract }, async (request) => listAsked(request, request.query))
+
+  app.get('/purchasing/ask-to-buy/:requestId', { schema: askContracts.getContract }, async (request) => getAsked(request, request.params.requestId))
+
+  app.post('/purchasing/ask-to-buy', { schema: askContracts.askContract }, async (request, reply) => reply.code(201).send(await askToBuy(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/purchasing/ask-to-buy/from-shortage', { schema: askContracts.fromShortageContract }, async (request, reply) => reply.code(201).send(await askFromShortage(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/purchasing/ask-to-buy/cancel', { schema: askContracts.cancelContract }, async (request) => cancelAsked(request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/ask-to-buy/reject', { schema: askContracts.rejectContract }, async (request) => rejectAsked(request, request.body, idempotencyKeyFrom(request)))
 })
