@@ -202,7 +202,8 @@
     "REPAIR": "Riparazione",
     "REPLACE": "Sostituzione",
     "RETURN_UNCHANGED": "Restituzione tal quale",
-    "SCRAP": "Rottamazione"
+    "SCRAP": "Rottamazione",
+    "SIZE_EXCHANGE": "Cambio taglia"
   },
   "done": {
     "cancelled": "{number} è annullato.",

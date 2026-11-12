@@ -37,8 +37,9 @@ export async function makeReplacementOrder(caller: CommandCaller, returnId: stri
     const { tx, now } = tools
     const rma = await lockReturn(tools, seen.id, body.version, ['RECEIVED', 'INSPECTED'], 'its replacement order is made')
     if (rma.replacementOrderId) throw new InvalidStateError(`Return ${rma.number} has its replacement order already.`)
-    const lines = (await readLines(tx, rma.id)).filter((line) => line.disposition === 'REPLACE' && line.replacementLineId === null)
-    if (lines.length === 0) throw new InvalidStateError(`No line of return ${rma.number} is decided Replace.`)
+    // B-W2b-346 (SAL-351): a size exchange is replaced in the size it is exchanged for (ReturnLine.exchangeSize).
+    const lines = (await readLines(tx, rma.id)).filter((line) => (line.disposition === 'REPLACE' || line.disposition === 'SIZE_EXCHANGE') && line.replacementLineId === null)
+    if (lines.length === 0) throw new InvalidStateError(`No line of return ${rma.number} is decided Replace or Size exchange.`)
     const sold = await soldFactsOf(tx, lines)
     const problems: Issue[] = []
     const orderLines = lines.flatMap((line) => {
@@ -47,7 +48,9 @@ export async function makeReplacementOrder(caller: CommandCaller, returnId: stri
         problems.push({ path: `lines/${line.seq}`, message: `Line ${line.seq} names no style, colour and size: replace it by a typed order instead.` })
         return []
       }
-      return [{ seq: line.seq, lineId: line.id, input: { styleId: facts.orderLine.styleId, colourwayId: facts.orderLine.colourwayId, sizes: [{ size: line.size, quantity: line.receivedQuantity }], unitPrice: '0', description: `Replacement for ${rma.number} line ${line.seq}: ${line.description}`.slice(0, 300) } }]
+      const exchange = line.disposition === 'SIZE_EXCHANGE' && line.exchangeSize ? line.exchangeSize : null
+      const description = exchange ? `Size exchange for ${rma.number} line ${line.seq}: size ${exchange} instead of ${line.size}, ${line.description}` : `Replacement for ${rma.number} line ${line.seq}: ${line.description}`
+      return [{ seq: line.seq, lineId: line.id, input: { styleId: facts.orderLine.styleId, colourwayId: facts.orderLine.colourwayId, sizes: [{ size: exchange ?? line.size, quantity: line.receivedQuantity }], unitPrice: '0', description: description.slice(0, 300) } }]
     })
     if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'Some lines cannot be replaced on an order.', problems)
     if (body.promiseDate && body.promiseDate < businessDate(now)) throw new ValidationError('The promise date is today or later.', [{ path: 'body/promiseDate', message: 'Today or later.' }])
