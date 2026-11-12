@@ -143,7 +143,7 @@
       "approvalAbove": "Needs approval above {amount}",
       "approvalHeld": "Needs approval above the value the warehouse rules set",
       "approvers": "Who approves: {names}. Up to that value it posts at once; above it, it waits for their yes.",
-      "approversUnknown": "Above that value it waits for a yes (Admin › Automation › Approval rules)."
+      "approversUnknown": "Above that value it waits for a yes (Admin › Approvals, automation & AI › Approval rules)."
     },
     "posting": {
       "label": "Posting date",

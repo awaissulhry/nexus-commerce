@@ -143,7 +143,7 @@
       "approvalAbove": "Serve un'approvazione sopra {amount}",
       "approvalHeld": "Serve un'approvazione sopra il valore fissato dalle regole di magazzino",
       "approvers": "Chi approva: {names}. Fino a quel valore si registra subito; sopra, aspetta il loro sì.",
-      "approversUnknown": "Sopra quel valore aspetta un sì (Sistema › Automazioni › Regole di approvazione)."
+      "approversUnknown": "Sopra quel valore aspetta un sì (Sistema › Approvazioni, automazioni e IA › Regole di approvazione)."
     },
     "posting": {
       "label": "Data contabile",

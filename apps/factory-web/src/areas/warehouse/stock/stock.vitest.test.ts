@@ -251,7 +251,8 @@ describe('every design case draws in both languages with no key left on screen',
       const shared = createTranslator(locale, messages.stock!)
       const has = (t: typeof own, key: string, count?: number) => expect(t(key, count === undefined ? undefined : { count }), `${locale}: ${key}`).not.toBe(key)
       for (const view of STOCK_VIEWS) has(own, `st.view.${view}`)
-      for (const tile of STOCK_TILES) has(own, `st.tile.${tile}`)
+      // B-W2b-327: Below minimum's words are warehouse-depth's (stock/depth/depth.vitest.test.ts draws them).
+      for (const tile of STOCK_TILES.filter((tile) => tile !== 'low')) has(own, `st.tile.${tile}`)
       for (const tracking of ['NONE', 'LOT', 'HIDE', 'SERIAL']) has(own, `st.tracking.${tracking}`)
       for (const check of ['quantity', 'tooMuch', 'note', 'unitCost', 'location']) has(own, `adj.held.${check}`)
       for (const period of PERIODS) has(own, `mv.period.${period}`)
