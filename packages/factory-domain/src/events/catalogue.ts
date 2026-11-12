@@ -137,6 +137,10 @@ import { events as approvals } from '../approvals/events'
 import { events as purchaseRequests } from '../purchase-requests/events'
 // B-W2b-295: inquiries and requests for quotation.
 import { events as salesInquiries } from '../sales-inquiries/events'
+// B-W2b-314: the warehouse rules and the adjustments they hold back.
+import { events as inventoryRules } from '../inventory-rules/events'
+// B-W2b-341: returns in depth (the policy check, fee rules, garments named, credit without a return, the scan code).
+import { events as returnsDepth } from '../returns-depth/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
 // B-W2b-238: materials in depth (a material's approval decided).
@@ -481,6 +485,10 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...lotsDepth,
   // B-W2b-295
   ...salesInquiries,
+  // B-W2b-314
+  ...inventoryRules,
+  // B-W2b-341
+  ...returnsDepth,
   // B-W2b-293
   ...planningPlannedOrders] as const satisfies readonly EventDefinition[]
 
