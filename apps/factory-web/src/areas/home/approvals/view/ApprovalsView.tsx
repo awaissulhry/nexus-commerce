@@ -236,6 +236,9 @@ function ApproveManyDialog({ rows, busy, actions, onDone, onClose }: { rows: rea
   )
 }
 
+/** B-W2b-307: the quote review, drawn by the inbox in depth too (a quote row opens it there). */
+export const QuoteReview = (props: { model: ApprovalsViewModel; actions?: ApprovalsActions }) => <Review {...props} />
+
 function Review({ model, actions }: { model: ApprovalsViewModel; actions?: ApprovalsActions }) {
   const t = useT('approvals')
   const sales = useT('sales')
