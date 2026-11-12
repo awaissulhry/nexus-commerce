@@ -509,6 +509,8 @@ async function applyCountScan(caller: CommandCaller, event: QueuedEvent, key: st
   const { countId, ...rest } = body.value
   const result = await scanCountUnit(caller, countId, rest, key)
   return { status: 'accepted', result: { type: 'StockCountScan', id: result.scanId } }
+}
+
 /** B-W2b-298: a queued issue from the pick list by bin, or an approved substitute's (the key: `<device>.<client event id>`). */
 async function applyPickIssue(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
   const at = event.occurredAt ? { occurredAt: event.occurredAt } : {}
