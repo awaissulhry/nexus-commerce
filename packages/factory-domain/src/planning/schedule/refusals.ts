@@ -46,6 +46,20 @@ export const SCHEDULE_REFUSALS = [
   'ALREADY_ALLOCATED',
   /** B-W2b-263: the work order's sales order waits on a pre-production gate not passed (issues `gate/<gate id>`). */
   'GATE_NOT_PASSED',
+  // B-W2b-312 (PLN-139, PLN-141, PLN-130, what-if): pins, the reschedules and the private what-if.
+  /** The slot is pinned: it keeps its lane and times (and stays on the board) until it is unpinned. */
+  'PINNED',
+  /** Pin: the slot is already pinned (unpin: it is not pinned). */
+  'ALREADY_PINNED',
+  'NOT_PINNED',
+  /** Pin a work order: it has no slot on the working plan to pin (or every one is already so). */
+  'NOTHING_TO_PIN',
+  /** Forward scheduling or the backlog reschedule found nothing to move or place. */
+  'NOTHING_TO_RESCHEDULE',
+  /** What-if: some tried moves clash with what the working plan changed since (issues `moves/<i>/<CODE>`). */
+  'WHAT_IF_CONFLICTS',
+  /** What-if: the scenario is applied or discarded; it never changes. */
+  'WHAT_IF_CLOSED',
 ] as const
 export type ScheduleRefusalCode = (typeof SCHEDULE_REFUSALS)[number]
 

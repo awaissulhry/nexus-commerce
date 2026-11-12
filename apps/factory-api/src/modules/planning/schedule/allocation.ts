@@ -21,6 +21,8 @@ import { siteViewOf } from './publish'
 import { scheduleWorld, type BoardWorkOrder, type ScheduleWorld } from './service'
 import { slotMinutes } from './slots'
 import { laneFacts, lockedWorkingPlan } from './store'
+// B-W2b-312: a pinned slot stays where it is (PLN-139).
+import { pinnedRefusal } from '../schedule-depth/pins'
 
 /**
  * Allocation to lines and workshops (B-W2a-34; PLN-160; design planning.allocation "Lanes", "Allocation board"; factory-
@@ -166,6 +168,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
     }
     for (const slot of existing) {
       if (body.parts.some((part) => laneKey(part.lane) === laneKey(laneOfSlot(slot)))) continue
+      if (slot.pinned) throw await pinnedRefusal(tx, slot, 'remove', target.site.timezone) // B-W2b-312 (PLN-139): a pinned part stays
       await tx.scheduleSlot.delete({ where: { id: slot.id }, select: { id: true } })
       audits.push({ slotId: slot.id, change: 'REMOVED', lane: laneOfSlot(slot), pieces: slot.pieces })
     }
@@ -178,6 +181,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
         for (const slot of world.slots.filter((candidate) => candidate.workOrderId === workOrder.id && candidate.workOrderOperationId !== null && candidate.lineId === row.lineId)) {
           const operation = workOrder.operations.find((candidate) => candidate.id === slot.workOrderOperationId)
           if (!operation || (next.does !== null && !next.does.includes(operation.workCentreId))) continue
+          if (slot.pinned) continue // B-W2b-312 (PLN-139): a pinned bar stays on its lane
           await tx.scheduleSlot.update({ where: { id: slot.id }, data: { lineId: next.ref.id, overloadReason: null, version: slot.version + 1, updatedAt: now, updatedById: context.actorId }, select: { id: true } })
           audits.push({ slotId: slot.id, change: 'FOLLOWED_LINE', lane: next.ref, pieces: null })
           barsMoved += 1

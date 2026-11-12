@@ -1910,6 +1910,7 @@
     "planning_planned_convert": "Rendere reali gli ordini di lavoro e gli ordini di conto lavoro pianificati dal piano (servono anche i permessi degli ordini di lavoro e del conto lavoro)",
     "planning_promise_view": "Vedere il disponibile a promettere e chiedere quando un ordine può essere pronto (il calcolatore delle promesse, le date proposte di un preventivo, le date per taglia di una riga d'ordine)",
     "planning_promise_manage": "Registrare la promessa per taglia di una riga d'ordine (solo le taglie coperte da un certificato valido fino alla data)",
+    "planning_schedule_pin": "Fissare barre e ordini di lavoro sul tabellone di pianificazione dove sono, o sbloccarli",
     "planning_strategy_manage": "Impostare come un sito risponde alla domanda di un capo o di un componente: su ordine, per magazzino o assemblaggio su ordine",
     "planning_actions_manage": "Gestire i messaggi d’azione del piano sugli ordini esistenti (anticipare, posticipare, annullare, aumentare, ridurre): segnarli fatti o ignorati",
     "planning_planned_edit": "Modificare gli ordini di lavoro e di conto lavoro pianificati (taglie, date, linea, laboratorio, fasi, data del kit): i run successivi mantengono ogni campo cambiato fino a «Ripristina il piano»",
