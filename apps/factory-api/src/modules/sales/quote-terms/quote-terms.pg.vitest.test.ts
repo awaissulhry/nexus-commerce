@@ -16,6 +16,9 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import { callerFor } from '../../../core/command'
+import { systemContext } from '../../../platform/outbox/system'
+import { carryScheduleAfterYes } from './carry'
 import { runQuoteValidity } from './validity'
 
 /**
@@ -232,5 +235,39 @@ describe('the order takes the accepted version’s delivery terms and schedule (
     expect(deliveries).toEqual([{ day: addDays(today, 15), sizes: { '50': 2, '52': 2 }, quantity: 4 }])
     const audit = await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.carryTerms' AND "recordId" = $1`, [made.order.id])
     expect(audit.after).toMatchObject({ incoterm: 'EXW', deliveries: 1, scheduleWaits: null })
+  })
+
+  it('an order confirmed by its yes takes the schedule once (sales.orderSchedule); an order with nothing to carry runs no command', async () => {
+    const sold = await draftQuote()
+    const terms = await ok('sales', 'PUT', `/sales/quotes/${sold.id}/lines/${sold.lines[0].id}/deliveries`, { version: sold.version, deliveries: [{ deliveryDate: addDays(today, 12), sizes: { '54': 2 } }] })
+    expect(terms.quoteVersion).toBeGreaterThan(sold.version)
+    await markSent(sold, new Date(Date.now() - 86_400_000), addDays(today, 20))
+    await admin(
+      `UPDATE "QuoteVersion" SET status = 'ACCEPTED', "closedAt" = now() WHERE id = '${sold.current.id}';
+       INSERT INTO "QuoteAcceptance" (id, "tenantId", "versionId", "partyId", channel, "signerName", "documentSha256", "termsVersion", "acceptedAt", "requestId")
+       VALUES ('${newId()}', '${T}', '${sold.current.id}', '${P1}', 'OFFICE', 'Made-up Buyer', repeat('b', 64), 'made-up-1', now(), 'made-up')`,
+    )
+    await admin(`UPDATE "Quote" SET status = 'ACCEPTED' WHERE id = $1`, [sold.id])
+    const made = await ok('sales', 'POST', '/sales/orders', { quoteVersionId: sold.current.id }, 201)
+    // As an order that waited for a yes: no schedule of its own yet when it is CONFIRMED.
+    await admin(`DELETE FROM "SalesOrderLineDelivery" d USING "SalesOrderLine" l WHERE l.id = d."lineId" AND l."orderId" = $1`, [made.order.id])
+    const caller = callerFor(h.database, systemContext(T, `made-up-${run}`))
+    expect(await carryScheduleAfterYes(caller, made.order.id)).toEqual({ written: 1 })
+    const deliveries = await admin(`SELECT d."deliveryDate"::text AS day, d."sizeQuantities" AS sizes, d.quantity FROM "SalesOrderLineDelivery" d JOIN "SalesOrderLine" l ON l.id = d."lineId" WHERE l."orderId" = $1`, [made.order.id])
+    expect(deliveries).toEqual([{ day: addDays(today, 12), sizes: { '54': 2 }, quantity: 2 }])
+    // Again (a redelivered event), and an order with nothing to carry: no command, no audit row.
+    expect(await carryScheduleAfterYes(caller, made.order.id)).toEqual({ written: 0 })
+    const plain = await draftQuote()
+    await markSent(plain, new Date(Date.now() - 86_400_000), addDays(today, 20))
+    await admin(
+      `UPDATE "QuoteVersion" SET status = 'ACCEPTED', "closedAt" = now() WHERE id = '${plain.current.id}';
+       INSERT INTO "QuoteAcceptance" (id, "tenantId", "versionId", "partyId", channel, "signerName", "documentSha256", "termsVersion", "acceptedAt", "requestId")
+       VALUES ('${newId()}', '${T}', '${plain.current.id}', '${P1}', 'OFFICE', 'Made-up Buyer', repeat('b', 64), 'made-up-1', now(), 'made-up')`,
+    )
+    await admin(`UPDATE "Quote" SET status = 'ACCEPTED' WHERE id = $1`, [plain.id])
+    const bare = await ok('sales', 'POST', '/sales/orders', { quoteVersionId: plain.current.id }, 201)
+    expect(await carryScheduleAfterYes(caller, bare.order.id)).toEqual({ written: 0 })
+    const audits = await admin<{ recordId: string; after: Json }>(`SELECT "recordId", after FROM "AuditLog" WHERE action = 'orders.carrySchedule' AND "recordId" = ANY($1::uuid[]) ORDER BY at, id`, [[made.order.id, bare.order.id]])
+    expect(audits).toEqual([{ recordId: made.order.id, after: expect.objectContaining({ deliveries: 1, passed: [] }) }])
   })
 })

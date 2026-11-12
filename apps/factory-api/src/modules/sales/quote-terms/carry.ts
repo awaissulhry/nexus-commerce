@@ -126,17 +126,32 @@ export async function carryToOrderInCommand(tools: CommandTools, orderId: string
   }
 }
 
-/** The schedule of an order that waited for a yes, once it is CONFIRMED (a system command, once per order). */
+/**
+ * Whether an order has a schedule to take (read only, before any command: every command writes an audit row, so an order
+ * with nothing to carry runs none): made from a quote, CONFIRMED / IN_PRODUCTION / READY, no delivery of its own yet, and
+ * its quote lines (fee lines aside) have deliveries.
+ */
+async function hasScheduleToCarry(client: CommandTx, orderId: string): Promise<boolean> {
+  const order = await client.salesOrder.findUnique({ where: { id: orderId }, select: { status: true, quoteVersionId: true } })
+  if (!order || order.quoteVersionId === null || !SCHEDULE_STATES.has(order.status)) return false
+  const lines = await client.salesOrderLine.findMany({ where: { orderId, quoteLineId: { not: null } }, select: { id: true, quoteLineId: true, kind: true } })
+  if (lines.length === 0) return false
+  if ((await client.salesOrderLineDelivery.count({ where: { lineId: { in: lines.map((line) => line.id) } } })) > 0) return false
+  const quoteLineIds = lines.flatMap((line) => (line.kind === 'FEE' ? [] : [line.quoteLineId!]))
+  return quoteLineIds.length > 0 && (await client.quoteLineDelivery.count({ where: { lineId: { in: quoteLineIds } } })) > 0
+}
+
+/** The schedule of an order that waited for a yes, once it is CONFIRMED (a system command, once per order; none when there is nothing to carry). */
 export async function carryScheduleAfterYes(caller: CommandCaller, orderId: string, causationId?: string): Promise<{ written: number }> {
+  if (!(await caller.withClient((client) => hasScheduleToCarry(client, orderId)))) return { written: 0 }
   const { result } = await command(caller, { name: 'orders.carrySchedule', idempotencyKey: `order-schedule-${orderId}`, input: { orderId }, ...(causationId ? { causationId } : {}) }, async (tools) => {
     const { tx, now } = tools
     await tx.$queryRaw`SELECT id FROM "SalesOrder" WHERE id = ${orderId}::uuid FOR UPDATE`
-    const order = await tx.salesOrder.findUnique({ where: { id: orderId }, select: { id: true, companyId: true, partyId: true, status: true, quoteVersionId: true } })
-    if (!order || order.quoteVersionId === null || !SCHEDULE_STATES.has(order.status)) return { written: 0 }
-    const plan = await scheduleToCarry(tx, order.id, businessDate(now))
-    if (plan.had) return { written: 0 }
-    const written = await writeOrderSchedule(tools, order, plan)
-    if (written > 0 || plan.passed.length > 0) tools.audit({ action: 'orders.carrySchedule', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { quoteVersionId: order.quoteVersionId, deliveries: written, passed: plan.passed.map((row) => day(row.deliveryDate)) } })
+    const order = await tx.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, companyId: true, partyId: true, status: true, quoteVersionId: true } })
+    // Checked again under the lock: a race that changed the order meanwhile writes nothing, and its audit row says so.
+    const plan = order.quoteVersionId !== null && SCHEDULE_STATES.has(order.status) ? await scheduleToCarry(tx, order.id, businessDate(now)) : null
+    const written = plan && !plan.had ? await writeOrderSchedule(tools, order, plan) : 0
+    tools.audit({ action: 'orders.carrySchedule', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { quoteVersionId: order.quoteVersionId, deliveries: written, passed: plan && !plan.had ? plan.passed.map((row) => day(row.deliveryDate)) : [], ...(plan && !plan.had ? {} : { skipped: plan ? 'HAS_SCHEDULE' : order.status }) } })
     return { written }
   })
   return result

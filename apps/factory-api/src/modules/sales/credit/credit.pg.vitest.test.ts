@@ -132,8 +132,10 @@ const switchRule = async (active: boolean) => {
 
 describe('no limit, no check (as before)', () => {
   it('a typed order of a customer without a limit writes no credit check', async () => {
-    // B-W2b-294: the brand's private-label jacket is refused to another customer; this one types a style of the open range.
+    // B-W2b-294: the brand's private-label jacket is refused to another customer; this one types a style of the open range
+    // (the seed offers none of its sizes yet: one made-up SKU).
     const open = await one<{ styleId: string; colourwayId: string; size: string }>(`SELECT s.id AS "styleId", c.id AS "colourwayId", s.sizes[1] AS size FROM "Style" s JOIN "Colourway" c ON c."styleId" = s.id WHERE s."tenantId" = $1 AND s."brandPartyId" IS NULL AND s.status = 'ACTIVE' AND c.status = 'ACTIVE' ORDER BY s.code, c.code LIMIT 1`, [A.tenant])
+    await admin(`INSERT INTO "Variant" (id, "tenantId", "styleId", "colourwayId", size, sku) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [newId(), A.tenant, open.styleId, open.colourwayId, open.size, `W2B294-OPEN-${run}`])
     const made = await ok('sales', 'POST', '/sales/orders/manual', { ...typedOrder('PO-304-NOLIMIT', '100', p3), lines: [{ styleId: open.styleId, colourwayId: open.colourwayId, sizes: [{ size: open.size, quantity: 1 }], unitPrice: '100' }] }, 201)
     expect(made.order.status).toBe('CONFIRMED')
     expect(await checksOf(made.order.id)).toEqual([])
