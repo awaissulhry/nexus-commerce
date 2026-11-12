@@ -74,7 +74,12 @@ const line = output({
 const workOrder = output({
   workOrder: output({ id: id(), number: z.string(), status: z.string(), siteId: id(), companyId: id(), dueDate: z.string().nullable(), style: output({ id: id(), code: z.string(), name: z.string() }), issuable: z.boolean() }),
   /** Where its kit is staged (B-W2b-15), and whether someone checked it complete. */
-  kit: output({ location: output({ id: id(), code: z.string(), name: z.string() }).nullable(), checkedAt: instant().nullable() }),
+  kit: output({
+    location: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+    checkedAt: instant().nullable(),
+    /** B-W2b-310: the kit record's version (0: none yet), for the tablet's stage and complete. */
+    version: z.number().int(),
+  }),
   /** Its open PICK task of the warehouse inbox (B-W2b-292), or null. */
   task: output({ id: id(), status: z.string(), version: z.number().int() }).nullable(),
   lines: z.array(line),
