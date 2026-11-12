@@ -189,6 +189,11 @@ export interface ProgressFacts {
   readonly invoiced: readonly { readonly lineId: string; readonly size: string | null; readonly quantity: string }[]
   /** B-W2a-30 (SAL-210): the lines closed short (what was left of them will not be made or shipped). */
   readonly closedShort?: ReadonlySet<string>
+  /**
+   * B-W2b-330 (SAL-181): the FEE lines (a development, sample or tooling fee): never made, released or shipped, so
+   * nothing of them is to ship and the order's shipped and released states and totals count the goods only.
+   */
+  readonly fees?: ReadonlySet<string>
 }
 
 /** The numbers of one size of one line (or of a made-to-measure unit). */
@@ -261,6 +266,7 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
   for (const row of facts.invoiced) invoiced.set(keyFor(row.lineId, row.size), (invoiced.get(keyFor(row.lineId, row.size)) ?? ZERO).plus(new Dec(row.quantity)))
 
   const closed = facts.closedShort ?? new Set<string>()
+  const fees = facts.fees ?? new Set<string>()
   const rows: ProgressRow[] = []
   for (const line of [...facts.lines].sort((a, b) => a.seq - b.seq)) {
     const sizes = line.sizes.length > 0 ? line.sizes.map((entry) => ({ size: entry.size as string | null, ordered: entry.quantity })) : [{ size: null, ordered: line.quantity }]
@@ -278,7 +284,7 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
         released: Math.max(0, released.get(key) ?? 0),
         shipped: out,
         invoiced: decimalText(invoiced.get(key) ?? ZERO),
-        toShip: short > 0 ? 0 : Math.max(0, entry.ordered - out),
+        toShip: short > 0 || fees.has(line.id) ? 0 : Math.max(0, entry.ordered - out),
         closedShort: short,
       })
     }
@@ -286,14 +292,16 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
   const lines = facts.lines
     .map((line) => ({ lineId: line.id, seq: line.seq, ...add(rows.filter((row) => row.lineId === line.id)) }))
     .sort((a, b) => a.seq - b.seq)
-  const any = rows.some((row) => row.shipped > 0)
-  const all = any && rows.every((row) => row.shipped + row.closedShort >= row.ordered)
+  // B-W2b-330: the goods (a fee line is not shipped: it never holds the order back).
+  const goods = rows.filter((row) => !fees.has(row.lineId))
+  const any = goods.some((row) => row.shipped > 0)
+  const all = any && goods.every((row) => row.shipped + row.closedShort >= row.ordered)
   return {
     rows,
     lines,
-    totals: add(rows),
+    totals: add(goods),
     shipped: all ? 'ALL' : any ? 'PARTLY' : 'NONE',
-    released: rows.length > 0 && rows.every((row) => row.released + row.closedShort >= row.ordered),
+    released: goods.length > 0 && goods.every((row) => row.released + row.closedShort >= row.ordered),
   }
 }
 

@@ -314,6 +314,21 @@ export async function createReturn(caller: CommandCaller, body: CreateBody, idem
   const context = officeOf(caller)
   if (!mayOn(context, SALES_RETURNS_MANAGE, { companyId: body.companyId, partyId: body.partyId })) throw new NotFoundError('Customer not found.')
   const { result } = await command(caller, { name: 'returns.create', idempotencyKey, input: body }, async (tools) => {
+    const made = await createReturnInCommand(tools, context, body)
+    return { returnId: made.returnId, warnings: made.warnings, registerEntries: made.registerEntries }
+  })
+  return { return: await recordOf(caller, result.returnId), warnings: result.warnings, registerEntries: result.registerEntries }
+}
+
+/**
+ * The RMA made inside the caller's command (POST /sales/returns above; B-W2b-345: a service case opens one for the goods, a
+ * remake or a credit and links it in the same command). The caller checked sales.returns.manage over the company and customer.
+ */
+export async function createReturnInCommand(
+  tools: CommandTools,
+  context: OfficeContext,
+  body: CreateBody,
+): Promise<{ returnId: string; number: string; siteId: string; lineIds: string[]; warnings: Issue[]; registerEntries: SafetyEntry[] }> {
     const { tx, now } = tools
     const today = businessDate(now)
     const tenantId = tenantOf(tools)
@@ -364,9 +379,7 @@ export async function createReturn(caller: CommandCaller, body: CreateBody, idem
     })
     tools.emit({ type: 'return.authorised', subject: id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: id, number: rma.number, partyId: rma.partyId, salesOrderId: rma.salesOrderId, lineIds, goodsDueBy: plan!.goodsDueBy } })
     const registerEntries = await openSafetyEntries(tools, rma, await tx.returnLine.findMany({ where: { returnId: id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } }))
-    return { returnId: id, warnings: plan!.warnings, registerEntries }
-  })
-  return { return: await recordOf(caller, result.returnId), warnings: result.warnings, registerEntries: result.registerEntries }
+    return { returnId: id, number: rma.number, siteId: rma.siteId, lineIds, warnings: plan!.warnings, registerEntries }
 }
 
 // ---- the RMA row, locked --------------------------------------------------------------------------------------------

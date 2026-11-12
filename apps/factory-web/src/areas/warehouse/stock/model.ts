@@ -6,6 +6,10 @@ import type { AdjustDialogModel } from './adjust/model'
 import type { HoldRow } from './daily/api'
 import type { HoldDialogModel, HoldSubjectLine } from './daily/dialog-model'
 import { availableOf, holdOfRow, holdsBySubject, spreadReservations, type HoldFact } from './daily/model'
+// B-W2b-327: the places with their kinds and blocks, below minimum, why is it this number, Move…, a waiting adjustment.
+import type { PlaceView } from '../locations/depth/api'
+import type { LowRow, WaitingAdjustment, Why } from './depth/api'
+import type { Loaded, MoveDialogModel } from './depth/model'
 
 /**
  * Warehouse › Stock (SCR-060; design warehouse.stock), pure: the saved views and the tile filters in the address, the
@@ -38,7 +42,8 @@ export function dailyCan(permissions: readonly string[]): DailyCan {
 
 export const STOCK_VIEWS = ['material', 'lot', 'location', 'leather', 'quarantine'] as const
 export type StockViewKey = (typeof STOCK_VIEWS)[number]
-export const STOCK_TILES = ['quarantine', 'crvi', 'blocked', 'reserved'] as const
+// B-W2b-327 (SCM-281): 'low' = Below minimum (its rows are the materials below their minimum, not stock rows).
+export const STOCK_TILES = ['quarantine', 'crvi', 'blocked', 'reserved', 'low'] as const
 export type StockTile = (typeof STOCK_TILES)[number]
 
 export interface StockAddress {
@@ -270,12 +275,14 @@ export function stockNotices(counts: LotCounts | null, truncated: boolean, unval
 /** The tile's count (lots; for Reserved the rows holding reservations), unknown as "—" (never 0). */
 export function tileCount(tile: StockTile, counts: LotCounts | null, reservedRows: number | null = null): number | null {
   if (tile === 'reserved') return reservedRows
+  if (tile === 'low') return null
   if (!counts) return null
   return tile === 'quarantine' ? counts.quarantine : tile === 'crvi' ? counts.waitingCrVi : counts.blocked + counts.rejected
 }
 
 /** The quantity a tile's lots hold here, per unit (the tile's second number: "3 lots · 412,5 ft²"); Reserved: what is reserved. */
 export function tileStock(rows: readonly GridRow[], tile: StockTile, crViLots: ReadonlySet<string>, extras: StockExtras = {}): PerUnit[] {
+  if (tile === 'low') return []
   const lines = visibleLines(rows, { site: null, view: 'material', q: '', tile }, false, crViLots, extras)
   if (tile !== 'reserved') return onHandPerUnit(lines)
   return reservedPerUnit(lines)
@@ -374,6 +381,16 @@ export interface StockPageModel {
   selected?: readonly string[]
   focusRow?: number
   helpOpen?: boolean
+  /** B-W2b-327: the places of the sites shown, with their kinds (In transit) and blocks (Move…). */
+  places?: readonly PlaceView[]
+  /** B-W2b-327 (SCM-281): the materials below their minimum at the sites shown (the tile's count and its rows). */
+  low?: Loaded<{ count: number; rows: LowRow[]; alertsOff: boolean }> | null
+  /** B-W2b-327 (design st-why): the row whose quantity's "why is it this number" is open, and its read. */
+  why?: { lineId: string; state: Loaded<Why> } | null
+  /** B-W2b-327: Move… of the rows picked. */
+  move?: MoveDialogModel | null
+  /** B-W2b-327 (design mv-approval): an adjustment that waits for a yes (nothing posted yet). */
+  waiting?: WaitingAdjustment | null
 }
 
 export interface StockPageActions {
@@ -390,6 +407,15 @@ export interface StockPageActions {
   onAsOfShow?: (draft: AsOfDraft) => void
   onNow?: () => void
   onHold?: (lines: StockLine[]) => void
+  /** B-W2b-327: open (a row) or close (null) the quantity's "why is it this number"; read it again. */
+  onWhy?: (line: StockLine | null) => void
+  onRetryWhy?: () => void
+  /** B-W2b-327: Move… of some rows; a waiting adjustment's notice dismissed. */
+  onMove?: (lines: StockLine[]) => void
+  onDismissWaiting?: () => void
+  onRetryLow?: () => void
+  onExportLow?: (rows: LowRow[]) => void
+  onOpenItem?: (itemId: string) => void
 }
 
 /** Why Adjust cannot start on this row (one stock key at one place; a leather row of several hides names one hide). */

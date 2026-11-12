@@ -67,6 +67,12 @@ export function shortDay(date: BusinessDate): string {
 
 const later = (a: BusinessDate | null, b: BusinessDate | null): BusinessDate | null => (a === null ? b : b === null ? a : a > b ? a : b)
 
+/**
+ * The first day a supply that arrives on `arrival` can be used: the day after (it is received that day), or `delayDays`
+ * later (ItemPlanning.delayDays). THE rule; B-W2b-318's calculated delays (PLN-082) use it too.
+ */
+export const usableFromArrival = (arrival: BusinessDate, delayDays: number | null | undefined): BusinessDate => plusDays(arrival, Math.max(1, delayDays ?? 0))
+
 /** The day a material arrives, from its readiness (see above). */
 function arrivalOf(material: Pick<MaterialReadiness, 'word' | 'date' | 'arrivals'>, today: BusinessDate): { date: BusinessDate | null; overdue: boolean; purchaseOrderNumber: string | null; source: MaterialDay['source'] } {
   if (material.word === 'RECEIVED' || material.word === 'NOT_BOOKED' || material.word === 'NOT_ENOUGH') return { date: null, overdue: false, purchaseOrderNumber: null, source: null }
@@ -102,7 +108,7 @@ export function materialStartOf(
     const notCovered = material.word === 'NOT_ENOUGH'
     const arrival = arrivalOf(material, today)
     const delay = delayDays.get(`${material.itemId}|${material.itemColourId ?? ''}`) ?? delayDays.get(material.itemId) ?? 0
-    const usableFrom = arrival.date === null ? null : plusDays(arrival.date, Math.max(1, delay))
+    const usableFrom = arrival.date === null ? null : usableFromArrival(arrival.date, delay)
     return { itemId: material.itemId, itemColourId: material.itemColourId, label: material.label, word: material.word, arrives: arrival.date, overdue: arrival.overdue, purchaseOrderNumber: arrival.purchaseOrderNumber, source: arrival.source, usableFrom, notCovered }
   })
   const notCovered = materials.filter((material) => material.notCovered)

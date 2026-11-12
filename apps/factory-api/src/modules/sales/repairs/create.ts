@@ -371,6 +371,17 @@ export async function createRepair(caller: CommandCaller, body: CreateBody, idem
   const context = officeOf(caller)
   if (!mayStart(context, body)) throw new NotFoundError('Customer not found.')
   const { result } = await command(caller, { name: 'repairs.create', idempotencyKey, input: body }, async (tools) => {
+    const made = await createRepairInCommand(tools, context, body)
+    return { repairId: made.repairId, warnings: made.warnings }
+  })
+  return { repair: await recordOf(caller, result.repairId), warnings: result.warnings }
+}
+
+/**
+ * The repair made inside the caller's command (POST /sales/repairs above; B-W2b-345: a service case opens one and links it
+ * in the same command). The caller checked who may start it (mayStart); the plan checks the rest.
+ */
+export async function createRepairInCommand(tools: CommandTools, context: OfficeContext, body: CreateBody): Promise<{ repairId: string; number: string; warnings: Issue[] }> {
     const { tx, now } = tools
     const tenantId = tenantOf(tools)
     // The line's row and the serial first: what the checks below count holds until the commit.
@@ -453,9 +464,7 @@ export async function createRepair(caller: CommandCaller, body: CreateBody, idem
       siteId: p.siteId,
       payload: { repairId: id, number: number.formatted, partyId: p.partyId, kind: p.kind, stage: p.stage, returnLineId: p.returnLineId, complaintId: p.complaintId, safetyCheckRequired: p.safetyCheckRequired },
     })
-    return { repairId: id, warnings: p.warnings }
-  })
-  return { repair: await recordOf(caller, result.repairId), warnings: result.warnings }
+    return { repairId: id, number: number.formatted, warnings: p.warnings }
 }
 
 export async function recordOf(caller: CommandCaller, repairId: string): Promise<RepairView> {

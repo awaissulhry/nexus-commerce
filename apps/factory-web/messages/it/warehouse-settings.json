@@ -1,0 +1,345 @@
+{
+  "head": {
+    "intro": "Chi può fare entrambi i passi di una decisione di magazzino, dove va la merce quando nessuno indica un posto, quali rettifiche aspettano un sì e fino a quando si può retrodatare un movimento.",
+    "reload": "Rileggi",
+    "history": "Cronologia (registro delle modifiche)",
+    "more": "Altro"
+  },
+  "live": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline",
+    "changedTitle": "Qualcun altro ha cambiato queste regole",
+    "changedBody": "Le tue modifiche su questa pagina restano finché non rileggi; salvare ora può essere rifiutato perché le regole sono cambiate.",
+    "reload": "Rileggi"
+  },
+  "scope": {
+    "label": "Di chi sono le regole",
+    "company": "{company}",
+    "all": "Tutte le aziende",
+    "companyHint": "Le regole di magazzino di {company}. Dove non ne ha di proprie, segue quelle di tutte le aziende.",
+    "allHint": "Le regole di magazzino che ogni azienda segue dove non ne ha di proprie."
+  },
+  "noAccess": {
+    "title": "Le regole di magazzino non sono nel tuo ruolo",
+    "body": "Per leggerle serve il permesso di vedere le giacenze (inventory.stock.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+  },
+  "card": {
+    "neverChanged": "Mai cambiato qui.",
+    "changedBy": "Cambiato da {name} · {time}",
+    "changedAt": "Cambiato il {time}",
+    "rowChangedBy": "Queste regole sono cambiate l’ultima volta da {name} · {time}",
+    "rowChangedAt": "Queste regole sono cambiate l’ultima volta il {time}",
+    "history": "Cronologia",
+    "viewOnly": "Sola lettura"
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "everyCompany": "Tutte le aziende",
+    "less": "Meno",
+    "more": "Più",
+    "on": "Attiva",
+    "off": "Disattivata",
+    "notKnown": "non ancora noto",
+    "save": "Salva",
+    "saveWithCode": "Salva (chiede un codice)",
+    "appliesNow": "In vigore ora:",
+    "appliesOnceSaved": "Dopo il salvataggio:"
+  },
+  "source": {
+    "COMPANY": "propria di questa azienda",
+    "TENANT": "come tutte le aziende",
+    "ALL_OWN": "propria di tutte le aziende",
+    "DEFAULT": "il valore predefinito"
+  },
+  "reason": {
+    "label": "Motivo",
+    "hint": "Questo allarga ciò che una persona può fare: indica il motivo (resta nel registro delle modifiche). Al salvataggio serve poi un codice nuovo."
+  },
+  "sod": {
+    "title": "Separazione dei compiti",
+    "description": "Due passi della stessa decisione di magazzino non li fa mai la stessa persona.",
+    "failed": "Non è stato possibile leggere le regole di separazione",
+    "locked": "Nessuno approva la propria richiesta, nemmeno il titolare.",
+    "rule": {
+      "COUNTER_NOT_APPROVER": {
+        "title": "Chi ha contato non approva il conteggio",
+        "on": "Chi ha contato, ricontato o scansionato una riga con differenza non approva mai il conteggio; il riconteggio è di un’altra persona.",
+        "off": "Disattivata: una sola persona può contare, ricontare e approvare le stesse differenze.",
+        "where": "Inventari"
+      },
+      "RECEIVER_NOT_MATCHER": {
+        "title": "Chi ha ricevuto la merce non ne approva la fattura",
+        "on": "Chi ha ricevuto la merce non approva mai la fattura del fornitore né accetta una differenza del suo abbinamento.",
+        "off": "Disattivata: chi ha ricevuto la merce può approvarne la fattura.",
+        "where": "Fatture fornitori"
+      }
+    },
+    "follow": "Segui tutte le aziende ({state})",
+    "backToDefault": "Torna al predefinito (attiva)",
+    "offReason": "Disattivata perché: {reason}",
+    "loosens_one": "Disattivare questa regola permette a una persona di fare entrambi i passi: al salvataggio servono il motivo e poi un codice nuovo.",
+    "loosens_other": "Disattivare queste {count} regole permette a una persona di fare entrambi i passi: al salvataggio servono il motivo e poi un codice nuovo.",
+    "reasonHint": "Indica perché una persona può ora fare entrambi i passi (resta con la regola finché è disattivata e nel registro delle modifiche).",
+    "noteDefault": "Entrambe le regole sono attive per impostazione predefinita. Riattivarne una non chiede mai un codice.",
+    "noteWorkers": "Un operatore di reparto conta come l’utente d’ufficio che è: scansionare in reparto e approvare in ufficio sono la stessa persona.",
+    "applyOff": "Disattiva…"
+  },
+  "posting": {
+    "title": "Date di registrazione",
+    "description": "Fino a quando si può retrodatare un movimento. I mesi chiusi vengono dall’Amministrazione.",
+    "failed": "Non è stato possibile leggere la regola delle date di registrazione",
+    "modeLabel": "Quale limite",
+    "mode": {
+      "OWN": "Limite proprio",
+      "FOLLOW": "Come tutte le aziende",
+      "LIMIT": "Un limite",
+      "NONE": "Nessun limite"
+    },
+    "daysLabel": "Giorni di retrodatazione ammessi",
+    "daysHint": "Da {min} (solo lo stesso giorno) a {max} giorni prima del giorno in cui il movimento è inserito.",
+    "daysSuffix": "giorni",
+    "daysPlaceholder": "Giorni",
+    "followHint": "Questa azienda segue tutte le aziende: {days}.",
+    "noneHint": "Nessun limite: un movimento può avere qualsiasi data precedente, tranne in un mese chiuso.",
+    "noLimit": "Nessun limite",
+    "sameDay": "Solo lo stesso giorno",
+    "days_one": "{count} giorno indietro",
+    "days_other": "{count} giorni indietro",
+    "window": "Oggi, {today}, un movimento può essere datato fino al {earliest}.",
+    "windowOpen": "Oggi, {today}, un movimento può avere qualsiasi data precedente fuori da un mese chiuso.",
+    "loosens": "Più giorni indietro, o nessun limite, allarga ciò che una persona può fare: al salvataggio servono il motivo e poi un codice nuovo.",
+    "closed": "Un mese chiuso rifiuta una data al suo interno, qualunque cosa dica questa regola. I mesi si chiudono in Amministrazione:",
+    "closedLink": "Amministrazione › Esportazione contabile",
+    "floor": "Un movimento fatto in reparto conta sempre nel giorno in cui è inserito.",
+    "future": "Nessun movimento ha una data successiva a oggi."
+  },
+  "adjust": {
+    "title": "Approvazione delle rettifiche",
+    "description": "Le rettifiche di giacenza che valgono più di un importo aspettano un sì.",
+    "failed": "Non è stato possibile leggere la regola delle rettifiche",
+    "addRule": "Nuova regola per le rettifiche",
+    "valueTitle": "L’importo",
+    "modeLabel": "Quale importo",
+    "mode": {
+      "OWN": "Importo proprio",
+      "FOLLOW": "Come tutte le aziende",
+      "LIMIT": "Un importo",
+      "NONE": "Nessuno"
+    },
+    "valueLabel": "Rettifiche che valgono più di",
+    "valueHint": "In {currency}, al costo della giacenza.",
+    "valueHintAll": "Nella valuta di ogni azienda, al costo della giacenza.",
+    "valuePlaceholder": "Importo",
+    "followHint": "Questa azienda segue tutte le aziende: {value}.",
+    "noneHint": "Nessun importo: nessuna rettifica aspetta un sì.",
+    "noValue": "Nessuno",
+    "state": {
+      "NO_VALUE": "Nessun importo impostato: ogni rettifica si registra subito, senza un sì.",
+      "NO_RULE": "Un importo è impostato, ma nessuna regola di approvazione per le rettifiche è attiva: le rettifiche oltre l’importo si registrano senza un sì finché il titolare non ne attiva una.",
+      "WAITS_one": "Le rettifiche oltre l’importo aspettano un sì: {count} regola di approvazione è attiva.",
+      "WAITS_other": "Le rettifiche oltre l’importo aspettano un sì: {count} regole di approvazione sono attive.",
+      "UNKNOWN": "Non è ancora noto se le rettifiche aspettano."
+    },
+    "loosens": "Un importo più alto, o nessuno, fa registrare più rettifiche senza un sì: al salvataggio servono il motivo e poi un codice nuovo.",
+    "onlyAdjust": "Aspetta solo una rettifica fatta a mano. Inventari, divisioni di lotto e trasferimenti si registrano come sempre.",
+    "unknownValue": "Aspetta anche una rettifica il cui valore nessuno può dire (senza costo, in un’altra valuta).",
+    "approverTitle": "Chi approva",
+    "byRole": "un ruolo",
+    "byPerson": "una persona",
+    "col": {
+      "rule": "Regola",
+      "company": "Azienda",
+      "approver": "Approvatore",
+      "state": "Stato"
+    },
+    "rulesFailed": "Non è stato possibile leggere le regole di approvazione",
+    "table": "Regole di approvazione per le rettifiche di giacenza",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "empty": {
+      "title": "Nessuna regola di approvazione per le rettifiche",
+      "body": "Chi approva una rettifica lo dice una regola di approvazione. Scrivila in Sistema › Approvazioni, automazioni e IA; nasce disattivata."
+    },
+    "firstDecides": "Decide la prima regola attiva il cui approvatore non è chi chiede.",
+    "noneByDefault": "Nessuna regola di approvazione è attiva per impostazione predefinita: solo il titolare ne attiva una.",
+    "inbox": "Le richieste aspettano in",
+    "inboxLink": "Home › Approvazioni"
+  },
+  "alerts": {
+    "title": "Avvisi di scorta bassa",
+    "on": "Attivi: un materiale sotto il suo minimo genera un avviso.",
+    "off": "Disattivati: nessun avviso di scorta bassa."
+  },
+  "defaults": {
+    "title": "Ubicazioni predefinite",
+    "description": "Dove va la merce quando nessuno indica un posto: per sede, per tipo di materiale e per scopo.",
+    "failed": "Non è stato possibile leggere le ubicazioni predefinite",
+    "noSite": {
+      "title": "Ancora nessuna sede",
+      "body": "Le ubicazioni predefinite si tengono per sede. Aggiungi prima una sede e le sue ubicazioni in Magazzino › Ubicazioni."
+    },
+    "site": "Sede",
+    "siteOf": "Sede: {site}",
+    "noteOrder": "Un comando prende l’ubicazione del tipo, altrimenti quella della prima riga se può contenere la merce, altrimenti la propria regola.",
+    "noteKinds": "Sono proposte solo le ubicazioni che possono servire lo scopo: per la qualità uno scaffale quarantena, i capi finiti solo dove possono stare.",
+    "notePlaces": "Le ubicazioni stesse si tengono in",
+    "locationsLink": "Magazzino › Ubicazioni",
+    "everyKind": "Ogni materiale",
+    "everyKindHint": "Ogni tipo senza una riga propria",
+    "usesFallback": "Usa la prima riga: {place}",
+    "ownRule": {
+      "RECEIVING": "Nessuna: il ricevimento chiede l’ubicazione di ingresso",
+      "QUALITY": "Nessuna: il blocco indica il suo scaffale quarantena",
+      "ISSUE": "Nessuna: il prelievo indica la sua ubicazione",
+      "RETURN": "Nessuna: il reso indica la sua ubicazione",
+      "PUT_AWAY": "Nessuna: il movimento indica la sua ubicazione"
+    },
+    "cellLabel": "{purpose} · {kind}",
+    "none": "Nessuna",
+    "pick": "Scegli un’ubicazione",
+    "archivedPlace": "Questa ubicazione è archiviata: scegline un’altra.",
+    "noneServes": "Nessuna ubicazione attiva di questa sede può servire a questo (accetta: {kinds}).",
+    "caption": "Ubicazioni predefinite della sede {site}",
+    "kindColumn": "Materiale",
+    "addKind": "Aggiungi un tipo di materiale…"
+  },
+  "purpose": {
+    "RECEIVING": "Ricevimento",
+    "QUALITY": "Qualità",
+    "ISSUE": "Prelievo",
+    "RETURN": "Reso",
+    "PUT_AWAY": "Stoccaggio"
+  },
+  "purposeHint": {
+    "RECEIVING": "dove arriva un ricevimento",
+    "QUALITY": "dove aspetta la merce bloccata",
+    "ISSUE": "da dove prelevano gli ordini di lavoro",
+    "RETURN": "dove tornano i resi",
+    "PUT_AWAY": "dove si conserva la merce"
+  },
+  "itemKind": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessorio",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezione",
+    "LABEL": "Etichetta",
+    "PACKAGING": "Imballo",
+    "COMPONENT": "Componente",
+    "FINISHED": "Capi finiti"
+  },
+  "locationKind": {
+    "WAREHOUSE": "Magazzino",
+    "ZONE": "Zona",
+    "BIN": "Cella",
+    "RECEIVING": "Ricevimento merci",
+    "QUARANTINE": "Scaffale quarantena",
+    "PRODUCTION": "Bordo linea",
+    "SHIPPING": "Spedizioni",
+    "SUBCONTRACTOR": "Terzista",
+    "FINISHED_GOODS": "Prodotti finiti",
+    "CUSTOMER": "Presso cliente",
+    "TRANSIT": "In transito",
+    "PICK_FACE": "Fronte di prelievo",
+    "BULK": "Magazzino di riserva"
+  },
+  "crvi": {
+    "title": "Regola delle prove Cr VI",
+    "description": "Quale prova vale per il cromo esavalente di un lotto di pelle. Si tiene in Conformità, non qui.",
+    "failed": "Non è stato possibile leggere la regola delle prove Cr VI",
+    "rule": {
+      "LOT_REPORT_REQUIRED": "Un rapporto per lotto",
+      "SUPPLIER_REPORT_ACCEPTED": "Un rapporto del fornitore che copre l’articolo e il periodo"
+    },
+    "isDefault": "(nessuno ne ha scelta un’altra)",
+    "why": "Ricevimenti e lotti la usano per decidere se un lotto di pelle può essere rilasciato.",
+    "link": "Cambiala in Conformità › Norme e mercati"
+  },
+  "held": {
+    "reading": "Sto ancora leggendo le regole.",
+    "busy": "Salvataggio in corso: attendi un momento.",
+    "noRight": "Per cambiare le regole di magazzino serve inventory.rules.manage su questa azienda (magazzino, amministrazione, il titolare).",
+    "noRightAll": "Le regole di magazzino di tutte le aziende le cambia solo un ruolo su tutte le aziende.",
+    "offline": "Offline: le modifiche restano su questa pagina finché la connessione torna.",
+    "offlineTitle": "Offline",
+    "offlineBody": "Questa è l’ultima copia letta. Non si può salvare nulla finché la connessione torna.",
+    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni (approvals.view).",
+    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di gestirle (approvals.rules.manage): il titolare o un amministratore.",
+    "noCost": "L’importo è un costo: si vede e si cambia solo con il permesso di vedere i costi (money.cost).",
+    "noLocationsView": "Le ubicazioni predefinite richiedono il permesso di vedere le ubicazioni (inventory.locations.view).",
+    "noLocationsRight": "Per cambiare le ubicazioni predefinite serve inventory.locations.manage.",
+    "noCrViView": "Per leggere questa regola serve il permesso di vedere i lotti e le loro prove (quality.lots.view)."
+  },
+  "problem": {
+    "reasonNeeded": "Indica il motivo: questo allarga ciò che una persona può fare.",
+    "reasonLong": "Al massimo 500 caratteri.",
+    "daysNeeded": "Scrivi i giorni di retrodatazione ammessi.",
+    "daysRange": "Da 0 a 366 giorni.",
+    "amountNeeded": "Scrivi l’importo.",
+    "amountRange": "L’importo è 0 o più, e non così grande.",
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non arriva a queste regole.",
+      "not_found": "Questa azienda non è stata trovata.",
+      "unavailable": "Il server non risponde. Riprova.",
+      "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+      "contract": "Il server ha risposto qualcosa che questa pagina non capisce. Riprova più tardi.",
+      "internal": "Qualcosa è andato storto nella lettura. Riprova."
+    },
+    "write": {
+      "moved": "Qualcuno ha cambiato queste regole nel frattempo: rileggi (nulla è stato sovrascritto).",
+      "reasonNeeded": "Indica prima il motivo: questo allarga ciò che una persona può fare.",
+      "placeRefused": "Quell’ubicazione non può essere questa predefinita (il suo tipo, o è archiviata): scegline un’altra.",
+      "invalid": "Il server ha rifiutato un valore: controlla la scheda.",
+      "noCost": "L’importo è un costo: per cambiarlo serve il permesso di vedere i costi.",
+      "forbidden": "Il tuo ruolo non può cambiare le regole di magazzino di questa azienda.",
+      "forbiddenAll": "Le regole di tutte le aziende le cambia solo un ruolo su tutte le aziende.",
+      "not_found": "Non è stato più trovato: rileggi.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo. Le modifiche restano su questa pagina.",
+      "rate_limited": "Troppe richieste: attendi un momento e salva di nuovo.",
+      "unavailable": "Il server non risponde: le modifiche restano, salva di nuovo.",
+      "internal": "Qualcosa è andato storto nel salvataggio. Riprova."
+    }
+  },
+  "done": {
+    "separation": "Le regole di separazione sono salvate.",
+    "separationOff": "Salvato: una persona può ora fare entrambi i passi della regola disattivata (il motivo resta).",
+    "posting": "La regola delle date di registrazione è salvata.",
+    "postingLoosened": "Salvato: i movimenti possono ora essere retrodatati di più (il motivo resta).",
+    "adjust": "L’importo delle rettifiche è salvato.",
+    "adjustLoosened": "Salvato: più rettifiche si registrano ora senza un sì (il motivo resta).",
+    "alerts": "Gli avvisi di scorta bassa sono salvati.",
+    "defaults_one": "{count} ubicazione predefinita salvata.",
+    "defaults_other": "{count} ubicazioni predefinite salvate.",
+    "defaultsSome": "{count} di {total} ubicazioni predefinite salvate; le altre sono state rifiutate e restano scritte (leggi la scheda)."
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "confirm": "Conferma",
+    "cancelled": "Non salvato: il codice non è stato dato. La regola resta com’era.",
+    "sentence": {
+      "separation": "Disattivare una regola di separazione permette a una persona di fare entrambi i passi. Scrivi un codice nuovo di 6 cifre dalla tua app di autenticazione.",
+      "posting": "Permettere movimenti retrodatati di più allarga ciò che una persona può fare. Scrivi un codice nuovo di 6 cifre dalla tua app di autenticazione.",
+      "adjust": "Un importo delle rettifiche più alto fa registrare più rettifiche senza un sì. Scrivi un codice nuovo di 6 cifre dalla tua app di autenticazione."
+    },
+    "problem": {
+      "wrong": "Il codice è sbagliato o già usato. Scrivi il codice che l’app mostra adesso.",
+      "locked": "Troppi codici sbagliati. Attendi qualche minuto e riprova.",
+      "unavailable": "Non è stato possibile controllare il codice ora. Riprova."
+    }
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "save": "Salva la scheda che hai cambiato",
+    "openRule": "Apri la regola di approvazione in Sistema › Approvazioni, automazioni e IA",
+    "close": "Chiudi la finestra"
+  }
+}

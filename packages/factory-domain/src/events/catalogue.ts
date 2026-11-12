@@ -149,6 +149,8 @@ import { events as planningPlannedOrders } from '../planning-planned-orders/even
 import { events as planningActions } from '../planning-actions/events'
 // B-W2b-301: promise dates (an order line's promise per size).
 import { events as planningPromise } from '../planning-promise/events'
+// B-W2b-317: keeping promises (re-promise proposals and decisions, the ranked backlog, supply too late).
+import { events as planningPromiseKeep } from '../planning-promise-keep/events'
 // B-W2b-321
 import { events as planningSubcontract } from '../planning-subcontract/events'
 // B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
@@ -157,6 +159,8 @@ import { events as subcontractDepth } from '../subcontract-depth/events'
 import { events as salesPricing } from '../sales-pricing/events'
 // B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
 import { events as repairsDepth } from '../repairs-depth/events'
+// B-W2b-345: warranty and service cases.
+import { events as serviceCases } from '../service-cases/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -524,6 +528,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-293
   ...planningPlannedOrders,
   ...planningPromise,
+  // B-W2b-317
+  ...planningPromiseKeep,
   // B-W2b-321
   ...planningSubcontract,
   // B-W2b-311
@@ -549,7 +555,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-306
   ...planningActions,
   // B-W2b-300
-  ...inventoryReceiving] as const satisfies readonly EventDefinition[]
+  ...inventoryReceiving,
+  // B-W2b-345
+  ...serviceCases] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
