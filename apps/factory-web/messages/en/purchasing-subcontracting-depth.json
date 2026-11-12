@@ -1,0 +1,403 @@
+{
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss"
+  },
+  "held": {
+    "busy": "Working…",
+    "permission": "Needs {permission}: ask an administrator."
+  },
+  "problem": {
+    "read": "The server didn't answer as expected. Try again.",
+    "forbidden": "Your role may not see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "write": "It was not booked. Try again.",
+    "changed": "Someone changed the order meanwhile, or its state no longer allows this: it was read again. Check and try again.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "tab": {
+    "balance": "Material balance",
+    "cost": "Cost"
+  },
+  "tile": {
+    "balanceFailed": "The open balances couldn't be read: the count is not known."
+  },
+  "grid": {
+    "balance": "Balance open",
+    "allBack": "every piece is back"
+  },
+  "terms": {
+    "title": "Written terms",
+    "lawPlain": "A subcontract (subfornitura) is made in writing, or it is void: the signed terms say the work, its price, the delivery and the payment terms.",
+    "loading": "Reading the written terms…",
+    "slow": "Still reading the written terms…",
+    "failed": "Couldn't load the written terms",
+    "covered": "Revision {revision}: {title}",
+    "signed": "Signed {date}",
+    "valid": "covers {from} – {until}",
+    "validOpen": "covers from {from}, with no end date",
+    "superseded": "Replaced since",
+    "supersededBody": "A later revision replaced it since; it still covers this order’s date.",
+    "terminated": "Ended since",
+    "ending_one": "Ends in {count} day",
+    "ending_other": "Ends in {count} days",
+    "download": "Download the signed terms",
+    "fileGone": "The signed file is no longer there.",
+    "held": {
+      "noFile": "No signed file is kept with this revision.",
+      "notReady": "The signed file is not available yet (still being checked)."
+    },
+    "none": {
+      "base": "No signed written terms with {workshop} cover {date}.",
+      "draft": "Revision {revision} is written and waits for its signature.",
+      "none": "No terms are written with this workshop yet.",
+      "otherDays": "The signed terms cover other days: a new revision is needed for these."
+    }
+  },
+  "balance": {
+    "intro": "Our material stays ours while the workshop has it. The balance shows what came back inside the garments, what came back unused and what is still out.",
+    "loading": "Reading the material balance…",
+    "slow": "Still reading the material balance…",
+    "failed": "Couldn't load the material balance",
+    "empty": {
+      "title": "Nothing sent yet",
+      "body": "The balance starts with the kit: once material goes to the workshop, each material sent has its line here."
+    },
+    "openAfterBack_one": "Every piece is back and material is still out on {count} line: book it as used, returned or scrapped (a loss).",
+    "openAfterBack_other": "Every piece is back and material is still out on {count} lines: book it as used, returned or scrapped (a loss).",
+    "line": "Line {line}",
+    "lineLabel": "Line {line}, {code}",
+    "lot": "lot {code}",
+    "hide": "hide {code}",
+    "sentOn": "sent {date}",
+    "bridge": "The balance of line {line}",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "rung": {
+      "sent": "Sent",
+      "used": "In the garments (used)",
+      "returned": "Returned unused",
+      "scrapped": "Scrapped at the workshop",
+      "open": "Still open"
+    },
+    "flagsLabel": "What needs a look",
+    "flagName": {
+      "SHORT_AT_WORKSHOP": "Short on arrival",
+      "NOT_DECLARED": "Not declared",
+      "RETURN_NOT_BACK": "Return not back",
+      "BACK_NOT_DECLARED": "Back, not declared",
+      "OPEN_AFTER_BACK": "Open after the goods back"
+    },
+    "flag": {
+      "SHORT_AT_WORKSHOP": "The workshop counted {checked} {uom} of the {sent} sent: {short} short on arrival.",
+      "NOT_DECLARED": "Goods came back, but the workshop has not declared what it used of this material yet.",
+      "RETURN_NOT_BACK": "Declared returned {returned} {uom}; {back} came back into our places so far.",
+      "BACK_NOT_DECLARED": "{back} {uom} came back into our places; the workshop declared {returned} returned.",
+      "OPEN_AFTER_BACK": "Every piece is back and {open} {uom} is still out: book it as used, returned or scrapped (a loss)."
+    },
+    "fact": {
+      "checked": "Counted by the workshop",
+      "notChecked": "not counted",
+      "announced": "Announced back",
+      "back": "Back in our places",
+      "daysOut": "Out for",
+      "nothingOut": "nothing out"
+    },
+    "kind": {
+      "DECLARED": "Declared",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "rows": {
+      "label": "What was booked on line {line}",
+      "none": "Nothing booked yet: the workshop’s declaration comes with the goods back.",
+      "what": "What",
+      "with": "With",
+      "why": "Why",
+      "booked": "Booked by",
+      "reported": "reported {date}",
+      "receipt": "Receipt {seq}",
+      "system": "The system"
+    },
+    "held": {
+      "nothingSent": "Nothing was sent yet: the balance starts with the kit.",
+      "nothingOpen": "Nothing is open: every part of the material sent is declared.",
+      "notDeclared": "The workshop has not declared this material yet: book its declaration first.",
+      "server": "The order’s state does not allow it now: read it again.",
+      "reasonLong": "The words are at most 2000 characters."
+    },
+    "declare": {
+      "open": "Book the workshop’s declaration",
+      "title": "The workshop’s declaration for {number}",
+      "intro": "What the workshop says of the material we sent: used in the garments, returned unused, scrapped there. Prefilled with what the goods back suggest: check it against the workshop’s papers.",
+      "receipt": "With the goods back",
+      "receiptHint": "The receipt the declaration came with.",
+      "noReceipt": "No receipt",
+      "receiptOption": "Receipt {seq} of {date}",
+      "lineOpen": "Open {open} of the {sent} sent.",
+      "returnedHint": "Back in our places: {back}.",
+      "fieldOf": "{what}, line {line}",
+      "note": "Note",
+      "noteHint": "Optional; kept with each line it books.",
+      "question_one": "Book the declaration for {count} line?",
+      "question_other": "Book the declaration for {count} lines?",
+      "confirm": "Book the declaration",
+      "nothingMoves": "Nothing moves yet: type at least one quantity.",
+      "costFollows": "The material cost of {workOrder} follows the moves.",
+      "held": {
+        "number": "Line {line}: each quantity is a number of 0 or more, at most 4 decimals.",
+        "open": "Line {line}: only {open} {uom} is still open.",
+        "nothing": "Declare at least one quantity above 0."
+      }
+    },
+    "adjust": {
+      "open": "Book over- or under-consumption",
+      "title": "Over- or under-consumption, line {line} {code}",
+      "intro": "What the workshop reports after the goods back: more or less used, returned or scrapped than it declared. Each change says why.",
+      "change": {
+        "used": "Change in used",
+        "returned": "Change in returned",
+        "scrapped": "Change in scrapped"
+      },
+      "changeHint": "+ more, − less; empty: no change.",
+      "reason": "Why",
+      "reasonHint": "What the workshop reported, in words.",
+      "question": "Book the change on line {line}?",
+      "confirm": "Book the change",
+      "review": "Line before and after",
+      "lossHint": "What is still open once every piece is back is a loss: book it as used or scrapped.",
+      "held": {
+        "number": "Each change is a number (+ or −), at most 4 decimals.",
+        "nothing": "Change at least one quantity (up or down).",
+        "belowZero": "{what} would go below 0 (it is {now} {uom}).",
+        "moreThanSent": "Used, returned and scrapped would pass the {sent} {uom} sent.",
+        "reason": "Say why: the workshop’s words."
+      }
+    },
+    "move": {
+      "issue": "Line {line} {item}: {quantity} {uom} used, issued from the workshop’s place to {workOrder}.",
+      "giveBack": "Line {line} {item}: {quantity} {uom} less used, back from {workOrder} to the workshop’s place.",
+      "scrap": "Line {line} {item}: {quantity} {uom} scrapped, written off at the workshop’s place.",
+      "unscrap": "Line {line} {item}: {quantity} {uom} less scrapped, the scrap taken back at the workshop’s place.",
+      "returned": "Line {line} {item}: {quantity} {uom} returned unused — no move here (the goods back moved it)."
+    },
+    "refused": {
+      "period": "The day it was reported falls in a closed accounting period: ask the accountant.",
+      "reportedAt": "The day it was reported is not accepted: not later than now, not before the order was sent.",
+      "receipt": "That receipt is not one of this order’s.",
+      "notDeclared": "The workshop has not declared this material yet: book its declaration first.",
+      "reason": "Say why, in at most 2000 characters.",
+      "belowZero": "A quantity would go below 0: read the line again.",
+      "open": "More than is still open: read the line again."
+    },
+    "booked_one": "Booked: the stock followed with {count} move.",
+    "booked_other": "Booked: the stock followed with {count} moves.",
+    "bookedWaiting_one": "Booked: the stock followed with {count} move; the work order’s cost waits (another currency).",
+    "bookedWaiting_other": "Booked: the stock followed with {count} moves; the work order’s cost waits (another currency)."
+  },
+  "cost": {
+    "intro": "The fee for the pieces plus material and transport, booked to {workOrder}.",
+    "loading": "Reading the cost…",
+    "slow": "Still reading the cost…",
+    "failed": "Couldn't load cost to the work order",
+    "noGrain": "Prices and amounts need the cost grain (money.cost): the pieces are shown, not what they cost.",
+    "empty": {
+      "title": "No cost yet",
+      "body": "Booked when goods come back: the fee for each piece back good goes to the work order."
+    },
+    "bridge": "Cost to the work order",
+    "rung": {
+      "earnedFee": "Fee for the pieces back good",
+      "feeAtWorkshopPrice": "Fee at the workshop’s price",
+      "transport": "Transport",
+      "material": "Material the workshop supplied",
+      "other": "Other charges",
+      "orderCost": "The order’s cost → {workOrder}"
+    },
+    "earnedLine_one": "Line {line} {code}: {count} piece back good × {fee} = {amount}",
+    "earnedLine_other": "Line {line} {code}: {count} pieces back good × {fee} = {amount}",
+    "ledger": {
+      "holds_one": "{workOrder}’s cost holds {amount} of this order ({count} entry).",
+      "holds_other": "{workOrder}’s cost holds {amount} of this order ({count} entries).",
+      "currency": "Order {order} is in {currency}; {workOrder} keeps its cost in {woCurrency} (no exchange rates): nothing posts there yet."
+    },
+    "op": {
+      "title": "Per operation",
+      "operation": "Operation",
+      "line": "Line {line}",
+      "fee": "Fee per piece",
+      "backGood": "Back good",
+      "waiting": "Waiting for inspection",
+      "byFee": "Paid at the workshop’s price",
+      "earned": "Fee earned",
+      "waitingHint": "Pieces waiting for their incoming inspection earn their fee once they pass it."
+    },
+    "entries": "Charges booked",
+    "entriesNone": "No charge booked: the fee earned is booked by itself when goods come back.",
+    "entry": {
+      "when": "When",
+      "what": "What",
+      "price": "Price",
+      "amount": "Amount",
+      "receipt": "With",
+      "onWorkOrder": "On the work order",
+      "why": "Why",
+      "actions": "Actions",
+      "posted": "Booked",
+      "waiting": "Waits",
+      "takenBack": "taken back",
+      "receiptSeq": "Receipt {seq}",
+      "reversal": "{kind} taken back",
+      "fee_one": "Fee, line {line}: {count} piece",
+      "fee_other": "Fee, line {line}: {count} pieces",
+      "one": "{kind}",
+      "many": "{kind} × {quantity}"
+    },
+    "kind": {
+      "FEE": "Fee at the workshop’s price",
+      "TRANSPORT": "Transport",
+      "MATERIAL": "Material",
+      "OTHER": "Other charge"
+    },
+    "held": {
+      "draft": "The order is a draft: its work costs nothing until it is sent.",
+      "cancelled": "The order is cancelled: its work costs nothing.",
+      "server": "The order’s state does not allow it now: read it again.",
+      "isReversal": "This entry takes another back: book the cost again instead.",
+      "takenBack": "This entry was taken back already."
+    },
+    "book": {
+      "open": "Book a charge",
+      "title": "Book a charge on {number}",
+      "kind": "What",
+      "kindHint": {
+        "FEE": "The fee for pieces back good at the workshop’s price (its invoice, an agreed price): those pieces leave the fee earned, so each piece is paid once.",
+        "TRANSPORT": "Transport to or from the workshop.",
+        "MATERIAL": "Material the workshop supplied and charges for.",
+        "OTHER": "Anything else: say what it is for."
+      },
+      "operation": "Operation",
+      "pickOperation": "Pick the line",
+      "operationOption_one": "Line {line} {code}: {count} piece to book",
+      "operationOption_other": "Line {line} {code}: {count} pieces to book",
+      "pieces": "Pieces",
+      "quantity": "Quantity",
+      "price": "Price each ({currency})",
+      "receipt": "With the goods back",
+      "noReceipt": "No receipt",
+      "receiptOption": "Receipt {seq} of {date}",
+      "what": "What it is for",
+      "reason": "Note",
+      "question": "Book {kind} on {workOrder}?",
+      "confirm": "Book the charge",
+      "onWorkOrder": "{quantity} × {price} = {amount} onto the cost of {workOrder}.",
+      "feeOnce_one": "{count} piece of line {line} leaves the fee earned: it is paid once.",
+      "feeOnce_other": "{count} pieces of line {line} leave the fee earned: each is paid once.",
+      "held": {
+        "operation": "Pick the line whose pieces the fee pays.",
+        "pieces": "A fee pays whole pieces: 1 or more.",
+        "bookable_one": "Line {line} has {count} piece back good whose fee is not booked yet.",
+        "bookable_other": "Line {line} has {count} pieces back good whose fee is not booked yet.",
+        "quantity": "A quantity above 0, at most 4 decimals.",
+        "price": "A price of 0 or more, at most 6 decimals.",
+        "what": "Say what the charge is for."
+      }
+    },
+    "reverse": {
+      "open": "Take back",
+      "openOf": "Take back: {what}",
+      "title": "Take a charge back",
+      "reason": "Why",
+      "question": "Take back {what}?",
+      "confirm": "Take it back",
+      "minus": "{amount} on the cost of {workOrder}.",
+      "itsAmount": "Its amount comes off",
+      "once": "An entry is taken back once, whole; book the cost again if it is due after all.",
+      "held": {
+        "reason": "Say why it is taken back."
+      }
+    },
+    "refused": {
+      "entry": "This entry cannot be taken back (taken back already, or it takes another back).",
+      "operation": "Only a fee names a line: pick the line for a fee, none for another charge.",
+      "bookable": "More pieces than are back good with no fee booked: read the line again.",
+      "reason": "Say why, in at most 2000 characters.",
+      "occurredAt": "The cost was incurred now or before, not later.",
+      "receipt": "That receipt is not one of this order’s."
+    },
+    "invoice": {
+      "title": "The workshop’s invoices",
+      "number": "Invoice",
+      "line": "Line",
+      "description": "Description",
+      "net": "Net",
+      "match": "Match",
+      "none": "No invoice of the workshop names this order yet.",
+      "hint": "The match itself is made in Finance › Supplier invoices.",
+      "matchStatus": {
+        "PENDING": "Not matched yet",
+        "MATCHED": "Matched",
+        "DIFFERENCES": "Differences",
+        "NO_PO": "No order line",
+        "WAITING_GOODS": "Waits for the goods",
+        "OTHER": "Other"
+      }
+    },
+    "done": {
+      "booked": "Booked: {kind} onto the work order’s cost.",
+      "reversed": "Taken back: the work order’s cost follows.",
+      "waiting": "Booked on the order; the work order’s cost waits (another currency)."
+    }
+  },
+  "ageing": {
+    "longOut": "Long out",
+    "since": "since {date}",
+    "workshop": "oldest {days} out",
+    "workshopLong": "oldest {days} out, {count} long out",
+    "failed": "Days out couldn't be read",
+    "truncated": "Days out are read from the newest moves only: filter by workshop to see them all.",
+    "how": "Days out count from the oldest part still out (first in, first out); past {days} days a line is long out."
+  },
+  "balanceView": {
+    "intro": "Every piece of these jobs is back, but kit material we sent is still out: book it on the order’s Material balance.",
+    "tableLabel": "Jobs back with material still open",
+    "count_one": "{count} job",
+    "count_other": "{count} jobs",
+    "search": "Search order, workshop or work order",
+    "export_one": "Export {count} job (CSV)",
+    "export_other": "Export {count} jobs (CSV)",
+    "failed": "Couldn't load the open balances",
+    "empty": {
+      "title": "No balance open",
+      "body": "Every job back has its material declared: nothing we sent is unaccounted for."
+    },
+    "lines": "{open} of {sent}",
+    "since": "since {date}",
+    "col": {
+      "open": "Still open",
+      "lines": "Lines open",
+      "oldest": "Out since",
+      "daysOut": "Days out"
+    }
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}
