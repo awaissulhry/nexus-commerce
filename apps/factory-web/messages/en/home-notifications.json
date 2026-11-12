@@ -223,7 +223,10 @@
       "approval": {
         "quote_requested": "{actor} asks you to approve quote {record}{figure}",
         "quote_decided": "{actor} {status} your approval request for quote {record}",
-        "nudged": "{actor} reminds you: quote {record} still waits for your approval"
+        "nudged": "{actor} reminds you: quote {record} still waits for your approval",
+        "taskAsked": "{actor} asks for your yes on {record}: {title}",
+        "taskDecided": "{actor} {status} your request on {record}: {title}",
+        "smvAsked": "{actor} asks you to approve an SMV change of operation {record}: {title}"
       },
       "plant": {
         "reported": "A machine problem was reported on {record}: {title}",

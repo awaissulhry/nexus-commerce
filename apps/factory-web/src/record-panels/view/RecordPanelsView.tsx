@@ -17,6 +17,8 @@ import { ApprovalsPanel } from '../approvals/view/ApprovalsPanel'
 import { openCount } from '../approvals/model'
 // B-W2b-200: the Partners tab.
 import { SharesPanel } from '../share/view/SharesPanel'
+// B-W2b-307 (PLT-104): the record's approval history under its partner approvals.
+import { ApprovalHistory } from '../../shell/panels/approvals/view/ApprovalHistory'
 import { liveCount, SHARES_NS } from '../share/model'
 import '../record-panels.css'
 
@@ -57,7 +59,7 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
     // Files counts documents (a file and its earlier versions are one), as the list shows them.
     ...(model.can.readFiles ? [{ id: 'files', label: t('panels.tabs.files'), count: model.files.items === null ? null : fileGroups(model.files.items).length }] : []),
     // B-W2b-188: the requests that still wait for the partner's answer.
-    ...(model.approvals ? [{ id: 'approvals', label: approvalWords('tab'), count: openCount(model.approvals) }] : []),
+    ...(model.approvals ? [{ id: 'approvals', label: approvalWords('tab'), count: openCount(model.approvals) }] : model.approvalHistory ? [{ id: 'approvals', label: approvalWords('tab'), count: null }] : []),
     // B-W2b-200: the partners invited to the record whose invitation still lives.
     ...(model.shares ? [{ id: 'shares', label: shareWords('tab'), count: liveCount(model.shares) }] : []),
     { id: 'history', label: t('panels.tabs.history') },
@@ -100,9 +102,10 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
             <FilesPanel model={model} actions={actions} now={now} />
           </div>
         )}
-        {model.approvals && (
+        {(model.approvals || model.approvalHistory) && (
           <div {...tabPanelProps(idBase, 'approvals')} hidden={active !== 'approvals'} className="fw-rp-panel">
-            <ApprovalsPanel model={model.approvals} actions={actions?.approvals} title={model.title} />
+            {model.approvals && <ApprovalsPanel model={model.approvals} actions={actions?.approvals} title={model.title} />}
+            {model.approvalHistory && <ApprovalHistory model={model.approvalHistory} actions={actions?.approvalHistory} />}
           </div>
         )}
         {model.shares && (

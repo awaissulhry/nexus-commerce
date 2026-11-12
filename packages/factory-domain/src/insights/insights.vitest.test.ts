@@ -111,15 +111,19 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
     // W2a: every office person's own rows (my tasks: tasks.manage; my mentions: home.view; B-W2a-33 my alerts: alerts.handle)
     // follow the W1 kinds.
     // B-W2b-189: suppliers' profile changes and documents to check.
-    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT'])
+    // B-W2b-307: + the approval engine's requests addressed to me (approvals.decide; every deciding template).
+    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'APPROVAL_TASK'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
     // B-W2b-17: the NCR decisions that wait for an approval (quality.ncr.approve).
     // B-W2b-190: the order requests customers sent from the portal (orders.manage).
     // B-W2b-183: customers' change and cancel requests (orders.manage).
-    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'SUPPLIER_DOCUMENT'])
+    // B-W2b-307: + change orders asked of me (product.changes.approve), inspection plan versions to approve, the engine's requests.
+    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'SUPPLIER_DOCUMENT', 'CHANGE_ORDER', 'PLAN_VERSION', 'APPROVAL_TASK'])
+    // B-W2b-307: the production manager also approves SMV changes (product.smv.approve).
+    expect(tileKindsFor(roleActor('production_manager'))).toEqual(['WORK_ORDER_HELD', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'APPROVAL_TASK'])
     // B-W2b-F13b: + the delivery addresses customers added, to check (orders.manage).
-    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'DELIVERY_ADDRESS'])
-    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
+    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'DELIVERY_ADDRESS', 'APPROVAL_TASK'])
+    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'APPROVAL_TASK'])
     // Read-only keeps no task (tasks.manage is a write) and handles no alert; it still reads the notes that mention it.
     expect(tileKindsFor(roleActor('read_only'))).toEqual(['MENTION'])
   })
@@ -352,10 +356,12 @@ describe('the catalogue', () => {
     // B-W2b-183: a customer's change or cancel request is answered on the order (its Changes tab), so it OPENs too.
     // B-W2b-189: a supplier's profile change and document are approvals decided on the supplier's record.
     // B-W2b-F13b: a delivery address a customer added is approved or refused on the customer's record.
-    const OPEN_APPROVALS: readonly string[] = ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS']
+    // B-W2b-307: a change order and an SMV change are decided in Products › Changes & versions, a plan version on the plan.
+    const OPEN_APPROVALS: readonly string[] = ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION']
     for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' || OPEN_APPROVALS.includes(kind) ? 'APPROVAL' : 'ALERT')
     expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION', 'ALERT'])
-    expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps'])
+    // B-W2b-307: + taskKind (the approval engine's kinds of request).
+    expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps', 'taskKind'])
   })
 
   it('every office template that works on records has home.view; floor roles never do', () => {

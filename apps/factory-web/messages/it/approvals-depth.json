@@ -1,0 +1,430 @@
+{
+  "you": "Tu",
+  "aWorker": "Un operatore di reparto",
+  "colleague": "Un collega",
+  "or": " o ",
+  "yes": "Sì",
+  "no": "No",
+  "retry": "Riprova",
+  "back": "Indietro",
+  "dismiss": "Chiudi",
+  "approve": "Approva",
+  "approveAs": "Approva come '{meaning}'",
+  "reject": "Rifiuta",
+  "later": {
+    "W3": "Arriva più avanti (W3)."
+  },
+  "meaning": {
+    "REVIEWED": "Revisionato",
+    "APPROVED": "Approvato",
+    "RELEASED": "Rilasciato",
+    "VERIFIED": "Verificato"
+  },
+  "status": {
+    "PENDING": "In attesa",
+    "APPROVED": "Approvata",
+    "REJECTED": "Rifiutata",
+    "WITHDRAWN": "Ritirata",
+    "STALE": "Cambiata dopo la richiesta"
+  },
+  "history": {
+    "title": "Approvazioni",
+    "loading": "Lettura delle approvazioni…",
+    "problem": {
+      "forbidden": "Le approvazioni di questo record sono fuori dai tuoi permessi.",
+      "unavailable": "Non è stato possibile leggere le approvazioni."
+    },
+    "empty": {
+      "title": "Nessuna approvazione per ora",
+      "body": "Ogni richiesta di approvazione su questo record, e la sua risposta, sarà elencata qui."
+    },
+    "more": "Mostra altro",
+    "loadingMore": "Lettura in corso…",
+    "line": {
+      "REQUESTED": {
+        "other": "{name} ha chiesto un sì",
+        "me": "Hai chiesto un sì",
+        "system": "Il sistema ha chiesto un sì"
+      },
+      "COMMENTED": {
+        "other": "{name} ha scritto una nota",
+        "me": "Hai scritto una nota",
+        "system": "Il sistema ha scritto una nota"
+      },
+      "APPROVED": {
+        "other": "{name} ha approvato",
+        "me": "Hai approvato",
+        "system": "Approvata dal sistema"
+      },
+      "APPROVED_AS": {
+        "other": "{name} ha approvato come '{meaning}'",
+        "me": "Hai approvato come '{meaning}'",
+        "system": "Approvata come '{meaning}' dal sistema"
+      },
+      "REJECTED": {
+        "other": "{name} ha rifiutato",
+        "me": "Hai rifiutato",
+        "system": "Rifiutata dal sistema"
+      },
+      "WITHDRAWN": {
+        "other": "{name} ha ritirato la richiesta",
+        "me": "Hai ritirato la richiesta",
+        "system": "Il sistema l’ha ritirata: il suo record non c’è più"
+      },
+      "STALE": {
+        "other": "{name}: è cambiata dopo la richiesta",
+        "me": "Tu: è cambiata dopo la richiesta",
+        "system": "Il sistema: è cambiata dopo la richiesta"
+      },
+      "SIGNED": {
+        "other": "{name} l’ha firmata come '{meaning}'",
+        "me": "L’hai firmata come '{meaning}'",
+        "system": "Firmata come '{meaning}'"
+      }
+    }
+  },
+  "intro": "Ogni richiesta che aspetta il tuo sì, in un unico posto: approva o rifiuta qui le richieste del motore di approvazione e i preventivi; ogni altro tipo apre la sua pagina.",
+  "notYet": "Non ancora letta",
+  "waitingForYou": "{count} in attesa di te",
+  "offline": "Non in linea",
+  "band": {
+    "outOfOffice": "Fuori ufficio…",
+    "more": "Altro",
+    "rules": "Regole di approvazione",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "held": {
+    "noRules": "Non leggi le regole di approvazione."
+  },
+  "tile": {
+    "waiting": "In attesa di me",
+    "overdue": "In ritardo",
+    "mine": "Chieste da me",
+    "decided": "Decise negli ultimi 7 giorni"
+  },
+  "tileMore": "{count}+",
+  "notice": {
+    "changed_one": "1 richiesta è cambiata dopo essere stata chiesta: serve una nuova richiesta.",
+    "changed_other": "{count} richieste sono cambiate dopo essere state chieste: serve una nuova richiesta.",
+    "show": "Mostrale",
+    "partial": "Alcune richieste non sono state lette: l’elenco mostra le altre. Riprova tra poco.",
+    "approved": "Approvata: {summary}",
+    "signed": "Firmata e approvata: {summary}",
+    "rejected": "Rifiutata: {summary}",
+    "quoteApproved": "Preventivo {number} approvato.",
+    "quoteRejected": "Preventivo {number} rifiutato."
+  },
+  "table": {
+    "waiting": "Richieste in attesa di me",
+    "overdue": "Richieste oltre il loro tempo",
+    "mine": "Le mie richieste",
+    "decided": "Decise negli ultimi 7 giorni",
+    "title": "Approvazioni"
+  },
+  "count_one": "1 richiesta",
+  "count_other": "{count} richieste",
+  "countAtLeast": "Almeno {count} richieste",
+  "search": "Cerca richieste",
+  "filter": {
+    "kind": "Tipo di richiesta",
+    "anyKind": "Ogni tipo",
+    "kindCount": "{kind} ({count})",
+    "changedChip": "Cambiate dopo la richiesta",
+    "changedOff": "Mostra di nuovo tutte le richieste"
+  },
+  "col": {
+    "kind": "Tipo",
+    "request": "Richiesta",
+    "record": "Record",
+    "askedBy": "Chiesta da",
+    "approver": "Approvatore",
+    "rule": "Regola",
+    "size": "Dimensione",
+    "amount": "Importo",
+    "waiting": "In attesa / scadenza",
+    "state": "Stato",
+    "company": "Azienda"
+  },
+  "kind": {
+    "QUOTE_APPROVAL": "Preventivo"
+  },
+  "row": {
+    "openRecord": "Apri il record",
+    "ownPage": "Si decide sulla sua pagina"
+  },
+  "recheck": {
+    "changedShort": "Cambiata dopo la richiesta",
+    "current": "Ancora attuale · controllata alle {time}",
+    "changed": "Cambiata dopo la richiesta: va chiesta di nuovo",
+    "askAgain": "Il record è cambiato dopo la richiesta: Approva resta in attesa finché qualcuno non chiede di nuovo.",
+    "gone": "Il suo record non c’è più o è fuori dalla tua portata."
+  },
+  "rule": {
+    "quote": "Vendite › Impostazioni: margine minimo e limite di sconto"
+  },
+  "since": "Dal {when}",
+  "due": "Entro {when}",
+  "dueWas": "Scadeva {when}",
+  "whyMe": {
+    "open": "Perché è mia? ({rule})",
+    "title": "Perché è mia?",
+    "named": "La regola nomina te.",
+    "role": "La regola chiede a {role}, e tu hai quel ruolo qui.",
+    "openRule": "Apri la regola"
+  },
+  "failed": "Non è stato possibile caricare le approvazioni.",
+  "empty": {
+    "waiting": {
+      "title": "Niente aspetta il tuo sì.",
+      "body": "Le nuove richieste compaiono qui appena qualcuno chiede."
+    },
+    "overdue": {
+      "title": "Niente è oltre il suo tempo.",
+      "body": "Una richiesta oltre il tempo dato dalla sua regola è elencata qui."
+    },
+    "mine": {
+      "title": "Non hai richieste aperte.",
+      "body": "Quello che chiedi di approvare resta qui finché qualcuno non decide."
+    },
+    "decided": {
+      "title": "Niente deciso negli ultimi 7 giorni.",
+      "body": "Quello che hai approvato o rifiutato negli ultimi 7 giorni è elencato qui."
+    },
+    "filtered": {
+      "title": "Nessuna richiesta corrisponde.",
+      "body": "Togli i filtri per vedere ogni richiesta di questa vista."
+    },
+    "clear": "Togli i filtri",
+    "showMine_one": "Chieste da me: 1 in attesa · Mostra",
+    "showMine_other": "Chieste da me: {count} in attesa · Mostra"
+  },
+  "bulk": {
+    "approve_one": "Approva 1",
+    "approve_other": "Approva {count}",
+    "title_one": "Approva 1 · {kind}",
+    "title_other": "Approva {count} · {kind}",
+    "summary": "Ogni richiesta è stata appena riletta: si approvano, una per una, solo quelle ancora come chieste.",
+    "now": "In attesa",
+    "next": "Approvata",
+    "ack": "Ho controllato ogni richiesta elencata.",
+    "leftOut_one": "1 esclusa:",
+    "leftOut_other": "{count} escluse:",
+    "doneVerb": "approvate",
+    "approved": "Approvata",
+    "failed": "Non è stato possibile rileggere le richieste. Riprova."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "open": "Apri la revisione",
+    "approve": "Approva la richiesta aperta",
+    "reject": "Rifiuta la richiesta aperta",
+    "walk": "Richiesta successiva / precedente",
+    "confirm": "Conferma in una finestra"
+  },
+  "inbox": {
+    "held": {
+      "ownPage": "Si decide sulla sua pagina: aprila dalla richiesta.",
+      "notWaiting": "Non aspetta più una decisione.",
+      "own": "L’hai chiesta tu: nessuno approva la propria richiesta, titolare compreso.",
+      "ownNames": "L’hai chiesta tu; può approvarla {names}.",
+      "notYours": "Aspetta un altro approvatore.",
+      "changed": "È cambiata dopo la richiesta: va chiesta di nuovo.",
+      "gone": "Il suo record non c’è più o è fuori dalla tua portata.",
+      "needsMargin": "Una richiesta sul margine richiede il permesso di vedere i margini.",
+      "offline": "Non in linea: decidi quando torni in linea.",
+      "busy": "In corso…",
+      "signedOneByOne": "Le approvazioni firmate si approvano una per una.",
+      "codeOneByOne": "Un’approvazione che chiede un codice si approva una per una.",
+      "pickSome": "Prima spunta le richieste da approvare.",
+      "oneKind": "Si approvano insieme solo richieste dello stesso tipo.",
+      "reading": "Lettura della richiesta…"
+    }
+  },
+  "refusal": {
+    "STALE": "È cambiata da quando l’hai guardata: la richiesta riguardava un’altra versione del record. Serve una nuova richiesta.",
+    "SUBJECT_GONE": "Il record di questa richiesta non c’è più o è fuori dalla tua portata.",
+    "NOT_PENDING": "Questa richiesta è già stata decisa, ritirata o trovata cambiata.",
+    "OWN_REQUEST": "L’hai chiesta tu: decide un altro approvatore.",
+    "NOT_APPROVER": "Questa richiesta aspetta un altro approvatore.",
+    "NO_KIND": "Questo tipo di richiesta non può ancora essere riletto, quindi non si approva qui.",
+    "NOT_REQUESTER": "Solo chi l’ha chiesta la ritira.",
+    "other": "Rifiutata da una regola dell’approvazione: rileggila.",
+    "moved": "Qualcuno l’ha cambiata nel frattempo: è stata riletta."
+  },
+  "problem": {
+    "forbidden": "Non puoi farlo qui.",
+    "invalid": "È stata rifiutata così com’è: controlla cosa hai inserito.",
+    "unavailable": "Il server non ha risposto. Riprova tra poco.",
+    "rate_limited": "Troppi tentativi: aspetta un momento.",
+    "signed_out": "La sessione è terminata: accedi di nuovo.",
+    "step_up": "Serve un nuovo codice dalla tua app di autenticazione.",
+    "internal": "Qualcosa è andato storto. Riprova."
+  },
+  "review": {
+    "title": "Approvare questa richiesta ({kind})?",
+    "titleDecided": "Richiesta: {kind}",
+    "titleUnknown": "Richiesta",
+    "not_found": "Questa richiesta non c’è più.",
+    "forbidden": "Questa richiesta è fuori dai tuoi permessi.",
+    "tabs": "La richiesta",
+    "noun": "richiesta",
+    "tab": {
+      "change": "Modifica",
+      "context": "Contesto",
+      "conversation": "Conversazione",
+      "history": "Cronologia"
+    },
+    "asked": "{who} ha chiesto il {at}",
+    "decided": "{status} da {who} il {at}",
+    "withdrawn": "Ritirata il {at}",
+    "changes_one": "1 modifica",
+    "changes_other": "{count} modifiche",
+    "noChanges": "La richiesta approva il record così com’è ora: nessun campo cambia.",
+    "rules": "Perché serve un sì",
+    "noRule": "Nessuna regola è indicata.",
+    "signs": "La sua regola chiede una firma: il tuo sì significa '{meaning}'.",
+    "signsWithCode": "La sua regola chiede una firma con un nuovo codice: il tuo sì significa '{meaning}'.",
+    "deciders": "Chi può deciderla: {names}.",
+    "noDeciders": "Nessun altro può ancora deciderla: un amministratore indica un altro approvatore.",
+    "comment": "Commento con il tuo sì",
+    "commentHint": "Facoltativo: va nella cronologia del record.",
+    "meaningTag": "Firmata come '{meaning}'",
+    "overdue": "Oltre il suo tempo"
+  },
+  "context": {
+    "kind": "Tipo",
+    "size": "Dimensione della modifica",
+    "due": "Da decidere entro",
+    "noMoney": "Gli importi si vedono solo con il permesso di vederli.",
+    "open": "Apri la pagina completa"
+  },
+  "conversation": {
+    "title": "Ancora nessun commento",
+    "body": "I commenti tra l’approvatore e chi ha chiesto restano con la richiesta."
+  },
+  "sign": {
+    "title": "Approva come '{meaning}'",
+    "binds": "La tua firma significa '{meaning}' e vale per il record come è stato chiesto (versione {version}, impronta {print}).",
+    "code": "Inserisci un nuovo codice dalla tua app di autenticazione.",
+    "confirm": "Firma e approva",
+    "codeWrong": "Quel codice non è valido: inserisci il codice che la tua app mostra ora.",
+    "codeAgain": "La firma richiede un nuovo codice: firma di nuovo."
+  },
+  "rejectDialog": {
+    "title": "Rifiuta: spiega a {who} perché",
+    "body": "Il motivo va nella cronologia del record e a chi ha chiesto.",
+    "code": "Motivo",
+    "pick": "Scegli un motivo",
+    "words": "Con parole tue",
+    "wordsHint": "Cosa deve cambiare prima che si possa approvare.",
+    "held": {
+      "reading": "Lettura dei motivi…",
+      "code": "Prima scegli un motivo.",
+      "words": "Scrivi perché, in poche parole.",
+      "long": "Al massimo 500 caratteri."
+    }
+  },
+  "rules": {
+    "title": "Regole di approvazione",
+    "label": "Regole di approvazione",
+    "body": "Quando una richiesta ha bisogno di un sì, e da chi. Una nuova regola nasce spenta: accendila quando è giusta.",
+    "new": "Nuova regola",
+    "count_one": "1 regola",
+    "count_other": "{count} regole",
+    "fixedBody": "Fissata dal sistema: non si può spegnere né cambiare.",
+    "locked": "Bloccata",
+    "allOff": "Ogni regola è spenta: nessuna richiesta chiede un sì finché qualcuno non accende una regola.",
+    "empty": "Nessuna regola di approvazione.",
+    "emptyBody": "I preventivi usano ancora il margine minimo di Vendite › Impostazioni.",
+    "error": "Non è stato possibile leggere le regole di approvazione.",
+    "kindsError": "Non è stato possibile leggere cosa può controllare una regola.",
+    "everyCompany": "Ogni azienda",
+    "notRegistered": "non ancora controllabile: arriva con il suo passo",
+    "thresholdHeld": "una soglia che non puoi vedere",
+    "switch": "Accendi o spegni la regola {rule}",
+    "on": "Accesa",
+    "off": "Spenta",
+    "named": "indicata per nome",
+    "withCode": "con un codice",
+    "aRequest": "una richiesta",
+    "col": {
+      "sentence": "Regola",
+      "area": "Area",
+      "approver": "Approvatore",
+      "delegation": "Delega",
+      "meaning": "Firma",
+      "fired": "Scattata in 30 giorni",
+      "active": "Accesa / spenta"
+    },
+    "held": {
+      "noManage": "Puoi leggere le regole ma non cambiarle.",
+      "offline": "Non in linea: cambiala quando torni in linea.",
+      "cannotChange": "Questa regola è fuori da ciò che puoi cambiare (la sua azienda, o una soglia che non puoi vedere).",
+      "money": "Controlla un importo che non puoi vedere: solo chi ha quel permesso ne cambia la condizione.",
+      "kind": "Scegli per cosa vale la regola.",
+      "name": "Dai un nome alla regola.",
+      "approver": "Scegli chi approva.",
+      "condition": "Prima completa ogni condizione.",
+      "sequence": "L’ordine è un numero intero da 1 a 9999.",
+      "dueHours": "Il tempo per decidere è in ore intere, da 1 a 2160.",
+      "notRegistered": "Questo tipo di richiesta non è ancora controllabile: la sua regola non si può accendere.",
+      "reading": "Lettura delle regole…",
+      "noKinds": "Nessun tipo di richiesta può ancora avere una regola."
+    },
+    "problem": {
+      "approver": "Quell’approvatore non può decidere approvazioni qui: scegli un ruolo che approva.",
+      "condition": "Una condizione è stata rifiutata: controlla ogni riga.",
+      "moved": "Qualcuno ha cambiato questa regola nel frattempo: è stata riletta.",
+      "invalid": "La regola è stata rifiutata così com’è: controlla cosa hai inserito."
+    },
+    "notice": {
+      "saved": "Regola {rule} salvata.",
+      "created": "Regola {rule} creata: resta spenta finché non la accendi.",
+      "on": "La regola {rule} è accesa.",
+      "off": "La regola {rule} è spenta."
+    },
+    "dialog": {
+      "title": "Regola di approvazione: {kind}",
+      "new": "Nuova regola di approvazione",
+      "save": "Salva la regola",
+      "create": "Crea la regola (spenta)",
+      "writtenOff": "Una nuova regola nasce spenta: accendila nell’elenco quando è giusta.",
+      "kind": "Per",
+      "kindFixed": "Fissata una volta scritta.",
+      "pickKind": "Scegli un tipo di richiesta",
+      "company": "Azienda",
+      "companyHint": "Ogni azienda richiede un permesso su ogni azienda.",
+      "name": "Nome",
+      "namePlaceholder": "Ordini oltre 5.000",
+      "when": "Quando {kind} ha bisogno di un sì",
+      "lead": "Per questo tipo ({kind}) serve un sì quando",
+      "outcome": "→ chiedi a {approver}",
+      "everyRequest": "Nessuna condizione: ogni richiesta di questo tipo chiede.",
+      "approver": "Approvatore",
+      "approverHint": "Un ruolo le cui persone approvano le richieste; mai chi ha chiesto.",
+      "personKept": "La regola indica questa persona: resta così.",
+      "reading": "Lettura dei ruoli…",
+      "rolesError": "Non è stato possibile leggere i ruoli",
+      "pickRole": "Scegli un ruolo",
+      "meaning": "Significato della firma",
+      "meaningHint": "Cosa significa il sì dell’approvatore, registrato con esso.",
+      "noMeaning": "Nessuna firma",
+      "sequence": "Ordine",
+      "sequenceHint": "Le regole di uno stesso tipo si applicano in quest’ordine; decide la prima che nomina un’altra persona.",
+      "dueHours": "Tempo per decidere (ore)",
+      "dueHoursHint": "Dopo, la richiesta è in ritardo.",
+      "noDue": "Nessun limite",
+      "stepUp": "Chiedi un nuovo codice di autenticazione con la firma",
+      "stepUpHeld": "Prima scegli il significato della firma.",
+      "delegationLater": "La delega (fuori ufficio) arriva più avanti (W3)."
+    },
+    "test": {
+      "title": "Prova",
+      "run": "Prova sui record recenti",
+      "body": "Non si salva nulla: la regola si prova sugli ultimi record che puoi vedere.",
+      "result": "Avrebbe chiesto per {asked} degli ultimi {tested} ({kind}).",
+      "approvers": "Approverebbe: {names}.",
+      "noApprovers": "Nessuno ha ancora quel ruolo lì: nessuno potrebbe approvarla."
+    }
+  }
+}
