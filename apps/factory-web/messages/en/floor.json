@@ -755,7 +755,12 @@
       "inlineResults": "In-line inspection: the plan's checks",
       "finalRecord": "Final inspection: results and measurements",
       "instructionSeen": "Work instruction seen",
-      "specProblem": "Spec problem reported"
+      "specProblem": "Spec problem reported",
+      "putAway": "Put away into a bin",
+      "binMove": "Moved between bins",
+      "taskTake": "Warehouse task taken",
+      "taskGiveBack": "Warehouse task given back",
+      "taskDone": "Warehouse task done"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

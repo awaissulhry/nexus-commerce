@@ -63,13 +63,13 @@ export function splitHeld(facts: SplitFacts): string | null {
 export const restOf = (facts: Pick<SplitFacts, 'quantity' | 'received'>): number => Math.max(0, facts.quantity - facts.received)
 
 /**
- * The place of the new line: the first free number after its parent and below the next line (10 → 11), else after the
- * last line (the next ten). Seqs are unique on an RMA.
+ * The place of the new line: the first free number after its parent within the parent's ten (10 → 11, then 12; 11 → 12),
+ * else after the last line (the next ten). Seqs are unique on an RMA.
  */
 export function splitSeqOf(seqs: readonly number[], parentSeq: number): number {
   const taken = new Set(seqs)
-  const above = seqs.filter((seq) => seq > parentSeq).sort((a, b) => a - b)[0] ?? Number.POSITIVE_INFINITY
-  for (let seq = parentSeq + 1; seq < Math.min(above, parentSeq + 10); seq += 1) if (!taken.has(seq)) return seq
+  const nextTen = (Math.floor(parentSeq / 10) + 1) * 10
+  for (let seq = parentSeq + 1; seq < nextTen; seq += 1) if (!taken.has(seq)) return seq
   const last = Math.max(parentSeq, ...seqs)
   return (Math.floor(last / 10) + 1) * 10
 }

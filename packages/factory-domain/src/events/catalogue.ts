@@ -145,6 +145,8 @@ import { events as returnsDepth } from '../returns-depth/events'
 import { events as returnsOutcomes } from '../returns-outcomes/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
+// B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
+import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -216,6 +218,8 @@ import { events as compliancePpeTexts } from '../compliance-ppe-texts/events'
 import { events as lotsDepth } from '../lots-depth/events'
 // B-W2b-311: suppliers in depth (supplier.status_changed).
 import { events as suppliersDepth } from '../suppliers-depth/events'
+// B-W2b-292: the warehouse task inbox.
+import { events as inventoryTasks } from '../inventory-tasks/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -498,7 +502,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-293
   ...planningPlannedOrders,
   // B-W2b-311
-  ...suppliersDepth] as const satisfies readonly EventDefinition[]
+  ...suppliersDepth,
+  // B-W2b-292
+  ...inventoryTasks,
+  // B-W2b-331
+  ...subcontractDepth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

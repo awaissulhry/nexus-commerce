@@ -818,6 +818,8 @@ model SalesOrderLine {
   shipmentLines      ShipmentLine[]
   // W2b-5 sales-orders-depth.prisma (wave 39/44): the materials its customer sends for it (SAL-306).
   customerMaterials  CustomerMaterial[]
+  // W2b-5 mtm-office.prisma (wave 44/44): the fittings of its made-to-measure unit.
+  fittingResults     FittingResult[]
   // money.prisma: the invoice lines that bill it.
   invoiceLines       InvoiceLine[]
   // returns.prisma: the return lines of its goods, and those it replaces (a replacement order's line).
