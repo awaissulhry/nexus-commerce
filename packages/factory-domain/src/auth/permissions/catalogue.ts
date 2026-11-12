@@ -204,6 +204,8 @@ import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../.
 import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (inventory.tasks.manage: tasks by hand, handed out, changed, cancelled).
 import { INVENTORY_TASKS_DEFINITIONS, INVENTORY_TASKS_PERMISSIONS } from '../../inventory/tasks/permissions'
+// B-W2b-331: subcontracting in depth (purchasing.subcontract.terms | balance | cost).
+import { SUBCONTRACT_DEPTH_DEFINITIONS, SUBCONTRACT_DEPTH_PERMISSIONS } from '../../purchasing/subcontract-depth/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -922,6 +924,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SUPPLIERS_DEPTH_DEFINITIONS,
   // B-W2b-292: the warehouse task inbox (area `inventory`).
   INVENTORY_TASKS_DEFINITIONS,
+  // B-W2b-331: subcontracting in depth (area `purchasing`, declared above).
+  SUBCONTRACT_DEPTH_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
 ])
@@ -1244,6 +1248,8 @@ for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-292: the warehouse task inbox.
 for (const name of INVENTORY_TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-331: subcontracting in depth.
+for (const name of SUBCONTRACT_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-299: counts in depth.
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

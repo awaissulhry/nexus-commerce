@@ -143,6 +143,8 @@ import { events as inventoryRules } from '../inventory-rules/events'
 import { events as returnsDepth } from '../returns-depth/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
+// B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
+import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -501,6 +503,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...suppliersDepth,
   // B-W2b-292
   ...inventoryTasks,
+  // B-W2b-331
+  ...subcontractDepth,
   // B-W2b-299
   ...inventoryCounts] as const satisfies readonly EventDefinition[]
 

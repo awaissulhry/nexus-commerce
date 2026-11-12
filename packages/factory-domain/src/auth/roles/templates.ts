@@ -55,6 +55,8 @@ import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
 import { INVENTORY_TASKS_ADDS } from '../../inventory/tasks/permissions'
+// B-W2b-331: subcontracting in depth (the buyer: terms, balance, cost; the warehouse: balance).
+import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permissions'
 // B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
 import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
@@ -948,6 +950,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
   ...(audience === 'office' ? (INVENTORY_TASKS_ADDS[key] ?? []) : []),
+  // B-W2b-331
+  ...(audience === 'office' ? (SUBCONTRACT_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? [])]
 /**
