@@ -137,7 +137,7 @@ describe('reading the lists (PLT-116)', () => {
     expect(pause).toMatchObject({ source: 'REASON_CODE', fields: { icon: true, colour: true, languages: true, needsDetail: true }, standardMissing: [] })
     expect(reasonIn(pause!, 'OTHER')).toMatchObject({ needsDetail: true, usedCount: 0, active: true, version: 1 })
     // Every list, by default; a viewer reads them, may not keep them; a role without reasons.view never reaches the editor.
-    expect((await editor('viewer', REASON_LISTS.join(','))).lists).toHaveLength(13)
+    expect((await editor('viewer', REASON_LISTS.join(','))).lists).toHaveLength(15)
     expect((await editor('viewer', 'PAUSE')).canManage).toBe(false)
     expect((await editor('companyKeeper', 'PAUSE')).canManage).toBe(false)
     expect((await refused('nobody', 'GET', '/reasons/lists', undefined, 403)).code).toBe('forbidden')

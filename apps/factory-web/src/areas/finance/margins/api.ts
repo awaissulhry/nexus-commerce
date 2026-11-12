@@ -12,7 +12,8 @@ import { COSTING_METHODS } from '../costing/api'
  * never zero) and the screen draws no column for it then. No person is named.
  */
 
-export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED'] as const
+// W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes (the domain's list, in its order).
+export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL'] as const
 export type SalesOrderStatus = (typeof SALES_ORDER_STATUSES)[number]
 /** Quoted → now: the value's change and each cost part's (they add up to the margin change). */
 export const WATERFALL_REASONS = ['PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT'] as const

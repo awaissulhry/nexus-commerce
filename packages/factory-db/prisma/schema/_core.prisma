@@ -125,6 +125,13 @@ model Company {
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries it was asked, its seasons, and the customer requirements, holds
+  // and terms set for it.
+  inquiries            Inquiry[]
+  seasons              Season[]
+  customerRequirements CustomerRequirement[]
+  partyHolds           PartyHold[]
+  partyCompanyTerms    PartyCompanyTerms[]
   // email.prisma: the company's sending identities (its mail goes out through them).
   emailIdentities     EmailIdentity[]
   // product.prisma: the company's own master data (tenant-wide rows have none).
@@ -170,6 +177,9 @@ model Company {
   depositRequests      DepositRequest[]
   // W2b portal-sales.prisma (wave 21/22): the order requests its customers sent from the portal, their payment intents.
   portalOrderRequests  PortalOrderRequest[]
+  // W2b-5 sales-orders-depth.prisma (wave 39/44): what freezes on its orders at each stage, its customers' credit checks.
+  orderFreezeRules     OrderFreezeRule[]
+  creditChecks         CreditCheck[]
   paymentIntents       PaymentIntent[]
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
@@ -200,6 +210,8 @@ model Company {
   // supplier invoices and the SDI deliveries waiting in its inbox.
   purchasingSettings   PurchasingSettings[]
   payablesSettings     PayablesSettings[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): its warehouse rules.
+  inventorySettings    InventorySettings[]
   // W2b-5 buying-depth.prisma (wave 40/44): its delivery tolerances.
   deliveryTolerances   DeliveryTolerance[]
   supplierInvoiceFiles SupplierInvoiceFile[]
@@ -214,6 +226,10 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quote templates, minimum order quantities and size curves.
+  quoteTemplates       QuoteTemplate[]
+  moqRules             MoqRule[]
+  sizeCurves           SizeCurve[]
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]
@@ -267,6 +283,10 @@ model Company {
   reportSubscriptions  ReportSubscription[]
   // alerts.prisma: the alert rules that look at it.
   alertRules           AlertRule[]
+  // W2b-5 approvals.prisma (wave 35/44): its approval rules, the requests for a yes about its records, their history.
+  approvalRules        ApprovalRule[]
+  approvalTasks        ApprovalTask[]
+  approvalEvents       ApprovalEvent[]
   // W2b capa.prisma, holds.prisma, quality.prisma, gendocs.prisma (wave 11/16): its corrective actions, genealogy holds,
   // quality alert rules and the documents generated for its records.
   capas                Capa[]
@@ -356,6 +376,13 @@ model Site {
   workCentreCapacities WorkCentreCapacity[]
   planningExceptions   PlanningException[]
   madeItemPlannings    ItemPlanning[]       @relation("ItemPlanningMakeSite")
+  // W2b-5 warehouse-depth.prisma (wave 36/44): its default locations, the transfers it sends and receives, its count
+  // schedules and warehouse tasks.
+  defaultLocations     DefaultLocation[]
+  transfersSent        TransferOrder[]      @relation("TransferOrderFromSite")
+  transfersReceived    TransferOrder[]      @relation("TransferOrderToSite")
+  countSchedules       CountSchedule[]
+  warehouseTasks       WarehouseTask[]
   // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
   locations       Location[]
   goodsReceipts   GoodsReceipt[]
@@ -422,6 +449,8 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2b-5 approvals.prisma (wave 35/44): the requests for a yes about its records.
+  approvalTasks       ApprovalTask[]
   // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
   incomingInspections IncomingInspection[]
   inProcessChecks     InProcessCheck[]

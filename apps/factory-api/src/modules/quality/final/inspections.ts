@@ -658,7 +658,8 @@ async function planDecision(db: Reader, row: InspectionRow, header: LabelHeader,
   const digest = {
     planVersionId: binding.version.id,
     results: results.map((result) => ({ check: binding.checks.find((check) => check.id === result.planCheckId)?.code, sampleIndex: result.sampleIndex, outcome: result.outcome, value: result.value, photos: result.photos })),
-    measurements: measurements.map((value) => ({ point: value.pointCode, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, uom: value.uom, pass: value.pass })),
+    // B-W2b-283 (FU1:05): a value measured against a band signs its band too (a value without one: as before).
+    measurements: measurements.map((value) => ({ point: value.pointCode, size: value.size, sampleIndex: value.sampleIndex, measured: value.measured, nominal: value.nominal, tolerance: value.tolerance, ...(value.toleranceMinus && value.tolerancePlus ? { band: { minus: value.toleranceMinus, plus: value.tolerancePlus } } : {}), uom: value.uom, pass: value.pass })),
     identity: identity.summary.words,
     inspected,
     stop: stop.stop,

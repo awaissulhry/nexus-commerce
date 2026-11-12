@@ -331,8 +331,6 @@
     "labelNoRight": "Per scegliere un modello di etichetta serve il permesso di leggere certificati ed etichette.",
     "labelOption": "{code} · {name} (rev. {revision})",
     "template": "Modello di misure",
-    "templateHint": "Usato solo per un modello su misura. I modelli di misure si scelgono con il su misura, non qui.",
-    "clear": "Togli",
     "ppeCategory": "Categoria DPI",
     "standard": "Norma DPI",
     "standardHint": "Con la sua edizione, come EN 17092-4:2020.",

@@ -331,8 +331,6 @@
     "labelNoRight": "Picking a label template needs the right to read certificates and labels.",
     "labelOption": "{code} · {name} (rev. {revision})",
     "template": "Measurement template",
-    "templateHint": "Used only for a style made to measure. Templates are picked with made-to-measure, not here.",
-    "clear": "Clear",
     "ppeCategory": "PPE category",
     "standard": "PPE standard",
     "standardHint": "With its edition, as EN 17092-4:2020.",

@@ -6,6 +6,8 @@ import {
   APPROVAL_REASONS,
   APPROVAL_STATUSES,
   DEPOSIT_KINDS,
+  GOODS_LINE_KINDS,
+  STORED_DEPOSIT_KINDS,
   ISSUE_SEVERITIES,
   MAX_SIZE_QUANTITY,
   MAX_TEXT,
@@ -120,7 +122,7 @@ const currentView = output({
   termsText: z.string().nullable(),
   termsVersion: z.string().nullable(),
   depositPct: z.string().nullable(),
-  depositKind: z.enum(DEPOSIT_KINDS).nullable(),
+  depositKind: z.enum(STORED_DEPOSIT_KINDS).nullable(),
   depositAmount: money.price(z.number().int().nullable()),
   noWithdrawal: z.boolean(),
   netAmount: money.price(z.number().int()),
@@ -312,8 +314,8 @@ export const addLineContract = defineContract({
   params: quoteParams,
   body: input({
     version,
-    /** SIZE_GRID; MADE_TO_MEASURE is refused for now (Owner Q9: made-to-measure comes later). */
-    kind: z.enum(SALES_LINE_KINDS).optional(),
+    /** SIZE_GRID; MADE_TO_MEASURE is refused for now (Owner Q9: made-to-measure comes later). A FEE line is B-W2b-330's. */
+    kind: z.enum(GOODS_LINE_KINDS).optional(),
     measurementProfileId: id().nullish(),
     styleId: id(),
     ...lineFields,
@@ -489,7 +491,7 @@ const depositView = output({
   id: id(),
   quoteVersionId: id().nullable(),
   orderId: id().nullable(),
-  kind: z.enum(DEPOSIT_KINDS),
+  kind: z.enum(STORED_DEPOSIT_KINDS),
   depositPct: z.string().nullable(),
   currency: z.string(),
   amount: money.price(z.number().int()),
@@ -610,7 +612,7 @@ export const linkQuoteView = output({
     shipTo: output({ name: z.string().optional(), line1: z.string(), line2: z.string().optional(), postalCode: z.string(), city: z.string(), province: z.string().optional(), country: z.string() }),
     lines: z.array(customerLineView),
     totals: money.price(output({ net: z.number().int(), vat: z.array(output({ rate: z.string().nullable(), nature: z.string().nullable(), taxable: z.number().int(), vat: z.number().int() })), gross: z.number().int() })),
-    deposit: output({ pct: z.string(), kind: z.enum(DEPOSIT_KINDS), amount: money.price(z.number().int()) }).nullable(),
+    deposit: output({ pct: z.string(), kind: z.enum(STORED_DEPOSIT_KINDS), amount: money.price(z.number().int()) }).nullable(),
     /** A made-to-measure unit for a consumer: no right of withdrawal (Codice del Consumo art. 59(c)). */
     noWithdrawal: z.boolean(),
     terms: output({ termsVersion: z.string(), clauses: z.array(output({ code: z.string(), text: z.string() })) }),
@@ -626,7 +628,7 @@ export const linkQuoteView = output({
   acceptance: output({ signerName: z.string(), acceptedAt: instant(), documentSha256: z.string(), termsVersion: z.string().nullable() }).nullable(),
   deposit: output({
     id: id(),
-    kind: z.enum(DEPOSIT_KINDS),
+    kind: z.enum(STORED_DEPOSIT_KINDS),
     depositPct: z.string().nullable(),
     currency: z.string(),
     amount: money.price(z.number().int()),

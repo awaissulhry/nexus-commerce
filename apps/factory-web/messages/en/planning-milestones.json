@@ -206,7 +206,7 @@
     "startedBy": "{name}, {when}",
     "comesFrom": "Comes from",
     "follows": {
-      "START": "The earliest bar of the order's work orders on the planning board (target) and the first work order that started (actual).",
+      "START": "The earliest bar of the order's production work orders on the planning board (target) and the first of them that started (actual); a sample or a repair work order never counts.",
       "SHIP": "The order's promise date (target) and the first shipment that left (actual)."
     },
     "openOrder": "Open the order",
@@ -219,7 +219,8 @@
     "holdsNone": "While it waits, the planning board will hold the work orders of {order}.",
     "holdsHow": "Mark it done when it is true, or let the work start before it with a reason (someone other than its planner).",
     "opened": "Passed: the work orders of {order} may be planned.",
-    "openedEarly": "Started before the gate: the work orders of {order} may be planned; the gate still waits to be passed."
+    "openedEarly": "Started before the gate: the work orders of {order} may be planned; the gate still waits to be passed.",
+    "workOrders": "Work orders"
   },
   "decision": {
     "APPROVED": "Approved",
@@ -364,5 +365,18 @@
     "retry": "Try again",
     "clearFilters": "Clear filters",
     "cancel": "Cancel"
+  },
+  "workOrders": {
+    "kind": {
+      "SIZE_GRID_one": "{count} production",
+      "SIZE_GRID_other": "{count} production",
+      "MADE_TO_MEASURE_one": "{count} made to measure",
+      "MADE_TO_MEASURE_other": "{count} made to measure",
+      "SAMPLE_one": "{count} sample",
+      "SAMPLE_other": "{count} samples",
+      "REPAIR_one": "{count} repair",
+      "REPAIR_other": "{count} repairs"
+    },
+    "kindNotStarted": "{kind} ({count} not started)"
   }
 }

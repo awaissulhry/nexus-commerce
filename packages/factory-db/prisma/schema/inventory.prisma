@@ -50,6 +50,16 @@
 // W2b (schema wave 12/16, B-W2b-80; leather.prisma): a hide names its leather grade and shade group as records too
 // (Hide.gradeId, shadeGroupId; the texts stay, and say the same); an offcut worth keeping comes back with a move of its own
 // (REMNANT, RETURN's twin) and is a tagged Remnant.
+//
+// W2b-5 (schema wave 36/44, B-W2b-277; warehouse-depth.prisma): locations of more kinds (a customer's, in transit, a pick
+// face, bulk), blocked with a reason and labelled with the code a scan confirms; goods without a purchase order wait in a
+// holding place for a buyer; a lot has a lifecycle beside its quality status, a parent lot it was split from and its own
+// attributes; a move has a posting date apart from the day it happened, and the transfer line it carries (TRANSFER_OUT and
+// TRANSFER_IN between two sites: stock in transit stays on the from-site's TRANSIT location until it is received).
+//
+// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306; sales-orders-depth.prisma): a customer's own material (leather, trims the
+// brand sends for its orders) is stock the customer owns: its lots name their owner (Lot.ownerPartyId); it is never valued,
+// never bought and never used for another party's order (the …_sales_orders_depth_w2b_guards triggers).
 
 /// A place on a site where stock lies (SCM-176): a warehouse, a zone, a bin, the goods-in dock, the quarantine shelf,
 /// a line-side supply point. A tree inside the site. Archived (never deleted) once used; an archived location takes no
@@ -69,6 +79,17 @@ model Location {
   /// role); set when it is made and never changed (the …_supply_w2a_guards trigger). Its stock stays the company's.
   partyId     String?      @db.Uuid
   status      MasterStatus @default(ACTIVE)
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-178): the code its bin label carries and a scan confirms (a put-away, a move,
+  /// a count): unique in the tenant, so a scan names one place; 1 to 64 characters without spaces. null: no label yet.
+  labelCode   String?
+  /// W2b-5 (SCM-181): blocked: when, by whom, why (COUNT, DAMAGE, CLEAN_UP; OTHER says it in blockNote) and until which day
+  /// (Europe/Rome; null: until it is unblocked, which clears all five). While blocked it takes no move in or out but a
+  /// count's own COUNT moves (the …_warehouse_depth_w2b_guards trigger); a count blocks its locations while it runs.
+  blockedAt   DateTime?            @db.Timestamptz(3)
+  blockedById String?              @db.Uuid
+  blockReason LocationBlockReason?
+  blockNote   String?
+  blockedUntil DateTime?           @db.Date
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -96,10 +117,24 @@ model Location {
   // W2b leather.prisma (wave 12/16): the remnants and fabric rolls lying here.
   remnants          Remnant[]
   fabricRolls       FabricRoll[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the defaults that name it; the transfers picked from, put into and in transit
+  // on it, and their lines; the count schedules of it; the tasks from or to it; the goods without a PO held in it.
+  defaultFor         DefaultLocation[]
+  transfersFrom      TransferOrder[]   @relation("TransferOrderFrom")
+  transfersTo        TransferOrder[]   @relation("TransferOrderTo")
+  transfersInTransit TransferOrder[]   @relation("TransferOrderTransit")
+  transferLinesFrom  TransferLine[]    @relation("TransferLineFrom")
+  transferLinesTo    TransferLine[]    @relation("TransferLineTo")
+  countSchedules     CountSchedule[]
+  tasksFrom          WarehouseTask[]   @relation("WarehouseTaskFrom")
+  tasksTo            WarehouseTask[]   @relation("WarehouseTaskTo")
+  heldReceipts       GoodsReceipt[]    @relation("GoodsReceiptHolding")
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the moves and the child locations.
   @@unique([tenantId, siteId, id])
+  // W2b-5: a bin label's code names one place in the tenant.
+  @@unique([tenantId, labelCode])
 }
 
 enum LocationKind {
@@ -117,6 +152,26 @@ enum LocationKind {
   SUBCONTRACTOR
   /// W2a (GAP-003): finished garments ready to ship; a production receipt puts them here (or in a location inside one).
   FINISHED_GOODS
+  /// W2b-5 (SCM-177): our stock at a customer's (consignment, a fitting stock), owned by its party (Location.partyId, a
+  /// customer or brand).
+  CUSTOMER
+  /// W2b-5 (SCM-177, SCM-220): goods between two sites: a transfer's goods lie here, the from-site's stock, from the ship to
+  /// the receipt; only a transfer's moves enter or leave it.
+  TRANSIT
+  /// W2b-5 (SCM-177): the place pickers take from (small quantities at hand), refilled from bulk.
+  PICK_FACE
+  /// W2b-5 (SCM-177): bulk storage (whole rolls, bundles of hides), which refills the pick faces.
+  BULK
+}
+
+/// Why a location is blocked (SCM-181; the design's "count, damage, clean-up").
+enum LocationBlockReason {
+  /// A count runs there.
+  COUNT
+  DAMAGE
+  CLEAN_UP
+  /// Said in words (Location.blockNote).
+  OTHER
 }
 
 /// Goods received from a supplier at a site (SCM-113), usually against a purchase order, with the supplier's DDT. OPEN
@@ -133,6 +188,15 @@ model GoodsReceipt {
   supplierId        String             @db.Uuid
   /// The purchase order it receives against, delivered to this site; null for goods without an order.
   purchaseOrderId   String?            @db.Uuid
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-122): STANDARD, or UNPLANNED: goods nobody ordered, received without a purchase
+  /// order into a holding place and handed to a buyer; fixed once made. An UNPLANNED receipt is POSTED only once a purchase
+  /// order names it: nothing of it is in stock, so nothing is used, until then.
+  kind              GoodsReceiptKind   @default(STANDARD)
+  /// W2b-5: UNPLANNED exactly: the place its goods wait in (a location of the receipt's site, not archived when named).
+  holdingLocationId String?            @db.Uuid
+  /// W2b-5: the buyer's task (a Task of this receipt that asks for the purchase order or a return), named once by the office
+  /// while the receipt is OPEN; UNPLANNED only. Task has no tenant-safe key, so no reference: the trigger checks it.
+  buyerTaskId       String?            @db.Uuid
   /// W2b (wave 22/22, B-W2b-158; SCM-106, B-W2b-182): the supplier's ship notice it was prefilled from: of the receipt's
   /// site, supplier and purchase order, SENT (or RECEIVED by an earlier receipt); set while the receipt is OPEN. It posts
   /// nothing by itself: the receipt's lines, lots and hides are what the dock counted and measured.
@@ -169,6 +233,9 @@ model GoodsReceipt {
   // W2b (wave 22/22): its ship notice. Restrict, not Prisma's SetNull default for an optional relation: that would also
   // clear tenantId, siteId and supplierId.
   shipNotice    ShipNotice?        @relation(fields: [tenantId, siteId, supplierId, shipNoticeId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 36/44): the holding place of goods without a PO. Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId and siteId.
+  holdingLocation Location?        @relation("GoodsReceiptHolding", fields: [tenantId, siteId, holdingLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         GoodsReceiptLine[]
   // W2a claims.prisma: what was wrong with the delivery, and the claims about its goods.
   discrepancies  ReceiptDiscrepancy[]
@@ -179,6 +246,18 @@ model GoodsReceipt {
   @@unique([tenantId, siteId, id])
   // W2b (wave 22/22): the receipts of a ship notice.
   @@index([tenantId, shipNoticeId])
+}
+
+/// W2b-5 (SCM-122): what kind of delivery a receipt is.
+enum GoodsReceiptKind {
+  /// Goods received as W1 receives them: against a purchase order (or opening stock and the like without one).
+  STANDARD
+  /// Goods nobody ordered: held in a holding place for a buyer until a purchase order names them (or they go back).
+  UNPLANNED
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306): goods a customer sends for its orders (the brand's own leather, trims):
+  /// from a CUSTOMER or BRAND party, with no purchase order or ship notice, of materials tracked by LOT or HIDE; its lots are
+  /// owned by the sender (Lot.ownerPartyId), never valued, never matched to a supplier invoice.
+  CUSTOMER_SUPPLIED
 }
 
 /// OPEN → POSTED → REVERSED; OPEN → CANCELLED.
@@ -256,6 +335,11 @@ model Lot {
   supplierId         String?          @db.Uuid
   /// The supplier's batch number.
   supplierLotRef     String?
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306, B-W2b-228): customer-owned stock: the customer or brand whose material
+  /// it is (sent to us for its orders: a CUSTOMER_SUPPLIED receipt of that party, or opening stock); null: ours. Set when the
+  /// lot is made, never changed. Never valued, never bought, never issued or reserved for another party's order (the
+  /// …_sales_orders_depth_w2b_guards triggers, for every login).
+  ownerPartyId       String?          @db.Uuid
   /// The tannery's dye batch (one shade).
   dyeBatch           String?
   shade              String?
@@ -279,6 +363,22 @@ model Lot {
   /// What the result rests on (the evidence rule is a setting, Q14); the report itself is a file of the lot.
   crViEvidence       CrViEvidence?
   crViTestedAt       DateTime?        @db.Date
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-236): where the lot is in its life, beside its quality status (W1's, which
+  /// holds the stock and which every W1 path reads): QUARANTINE → RELEASED → IN_USE (the first issue) → DEPLETED (the last
+  /// unit out); BLOCKED; RETURNED (back to its supplier). It fits the quality status (QUARANTINE exactly while QUARANTINE;
+  /// RELEASED and IN_USE only RELEASED; BLOCKED only BLOCKED or REJECTED), and the database moves it when a quality decision
+  /// leaves it unfitting (…_warehouse_depth_w2b_guards: to QUARANTINE, RELEASED or BLOCKED; a REJECTED lot BLOCKED until its
+  /// stock left). The inventory module moves it by the events (B-W2b-313).
+  lifecycle          LotLifecycle     @default(QUARANTINE)
+  /// W2b-5 (SCM-237; B-W2b-80, -98): the lot it was split from (a shade group of it): of the same site, item and colour, a
+  /// lot that is no child itself; set when it is made, never changed.
+  parentLotId        String?          @db.Uuid
+  /// W2b-5 (SCM-185): what was measured or declared of this lot, typed per material kind (decimals as strings): LEATHER {
+  /// "thicknessMinMm", "thicknessMaxMm" (above 0, at most 20, min ≤ max), "finish", "tannage" (CHROME, VEGETABLE,
+  /// CHROME_FREE, COMBINATION), "gradeMix" { "<grade code>": "<percent>" (above 0, adding up to at most 100) }, "origin" };
+  /// TEXTILE, LINING, MEMBRANE, PADDING { "widthCm", "weightGsm", "origin" }; any other kind { "origin" }; texts 1 to 100
+  /// characters. {}: nothing recorded.
+  attributes         Json             @default("{}")
   /// W2b-5 (schema wave 40/44, B-W2b-285; SCM-186): the variant of the item the lot is (buying-depth.prisma ItemVariant, by
   /// its code; of the lot's colour when the variant has one, ACTIVE when named); set when the lot is made (or once on an
   /// older lot), never changed. A lot received on a purchase order line of a variant is of that variant.
@@ -295,6 +395,8 @@ model Lot {
   itemColour  ItemColour?       @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier    Party?            @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   receiptLine GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 39/44): the customer who owns it. Restrict, not Prisma's SetNull default: that would also clear tenantId.
+  owner       Party?            @relation("LotOwner", fields: [tenantId, ownerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   hides       Hide[]
   moves       StockMove[]
   valuations  StockValuation[]
@@ -320,10 +422,37 @@ model Lot {
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
   claimLines  SupplierClaimLine[]
   kitLines    SubcontractKitLine[]
+  // W2b-5 (wave 36/44): the lot it was split from and its child lots (Restrict, not Prisma's SetNull default: that would also
+  // clear tenantId, siteId and itemId); warehouse-depth.prisma: the transfer lines that send it or that it arrived as, the
+  // tasks that handle it, the substitutions that use it.
+  parentLot         Lot?                   @relation("LotSplit", fields: [tenantId, siteId, itemId, parentLotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  childLots         Lot[]                  @relation("LotSplit")
+  transferLines     TransferLine[]         @relation("TransferLineLot")
+  transferLinesIn   TransferLine[]         @relation("TransferLineToLot")
+  warehouseTasks    WarehouseTask[]
+  substitutions     MaterialSubstitution[]
 
   @@unique([tenantId, code])
   // The target of the hides', moves' and valuations' references: a lot of the same site and item.
   @@unique([tenantId, siteId, itemId, id])
+  // W2b-5: the child lots of a lot.
+  @@index([tenantId, parentLotId])
+}
+
+/// W2b-5 (SCM-236): where a lot is in its life (Lot.lifecycle), beside its quality status.
+enum LotLifecycle {
+  /// Waiting for its release (quality QUARANTINE).
+  QUARANTINE
+  /// Released, nothing issued yet.
+  RELEASED
+  /// Released, issued from.
+  IN_USE
+  /// Nothing of it left.
+  DEPLETED
+  /// Held (quality BLOCKED, or REJECTED until its stock left).
+  BLOCKED
+  /// Sent back to its supplier.
+  RETURNED
 }
 
 /// QUARANTINE → RELEASED | REJECTED | BLOCKED; RELEASED → BLOCKED; BLOCKED → RELEASED | REJECTED. Only RELEASED is usable.
@@ -417,6 +546,10 @@ model Hide {
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
   claimLines    SupplierClaimLine[]
   kitLines      SubcontractKitLine[]
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the transfer lines that send it or that it arrived as, the tasks that handle it.
+  transferLines   TransferLine[]  @relation("TransferLineHide")
+  transferLinesIn TransferLine[]  @relation("TransferLineToHide")
+  warehouseTasks  WarehouseTask[]
 
   @@unique([tenantId, code])
   // The target of the moves' reference: a hide of the move's own site and lot.
@@ -487,6 +620,14 @@ model StockMove {
   /// W2b (B-W2a-48): SHIPMENT, exactly: the shipment line (of the move's site and company) whose garments leave
   /// finished-goods stock.
   shipmentLineId String?         @db.Uuid
+  /// W2b-5 (schema wave 36/44, B-W2b-277; SCM-219, SCM-220): the transfer line it carries: TRANSFER_OUT and TRANSFER_IN
+  /// exactly; also the ship's TRANSFER onto the transfer's transit location and an ADJUSTMENT that writes a difference off
+  /// it. A move into or out of a TRANSIT location always names one (the …_warehouse_depth_w2b_guards trigger).
+  transferLineId String?         @db.Uuid
+  /// W2b-5 (SCM-196): the day it counts on in the books (Europe/Rome) when it is not the day it happened: not after the day
+  /// it was entered, not further back than the company's back-dating limit (InventorySettings), never inside a closed period
+  /// (the period lock reads it); a floor session posts today's. null: the day it happened (occurredAt).
+  postingDate    DateTime?       @db.Date
   /// The move this one reverses: the same move with its locations swapped. At most one reversal per move.
   reversalOfId   String?         @db.Uuid
   /// Unique in the tenant: the command's idempotency key, so a retried scan or request posts once.
@@ -530,6 +671,8 @@ model StockMove {
   // (Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId).
   returnLine   ReturnLine?       @relation(fields: [tenantId, returnPartyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   shipmentLine ShipmentLine?     @relation(fields: [tenantId, siteId, shipmentLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 warehouse-depth.prisma (wave 36/44): the transfer line it carries (Restrict, as above).
+  transferLine TransferLine?     @relation(fields: [tenantId, transferLineId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, idempotencyKey])
   // The target of the reversals' and valuations' references: on the move's own site.
@@ -539,10 +682,12 @@ model StockMove {
   // W2b: the moves of a return line and of a shipment line.
   @@index([tenantId, returnLineId])
   @@index([tenantId, shipmentLineId])
+  // W2b-5: the moves of a transfer line.
+  @@index([tenantId, transferLineId])
 }
 
-/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN, REMNANT, PRODUCTION_RECEIPT, CUSTOMER_RETURN; out of it:
-/// ISSUE, SCRAP, SUPPLIER_RETURN, SHIPMENT; inside it: TRANSFER; either way: ADJUSTMENT, COUNT.
+/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN, REMNANT, PRODUCTION_RECEIPT, CUSTOMER_RETURN, TRANSFER_IN;
+/// out of it: ISSUE, SCRAP, SUPPLIER_RETURN, SHIPMENT, TRANSFER_OUT; inside it: TRANSFER; either way: ADJUSTMENT, COUNT.
 enum StockMoveReason {
   /// Stock the site held before the factory app (B-W1-35).
   OPENING
@@ -573,6 +718,12 @@ enum StockMoveReason {
   /// W2b (wave 12/16, SCM-254): an offcut back from a work order as tagged stock (a Remnant names the move): RETURN's twin,
   /// by every rule of the database (it enters one location, names its work order, comes off what the work order holds).
   REMNANT
+  /// W2b-5 (schema wave 36/44, SCM-219, SCM-220): goods received at another site of the tenant leave this site's stock: out
+  /// of the transfer's transit location, naming the transfer line (StockMove.transferLineId); posted with its TRANSFER_IN.
+  TRANSFER_OUT
+  /// W2b-5: goods sent from another site enter this site's stock with the receipt of a transfer, naming the transfer line,
+  /// as the lot (and hide) the receipt made here.
+  TRANSFER_IN
 }
 
 /// The value of one move that changes the site's stock value (A1 §2.6: a cost, office only): its signed base quantity

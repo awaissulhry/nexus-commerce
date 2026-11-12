@@ -91,7 +91,7 @@ describe('the seeds', () => {
     const holidays = await admin(`SELECT count(*)::int AS n FROM "CalendarDay" WHERE "tenantId" = $1 AND "calendarId" = $2 AND "holidaySet" = 'IT'`, [core.tenantId, key('calendar:company:A')])
     expect(holidays[0]!.n).toBe(24)
     const lists = await admin(`SELECT DISTINCT "list"::text AS list FROM "ReasonCode" WHERE "tenantId" = $1`, [core.tenantId])
-    expect(lists).toHaveLength(11)
+    expect(lists).toHaveLength(13)
   })
 })
 

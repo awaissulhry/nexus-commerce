@@ -12,6 +12,8 @@ import {
   duplicateRequests,
   lineProblems,
   MADE_TO_MEASURE_LATER,
+  MAX_CELL_PIECES,
+  MAX_CELLS,
   openSizes,
   revisionFor,
   type CellRequest,
@@ -467,8 +469,133 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity })),
       },
     })
-    tools.emit({ type: 'workorder.created', subject: id, companyId: site.companyId, siteId: site.id, payload: { workOrderId: id, number: number.formatted, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces } })
+    createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
     if (sample) await sample.inCommand(tools, { id, number: number.formatted })
+    return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
+  })
+  return result
+}
+
+/** `workorder.created` of a new DRAFT (B-W2b-284: one emit for both creates; a sample work order without an order line names no order). */
+function createdEvent(tools: CommandTools, made: { workOrderId: string; number: string; companyId: string; siteId: string; styleId: string; salesOrderIds: string[]; cells: number; pieces: number }): void {
+  const { companyId, ...payload } = made
+  tools.emit({ type: 'workorder.created', subject: made.workOrderId, companyId, siteId: made.siteId, payload })
+}
+
+// ---- a sample work order without an order line (B-W2b-284) -------------------------------------------------------------------
+
+/** One cell of a sample work order made without an order line: a colourway of the style, a size of its range, its pieces. */
+export interface SampleCellInput {
+  readonly colourwayId: string
+  readonly size: string
+  readonly quantity: number
+}
+
+export interface SampleWithoutLineInput {
+  readonly siteId?: string | undefined
+  readonly dueDate?: BusinessDate | undefined
+  readonly priority?: number | undefined
+  readonly note?: string | null | undefined
+  readonly cells: readonly SampleCellInput[]
+}
+
+/**
+ * B-W2b-284 (MES-018 with W2b-5 wave 34's nullable cell): the SAMPLE work order of an internal or uncharged proto, fit or
+ * salesman round, made by modules/sales/samples (which decides whether the round may have one) from the round's own cells:
+ * its cells name no sales order line and no party (both null, the database's "neither, only on a SAMPLE work order"). The
+ * rest is W1's: a DRAFT at an active plant of the round's company (the one asked, else the company's only plant) where the
+ * caller makes work orders, numbered from the WORK_ORDER series, the round's pinned revision (not OBSOLETE), each colourway and
+ * size once with 1 to 100000 pieces; then W1's release, floor and pay. No order caps it: it ships on no order's shipment.
+ */
+export async function createSampleWorkOrder(
+  caller: CommandCaller,
+  body: SampleWithoutLineInput,
+  idempotencyKey: string | undefined,
+  sample: SampleWorkOrder & { readonly styleId: string; readonly companyId: string },
+): Promise<{ workOrder: WorkOrderView }> {
+  const context = officeContextOf(caller)
+  const plan = await caller.withClient(async (client) => {
+    const style = await client.style.findUniqueOrThrow({ where: { id: sample.styleId }, select: STYLE_COLUMNS })
+    let siteId = body.siteId ?? null
+    if (!siteId) {
+      const plants = await client.site.findMany({ where: { companyId: sample.companyId, kind: 'PLANT', status: 'ACTIVE' }, select: { id: true } })
+      if (plants.length === 1) siteId = plants[0]!.id
+    }
+    if (!siteId) throw new ValidationError('Name the site that makes it.', [{ path: 'body/siteId', message: 'Required: the company has several plants.' }])
+    const site = isUuid(siteId) ? await client.site.findUnique({ where: { id: siteId }, select: SITE_COLUMNS }) : null
+    if (!site || site.companyId !== sample.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
+      throw new ValidationError("Not an active plant of the round's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the sample round's company." }])
+    }
+    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Sample round')
+    const revision = await revisionOf(client, style.id, sample.revisionId, 'body/styleRevisionId')
+    const colourways = new Set((await client.colourway.findMany({ where: { styleId: style.id }, select: { id: true } })).map((row) => row.id))
+    return { style, site, revisionId: revision.id, colourways }
+  })
+  const { style, site, revisionId, colourways } = plan
+  const problems: Issue[] = []
+  const seen = new Set<string>()
+  body.cells.forEach((cell, index) => {
+    const at = `body/cells/${index}`
+    if (!colourways.has(cell.colourwayId)) problems.push({ path: `${at}/colourwayId`, message: `Not a colourway of style ${style.code}.` })
+    if (!style.sizes.includes(cell.size)) problems.push({ path: `${at}/size`, message: `Size ${cell.size} is not in the style's size range.` })
+    if (!Number.isSafeInteger(cell.quantity) || cell.quantity < 1 || cell.quantity > MAX_CELL_PIECES) problems.push({ path: `${at}/quantity`, message: `Expected whole pieces from 1 to ${MAX_CELL_PIECES}.` })
+    const key = `${cell.colourwayId}\u0000${cell.size}`
+    if (seen.has(key)) problems.push({ path: at, message: `Size ${cell.size} of this colourway is named twice: one cell per colourway and size.` })
+    seen.add(key)
+  })
+  if (body.cells.length === 0 || body.cells.length > MAX_CELLS) problems.push({ path: 'body/cells', message: `Name 1 to ${MAX_CELLS} cells.` })
+  if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These cells cannot be made on one work order.', problems)
+
+  const spec: CommandSpec = { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId, withoutOrderLine: true }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
+  const { result } = await command(caller, spec, async (tools) => {
+    const { tx } = tools
+    if (!(await hasSeries(tx, site.companyId, 'WORK_ORDER'))) {
+      throw new InvalidStateError('The company has no active work order number series: an admin sets one up under Numbering (kind WORK_ORDER).')
+    }
+    const id = newId()
+    const number = await allocateNumber(tools, { companyId: site.companyId, kind: 'WORK_ORDER' }, { type: 'WorkOrder', id })
+    const priority = body.priority ?? 0
+    await tx.workOrder.create({
+      data: {
+        id,
+        companyId: site.companyId,
+        siteId: site.id,
+        number: number.formatted,
+        kind: 'SAMPLE',
+        sampleRoundId: sample.roundId,
+        styleId: style.id,
+        styleRevisionId: revisionId,
+        dueDate: body.dueDate ? asDay(body.dueDate) : null,
+        priority,
+        note: blankToNull(body.note),
+        createdById: actorIdOf(tools),
+      },
+      select: { id: true },
+    })
+    // Neither an order line nor a party: the round's samples belong to no order (the database allows it on a SAMPLE work order only).
+    const rows = body.cells.map((cell) => ({ id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: cell.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: null, partyId: null, createdById: actorIdOf(tools) }))
+    await tx.workOrderSize.createMany({ data: rows })
+    const pieces = rows.reduce((sum, row) => sum + row.quantity, 0)
+    tools.audit({
+      recordType: 'WorkOrder',
+      recordId: id,
+      companyId: site.companyId,
+      siteId: site.id,
+      after: {
+        number: number.formatted,
+        status: 'DRAFT',
+        kind: 'SAMPLE',
+        sampleRoundId: sample.roundId,
+        withoutOrderLine: true,
+        styleId: style.id,
+        styleRevisionId: revisionId,
+        dueDate: body.dueDate ?? null,
+        priority,
+        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: null, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity })),
+      },
+    })
+    createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds: [], cells: rows.length, pieces })
+    await sample.inCommand(tools, { id, number: number.formatted })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })
   return result
@@ -506,6 +633,10 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
   if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; its cells are frozen (a change is a new work order).`)
   // B-W2a-12: a repair's one garment comes from its repair order.
   if (workOrder.kind === 'REPAIR') throw new InvalidStateError(`Work order ${workOrder.number} repairs one garment of its repair order: its cell does not change (a different garment is a new repair work order).`)
+  // B-W2b-284: a sample work order made without an order line makes its round's own cells; they are not set from order lines.
+  if (workOrder.kind === 'SAMPLE' && (await caller.withClient((db) => db.workOrderSize.count({ where: { workOrderId: workOrder.id, salesOrderLineId: null } }))) > 0) {
+    throw new InvalidStateError(`Work order ${workOrder.number} makes the samples of its sample round for no order line: its cells are the round's. Change the round's cells, cancel this work order and make a new one from the round.`)
+  }
   const lineIds = [...new Set(body.cells.map((cell) => cell.salesOrderLineId))]
   await linesFor(caller, lineIds)
   const requests = body.cells.map((cell, index) => ({ ...cell, index }))

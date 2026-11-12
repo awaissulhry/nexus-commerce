@@ -503,15 +503,31 @@ describe('the graded spec of the work order revision (B-W2b-224, SZ1:01), plante
         { pointCode: 'SLEEVE_LEN', size: '52', sampleIndex: 1, measured: '63.4' },
       ],
     })
-    const values = await admin<{ pointCode: string; sampleIndex: number; nominal: string; tolerance: string; pass: boolean }>(
-      `SELECT "pointCode", "sampleIndex", nominal::text, tolerance::text, pass FROM "InspectionMeasurement" WHERE "inspectionId" = $1 ORDER BY "pointCode", "sampleIndex"`,
-      [inspectionId],
-    )
-    expect(values).toEqual([
-      { pointCode: 'BACK_LEN', sampleIndex: 1, nominal: '72.000', tolerance: '1.000', pass: true },
-      { pointCode: 'SLEEVE_LEN', sampleIndex: 1, nominal: '64.500', tolerance: '1.000', pass: false },
-      { pointCode: 'SLEEVE_LEN', sampleIndex: 2, nominal: '64.500', tolerance: '1.000', pass: true },
+    // B-W2b-283 (FU1:05): the band is kept as the spec writes it (no more centre ± half): the spec's nominal, the larger side
+    // as the tolerance, minus and plus apart; the database's `pass` reads the band.
+    const valuesNow = () =>
+      admin<{ pointCode: string; sampleIndex: number; nominal: string; tolerance: string; minus: string | null; plus: string | null; measured: string; pass: boolean }>(
+        `SELECT "pointCode", "sampleIndex", nominal::text, tolerance::text, "toleranceMinus"::text AS minus, "tolerancePlus"::text AS plus, measured::text, pass FROM "InspectionMeasurement" WHERE "inspectionId" = $1 ORDER BY "pointCode", "sampleIndex"`,
+        [inspectionId],
+      )
+    expect(await valuesNow()).toEqual([
+      { pointCode: 'BACK_LEN', sampleIndex: 1, nominal: '72.000', tolerance: '1.000', minus: null, plus: null, measured: '72.400', pass: true },
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 1, nominal: '64.000', tolerance: '1.500', minus: '0.500', plus: '1.500', measured: '63.400', pass: false },
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 2, nominal: '64.000', tolerance: '1.500', minus: '0.500', plus: '1.500', measured: '65.400', pass: true },
     ])
-    expect(sheet.chart.points.find((entry: Json) => entry.pointCode === 'SLEEVE_LEN').values.map((value: Json) => value.words).sort()).toEqual(['under by 0.1 cm', 'within 64.5 ± 1 cm'])
+    const sleevePoint = sheet.chart.points.find((entry: Json) => entry.pointCode === 'SLEEVE_LEN')
+    expect(sleevePoint.values.map((value: Json) => value.words).sort()).toEqual(['under by 0.1 cm', 'within 64 −0.5/+1.5 cm'])
+    expect(sleevePoint.values.find((value: Json) => value.sampleIndex === 2)).toMatchObject({ nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', pass: true })
+    expect(sleevePoint.bySize.find((entry: Json) => entry.size === '52')).toMatchObject({ nominal: '64.000', tolerance: '1.500', toleranceMinus: '0.500', tolerancePlus: '1.500', words: '64 −0.5/+1.5 cm' })
+    expect(backPoint.bySize.find((entry: Json) => entry.size === '52')).toMatchObject({ toleranceMinus: null, tolerancePlus: null })
+    // A point code that differs only in case is the same point: twice in one request is refused in words; alone it changes
+    // the value it names (kept in the spec's spelling), never a second row.
+    const twice = await refused('inspector', 'PUT', `/quality/inspections/${inspectionId}/measurements`, { version: sheet.inspection.version, measurements: [{ pointCode: 'SLEEVE_LEN', size: '52', sampleIndex: 1, measured: '63.6' }, { pointCode: 'sleeve_len', size: '52', sampleIndex: 1, measured: '63.7' }] }, 400)
+    expect(twice.message).toBe('sleeve_len of size 52, unit 1, is given twice (a point code is one code whatever its letter case).')
+    sheet = await ok('inspector', 'PUT', `/quality/inspections/${inspectionId}/measurements`, { version: sheet.inspection.version, measurements: [{ pointCode: 'sleeve_len', size: '52', sampleIndex: 1, measured: '63.6' }] })
+    expect((await valuesNow()).filter((value) => value.pointCode.toUpperCase() === 'SLEEVE_LEN')).toEqual([
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 1, nominal: '64.000', tolerance: '1.500', minus: '0.500', plus: '1.500', measured: '63.600', pass: true },
+      { pointCode: 'SLEEVE_LEN', sampleIndex: 2, nominal: '64.000', tolerance: '1.500', minus: '0.500', plus: '1.500', measured: '65.400', pass: true },
+    ])
   })
 })

@@ -464,6 +464,7 @@
     "DRAFT_EXISTS": "A version is being written already: change it, or discard it first.",
     "NOT_DRAFT": "This version is not a draft any more: it never changes. Start a new version.",
     "OWN_DRAFT": "This is your own draft: another person approves it (four eyes).",
+    "EDITED_DRAFT": "You changed this draft: a person who neither wrote nor changed it approves it (four eyes).",
     "NO_STEPS": "The draft has no step: write at least one first.",
     "CHANGE_NOTE_MISSING": "The draft needs a change note: say what changed from the version before.",
     "MEDIA_NOT_READY": "A photo or video is not uploaded yet: wait for it or take it off.",

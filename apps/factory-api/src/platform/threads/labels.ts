@@ -82,6 +82,8 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   ChangeOrder: async (client, id) => (await client.changeOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2b-246 (modules/sales/samples): a sample round by its number.
   SampleRound: async (client, id) => (await client.sampleRound.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2b-282 (platform/approvals): a request for a yes by its summary (no money in it).
+  ApprovalTask: async (client, id) => (await client.approvalTask.findUnique({ where: { id }, select: { summary: true } }))?.summary ?? null,
 })
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */

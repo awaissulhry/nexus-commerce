@@ -101,7 +101,7 @@ describe('the checklist the tablet ticks (B-W2b-47 follow-up: the published vers
 })
 
 describe('publishing: a second person, a complete draft', () => {
-  const facts: PublishFacts = { number: 2, status: 'DRAFT', authorId: 'author', approverId: 'approver', instructionNumber: 'WI-0007', instructionActive: true, changeNote: 'Wider allowance.', steps: 3, mediaNotReady: 0 }
+  const facts: PublishFacts = { number: 2, status: 'DRAFT', authorId: 'author', editorIds: ['author', 'editor'], approverId: 'approver', instructionNumber: 'WI-0007', instructionActive: true, changeNote: 'Wider allowance.', steps: 3, mediaNotReady: 0 }
 
   it('says why, in the order the database checks', () => {
     expect(publishRefusal(facts)).toBeNull()
@@ -113,6 +113,14 @@ describe('publishing: a second person, a complete draft', () => {
     expect(publishRefusal({ ...facts, steps: 0 })?.code).toBe('NO_STEPS')
     expect(publishRefusal({ ...facts, changeNote: '  ' })?.code).toBe('CHANGE_NOTE_MISSING')
     expect(publishRefusal({ ...facts, mediaNotReady: 2 })?.message).toMatch(/2 photos or videos not uploaded yet/)
+  })
+
+  it('nobody approves their own work (B-W2b-F24; Owner W2b-5 Q3): a person who changed the draft never publishes it', () => {
+    expect(publishRefusal({ ...facts, approverId: 'editor' })).toEqual({ code: 'EDITED_DRAFT', message: 'You changed version 2 of WI-0007: a person who neither wrote nor changed it approves it (four eyes).' })
+    // Who changed it is refused before what the draft lacks; a third person is not.
+    expect(publishRefusal({ ...facts, approverId: 'editor', steps: 0 })?.code).toBe('EDITED_DRAFT')
+    expect(publishRefusal({ ...facts, approverId: 'third' })).toBeNull()
+    expect(publishRefusal({ ...facts, editorIds: [] })).toBeNull()
   })
 })
 

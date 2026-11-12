@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/approvals.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 35/44 (B-W2b-276): approval rules, the requests for a yes and their history. The office (factory_runtime) reads them and writes them only through apps/factory-api's platform/approvals (B-W2b-282), always with command(); the API keeps a reader to the companies and sites their grants reach (a company is a column, not a policy key; the site key below is the wall's for a role scoped by site, none here). The floor, portal and link sessions read and write nothing here: a request asked on the floor (a substitute, a count difference) is written by the API for the worker, who is named as its requester, and the floor sees its answer in its own records, never these rows. No money column: a request's amounts and margins are the preview's facts, each with its grain (the API shows them only to a reader with it). Nobody decides their own request, the Owner included, and every line of the history agrees with its task: the …_approvals_w2b_guards triggers, for every login. A rule is switched off, never deleted; a task is withdrawn, never deleted; ApprovalEvent is append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ApprovalRule": {
+      "about": "The office keeps the approval rules of Admin › Automation (when a request of a kind needs a yes, from whom, with which meaning and step-up, in which order, by when), switches them on and off, and the approval engine reads the switched-on ones of a kind; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ApprovalTask": {
+      "about": "The approval engine writes a request for a yes (its subject, the rules that asked, the approver, the change as it will be written and its fingerprint) and its one decision, withdrawal or staleness; the office reads the requests of its companies and sites (Home › Approvals, a record's Approvals); never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ApprovalEvent": {
+      "about": "The history of a record's approvals: the approval engine adds one line per thing that happened to a request (and a domain step may add its own approvals' lines); the office reads a record's history, newest first. Never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

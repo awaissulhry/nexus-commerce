@@ -49,11 +49,14 @@ const pointSchema = z.object({
   checkCode: z.string().nullable(),
   label: z.string(),
   size: z.string().nullable(),
-  source: z.enum(['PLAN', 'SIZE_CHART', 'PROFILE', 'TYPED']),
+  // B-W2b-283 (FU1:05): a point of the revision's approved measurement spec (B-W2b-224's SPEC), its words per size, and a
+  // value's band when the spec's sides differ (nominal − minus … nominal + plus).
+  source: z.enum(['PLAN', 'SIZE_CHART', 'PROFILE', 'SPEC', 'TYPED']),
   nominal: z.string().nullable(),
   tolerance: z.string().nullable(),
   uom: z.string().nullable(),
-  values: z.array(z.object({ id: z.string(), size: z.string(), sampleIndex: z.number(), measured: z.string(), nominal: z.string(), tolerance: z.string(), pass: z.boolean() })),
+  spec: z.string().optional(),
+  values: z.array(z.object({ id: z.string(), size: z.string(), sampleIndex: z.number(), measured: z.string(), nominal: z.string(), tolerance: z.string(), toleranceMinus: z.string().nullable().optional(), tolerancePlus: z.string().nullable().optional(), pass: z.boolean() })),
 })
 export type ChartPoint = z.infer<typeof pointSchema>
 
