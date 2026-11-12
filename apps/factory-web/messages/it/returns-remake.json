@@ -1,0 +1,62 @@
+{
+  "claim": {
+    "type": {
+      "title": "Chiedi un rifacimento",
+      "body": "Su misura e non veste bene: dicci cosa non va e invia una foto davanti e una da dietro.",
+      "none": "Niente di questa consegna può essere rifatto adesso. Puoi comunque segnalare un problema di qualità.",
+      "later": "Per una riparazione o modifica o un incidente di sicurezza, per ora scrivi direttamente a {sender}."
+    },
+    "item": {
+      "legend": "Il capo da rifare",
+      "hint": "Un capo, un pezzo: quello che non veste bene.",
+      "none": "Niente di questa consegna può essere rifatto adesso.",
+      "noneBody": "Ogni pezzo è già su un'altra richiesta, oppure nulla è stato ancora consegnato. Per notizie chiedi a {sender}.",
+      "toComplaint": "Segnala invece un problema di qualità"
+    },
+    "details": {
+      "fit": "Cosa non va nella vestibilità",
+      "fitHint": "Dove tira, è troppo lungo o troppo corto, e di quanto (per esempio: le maniche sono lunghe 3 cm in più)."
+    },
+    "photos": {
+      "intro": "Ci servono due foto con il capo indossato: una davanti e una da dietro, in piedi e dritti.",
+      "needed": "Una foto davanti e una da dietro: {count} di {needed} aggiunte.",
+      "front": "Davanti",
+      "back": "Da dietro"
+    },
+    "check": {
+      "item": "Scegli il capo da rifare.",
+      "fit": "Di' cosa non va nella vestibilità.",
+      "photos_one": "Aggiungi ancora {count} foto: per un rifacimento ne servono una davanti e una da dietro.",
+      "photos_other": "Aggiungi ancora {count} foto: per un rifacimento ne servono una davanti e una da dietro."
+    },
+    "send": "Invia la richiesta di rifacimento",
+    "done": {
+      "title": "Richiesta di rifacimento {number} inviata",
+      "next": "Guardiamo le foto e quello che ci hai scritto, e ti diciamo come lo rifacciamo e se rispedirci il capo."
+    }
+  },
+  "portal": {
+    "type": "Chiedi un rifacimento",
+    "typeBody": "Su misura e non veste bene: dicci cosa non va; le foto davanti e da dietro si aggiungono poi sulla richiesta.",
+    "item": "Il capo da rifare",
+    "itemHint": "Un capo, un pezzo: quello che non veste bene.",
+    "none": "Niente di quanto consegnato può essere rifatto adesso.",
+    "noneBody": "Ogni pezzo è già su un'altra richiesta. Scrivici nei messaggi se ti serve altro.",
+    "fit": "Cosa non va nella vestibilità",
+    "fitHint": "Dove tira, è troppo lungo o troppo corto, e di quanto (per esempio: le maniche sono lunghe 3 cm in più).",
+    "photosNext": "Una volta inviata, aggiungi sulla richiesta una foto con il capo indossato davanti e una da dietro.",
+    "review": "Il rifacimento che chiedi",
+    "send": "Invia la richiesta di rifacimento",
+    "sent": "Richiesta di rifacimento {number} aperta",
+    "sentPhotos": "Ora aggiungi le due foto (davanti e da dietro) sulla richiesta.",
+    "sentNext": "Guardiamo le foto e quello che ci hai scritto, e ti diciamo come lo rifacciamo.",
+    "openRequest": "Apri la richiesta per aggiungere le foto",
+    "problem": {
+      "item": "Scegli il capo da rifare.",
+      "itemGone": "Questo capo non può più essere rifatto: scegline un altro.",
+      "nothing": "Niente di quanto consegnato può essere rifatto adesso.",
+      "fit": "Di' cosa non va nella vestibilità.",
+      "long": "Troppo lungo: accorcialo."
+    }
+  }
+}

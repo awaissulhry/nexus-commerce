@@ -34,6 +34,8 @@ import { copiesOf } from '@nexus/factory-domain/purchasing/suppliers-depth/routi
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
+// B-W2b-328: each line's variant, rolls and certificate on the PDF.
+import { kindWordsOf } from './line-kinds/store'
 // B-W2b-347: a sample order's PDF is the sample order (titled so, what it is for, not a production order).
 import { sampleOrderDocument } from '@nexus/factory-domain/purchasing/sample-orders/document'
 import { developmentOf } from './sample-orders/store'
@@ -130,6 +132,7 @@ function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: stri
         requiresCrViTest: line.requiresCrViTest,
         note: line.note,
         deliveries: (facts.depth?.deliveries.get(line.id) ?? []).map((delivery) => ({ quantity: quantityText(delivery.quantity), needDate: dayOf(delivery.needDate)!, note: delivery.note })),
+        kind: kindWordsOf(facts.kinds, line, supplierLanguageOf(facts.contact?.language, facts.party.language)),
       }
     }),
   }

@@ -1,0 +1,184 @@
+{
+  "common": {
+    "loading": "Lettura…",
+    "retry": "Riprova"
+  },
+  "noAccess": {
+    "title": "I report di magazzino non sono nel tuo ruolo",
+    "body": "Chiedi all'amministratore i report di magazzino."
+  },
+  "notInRole": {
+    "title": "Non nel tuo ruolo",
+    "stock": "Le giacenze degli stabilimenti di questa azienda non sono nel tuo ruolo: nessun dato è mostrato."
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere il report. Riprova tra poco.",
+    "forbidden": "Questo report non è nel tuo ruolo.",
+    "offline": "Nessuna risposta dal server: forse sei offline.",
+    "gone": "Questo stabilimento o questa azienda non c'è più."
+  },
+  "band": {
+    "label": "Azioni del report",
+    "reading": "Lettura…",
+    "arrange": "Disponi",
+    "print": "Stampa",
+    "more": "Altre azioni",
+    "monday": "Inviamelo ogni lunedì",
+    "mondayHeld": "L'invio programmato dei report arriva più avanti: intanto stampalo o salva il PDF.",
+    "csv": {
+      "ageing": "Esporta invecchiamento giacenze (CSV)",
+      "leather": "Esporta uso della pelle (CSV)"
+    },
+    "csvHeld": "Attende la lettura del pannello.",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In tempo reale",
+    "offline": "Offline: i dati potrebbero essere vecchi"
+  },
+  "scope": {
+    "label": "Cosa copre il report",
+    "quick": {
+      "thisMonth": "Questo mese finora",
+      "lastMonth": "Mese scorso"
+    },
+    "asAt": "Giacenze invecchiate al {day}"
+  },
+  "section": {
+    "ageing": "Invecchiamento giacenze",
+    "leather": "Uso della pelle"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "arrange": "Disponi i pannelli",
+    "print": "Vista di stampa (nuova scheda)",
+    "help": "Questo elenco"
+  },
+  "csv": {
+    "shareOf": "Quota {bucket}",
+    "valueOf": "Valore {bucket}"
+  },
+  "type": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessori",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezioni",
+    "LABEL": "Etichette",
+    "PACKAGING": "Imballi",
+    "COMPONENT": "Componenti",
+    "FINISHED": "Capi finiti"
+  },
+  "bucket": {
+    "d0to90": "0–90 giorni",
+    "d91to180": "91–180 giorni",
+    "d181to365": "181–365 giorni",
+    "overYear": "Oltre un anno"
+  },
+  "col": {
+    "type": "Tipo di materiale",
+    "article": "Articolo",
+    "whole": "Giacenza",
+    "value": "Valore",
+    "averageDays": "Età media (giorni)",
+    "oldestDays": "Più vecchio"
+  },
+  "ageing": {
+    "hint": "Quanto sono vecchie le giacenze al {day}, per tipo di materiale.",
+    "hintLoading": "Quanto sono vecchie le giacenze, per tipo di materiale.",
+    "series": "Mostra",
+    "seriesOf": {
+      "share": "Quota della quantità",
+      "value": "Valore"
+    },
+    "failed": "Non è stato possibile leggere l'invecchiamento delle giacenze",
+    "empty": "Nessuna giacenza al {day}",
+    "emptyHint": "Negli stabilimenti di questo report non c'è giacenza.",
+    "chartLabel": "Giacenze per fascia di età e tipo di materiale",
+    "axisShare": "Quota della quantità (%)",
+    "axisValue": "Valore",
+    "axisDays": "Età media (giorni)",
+    "averageDays": "Età media (giorni)",
+    "captionShare": "Ogni barra è la quantità di un tipo di materiale divisa per età; la linea è la sua età media.",
+    "captionValue": "Ogni barra è il valore di un tipo di materiale ({currency}) diviso per età; la linea è la sua età media.",
+    "leftOut": "Non disegnati (più di un'unità, vedi la tabella): {types}.",
+    "noChart": "Nessun tipo di materiale è in una sola unità: la tabella riporta le quantità.",
+    "tableLabel": "Invecchiamento giacenze per tipo di materiale",
+    "mixedCurrencies": "Più valute",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "definition": "Un lotto ha l'età del suo ricevimento (giacenza iniziale: il suo primo ingresso a magazzino); un articolo senza lotti è invecchiato primo entrato, primo uscito. Le quantità si sommano per unità, mai tra unità diverse.",
+    "customerOwned_one": "{count} riga di giacenza è materiale di un cliente: contata, mai valorizzata.",
+    "customerOwned_other": "{count} righe di giacenza sono materiale di clienti: contate, mai valorizzate.",
+    "unvalued_one": "{count} parte non ha ancora un valore.",
+    "unvalued_other": "{count} parti non hanno ancora un valore.",
+    "allValue": "Tutte le giacenze insieme: {value}.",
+    "noCost": "I valori richiedono il permesso sui costi.",
+    "articlesOf": "Articoli di {type}",
+    "pickType": "Tipo di materiale",
+    "moves": "Movimenti",
+    "more_one": "{count} altro articolo non è elencato.",
+    "more_other": "Altri {count} articoli non sono elencati.",
+    "drill": "Un articolo apre Giacenze cercando il suo codice, Movimenti i suoi movimenti. Giacenze non filtra ancora per età o tipo."
+  },
+  "leather": {
+    "hint": "Superficie ricevuta, tagliata, rientrata come ritaglio, scartata e in giacenza dal {from} al {to}, per articolo e lotto del fornitore.",
+    "measure": "Le barre mostrano",
+    "col": {
+      "article": "Articolo · lotto del fornitore",
+      "lot": "Lotto del fornitore",
+      "unit": "Unità",
+      "start": "Giacenza all'inizio",
+      "received": "Ricevuta",
+      "cut": "Tagliata",
+      "remnant": "Rientrata come ritaglio",
+      "scrapped": "Scartata",
+      "other": "Altro",
+      "end": "In giacenza",
+      "hidesReceived": "Pelli ricevute",
+      "hidesOnHand": "Pelli in giacenza",
+      "valueReceived": "Valore ricevuto",
+      "valueCut": "Valore tagliato",
+      "valueScrapped": "Valore scartato",
+      "valueEnd": "Valore in giacenza"
+    },
+    "failed": "Non è stato possibile leggere l'uso della pelle",
+    "empty": "Nessuna pelle movimentata o in giacenza nel periodo",
+    "emptyHint": "Scegli un altro periodo o stabilimento.",
+    "barSub": "Lotti del fornitore: {lots} · pelli in giacenza: {hides}",
+    "noLot": "Nessun lotto",
+    "children_one": "{count} lotto figlio contato con esso",
+    "children_other": "{count} lotti figli contati con esso",
+    "dyeBatch": "Bagno di tintura {batch}",
+    "barsLabel": "{measure} per articolo",
+    "barsHint": "{measure} per articolo, in m². Una barra apre le pelli dell'articolo.",
+    "notAdding": "Un lotto non torna: inizio + ricevuta − tagliata − scartata + altro non è la giacenza. Controlla i suoi movimenti.",
+    "tableLabel": "Uso della pelle per articolo e lotto del fornitore",
+    "all": "Tutta la pelle",
+    "definition": "Tagliata è quanto è andato agli ordini di lavoro meno quanto è rientrato intero o come ritaglio. Altro è la giacenza iniziale, le rettifiche, gli inventari, i trasferimenti tra stabilimenti e i resi al fornitore. I lotti figli di un lotto diviso contano con il lotto padre. Inizio + ricevuta − tagliata − scartata + altro = giacenza.",
+    "more_one": "{count} altro lotto del fornitore non è elencato.",
+    "more_other": "Altri {count} lotti del fornitore non sono elencati.",
+    "unvalued_one": "{count} movimento del periodo non ha ancora un valore.",
+    "unvalued_other": "{count} movimenti del periodo non hanno ancora un valore.",
+    "noCost": "I valori richiedono il permesso sui costi.",
+    "severalUnits": "Gli articoli sono in più di un'unità: nessuna superficie totale.",
+    "drill": "Un articolo o un lotto apre le sue pelli."
+  },
+  "print": {
+    "title": "Report di magazzino",
+    "period": "Periodo",
+    "asAt": "Giacenze invecchiate al",
+    "site": "Stabilimento",
+    "allSites": "Tutti gli stabilimenti",
+    "held": "Lettura del report in corso",
+    "back": "Torna al report",
+    "failed": "Non è stato possibile leggere il report",
+    "ageingTitle": "Invecchiamento giacenze al {day}",
+    "leatherTitle": "Uso della pelle dal {from} al {to}"
+  }
+}

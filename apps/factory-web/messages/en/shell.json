@@ -211,7 +211,9 @@
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
       "picking": "Picking & kits",
-      "counts": "Counts"
+      "counts": "Counts",
+      "reportsGroup": "Reports",
+      "reports": "Warehouse reports"
     },
     "frame": {
       "topBar": "Top bar"

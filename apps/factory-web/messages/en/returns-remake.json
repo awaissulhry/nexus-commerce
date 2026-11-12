@@ -1,0 +1,62 @@
+{
+  "claim": {
+    "type": {
+      "title": "Ask for a remake",
+      "body": "Made to measure and it does not fit: tell us what is wrong and send a photo from the front and one from the back.",
+      "none": "Nothing of this delivery can be remade now. You can still report a quality problem.",
+      "later": "For a repair or alteration or a safety incident, write to {sender} directly for now."
+    },
+    "item": {
+      "legend": "The item to make again",
+      "hint": "One item, one piece: the one that does not fit.",
+      "none": "Nothing of this delivery can be remade now.",
+      "noneBody": "Every piece is on another request already, or none was delivered yet. For news, ask {sender}.",
+      "toComplaint": "Report a quality problem instead"
+    },
+    "details": {
+      "fit": "What is wrong with the fit",
+      "fitHint": "Where it pulls, is too long or too short, and by how much (for example: the sleeves are 3 cm too long)."
+    },
+    "photos": {
+      "intro": "We need two photos of you wearing it: one from the front and one from the back, standing straight.",
+      "needed": "A photo from the front and one from the back: {count} of {needed} added.",
+      "front": "From the front",
+      "back": "From the back"
+    },
+    "check": {
+      "item": "Pick the item to make again.",
+      "fit": "Say what is wrong with the fit.",
+      "photos_one": "Add {count} more photo: a remake needs one from the front and one from the back.",
+      "photos_other": "Add {count} more photos: a remake needs one from the front and one from the back."
+    },
+    "send": "Send the remake request",
+    "done": {
+      "title": "Remake request {number} sent",
+      "next": "We look at the photos and what you told us, and tell you how we make it again and whether to send the garment back."
+    }
+  },
+  "portal": {
+    "type": "Ask for a remake",
+    "typeBody": "Made to measure and it does not fit: tell us what is wrong; the photos from the front and the back follow on the request.",
+    "item": "The item to make again",
+    "itemHint": "One item, one piece: the one that does not fit.",
+    "none": "Nothing we delivered can be remade now.",
+    "noneBody": "Every piece is on another request already. Ask a question in the messages if you need more.",
+    "fit": "What is wrong with the fit",
+    "fitHint": "Where it pulls, is too long or too short, and by how much (for example: the sleeves are 3 cm too long).",
+    "photosNext": "Once it is sent, add a photo of you wearing it from the front and one from the back on the request.",
+    "review": "The remake you ask for",
+    "send": "Send the remake request",
+    "sent": "Remake request {number} opened",
+    "sentPhotos": "Now add the two photos (from the front and from the back) on the request.",
+    "sentNext": "We look at the photos and what you told us, and tell you how we make it again.",
+    "openRequest": "Open the request to add the photos",
+    "problem": {
+      "item": "Pick the item to make again.",
+      "itemGone": "This item can no longer be remade: pick another.",
+      "nothing": "Nothing we delivered can be remade now.",
+      "fit": "Say what is wrong with the fit.",
+      "long": "Too long: shorten it."
+    }
+  }
+}

@@ -17,4 +17,10 @@ export const manifest = defineManifest({
   'PUT /product/materials/:materialId/standard-cost': { audiences: ['office'], permission: 'product.materials.cost', scope: 'record' },
   'POST /product/materials/:materialId/colours': { audiences: ['office'], permission: 'product.materials.manage', scope: 'record' },
   'PATCH /product/materials/:materialId/colours/:colourId': { audiences: ['office'], permission: 'product.materials.manage', scope: 'record' },
+  // B-W2b-328 (SCM-186): a material's colour and size variants, as its colours; the BOM size lines also need product.styles.view
+  // (checked in the handler).
+  'GET /product/materials/:materialId/variants': { audiences: ['office'], permission: 'product.materials.view', scope: 'record' },
+  'POST /product/materials/:materialId/variants': { audiences: ['office'], permission: 'product.materials.manage', scope: 'record' },
+  'PATCH /product/materials/:materialId/variants/:variantId': { audiences: ['office'], permission: 'product.materials.manage', scope: 'record' },
+  'GET /product/materials/:materialId/variants/bom-sizes': { audiences: ['office'], permission: 'product.materials.view', scope: 'record' },
 })
