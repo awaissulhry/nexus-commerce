@@ -3,6 +3,7 @@ import { BATCH_NUMBER_MAX } from '@nexus/factory-domain/compliance/declarations/
 import { COVERAGE_KINDS, CELL_STATES } from '@nexus/factory-domain/compliance/declarations/coverage'
 import { NAME_MAX, NOTE_MAX, NUMBER_MAX, PLACE_MAX, REASON_MAX, TRANSLATION_STATES, WORDS_MAX } from '@nexus/factory-domain/compliance/declarations/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { ppeGateView } from '../ppe-texts/contract'
 
 /**
  * The DoC generator's routes (B-W2b-257; PRD-292, PRD-293, PRD-295, PRD-300; design compliance.declarations). No price, no
@@ -80,7 +81,8 @@ const timelineGroup = output({
 export const declarationDetail = declarationRow.extend({
   points: z.array(point),
   template: z.string().nullable(),
-  gate: gate.extend({ open: z.boolean() }).nullable(),
+  // B-W2b-288 (FU2:01): the gate as the PPE consultant's yes per template says it (modules/compliance/ppe-texts).
+  gate: ppeGateView.nullable(),
   createdBy: person.nullable(),
   original: output({ id: id(), language: z.string(), status }).nullable(),
   languages: z.array(output({ id: id(), language: z.string(), status, origin, translationStatus: z.enum(TRANSLATION_STATES).nullable(), translationCheckedBy: person.nullable(), marketCode: z.string().nullable(), pointsToType: z.array(z.string()), original: z.boolean() })),

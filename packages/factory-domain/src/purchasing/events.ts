@@ -39,6 +39,11 @@ import { CLAIM_KINDS, CLAIM_STATUSES } from './claims/rules'
  *                                  closed short; the confirm-by deadline moved; a reminder to confirm sent (by the buyer,
  *                                  or by the daily run once a company switches automatic reminders on)
  *   purchasing_settings.changed   the Owner's switch for automatic confirmation reminders (B-W2b-14).
+ *   purchase_order.dates_confirmed | date_changed   B-W2b-296 (SCM-088; modules/purchasing/po-depth): the buyer recorded the
+ *                                  supplier's first days of a line's deliveries; a confirmed day moved (a row of the date
+ *                                  history each, the line's own too when its earliest delivery moved). A draft's delivery
+ *                                  schedule, rate at order and ship-to are purchase_order.lines_changed and .updated.
+ *   delivery_tolerance.changed     B-W2b-296 (SCM-061): a delivery tolerance was added, changed, archived or reactivated.
  *   supplier_claim.created | updated | sent | answered | goods_returned | closed | cancelled
  *                                  a claim to a supplier (B-W2a-44; modules/purchasing/claims): made (by hand, from
  *                                  discrepancies, from a lot, or as a Return to supplier), changed (header, lines), sent
@@ -318,5 +323,27 @@ export const events = [
     description: "The owner switched a company's (or every company's) automatic purchase order confirmation reminders on or off.",
     payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid().nullable(), confirmationRemindersEnabled: z.boolean() }),
     live: { permission: 'purchasing.view', fields: ['settingsId', 'companyId', 'confirmationRemindersEnabled'] },
+  }),
+  // B-W2b-296: purchase orders in depth (the supplier's dates and their history; the delivery tolerances).
+  defineEvent({
+    type: 'purchase_order.dates_confirmed',
+    context: 'purchasing',
+    description: "The buyer recorded the days the supplier confirmed for deliveries of a purchase order line.",
+    payload: z.strictObject({ ...base, lineId: z.uuid(), deliveryIds: z.array(z.uuid()).min(1).max(52) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.date_changed',
+    context: 'purchasing',
+    description: "A confirmed day of a purchase order line or of one of its deliveries moved, with its row of the date history.",
+    payload: z.strictObject({ ...base, lineId: z.uuid(), deliveryId: z.uuid().nullable(), dateChangeIds: z.array(z.uuid()).min(1).max(2), source: z.enum(['SUPPLIER', 'BUYER']) }),
+    live,
+  }),
+  defineEvent({
+    type: 'delivery_tolerance.changed',
+    context: 'purchasing',
+    description: 'A delivery tolerance (how far over or under the ordered quantity a receipt may be) was added, changed, archived or reactivated.',
+    payload: z.strictObject({ toleranceId: z.uuid(), companyId: z.uuid().nullable(), action: z.enum(['CREATED', 'UPDATED', 'ARCHIVED', 'REACTIVATED']) }),
+    live: { permission: 'purchasing.view', fields: ['toleranceId', 'companyId', 'action'] },
   }),
 ] as const

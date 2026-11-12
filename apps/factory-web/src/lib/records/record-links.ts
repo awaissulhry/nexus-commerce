@@ -89,6 +89,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Shipment: '/warehouse/shipments/[id]',
   // Purchasing › the PO studio (SCR-059); Warehouse › a goods receipt (SCR-063).
   PurchaseOrder: '/purchasing/orders/[id]',
+  // B-W2b-332: a request asked in the office opens in Requests to buy (the queue's kind ASKED).
+  PurchaseRequest: '/purchasing/requests?open=asked:[id]',
   GoodsReceipt: '/warehouse/receipts/[id]',
   // Purchasing › Subcontract orders (SCR-128, B-W2a-56): an order sent to a workshop.
   SubcontractOrder: '/purchasing/subcontracting/[id]',
@@ -172,6 +174,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
   StandardChange: '/compliance/settings?tab=regulations&change=[id]',
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
+  // B-W2b-288 Compliance › Rules & markets › Templates (SCR-262): a PPE consultant's yes opens its template's window.
+  PpeTextApproval: '/compliance/settings?tab=templates&open=[id]',
   // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
   ComplianceDocument: '/compliance/declarations/[id]',
   // B-W2b-267 Compliance › Tests & substances: a supplier declaration opens in its DetailModal on the Supplier declarations

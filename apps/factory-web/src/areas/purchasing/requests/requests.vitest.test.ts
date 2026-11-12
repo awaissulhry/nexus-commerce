@@ -96,11 +96,13 @@ describe('requests to buy: the views, the address, the tiles', () => {
     expect(requestsAddress('/w/DEMO/purchasing/requests', 'held', { site: null, kind: 'REORDER', q: ' zip ', group: 'supplier' }, 'reorder:x')).toBe('/w/DEMO/purchasing/requests?view=held&kind=REORDER&q=zip&group=supplier&open=reorder%3Ax')
   })
 
-  it('draws the tiles: 0 is 0, unknown is —, waiting approval is always — (staff requests are W2b)', () => {
+  it('draws the tiles: 0 is 0, unknown is —; waiting approval counts the requests asked in the office (B-W2b-332)', () => {
     const counts = { asOf: 'x', open: 7, needWithin14Days: 0, waitingApproval: null, convertedToday: 1 }
     expect(TILES.map((tile) => tileValue(tile, counts))).toEqual(['7', '0', '—', '1'])
+    expect(TILES.map((tile) => tileValue(tile, { ...counts, waitingApproval: 2 }))).toEqual(['7', '0', '2', '1'])
     expect(TILES.map((tile) => tileValue(tile, null))).toEqual(['—', '—', '—', '—'])
-    expect(TILES.map((tile) => tile.view)).toEqual(['open', 'need14', null, 'converted'])
+    expect(TILES.map((tile) => tile.view)).toEqual(['open', 'need14', 'waiting', 'converted'])
+    expect(requestQuery('waiting', NO_FILTERS, '2026-10-30').status).toBe('WAITING_APPROVAL')
   })
 
   it('reads the roles: buyer drafts and rejects with costs; planner rejects without; warehouse and read-only read', () => {

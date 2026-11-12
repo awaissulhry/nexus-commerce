@@ -14,6 +14,8 @@ import { officeOf, rulesClock, type Reader } from '../register-of-rules/common'
 import { gateRequirements } from '../requirements/store'
 import { checkerFor, checksAsked, readGateStyle, readMarkets, styleLabelTemplateId, type GateStyle } from '../gates/facts'
 import { crViGapLots, expiriesOf } from '../reports/facts'
+// B-W2b-288 (FU2:02): the markets a style is sold in (Style.marketCodes): a market it leaves out is "Not sold there".
+import { boardMarketsOf, notSoldCell, rowStateOf, standingOf } from './markets'
 
 /**
  * The compliance status board's reads (B-W2b-254; PRD-277, PRD-271; design compliance.status SCR-119, screens B-W2b-266):
@@ -26,8 +28,9 @@ import { crViGapLots, expiriesOf } from '../reports/facts'
  *   GET /compliance/status/actions   every "Needs action" line (the board's "See all")
  *   GET /compliance/status/expiries  what expires in the next months (certificates), per month (cs-expiry)
  *
- * Every cell asks the market's languages as if the style sold there (the style × market link is a schema need: "Not sold
- * there" cannot be told yet). The gate refusals feed is GET /compliance/gates/events. Reading needs
+ * B-W2b-288 (FU2:02): a style that names the markets it is sold in (Style.marketCodes) is asked only there; a market it leaves
+ * out is "Not sold there" (state NOT_SOLD: no line, never a gap); a style that names none is asked everywhere, as before. The
+ * gate refusals feed is GET /compliance/gates/events. Reading needs
  * compliance.certificates.view; the styles of the companies a person's grants reach.
  */
 
@@ -94,7 +97,7 @@ export async function readMatrix(db: Reader, context: OfficeContext, query: Boar
   const day = businessDate(now)
   const markets = await boardMarkets(db, marketCodesOf(query.markets))
   const limit = Math.min(Math.max(query.limit ?? 100, 1), STYLES_MAX)
-  const styles = await db.style.findMany({ where: styleWhere(context, query), select: { id: true, code: true, name: true, companyId: true, brandPartyId: true, soldUnderOurName: true, ppeCategory: true, productType: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: limit + 1 })
+  const styles = await db.style.findMany({ where: styleWhere(context, query), select: { id: true, code: true, name: true, companyId: true, brandPartyId: true, soldUnderOurName: true, ppeCategory: true, productType: true, marketCodes: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: limit + 1 })
   const more = styles.length > limit
   const page = styles.slice(0, limit)
   const brandIds = [...new Set(page.flatMap((style) => (style.brandPartyId ? [style.brandPartyId] : [])))]
@@ -108,8 +111,11 @@ export async function readMatrix(db: Reader, context: OfficeContext, query: Boar
   for (const style of page) {
     const facts = await readGateStyle(db, style.id)
     if (!facts) continue
-    const lines = await styleLines(db, facts, requirements, markets, day, now)
+    // B-W2b-288 (FU2:02): only the markets the style is sold in are asked; the others are "Not sold there".
+    const { asked, notSold } = boardMarketsOf(style.marketCodes, markets)
+    const lines = asked.length > 0 ? await styleLines(db, facts, requirements, asked, day, now) : new Map<string, GateLine[]>()
     const cells = markets.map((market) => {
+      if (notSold.has(market.code)) return cellView(market.code, notSoldCell())
       const marketLines = lines.get(market.code) ?? []
       const cell = cellOf(marketLines)
       // B-W2b-266: the design's tile "Missing DoC or user-information languages" (= the cells `?gap=docLanguage` shows; a label's languages are the label gap).
@@ -120,10 +126,10 @@ export async function readMatrix(db: Reader, context: OfficeContext, query: Boar
     })
     const brand = style.brandPartyId ? brands.get(style.brandPartyId) : undefined
     rows.push({
-      style: { id: style.id, code: style.code, name: style.name, companyId: style.companyId, ppeCategory: style.ppeCategory, productType: style.productType, brand: brand ? { id: brand.id, code: brand.code, name: brand.tradeName ?? brand.legalName } : null, soldUnderOurName: style.soldUnderOurName },
+      style: { id: style.id, code: style.code, name: style.name, companyId: style.companyId, ppeCategory: style.ppeCategory, productType: style.productType, brand: brand ? { id: brand.id, code: brand.code, name: brand.tradeName ?? brand.legalName } : null, soldUnderOurName: style.soldUnderOurName, marketCodes: [...style.marketCodes] },
       cells,
-      ready: cells.every((cell) => cell.state === 'READY'),
-      blocked: cells.some((cell) => cell.state === 'BLOCKED'),
+      // B-W2b-288 (FU2:02): ready and blocked over the markets it is sold in.
+      ...rowStateOf(cells),
     })
   }
   return { now, day, markets, rows, actions, missingLanguages, more, cellLines }
@@ -156,11 +162,13 @@ function gapView(matrix: Matrix, gap: GapType): { rows: Matrix['rows']; actions:
   const actions: ActionInput[] = []
   const rows = matrix.rows.flatMap((row) => {
     const cells = row.cells.map((shown) => {
+      // B-W2b-288 (FU2:02): a market the style is not sold in stays "Not sold there".
+      if (shown.state === 'NOT_SOLD') return shown
       const cell = cellOf(lines.get(`${row.style.id}|${shown.marketCode}`) ?? [])
       actions.push({ styleId: row.style.id, styleCode: row.style.code, marketCode: shown.marketCode, marketName: names.get(shown.marketCode) ?? shown.marketCode, cell })
       return cellView(shown.marketCode, cell)
     })
-    return cells.some((cell) => cell.state !== 'READY') ? [{ ...row, cells, ready: false, blocked: cells.some((cell) => cell.state === 'BLOCKED') }] : []
+    return cells.some((cell) => cell.state !== 'READY' && cell.state !== 'NOT_SOLD') ? [{ ...row, cells, ready: false, blocked: cells.some((cell) => cell.state === 'BLOCKED') }] : []
   })
   return { rows, actions }
 }
@@ -220,6 +228,19 @@ export async function statusCell(request: FastifyRequest, query: { readonly styl
     if (!market) throw new NotFoundError(`There is no market ${query.market}.`)
     const now = rulesClock().now()
     const day = businessDate(now)
+    // B-W2b-288 (FU2:02): a market the style is not sold in asks nothing ("Not sold there"); the pop-up says where it is sold.
+    const marketCodes = (await db.style.findUnique({ where: { id: style.row.id }, select: { marketCodes: true } }))?.marketCodes ?? []
+    const standing = standingOf(marketCodes, market.code)
+    if (standing === 'NOT_SOLD_THERE') {
+      return {
+        style: { id: style.row.id, code: style.row.code, name: style.row.name, ppeCategory: style.row.ppeCategory, productType: style.row.productType, marketCodes: [...marketCodes] },
+        market: { code: market.code, name: market.name, switchedOn: market.switchedOn },
+        standing,
+        cell: cellView(market.code, notSoldCell()),
+        items: [],
+        asOf: toUtcIso(now),
+      }
+    }
     const requirements = await gateRequirements(db)
     const lines = (await styleLines(db, style, requirements, [market], day, now)).get(market.code) ?? []
     const shown = new Set(lines.map((line) => line.requirement.code))
@@ -230,8 +251,9 @@ export async function statusCell(request: FastifyRequest, query: { readonly styl
     const cell = cellOf(lines)
     const owner = (requirement: RequirementRow) => ownerOf(requirement)
     return {
-      style: { id: style.row.id, code: style.row.code, name: style.row.name, ppeCategory: style.row.ppeCategory, productType: style.row.productType },
+      style: { id: style.row.id, code: style.row.code, name: style.row.name, ppeCategory: style.row.ppeCategory, productType: style.row.productType, marketCodes: [...marketCodes] },
       market: { code: market.code, name: market.name, switchedOn: market.switchedOn },
+      standing,
       cell: cellView(market.code, cell),
       items: [
         ...lines.map((line) => ({

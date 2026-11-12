@@ -44,6 +44,8 @@ export interface SupplierLine {
   readonly leather: SupplierLeather | null
   readonly requiresCrViTest: boolean
   readonly note: string | null
+  /** B-W2b-296 (SCM-052): the line's delivery schedule, by day (none: one delivery on its need date). */
+  readonly deliveries?: readonly { readonly quantity: DecimalString; readonly needDate: BusinessDate; readonly note: string | null }[] | undefined
 }
 
 export interface SupplierOrder {
@@ -74,6 +76,8 @@ const WORDS = {
     tolerance: (pct: string) => `tolleranza superficie ±${pct}%`,
     hides: (hides: number, area: string, uom: string) => `circa ${hides} ${hides === 1 ? 'pelle' : 'pelli'} (${area} ${uom})`,
     crVi: 'prova Cr VI richiesta per ogni lotto (REACH All. XVII voce 47)',
+    deliveries: (parts: string) => `consegne: ${parts}`,
+    delivery: (quantity: string, uom: string, date: string) => `${quantity} ${uom} entro il ${date}`,
   },
   en: {
     colour: (name: string, code: string | null) => (code ? `colour ${name} (supplier code ${code})` : `colour ${name}`),
@@ -83,6 +87,8 @@ const WORDS = {
     tolerance: (pct: string) => `area tolerance ±${pct}%`,
     hides: (hides: number, area: string, uom: string) => `about ${hides} ${hides === 1 ? 'hide' : 'hides'} (${area} ${uom})`,
     crVi: 'Cr VI test required for every lot (REACH Annex XVII entry 47)',
+    deliveries: (parts: string) => `deliveries: ${parts}`,
+    delivery: (quantity: string, uom: string, date: string) => `${quantity} ${uom} by ${date}`,
   },
 } as const
 
@@ -106,6 +112,10 @@ export function lineText(line: SupplierLine, language: DocumentLanguage): string
     if (leather.estimatedHides !== null) parts.push(words.hides(leather.estimatedHides, formatQuantity(leather.baseQuantity, language), uomText(leather.baseUom)))
   }
   if (line.requiresCrViTest) parts.push(words.crVi)
+  // B-W2b-296: a line split into deliveries says each one (quantity in the line's unit, the day asked, its note).
+  if (line.deliveries && line.deliveries.length > 0) {
+    parts.push(words.deliveries(line.deliveries.map((delivery) => `${words.delivery(formatQuantity(delivery.quantity, language), uomText(line.uom), formatDate(delivery.needDate, language))}${delivery.note ? ` (${delivery.note})` : ''}`).join('; ')))
+  }
   if (line.note) parts.push(line.note)
   return parts.join(' · ')
 }

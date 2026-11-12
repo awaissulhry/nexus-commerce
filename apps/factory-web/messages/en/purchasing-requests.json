@@ -36,14 +36,15 @@
     "draft_one": "Draft PO for {count}",
     "draft_other": "Draft POs for {count}",
     "draftNone": "Draft POs",
-    "plan": "What to buy & make"
+    "plan": "What to buy & make",
+    "ask": "Ask to buy"
   },
   "tile": {
     "open": "Open",
     "need14": "Need date within 14 days",
     "waiting": "Waiting approval",
     "converted": "Converted today",
-    "waitingHint": "Staff requests come later"
+    "waitingHint": "Asked in the office, waiting for a yes"
   },
   "tiles": {
     "failed": "Couldn’t load what is to handle"
@@ -77,12 +78,14 @@
     "held": "Open, cannot be drafted now",
     "converted": "In a purchase order",
     "setAside": "Rejected",
-    "all": "All"
+    "all": "All",
+    "waiting": "Waiting for a yes"
   },
   "kind": {
     "all": "Every kind",
     "PLAN": "Plan",
-    "REORDER": "Reorder point"
+    "REORDER": "Reorder point",
+    "ASKED": "Asked in the office"
   },
   "groupBy": {
     "none": "No groups",
@@ -121,13 +124,16 @@
     "shortage_one": "Shortage for {numbers}",
     "shortage_other": "Shortage for {count} work orders ({numbers}…)",
     "reorderPoint": "Reorder point reached",
-    "minMax": "Below its minimum"
+    "minMax": "Below its minimum",
+    "asked": "{name} asked",
+    "askedShortage": "{number} shortage · {name} asked"
   },
   "by": {
     "planRun": "Plan run",
     "reorderPoint": "Reorder rule at {site}",
     "minMax": "Min–max rule at {site}",
-    "live": "Checked live, not stored"
+    "live": "Checked live, not stored",
+    "person": "{name}"
   },
   "crVi": "chromium VI test",
   "hides_one": "≈ {count} hide",
@@ -163,12 +169,16 @@
     "SET_ASIDE": "Rejected",
     "held": "Open · held",
     "inOrder": "In {number}",
-    "setAsideWhy": "Rejected: {reason}"
+    "setAsideWhy": "Rejected: {reason}",
+    "WAITING_APPROVAL": "Waits for a yes",
+    "refused": "Refused"
   },
   "notOpen": {
     "CONVERTED": "Already in purchase order {number}",
     "SET_ASIDE": "Rejected: put it back on What to buy & make first",
-    "OPEN": "Open"
+    "OPEN": "Open",
+    "WAITING_APPROVAL": "It waits for a yes first: it can be drafted once approved",
+    "refused": "Refused: the person who asked may ask again"
   },
   "hold": {
     "NO_SUPPLIER": "No supplier yet: open it and pick an approved one",
@@ -179,7 +189,8 @@
     "MATERIAL_ARCHIVED": "{material} is archived: nothing can be bought",
     "NOT_OPEN": "No longer open: someone decided it meanwhile",
     "PLAN_REPLACED": "A newer plan replaced this line: read the list again",
-    "NOT_NEEDED": "The stock is no longer at the reorder point: nothing to buy"
+    "NOT_NEEDED": "The stock is no longer at the reorder point: nothing to buy",
+    "WAITING_APPROVAL": "It waits for a yes first"
   },
   "warning": {
     "SUPPLIER_PROSPECT": "The supplier is a prospect: the order can be drafted, not sent, until it is approved.",
@@ -211,7 +222,8 @@
     "offline": "Offline: wait for the connection",
     "selectFirst": "Select requests first",
     "noneOpen": "None of these is open and ready to draft",
-    "reorderNoReject": "A reorder point cannot be rejected: change the reorder rule"
+    "reorderNoReject": "A reorder point cannot be rejected: change the reorder rule",
+    "noManageReject": "Refusing a request asked in the office needs purchasing.manage"
   },
   "keys": {
     "draft": "Draft POs for the selected requests (in the request: this one)",
@@ -278,7 +290,9 @@
       "SOURCE": "Buy {quantity} {uom}, in the supplier’s unit and steps",
       "PLAN": "Buy {quantity} {uom}, as the plan suggests",
       "ITEM": "Buy {quantity} {uom}, by the material’s terms"
-    }
+    },
+    "asked": "Asked: {quantity} {uom}",
+    "shortage": "Short for {number} when asked: {quantity} {uom}"
   },
   "rounding": {
     "WHOLE_UNITS": "Whole units: {quantity} {uom}",
@@ -293,7 +307,12 @@
     "run": "The plan run found it",
     "setAside": "Rejected: {reason}",
     "ordered": "Drafted into {number}",
-    "reorderLive": "The site’s reorder rule asks for it now (checked each time the list is read)."
+    "reorderLive": "The site’s reorder rule asks for it now (checked each time the list is read).",
+    "asked": "{name} asked for it",
+    "askedShortage": "{name} asked for it from a shortage",
+    "waitingYes": "It waits for a yes (an approval rule asked one)",
+    "yesAsked": "An approval rule asked a yes first",
+    "refused": "Refused: {reason}"
   },
   "reason": {
     "CUSTOMER_SUPPLIES": "the customer supplies it",
@@ -413,5 +432,20 @@
     "RECEIVED": "Received",
     "CLOSED": "Closed",
     "CANCELLED": "Cancelled"
+  },
+  "asked": {
+    "title": "Asked in the office",
+    "waiting": "It waits for a yes first: the buyers can draft it once it is approved.",
+    "by": "Asked by",
+    "quantity": "Asked for",
+    "reason": "Why",
+    "description": "What exactly",
+    "workOrder": "For work order",
+    "shortage": "Short when asked",
+    "word": {
+      "NOT_ENOUGH": "Not enough, needed by {date}",
+      "DELAYED": "On order too late, needed by {date}"
+    },
+    "refused": "Refused"
   }
 }

@@ -11,6 +11,7 @@ import { detailInCommand, onOrder } from '../orders'
 import { substituteAcceptProblem } from '@nexus/factory-domain/purchasing/portal-orders/answer'
 import { reopenConfirmTask } from '../portal-orders/tasks'
 import { dayOf, dayValue, officeContextOf, officeOrder, quantityText, senderOf } from '../store'
+import { confirmScheduleAsAsked } from '../po-depth/hooks'
 
 /**
  * The buyer's decision on a supplier's proposed changes (B-W1-31; SCM-086; Owner question P2, answer A: the buyer always
@@ -122,6 +123,8 @@ export async function acceptProposal(caller: CommandCaller, orderId: string, bod
         data: { confirmedQuantity: confirmation.confirmedQuantity, confirmedDate: confirmation.confirmedDate === null ? null : dayValue(confirmation.confirmedDate), version: { increment: 1 } },
       })
     }
+    // B-W2b-296: a line the proposal keeps as asked confirms its deliveries, each on its own day.
+    await confirmScheduleAsAsked(tools, current.id, accepted.map(({ line }) => line.id))
     // The channel the proposal came through (exactly one of its link and its portal person: the …_portal_followups guard).
     const channel = proposal.proposalLinkId ? ({ confirmedVia: 'LINK', confirmLinkId: proposal.proposalLinkId } as const) : ({ confirmedVia: 'PORTAL', confirmedByUserId: proposal.proposedByUserId } as const)
     await tx.purchaseOrder.update({
