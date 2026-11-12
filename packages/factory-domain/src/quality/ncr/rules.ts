@@ -360,6 +360,15 @@ export function approveProblem(input: { readonly stage: NcrStage; readonly appro
   return null
 }
 
+/**
+ * Four eyes past who decided it: nobody approves their own work, the Owner included (Owner W2b-5 Q3), so a person who changed
+ * the decision since (its quality.editNcrDecision audit rows) does not approve it either. A 409 `refusal/EDITED_DECISION`.
+ */
+export function decisionEditorRefusal(input: { readonly seq: number; readonly editorIds: readonly string[]; readonly approverId: string }): { readonly code: 'EDITED_DECISION'; readonly message: string } | null {
+  if (!input.editorIds.includes(input.approverId)) return null
+  return { code: 'EDITED_DECISION', message: `You changed decision ${input.seq}: a person who neither decided nor changed it approves it (four eyes).` }
+}
+
 /** Why a decision cannot be carried out now (null: it can). */
 export function carryOutProblem(input: { readonly stage: NcrStage; readonly approvalRequired: boolean; readonly approved: boolean; readonly done: boolean }): string | null {
   if (input.done) return 'This decision is carried out already.'

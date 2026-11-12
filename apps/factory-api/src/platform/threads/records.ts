@@ -248,6 +248,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const round = await client.sampleRound.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return round ? { companyId: round.companyId, siteId: null, partyId: round.partyId } : null
   },
+  // B-W2b-282 (platform/approvals; design home.approvals review "Conversation"): a request for a yes, between its approver and
+  // the person who asked, internal notes only (no party), in the request's company and site.
+  ApprovalTask: async (client, id) => {
+    const task = await client.approvalTask.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return task ? { companyId: task.companyId, siteId: task.siteId, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
