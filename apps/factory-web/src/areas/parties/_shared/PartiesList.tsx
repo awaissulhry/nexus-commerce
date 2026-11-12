@@ -63,7 +63,7 @@ export function PartiesList({ side, headActions, columns, depth }: { side: Side;
   )
 }
 
-const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers'])
+const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers']) // B-W2b-324: riders
 
 function PartiesListContainer({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
   const config = SIDES[side]
