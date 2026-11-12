@@ -19,6 +19,7 @@
     "CLAIM": "Supplier claims",
     "DOWNGRADE": "Downgrades",
     "APPROVAL_REJECT": "Approval rejections",
+    "PRICE_ADJUSTMENT": "Price adjustments",
     "SCRAP": "Scrap",
     "REWORK": "Rework"
   },
@@ -35,6 +36,7 @@
     "CLAIM": "Why we claim against a supplier.",
     "DOWNGRADE": "Why goods went down to a lower quality.",
     "APPROVAL_REJECT": "Why an approver said no to a request: every no names one, with the words.",
+    "PRICE_ADJUSTMENT": "Why a line's price was changed by hand: every manual change on a quote or order line names one.",
     "SCRAP": "Why a garment is lost at an operation: the operation screen's scrap tiles.",
     "REWORK": "Why a garment goes back to be made again: the operation screen's rework tiles."
   },
