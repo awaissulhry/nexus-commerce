@@ -309,6 +309,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'warehouse.locations', title: 'Locations', titleIt: 'Ubicazioni', wave: 'W1', href: '/warehouse/locations' },
           { id: 'warehouse.shipping', title: 'Carriers & shipping', titleIt: 'Corrieri e spedizioni', wave: 'W1', href: '/warehouse/shipping' },
+          // W2b: B-W2b-355 Warehouse rules (SCR-258), last in Settings.
+          { id: 'warehouse.settings', title: 'Warehouse rules', titleIt: 'Regole di magazzino', wave: 'W2b', href: '/warehouse/settings' },
         ],
       },
     ],

@@ -539,6 +539,8 @@ async function copyLines(tools: CommandTools, fromVersionId: string, toVersionId
       listUnitPrice: true,
       unitPrice: true,
       adjustmentReason: true,
+      // B-W2b-330 (SAL-174): the waterfall goes with the price to the new version.
+      priceSteps: true,
       netAmount: true,
       vatRatePct: true,
       vatNature: true,
@@ -553,9 +555,12 @@ async function copyLines(tools: CommandTools, fromVersionId: string, toVersionId
   if (lines.length === 0) return
   const sizes = await tx.quoteLineSize.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, size: true, quantity: true, unitPrice: true } })
   const actorId = actorIdOf(tools)
-  for (const { id: oldId, costSnapshot, ...line } of lines) {
+  for (const { id: oldId, costSnapshot, priceSteps, ...line } of lines) {
     const id = newId()
-    await tx.quoteLine.create({ data: { ...line, id, versionId: toVersionId, partyId, ...(costSnapshot === null ? {} : { costSnapshot: costSnapshot as Prisma.InputJsonValue }), createdById: actorId }, select: { id: true } })
+    await tx.quoteLine.create({
+      data: { ...line, id, versionId: toVersionId, partyId, ...(costSnapshot === null ? {} : { costSnapshot: costSnapshot as Prisma.InputJsonValue }), ...(priceSteps === null ? {} : { priceSteps: priceSteps as Prisma.InputJsonValue }), createdById: actorId },
+      select: { id: true },
+    })
     const own = sizes.filter((row) => row.lineId === oldId)
     if (own.length > 0) await tx.quoteLineSize.createMany({ data: own.map((row) => ({ id: newId(), lineId: id, partyId, size: row.size, quantity: row.quantity, unitPrice: row.unitPrice, createdById: actorId })) })
   }
