@@ -240,6 +240,8 @@ import { events as inventoryCounts } from '../inventory-counts/events'
 import { events as salesCredit } from '../sales-credit/events'
 // B-W2b-298: substitutes with a yes (inventory.substitution_changed).
 import { events as inventorySubstitutions } from '../inventory-substitutions/events'
+// B-W2b-300: goods without a PO and the reception report (inventory.unplanned_changed, inventory.reception_reported).
+import { events as inventoryReceiving } from '../inventory-receiving/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -545,7 +547,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-342
   ...repairsDepth,
   // B-W2b-306
-  ...planningActions] as const satisfies readonly EventDefinition[]
+  ...planningActions,
+  // B-W2b-300
+  ...inventoryReceiving] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

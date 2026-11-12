@@ -1,0 +1,354 @@
+{
+  "unplanned": {
+    "entry": "Goods without a PO",
+    "title": "Goods without a PO",
+    "intro": "Goods that came without a purchase order wait in the holding area for a buyer. Nothing of it is used until an order names it.",
+    "loading": "Reading where such goods wait…",
+    "noPermission": {
+      "title": "You cannot take goods in",
+      "body": "Taking goods in needs the goods-in role on this tablet. Ask your team leader."
+    },
+    "supplier": {
+      "title": "Who sent it?",
+      "search": "Find the supplier",
+      "hint": "Type part of the name or the code, then Enter.",
+      "filtered": "Suppliers with “{text}”",
+      "clear": "Show all",
+      "none": {
+        "title": "No supplier found",
+        "body": "Type another part of the name, or ask the office to add the supplier."
+      },
+      "count_one": "{count} supplier",
+      "count_other": "{count} suppliers"
+    },
+    "card": {
+      "type": "Goods without a PO",
+      "supplier": "Supplier",
+      "noSupplier": "No supplier yet",
+      "ddt": "Delivery note",
+      "noDdt": "No number",
+      "place": "Holding place",
+      "noPlace": "Scan its label",
+      "lines": "Lines",
+      "linesCount_one": "{count} line",
+      "linesCount_other": "{count} lines"
+    },
+    "material": {
+      "title": "Materials found",
+      "scan": "Scan or type the material code",
+      "hint": "The code on the label or the delivery note. Part of the name works too.",
+      "reading": "Finding the material…",
+      "ask": {
+        "title": "What came?",
+        "body": "Scan the code or type it, then tap the material."
+      },
+      "none": {
+        "title": "No material matches “{code}”",
+        "body": "Try another code or part of the name. A material we do not keep yet is the office’s to add."
+      }
+    },
+    "tracking": {
+      "NONE": "By quantity",
+      "LOT": "By lot",
+      "HIDE": "Leather, by hide"
+    },
+    "quantity": {
+      "colour": "Which colour came?",
+      "title": "How much came ({unit})",
+      "pad": "Quantity in {unit}",
+      "empty": "Type the quantity",
+      "hides": "How many hides",
+      "hidesEmpty": "Count the hides",
+      "held": {
+        "NO_COLOUR": "Pick the colour that came.",
+        "NO_QUANTITY": "Type how much came."
+      }
+    },
+    "lines": {
+      "title": "What came",
+      "goesTo": "Put it in the holding area {place}: it waits there for a buyer.",
+      "scanPlace": "Scan the label of the holding area where you put it.",
+      "empty": {
+        "title": "Nothing yet",
+        "body": "Add each material that came."
+      },
+      "quantity": "Quantity",
+      "hides_one": "{count} hide",
+      "hides_other": "{count} hides",
+      "remove": "Remove {code}",
+      "full": "One delivery takes at most 20 lines."
+    },
+    "keys": {
+      "enter": "Put it in the holding area"
+    },
+    "ddt": {
+      "title": "Delivery note",
+      "number": "Its number",
+      "scan": "Scan the delivery note",
+      "hint": "Its barcode, or type the number.",
+      "pad": "The delivery note number",
+      "empty": "Type the number",
+      "kept": "Kept as scanned: {number}",
+      "clear": "Clear the number",
+      "date": "Its date",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "another": "Another day",
+      "photo": "A photo of it",
+      "takePhoto": "Take a photo",
+      "retake": "Take it again",
+      "removePhoto": "Remove the photo",
+      "photoKept": "photo kept",
+      "photoAlt": "Delivery note {number}",
+      "photoHint": "The photo goes with the goods once they are in the holding area. Keep faces out of it."
+    },
+    "place": {
+      "title": "Holding area",
+      "scan": "Scan the holding area’s label",
+      "hint": "The label on the bin or rack where the goods wait.",
+      "useSuggested": "Use {place} again"
+    },
+    "held": {
+      "OFFLINE": "No network: goods without a PO wait for it (the receipt takes its number from the office). What you typed stays here.",
+      "NO_SUPPLIER": "Pick who sent it first.",
+      "NO_LINES": "Add what came first.",
+      "NO_PLACE": "Scan the holding area’s label first.",
+      "BUSY": "Sending…"
+    },
+    "action": {
+      "back": "Back to receiving",
+      "toDraft": "Back to the goods",
+      "toLines": "Back to what came",
+      "toSupplier": "Back to the supplier",
+      "cancelLine": "Leave this line",
+      "addLine": "Add this line",
+      "addMaterial": "Add another material",
+      "ddt": "Delivery note",
+      "place": "Another holding place",
+      "changeSupplier": "Change the supplier",
+      "post": "Put it in the holding area",
+      "posting": "Sending…",
+      "next": "Next delivery"
+    },
+    "problem": {
+      "PLACE": {
+        "title": "That is no holding place",
+        "body": "Scan the label of a bin or rack of this site that takes goods (not a workshop’s, a customer’s or a transit place)."
+      },
+      "SUPPLIER": {
+        "title": "That supplier cannot be picked",
+        "body": "Pick one of our active suppliers, or ask the office."
+      },
+      "COLOUR": {
+        "title": "Pick the colour",
+        "body": "A material that comes in colours needs the colour that came."
+      },
+      "LINE": {
+        "title": "A line cannot be taken in",
+        "body": "Check each material and its quantity, then send again."
+      }
+    },
+    "done": {
+      "type": "Waiting for a buyer",
+      "waiting": "Nothing is used yet",
+      "lines_one": "{count} line",
+      "lines_other": "{count} lines",
+      "putIt": "Put the goods in {place} now.",
+      "buyerAsked": "A buyer has a task: they name the purchase order or send the goods back.",
+      "buyerLater": "The office asks a buyer: the goods wait meanwhile.",
+      "photoSending": "Sending the delivery note photo…",
+      "photoSent": "Delivery note photo sent.",
+      "photoFailed": "The delivery note photo did not go."
+    }
+  },
+  "reception": {
+    "menu": "Reception report…",
+    "title": "Reception report {number}",
+    "subtitle": "Which work orders and orders these goods serve, what to reserve for them now.",
+    "loading": "Reading the report…",
+    "failed": "The report could not be read",
+    "retry": "Try again",
+    "close": "Close",
+    "send": "Send to the buyer",
+    "reserve": {
+      "workOrders_one": "Reserve for {count} work order",
+      "workOrders_other": "Reserve for {count} work orders",
+      "orders_one": "Reserve for {count} order",
+      "orders_other": "Reserve for {count} orders",
+      "demands_one": "Reserve for {count} order",
+      "demands_other": "Reserve for {count} orders"
+    },
+    "tellBuyer": "Tell the buyer, {name}",
+    "noBuyer": "The order names no buyer to tell.",
+    "noBuyerShort": "None",
+    "note": "A word for the buyer",
+    "noteHint": "Goes with the report and on the reservations.",
+    "fact": {
+      "order": "Purchase order",
+      "buyer": "Buyer",
+      "plan": "Plan",
+      "planAt": "Planning run of {time}",
+      "noPlan": "No planning run yet: the open work orders that need the material"
+    },
+    "linesLabel": "What came",
+    "line": {
+      "received": "received {amount}",
+      "lotFree": "Lot {lot}: {amount} free",
+      "lotHeld": "Lot {lot}: in quarantine, free once released",
+      "free": "{amount} free",
+      "left": "To stock after these: {amount}"
+    },
+    "tableLabel": "Work orders and orders these goods serve",
+    "count_one": "{count} work order or order",
+    "count_other": "{count} work orders and orders",
+    "empty": {
+      "title": "Nothing waits for these goods",
+      "body": "No plan pegged this order line and no open work order needs the material: the goods go to stock."
+    },
+    "col": {
+      "line": "Line",
+      "for": "For",
+      "need": "Needed by",
+      "open": "Still needs",
+      "here": "Reserved from these",
+      "proposed": "Reserve now",
+      "state": "State",
+      "ready": "Ready to reserve"
+    },
+    "kind": {
+      "WORK_ORDER": "Work order",
+      "ORDER_LINE": "Customer order line"
+    },
+    "why": {
+      "PEGGED": "Planned for it",
+      "NEEDS": "Needs it"
+    },
+    "held": {
+      "NOT_NEEDED": "It needs nothing more (reserved or issued).",
+      "NOTHING_LEFT": "Nothing of these goods is free for it.",
+      "IN_QUARANTINE": "The lots are in quarantine: reserve once released.",
+      "NOT_OPEN": "It is no longer open.",
+      "busy": "Working…",
+      "loading": "The report is being read.",
+      "nothing": "Nothing to reserve now.",
+      "noReserve": "Reserving needs the right to reserve stock at this site.",
+      "choose": "Choose a work order or an order first.",
+      "noSend": "Sending needs the right to write on the purchase order."
+    },
+    "report": {
+      "NOT_POSTED": "The receipt is not posted: its goods are not in stock yet.",
+      "NO_ORDER": "The receipt names no purchase order: there is no report."
+    },
+    "done_one": "Reserved {count} line of stock.",
+    "done_other": "Reserved {count} lines of stock.",
+    "doneSkipped_one": "{count} had nothing free left.",
+    "doneSkipped_other": "{count} had nothing free left.",
+    "doneTold": "The buyer was told on the purchase order.",
+    "doneNotTold": "The report is on the purchase order; its buyer could not be named there.",
+    "problem": {
+      "refused": "Some of it was reserved meanwhile: read the report again and choose once more.",
+      "demand": "A chosen work order or order no longer takes these goods: read the report again.",
+      "nothing": "Nothing of these goods is free for the chosen ones now: read the report again.",
+      "read": "Try again in a moment.",
+      "forbidden": "You may not see this receipt’s report.",
+      "offline": "No answer from the office server: try again.",
+      "gone": "This receipt is no longer there."
+    }
+  },
+  "waiting": {
+    "title": "Goods without a PO: waiting in {place} since {since}",
+    "body": "Nothing of it is in stock or used until a purchase order names it.",
+    "buyer": "The buyer {name} has the task, due {due}.",
+    "buyerNobody": "The buyer’s task waits for someone to take it.",
+    "noTask": "No buyer was asked yet.",
+    "noOrderYet": "{supplier} has no open order to this site for these goods yet: make it and send it first.",
+    "toOrders": "Purchase orders",
+    "askBuyer": "Ask a buyer",
+    "sendBack": "Send back…",
+    "name": "Name the purchase order…",
+    "named": "Posted with {order} into {place}: the goods are in stock.",
+    "sentBack": "Sent back to the supplier: this receipt is cancelled.",
+    "held": {
+      "busy": "Working…",
+      "noDecide": "Deciding on goods without a PO needs the buyer’s or the warehouse’s right.",
+      "noOrder": "{supplier} has no open order to this site: make it and send it first.",
+      "pickOrder": "Pick the purchase order.",
+      "pickLine": "Pick the order line for line {seq} ({code}).",
+      "hides": "Give each hide’s area for line {seq} ({code}): leather posts hide by hide.",
+      "reason": "Say why the goods go back."
+    },
+    "back": {
+      "title": "Send {number} back",
+      "what_one": "The goods of {supplier} ({count} line) go back: the receipt is cancelled.",
+      "what_other": "The goods of {supplier} ({count} lines) go back: the receipt is cancelled.",
+      "task": "The buyer’s task is done.",
+      "kept": "Nothing is deleted: the receipt keeps why.",
+      "reason": "Why they go back",
+      "reasonHint": "The buyer and the supplier read it.",
+      "confirm": "Send back"
+    },
+    "nameDialog": {
+      "title": "Name the purchase order of {number}",
+      "subtitle": "The goods post into {place}, where they wait.",
+      "order": "The supplier’s open orders to this site",
+      "notAll": "not every line fits",
+      "lines": "Each line to a line of the order",
+      "came": "Came",
+      "hides_one": "{count} hide",
+      "hides_other": "{count} hides",
+      "orderLine": "Order line",
+      "pick": "Pick the line",
+      "noFit": "No line of this order is of this material and colour",
+      "lineOption": "Line {seq} · {code} · {open} still to come",
+      "supplierLot": "Supplier’s lot",
+      "supplierLotHint": "As printed on the goods (optional).",
+      "hideAreas": "Each hide’s area ({unit})",
+      "hideAreasHint": "One number per hide, separated by spaces or new lines.",
+      "hideTotal_one": "{count} hide, {total} in all",
+      "hideTotal_other": "{count} hides, {total} in all",
+      "reach": "Posting puts the goods in stock in {place}, numbers their lots, moves the order on and closes the buyer’s task. A put-away task follows.",
+      "confirm": "Name the order and post"
+    },
+    "orderStatus": {
+      "SENT": "sent",
+      "CONFIRMED": "confirmed",
+      "PARTLY_RECEIVED": "partly received"
+    },
+    "problem": {
+      "tolerance": "A line brings more than its order line allows: name another line, or send the goods back.",
+      "hides": "The hide areas cannot be read: one number per hide.",
+      "line": "A line cannot go to that order line: pick another.",
+      "order": "That order cannot take these goods (another supplier, another site, or not sent).",
+      "period": "The month is closed for stock moves: ask finance.",
+      "changed": "The goods changed meanwhile: they were named, sent back or changed by someone else. Read them again."
+    }
+  },
+  "problem": {
+    "write": "It did not go: try again.",
+    "changed": "Someone changed it meanwhile: read it again.",
+    "forbidden": "You may not do this here.",
+    "gone": "It is no longer there.",
+    "invalid": "Something is not right: check what you typed.",
+    "slowDown": "Too many tries: wait a moment.",
+    "offline": "No answer from the office server: try again."
+  },
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}

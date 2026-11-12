@@ -180,6 +180,9 @@ export interface RecordOptions {
   readonly expectedVersion?: number
   /** The floor: where lots that start in quarantine go (the site's quality-hold place), instead of the dock. */
   readonly heldLocation?: { readonly id: string; readonly code: string } | null
+  // B-W2b-300 (SCM-122): goods without a PO that waited OPEN post as THEIR receipt (its number kept): `name` names the order on
+  // it and clears its waiting lines (modules/inventory/unplanned/office.ts) where a new receipt would be created.
+  readonly unplanned?: { readonly receiptId: string; readonly number: string; name(tools: CommandTools, order: OrderForReceipt): Promise<void> } | undefined
 }
 
 /** POST /inventory/receipts (inventory.receive over the order's company and site; office in W1). */
@@ -297,9 +300,11 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   if (!blank(body.supplierDdtNumber)) notes.unshift({ code: 'NO_SUPPLIER_DDT', seq: null, message: 'No supplier DDT number: add the transport document\'s number and date to the receipt (DPR 472/1996).' })
 
   // 5. The receipt and its lines.
-  const receiptId = newId()
-  const number = await receiptNumber(tools, { companyId: order.companyId, receiptId, date: businessDate(receivedAt) })
-  await tx.goodsReceipt.create({
+  // B-W2b-300: goods without a PO post as their own receipt (named the order, its waiting lines cleared), not a new one.
+  const receiptId = options.unplanned?.receiptId ?? newId()
+  const number = options.unplanned ? options.unplanned.number : await receiptNumber(tools, { companyId: order.companyId, receiptId, date: businessDate(receivedAt) })
+  if (options.unplanned) await options.unplanned.name(tools, order)
+  else await tx.goodsReceipt.create({
     data: {
       id: receiptId,
       companyId: order.companyId,

@@ -55,6 +55,9 @@ import {
 import type { DailyDialog, DailyNotice, ReceiptDailyModel } from '../daily-state'
 import { receiptTabOf, type ReceiptRecordModel } from '../model'
 import { ReceiptRecordView } from './view/ReceiptRecordView'
+// B-W2b-300 (SCM-119, SCM-122): the reception report and goods without a PO.
+import { NAMESPACE as DEPTH } from '../reception/model'
+import { useReceiptDepth } from '../reception/useReceiptDepth'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -69,7 +72,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function ReceiptRecord({ receiptId }: { receiptId: string }) {
   return (
-    <WithMessages namespaces={['buying', 'lists', 'records', NAMESPACE, 'photo-kit']}>
+    <WithMessages namespaces={['buying', 'lists', 'records', NAMESPACE, 'photo-kit', /* B-W2b-300 */ DEPTH]}>
       <RecordContainer receiptId={receiptId} />
     </WithMessages>
   )
@@ -251,6 +254,9 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   }, [api, receiptId, sentEmail])
 
   const value = receipt.status === 'ready' ? receipt.value : null
+  // B-W2b-300: the reception report (⋯) and goods without a PO (their banner and dialogs).
+  const depthT = useT(DEPTH)
+  const depth = useReceiptDepth({ api, receipt: value, prefix, timeZone: TIME_ZONE, label: depthT('reception.menu'), onChanged: () => void reloadReceipt() })
 
   // B-W2a-F4: the request's own check (inventory.receipts.documents.request): the documents, the supplier's contacts.
   const requestOpen = daily?.kind === 'request' && daily.draft.check.value === null && daily.draft.check.problem === null
@@ -435,6 +441,7 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   return (
     <ReceiptRecordView
       model={model}
+      depth={depth}
       panels={value && (tab === 'activity' || dockOpen) ? <RecordPanels record={{ type: 'GoodsReceipt', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.supplier.name}`} /> : null}
       actions={{
         onRetry: () => void load(),
