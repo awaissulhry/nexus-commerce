@@ -53,6 +53,8 @@ import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
 // B-W2b-301
 import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
+// B-W2b-312: scheduling in depth (the planner and the production manager pin the board).
+import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -93,6 +95,8 @@ import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permis
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-319: the production strategy per item.
 import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
+// B-W2b-306: MRP you can trust (action messages; protected edits and bulk edit of planned orders).
+import { PLANNING_ACTIONS_ADDS } from '../../planning/actions/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
@@ -963,6 +967,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
   // B-W2b-301
   ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
+  // B-W2b-312
+  ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -983,7 +989,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-304
-  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
+  // B-W2b-306
+  ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -35,6 +35,8 @@ import {
 } from './model'
 import type { ProfileDialog } from './view/ProfileDialogs'
 import { ProfileView } from './view/ProfileView'
+// B-W2b-334: Profile › Bank details (SCM-007).
+import { SupplierBank } from './bank/SupplierBank'
 
 /**
  * `/p/<party>/profile` for a supplier or a workshop (B-W2b-193, SCR-191; design portal.supplier.profile): reads GET
@@ -47,7 +49,7 @@ import { ProfileView } from './view/ProfileView'
  */
 export function SupplierProfileRoute() {
   return (
-    <WithMessages namespaces={[NS, 'portal', 'portal-account', 'lists', 'ds-words']}>
+    <WithMessages namespaces={[NS, 'portal', 'portal-account', 'lists', 'ds-words', 'purchasing-suppliers-depth']}>
       <Gate />
     </WithMessages>
   )
@@ -222,6 +224,7 @@ function ProfileContainer() {
   const website = edits.website ?? websiteSaved
   return (
     <ProfileView
+      bank={me.permissions.includes('portal.supplierBank.view') ? <SupplierBank /> : null}
       model={{
         slow,
         company: { state: profile.state, company: value?.company ?? null, website, websiteChanged: edits.website !== null, websiteProblem: edits.website !== null ? websiteProblemKey(edits.website) : null, addresses, selected: addressSelected, held, admins },

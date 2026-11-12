@@ -145,12 +145,16 @@ import { events as returnsDepth } from '../returns-depth/events'
 import { events as returnsOutcomes } from '../returns-outcomes/events'
 // B-W2b-293: planned work and subcontract orders (planned by a run, made real, made firm).
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
+// B-W2b-306: MRP you can trust (action messages raised and decided, planned orders edited, order-specific pegs).
+import { events as planningActions } from '../planning-actions/events'
 // B-W2b-301: promise dates (an order line's promise per size).
 import { events as planningPromise } from '../planning-promise/events'
 // B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
 import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
 import { events as salesPricing } from '../sales-pricing/events'
+// B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
+import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -232,6 +236,8 @@ import { events as inventoryTransfers } from '../inventory-transfers/events'
 import { events as inventoryCounts } from '../inventory-counts/events'
 // B-W2b-304: credit checks and limits.
 import { events as salesCredit } from '../sales-credit/events'
+// B-W2b-298: substitutes with a yes (inventory.substitution_changed).
+import { events as inventorySubstitutions } from '../inventory-substitutions/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -529,7 +535,13 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-299
   ...inventoryCounts,
   // B-W2b-304
-  ...salesCredit] as const satisfies readonly EventDefinition[]
+  ...salesCredit,
+  // B-W2b-298
+  ...inventorySubstitutions,
+  // B-W2b-342
+  ...repairsDepth,
+  // B-W2b-306
+  ...planningActions] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

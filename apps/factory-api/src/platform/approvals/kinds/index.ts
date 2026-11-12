@@ -14,6 +14,8 @@ import { SUPPLIER_BANK_CHANGE_KIND } from './supplier-bank-change'
 import { COUNT_VARIANCE_KIND } from './count-variance'
 // B-W2b-304: a step held for credit let through with a yes.
 import { CREDIT_OVERRIDE_KIND } from './credit-override'
+// B-W2b-298: a substitute material on a work order's BOM line, before it is used.
+import { MATERIAL_SUBSTITUTION_KIND } from './material-substitution'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -28,6 +30,7 @@ import { CREDIT_OVERRIDE_KIND } from './credit-override'
  *   SUPPLIER_BANK_CHANGE   a supplier's new bank account after its call-back, before payments use it (B-W2b-315; ACTIVE on the yes)
  *   COUNT_VARIANCE   a submitted stock count's differences (B-W2b-299; approved on the yes, sent back for a recount on the no)
  *   CREDIT_OVERRIDE  an order, a release or a shipment held for credit, let through on the yes (B-W2b-304)
+ *   MATERIAL_SUBSTITUTION  a substitute on a work order's BOM line before it is used (B-W2b-298; approved, refused or withdrawn)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -43,6 +46,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   COUNT_VARIANCE_KIND,
   // B-W2b-304
   CREDIT_OVERRIDE_KIND,
+  // B-W2b-298
+  MATERIAL_SUBSTITUTION_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {

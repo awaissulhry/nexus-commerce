@@ -86,6 +86,20 @@ export interface OverviewSlot {
 }
 
 /**
+ * B-W2b-334: a supplier's W2b parts (areas/purchasing/suppliers/depth), drawn by Purchasing: kinds, status, origin and
+ * closures under the supplier's form; the status since when and the next document to expire under Now; what each contact
+ * receives under the contacts; the Documents & qualification, Quality & rating and Bank details tabs.
+ */
+export interface SupplierDepth {
+  readonly overview?: ReactNode
+  readonly now?: ReactNode
+  readonly contacts?: ReactNode
+  readonly documents?: ReactNode
+  readonly quality?: ReactNode
+  readonly bank?: ReactNode
+}
+
+/**
  * SCR-033 Customer record and SCR-057 Supplier record (design sales.customers / purchasing.suppliers "records", 00
  * §2.2): one party record, two sides. The head (‹ list · name · identity · status, role and VIES pills · at most two
  * actions · ⋯), the tabs always in view (Owner L1), then the tab: a customer's Overview, Addresses & contacts, Tax &
@@ -93,15 +107,15 @@ export interface OverviewSlot {
  * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
  * (thread, files, history) come in as `panels` and `documents`.
  */
-export function PartyRecordView({ model, actions, panels, documents, terms, items, overview, portal, questionnaire }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode }) {
+export function PartyRecordView({ model, actions, panels, documents, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} />
+      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents, terms, items, overview, portal, questionnaire }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode }) {
+function PartyRecord({ model, actions, panels, documents, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -244,7 +258,7 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         {!can.manage && party.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
 
         {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} />}
-        {tab === 'overview' && side === 'suppliers' && <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} />}
+        {tab === 'overview' && side === 'suppliers' && <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} depth={depth} />}
         {tab === 'addresses' && (
           <div className="fw-pty-stack">
             <AddressesCard model={model} party={party} actions={actions} editable={editable} />
@@ -252,6 +266,8 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
           </div>
         )}
         {tab === 'contacts' && <ContactsCard model={model} party={party} actions={actions} editable={editable} />}
+        {/* B-W2b-334: what each contact receives (Purchasing's depth slot). */}
+        {tab === 'contacts' && side === 'suppliers' && depth?.contacts}
         {tab === 'tax' && (
           <div className="fw-pty-two-wide">
             <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
@@ -268,7 +284,12 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         {tab === 'portal' && portal}
         {/* B-W2b-172: the supplier questionnaire (areas/purchasing/suppliers/questionnaire). */}
         {tab === 'questionnaire' && side === 'suppliers' && questionnaire}
+        {/* B-W2b-334: a supplier's Documents & qualification, Quality & rating and Bank details (Purchasing's depth slot);
+            the record's files (upload, what a file is and until when) stay below the supplier's vault. */}
+        {tab === 'documents' && side === 'suppliers' && depth?.documents}
         {tab === 'documents' && documents}
+        {tab === 'quality' && side === 'suppliers' && depth?.quality}
+        {tab === 'bank' && side === 'suppliers' && depth?.bank}
         {tab === 'activity' && panels}
       </RecordFrame>
 
@@ -707,7 +728,7 @@ function SupplierForm({ model, party, actions, editable }: TabProps) {
   )
 }
 
-function SupplierOverview({ model, party, actions, editable, viesHeld }: TabProps & { viesHeld: string | null }) {
+function SupplierOverview({ model, party, actions, editable, viesHeld, depth }: TabProps & { viesHeld: string | null; depth?: SupplierDepth | undefined }) {
   const t = useT('parties')
   const locale = useLocale()
   const { current } = identitiesOf(party)
@@ -725,6 +746,8 @@ function SupplierOverview({ model, party, actions, editable, viesHeld }: TabProp
   const main = (
     <div className="fw-pty-stack">
       <SupplierForm model={model} party={party} actions={actions} editable={editable} />
+      {/* B-W2b-334: kinds, status, origin and closures (Purchasing's depth slot). */}
+      {depth?.overview}
       <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} compact viesHeld={viesHeld} />
       <AddressesCard model={model} party={party} actions={actions} editable={editable} />
     </div>
@@ -754,6 +777,7 @@ function SupplierOverview({ model, party, actions, editable, viesHeld }: TabProp
       main={main}
       aside={
         <SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld}>
+          {depth?.now}
           {orders}
         </SidePanel>
       }

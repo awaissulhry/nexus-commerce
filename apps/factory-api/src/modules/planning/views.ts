@@ -9,6 +9,9 @@ import { sourceFor, sourceRules, type SourceFacts } from '@nexus/factory-domain/
 import { readDecisionNote } from '@nexus/factory-domain/planning/decisions'
 import type { PlanWarning, RequirementSource } from '@nexus/factory-domain/planning/explode'
 import { whyLine } from '@nexus/factory-domain/planning/explain'
+// B-W2b-306 (PLN-083): a planned order is dated today at the earliest.
+import { plannedDateOf } from '@nexus/factory-domain/planning/actions/late'
+import { daysFrom } from '@nexus/factory-domain/calendars/dates'
 import { COST_SCALE, QUANTITY_SCALE, toBase, unitCostIn } from '@nexus/factory-domain/product/units/units'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import { supplierCalendarsFor, type LoadedSupplierCalendar } from '../../platform/calendars/service'
@@ -79,6 +82,9 @@ export const REQUIREMENT_COLUMNS = {
   firmedById: true,
   // B-W2b-20: the earlier run's firm line this line carries (history; stays when the line is made planned again).
   firmCarriedFromId: true,
+  // B-W2b-306 (PLN-072): kept for one order line alone.
+  orderSpecific: true,
+  reservedForLineId: true,
   createdAt: true,
 } as const satisfies Prisma.MaterialRequirementSelect
 export type RequirementRow = Prisma.MaterialRequirementGetPayload<{ select: typeof REQUIREMENT_COLUMNS }>
@@ -293,7 +299,16 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
             carried: row.firmCarriedFromId !== null || row.version === 1 || row.firmedAt.getTime() < row.createdAt.getTime(),
           }
         : null,
+    // B-W2b-306 (PLN-072): the order line it is kept for alone; (PLN-083) its planned date, never before today.
+    orderSpecific: row.orderSpecific && row.reservedForLineId !== null ? reservedOf(row.reservedForLineId, sources) : null,
+    planned: { date: plannedDateOf(numbers.needDate, today), daysLate: numbers.needDate < today ? daysFrom(numbers.needDate, today) : null },
     ...(withCost ? { unitCost: asMoney('cost', unitCost), expectedAmount: asMoney('cost', expected) } : {}),
     currency: item.currency,
   }
+}
+
+/** B-W2b-306 (PLN-072): the order line a line is kept for, as its sources name it. */
+function reservedOf(orderLineId: string, sources: readonly RequirementSource[]): { orderLineId: string; orderId: string; orderNumber: string; lineSeq: number } {
+  const source = sources.find((entry) => entry.orderLineId === orderLineId)
+  return { orderLineId, orderId: source?.orderId ?? '', orderNumber: source?.orderNumber ?? '', lineSeq: source?.lineSeq ?? 0 }
 }

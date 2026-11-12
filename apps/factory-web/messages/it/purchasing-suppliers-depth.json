@@ -1,0 +1,880 @@
+{
+  "problem": {
+    "forbidden": "Non puoi farlo qui.",
+    "notFound": "Non c’è più: rileggi la pagina.",
+    "conflict": "Qualcun altro l’ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa di scritto non va: controlla i campi.",
+    "stepUp": "Serve un codice nuovo per questo.",
+    "rateLimited": "Troppi tentativi: aspetta un minuto e riprova.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "offline": "Il server della fabbrica non ha risposto: controlla la connessione e riprova.",
+    "unavailable": "Questa volta non ha funzionato: riprova."
+  },
+  "read": {
+    "failed": "Impossibile caricare {what}",
+    "retry": "Riprova",
+    "loading": "Ancora in caricamento…"
+  },
+  "dialog": {
+    "cancel": "Annulla",
+    "saving": "Salvataggio…"
+  },
+  "notice": {
+    "hide": "Nascondi"
+  },
+  "held": {
+    "manage": "Cambiare i dati di un fornitore richiede il permesso di gestire le anagrafiche.",
+    "archived": "Un fornitore archiviato è in sola lettura: riattivalo prima.",
+    "status": "Impostare lo stato di un fornitore richiede il permesso acquisti per lo stato fornitore.",
+    "qualify": "Qualificare un fornitore richiede il permesso di gestire le qualifiche.",
+    "review": "Controllare ciò che inviano i fornitori richiede il permesso di verificare i documenti fornitore.",
+    "decideChanges": "Decidere le modifiche di un fornitore richiede il permesso di decidere le modifiche fornitore.",
+    "ask": "Chiedere qualcosa a un fornitore richiede il permesso di inviare richieste ai partner.",
+    "bankPropose": "Proporre coordinate bancarie richiede il permesso di proporle.",
+    "bankCallBack": "Registrare la richiamata richiede il permesso di richiamare i fornitori.",
+    "bankVerify": "Il secondo controllo richiede il permesso di verificare le coordinate bancarie.",
+    "bankReveal": "Vedere l’IBAN intero richiede il permesso amministrativo di mostrarlo.",
+    "receipts": "Gli arrivi richiedono il permesso di vedere le giacenze.",
+    "claims": "I reclami richiedono il permesso di vedere gli acquisti.",
+    "files": "Aprire un file richiede il permesso di leggere i file.",
+    "noEmail": "Questo contatto non ha un indirizzo e-mail: aggiungilo prima.",
+    "sources": "Importare un listino richiede il permesso di gestire le fonti approvate.",
+    "importRun": "Importare richiede i permessi di avviare importazioni e caricare file."
+  },
+  "import": {
+    "suppliers": "Importa",
+    "prices": "Importa listino",
+    "everyCompany": "Tutte le aziende"
+  },
+  "kind": {
+    "TANNERY": "Conceria",
+    "TEXTILE_MILL": "Tessitura",
+    "TRIMS": "Accessori",
+    "PROTECTOR_MAKER": "Produttore di protezioni",
+    "SUBCONTRACTOR": "Terzista",
+    "CARRIER": "Corriere",
+    "SERVICE": "Servizi"
+  },
+  "tannage": {
+    "CHROME": "Al cromo",
+    "VEGETABLE": "Vegetale",
+    "CHROME_FREE": "Senza cromo",
+    "COMBINATION": "Mista"
+  },
+  "status": {
+    "PROSPECT": "Potenziale",
+    "APPROVED": "Approvato",
+    "CONDITIONAL": "Con condizioni",
+    "ON_HOLD": "Sospeso",
+    "BLOCKED": "Bloccato",
+    "INACTIVE": "Inattivo",
+    "label": "Stato con noi",
+    "fromParty": "Letto dallo stato dell’anagrafica: nessuno stato fornitore ancora.",
+    "sinceBy": "Dal {date}, da {name}",
+    "sinceSystem": "Dal {date}, impostato dal sistema",
+    "reasonIs": "Perché: {reason}",
+    "change": "Cambia stato",
+    "problem": {
+      "pick": "Scegli il nuovo stato.",
+      "reason": "Di’ perché: con condizioni, sospeso e bloccato richiedono un motivo."
+    },
+    "dialog": {
+      "title": "Cambia lo stato di {name}",
+      "now": "Ora: {status}.",
+      "to": "Nuovo stato",
+      "pick": "Scegli uno stato",
+      "reason": "Motivo",
+      "reasonHint": "Una riga. Serve per con condizioni, sospeso e bloccato; si vede sulla scheda e su un invio trattenuto.",
+      "confirm": "Rendilo {status}",
+      "stops": "Da ora non gli va nessun nuovo ordine d’acquisto; le bozze sono trattenute all’invio, gli ordini inviati proseguono.",
+      "prospect": "Un potenziale riceve solo ordini campione.",
+      "reaching": "Conto cosa tocca…",
+      "reachFailed": "Impossibile contare cosa tocca: il cambio funziona comunque.",
+      "reachStops": "{drafts} bozze di ordine d’acquisto trattenute all’invio; {open} ordini d’acquisto inviati proseguono invariati.",
+      "reachGoes": "{drafts} bozze di ordine d’acquisto si possono inviare; {open} ordini d’acquisto inviati proseguono invariati."
+    }
+  },
+  "profile": {
+    "title": "Tipi, origine e chiusure",
+    "hint": "Che tipo di fornitore è, il suo tempo di consegna, dove produce ciò che ci vende e quando è chiuso.",
+    "kinds": "Tipi",
+    "noKinds": "Nessun tipo impostato",
+    "leadTime": "Tempo di consegna predefinito (giorni)",
+    "leadTimeHint": "Giorni di calendario dall’ordine alla consegna; i suoi giorni di chiusura sono saltati.",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "country": "Paese di produzione",
+    "countryHint": "Due lettere, es. IT",
+    "region": "Regione",
+    "note": "Origine, in parole",
+    "hides": "Pelli grezze da",
+    "hidesHint": "Paesi, due lettere ciascuno, separati da virgole",
+    "tannages": "Concia",
+    "clearsTannery": "Non più conceria: salvando si cancellano la provenienza delle pelli grezze e le conce.",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "save": "Salva",
+    "fixFirst_one": "Correggi prima {count} campo",
+    "fixFirst_other": "Correggi prima {count} campi",
+    "refused": "Rifiutato: controlla questo campo.",
+    "problem": {
+      "leadTime": "Giorni interi da 0 a {max}.",
+      "country": "Due lettere del paese (ISO), es. IT.",
+      "hides": "Due lettere per paese, separate da virgole.",
+      "tooLong": "Al massimo {max} caratteri.",
+      "tooMany": "Al massimo {max}."
+    }
+  },
+  "closures": {
+    "title": "Chiusure",
+    "label": "Chiusure di {name}",
+    "kind": {
+      "work": "Giorno lavorativo",
+      "off": "Giorno libero",
+      "closed": "Chiuso"
+    },
+    "noCalendar": "Nessun calendario delle chiusure: contano solo i giorni liberi della settimana.",
+    "none": "Nessuna chiusura nei prossimi dodici mesi.",
+    "day": "{date}: {name}",
+    "span": "{from} – {to}: {name} ({count} giorni)",
+    "ordered": "Ordinato oggi ({date}), arriva il {arrives} al più presto: {count} giorni di consegna.",
+    "orderedPast": "Ordinato oggi ({date}), arriva il {arrives} al più presto: {count} giorni di consegna, oltre {closed}.",
+    "noLeadTime": "Nessun tempo di consegna predefinito: impostalo per vedere quando arriva un ordine fatto oggi."
+  },
+  "now": {
+    "title": "Stato e documenti",
+    "since": "dal {date}",
+    "newOrders": "Nuovi ordini d’acquisto",
+    "nextStep": "Prossimo passo",
+    "nextExpiry": "Prossimo documento in scadenza",
+    "noExpiry": "Nessuno con una data di fine",
+    "unknown": "— impossibile caricare",
+    "noOrder": {
+      "PROSPECT": "Solo ordini campione finché non è approvato.",
+      "APPROVED": "Può ricevere nuovi ordini.",
+      "CONDITIONAL": "Può ricevere nuovi ordini, alle sue condizioni.",
+      "ON_HOLD": "Nessuno: è sospeso.",
+      "BLOCKED": "Nessuno: è bloccato come fornitore.",
+      "INACTIVE": "Nessuno: è inattivo.",
+      "partyBlocked": "Nessuno: l’anagrafica è bloccata.",
+      "archived": "Nessuno: l’anagrafica è archiviata."
+    }
+  },
+  "receives": {
+    "title": "Cosa riceve ogni contatto",
+    "hint": "Spunta cosa riceve ogni contatto per e-mail. Si salva mentre spunti.",
+    "contact": "Contatto",
+    "noEmail": "Nessuna e-mail",
+    "kind": {
+      "PO": "Ordini d’acquisto",
+      "CLAIM": "Reclami",
+      "REMITTANCE": "Avvisi di pagamento",
+      "QUALITY": "Qualità",
+      "DOCUMENT": "Richieste di documenti"
+    },
+    "box": "{name} riceve {kind}",
+    "saved": "Salvato",
+    "refused": "Non salvato",
+    "invalid": "Non salvato: un contatto deve avere un indirizzo e-mail ed essere attivo.",
+    "conflict": "Qualcun altro ha cambiato questo contatto nel frattempo: è stato riletto.",
+    "empty": "Nessun contatto",
+    "emptyBody": "Gli ordini non si possono inviare per e-mail finché nessuno li riceve. Aggiungi un contatto a sinistra.",
+    "nobodyPo": "Nessuno riceve gli ordini d’acquisto: non si possono inviare per e-mail finché un contatto non li riceve.",
+    "routes": "Chi riceve cosa"
+  },
+  "routing": {
+    "receives": {
+      "PO": "Gli ordini vanno a {who}.",
+      "CLAIM": "I reclami vanno a {who}.",
+      "REMITTANCE": "Gli avvisi di pagamento vanno a {who}.",
+      "QUALITY": "La posta qualità va a {who}.",
+      "DOCUMENT": "Le richieste di documenti vanno a {who}."
+    },
+    "role": {
+      "PO": "Gli ordini vanno a {who}, per il ruolo (ordini): nessuno li ha spuntati.",
+      "CLAIM": "I reclami vanno a {who}, per il ruolo: nessuno li ha spuntati.",
+      "REMITTANCE": "Gli avvisi di pagamento vanno a {who}, per il ruolo (fatture): nessuno li ha spuntati.",
+      "QUALITY": "La posta qualità va a {who}, per il ruolo: nessuno l’ha spuntata.",
+      "DOCUMENT": "Le richieste di documenti vanno a {who}, per il ruolo: nessuno le ha spuntate."
+    },
+    "none": {
+      "PO": "Nessuno riceve gli ordini d’acquisto.",
+      "CLAIM": "Nessuno riceve i reclami.",
+      "REMITTANCE": "Nessuno riceve gli avvisi di pagamento.",
+      "QUALITY": "Nessuno riceve la posta qualità.",
+      "DOCUMENT": "Nessuno riceve le richieste di documenti."
+    }
+  },
+  "vault": {
+    "title": "Documenti",
+    "hint": "Certificati e dichiarazioni con la scadenza, e cosa sblocca ciascuno all’invio dell’ordine.",
+    "request": "Richiedi documenti",
+    "questionnaire": "Invia il link al questionario",
+    "noKinds": "I suoi tipi non sono impostati: impostali in Panoramica per sapere cosa chiedergli.",
+    "asked": "Cosa gli chiediamo",
+    "materials": "Cosa richiedono i materiali che ci vende",
+    "inForce": "Documenti validi",
+    "or": " oppure ",
+    "required": "Obbligatorio",
+    "askedOnly": "Richiesto",
+    "waiting": "In attesa del nostro controllo",
+    "needsCertificate": "Certificato {number} ({standard})",
+    "held": "Trattenuto all’invio",
+    "checked": "Controllato all’invio",
+    "notChecked": "Non controllato",
+    "empty": "Nessun documento",
+    "emptyBody": "I materiali che ne richiedono uno saranno trattenuti all’invio dell’ordine.",
+    "unnamed": "Documento",
+    "covers": "Copre {codes}",
+    "number": "N. {number}",
+    "col": {
+      "document": "Documento",
+      "required": "Obbligatorio",
+      "law": "Norma",
+      "state": "Stato",
+      "expires": "Scade",
+      "material": "Materiale",
+      "needs": "Richiede",
+      "atSend": "All’invio",
+      "file": "File",
+      "kind": "Tipo",
+      "issuer": "Emesso da",
+      "issued": "Emesso il",
+      "source": "Da"
+    }
+  },
+  "ask": {
+    "MET": "Valido",
+    "EXPIRING": "Scade entro 30 giorni",
+    "EXPIRED": "Scaduto",
+    "MISSING": "Mancante"
+  },
+  "doc": {
+    "CR_VI_TEST_REPORT": "un rapporto di prova sul cromo VI (sotto 3 mg/kg)",
+    "REACH_DECLARATION": "una dichiarazione REACH",
+    "LWG_AUDIT": "un audit LWG o un certificato ISO 9001 / 14001",
+    "AZO_TEST_REPORT": "un rapporto di prova sui coloranti azoici",
+    "EN_1621_CERTIFICATE": "il certificato UE del tipo delle protezioni (EN 1621)",
+    "DECLARATION_OF_CONFORMITY": "la dichiarazione UE di conformità delle protezioni",
+    "DURC": "il DURC (regolarità contributiva, valido 120 giorni)",
+    "CODE_OF_CONDUCT": "il codice di condotta firmato",
+    "CARRIER_INSURANCE": "l’assicurazione e l’iscrizione del corriere",
+    "state": {
+      "VALID": "Valido",
+      "EXPIRING": "Scade entro 30 giorni",
+      "EXPIRED": "Scaduto"
+    }
+  },
+  "need": {
+    "CR_VI_TEST_REPORT": "Un rapporto di prova sul cromo VI",
+    "PPE_CERTIFICATE": "Un certificato valido del registro"
+  },
+  "gate": {
+    "CR_VI_TEST_REPORT_one": "Gli ordini di {codes} richiedono un rapporto sul cromo VI valido per essere inviati.",
+    "CR_VI_TEST_REPORT_other": "Gli ordini di {codes} richiedono un rapporto sul cromo VI valido per essere inviati.",
+    "PPE_CERTIFICATE_one": "Gli ordini di {codes} richiedono un certificato valido nel registro per essere inviati.",
+    "PPE_CERTIFICATE_other": "Gli ordini di {codes} richiedono un certificato valido nel registro per essere inviati."
+  },
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Certificato",
+    "TEST_REPORT": "Rapporto di prova",
+    "DECLARATION": "Dichiarazione"
+  },
+  "source": {
+    "PORTAL": "Il suo portale",
+    "QUESTIONNAIRE": "Questionario",
+    "OFFICE": "Ufficio"
+  },
+  "expiry": {
+    "none": "Nessuna scadenza",
+    "today": "Scade oggi",
+    "in_one": "Scade tra {count} giorno",
+    "in_other": "Scade tra {count} giorni",
+    "ago_one": "Scaduto da {count} giorno",
+    "ago_other": "Scaduto da {count} giorni"
+  },
+  "next": {
+    "nothing": "Niente in attesa.",
+    "waiting_one": "{count} caricamento attende il nostro controllo.",
+    "waiting_other": "{count} caricamenti attendono il nostro controllo.",
+    "missing_one": "Manca {count} documento obbligatorio.",
+    "missing_other": "Mancano {count} documenti obbligatori.",
+    "expired_one": "{count} documento è scaduto.",
+    "expired_other": "{count} documenti sono scaduti.",
+    "expiring_one": "{count} documento scade entro 30 giorni.",
+    "expiring_other": "{count} documenti scadono entro 30 giorni."
+  },
+  "review": {
+    "title": "In attesa del nostro controllo",
+    "hint": "Ciò che il fornitore ha inviato dal suo portale: nulla conta finché qualcuno qui non lo accetta.",
+    "empty": "Niente attende il nostro controllo.",
+    "uploads": "Documenti inviati",
+    "changes": "Modifiche ai dati aziendali",
+    "changesHeld_one": "{count} modifica dei suoi dati aziendali attende: deciderla richiede il permesso di decidere le modifiche fornitore.",
+    "changesHeld_other": "{count} modifiche dei suoi dati aziendali attendono: deciderle richiede il permesso di decidere le modifiche fornitore.",
+    "col": {
+      "document": "Documento",
+      "said": "Cosa ha detto",
+      "for": "Per",
+      "sent": "Inviato da",
+      "decide": "Decidi"
+    },
+    "replaces": "Sostituisce un documento valido",
+    "until": "Valido fino al {date}",
+    "note": "La sua nota: {note}",
+    "accept": "Accetta",
+    "refuse": "Rifiuta",
+    "approve": "Approva",
+    "changeFrom": "Da {name}, {date}",
+    "acceptTitle": "Accetta il documento",
+    "acceptBody": "Accettato, è condiviso con il fornitore, conta per le regole e avvia i promemoria di scadenza.",
+    "saidUntil": "Valido fino al (secondo loro)",
+    "kind": "Cos’è",
+    "kindHint": "Controllalo sul file.",
+    "lastDay": "Ultimo giorno di validità",
+    "lastDayHint": "Lascia vuoto per un documento senza scadenza.",
+    "replacesField": "Sostituisce",
+    "replacesHint": "La copia accettata diventa la versione successiva di quel documento.",
+    "replacesNone": "Nulla: un nuovo documento",
+    "refuseTitle": "Rifiuta il documento",
+    "refuseBody": "Il fornitore vede il perché e gli si chiede di ricaricarlo entro 14 giorni.",
+    "refuseChangeTitle": "Rifiuta la modifica",
+    "refuseChangeBody": "Non cambia nulla; il fornitore vede il perché.",
+    "reason": "Perché",
+    "approveTitle": "Approva la modifica",
+    "approveBody": "Ogni modifica viene fatta ora sulla scheda del fornitore, come mostrato.",
+    "accepted": "Accettato: conta da ora.",
+    "refused": "Rifiutato: si chiede di nuovo al fornitore.",
+    "changeApproved": "Approvata: la scheda mostra la modifica.",
+    "changeRefused": "Rifiutata: non è cambiato nulla.",
+    "problem": {
+      "date": "Indica un giorno.",
+      "past": "Quel giorno è passato: un documento scaduto non si accetta.",
+      "reason": "Di’ perché in almeno {min} caratteri."
+    }
+  },
+  "change": {
+    "ADDRESS": {
+      "ADD": "Nuovo indirizzo: {what}",
+      "CHANGE": "Indirizzo cambiato: {what}",
+      "REMOVE": "Indirizzo rimosso: {what}"
+    },
+    "CONTACT": {
+      "ADD": "Nuovo contatto: {what}",
+      "CHANGE": "Contatto cambiato: {what}",
+      "REMOVE": "Contatto rimosso: {what}"
+    },
+    "website": "Sito web cambiato",
+    "field": "{field}: {before} → {after}"
+  },
+  "field": {
+    "name": "Nome",
+    "line1": "Indirizzo",
+    "line2": "Indirizzo riga 2",
+    "postalCode": "CAP",
+    "city": "Città",
+    "province": "Provincia",
+    "country": "Paese",
+    "contactName": "Contatto",
+    "phone": "Telefono",
+    "deliveryNotes": "Note di consegna",
+    "email": "E-mail",
+    "roles": "Si occupa di",
+    "language": "Lingua",
+    "website": "Sito web",
+    "kinds": "Uso"
+  },
+  "request": {
+    "titleOne": "Richiedi documenti",
+    "title_one": "Richiedi documenti a {count} fornitore",
+    "title_other": "Richiedi documenti a {count} fornitori",
+    "body": "Ogni fornitore riceve una richiesta nella Home del suo portale per caricare ciò che gli chiediamo; lì si vede con la scadenza.",
+    "due": "Entro il",
+    "dueHint": "Facoltativo. Al massimo fra 180 giorni.",
+    "send": "Invia la richiesta",
+    "sendMany_one": "Chiedi a {count} fornitore",
+    "sendMany_other": "Chiedi a {count} fornitori",
+    "sending": "Invio richieste…",
+    "close": "Chiudi",
+    "toAsk": "da chiedere",
+    "waiting": "in attesa…",
+    "outcome": {
+      "asked": "richiesto",
+      "already": "una richiesta attende già"
+    },
+    "refused": "non richiesto: {why}",
+    "summary": "{asked} di {count} richiesti.",
+    "done": "Richiesto: la richiesta è nel suo portale.",
+    "already": "Una richiesta attende già nel suo portale.",
+    "held": {
+      "none": "Seleziona i fornitori a cui chiedere.",
+      "max": "Al massimo {max} alla volta."
+    },
+    "problem": {
+      "future": "Un giorno da domani in poi.",
+      "far": "Al massimo fra 180 giorni."
+    }
+  },
+  "qual": {
+    "title": "Qualifica",
+    "hint": "Per cosa è qualificato ora, per tipo di lavorazione o di materiale, su quali evidenze e fino a quando.",
+    "ask": "Chiedi una qualifica",
+    "heldAsk": "Questo fornitore non si può qualificare qui.",
+    "work": "Qualificato per",
+    "col": {
+      "work": "Lavorazione",
+      "company": "Azienda",
+      "standing": "Ora"
+    },
+    "empty": "Nessuna qualifica ancora",
+    "emptyBody": "Chiedine una: si basa sul questionario accettato più recente e sui documenti che ha reso validi.",
+    "status": {
+      "PENDING": "In attesa di decisione",
+      "APPROVED": "Approvata",
+      "CONDITIONAL": "Con condizioni",
+      "REFUSED": "Rifiutata",
+      "SUSPENDED": "Sospesa",
+      "WITHDRAWN": "Ritirata"
+    },
+    "move": {
+      "decide": "Decidi",
+      "suspend": "Sospendi",
+      "lift": "Togli la sospensione",
+      "withdraw": "Ritira"
+    },
+    "heldMove": {
+      "decide": "Si decide solo una qualifica in attesa di decisione.",
+      "suspend": "Si sospende solo una qualifica approvata.",
+      "lift": "Si toglie la sospensione solo a una qualifica sospesa.",
+      "withdraw": "Questa qualifica ora non si può ritirare."
+    },
+    "scope": "Ambito",
+    "days": "Valida",
+    "fromTo": "{from} – {to}",
+    "noEnd": "senza fine",
+    "evidence": "Evidenze",
+    "noEvidence": "Nessuna indicata",
+    "evidenceExpired": "scaduta",
+    "decided": "Decisa",
+    "decidedBy": "{date}, {name}",
+    "conditions": "Condizioni",
+    "refuseReason": "Perché è stata rifiutata",
+    "suspended": "Sospesa",
+    "withdrawn": "Ritirata",
+    "whyOn": "{date}: {reason}",
+    "askTitle": "Chiedi una qualifica",
+    "askConfirm": "Chiedi",
+    "askBody": "Attende una decisione; senza evidenze indicate si basa sul questionario accettato più recente dell’azienda.",
+    "company": "Azienda",
+    "workKinds": "Tipi di lavorazione",
+    "materialKinds": "Tipi di materiale",
+    "from": "Dal",
+    "fromHint": "Di norma oggi.",
+    "until": "Al",
+    "untilHint": "Lascia vuoto per nessuna fine.",
+    "decideTitle": "Decidi la qualifica",
+    "decision": "Decisione",
+    "decisionOf": {
+      "APPROVED": "Approva",
+      "CONDITIONAL": "Approva con condizioni",
+      "REFUSED": "Rifiuta"
+    },
+    "suspendTitle": "Sospendi la qualifica",
+    "withdrawTitle": "Ritira la qualifica",
+    "reason": "Perché",
+    "liftTitle": "Togli la sospensione",
+    "liftBody": "Torna a contare da ora. Era sospesa perché: {reason}",
+    "done": {
+      "ask": "Richiesta: attende una decisione.",
+      "decide": "Decisa.",
+      "suspend": "Sospesa: non conta finché non si toglie la sospensione.",
+      "lift": "Sospensione tolta: conta di nuovo.",
+      "withdraw": "Ritirata."
+    },
+    "problem": {
+      "work": "Scegli almeno un tipo di lavorazione.",
+      "materials": "Scegli almeno un tipo di materiale.",
+      "days": "La fine viene dopo l’inizio.",
+      "conditions": "Indica le condizioni.",
+      "refuse": "Di’ perché è rifiutata.",
+      "reason": "Di’ perché.",
+      "noEvidence": "Un sì ha bisogno di un’evidenza su cui basarsi: un questionario accettato, un documento accettato o un rapporto di visita. Rifiutala, oppure chiedine una nuova quando ha un’evidenza."
+    }
+  },
+  "standing": {
+    "QUALIFIED": "Qualificato",
+    "CONDITIONAL": "Con condizioni",
+    "NOT_YET": "Non ancora valida",
+    "EXPIRED": "Scaduta",
+    "EVIDENCE_EXPIRED": "Evidenza scaduta",
+    "SUSPENDED": "Sospesa",
+    "PENDING": "In attesa di decisione",
+    "REFUSED": "Rifiutata",
+    "NONE": "Non qualificato"
+  },
+  "work": {
+    "CUTTING": "Taglio",
+    "SEWING": "Cucitura",
+    "ASSEMBLY": "Assemblaggio",
+    "FINISHING": "Rifinitura",
+    "INSPECTION": "Controllo",
+    "PACKING": "Imballaggio",
+    "SUBCONTRACT": "Lavorazione esterna"
+  },
+  "material": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessori",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezioni",
+    "LABEL": "Etichette",
+    "PACKAGING": "Imballi",
+    "COMPONENT": "Componenti"
+  },
+  "evidence": {
+    "SupplierQuestionnaireResponse": "Questionario",
+    "SupplierDocumentUpload": "Caricamento",
+    "StoredFile": "File"
+  },
+  "quality": {
+    "tile": {
+      "receipts": "Arrivi registrati",
+      "recent": "gli ultimi 50",
+      "lots": "Lotti ricevuti",
+      "released_one": "{count} rilasciato",
+      "released_other": "{count} rilasciati",
+      "discrepancies": "Difformità all’arrivo",
+      "open_one": "{count} aperta",
+      "open_other": "{count} aperte",
+      "claims": "Reclami aperti",
+      "claimsAll_one": "{count} in tutto",
+      "claimsAll_other": "{count} in tutto"
+    },
+    "noRight": "—",
+    "receipts": "Arrivi",
+    "receiptsHint": "Cosa è arrivato da questo fornitore e cosa abbiamo accettato.",
+    "claims": "Reclami e resi",
+    "claimsHint": "Cosa gli abbiamo contestato dopo.",
+    "noReceipts": "Nessun arrivo ancora",
+    "noClaims": "Nessun reclamo",
+    "lotsOf": "{released} di {count} rilasciati",
+    "discOf": "{count} ({open} aperte)",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "scoreLater": "La pagella (puntualità e completezza, qualità, reattività) arriva più avanti.",
+    "col": {
+      "receipt": "Arrivo",
+      "received": "Ricevuto",
+      "order": "Ordine",
+      "lots": "Lotti accettati",
+      "discrepancies": "Difformità",
+      "status": "Stato",
+      "claim": "Reclamo",
+      "kind": "Tipo",
+      "materials": "Materiali",
+      "lotsClaimed": "Lotti",
+      "quantity": "Quantità",
+      "age": "Età"
+    }
+  },
+  "receipt": {
+    "OPEN": "Aperto",
+    "POSTED": "Registrato",
+    "REVERSED": "Stornato",
+    "CANCELLED": "Annullato"
+  },
+  "claim": {
+    "kind": {
+      "RETURN": "Reso",
+      "CLAIM": "Reclamo"
+    },
+    "status": {
+      "DRAFT": "Bozza",
+      "SENT": "Inviato",
+      "ACCEPTED": "Accettato",
+      "REJECTED": "Respinto",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato"
+    }
+  },
+  "bank": {
+    "title": "Conto bancario",
+    "hint": "L’IBAN usato per i pagamenti. Un cambio attende una richiamata su un numero che avevamo prima e il controllo di una seconda persona.",
+    "change": "Cambia IBAN",
+    "empty": "Nessun conto bancario",
+    "emptyBody": "I pagamenti a questo fornitore sono trattenuti.",
+    "reveal": "Mostra l’IBAN",
+    "retire": "Dismetti",
+    "refuse": "Rifiuta",
+    "callBack": "Registra la richiamata",
+    "verify": "Secondo controllo",
+    "bankName": "Banca",
+    "holder": "Intestatario",
+    "bic": "BIC",
+    "currency": "Valuta",
+    "iban": "IBAN",
+    "ibanHint": "Come sulla lettera della banca; gli spazi vanno bene. Si controlla mentre scrivi.",
+    "inUseSince": "In uso dal",
+    "source": "Arrivato da",
+    "sourceOf": {
+      "OFFICE": "l’ufficio",
+      "PORTAL": "il portale del fornitore"
+    },
+    "letter": "Lettera della banca",
+    "noLetter": "Nessuna allegata",
+    "waitingTitle": "Cambio in attesa",
+    "oldNew": "{old} → {next}",
+    "proposed": "Proposto",
+    "proposedBy": "{date}, {name}",
+    "callBackLabel": "Richiamata",
+    "calledBy": "{name} ha chiamato {who} al {number}, {date}",
+    "notCalled": "Non ancora",
+    "waitingYes": "Una seconda approvazione attende in Home › Approvazioni (entro il {date}).",
+    "nextCall": "Poi: qualcuno diverso da chi l’ha proposto chiama il fornitore su un numero che avevamo prima del cambio.",
+    "nextCheck": "Poi: una seconda persona lo controlla; solo allora i pagamenti lo usano.",
+    "pill": {
+      "WAITING_CALL_BACK": "In attesa di richiamata",
+      "WAITING_SECOND_CHECK": "In attesa di seconda approvazione",
+      "VERIFIED": "Controllato",
+      "USABLE": "Utilizzabile",
+      "REFUSED": "Rifiutato",
+      "RETIRED": "Dismesso"
+    },
+    "held": {
+      "oneAtATime": "Un cambio attende già: decidi prima quello.",
+      "notWaiting": "Questo conto non attende quel passo.",
+      "calledBack": "Già richiamato.",
+      "ownCallBack": "Hai proposto tu questo cambio: richiama il fornitore qualcun altro.",
+      "ownCheck": "Hai proposto tu questo cambio: lo controlla qualcun altro.",
+      "noNumber": "Nessun numero registrato prima del cambio: aggiungilo nei contatti del fornitore.",
+      "notYou": "Non tocca a te su questo cambio.",
+      "callBackFirst": "Registra prima la richiamata.",
+      "waitingYes": "Una seconda approvazione attende in Home › Approvazioni."
+    },
+    "propose": {
+      "title": "Nuovo IBAN",
+      "body": "Il nuovo conto attende: i pagamenti usano il conto in uso fino alla richiamata e al secondo controllo.",
+      "review": "Controlla",
+      "reviewTitle": "Controlla il cambio",
+      "back": "Indietro",
+      "send": "Proponi il cambio",
+      "old": "Conto in uso",
+      "new": "Nuovo conto",
+      "noOld": "Nessuno in questa valuta",
+      "waits": "I pagamenti usano il conto in uso finché il fornitore non viene richiamato su un numero che avevamo e una seconda persona non lo controlla.",
+      "fix_one": "Correggi prima {count} campo",
+      "fix_other": "Correggi prima {count} campi",
+      "letter": "Allega la lettera della banca ai file del conto una volta proposto."
+    },
+    "problem": {
+      "ibanEmpty": "Scrivi l’IBAN.",
+      "ibanShape": "Due lettere del paese, due cifre di controllo, poi da 11 a 30 lettere o cifre.",
+      "ibanLength": "Un IBAN di {country} ha {length} caratteri; questo ne ha {typed}.",
+      "ibanDigits": "Le cifre di controllo non tornano: un carattere è sbagliato.",
+      "holder": "Scrivi l’intestatario.",
+      "bic": "Un BIC ha 8 o 11 lettere e cifre.",
+      "currency": "Tre lettere, es. EUR.",
+      "own": "Hai proposto tu questo cambio: questo passo spetta a qualcun altro."
+    },
+    "callBackDialog": {
+      "title": "Richiamata per {iban}",
+      "body": "Chiama il fornitore su un numero che avevamo prima del cambio e conferma con lui il nuovo conto.",
+      "onFile": "Numero registrato",
+      "dialled": "Numero composto",
+      "dialledHint": "Come l’hai composto: le cifre devono essere quelle registrate.",
+      "leftOut": "Non proposti",
+      "pick": "Scegli il numero che hai chiamato.",
+      "phoneDiffers": "Le cifre sono diverse dal numero registrato.",
+      "confirm": "Registra la richiamata"
+    },
+    "onFile": {
+      "CONTACT": "Contatto",
+      "ADDRESS": "Indirizzo"
+    },
+    "hold": {
+      "NO_PHONE": "Nessun numero di telefono registrato.",
+      "ADDED_AFTER": "Aggiunto dopo la proposta del cambio: può essere arrivato con il cambio.",
+      "CHANGED_AFTER": "Cambiato dopo la proposta del cambio: può essere arrivato con il cambio.",
+      "NOT_ACTIVE": "Non più attivo."
+    },
+    "verifyDialog": {
+      "title": "Secondo controllo di {iban}",
+      "body": "Confermi la richiamata e il nuovo conto: i pagamenti lo usano da ora e il conto in uso viene dismesso.",
+      "rule": "Se è attiva una regola di approvazione, il cambio attende invece quel sì.",
+      "confirm": "Controllalo"
+    },
+    "refuseDialog": {
+      "title": "Rifiuta il cambio verso {iban}",
+      "body": "I pagamenti usano il conto in uso; il fornitore lo vede rifiutato.",
+      "confirm": "Rifiuta il cambio"
+    },
+    "retireDialog": {
+      "title": "Dismetti {iban}",
+      "body": "I pagamenti in questa valuta sono trattenuti finché un altro conto non è in uso.",
+      "confirm": "Dismetti il conto"
+    },
+    "revealDialog": {
+      "title": "L’IBAN intero di {iban}",
+      "body": "Per vederlo serve un codice nuovo e resta registrato con il tuo nome.",
+      "confirm": "Mostra",
+      "done": "Fatto",
+      "recorded": "Registrato con il tuo nome. Chiusa la finestra non resta in questa pagina."
+    },
+    "reason": "Perché",
+    "stepUp": {
+      "title": "Conferma che sei tu",
+      "confirm": "Conferma",
+      "propose": "Il codice ti permette di proporre nuove coordinate bancarie per 5 minuti.",
+      "verify": "Il codice ti permette di controllare le coordinate bancarie per 5 minuti.",
+      "reveal": "Il codice ti permette di vedere l’IBAN intero per 5 minuti."
+    },
+    "done": {
+      "proposed": "Proposto: attende la richiamata.",
+      "calledBack": "Richiamata registrata: attende il secondo controllo.",
+      "verified": "Controllato: i pagamenti usano ora il nuovo conto.",
+      "waitsYes": "Controllato: attende l’approvazione in Home › Approvazioni.",
+      "refused": "Rifiutato: i pagamenti usano il conto in uso.",
+      "retired": "Dismesso: i pagamenti in quella valuta sono trattenuti."
+    },
+    "history": {
+      "title": "Storico dei cambi",
+      "proposed": "{iban} proposto da {source}",
+      "calledBack": "{iban}: fornitore richiamato",
+      "checked": "{iban}: secondo controllo",
+      "inUse": "{iban} in uso",
+      "refused": "{iban} rifiutato",
+      "retired": "{iban} dismesso"
+    }
+  },
+  "stepUp": {
+    "sentence": {
+      "default": "Il codice ti permette di proseguire per 5 minuti."
+    },
+    "problem": {
+      "wrong": "Il codice non è giusto: scrivi il più recente.",
+      "locked": "Troppi codici sbagliati: aspetta qualche minuto.",
+      "noAuthenticator": "Configura prima l’autenticatore in Il mio profilo.",
+      "tooMany": "Troppi tentativi: aspetta un minuto.",
+      "failed": "Il codice non si è potuto controllare: riprova."
+    }
+  },
+  "list": {
+    "documents": {
+      "col": "Documenti",
+      "none": "Nessuno richiesto",
+      "cell": "{valid} validi · {expiring} in scadenza · {expired} scaduti · {missing} mancanti"
+    },
+    "request_one": "Richiedi documenti ({count})",
+    "request_other": "Richiedi documenti ({count})"
+  },
+  "tile": {
+    "expiring": "Documenti in scadenza entro 30 giorni",
+    "expiringHint": "Fornitori con un documento che scade a breve",
+    "unknown": "Impossibile contare"
+  },
+  "expiring": {
+    "title": "Fornitori con documenti in scadenza entro 30 giorni",
+    "intro": "Chiedi loro i nuovi prima che l’invio di un ordine sia trattenuto.",
+    "close": "Torna all’elenco",
+    "count_one": "{count} fornitore",
+    "count_other": "{count} fornitori",
+    "empty": "Nessun documento scade nei prossimi 30 giorni",
+    "emptyBody": "La casella li conta man mano che si avvicinano.",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "col": {
+      "code": "Codice",
+      "supplier": "Fornitore",
+      "kinds": "Tipi",
+      "expiring": "In scadenza",
+      "expired": "Scaduti",
+      "missing": "Mancanti",
+      "valid": "Validi"
+    }
+  },
+  "portalBank": {
+    "title": "Coordinate bancarie",
+    "hint": "Si cambiano solo con la nostra richiamata e un secondo controllo.",
+    "change": "Cambia coordinate bancarie",
+    "reading": "Lettura…",
+    "failedRead": "Impossibile caricare le tue coordinate bancarie.",
+    "none": "Nessun conto bancario presso di noi: aggiungilo con Cambia coordinate bancarie.",
+    "state": {
+      "USABLE": "In uso",
+      "WAITING": "In attesa del nostro controllo",
+      "REFUSED": "Rifiutato",
+      "RETIRED": "Non più usato"
+    },
+    "bank": "Banca",
+    "holder": "Intestatario del conto",
+    "bic": "BIC",
+    "currency": "Valuta",
+    "iban": "IBAN",
+    "lastChanged": "Ultima modifica",
+    "sentOn": "Inviato il",
+    "refusedOn": "Rifiutato il",
+    "why": "Perché: {reason}",
+    "waitingWords": "In attesa: ti chiamiamo al numero registrato prima che un pagamento usi il nuovo conto. Fino ad allora i pagamenti vanno al vecchio conto.",
+    "held": {
+      "preview": "Questa è un’anteprima del portale: qui non si può cambiare nulla.",
+      "admin": "Solo il tuo amministratore cambia le coordinate bancarie.",
+      "waiting": "Un cambio attende già il nostro controllo.",
+      "offline": "Sei offline: riprova quando torna la connessione."
+    },
+    "formTitle": "Nuove coordinate bancarie",
+    "formBody": "Scrivi il nuovo conto come sulla lettera della tua banca.",
+    "ibanHint": "Gli spazi vanno bene. Si controlla mentre scrivi.",
+    "letter": "Tieni a portata di mano la lettera della banca: te la chiediamo quando ti chiamiamo.",
+    "cancel": "Annulla",
+    "review": "Controlla",
+    "fix_one": "Correggi prima {count} campo",
+    "fix_other": "Correggi prima {count} campi",
+    "reviewTitle": "Controlla prima di inviare",
+    "old": "Conto in uso",
+    "new": "Nuovo conto",
+    "noOld": "Nessuno in questa valuta",
+    "back": "Indietro",
+    "send": "Invia per il nostro controllo",
+    "sending": "Invio…",
+    "sent": "Inviato per il nostro controllo: ti chiamiamo al numero registrato prima che un pagamento lo usi.",
+    "problem": {
+      "ibanEmpty": "Scrivi l’IBAN.",
+      "ibanShape": "Due lettere del paese, due cifre di controllo, poi da 11 a 30 lettere o cifre.",
+      "ibanLength": "Un IBAN di {country} ha {length} caratteri; questo ne ha {typed}.",
+      "ibanDigits": "Le cifre di controllo non tornano: un carattere è sbagliato.",
+      "holder": "Scrivi l’intestatario del conto.",
+      "bic": "Un BIC ha 8 o 11 lettere e cifre.",
+      "currency": "Tre lettere, es. EUR."
+    },
+    "failed": {
+      "clash": "Un cambio di queste coordinate attende già, oppure è il conto in uso.",
+      "invalid": "Qualcosa di scritto non va: controlla l’IBAN.",
+      "forbidden": "Solo il tuo amministratore cambia le coordinate bancarie.",
+      "wait": "Troppi tentativi: aspetta un minuto.",
+      "network": "Non è stato inviato: controlla la connessione e riprova."
+    }
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

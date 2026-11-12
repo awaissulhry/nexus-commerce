@@ -183,8 +183,11 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
 /** Standard minutes × garments (a decimal). */
 export const standardOf = (operation: Pick<BoardOperation, 'standardMinutes'>, garments: number): Decimal => new Dec(operation.standardMinutes).times(Math.max(0, garments))
 
+/** B-W2b-312: what a schedule reads of a slot (a stored one, or one forward scheduling or a what-if is trying). */
+export type ScheduleSlotLike = Pick<SlotRow, 'workOrderId' | 'workOrderOperationId' | 'lineId' | 'workCentreId' | 'partyId' | 'startAt' | 'endAt'>
+
 /** The lane an operation is worked on (see above); `slots`: the working plan's. */
-export function laneForOperation(world: Pick<ScheduleWorld, 'lanes'>, workOrder: BoardWorkOrder, operation: BoardOperation, slots: readonly SlotRow[]): LaneRef {
+export function laneForOperation(world: Pick<ScheduleWorld, 'lanes'>, workOrder: BoardWorkOrder, operation: BoardOperation, slots: readonly ScheduleSlotLike[]): LaneRef {
   const own = slots.find((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === operation.id)
   if (own) return laneOfSlot(own)
   if (workOrder.lineId) {
@@ -255,10 +258,21 @@ export async function scheduleWorld(db: Reader, site: SiteRow, span: { readonly 
   const siteSpans = spansOf(siteDays)
   const next = siteCalendar ? addWorkingDays(siteCalendar, today, 1).date ?? plusDays(today, 1) : plusDays(today, 1)
   const soon = businessDayStart(plusDays(next, 1), site.timezone).getTime()
-  const base = { lanes, siteSpans }
+  // B-W2b-312: the schedules are one function of the slots (forward scheduling and a what-if read them after their moves).
+  const { schedules, operationLanes } = schedulesOf({ site, now, soon, lanes, siteSpans, workOrders }, slots)
+  return { site, today, now, capacity, plan, slots, workOrders, lanes, workshops, siteSpans, siteDays, soon, schedules, operationLanes }
+}
+
+/**
+ * B-W2b-312 (PLN-130, what-if): every work order's backward schedule and each operation's lane on a set of the working
+ * plan's slots: the world's own (scheduleWorld), or the plan as forward scheduling, the backlog reschedule or a what-if
+ * would leave it.
+ */
+export function schedulesOf(world: Pick<ScheduleWorld, 'site' | 'now' | 'soon' | 'lanes' | 'siteSpans' | 'workOrders'>, slots: readonly ScheduleSlotLike[]): { schedules: Map<string, WorkOrderSchedule>; operationLanes: Map<string, LaneRef> } {
+  const base = { lanes: world.lanes, siteSpans: world.siteSpans }
   const operationLanes = new Map<string, LaneRef>()
   const schedules = new Map<string, WorkOrderSchedule>()
-  for (const workOrder of workOrders) {
+  for (const workOrder of world.workOrders) {
     const own = slots.filter((slot) => slot.workOrderId === workOrder.id)
     const whole = own.filter((slot) => slot.workOrderOperationId === null)
     const left = workOrder.operations.filter((operation) => operation.remaining > 0)
@@ -269,18 +283,33 @@ export async function scheduleWorld(db: Reader, site: SiteRow, span: { readonly 
         {
           number: workOrder.number,
           dueDate: workOrder.dueDate,
-          dueBy: workOrder.dueDate ? businessDayStart(plusDays(workOrder.dueDate, 1), site.timezone).getTime() : null,
+          dueBy: workOrder.dueDate ? businessDayStart(plusDays(workOrder.dueDate, 1), world.site.timezone).getTime() : null,
           operations: left.map((operation) => {
             const bars = own.filter((slot) => slot.workOrderOperationId === operation.id)
             const planned = (bars.length > 0 ? bars : whole).map((slot) => ({ start: slot.startAt.getTime(), end: slot.endAt.getTime() }))
             return { id: operation.id, seq: operation.seq, name: `Op ${operation.seq} ${operation.name}`, duration: durationOn(base, operationLanes.get(operation.id)!, operation, operation.remaining), planned }
           }),
         },
-        { now: now.getTime(), soon, timeZone: site.timezone },
+        { now: world.now.getTime(), soon: world.soon, timeZone: world.site.timezone },
       ),
     )
   }
-  return { site, today, now, capacity, plan, slots, workOrders, lanes, workshops, siteSpans, siteDays, soon, schedules, operationLanes }
+  return { schedules, operationLanes }
+}
+
+/**
+ * B-W2b-312 (PLN-139, PLN-141): the bars (operation slots) that hold each line or work centre: a lane works one bar at a
+ * time (a bar's working minutes take the whole lane), so forward scheduling and the backlog reschedule put a bar only where
+ * none of these is. Keyed by lane (`laneKey`); a workshop's bars are left out (its capacity is B-W2b-321's).
+ */
+export function barsByLane(slots: readonly (Pick<SlotRow, 'id' | 'workOrderOperationId' | 'lineId' | 'workCentreId' | 'partyId' | 'startAt' | 'endAt'>)[]): Map<string, { id: string; start: number; end: number }[]> {
+  const out = new Map<string, { id: string; start: number; end: number }[]>()
+  for (const slot of slots) {
+    if (slot.workOrderOperationId === null || slot.partyId !== null) continue
+    const key = laneKey(laneOfSlot(slot))
+    out.set(key, [...(out.get(key) ?? []), { id: slot.id, start: slot.startAt.getTime(), end: slot.endAt.getTime() }])
+  }
+  return out
 }
 
 /** A slot as the load needs it: a stored one, or one a command is about to write. */

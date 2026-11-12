@@ -6,7 +6,11 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PLANNING_FIRM } from '@nexus/factory-domain/planning/mrp/permissions'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { PLANNING_PLANNED_CONVERT } from '@nexus/factory-domain/planning/planned-orders/permissions'
-import { convertProblem, demandOf, PROTECTABLE_FIELDS, sizesOf, type PlannedOrderKind, type PlannedOrderStatus } from '@nexus/factory-domain/planning/planned-orders/rules'
+// B-W2b-306 (PLN-076, PLN-083): edits, the plan's values of protected fields, late planned orders.
+import { PLANNING_PLANNED_EDIT } from '@nexus/factory-domain/planning/actions/permissions'
+import { lateOf, readPlanValues } from '@nexus/factory-domain/planning/actions/protect'
+import { protectedPlanOf, readRunInputs } from '@nexus/factory-domain/planning/run-log/inputs'
+import { convertProblem, demandOf, needDateOf, PROTECTABLE_FIELDS, sizesOf, type PlannedOrderKind, type PlannedOrderStatus } from '@nexus/factory-domain/planning/planned-orders/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
@@ -49,7 +53,15 @@ async function contextOf(db: Reader, rows: readonly PlannedRow[]) {
   const workOrders = workOrderIds.length === 0 ? [] : await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true } })
   const subcontractIds = ids((row) => row.subcontractOrderId)
   const subcontracts = subcontractIds.length === 0 ? [] : await db.subcontractOrder.findMany({ where: { id: { in: subcontractIds } }, select: { id: true, number: true, status: true } })
+  // B-W2b-306 (PLN-076): the latest DONE run's log of each site (the plan's values of protected fields).
+  const logs = new Map<string, ReturnType<typeof readRunInputs>>()
+  for (const siteId of rows.some((row) => row.protectedFields.length > 0) ? ids((row) => row.siteId) : []) {
+    const run = await latestDoneRun(db, siteId)
+    const stored = run ? await db.planningRun.findUnique({ where: { id: run.id }, select: { inputs: true } }) : null
+    logs.set(siteId, readRunInputs(stored?.inputs ?? null))
+  }
   return {
+    logOf: (siteId: string) => logs.get(siteId) ?? null,
     style: new Map(styles.map((row) => [row.id, row])),
     colourway: new Map(colourways.map((row) => [row.id, row])),
     revisionOf,
@@ -114,8 +126,32 @@ export function plannedOrderViewOf(row: PlannedRow, facts: Context, office: Offi
     note: row.note,
     version: row.version,
     held,
-    may: { convert: status === 'PLANNED' && mayAt(office, PLANNING_PLANNED_CONVERT, row), firm: status === 'PLANNED' && mayAt(office, PLANNING_FIRM, row) },
+    // B-W2b-306 (PLN-083, PLN-076).
+    late: lateOfRow(row, demand, facts),
+    plan: row.protectedFields.length > 0 ? planViewOf(readPlanValues(protectedPlanOf(facts.logOf(row.siteId), row.id))) : {},
+    may: { convert: status === 'PLANNED' && mayAt(office, PLANNING_PLANNED_CONVERT, row), firm: status === 'PLANNED' && mayAt(office, PLANNING_FIRM, row), edit: status === 'PLANNED' && mayAt(office, PLANNING_PLANNED_EDIT, row) },
   }
+}
+
+/** B-W2b-306 (PLN-076): the plan's values of the protected fields, as answered. */
+function planViewOf(values: ReturnType<typeof readPlanValues>): PlannedOrderView['plan'] {
+  const { sizes, operationSeqs, ...rest } = values
+  return { ...rest, ...(sizes ? { sizes: sizes.map((entry) => ({ ...entry })) } : {}), ...(operationSeqs ? { operationSeqs: [...operationSeqs] } : {}) }
+}
+
+/** B-W2b-306 (PLN-083): a planned order due after its demand's day, with the reason in words. */
+function lateOfRow(row: PlannedRow, demand: ReturnType<typeof demandOf>, facts: Context): PlannedOrderView['late'] {
+  if (row.status !== 'PLANNED' || demand.length === 0) return null
+  const due = dayOf(row.dueDate)
+  const late = lateOf(needDateOf(demand, due), due)
+  if (!late) return null
+  const first = demand.find((entry) => entry.needDate === late.needDate) ?? demand[0]!
+  const orderLine = facts.orderLine.get(first.orderLineId)
+  const label = orderLine ? `${orderLine.order.number} line ${orderLine.seq}` : 'Its order line'
+  const days = `${late.daysLate} ${late.daysLate === 1 ? 'day' : 'days'} late`
+  // A planner's due date says so; else the plan could not make it in time (it starts today at the earliest).
+  if (row.protectedFields.includes('dueDate')) return { ...late, reason: `${label} needs it on ${late.needDate}; its due date ${due} is protected (${days}).` }
+  return { ...late, reason: `${label} needs it on ${late.needDate}; it starts ${dayOf(row.startDate)} and cannot be ready before ${due} (${days}).` }
 }
 
 export async function viewsOf(db: Reader, rows: readonly PlannedRow[], office: OfficeContext): Promise<PlannedOrderView[]> {

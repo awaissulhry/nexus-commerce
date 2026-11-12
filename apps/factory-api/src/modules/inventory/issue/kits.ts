@@ -262,7 +262,8 @@ export async function listPickLists(caller: CommandCaller, query: PickListsQuery
 // ---- the pick list of one work order with what it proposes ----------------------------------------------------------------
 
 /** A work order's pick list (picking.ts pickListView, quality holds included), with its reservations and what a pick list proposes. */
-async function sheetOf(db: Reader, context: StockContext, header: PickHeader) {
+// B-W2b-298: exported for the pick list by bin (modules/inventory/pick-lists) and the substitutes' line facts.
+export async function sheetOf(db: Reader, context: StockContext, header: PickHeader) {
   const view = await pickListView(db, context, header)
   const items = [...new Set(view.lines.map((line) => line.itemId))]
   const rows = items.length === 0 ? [] : await db.reservation.findMany({ where: { siteId: header.siteId, itemId: { in: items }, status: 'ACTIVE' }, select: RESERVATION_COLUMNS, orderBy: { id: 'asc' } })

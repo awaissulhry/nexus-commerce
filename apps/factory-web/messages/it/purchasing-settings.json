@@ -1,0 +1,351 @@
+{
+  "head": {
+    "intro": "Chi approva gli ordini di acquisto prima dell’invio, quanto una consegna può scostarsi dall’ordine e come si chiede ai fornitori di confermare.",
+    "reload": "Rileggi",
+    "history": "Cronologia (registro delle modifiche)",
+    "more": "Altro"
+  },
+  "live": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline",
+    "changedTitle": "Qualcun altro ha cambiato queste impostazioni",
+    "changedBody": "Le tue modifiche su questa pagina restano finché non rileggi; salvare ora potrebbe essere rifiutato perché le impostazioni sono cambiate.",
+    "reload": "Rileggi"
+  },
+  "scope": {
+    "label": "Impostazioni di",
+    "company": "{company}",
+    "all": "Tutte le aziende",
+    "companyHint": "Le impostazioni di {company}. Dove non ne tiene di proprie, segue quelle di tutte le aziende.",
+    "allHint": "Le impostazioni che ogni azienda segue dove non ne tiene di proprie."
+  },
+  "noAccess": {
+    "title": "Le impostazioni acquisti non sono nel tuo ruolo",
+    "body": "Per leggerle serve il permesso di vedere gli acquisti (purchasing.view). Lo assegna un amministratore in Sistema › Ruoli e permessi."
+  },
+  "card": {
+    "neverChanged": "Mai cambiato qui.",
+    "changedBy": "Cambiato da {name} · {time}",
+    "changedAt": "Cambiato il {time}",
+    "history": "Cronologia",
+    "viewOnly": "Solo lettura"
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "everyCompany": "Tutte le aziende",
+    "less": "Meno",
+    "more": "Più"
+  },
+  "approval": {
+    "title": "Approvazione degli ordini",
+    "description": "Chi approva quali ordini di acquisto prima dell’invio. Le regole si scrivono e si accendono in Sistema › Approvazioni, automazioni e IA › Regole di approvazione.",
+    "add": "Nuova regola per gli ordini",
+    "locked": "Nessuno approva la propria richiesta, nemmeno il titolare.",
+    "state": {
+      "NONE": "Nessuna regola di approvazione per gli ordini di acquisto: ogni ordine parte senza il sì di nessuno.",
+      "OFF_one": "{count} regola scritta, spenta: ogni ordine parte senza il sì di nessuno finché una regola non viene accesa.",
+      "OFF_other": "{count} regole scritte, nessuna accesa: ogni ordine parte senza il sì di nessuno finché una regola non viene accesa.",
+      "ON_one": "{count} regola accesa su {total}: un ordine che la rispetta aspetta un sì prima dell’invio.",
+      "ON_other": "{count} regole accese su {total}: un ordine che le rispetta aspetta un sì prima dell’invio."
+    },
+    "notYetInForce_one": "{count} altra è accesa da una data futura.",
+    "notYetInForce_other": "{count} altre sono accese da una data futura.",
+    "table": "Regole di approvazione degli ordini di acquisto",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "col": {
+      "rule": "Regola",
+      "company": "Azienda",
+      "approver": "Chi approva",
+      "signature": "Firma",
+      "due": "Tempo per decidere",
+      "fired": "Richieste in 30 giorni",
+      "state": "Stato",
+      "changed": "Cambiata"
+    },
+    "byRole": "Chiunque abbia questo ruolo",
+    "byPerson": "Questa persona",
+    "noSignature": "Senza firma",
+    "withCode": "con un codice nuovo",
+    "hours_one": "{count} ora",
+    "hours_other": "{count} ore",
+    "on": "Accesa",
+    "off": "Spenta",
+    "byYou": "da te",
+    "empty": {
+      "title": "Ancora nessuna regola per gli ordini di acquisto",
+      "body": "Senza una regola ogni ordine di acquisto parte senza un sì. Una regola nuova nasce spenta e chiede un sì solo dopo che la accendi."
+    },
+    "facts": "Una regola può guardare: {facts}.",
+    "firstDecides": "Per un ordine possono valere più regole: decide la prima il cui approvatore non è chi chiede.",
+    "comesLater": "In arrivo: l’approvazione da un link nell’e-mail e due approvatori uno dopo l’altro.",
+    "inbox": "Gli ordini che aspettano un sì sono in",
+    "inboxLink": "Home › Approvazioni",
+    "failed": "Impossibile caricare l’approvazione degli ordini"
+  },
+  "meaning": {
+    "REVIEWED": "Revisionato",
+    "APPROVED": "Approvato",
+    "RELEASED": "Rilasciato",
+    "VERIFIED": "Verificato"
+  },
+  "tolerance": {
+    "title": "Tolleranze di consegna",
+    "description": "Quanto una consegna può superare o restare sotto la quantità ordinata, per fornitore o per materiale (per esempio ±5 % sui piedi quadri di pelle).",
+    "add": "Nuova tolleranza",
+    "defaultFor": "Valore generale per {company}",
+    "defaultAll": "Valore generale per tutte le aziende",
+    "defaultHint": "Ogni fornitore e ogni materiale. Una regola per fornitore o materiale qui sotto vale prima di questa.",
+    "over": "In più",
+    "overHint": "Quanto oltre l’ordinato si accetta, in percentuale. Per esempio 5.",
+    "overPlaceholder": "es. 5",
+    "under": "In meno",
+    "underHint": "Quanto in meno conta ancora come consegnato per intero, in percentuale. Per esempio 5.",
+    "underPlaceholder": "es. 5",
+    "beyond": "Oltre la tolleranza",
+    "beyondTitle": {
+      "BLOCK": "Rifiuta l’eccedenza",
+      "APPROVAL": "Serve un sì"
+    },
+    "beyondHint": {
+      "BLOCK": "Il ricevimento accetta al massimo il limite; il resto torna al fornitore.",
+      "APPROVAL": "Il sì per un ricevimento non è ancora costruito: finché non c’è, l’eccedenza è rifiutata allo stesso modo."
+    },
+    "beyondShort": {
+      "BLOCK": "eccedenza rifiutata",
+      "APPROVAL": "l’eccedenza chiede un sì (rifiutata finché non c’è)"
+    },
+    "figures": "+{over} / −{under}",
+    "applies": "Cosa vale:",
+    "appliesNow": "Cosa vale ora:",
+    "followsAll": "segue tutte le aziende",
+    "none": "Nessuna tolleranza: una consegna si accetta esattamente come ordinata; di più solo con il motivo di chi riceve.",
+    "removeDefault": "Togli il valore generale",
+    "applyDefault": "Salva il valore generale",
+    "exceptions": "Per fornitore o materiale",
+    "table": "Tolleranze di consegna per fornitore o materiale",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "col": {
+      "supplier": "Fornitore",
+      "material": "Materiale",
+      "rule": "Tolleranza",
+      "whose": "Di chi",
+      "note": "Nota",
+      "state": "Stato",
+      "changed": "Cambiata",
+      "actions": "Azioni"
+    },
+    "status": {
+      "label": "Quali regole",
+      "ACTIVE": "Attive",
+      "ARCHIVED": "Archiviate",
+      "ALL": "Tutte"
+    },
+    "everySupplier": "Ogni fornitore",
+    "everyMaterial": "Ogni materiale",
+    "kindOf": "Qualsiasi {kind}",
+    "thisCompany": "Questa azienda",
+    "empty": {
+      "title": "Nessuna regola per fornitore o materiale",
+      "body": "Ogni consegna segue il valore generale qui sopra. Aggiungi una regola dove un fornitore o un materiale ne vuole una propria."
+    },
+    "emptyArchived": {
+      "title": "Nessuna regola archiviata",
+      "body": "Una regola archiviata non vale più; qui si può riattivare."
+    },
+    "precedence": "Vale la regola più precisa: un materiale prima del suo tipo e di ogni materiale, poi un fornitore prima di ogni fornitore, poi l’azienda prima di tutte le aziende.",
+    "leatherLine": "Una riga di pelle con una propria tolleranza di superficie, concordata sul suo ordine, la mantiene: oltre quella chi riceve dice perché accetta l’eccedenza.",
+    "short": "Una consegna in meno non è mai rifiutata: entro la tolleranza in meno la riga conta come ricevuta per intero.",
+    "failed": "Impossibile caricare le tolleranze di consegna"
+  },
+  "itemKind": {
+    "LEATHER": "pelle",
+    "TEXTILE": "tessuto",
+    "LINING": "fodera",
+    "MEMBRANE": "membrana",
+    "PADDING": "imbottitura",
+    "THREAD": "filo",
+    "TRIM": "accessorio",
+    "HARDWARE": "minuteria",
+    "PROTECTOR": "protezione",
+    "LABEL": "etichetta",
+    "PACKAGING": "imballo",
+    "COMPONENT": "componente"
+  },
+  "row": {
+    "menu": "Azioni per {rule}",
+    "edit": "Modifica",
+    "view": "Vedi",
+    "archive": "Archivia",
+    "archiveHint": "Smette di valere; si può riattivare.",
+    "reactivate": "Riattiva"
+  },
+  "bulk": {
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "reactivate_one": "Riattiva {count}",
+    "reactivate_other": "Riattiva {count}"
+  },
+  "dialog": {
+    "newTitle": "Nuova tolleranza di consegna",
+    "editTitle": "Tolleranza di consegna: {rule}",
+    "viewTitle": "Tolleranza di consegna: {rule}",
+    "whose": "Per",
+    "whoseHint": "La regola di tutte le aziende la tiene solo un ruolo su tutte le aziende.",
+    "forEveryCompany": "Per tutte le aziende.",
+    "supplierHint": "Un fornitore o un terzista, oppure ogni fornitore.",
+    "supplierPlaceholder": "Ogni fornitore",
+    "materialHint": "Un materiale, un tipo di materiale o ogni materiale. Una regola nomina un fornitore, un materiale o entrambi.",
+    "mode": {
+      "ALL": "Ogni materiale",
+      "KIND": "Un tipo",
+      "ITEM": "Un materiale"
+    },
+    "kind": "Tipo di materiale",
+    "kindPlaceholder": "Scegli un tipo",
+    "materialPlaceholder": "Scegli un materiale",
+    "note": "Nota",
+    "noteHint": "Facoltativa: cosa è stato concordato e con chi.",
+    "scopeFixed": "Di chi, fornitore e materiale non cambiano: archivia questa regola e aggiungine un’altra.",
+    "archived": "Archiviata: non vale più. Riattivala per usarla di nuovo.",
+    "create": "Aggiungi la regola",
+    "save": "Salva"
+  },
+  "confirm": {
+    "title": "Conferma",
+    "description": "Quando si chiede ai fornitori di confermare un ordine e come vengono sollecitati.",
+    "by": "Conferma entro",
+    "byValue": "{hours} ore dall’invio: {days} giorni lavorativi del fornitore, di più sopra i suoi giorni di chiusura.",
+    "byHint": "Chi acquista può chiedere un altro orario all’invio e spostarlo finché l’ordine aspetta. Un’impostazione propria per questo valore arriverà più avanti.",
+    "reminders": "Solleciti automatici ai fornitori",
+    "on": "Accesi",
+    "off": "Spenti",
+    "how": "Se accesi, il giro giornaliero scrive al fornitore che non ha confermato entro la scadenza, poi una volta al giorno, al massimo {most} volte per revisione.",
+    "byHand": "Conta anche un sollecito inviato a mano dall’ordine. Se spenti, chi acquista sollecita a mano.",
+    "mails": "Il sollecito ripete il numero dell’ordine e la sua scadenza e allega di nuovo l’ordine; non contiene link (a una risposta del fornitore ne arriva uno nuovo).",
+    "turningOn": "Accendendoli, ogni giorno in cui un ordine aspetta oltre la scadenza parte un’e-mail a fornitori veri. Il salvataggio ti chiede di confermare che sei tu.",
+    "applyOn": "Accendi",
+    "applyOff": "Spegni",
+    "failed": "Impossibile caricare la conferma"
+  },
+  "switch": {
+    "on": {
+      "COMPANY": "Accesi per questa azienda.",
+      "TENANT": "Accesi: segue l’impostazione di tutte le aziende.",
+      "DEFAULT": "Accesi."
+    },
+    "off": {
+      "COMPANY": "Spenti per questa azienda: il giro giornaliero non invia solleciti.",
+      "TENANT": "Spenti: segue l’impostazione di tutte le aziende; il giro giornaliero non invia solleciti.",
+      "DEFAULT": "Spenti (mai accesi): il giro giornaliero non invia solleciti."
+    }
+  },
+  "alert": {
+    "title": "Avviso a chi acquista",
+    "hint": "Chi acquista viene avvisato quando un ordine non è ancora confermato dopo la sua scadenza (Home › Avvisi).",
+    "none": "Nessuna regola di avviso per gli ordini non confermati: chi acquista non viene avvisato.",
+    "add": "Nuova regola di avviso",
+    "tells": "Avvisa: {role}",
+    "tellsNobody": "Non avvisa ancora nessuno",
+    "everywhere": "Ogni azienda e sede",
+    "open": "Apri in Home › Avvisi",
+    "on": "Attiva",
+    "off": "Spenta"
+  },
+  "held": {
+    "reading": "Sto ancora leggendo le impostazioni.",
+    "busy": "Salvataggio in corso: attendi un momento.",
+    "offline": "Offline: le modifiche restano su questa pagina finché la connessione non torna.",
+    "offlineTitle": "Offline",
+    "offlineBody": "Questa è l’ultima copia letta. Non si può salvare nulla finché la connessione non torna.",
+    "noApprovalsView": "Per leggere le regole di approvazione serve il permesso di vedere le approvazioni (approvals.view).",
+    "noRulesManage": "Per scrivere regole di approvazione serve il permesso di tenerle (approvals.rules.manage): il titolare o un amministratore.",
+    "noToleranceRight": "Per tenere le tolleranze di consegna serve purchasing.tolerances.manage su questa azienda.",
+    "noToleranceRightAll": "Le tolleranze di tutte le aziende le tiene solo un ruolo su tutte le aziende.",
+    "noSwitch": "Solo il titolare accende o spegne i solleciti automatici ai fornitori.",
+    "noSwitchAll": "I solleciti di tutte le aziende li accende solo un ruolo su tutte le aziende.",
+    "noAlertsView": "Per leggere le regole di avviso serve il permesso di vedere gli avvisi (alerts.view).",
+    "noAlertsManage": "Per scrivere regole di avviso serve alerts.rules.manage.",
+    "noPartiesView": "Per scegliere un fornitore serve il permesso di vedere i fornitori (parties.view): la regola vale per ogni fornitore.",
+    "noMaterialsView": "Per scegliere un materiale serve il permesso di vedere i materiali (product.materials.view): scegli invece un tipo.",
+    "noneActive": "Nessuna delle regole spuntate è attiva, oppure non puoi cambiarle.",
+    "noneArchived": "Nessuna delle regole spuntate è archiviata, oppure non puoi cambiarle.",
+    "nothingChanged": "Ancora nulla di cambiato."
+  },
+  "problem": {
+    "percentNeeded": "Scrivi una percentuale.",
+    "percentRange": "Una percentuale da 0 a 100.",
+    "percentPlaces": "Al massimo quattro decimali.",
+    "kindNeeded": "Scegli il tipo di materiale.",
+    "materialNeeded": "Scegli il materiale.",
+    "supplierRefused": "Questo fornitore non può avere una tolleranza: scegline un altro, oppure ogni fornitore.",
+    "noteLong": "La nota è troppo lunga.",
+    "exceptionNeedsScope": "Indica un fornitore, un materiale o entrambi: il valore generale qui sopra vale per ogni fornitore e ogni materiale.",
+    "sameScope": "Esiste già una regola attiva per lo stesso fornitore e materiale: cambia quella, oppure archiviala prima.",
+    "toleranceGone": "Quella tolleranza non c’è più.",
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non legge questo.",
+      "not_found": "Non trovato: forse è stato tolto.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova tra un momento.",
+      "rate_limited": "Troppi tentativi insieme. Attendi un momento e riprova.",
+      "contract": "Questa schermata e il server non concordano sulla risposta. Ricarica la pagina.",
+      "internal": "Qualcosa è andato storto nella lettura. Riprova."
+    },
+    "write": {
+      "moved": "Qualcuno l’ha cambiata nel frattempo: è stata riletta e nulla è stato sovrascritto. Rifai la modifica.",
+      "sameScope": "Esiste già una regola attiva per lo stesso fornitore e materiale: cambia quella, oppure archiviala prima.",
+      "state": "Nel frattempo ha cambiato stato: è stata riletta.",
+      "invalid": "Il server ha rifiutato quanto scritto: guarda i campi.",
+      "forbidden": "Il tuo ruolo non può cambiare questo per questa azienda.",
+      "forbiddenAll": "Le impostazioni di tutte le aziende le cambia solo un ruolo su tutte le aziende.",
+      "not_found": "Non trovato: forse è stato tolto. Viene riletto.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo, poi salva.",
+      "rate_limited": "Troppi tentativi insieme. Attendi un momento e salva di nuovo.",
+      "unavailable": "Il server della fabbrica non ha risposto: non è stato salvato nulla. Riprova.",
+      "internal": "Qualcosa è andato storto: non è stato salvato nulla. Riprova."
+    }
+  },
+  "done": {
+    "default": "Il valore generale è salvato.",
+    "defaultRemoved": "Il valore generale è archiviato: le consegne seguono quanto vale sopra di esso. Si può riattivare dalle regole archiviate.",
+    "added": "La regola è aggiunta.",
+    "saved": "La regola è salvata.",
+    "archived_one": "{count} regola archiviata.",
+    "archived_other": "{count} regole archiviate.",
+    "archivedSome_one": "{count} di {total} regole archiviate; le altre sono state rifiutate (rileggi).",
+    "archivedSome_other": "{count} di {total} regole archiviate; le altre sono state rifiutate (rileggi).",
+    "reactivated_one": "{count} regola riattivata.",
+    "reactivated_other": "{count} regole riattivate.",
+    "reactivatedSome_one": "{count} di {total} regole riattivate; le altre sono state rifiutate (rileggi).",
+    "reactivatedSome_other": "{count} di {total} regole riattivate; le altre sono state rifiutate (rileggi).",
+    "remindersOn": "I solleciti automatici sono accesi: il giro giornaliero sollecita i fornitori che non hanno confermato.",
+    "remindersOff": "I solleciti automatici sono spenti: chi acquista sollecita a mano."
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "sentence": "Accendere i solleciti automatici invia e-mail ai tuoi fornitori. Scrivi un codice nuovo a 6 cifre dalla tua app di autenticazione.",
+    "confirm": "Conferma",
+    "cancelled": "Non cambiato: il codice non è stato dato. I solleciti restano come erano.",
+    "problem": {
+      "wrong": "Il codice è sbagliato o già usato. Scrivi il codice che l’app mostra adesso.",
+      "locked": "Troppi codici sbagliati. Attendi qualche minuto e riprova.",
+      "unavailable": "Il codice non si può verificare ora. Riprova."
+    }
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "newException": "Nuova tolleranza di consegna",
+    "openRule": "Apri la regola in Sistema › Approvazioni, automazioni e IA",
+    "save": "Salva la scheda che hai cambiato",
+    "saveDialog": "Salva la tolleranza nella sua finestra",
+    "close": "Chiudi la finestra"
+  }
+}

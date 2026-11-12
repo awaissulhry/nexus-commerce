@@ -96,6 +96,11 @@ export const FLOOR_SYNC_KINDS = [
   // and its lines stand when they arrive.
   'inventory.count.scan',
   'inventory.count.finishBin',
+  // B-W2b-298: the pick list by bin on the floor (SCM-212; design floor.pick, B-W2b-310 "offline"): an issue to the work order by
+  // the scan of what is taken at a stop (W1's issue: a hide whole, a lot by quantity), and an approved substitute issued with its
+  // own move (MES-139). Applied as the stock, the work order and the substitute stand when they arrive.
+  'inventory.pick.issue',
+  'inventory.substitute.issue',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -175,6 +180,9 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   // B-W2b-299: the counts' scanning right (the module checks the count, the bin and the line again on arrival).
   'inventory.count.scan': { kind: 'inventory.count.scan', permission: 'inventory.counts.scan', numbers: null, what: 'Scan a unit into a count' },
   'inventory.count.finishBin': { kind: 'inventory.count.finishBin', permission: 'inventory.counts.scan', numbers: null, what: 'Finish a bin of a count' },
+  // B-W2b-298: the issue's right; the module checks again the work order, the stock and the substitute's yes.
+  'inventory.pick.issue': { kind: 'inventory.pick.issue', permission: 'inventory.issue', numbers: null, what: 'Issue to a work order from the pick list (a scan)' },
+  'inventory.substitute.issue': { kind: 'inventory.substitute.issue', permission: 'inventory.issue', numbers: null, what: 'Issue an approved substitute to a work order' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
