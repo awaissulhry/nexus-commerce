@@ -9,7 +9,7 @@ import {
   INVENTORY_COUNTS_VIEW,
 } from '@nexus/factory-domain/inventory/counts/permissions'
 import {
-  approveProblems,
+  // B-W2b-299: approveProblems now reads the warehouse rules' switch (counts-depth/reads.ts ownVarianceRefusals).
   COUNT_RULES,
   countListViewFilter,
   differenceOf,
@@ -35,6 +35,8 @@ import { seesCost } from '../ledger/access'
 import type { CountRecordView, CountView, LineView } from './contract'
 import { movedSince, siteLocations, unitCostOf, unitCostsOf, type LocationNode } from './ledger-at'
 import { LINE_COLUMNS, readLines, type CountRow, type LineRow } from './store'
+// B-W2b-299 (SCM-226, SCM-228, SCM-229, SCM-293): a line's freeze and scans; the yes asked in Approvals; the counter rule's switch.
+import { lineDepthOf, ownVarianceRefusals, varianceRequestOf, waitingWords } from '../counts-depth/reads'
 
 /**
  * The counts' views (B-W2a-15): a count as the list shows it, its record (summary, approval, what the caller may do)
@@ -140,6 +142,8 @@ export async function countViews(client: Client, rows: readonly CountRow[]): Pro
       cancelledAt: iso(row.cancelledAt),
       cancelReason: row.cancelReason,
       lines,
+      // B-W2b-299 (SCM-226)
+      freezeMoves: row.freezeMoves,
       version: row.version,
       createdAt: toUtcIso(row.createdAt),
       updatedAt: toUtcIso(row.updatedAt),
@@ -172,10 +176,13 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
   const allowedTo = (permission: Parameters<typeof can>[1]) => can(actor, permission, scopeOf(row))
   const manage = allowedTo(INVENTORY_COUNTS_MANAGE)
   const approve = allowedTo(INVENTORY_COUNTS_APPROVE)
-  const own = approveProblems(required, context.actorId, facts)
-  const held = row.status !== 'SUBMITTED' ? 'NOT_SUBMITTED' : !approve ? 'NO_RIGHT' : own.length > 0 ? 'OWN_VARIANCE' : null
+  // B-W2b-299 (SCM-229, SCM-293): the counter rule as the warehouse rules hold it (scans too); a yes asked in Approvals.
+  const own = await ownVarianceRefusals(client, context.tenantId, row, lines, context.actorId, required)
+  const request = await varianceRequestOf(client, row.id)
+  const waiting = row.status === 'SUBMITTED' && request?.status === 'PENDING' ? await waitingWords(client, request, row.number) : null
+  const held = row.status !== 'SUBMITTED' ? 'NOT_SUBMITTED' : !approve || waiting ? 'NO_RIGHT' : own.length > 0 ? 'OWN_VARIANCE' : null
   const heldReason =
-    held === 'NOT_SUBMITTED' ? 'The count is approved once it is submitted.' : held === 'NO_RIGHT' ? 'Approving needs inventory.counts.approve.' : held === 'OWN_VARIANCE' ? own[0]!.message : null
+    held === 'NOT_SUBMITTED' ? 'The count is approved once it is submitted.' : waiting ? waiting : held === 'NO_RIGHT' ? 'Approving needs inventory.counts.approve.' : held === 'OWN_VARIANCE' ? own[0]!.message : null
   const blocked = submitProblems(facts)
   const noManage = 'Needs inventory.counts.manage.'
   const live = ['DRAFT', 'COUNTING', 'SUBMITTED', 'APPROVED'].includes(row.status)
@@ -186,6 +193,8 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
     return snapshot.problem ? no(snapshot.problem) : yes
   })()
   const applyAction = (() => {
+    // B-W2b-299: the differences wait for the yes asked in Approvals.
+    if (waiting) return no(waiting)
     if (!(row.status === 'APPROVED' || (row.status === 'SUBMITTED' && !row.approvalRequired))) {
       return no(row.status === 'SUBMITTED' ? 'The differences wait for their approval.' : 'A count is applied once it is approved.')
     }
@@ -222,11 +231,14 @@ export async function recordView(client: Client, row: CountRow, context: OfficeC
       unvalued: value.unvalued + value.otherCurrency,
     },
     approval: {
-      required,
+      // B-W2b-299: a yes asked in Approvals is needed too.
+      required: required || request?.status === 'PENDING',
       limitAmount: asMoney('cost', COUNT_RULES.approvalLimitMinor),
       mayApprove: held === null,
       held,
       heldReason,
+      // B-W2b-299 (SCM-229)
+      request: request ? { taskId: request.taskId, status: request.status } : null,
     },
     actions: {
       edit: row.status === 'DRAFT' || row.status === 'COUNTING' ? (manage ? yes : no(noManage)) : no('Only a DRAFT or COUNTING count is edited.'),
@@ -263,6 +275,8 @@ export async function lineViews(client: Client, count: CountRow, lines: readonly
   const lot = new Map(lots.map((row) => [row.id, row]))
   const hide = new Map(hides.map((row) => [row.id, row]))
   const move = new Map(posted.map((row) => [row.id, row]))
+  // B-W2b-299 (SCM-226, SCM-228): each line's freeze and its units scanned.
+  const depth = await lineDepthOf(client, count, lines)
   return lines.map((line) => {
     const facts = factsOf(line)
     const final = finalCount(facts)
@@ -301,6 +315,9 @@ export async function lineViews(client: Client, count: CountRow, lines: readonly
       unitCost: asMoney('cost', cost?.unitCost ?? null),
       differenceAmount: asMoney('cost', cost ? lineValue(facts, cost.unitCost, cost.currency) : null),
       movedSinceSnapshot: moved.has(line.id),
+      // B-W2b-299
+      frozen: depth.get(line.id)?.frozen ?? false,
+      scans: depth.get(line.id)?.scans ?? 0,
       version: line.version,
     }
   })

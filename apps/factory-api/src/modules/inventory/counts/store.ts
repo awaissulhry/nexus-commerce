@@ -46,6 +46,8 @@ export const COUNT_COLUMNS = {
   cancelledAt: true,
   cancelReason: true,
   note: true,
+  // B-W2b-299 (SCM-226): the count freezes its lines' moves until each is counted.
+  freezeMoves: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -76,6 +78,8 @@ export const LINE_COLUMNS = {
   reasonCode: true,
   reasonNote: true,
   moveId: true,
+  // B-W2b-299 (SCM-226): when the line was frozen (a line of a count that freezes moves).
+  frozenAt: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -165,6 +169,8 @@ export function audited(row: CountRow): Record<string, unknown> {
     cancelledAt: iso(row.cancelledAt),
     cancelReason: row.cancelReason,
     note: row.note,
+    // B-W2b-299
+    freezeMoves: row.freezeMoves,
   }
 }
 
@@ -191,6 +197,8 @@ export function auditedLine(row: LineRow): Record<string, unknown> {
     reasonCode: row.reasonCode,
     reasonNote: row.reasonNote,
     moveId: row.moveId,
+    // B-W2b-299
+    frozenAt: iso(row.frozenAt),
   }
 }
 
@@ -204,7 +212,9 @@ type Tools = Pick<CommandTools, 'tx' | 'audit' | 'now'>
 
 // ---- count writes ---------------------------------------------------------------------------------------------------------
 
-export type NewCount = Pick<CountRow, 'id' | 'companyId' | 'siteId' | 'number' | 'kind' | 'locationId' | 'itemId' | 'lotId' | 'itemKind' | 'inventoryDate' | 'countTeam' | 'note' | 'createdById'>
+export type NewCount = Pick<CountRow, 'id' | 'companyId' | 'siteId' | 'number' | 'kind' | 'locationId' | 'itemId' | 'lotId' | 'itemKind' | 'inventoryDate' | 'countTeam' | 'note' | 'createdById'> &
+  // B-W2b-299 (SCM-226): chosen while DRAFT (the database fixes it once the count counts).
+  Partial<Pick<CountRow, 'freezeMoves'>>
 
 export async function insertCount(tools: Tools, count: NewCount, options: WriteOptions = {}): Promise<CountRow> {
   const row = await tools.tx.stockCount.create({
@@ -267,7 +277,10 @@ export async function updateCount(tools: Tools, before: CountRow, changes: Count
 
 export type NewLine = Pick<LineRow, 'id' | 'siteId' | 'countId' | 'seq' | 'locationId' | 'itemId' | 'itemColourId' | 'lotId' | 'hideId' | 'origin' | 'createdById'> & {
   readonly expectedQuantity: string
-} & Partial<Pick<LineRow, 'countedAt' | 'countedById' | 'reasonCode' | 'reasonNote'>> & { readonly countedQuantity?: string | null }
+} & Partial<Pick<LineRow, 'countedAt' | 'countedById' | 'reasonCode' | 'reasonNote'>> & { readonly countedQuantity?: string | null } & {
+  // B-W2b-299 (SCM-226): a line of a count that freezes moves is frozen when it is written (never changed afterwards).
+  readonly frozenAt?: Date | null
+}
 
 /** The snapshot's lines, in one statement (their audit is the start's row on the count: the frozen line count). */
 export async function insertSnapshotLines(tx: CommandTx, now: Date, lines: readonly NewLine[]): Promise<void> {

@@ -64,6 +64,8 @@ import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
 // B-W2b-326: transfers between sites (the warehouse).
 import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
+// B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
+import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -116,6 +118,8 @@ import { COMPLIANCE_REPORTS_ADDS } from '../../compliance/reports/permissions'
 import { CLAIMS_ADDS } from '../../compliance/claims/permissions'
 // B-W2b-262: the brand's samples and tech packs (the customer Buyer, Quality, Designer and Viewer; the Admin follows).
 import { PORTAL_SAMPLES_READERS } from '../../sales/portal-samples/permissions'
+// B-W2b-304: credit limits.
+import { SALES_CREDIT_ADDS } from '../../sales/credit/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -978,6 +982,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-326
   ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
+  // B-W2b-299
+  ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-304
+  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
   // B-W2b-306
   ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : [])]
 /**

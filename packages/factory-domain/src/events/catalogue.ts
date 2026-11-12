@@ -230,6 +230,12 @@ import { events as inventoryTasks } from '../inventory-tasks/events'
 import { events as supplierQualification } from '../supplier-qualification/events'
 // B-W2b-326: transfers between sites (inventory.transfer_changed).
 import { events as inventoryTransfers } from '../inventory-transfers/events'
+// B-W2b-299: counts in depth (a unit scanned into a count, a count schedule changed or counted).
+import { events as inventoryCounts } from '../inventory-counts/events'
+// B-W2b-304: credit checks and limits.
+import { events as salesCredit } from '../sales-credit/events'
+// B-W2b-298: substitutes with a yes (inventory.substitution_changed).
+import { events as inventorySubstitutions } from '../inventory-substitutions/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -524,6 +530,12 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...salesPricing,
   // B-W2b-326
   ...inventoryTransfers,
+  // B-W2b-299
+  ...inventoryCounts,
+  // B-W2b-304
+  ...salesCredit,
+  // B-W2b-298
+  ...inventorySubstitutions,
   // B-W2b-306
   ...planningActions] as const satisfies readonly EventDefinition[]
 

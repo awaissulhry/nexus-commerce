@@ -2109,11 +2109,15 @@
     "sales_samples_measure": "Misurare la vestibilità di un giro di campioni rispetto alla scheda misure e gestirne i commenti",
     "sales_inquiries_view": "Vedere le richieste e le richieste di offerta: chi chiede, cosa chiede per taglia, la mail da cui arrivano, i loro file e il tech pack del brand in vigore, e il preventivo che ne è nato (il prezzo obiettivo solo con i prezzi)",
     "sales_inquiries_manage": "Inserire le richieste e crearle dalle mail ricevute, cambiare cosa si chiede, collegare un potenziale cliente a un cliente, assegnarle, chiedere al cliente più informazioni, rifiutarle con il motivo o segnarle perse, e farne il preventivo",
+    "sales_credit_view": "Vedere il fido di un cliente con una società: il fido, l'utilizzato, il disponibile, la parte scaduta, gli ordini fermi per il fido e i controlli del fido di preventivi, ordini, ordini di lavoro e spedizioni (gli importi solo con i prezzi)",
+    "sales_credit_limits": "Impostare, cambiare o togliere il fido di un cliente con una società; gli ordini fermi per il fido vengono ricontrollati subito",
+    "sales_credit_checks": "Ricontrollare un documento fermo per il fido e chiedere un sì per lasciarlo passare (lo approva un'altra persona, mai tu)",
     "production_instructions_view": "Vedere le istruzioni di lavoro delle operazioni: passi, foto e video, versioni, la scheda stampata e quanti hanno visto una versione (conteggi, mai un nome)",
     "production_instructions_manage": "Scrivere istruzioni di lavoro: una bozza con passi per lingua, punti critici, note di sicurezza, icone, le spunte chieste dal tablet, foto e video; scartare una bozza, archiviare o ripristinare; riportare le righe di passi scritte nei cicli",
     "production_instructions_approve": "Approvare la bozza di un'altra persona di un'istruzione di lavoro: il reparto la vede da quel momento (mai la propria bozza)",
     "production_instructions_people": "Un registro della formazione: vedere per nome chi ha visto quale versione di un'istruzione di lavoro (dove il sito consente un nome) e registrare una presa visione firmata su carta",
     "purchasing_requests_ask": "Chiedere ai buyer di acquistare un materiale (anche da una mancanza di un ordine di produzione); vedere e ritirare le proprie richieste",
-    "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli"
+    "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli",
+    "inventory_counts_scan": "Contare un inventario in corso scansionando ogni unità (l'area di una pelle, la lunghezza di un rotolo, i pezzi digitati), vedere le differenze di un contenitore a fine conteggio, chiuderlo e ricontare una riga contata da un'altra persona"
   }
 }

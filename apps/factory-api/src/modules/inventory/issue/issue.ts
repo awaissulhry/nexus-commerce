@@ -221,7 +221,9 @@ export async function issueInCommand(
   key: string,
   path = 'body',
   // B-W2b-100: the cutting table checks the shade itself (a warning a lead may pass: B-W2b-103), so its scan skips it here.
-  options: { readonly shade?: boolean } = {},
+  // B-W2b-298: `plannedAs` = what a substitute's substitution allows (base unit, with what the work order held of it before):
+  // an approved substitute (modules/inventory/substitutions) is issued against it, not against the work order's plan.
+  options: { readonly shade?: boolean; readonly plannedAs?: string } = {},
 ): Promise<IssueResult> {
   const context = contextOf(tools)
   const workOrder = await lockedWorkOrder(tools, workOrderId)
@@ -239,6 +241,8 @@ export async function issueInCommand(
 
   const planned = await tx.workOrderMaterial.groupBy({ by: ['itemColourId'], where: { workOrderId: workOrder.id, itemId: item.id }, _sum: { baseQuantity: true } })
   const plannedLine = planned.find((row) => row.itemColourId === itemColourId)
+  // B-W2b-298: a substitute's line is what its substitution allows.
+  const plannedFor = options.plannedAs !== undefined ? new Dec(options.plannedAs) : plannedLine ? dec(plannedLine._sum.baseQuantity ?? ZERO) : null
   const issuedNow = (await readAtWorkOrder(tx, workOrder.siteId, workOrder.id, { itemId: item.id, itemColourId })).reduce((sum, row) => sum.plus(new Dec(row.quantity)), ZERO)
   const balances = (await readSiteStock(tx, workOrder.siteId, { itemIds: [item.id], itemColourId, lotId: lot?.id ?? null, hideId: hide?.id ?? null })).filter(
     // A hide is issued whole, from wherever it lies; a quantity from the location asked, when one is.
@@ -252,8 +256,8 @@ export async function issueInCommand(
     workOrder: { number: workOrder.number, status: workOrder.status },
     label,
     baseUom: item.baseUom,
-    line: plannedLine ? { planned: dec(plannedLine._sum.baseQuantity ?? ZERO).toFixed(4), issued: issuedNow.toFixed(4) } : null,
-    materialPlanned: planned.length > 0,
+    line: plannedFor ? { planned: plannedFor.toFixed(4), issued: issuedNow.toFixed(4) } : null,
+    materialPlanned: plannedFor !== null || planned.length > 0,
     lot: lot ? { code: lot.code, qualityStatus: lot.qualityStatus, requiresCrViTest: lot.requiresCrViTest, crViStatus: lot.crViStatus } : null,
     hide: hide ? { code: hide.code, state: hide.state } : null,
     onHand: onHand.toFixed(4),
@@ -384,7 +388,7 @@ export async function issueInCommand(
       postedBy: postedBy(context).audience,
     },
   })
-  const planned4 = plannedLine ? dec(plannedLine._sum.baseQuantity ?? ZERO) : ZERO
+  const planned4 = plannedFor ?? ZERO
   const issuedAfter = issuedNow.plus(new Dec(baseQuantity))
   return { issue, line: { planned: quantityText(planned4), issued: quantityText(issuedAfter), toIssue: quantityText(Dec.max(ZERO, planned4.minus(issuedAfter))) } }
 }
