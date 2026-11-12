@@ -1,12 +1,14 @@
 import { z } from 'zod'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
-import { amountMinor, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
+import { amountMinor, businessDate, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { MAX_WRITE_OFF_LINES } from '@nexus/factory-domain/inventory/ledger/write-off'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { fileView, presignedView } from '../../../platform/files/contract'
+// B-W2b-314: an adjustment above the warehouse rules' value waits for a yes (202).
+import { waitingAdjustmentView } from '../posting/contract'
 
 /**
  * The stock ledger's contracts (SCM-189, SCM-191, SCM-192, SCM-193, SCM-195; A2 SCR-064). Quantities are decimal
@@ -19,6 +21,12 @@ const uom = z.enum(UOMS)
 const reason = z.enum(STOCK_MOVE_REASONS)
 const why = () => z.string().trim().min(1).max(500)
 const reference = () => z.string().trim().max(120).nullish()
+/**
+ * B-W2b-314 (SCM-196): the day the move counts on in the books (YYYY-MM-DD), apart from when it happened: not after today,
+ * not further back than the warehouse rules allow (400 `body/postingDate` in words), never in a closed month. Left out: the
+ * day it happened.
+ */
+const postingDate = () => businessDate().optional()
 
 /** The stock a move names: the item, and its colour, lot and hide as it is tracked (a hide alone names its lot). */
 const stock = {
@@ -66,6 +74,8 @@ export const moveView = output({
   occurredAt: instant(),
   /** Its value was written with it (office moves that enter or leave the site's stock, with a cost). */
   valued: z.boolean(),
+  /** B-W2b-314: the day it counts on in the books when it is not the day it happened. */
+  postingDate: businessDate().nullable().optional(),
 })
 export type MoveView = z.infer<typeof moveView>
 
@@ -88,8 +98,10 @@ export const adjustContract = defineContract({
     unitCost: money.cost(unitPrice()),
     /** B-W2b-22: why it goes into a soft-locked month (B-W2a-F8's field; a HARD lock refuses it whatever). */
     periodLockOverride: periodLockOverride.optional(),
+    postingDate: postingDate(),
   }),
-  response: oneMove,
+  /** B-W2b-314: 202 when it is worth more than the warehouse rules' value and an approval rule names who says yes: nothing posted yet. */
+  response: { ...oneMove, 202: output({ waiting: waitingAdjustmentView }) },
 })
 
 export const transferContract = defineContract({
@@ -106,6 +118,8 @@ export const transferContract = defineContract({
     occurredAt: instant().optional(),
     /** B-W2b-22: why it goes into a soft-locked month (office; the floor's moves read no lock). */
     periodLockOverride: periodLockOverride.optional(),
+    /** B-W2b-314: office only (a floor move counts on the day it is entered). */
+    postingDate: postingDate(),
   }),
   response: oneMove,
 })
@@ -121,6 +135,7 @@ export const scrapContract = defineContract({
     reference: reference(),
     /** B-W2b-22: why it goes into a soft-locked month. */
     periodLockOverride: periodLockOverride.optional(),
+    postingDate: postingDate(),
   }),
   response: oneMove,
 })
@@ -131,6 +146,7 @@ export const reverseContract = defineContract({
     note: why(),
     /** B-W2b-22: why the reversal goes into a soft-locked month (it is dated now). */
     periodLockOverride: periodLockOverride.optional(),
+    postingDate: postingDate(),
   }),
   response: {
     201: output({
@@ -161,6 +177,7 @@ export const countContract = defineContract({
       .max(500),
     /** B-W2b-22: why the differences go into a soft-locked month (they are dated now). */
     periodLockOverride: periodLockOverride.optional(),
+    postingDate: postingDate(),
   }),
   response: {
     201: output({
@@ -267,6 +284,7 @@ export const writeOffContract = defineContract({
       .min(1)
       .max(MAX_WRITE_OFF_LINES),
     periodLockOverride: periodLockOverride.optional(),
+    postingDate: postingDate(),
   }),
   response: {
     201: output({

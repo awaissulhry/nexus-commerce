@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { grainsOf, markValues, type RowValues } from '../imports/importer'
 import { importRecordValues, partiesImporter, termsOfRow, TERMS_COLUMNS, type ImportedParty } from './importer'
+import { SUPPLIER_COLUMN_NAMES } from '../purchasing/suppliers-depth/importer'
 
 /** W2b (B-W2b-25; the B-W2a-49 gap): the commercial terms columns of the customers and suppliers import. Made-up parties only. */
 
@@ -19,7 +20,8 @@ const plan = (values: RowValues, record: ImportedParty | null = null) => parties
 
 describe('the commercial terms columns of the parties import (B-W2b-25)', () => {
   it('come after the W1 columns, the minimum order with the price grain', () => {
-    const names = Object.keys(partiesImporter.columns)
+    // W2b (B-W2b-311): the supplier columns come after the terms columns.
+    const names = Object.keys(partiesImporter.columns).filter((name) => !(SUPPLIER_COLUMN_NAMES as readonly string[]).includes(name))
     expect(names.slice(-TERMS_COLUMNS.length)).toEqual([...TERMS_COLUMNS])
     expect(names.indexOf('contactPhone')).toBe(names.length - TERMS_COLUMNS.length - 1)
     expect(grainsOf(partiesImporter, ['minimumOrder', 'list', 'defaultDepositPct'])).toEqual(['price'])

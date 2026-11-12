@@ -131,6 +131,8 @@ export const WARNING_CODES = [
   'COLOURWAY_NOT_IN_BOM',
   'UNCONVERTIBLE_UNIT',
   'SEVERAL_SUPPLIERS',
+  /** B-W2b-293: a sub-assembly below the order line's revision cannot be walked (its size, colourway, unit, a circle). */
+  'SUB_ASSEMBLY',
 ] as const
 export type WarningCode = (typeof WARNING_CODES)[number]
 
@@ -242,6 +244,14 @@ export interface PlanInput {
    * date. A work order not on the board keeps its order line's date.
    */
   readonly workOrderStarts?: ReadonlyMap<string, BusinessDate>
+  /**
+   * B-W2b-293 (MR1:01, MR1:02, PLN-079): what one garment of an order line's size takes, from the multi-level explosion
+   * with the line's options, phantoms passed through and customer-supplied lines left out (./planned-orders/explosion);
+   * null or left out: W1's one level of the revision's lines.
+   */
+  readonly perGarment?: (line: PlanOrderLine, size: string) => readonly GarmentNeed[] | null
+  /** B-W2b-293: the supplier of the BOM lines below the revision's own (its sub-assemblies' lines), by line id. */
+  readonly lineSuppliers?: ReadonlyMap<string, string | null>
 }
 
 const UP = { scale: QUANTITY_SCALE, rounding: 'UP' } as const
@@ -252,7 +262,7 @@ const cellKey = (orderLineId: string, size: string): string => `${orderLineId}|$
 const least = (...values: Decimal[]): Decimal => values.reduce((a, b) => (b.lt(a) ? b : a))
 
 /** Per garment of one size in one colourway: each material colour with its exact base quantity and BOM lines. */
-interface PerPiece {
+export interface GarmentNeed {
   readonly itemId: string
   readonly itemColourId: string | null
   readonly quantity: Decimal
@@ -265,7 +275,7 @@ interface SourceDraft {
   readonly sizeIndex: number
   readonly ordered: number
   made: number
-  readonly perPiece: readonly PerPiece[]
+  readonly perPiece: readonly GarmentNeed[]
   readonly openCells: PlanWorkOrderCell[]
 }
 
@@ -312,6 +322,8 @@ export function planRequirements(input: PlanInput): PlanResult {
     planned++
     if (line.dueDate === null) warn({ code: 'NO_DATE', message: `${label} has no date: its material is planned as needed today.`, orderId: line.orderId, orderLineId: line.orderLineId })
     for (const bomLine of revision.lines) bomLineSupplier.set(bomLine.id, bomLine.supplierId)
+    // B-W2b-293: the sub-assemblies' lines name their supplier too.
+    for (const [lineId, supplierId] of input.lineSuppliers ?? []) if (!bomLineSupplier.has(lineId)) bomLineSupplier.set(lineId, supplierId)
     sizes.forEach((row, sizeIndex) => {
       for (const bomLine of revision.lines) {
         if (bomLine.colourwayId !== null && bomLine.colourwayId !== line.colourwayId) continue
@@ -325,7 +337,8 @@ export function planRequirements(input: PlanInput): PlanResult {
           warn({ code: 'UNCONVERTIBLE_UNIT', message: `${label}: BOM line ${bomLine.seq} (${code}) is in a unit its material does not convert; it is not planned.`, orderLineId: line.orderLineId, itemId: bomLine.itemId })
         }
       }
-      const perPiece = exactRequirements(revision.lines, { sizes: [row.size], colourwayIds: [line.colourwayId] }, unitsOf).map((need) => ({
+      // B-W2b-293: the multi-level explosion when the run gives it, else W1's one level.
+      const perPiece = input.perGarment?.(line, row.size) ?? exactRequirements(revision.lines, { sizes: [row.size], colourwayIds: [line.colourwayId] }, unitsOf).map((need) => ({
         itemId: need.itemId,
         itemColourId: need.itemColourId,
         quantity: need.quantity,

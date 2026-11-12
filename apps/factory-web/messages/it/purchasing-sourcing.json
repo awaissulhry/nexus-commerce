@@ -1,0 +1,217 @@
+{
+  "common": {
+    "stillLoading": "Ancora in caricamento…",
+    "retry": "Riprova",
+    "reading": "Lettura…",
+    "cancel": "Annulla",
+    "close": "Chiudi"
+  },
+  "access": {
+    "title": "Non puoi aprire Richieste di offerta",
+    "body": "Per leggere gli ordini di campionatura serve il permesso di vedere gli ordini di acquisto (purchasing.view). Un amministratore della tua azienda può dartelo."
+  },
+  "band": {
+    "label": "Richieste di offerta",
+    "reading": "Lettura degli ordini di campionatura…",
+    "add": "Nuovo ordine di campionatura",
+    "more": "Altre azioni",
+    "export": "Esporta",
+    "exportHint": "Dall'elenco: Esporta ▾ nella sua barra, oppure Esporta N con delle righe scelte."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "add": "Nuovo ordine di campionatura",
+    "close": "Chiudi la finestra"
+  },
+  "samples": {
+    "title": "Ordini di campionatura e sviluppo",
+    "note": "Pelli campione, campioni di materiale e cartelle colori per un modello o un giro di campionatura: non contano nella spesa di produzione e non entrano nella pianificazione.",
+    "failed": "Impossibile caricare gli ordini di campionatura e sviluppo"
+  },
+  "col": {
+    "number": "Numero",
+    "supplier": "Fornitore",
+    "project": "Progetto",
+    "items": "Articoli",
+    "status": "Stato",
+    "value": "Costo",
+    "more": "Altro"
+  },
+  "project": {
+    "round": "{number} · {kind}, giro {round}",
+    "styleOnly": "Per il modello (nessun giro)"
+  },
+  "items": {
+    "none": "Ancora nessuna riga",
+    "more_one": "e {count} altra riga",
+    "more_other": "e altre {count} righe"
+  },
+  "row": {
+    "menu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "pdf": "PDF dell'ordine di campionatura",
+    "pdfSent": "Il PDF così come è stato inviato al fornitore (nuova scheda)",
+    "pdfDraft": "La bozza come la riceverebbe oggi il fornitore (nuova scheda)"
+  },
+  "list": {
+    "search": "Numero, fornitore o modello",
+    "filterStatus": "Quali ordini",
+    "count_one": "{count} ordine di campionatura",
+    "count_other": "{count} ordini di campionatura",
+    "more": "Mostra altri",
+    "noneFiltered": "Nessun ordine di campionatura corrisponde",
+    "noneFilteredHint": "Cambia le parole o lo stato, oppure togli i filtri.",
+    "clearFilters": "Togli i filtri",
+    "emptyTitle": "Nessun ordine di campionatura",
+    "empty": "Acquista pelli campione, campioni di materiale e cartelle colori per un modello o un giro di campionatura: restano separati dagli acquisti di produzione."
+  },
+  "rows": {
+    "OPEN": "Ordini aperti",
+    "ALL": "Tutti gli ordini"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "SENT": "Inviato",
+    "CHANGES_PROPOSED": "Modifiche proposte",
+    "CONFIRMED": "Confermato",
+    "DECLINED": "Rifiutato",
+    "PARTLY_RECEIVED": "Ricevuto in parte",
+    "RECEIVED": "Ricevuto",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "new": {
+    "title": "Nuovo ordine di campionatura",
+    "foot": "Una bozza di ordine di acquisto di tipo Campionatura: prezzi, PDF e invio sono nella sua scheda.",
+    "create": "Crea bozza",
+    "choicesFailed": "Impossibile caricare ciò che un ordine di campionatura può indicare",
+    "incomplete": "Alcuni elenchi sono più lunghi di quanto mostrato: scrivi più lettere del nome per trovarlo, o chiedi a un amministratore di archiviare ciò che non si usa più.",
+    "refused": "La bozza non è stata creata"
+  },
+  "field": {
+    "supplier": "Fornitore",
+    "supplierPlaceholder": "Cerca un fornitore",
+    "site": "Consegna a",
+    "siteOnly": "L'unica sede della tua azienda.",
+    "sitePick": "Scegli una sede",
+    "style": "Modello",
+    "styleHint": "Il modello in sviluppo a cui servono i campioni.",
+    "stylePlaceholder": "Cerca un modello",
+    "round": "Giro di campionatura",
+    "roundHint": "Un giro aperto del modello, oppure nessuno: solo per il modello.",
+    "roundNone": "Il modello non ha giri di campionatura aperti: l'ordine è solo per il modello.",
+    "roundStyleOnly": "Nessun giro: per il modello",
+    "requestedDate": "Desiderato entro",
+    "requestedHint": "Facoltativo: il giorno in cui vorresti i campioni.",
+    "note": "Parole per il fornitore",
+    "noteHint": "Stampate sull'ordine di campionatura.",
+    "what": "Cosa",
+    "material": "Materiale",
+    "materialHide": "Solo pelli: una pelle campione è una pelle intera.",
+    "materialPlaceholder": "Cerca un materiale",
+    "colour": "Colore",
+    "colourAny": "Nessun colore in particolare",
+    "quantity": "Quantità",
+    "unit": "Unità",
+    "unitFirst": "Prima scegli il materiale",
+    "needDate": "Serve entro",
+    "description": "Parole tue",
+    "descriptionHint": "Dopo le parole del campione sulla riga («20 × 20 cm»)."
+  },
+  "what": {
+    "HIDE": "Pelle campione",
+    "SWATCH": "Campione di materiale",
+    "COLOUR_CARD": "Cartella colori"
+  },
+  "lines": {
+    "title": "Cosa acquista",
+    "hint": "Ogni riga dice al fornitore cos'è (pelle campione, campione di materiale, cartella colori) nella sua lingua.",
+    "add": "Aggiungi una riga",
+    "line": "Riga {n}",
+    "remove": "Togli la riga {n}"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "held": {
+    "manage": "Per creare un ordine di campionatura serve il permesso di gestire gli ordini di acquisto (purchasing.manage).",
+    "company": "Prima scegli un'azienda: un ordine di campionatura è di un'azienda.",
+    "choices": "Attendi la lettura di fornitori, modelli e materiali.",
+    "busy": "In corso…",
+    "supplier": "Scegli il fornitore.",
+    "site": "Scegli dove va consegnato.",
+    "style": "Scegli il modello a cui servono i campioni.",
+    "lines": "Aggiungi almeno una riga.",
+    "requestedPast": "Il giorno desiderato è oggi o dopo.",
+    "lineMaterial": "Scegli il materiale di ogni riga.",
+    "lineUnit": "Scegli l'unità di ogni riga.",
+    "lineQuantity": "Dai a ogni riga una quantità sopra 0 (al massimo quattro decimali).",
+    "lineDate": "Dai a ogni riga il giorno in cui serve.",
+    "linePast": "Ogni riga serve oggi o dopo.",
+    "maxLines": "Al massimo 20 righe qui: aggiungine altre nella scheda dell'ordine.",
+    "lastLine": "Un ordine di campionatura ha almeno una riga.",
+    "pdfCost": "Il PDF stampa i prezzi: servono i permessi sui costi.",
+    "valueCost": "servono i permessi sui costi"
+  },
+  "refusal": {
+    "NOT_A_SAMPLE_ORDER": "Questo ordine non è un ordine di campionatura.",
+    "STYLE_CLOSED": "Questo modello è archiviato o fuori produzione: non si acquistano campioni per lui.",
+    "ROUND_CLOSED": "Questo giro di campionatura è deciso o annullato: acquista per un giro aperto, o solo per il modello.",
+    "ROUND_OF_ANOTHER_STYLE": "Questo giro di campionatura è di un altro modello: scegli un giro del modello.",
+    "HIDE_NOT_LEATHER": "Una pelle campione è una pelle intera: scegli una pelle, oppure indica un campione di materiale o una cartella colori.",
+    "NOT_A_MATERIAL": "Un ordine di campionatura acquista materiali, mai un capo finito.",
+    "SAMPLE_ORDER_TAKES_NO_PLAN_LINES": "Un ordine di campionatura non accoglie righe del piano o di una richiesta: vanno su un ordine di produzione."
+  },
+  "invalid": {
+    "partyId": "Questo fornitore ora non può ricevere ordini: scegline un altro.",
+    "siteId": "Questa sede non può ricevere consegne: scegline un'altra.",
+    "developmentStyleId": "Questo modello non è della tua azienda.",
+    "sampleRoundId": "Questo giro di campionatura non è della tua azienda.",
+    "requestedDate": "Il giorno desiderato è oggi o dopo.",
+    "note": "Le parole per il fornitore sono troppo lunghe.",
+    "contactId": "Il contatto del fornitore non riceve ordini.",
+    "line": {
+      "itemId": "Questo materiale non si può acquistare: scegline un altro.",
+      "itemColourId": "Scegli un colore attivo del materiale.",
+      "quantity": "Una quantità sopra 0, al massimo quattro decimali.",
+      "uom": "Il materiale non si acquista in questa unità: scegli una delle sue unità.",
+      "needDate": "Il giorno in cui serve è oggi o dopo.",
+      "description": "Le tue parole sono troppo lunghe.",
+      "unitPrice": "Questo prezzo non va bene per la riga."
+    }
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere l'elenco. Riprova tra poco.",
+    "write": "Non è stato possibile creare la bozza. Riprova tra poco.",
+    "invalid": "Qualcosa nella bozza è stato rifiutato: controlla i campi.",
+    "conflict": "Qualcosa è cambiato nel frattempo: rileggi e riprova.",
+    "gone": "Non c'è più: rileggi.",
+    "forbidden": "I tuoi permessi non lo consentono.",
+    "signedOut": "La sessione è finita: accedi di nuovo.",
+    "slowDown": "Troppi tentativi: attendi un momento.",
+    "offline": "Nessuna risposta dal server: controlla la connessione e riprova."
+  },
+  "notice": {
+    "drafted": "Ordine di campionatura {number} creato in bozza.",
+    "draftedNext": "Controlla i prezzi, poi invialo dalla sua scheda (il PDF parte con l'e-mail).",
+    "open": "Apri"
+  }
+}
