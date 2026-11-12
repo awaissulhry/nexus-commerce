@@ -270,10 +270,12 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'In the warehouse',
         labelIt: 'In magazzino',
         hideLabel: false,
-        // W2a: B-W2a-58 Picking & kits (SCR-237), B-W2a-28 Counts (SCR-132); Transfers is W2b.
+        // W2a: B-W2a-58 Picking & kits (SCR-237), B-W2a-28 Counts (SCR-132); W2b: B-W2b-326 Transfers (SCR-360).
         pages: [
           { id: 'warehouse.picking', title: 'Picking & kits', titleIt: 'Prelievi e kit', wave: 'W2a', href: '/warehouse/picking' },
           { id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' },
+          // B-W2b-326: Transfers (SCR-360; the design's SCR-133).
+          { id: 'warehouse.transfers', title: 'Transfers', titleIt: 'Trasferimenti', wave: 'W2b', href: '/warehouse/transfers' },
         ],
       },
       {

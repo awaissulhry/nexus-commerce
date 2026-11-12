@@ -1727,6 +1727,7 @@
     "inventory_stock_view": "See the stock and its moves",
     "inventory_adjust": "Correct stock with a reason",
     "inventory_transfer": "Move stock between locations",
+    "inventory_transfers_manage": "Transfers between sites: draft, ship with the DDT, receive at the other site, settle a difference",
     "inventory_scrap": "Scrap stock with a reason",
     "inventory_reverse": "Reverse a wrong stock move",
     "inventory_issue": "Pick and issue stock to a work order",
