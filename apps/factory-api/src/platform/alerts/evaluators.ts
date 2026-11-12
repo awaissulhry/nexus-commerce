@@ -14,6 +14,8 @@ import { readSubjects } from '../../modules/quality/holds/store'
 import { workingTimeFindings } from '../../modules/people/limits/warnings'
 // B-W2b-314: a material below its planning minimum at a site.
 import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
+// B-W2b-350: the supply alerts (a line confirmed later than needed; a supplier put on hold, blocked or limited).
+import { confirmedLateFindings, supplierStatusFindings } from '../../modules/purchasing/reports/supply-alerts'
 
 /**
  * What each kind of rule watches (B-W2a-33; factory-domain alerts/kinds), read in the tenant's system scope: the records a
@@ -258,6 +260,9 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   WORKING_TIME_LIMIT: workingTimeFindings,
   // B-W2b-314: the low-stock alerts (one per material, colour and site; off where the warehouse rules switch them off).
   LOW_STOCK: lowStockFindings,
+  // B-W2b-350: the supply alerts (one per purchase order; one per supplier).
+  PO_CONFIRMED_LATE: confirmedLateFindings,
+  SUPPLIER_STATUS_CHANGED: supplierStatusFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

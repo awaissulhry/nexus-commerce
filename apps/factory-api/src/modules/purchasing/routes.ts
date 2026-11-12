@@ -238,6 +238,9 @@ import * as qualificationContracts from './qualification/contract'
 import * as complianceGate from './qualification/gate'
 import * as qualifications from './qualification/qualifications'
 import { getVault, vaultSummary as getVaultSummary } from './qualification/vault'
+// B-W2b-350: purchasing reports (./reports): the spend and the lines behind one of its bars.
+import { spendContract, spendLinesContract } from './reports/contract'
+import { spendAnswer, spendLinesAnswer } from './reports/reads'
 // B-W2b-172: "Ask for a new link" on a dead questionnaire link.
 registerLinkRenewer('SUPPLIER_ONBOARD', 'Party', questionnaireLink.renewQuestionnaireLink)
 
@@ -766,4 +769,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/compliance-overrides', { schema: qualificationContracts.listOverridesContract }, async (request) => complianceGate.listOverrides(request, request.query))
 
   app.get('/purchasing/compliance-overrides/:purchaseOrderId', { schema: qualificationContracts.complianceContract }, async (request) => complianceGate.getCompliance(request, request.params.purchaseOrderId))
+
+  // B-W2b-350 (SCM-165): purchasing reports (./reports) — the spend by supplier, category, material, company or month with sample
+  // orders apart (SCR-255 sec spend), and the purchase order lines behind one bar (pop drill). Read only. The late lines and what
+  // they block are the expediting worklist (GET /purchasing/expediting, B-W2b-305); the supply alerts are exception rules.
+  app.get('/purchasing/reports/spend', { schema: spendContract }, async (request) => spendAnswer(request, request.query))
+  app.get('/purchasing/reports/spend/lines', { schema: spendLinesContract }, async (request) => spendLinesAnswer(request, request.query))
 })

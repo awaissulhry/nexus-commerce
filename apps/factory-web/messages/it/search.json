@@ -96,6 +96,7 @@
     "ChangeOrder": "Ordine di modifica",
     "PointOfMeasure": "Punto di misura",
     "GradeRule": "Regola di sviluppo taglie",
+    "Inquiry": "Richiesta",
     "other": "Record"
   },
   "chip": {
@@ -142,6 +143,7 @@
     "ChangeOrder": "Ordini di modifica",
     "PointOfMeasure": "Punti di misura",
     "GradeRule": "Regole di sviluppo taglie",
+    "Inquiry": "Richieste",
     "other": "Altri record"
   },
   "status": {
@@ -232,6 +234,10 @@
     "IN_MAKING": "In lavorazione",
     "UNDER_REVIEW": "In valutazione",
     "IN_REVIEW": "In valutazione",
-    "DONE": "Fatta"
+    "DONE": "Fatta",
+    "ASSIGNED": "In lavorazione",
+    "NEED_INFO": "Servono informazioni",
+    "QUOTED": "Preventivata",
+    "LOST": "Persa"
   }
 }

@@ -123,8 +123,9 @@ export const latestDoneRun = (db: Reader, siteId: string) =>
   db.planningRun.findFirst({ where: { siteId, status: 'DONE' }, select: { id: true, finishedAt: true, startedAt: true }, orderBy: [{ finishedAt: 'desc' }, { id: 'desc' }] })
 
 /** Everything the plan of a site reads, as of `runDate`; `firmFromRunId`: the run whose firm lines are carried. */
-export async function readPlanInputs(db: Reader, site: SiteRow, runDate: BusinessDate, firmFromRunId: string | null): Promise<PlanInputs> {
-  const demand = await readDemand(db, site)
+export async function readPlanInputs(db: Reader, site: SiteRow, runDate: BusinessDate, firmFromRunId: string | null, extraDemand?: (demand: DemandRead) => Promise<DemandRead>): Promise<PlanInputs> {
+  // B-W2b-301 (CTP-lite): a promise question adds its lines (not orders yet) after every real one; a run never does.
+  const demand = extraDemand ? await extraDemand(await readDemand(db, site)) : await readDemand(db, site)
   const firmSupply = await readFirmSupply(db, firmFromRunId)
   // B-W2b-293: the materials of every level (and of the options' effects) are the plan's too.
   const explosion = await readGarments(db, site, demand)
