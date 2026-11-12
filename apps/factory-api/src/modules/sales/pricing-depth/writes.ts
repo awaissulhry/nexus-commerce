@@ -10,7 +10,8 @@ import { actorOf } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
 import { assertMayChangeList, claimVersion, dayText, dayValue, ENTRY_COLUMNS, entriesViewOf, lockList, mayOnList, priceOf, readListFor, VERSION_COLUMNS, versionViewOf, type ListRow } from '../pricelists/store'
 import { officeContextOf, type Reader } from '../quotes/store'
-import { assertDraft, assertListActive, BREAK_COLUMNS, invalid, rulesViewOf, SURCHARGE_COLUMNS, surchargeViewOf } from './store'
+import { getVersion } from '../pricelists/versions'
+import { assertDraft, assertListActive, BREAK_COLUMNS, invalid, readVersionFor, rulesViewOf, SURCHARGE_COLUMNS, surchargeViewOf } from './store'
 
 /**
  * Price lists in depth (B-W2b-325), the writes. Each is ONE command that locks the list's row first, then compares and
@@ -25,9 +26,17 @@ import { assertDraft, assertListActive, BREAK_COLUMNS, invalid, rulesViewOf, SUR
  *                   (and its last day) set, or removed (unitPrice null, with its breaks); the version's prices of one
  *                   style and colourway then never overlap
  *   discount shown  the list's choice for the customer's documents (SAL-170)
+ *
+ * B-W2b-F32: a write that changes nothing (the values there already, a removal of what is not there) writes nothing: no
+ * audit row, no event, no version moved; it answers 200 with what is there, as the GET reads it. The comparison runs under
+ * the lock, inside the command; nothing to change throws `Unchanged`, which rolls back the empty command (the version's
+ * claim with it), as inventory/lots-depth/lifecycle.ts does.
  */
 
-const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
+/** Thrown inside the command when the write changes nothing: rolls back an empty command. */
+class Unchanged extends Error {}
+
+const actorIdOf =(tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
 async function writableList(caller: CommandCaller, listId: string): Promise<ListRow> {
   const list = await readListFor(caller, listId)
@@ -46,6 +55,12 @@ async function lockedDraft(tools: CommandTools, listId: string, versionId: strin
 const rulesAnswer = async (tools: CommandTools, list: ListRow, versionId: string) => {
   const version = await tools.tx.priceListVersion.findUniqueOrThrow({ where: { id: versionId }, select: VERSION_COLUMNS })
   return rulesViewOf(tools.tx, list, version)
+}
+
+/** The version's Breaks & surcharges tab as GET …/rules reads it: the answer of a write that changed nothing. */
+async function rulesNow(caller: CommandCaller, listId: string, versionId: string) {
+  const { list, version } = await readVersionFor(caller, listId, versionId)
+  return caller.withClient((client) => rulesViewOf(client, list, version))
 }
 
 // ---- quantity breaks (SAL-166) -------------------------------------------------------------------------------------------
@@ -69,39 +84,43 @@ export interface BreaksBody {
 export async function setBreaks(caller: CommandCaller, listId: string, versionId: string, sent: BreaksBody, idempotencyKey?: string) {
   await writableList(caller, listId)
   const body = { version: sent.version, breaks: allSent(sent.breaks, ['unitPrice', 'discountPct'], 'breaks') }
-  const { result } = await command(caller, { name: 'priceLists.setBreaks', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
-    const { tx, now } = tools
-    const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'quantity breaks')
-    const entries = await tx.priceListEntry.findMany({ where: { versionId }, select: { id: true, unitPrice: true } })
-    const prices = new Map(entries.map((entry) => [entry.id, priceOf(entry.unitPrice)]))
-    const unknown = body.breaks.flatMap((row, index) => (row.entryId !== null && !prices.has(row.entryId) ? [{ path: `breaks/${index}/entryId`, message: 'Not a price of this version.' }] : []))
-    const issues = [...unknown, ...breakProblems(body.breaks, prices)]
-    if (issues.length > 0) throw invalid(issues, 'The quantity breaks are not valid.')
-    const existing = await tx.priceBreak.findMany({ where: { versionId }, select: BREAK_COLUMNS })
-    const byKey = new Map(existing.map((row) => [breakKey(row.entryId, row.minQuantity), row]))
-    const before: unknown[] = []
-    const after: unknown[] = []
-    for (const row of body.breaks) {
-      const current = byKey.get(breakKey(row.entryId, row.minQuantity))
-      const unitPrice = row.unitPrice === null ? null : listPriceText(row.unitPrice)
-      const discountPct = row.discountPct
-      const was = current ? { unitPrice: current.unitPrice === null ? null : priceOf(current.unitPrice), discountPct: current.discountPct === null ? null : current.discountPct.toString() } : null
-      const removing = unitPrice === null && discountPct === null
-      if (removing && !current) continue
-      if (current && !removing && was!.unitPrice === unitPrice && (was!.discountPct === null ? discountPct === null : discountPct !== null && current.discountPct!.equals(discountPct))) continue
-      before.push({ entryId: row.entryId, minQuantity: row.minQuantity, ...(was ?? { unitPrice: null, discountPct: null }) })
-      after.push({ entryId: row.entryId, minQuantity: row.minQuantity, unitPrice, discountPct })
-      if (removing) await tx.priceBreak.delete({ where: { id: current!.id }, select: { id: true } })
-      else if (current) await tx.priceBreak.update({ where: { id: current.id }, data: { unitPrice, discountPct, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
-      else await tx.priceBreak.create({ data: { id: newId(), versionId, entryId: row.entryId, minQuantity: row.minQuantity, unitPrice, discountPct, createdAt: now, updatedAt: now, createdById: actorIdOf(tools) }, select: { id: true } })
-    }
-    if (after.length > 0) {
+  try {
+    const { result } = await command(caller, { name: 'priceLists.setBreaks', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
+      const { tx, now } = tools
+      const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'quantity breaks')
+      const entries = await tx.priceListEntry.findMany({ where: { versionId }, select: { id: true, unitPrice: true } })
+      const prices = new Map(entries.map((entry) => [entry.id, priceOf(entry.unitPrice)]))
+      const unknown = body.breaks.flatMap((row, index) => (row.entryId !== null && !prices.has(row.entryId) ? [{ path: `breaks/${index}/entryId`, message: 'Not a price of this version.' }] : []))
+      const issues = [...unknown, ...breakProblems(body.breaks, prices)]
+      if (issues.length > 0) throw invalid(issues, 'The quantity breaks are not valid.')
+      const existing = await tx.priceBreak.findMany({ where: { versionId }, select: BREAK_COLUMNS })
+      const byKey = new Map(existing.map((row) => [breakKey(row.entryId, row.minQuantity), row]))
+      const before: unknown[] = []
+      const after: unknown[] = []
+      for (const row of body.breaks) {
+        const current = byKey.get(breakKey(row.entryId, row.minQuantity))
+        const unitPrice = row.unitPrice === null ? null : listPriceText(row.unitPrice)
+        const discountPct = row.discountPct
+        const was = current ? { unitPrice: current.unitPrice === null ? null : priceOf(current.unitPrice), discountPct: current.discountPct === null ? null : current.discountPct.toString() } : null
+        const removing = unitPrice === null && discountPct === null
+        if (removing && !current) continue
+        if (current && !removing && was!.unitPrice === unitPrice && (was!.discountPct === null ? discountPct === null : discountPct !== null && current.discountPct!.equals(discountPct))) continue
+        before.push({ entryId: row.entryId, minQuantity: row.minQuantity, ...(was ?? { unitPrice: null, discountPct: null }) })
+        after.push({ entryId: row.entryId, minQuantity: row.minQuantity, unitPrice, discountPct })
+        if (removing) await tx.priceBreak.delete({ where: { id: current!.id }, select: { id: true } })
+        else if (current) await tx.priceBreak.update({ where: { id: current.id }, data: { unitPrice, discountPct, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+        else await tx.priceBreak.create({ data: { id: newId(), versionId, entryId: row.entryId, minQuantity: row.minQuantity, unitPrice, discountPct, createdAt: now, updatedAt: now, createdById: actorIdOf(tools) }, select: { id: true } })
+      }
+      if (after.length === 0) throw new Unchanged()
       tools.audit({ action: 'priceLists.setBreaks', recordType: 'PriceList', recordId: listId, companyId: list.companyId, before: { versionId, revision: version.revision, breaks: markMoney('price', before) }, after: { versionId, revision: version.revision, breaks: markMoney('price', after) } })
       tools.emit({ type: 'price_list.rules_changed', subject: listId, companyId: list.companyId, payload: { listId, versionId, revision: version.revision, change: 'BREAKS', rows: after.length } })
-    }
-    return rulesAnswer(tools, list, versionId)
-  })
-  return result
+      return rulesAnswer(tools, list, versionId)
+    })
+    return result
+  } catch (error) {
+    if (error instanceof Unchanged) return rulesNow(caller, listId, versionId)
+    throw error
+  }
 }
 
 // ---- size surcharges of a version (SAL-180) ------------------------------------------------------------------------------
@@ -130,24 +149,28 @@ export async function setVersionSurcharges(caller: CommandCaller, listId: string
   const body = { version: sent.version, surcharges: allSent(sent.surcharges, ['amount', 'pct'], 'surcharges') }
   const problems = surchargeProblems(body.surcharges, false)
   if (problems.length > 0) throw invalid(problems, 'The size surcharges are not valid.')
-  const { result } = await command(caller, { name: 'priceLists.setSizeSurcharges', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
-    const { tx } = tools
-    const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'size surcharges')
-    const ids = body.surcharges.map((row) => row.styleId)
-    const { issues, styles } = await stylesFor(tx, list, ids.flatMap((id) => (id ? [id] : [])), (index) => `surcharges/${index}`, ids)
-    for (const [index, row] of body.surcharges.entries()) {
-      const style = row.styleId ? styles.get(row.styleId) : undefined
-      if (style && style.sizes.length > 0 && !style.sizes.includes(sizeCodeOf(row.size))) issues.push({ path: `surcharges/${index}/size`, message: `${sizeCodeOf(row.size)} is not a size of ${style.code} (${style.sizes.join(', ')}).` })
-    }
-    if (issues.length > 0) throw invalid(issues, 'Some size surcharges cannot be saved.')
-    const changed = await writeSurcharges(tools, { versionId, currency: list.currency }, body.surcharges)
-    if (changed.after.length > 0) {
+  try {
+    const { result } = await command(caller, { name: 'priceLists.setSizeSurcharges', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
+      const { tx } = tools
+      const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'size surcharges')
+      const ids = body.surcharges.map((row) => row.styleId)
+      const { issues, styles } = await stylesFor(tx, list, ids.flatMap((id) => (id ? [id] : [])), (index) => `surcharges/${index}`, ids)
+      for (const [index, row] of body.surcharges.entries()) {
+        const style = row.styleId ? styles.get(row.styleId) : undefined
+        if (style && style.sizes.length > 0 && !style.sizes.includes(sizeCodeOf(row.size))) issues.push({ path: `surcharges/${index}/size`, message: `${sizeCodeOf(row.size)} is not a size of ${style.code} (${style.sizes.join(', ')}).` })
+      }
+      if (issues.length > 0) throw invalid(issues, 'Some size surcharges cannot be saved.')
+      const changed = await writeSurcharges(tools, { versionId, currency: list.currency }, body.surcharges)
+      if (changed.after.length === 0) throw new Unchanged()
       tools.audit({ action: 'priceLists.setSizeSurcharges', recordType: 'PriceList', recordId: listId, companyId: list.companyId, before: { versionId, revision: version.revision, surcharges: markMoney('price', changed.before) }, after: { versionId, revision: version.revision, surcharges: markMoney('price', changed.after) } })
       tools.emit({ type: 'price_list.rules_changed', subject: listId, companyId: list.companyId, payload: { listId, versionId, revision: version.revision, change: 'SIZE_SURCHARGES', rows: changed.after.length } })
-    }
-    return rulesAnswer(tools, list, versionId)
-  })
-  return result
+      return rulesAnswer(tools, list, versionId)
+    })
+    return result
+  } catch (error) {
+    if (error instanceof Unchanged) return rulesNow(caller, listId, versionId)
+    throw error
+  }
 }
 
 /** Writes surcharges of one scope (a version, or a style's own), keyed by style and size; answers what changed. */
@@ -195,9 +218,6 @@ export async function getStyleSurcharges(caller: CommandCaller, styleId: string)
   const style = await styleFor(caller, styleId)
   return caller.withClient((client) => styleSurchargesView(client, style))
 }
-
-/** Thrown inside the command when the write changes nothing: rolls back an empty command (as lots-depth/lifecycle.ts). */
-class Unchanged extends Error {}
 
 /**
  * PUT /sales/styles/:styleId/size-surcharges: a style's own surcharges set or removed (sizes of its range). The surcharges
@@ -265,41 +285,47 @@ export async function setDatedPrices(caller: CommandCaller, listId: string, vers
   const issues: Issue[] = entryProblems(body.prices.map((row) => ({ styleId: `${row.styleId}:${row.validFrom ?? '-'}`, colourwayId: row.colourwayId, unitPrice: row.unitPrice }))).map((issue) => ({ path: issue.path.replace(/^entries/, 'prices'), message: issue.message.replace('The same style and colourway twice: one price each.', 'The same style, colourway and first day twice: one price each.') }))
   for (const [index, row] of body.prices.entries()) issues.push(...daysProblems(row.validFrom, row.validTo, `prices/${index}`))
   if (issues.length > 0) throw invalid(issues, 'The prices are not valid.')
-  const { result } = await command(caller, { name: 'priceLists.setDatedPrices', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
-    const { tx, now } = tools
-    const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'prices')
-    await checkTargets(tx, list, body.prices)
-    const existing = await tx.priceListEntry.findMany({ where: { versionId }, select: ENTRY_COLUMNS })
-    const byKey = new Map(existing.map((entry) => [datedKey(entry.styleId, entry.colourwayId, dayText(entry.validFrom)), entry]))
-    const before: unknown[] = []
-    const after: unknown[] = []
-    for (const row of body.prices) {
-      const current = byKey.get(datedKey(row.styleId, row.colourwayId, row.validFrom))
-      const price = row.unitPrice === null ? null : listPriceText(row.unitPrice)
-      const was = current ? { unitPrice: priceOf(current.unitPrice), validTo: dayText(current.validTo) } : null
-      if (price === null && !current) continue
-      if (current && price !== null && was!.unitPrice === price && was!.validTo === row.validTo) continue
-      const key = { styleId: row.styleId, colourwayId: row.colourwayId, validFrom: row.validFrom }
-      before.push({ ...key, unitPrice: was?.unitPrice ?? null, validTo: was?.validTo ?? null })
-      after.push({ ...key, unitPrice: price, validTo: price === null ? null : row.validTo })
-      // A price removed takes its quantity breaks with it (PriceBreak's entry: ON DELETE CASCADE).
-      if (price === null) await tx.priceListEntry.delete({ where: { id: current!.id }, select: { id: true } })
-      else if (current) await tx.priceListEntry.update({ where: { id: current.id }, data: { unitPrice: price, validTo: row.validTo === null ? null : dayValue(row.validTo), version: { increment: 1 }, updatedAt: now }, select: { id: true } })
-      else await tx.priceListEntry.create({ data: { id: newId(), versionId, styleId: row.styleId, colourwayId: row.colourwayId, unitPrice: price, validFrom: row.validFrom === null ? null : dayValue(row.validFrom), validTo: row.validTo === null ? null : dayValue(row.validTo), createdAt: now, updatedAt: now, createdById: actorIdOf(tools) }, select: { id: true } })
-    }
-    const overlap = await overlapIssues(tx, versionId)
-    if (overlap.length > 0) throw invalid(overlap, 'Some prices hold on the same days.')
-    const count = await tx.priceListEntry.count({ where: { versionId } })
-    if (count > PRICE_LIST_LIMITS.entries) throw new ConflictError(`A version holds at most ${PRICE_LIST_LIMITS.entries} prices.`)
-    if (after.length > 0) {
+  try {
+    const { result } = await command(caller, { name: 'priceLists.setDatedPrices', idempotencyKey, input: { listId, versionId, ...body } }, async (tools) => {
+      const { tx, now } = tools
+      const { list, version } = await lockedDraft(tools, listId, versionId, body.version, 'prices')
+      await checkTargets(tx, list, body.prices)
+      const existing = await tx.priceListEntry.findMany({ where: { versionId }, select: ENTRY_COLUMNS })
+      const byKey = new Map(existing.map((entry) => [datedKey(entry.styleId, entry.colourwayId, dayText(entry.validFrom)), entry]))
+      const before: unknown[] = []
+      const after: unknown[] = []
+      for (const row of body.prices) {
+        const current = byKey.get(datedKey(row.styleId, row.colourwayId, row.validFrom))
+        const price = row.unitPrice === null ? null : listPriceText(row.unitPrice)
+        const was = current ? { unitPrice: priceOf(current.unitPrice), validTo: dayText(current.validTo) } : null
+        if (price === null && !current) continue
+        if (current && price !== null && was!.unitPrice === price && was!.validTo === row.validTo) continue
+        const key = { styleId: row.styleId, colourwayId: row.colourwayId, validFrom: row.validFrom }
+        before.push({ ...key, unitPrice: was?.unitPrice ?? null, validTo: was?.validTo ?? null })
+        after.push({ ...key, unitPrice: price, validTo: price === null ? null : row.validTo })
+        // A price removed takes its quantity breaks with it (PriceBreak's entry: ON DELETE CASCADE).
+        if (price === null) await tx.priceListEntry.delete({ where: { id: current!.id }, select: { id: true } })
+        else if (current) await tx.priceListEntry.update({ where: { id: current.id }, data: { unitPrice: price, validTo: row.validTo === null ? null : dayValue(row.validTo), version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+        else await tx.priceListEntry.create({ data: { id: newId(), versionId, styleId: row.styleId, colourwayId: row.colourwayId, unitPrice: price, validFrom: row.validFrom === null ? null : dayValue(row.validFrom), validTo: row.validTo === null ? null : dayValue(row.validTo), createdAt: now, updatedAt: now, createdById: actorIdOf(tools) }, select: { id: true } })
+      }
+      // Nothing changed: the version's prices are as they were (their days checked when they were written).
+      if (after.length === 0) throw new Unchanged()
+      const overlap = await overlapIssues(tx, versionId)
+      if (overlap.length > 0) throw invalid(overlap, 'Some prices hold on the same days.')
+      const count = await tx.priceListEntry.count({ where: { versionId } })
+      if (count > PRICE_LIST_LIMITS.entries) throw new ConflictError(`A version holds at most ${PRICE_LIST_LIMITS.entries} prices.`)
       tools.audit({ action: 'priceLists.setDatedPrices', recordType: 'PriceList', recordId: listId, companyId: list.companyId, before: { versionId, revision: version.revision, prices: markMoney('price', before) }, after: { versionId, revision: version.revision, prices: markMoney('price', after) } })
       tools.emit({ type: 'price_list.version_changed', subject: listId, companyId: list.companyId, payload: { listId, versionId, revision: version.revision, change: 'PRICES' } })
-    }
-    const row = await tx.priceListVersion.findUniqueOrThrow({ where: { id: versionId }, select: VERSION_COLUMNS })
-    const entries = await entriesViewOf(tx, tools.context, list, versionId, now)
-    return { version: versionViewOf(row, entries.length), entries }
-  })
-  return result
+      const row = await tx.priceListVersion.findUniqueOrThrow({ where: { id: versionId }, select: VERSION_COLUMNS })
+      const entries = await entriesViewOf(tx, tools.context, list, versionId, now)
+      return { version: versionViewOf(row, entries.length), entries }
+    })
+    return result
+  } catch (error) {
+    // The version as GET …/versions/:versionId reads it.
+    if (error instanceof Unchanged) return getVersion(caller, listId, versionId)
+    throw error
+  }
 }
 
 /** The styles and colourways a list's prices name: the list's company's (or every company's), not archived, active colourways. */

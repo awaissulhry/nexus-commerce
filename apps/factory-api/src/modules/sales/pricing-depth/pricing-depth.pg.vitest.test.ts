@@ -122,6 +122,26 @@ const eventsOf = async (subject: string) => (await admin<{ type: string; payload
 const v = (versionId: string) => `/sales/price-lists/${P1_LIST}/versions/${versionId}`
 const versionOf = async (versionId: string): Promise<number> => (await ok('sales', 'GET', v(versionId))).version.version
 
+/**
+ * B-W2b-F32: a write of the values there already, sent twice (the second with an Idempotency-Key of its own), answers 200
+ * with what the GET reads, and writes nothing: the write's audit rows and events stay as many (the version does not move,
+ * or the second, at the same version, would be stale).
+ */
+async function sameTwice(url: string, payload: Json, read: string, audit: { action: string; recordId: string }, event: string): Promise<Json> {
+  const audits = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = $1 AND "recordId" = $2`, [audit.action, audit.recordId]))[0]!.n
+  const events = async () => (await eventsOf(audit.recordId)).filter((row) => row.type === event).length
+  const [auditsBefore, eventsBefore] = [await audits(), await events()]
+  expect(auditsBefore).toBeGreaterThan(0)
+  const current = await ok('sales', 'GET', read)
+  expect(await ok('sales', 'PUT', url, payload)).toEqual(current)
+  const keyed = await app.inject({ method: 'PUT', url, headers: { 'x-test-session': 'sales', 'idempotency-key': `f32-same-${newId()}` }, payload: payload as object })
+  expect(keyed.statusCode, keyed.body).toBe(200)
+  expect(keyed.json()).toEqual(current)
+  expect(await audits()).toBe(auditsBefore)
+  expect(await events()).toBe(eventsBefore)
+  return current
+}
+
 beforeAll(async () => {
   db = await migratedDatabase('pricing_depth')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 12 } })
@@ -200,6 +220,14 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
     expect((await refused('sales', 'PUT', `${v(P1_V1)}/breaks`, { version: await versionOf(P1_V1), breaks: [{ entryId: null, minQuantity: 30, unitPrice: null, discountPct: '1' }] }, 409)).message).toBe('Version 1 is active: its quantity breaks are fixed. Make the next version to change them.')
   })
 
+  it('the same breaks again change nothing: 200 with the rules, no audit row, no event, the version stays (B-W2b-F32)', async () => {
+    const version = await versionOf(P1_V2)
+    const breaks = [{ entryId: JKT01_V2, minQuantity: 20, unitPrice: '420', discountPct: null }, { entryId: JKT01_V2, minQuantity: 50, unitPrice: null, discountPct: null }]
+    const rules = await sameTwice(`${v(P1_V2)}/breaks`, { version, breaks }, `${v(P1_V2)}/rules`, { action: 'priceLists.setBreaks', recordId: P1_LIST }, 'price_list.rules_changed')
+    expect(rules.version.version).toBe(version)
+    expect(await versionOf(P1_V2)).toBe(version)
+  })
+
   it("sets a version's surcharge for one style and a style's own, the list's word first", async () => {
     const version = await versionOf(P1_V2)
     expect((await refused('sales', 'PUT', `${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '60', amount: null, pct: '5' }] }, 400)).message).toBe('60 is not a size of SEED-JKT-01 (50, 52, 54).')
@@ -215,22 +243,19 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
     expect((await eventsOf(jkt01)).filter((event) => event.type === 'style.size_surcharges_changed').map((event) => event.payload)).toEqual([{ styleId: jkt01, code: 'SEED-JKT-01', sizes: ['54'] }])
   })
 
+  it("a version's surcharges sent again change nothing: 200 with the rules, no audit row, no event, the version stays (B-W2b-F32)", async () => {
+    const version = await versionOf(P1_V2)
+    const rules = await sameTwice(`${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '54', amount: null, pct: '5' }] }, `${v(P1_V2)}/rules`, { action: 'priceLists.setSizeSurcharges', recordId: P1_LIST }, 'price_list.rules_changed')
+    expect(rules.sizeSurcharges).toMatchObject([{ size: '54', pct: '5' }, { size: '56', amount: '20' }])
+    expect(await versionOf(P1_V2)).toBe(version)
+  })
+
   it("a style's own surcharges sent again change nothing: 200 with what the style has, no audit row, no event (B-W2b-F32)", async () => {
-    const audits = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'styles.setSizeSurcharges' AND "recordId" = $1`, [jkt01]))[0]!.n
-    const events = async () => (await eventsOf(jkt01)).filter((event) => event.type === 'style.size_surcharges_changed').length
-    const [auditsBefore, eventsBefore] = [await audits(), await events()]
-    expect(auditsBefore).toBe(1)
-    const current = await ok('sales', 'GET', `/sales/styles/${jkt01}/size-surcharges`)
+    const url = `/sales/styles/${jkt01}/size-surcharges`
+    const current = await sameTwice(url, { surcharges: [{ size: '54', amount: '15', currency: 'EUR', pct: null }] }, url, { action: 'styles.setSizeSurcharges', recordId: jkt01 }, 'style.size_surcharges_changed')
     expect(current.surcharges).toMatchObject([{ size: '54', amount: '15', currency: 'EUR', pct: null }])
-    const same = { surcharges: [{ size: '54', amount: '15', currency: 'EUR', pct: null }] }
-    // The same values twice (the second with a key of its own), and a size removed that has none.
-    expect(await ok('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, same)).toEqual(current)
-    const keyed = await app.inject({ method: 'PUT', url: `/sales/styles/${jkt01}/size-surcharges`, headers: { 'x-test-session': 'sales', 'idempotency-key': `f32-same-${newId()}` }, payload: same })
-    expect(keyed.statusCode, keyed.body).toBe(200)
-    expect(keyed.json()).toEqual(current)
-    expect(await ok('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '50', amount: null, pct: null }] })).toEqual(current)
-    expect(await audits()).toBe(auditsBefore)
-    expect(await events()).toBe(eventsBefore)
+    // A size removed that has none changes nothing either.
+    await sameTwice(url, { surcharges: [{ size: '50', amount: null, pct: null }] }, url, { action: 'styles.setSizeSurcharges', recordId: jkt01 }, 'style.size_surcharges_changed')
   })
 })
 
@@ -259,6 +284,20 @@ describe('dated prices (SAL-167)', () => {
     ])
     // W2a's price cell keys a style by colourway only: a style with dated prices goes through the dated prices.
     expect((await refused('sales', 'PUT', `${v(P1_V2)}/entries`, { version: answer.version.version, entries: [{ styleId: jkt02, colourwayId: null, unitPrice: '405' }] }, 400)).message).toMatch(/prices by date/)
+  })
+
+  it('the same dated prices again change nothing: 200 with the version, no audit row, no event, the version stays (B-W2b-F32)', async () => {
+    const version = await versionOf(P1_V2)
+    const [until, from] = [addDays(TODAY, 20), addDays(TODAY, 21)]
+    const prices = [
+      { styleId: jkt02, colourwayId: null, validFrom: null, validTo: until, unitPrice: '400' },
+      { styleId: jkt02, colourwayId: null, validFrom: '2027-02-01', validTo: null, unitPrice: null },
+      { styleId: jkt02, colourwayId: null, validFrom: from, validTo: null, unitPrice: '415' },
+      { styleId: jkt02, colourwayId: RED2, validFrom: from, validTo: null, unitPrice: '430' },
+    ]
+    const current = await sameTwice(`${v(P1_V2)}/dated-prices`, { version, prices }, v(P1_V2), { action: 'priceLists.setDatedPrices', recordId: P1_LIST }, 'price_list.version_changed')
+    expect(current.version.version).toBe(version)
+    expect(await versionOf(P1_V2)).toBe(version)
   })
 
   it('shows the discount or the net price only on the customer documents (SAL-170)', async () => {
