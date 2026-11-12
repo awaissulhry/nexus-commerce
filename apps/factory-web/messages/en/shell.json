@@ -216,7 +216,8 @@
       "picking": "Picking & kits",
       "counts": "Counts",
       "reportsGroup": "Reports",
-      "reports": "Warehouse reports"
+      "reports": "Warehouse reports",
+      "transfers": "Transfers"
     },
     "frame": {
       "topBar": "Top bar"

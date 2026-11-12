@@ -1727,6 +1727,7 @@
     "inventory_stock_view": "Vedere le giacenze e i movimenti",
     "inventory_adjust": "Rettificare le giacenze con un motivo",
     "inventory_transfer": "Spostare merce tra ubicazioni",
+    "inventory_transfers_manage": "Trasferimenti tra sedi: preparare, spedire con il DDT, ricevere nell’altra sede, sistemare una differenza",
     "inventory_scrap": "Scartare merce con un motivo",
     "inventory_reverse": "Stornare un movimento sbagliato",
     "inventory_issue": "Prelevare e consegnare merce a un ordine di lavoro",
@@ -2112,6 +2113,7 @@
     "production_instructions_approve": "Approvare la bozza di un'altra persona di un'istruzione di lavoro: il reparto la vede da quel momento (mai la propria bozza)",
     "production_instructions_people": "Un registro della formazione: vedere per nome chi ha visto quale versione di un'istruzione di lavoro (dove il sito consente un nome) e registrare una presa visione firmata su carta",
     "purchasing_requests_ask": "Chiedere ai buyer di acquistare un materiale (anche da una mancanza di un ordine di produzione); vedere e ritirare le proprie richieste",
-    "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli"
+    "inventory_tasks_manage": "Creare a mano i compiti di magazzino del reparto (ricevere, ubicare, prelevare, spostare, contare), assegnarli a un ruolo o a un addetto, cambiarli e annullarli",
+    "inventory_counts_scan": "Contare un inventario in corso scansionando ogni unità (l'area di una pelle, la lunghezza di un rotolo, i pezzi digitati), vedere le differenze di un contenitore a fine conteggio, chiuderlo e ricontare una riga contata da un'altra persona"
   }
 }

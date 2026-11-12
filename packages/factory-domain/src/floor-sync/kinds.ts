@@ -91,6 +91,11 @@ export const FLOOR_SYNC_KINDS = [
   'inventory.task.take',
   'inventory.task.giveBack',
   'inventory.task.done',
+  // B-W2b-299: counting by scanning every unit (design floor.count "Works offline"; SCM-228): a unit scanned into a running
+  // count (its own area or length, or pieces typed) and a bin finished (each line the sum of its scans). Applied as the count
+  // and its lines stand when they arrive.
+  'inventory.count.scan',
+  'inventory.count.finishBin',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -167,6 +172,9 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'inventory.task.take': { kind: 'inventory.task.take', permission: 'floor.work', numbers: null, what: 'Take a warehouse task' },
   'inventory.task.giveBack': { kind: 'inventory.task.giveBack', permission: 'floor.work', numbers: null, what: 'Give a warehouse task back' },
   'inventory.task.done': { kind: 'inventory.task.done', permission: 'floor.work', numbers: null, what: 'Mark a warehouse task done' },
+  // B-W2b-299: the counts' scanning right (the module checks the count, the bin and the line again on arrival).
+  'inventory.count.scan': { kind: 'inventory.count.scan', permission: 'inventory.counts.scan', numbers: null, what: 'Scan a unit into a count' },
+  'inventory.count.finishBin': { kind: 'inventory.count.finishBin', permission: 'inventory.counts.scan', numbers: null, what: 'Finish a bin of a count' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

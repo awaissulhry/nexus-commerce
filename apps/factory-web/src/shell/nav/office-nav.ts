@@ -337,6 +337,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
   '/warehouse/counts',
   '/warehouse/counts/[id]',
+  // B-W2b-326: Warehouse › Transfers (SCR-360) and a transfer (SCR-361).
+  '/warehouse/transfers',
+  '/warehouse/transfers/[id]',
   // B-W2a-58: Warehouse › Picking & kits (SCR-237) and its paper (a new tab, no navigation row).
   '/warehouse/picking',
   '/warehouse/picking/print',

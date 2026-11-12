@@ -72,6 +72,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Location: '/warehouse/locations/[id]',
   // Warehouse › Counts (SCR-132): a cycle count or the year-end inventory.
   StockCount: '/warehouse/counts/[id]',
+  // B-W2b-326: a transfer between sites (SCR-361: lines, in transit with its DDT, received).
+  TransferOrder: '/warehouse/transfers/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // B-W2b-271: a recall or withdrawal of a register entry (SCR-328).
