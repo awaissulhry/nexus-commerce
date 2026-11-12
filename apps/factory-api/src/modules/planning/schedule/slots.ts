@@ -22,6 +22,9 @@ import { laneFacts, lockedSlot, lockedWorkingPlan, SLOT_COLUMNS, userNamesOf, ty
 // B-W2b-263: the board holds a drop on a pre-production gate not passed.
 import { holdWords } from '@nexus/factory-domain/planning/milestones/rules'
 import { assertNoGateHold, gateHoldsOf, type GateHold } from './gates'
+// B-W2b-312: a pinned slot stays where it is (PLN-139); a move's answer knows the material (PLN-134).
+import { pinnedRefusal } from '../schedule-depth/pins'
+import { materialCheckOf, materialStartsOf } from '../schedule-depth/material'
 
 /**
  * Moves on the planning board (B-W2a-34; PLN-129, PLN-131, PLN-160; design planning.board "Schedule": "Each move
@@ -80,8 +83,8 @@ function openWorkOrder(world: ScheduleWorld, workOrderId: string): BoardWorkOrde
 
 const centreName = (world: ScheduleWorld, id: string): string => world.lanes.get(laneKey({ kind: 'WORK_CENTRE', id }))?.name ?? 'its work centre'
 
-/** A bar fits a lane when the lane does its operation; a whole-order slot goes to a line or a workshop. */
-function assertFits(world: ScheduleWorld, operation: BoardOperation | null, lane: LaneRef, laneName: string): void {
+/** A bar fits a lane when the lane does its operation; a whole-order slot goes to a line or a workshop. (B-W2b-312: exported for the what-if.) */
+export function assertFits(world: ScheduleWorld, operation: BoardOperation | null, lane: LaneRef, laneName: string): void {
   if (operation === null) {
     if (lane.kind === 'WORK_CENTRE') throw new ScheduleRefusal('PART_LANE', 'A part of an order goes to a line or a workshop; an operation goes to a work centre.')
     return
@@ -111,8 +114,8 @@ export function slotMinutes(world: ScheduleWorld, workOrder: BoardWorkOrder, ope
     .reduce((sum, candidate) => sum.plus(standardOf(candidate, Math.min(garments, candidate.remaining))), new Dec(0))
 }
 
-/** Where a slot placed at `start` on a lane ends (see above). */
-function endFor(world: ScheduleWorld, workOrder: BoardWorkOrder, operation: BoardOperation | null, lane: LaneRef, start: Date, minutes: Decimal): Date {
+/** Where a slot placed at `start` on a lane ends (see above). (B-W2b-312: exported for the what-if.) */
+export function endFor(world: ScheduleWorld, workOrder: BoardWorkOrder, operation: BoardOperation | null, lane: LaneRef, start: Date, minutes: Decimal): Date {
   let duration
   if (operation) duration = durationOn(world, lane, operation, operation.remaining)
   else if (lane.kind === 'WORKSHOP') duration = { kind: 'CLOCK' as const, minutes: 24 * 60 }
@@ -152,12 +155,15 @@ function invalid(problems: Issue[]): never {
 async function answerAfter(caller: CommandCaller, site: SiteRow, slotId: string, workOrderId: string) {
   return caller.withClient(async (db) => {
     const slot = await db.scheduleSlot.findUniqueOrThrow({ where: { id: slotId }, select: SLOT_COLUMNS })
-    const names = await userNamesOf(db, [slot.updatedById])
+    const names = await userNamesOf(db, [slot.updatedById, slot.pinnedById]) // B-W2b-312: who pinned it too
     const now = serverClock.now()
     const today = businessDate(now, site.timezone)
     const world = await scheduleWorld(db, site, { from: today, to: today }, now)
     const schedule = world.schedules.get(workOrderId)
-    return { slot: storedSlotView(slot, names), schedule: schedule ? scheduleViewOf(schedule) : null }
+    // B-W2b-312 (PLN-134): the start against the work order's material ("Snap to 15 Nov / Keep my date").
+    const start = world.workOrders.some((workOrder) => workOrder.id === workOrderId) ? (await materialStartsOf(db, world, [workOrderId])).get(workOrderId) : undefined
+    const material = start ? materialCheckOf(world, start, laneOfSlot(slot), slot.startAt.getTime()) : null
+    return { slot: storedSlotView(slot, names), schedule: schedule ? scheduleViewOf(schedule) : null, material }
   })
 }
 
@@ -263,6 +269,8 @@ export async function moveSlot(caller: CommandCaller, slotId: string, body: Move
     const end = body.endAt ? instant(body.endAt) : replaced ? endFor(world, workOrder, operation, lane.ref, start, minutes) : current.endAt
     const problems = slotInputProblems({ startAt: start.getTime(), endAt: end.getTime(), pieces, overloadReason: body.overloadReason ?? null, note: body.note ?? null }, { whole: !operation, garments: workOrder.garments })
     if (problems.length > 0) invalid(problems)
+    // B-W2b-312 (PLN-139): a pinned slot keeps its lane and times (its garments, reason and note may change).
+    if (current.pinned && (laneKey(lane.ref) !== laneKey(laneOfSlot(current)) || start.getTime() !== current.startAt.getTime() || end.getTime() !== current.endAt.getTime())) throw await pinnedRefusal(tx, current, 'move', target.site.timezone)
     const moved: PlannedSlot = { id: current.id, workOrderId: current.workOrderId, workOrderOperationId: current.workOrderOperationId, ...laneColumns(lane.ref), startAt: start, endAt: end, pieces, minutes }
     const others = world.slots.filter((slot) => slot.id !== current.id)
     const over = workOrder.booksCapacity ? overDays(world, capacityWith(world, [...others, moved]), lane.ref, start, end) : []
@@ -298,6 +306,7 @@ export async function removeSlot(caller: CommandCaller, slotId: string, body: { 
     const { tx, now } = tools
     const plan = await lockedWorkingPlan(tx, target.site, context.tenantId, { actorId: context.actorId, now, bump: true })
     const current = await lockedSlot(tx, slotId, body.version, target.site.timezone)
+    if (current.pinned) throw await pinnedRefusal(tx, current, 'remove', target.site.timezone) // B-W2b-312 (PLN-139)
     const { count } = await tx.scheduleSlot.deleteMany({ where: { id: current.id, version: current.version } })
     if (count !== 1) throw new ScheduleRefusal('SLOT_MOVED', 'The slot moved meanwhile: reload the board.')
     tools.audit({ action: 'planning.schedule.remove', recordType: 'ScheduleSlot', recordId: current.id, companyId: target.companyId, siteId: target.siteId, before: { workOrderId: current.workOrderId, operationId: current.workOrderOperationId, ...slotAudit(current) }, after: null })

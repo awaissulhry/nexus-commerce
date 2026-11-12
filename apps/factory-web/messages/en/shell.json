@@ -197,6 +197,9 @@
       "exceptions": "Exceptions",
       "dates": "Dates",
       "milestones": "Time & action",
+      "longRange": "Long range",
+      "demand": "Demand & forecast",
+      "mps": "Master schedule & S&OP",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },
