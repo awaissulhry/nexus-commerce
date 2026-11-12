@@ -769,7 +769,9 @@
       "binMove": "Moved between bins",
       "taskTake": "Warehouse task taken",
       "taskGiveBack": "Warehouse task given back",
-      "taskDone": "Warehouse task done"
+      "taskDone": "Warehouse task done",
+      "countScan": "Unit scanned into a count",
+      "countFinishBin": "Bin of a count finished"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

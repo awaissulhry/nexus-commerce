@@ -1,4 +1,4 @@
-import { ClipboardList, Contact, FileText, Handshake, Settings, Tags, Undo2 } from 'lucide-react'
+import { ClipboardList, Contact, FileText, Handshake, Inbox, Settings, Tags, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -23,6 +23,8 @@ export const officeArea: OfficeAreaNav = {
         noCrumb: true,
         items: [
           { id: 'sales-customers', label: 'shell:nav.sales.customers', href: '/sales/customers', icon: Contact, permission: 'parties.view' },
+          // SCR-105 (B-W2b-322): requests and RFQs from mail, phone, a fair or the office, until they become a quote.
+          { id: 'sales-inquiries', label: 'shell:nav.sales.inquiries', href: '/sales/inquiries', icon: Inbox, permission: 'sales.inquiries.view' },
           // SCR-034 / SCR-035 (B-W1-21, B-W1-24): quotes by style, colour and size with price, margin, approval and send.
           { id: 'sales-quotes', label: 'shell:nav.sales.quotes', href: '/sales/quotes', icon: FileText, permission: 'quotes.view' },
           // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
