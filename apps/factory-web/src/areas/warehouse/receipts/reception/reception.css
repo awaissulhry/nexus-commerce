@@ -1,0 +1,87 @@
+/*
+ * B-W2b-300 — the receipt's reception report (SCR-379) and goods without a PO on the receipt record. LAYOUT only: the
+ * controls are the design system's; semantic tokens, no colours of their own. The dialog's list fills the dialog's width.
+ */
+.fw-rc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rc-actions,
+.fw-rc-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rc-lines,
+.fw-rc-list,
+.fw-rc-naming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rc-list {
+  padding-left: var(--nds-space-16);
+  list-style: disc;
+}
+
+.fw-rc-naming-line {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-10) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rc-orders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-rc-legend {
+  width: 100%;
+  margin-bottom: var(--nds-space-4);
+  font-weight: 600;
+}
+
+.fw-rc-cell {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-rc-sub {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+p.fw-rc-sub[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-rc-strong {
+  font-weight: 600;
+}
+
+.fw-rc-banner-body {
+  display: inline;
+}

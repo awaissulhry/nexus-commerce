@@ -1,0 +1,525 @@
+{
+  "problem": {
+    "forbidden": "Qui non puoi farlo.",
+    "notFound": "Non c’è più: rileggi la pagina.",
+    "conflict": "Qualcun altro l’ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa di scritto non va: controlla i campi.",
+    "stepUp": "Per questo serve un nuovo codice.",
+    "rateLimited": "Troppi tentativi: aspetta un minuto e riprova.",
+    "signedOut": "Sei stato disconnesso: accedi di nuovo.",
+    "offline": "Il server della fabbrica non ha risposto: controlla la connessione e riprova.",
+    "unavailable": "Questa volta non ha funzionato: riprova.",
+    "tooLong": "Al massimo {max} caratteri."
+  },
+  "read": {
+    "failed": "Impossibile caricare {what}",
+    "retry": "Riprova",
+    "loading": "Caricamento in corso…"
+  },
+  "dialog": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "saving": "Salvataggio…",
+    "fixFirst_one": "Correggi prima {count} campo",
+    "fixFirst_other": "Correggi prima {count} campi"
+  },
+  "held": {
+    "manage": "Serve il permesso di modificare i clienti (parties.manage).",
+    "hold": "Serve il permesso di bloccare i clienti (parties.hold).",
+    "privacy": "Serve il permesso di gestire i dati personali (parties.privacy).",
+    "erase": "Serve il permesso di cancellare i dati personali (parties.erase).",
+    "archived": "Il cliente è archiviato: riattivalo prima.",
+    "manageCompany": "Non puoi cambiare le condizioni di questo cliente con questa azienda.",
+    "erased": "Questo contatto è stato cancellato: non si può fare altro.",
+    "objected": "Un’opposizione è già registrata per questa persona.",
+    "styles": "Per scegliere i modelli serve il permesso di vederli (product.styles.view).",
+    "files": "Per scegliere un file serve il permesso di vedere i file della scheda (files.read)."
+  },
+  "numbers": {
+    "freeCredit": "Fido disponibile",
+    "promises": "Date promesse",
+    "reading": "Lettura…",
+    "failed": "Impossibile contare",
+    "unknown": "—",
+    "creditWithheld": "Il tuo ruolo non vede il fido",
+    "promisesWithheld": "Il tuo ruolo non vede gli ordini"
+  },
+  "credit": {
+    "noLimit": "Nessun fido",
+    "noLimitHint": "Nessun fido impostato con questa azienda",
+    "available": "{amount}",
+    "ofLimit": "su un fido di {limit}",
+    "overBy": "Oltre di {amount}",
+    "over": "Oltre il fido",
+    "within": "Entro il fido",
+    "noPrice": "Gli importi richiedono i prezzi di vendita"
+  },
+  "promises": {
+    "none": "Nessun ordine aperto",
+    "noneHint": "Nulla di promesso ora",
+    "late_one": "{count} in ritardo",
+    "late_other": "{count} in ritardo",
+    "onTime_one": "{count} nei tempi",
+    "onTime_other": "Tutti i {count} nei tempi",
+    "next": "Prossima {date}",
+    "without_one": "{count} senza data promessa",
+    "without_other": "{count} senza data promessa",
+    "noneComing": "Nessuna data promessa in vista"
+  },
+  "withheld": {
+    "samples": "Non mostrato: il tuo ruolo non vede i giri campione.",
+    "profiles": "Non mostrato: il tuo ruolo non vede i profili di misura.",
+    "repairs": "Non mostrato: il tuo ruolo non vede le riparazioni."
+  },
+  "glance": {
+    "seeAll": "Vedi tutti ({count})",
+    "more_one": "altro {count}",
+    "more_other": "altri {count}"
+  },
+  "now": {
+    "title": "Adesso"
+  },
+  "samples": {
+    "title": "Campioni in corso",
+    "hint": "Giri campione per questo cliente non ancora decisi, prima i più vicini alla scadenza.",
+    "none": "Nessun campione in corso.",
+    "col": {
+      "number": "Giro",
+      "style": "Modello",
+      "kind": "Tipo",
+      "stage": "Fase",
+      "due": "Scadenza"
+    },
+    "kindRound": "{kind} · giro {round}",
+    "late_one": "In ritardo di {count} giorno",
+    "late_other": "In ritardo di {count} giorni",
+    "dueToday": "Scade oggi",
+    "due": "Scade il {date}",
+    "noDue": "Senza scadenza"
+  },
+  "profiles": {
+    "title": "Profili di misura",
+    "hint": "L’ultima revisione per pilota e capo; le misure restano nel profilo.",
+    "none": "Nessun profilo di misura per questo cliente.",
+    "noneRider": "Ancora nessun profilo di misura per questo pilota.",
+    "col": {
+      "rider": "Pilota",
+      "garment": "Capo",
+      "revision": "Revisione",
+      "base": "Taglia più vicina",
+      "taken": "Misurato il"
+    },
+    "rev": "Rev. {revision}"
+  },
+  "riders": {
+    "title": "Piloti",
+    "hint": "Le persone sotto questa squadra o rivenditore.",
+    "none": "Nessun pilota sotto questo cliente.",
+    "col": {
+      "rider": "Pilota",
+      "status": "Stato",
+      "profiles": "Profili"
+    }
+  },
+  "repairs": {
+    "title": "Riparazioni e modifiche in corso",
+    "hint": "Capi di questo cliente in riparazione o modifica.",
+    "none": "Nessuna riparazione in corso.",
+    "col": {
+      "number": "Riparazione",
+      "kind": "Tipo",
+      "stage": "Fase",
+      "opened": "Aperta il"
+    }
+  },
+  "status": {
+    "notOnHold": "Non in blocco.",
+    "onHold": "In blocco",
+    "since": "Dal {date}, da {by}",
+    "sinceSystem": "Dal {date}, da un controllo del fido",
+    "holdStops": "Nuovi ordini e spedizioni attendono; i nuovi preventivi mostrano un avviso.",
+    "openHold": "Apri il blocco"
+  },
+  "team": {
+    "title": "Squadra",
+    "hint": "Questo pilota è sotto questa squadra o rivenditore."
+  },
+  "reqSide": {
+    "title": "Requisiti in vigore",
+    "none": "Nessun requisito particolare.",
+    "all_one": "Vedi il requisito",
+    "all_other": "Vedi tutti i {count} requisiti",
+    "open": "Apri Requisiti"
+  },
+  "hold": {
+    "title": "Blocco",
+    "hint": "Ferma nuovi ordini e spedizioni con un motivo; i nuovi preventivi mostrano un avviso.",
+    "place": "Metti in blocco…",
+    "toggle": "In blocco",
+    "on": "In blocco",
+    "off": "Non in blocco",
+    "toggleMany": "Sono in vigore più blocchi: sbloccali uno per uno qui sotto.",
+    "inForce": "Blocchi in vigore",
+    "none": "Nessun blocco in vigore.",
+    "col": {
+      "reason": "Motivo",
+      "company": "Azienda",
+      "words": "Perché",
+      "placed": "Messo"
+    },
+    "everyCompany": "Tutte le aziende",
+    "placedBy": "{date} da {by}",
+    "placedSystem": "{date} da un controllo del fido",
+    "release": "Sblocca…",
+    "stops": "Finché un blocco è in vigore, nuovi ordini e spedizioni di questo cliente attendono lo sblocco.",
+    "waiting_one": "{count} preventivo accettato attende il suo ordine",
+    "waiting_other": "{count} preventivi accettati attendono il loro ordine",
+    "quoteRev": "{number} rev. {revision}",
+    "waitingHint": "Dopo lo sblocco, crea l’ordine dal preventivo (Vendite › Ordini).",
+    "history": "Blocchi tolti",
+    "noHistory": "Nessun blocco ancora tolto.",
+    "releasedLine": "{reason}: tolto da {by}",
+    "placedLine": "messo il {date}: {words}",
+    "system": "il sistema",
+    "dialog": {
+      "place": "Metti il cliente in blocco",
+      "release": "Togli il blocco ({reason})",
+      "company": "Per",
+      "companyHint": "Un’azienda, o tutte le aziende del gruppo.",
+      "reason": "Motivo",
+      "pick": "Scegli un motivo",
+      "words": "Perché",
+      "wordsHint": "Lo vedono sul preventivo, sull’ordine e sulla spedizione.",
+      "stops": "Nuovi ordini e spedizioni attenderanno lo sblocco.",
+      "releaseWords": "Perché viene tolto",
+      "releaseHint": "Resta nella storia del blocco.",
+      "confirmPlace": "Metti in blocco",
+      "confirmRelease": "Sblocca"
+    },
+    "problem": {
+      "reason": "Scegli il motivo.",
+      "why": "Scrivi perché il cliente va in blocco.",
+      "whyRelease": "Scrivi perché il blocco viene tolto."
+    },
+    "refused": {
+      "same": "Lì è già in vigore un blocco per questo motivo: toglilo o scegli un altro motivo.",
+      "company": "Non è un’azienda in cui questo cliente può essere bloccato."
+    },
+    "placed": "Il cliente è in blocco.",
+    "released": "Il blocco è stato tolto."
+  },
+  "reason": {
+    "CREDIT": "Fido",
+    "LEGAL": "Legale",
+    "QUALITY_DISPUTE": "Contestazione qualità",
+    "DATA_MISSING": "Dati mancanti",
+    "OTHER": "Altro"
+  },
+  "po": {
+    "title": "Numero d’ordine del cliente",
+    "hint": "Quando è obbligatorio, un ordine con quell’azienda viene rifiutato se creato senza il numero d’ordine del cliente.",
+    "toggle": "Numero d’ordine del cliente obbligatorio con {company}",
+    "required": "Obbligatorio con {company}",
+    "notRequired": "Non obbligatorio con {company}",
+    "setBy": "Impostato da {by}, {date}",
+    "partyOwn": "Ancora nessuna condizione di questa azienda: nulla è obbligatorio.",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "save": "Salva",
+    "saved_one": "La regola del numero d’ordine è stata salvata per {count} azienda.",
+    "saved_other": "La regola del numero d’ordine è stata salvata per {count} aziende."
+  },
+  "req": {
+    "title": "Requisiti del cliente",
+    "hint": "Regole di imballo, etichette, cartellini, documenti e routing guide; ognuna dice dove la vedranno.",
+    "add": "Aggiungi regola",
+    "empty": "Nessun requisito particolare",
+    "emptyBody": "Aggiungi una regola per imballo, etichette, documenti o spedizione, e di’ dove deve essere vista.",
+    "col": {
+      "rule": "Regola",
+      "appliesTo": "Vale per",
+      "shownOn": "Mostrata su",
+      "attachment": "Allegato",
+      "written": "Scritta"
+    },
+    "allOrders": "Tutti gli ordini",
+    "someStyles": "Alcuni modelli",
+    "writtenBy": "{by}, {date}",
+    "menu": "Azioni per la regola {kind}",
+    "replace": "Sostituisci…",
+    "replaceHint": "La vecchia regola finisce e la nuova inizia in un solo passo.",
+    "end": "Termina…",
+    "history": "Regole terminate",
+    "historyHint": "Le regole non si modificano: un cambio termina la vecchia e la tiene qui.",
+    "noHistory": "Nessuna regola ancora terminata.",
+    "endedLine": "{kind}: terminata da {by}",
+    "addTitle": "Aggiungi un requisito",
+    "replaceTitle": "Sostituisci la regola {kind}",
+    "replaceNote": "Salvando, la regola in vigore finisce e questa la sostituisce; la vecchia resta nella storia.",
+    "addConfirm": "Aggiungi regola",
+    "replaceConfirm": "Sostituisci regola",
+    "endTitle": "Termina la regola {kind}",
+    "endReason": "Perché termina",
+    "endReasonHint": "Resta con la regola nella storia.",
+    "endConfirm": "Termina regola",
+    "field": {
+      "company": "Per",
+      "companyHint": "Un’azienda, o tutte le aziende del gruppo.",
+      "kind": "Tipo",
+      "rule": "Regola",
+      "ruleHint": "Come deve essere letta: “Due cartellini per giacca, etichetta taglia nel collo.”",
+      "shownOn": "Mostrata su",
+      "shownOnHint": "Dove la vedranno mentre lavorano.",
+      "appliesTo": "Vale per",
+      "styles": "Modelli",
+      "stylesPick": "Scegli i modelli",
+      "stylesSearch": "Cerca un modello",
+      "attachment": "Allegato (routing guide)",
+      "attachmentHint": "Uno dei file di questo cliente (scheda Documenti).",
+      "noAttachment": "Nessun allegato",
+      "reason": "Perché cambia (facoltativo)",
+      "reasonHint": "Resta con la vecchia regola."
+    },
+    "stylesFailed": "Impossibile leggere i modelli: per ora la regola può valere solo per tutti gli ordini.",
+    "problem": {
+      "words": "Scrivi la regola.",
+      "where": "Scegli almeno un punto in cui mostrarla.",
+      "styles": "Scegli i modelli, o tutti gli ordini.",
+      "tooManyStyles": "Al massimo {max} modelli.",
+      "endReason": "Scrivi perché la regola termina."
+    },
+    "refused": {
+      "company": "Non è un’azienda per cui può valere questa regola.",
+      "styles": "Un modello scelto non è di questa azienda.",
+      "file": "L’allegato non è un file di questo cliente."
+    },
+    "done": {
+      "add": "Il requisito è stato aggiunto.",
+      "replace": "Il requisito è stato sostituito; il vecchio è nella storia.",
+      "end": "Il requisito è terminato."
+    }
+  },
+  "kind": {
+    "PACKING": "Imballo",
+    "DOCUMENT": "Documenti",
+    "LABEL": "Etichette",
+    "QUALITY": "Qualità",
+    "SHIPPING": "Spedizione",
+    "INVOICING": "Fatturazione",
+    "OTHER": "Altro"
+  },
+  "stage": {
+    "QUOTE": "il preventivo",
+    "ORDER": "l’ordine",
+    "PACKING": "la schermata di prelievo e imballo",
+    "SHIPMENT": "la checklist di spedizione",
+    "INVOICE": "la fattura"
+  },
+  "privacy": {
+    "title": "Dati personali dei contatti",
+    "hint": "Perché possiamo tenere i dati di ogni persona (GDPR art. 6), il loro consenso e cosa possono chiedere: una copia di ciò che teniamo (art. 15) e la cancellazione (art. 17).",
+    "notRecorded_one": "{count} contatto non ha ancora una base giuridica registrata.",
+    "notRecorded_other": "{count} contatti non hanno ancora una base giuridica registrata.",
+    "none": "Ancora nessun contatto.",
+    "col": {
+      "contact": "Contatto",
+      "basis": "Base giuridica",
+      "consent": "Consenso",
+      "objection": "Opposizione",
+      "state": "Stato"
+    },
+    "erasedName": "Contatto cancellato",
+    "basisMissing": "Non registrata",
+    "objectedOn": "Opposizione {date}",
+    "erased": "Cancellato",
+    "erasedOn": "{date} da {by}",
+    "menu": "Azioni sui dati personali di {name}",
+    "rule": "I dati personali restano in questa scheda: mai un filtro, un raggruppamento o un totale.",
+    "openPortal": "Apri Accesso al portale",
+    "act": {
+      "basis": "Registra la base giuridica…",
+      "basisHint": "Perché possiamo tenere i dati di questa persona.",
+      "objection": "Registra un’opposizione…",
+      "objectionHint": "La persona si oppone a come usiamo i suoi dati (art. 21).",
+      "copy": "Copia dei dati…",
+      "copyHint": "Tutto ciò che teniamo sulla persona (art. 15).",
+      "erase": "Cancella…",
+      "eraseHint": "Cancella per sempre i dati della persona; i documenti che la legge conserva restano (art. 17)."
+    },
+    "problem": {
+      "basis": "Scegli la base giuridica.",
+      "consentDay": "Indica il giorno in cui la persona ha dato il consenso.",
+      "consentSource": "Scrivi come la persona ha dato il consenso (un modulo, una mail).",
+      "future": "Il consenso non può essere nel futuro.",
+      "words": "Scrivi cosa ha chiesto la persona e come (una mail, una lettera), senza i suoi dati."
+    },
+    "refused": {
+      "portalUser": "Questa persona accede ancora al portale con questa e-mail: togli prima l’accesso al portale, poi cancella il contatto."
+    },
+    "done": {
+      "basis": "La base giuridica di {name} è stata registrata.",
+      "objection": "L’opposizione di {name} è stata registrata."
+    }
+  },
+  "basis": {
+    "CONTRACT": "Contratto",
+    "CONSENT": "Consenso",
+    "LEGITIMATE_INTEREST": "Interesse legittimo",
+    "LEGAL_DUTY": "Obbligo di legge",
+    "title": "Base giuridica di {name}",
+    "field": "Base giuridica",
+    "fieldHint": "Perché possiamo tenere i dati di questa persona.",
+    "pick": "Scegli una base",
+    "consentDay": "Consenso dato il",
+    "consentSource": "Come",
+    "consentSourceHint": "Il modulo, la mail o la telefonata con cui è arrivato.",
+    "confirm": "Salva"
+  },
+  "basisArticle": {
+    "CONTRACT": "GDPR art. 6(1)(b)",
+    "CONSENT": "GDPR art. 6(1)(a)",
+    "LEGITIMATE_INTEREST": "GDPR art. 6(1)(f)",
+    "LEGAL_DUTY": "GDPR art. 6(1)(c)"
+  },
+  "basisWhy": {
+    "CONTRACT": "Servono i dati per preventivare, consegnare e fatturare ciò che ordinano.",
+    "CONSENT": "La persona ha acconsentito: indica quando e come.",
+    "LEGITIMATE_INTEREST": "Il nostro interesse a restare in contatto, bilanciato con i diritti della persona.",
+    "LEGAL_DUTY": "Una legge ci obbliga a conservarli (fatture, registri fiscali)."
+  },
+  "objection": {
+    "title": "Opposizione di {name}",
+    "body": "Si registra una volta sola, con cosa ha chiesto la persona e come; resta sul contatto.",
+    "words": "Cosa ha chiesto la persona e come",
+    "wordsHint": "Senza i suoi dati: “Per mail il 3 nov, niente più newsletter.”",
+    "confirm": "Registra opposizione"
+  },
+  "copy": {
+    "title": "Copia dei dati di {name}",
+    "body": "Tutto ciò che teniamo sulla persona (GDPR art. 15): i suoi dati, perché li teniamo, preventivi, richieste, resi, reclami, mail, messaggi, link, profili di misura e utenti del portale. La copia viene registrata.",
+    "words": "Cosa ha chiesto la persona e come",
+    "wordsHint": "Senza i suoi dati: “Richiesta per mail il 3 nov.”",
+    "confirm": "Crea la copia",
+    "making": "Creazione della copia…",
+    "made": "Copia creata il {date}.",
+    "person": "Persona",
+    "email": "E-mail",
+    "phone": "Telefono",
+    "basis": "Base giuridica",
+    "held": "Cosa teniamo",
+    "col": {
+      "what": "Cosa",
+      "count": "Quanti"
+    },
+    "truncated": "Alcuni elenchi si fermano a 200 voci: il resto si apre da ogni scheda.",
+    "passOn": "Scarica la copia e mandala alla persona attraverso il canale con cui l’ha chiesta.",
+    "download": "Scarica la copia",
+    "fileName": "copia-dati-{date}.json",
+    "quotes": "Preventivi",
+    "inquiries": "Richieste",
+    "returns": "Resi",
+    "complaints": "Reclami",
+    "mailsReceived": "Mail ricevute",
+    "mailsSent": "Mail inviate",
+    "messages": "Messaggi scritti",
+    "links": "Link inviati",
+    "profiles": "Profili di misura",
+    "portalUsers": "Utenti del portale",
+    "changes": "Modifiche al contatto"
+  },
+  "erase": {
+    "title": "Cancella {name}",
+    "forGood": "Non si può annullare.",
+    "blanks": "Nome, e-mail e telefono vengono cancellati per sempre e il contatto archiviato come “Contatto cancellato”.",
+    "keeps": "Resta ciò che la legge richiede: preventivi, ordini, DDT e fatture tengono le proprie copie; il registro delle modifiche tiene ciò che ha registrato.",
+    "words": "Cosa ha chiesto la persona e come",
+    "wordsHint": "Senza i suoi dati: “Cancellazione chiesta per lettera il 3 nov.”",
+    "code": "Prima della cancellazione viene chiesto un nuovo codice dall’app di autenticazione.",
+    "confirm": "Cancella per sempre",
+    "erasing": "Cancellazione…",
+    "done": "Il contatto è stato cancellato.",
+    "keptNone": "Nient’altro nominava la persona.",
+    "notErased": "Non cancellato: il codice non è stato dato.",
+    "stepUp": "La cancellazione dei dati personali chiede un nuovo codice dall’app di autenticazione.",
+    "stepUpTitle": "Conferma che sei tu",
+    "stepUpConfirm": "Conferma e cancella",
+    "stepUpFailed": "Il codice non è giusto: prova il più recente.",
+    "kept": {
+      "documents": {
+        "what_one": "{count} documento conservato",
+        "what_other": "{count} documenti conservati",
+        "why": "Tengono le proprie copie di ciò che hanno stampato: la legge ci obbliga a conservarli."
+      },
+      "inboundMails": {
+        "what_one": "{count} mail ricevuta conservata",
+        "what_other": "{count} mail ricevute conservate",
+        "why": "Le mail restano come sono arrivate finché la piattaforma non permetterà di cancellarle."
+      },
+      "messages": {
+        "what_one": "{count} messaggio conservato",
+        "what_other": "{count} messaggi conservati",
+        "why": "I messaggi sulle schede restano per ora come sono stati scritti."
+      },
+      "auditRows": {
+        "what_one": "{count} voce del registro conservata",
+        "what_other": "{count} voci del registro conservate",
+        "why": "Il registro è la prova di chi ha cambiato cosa."
+      },
+      "links": {
+        "what_one": "{count} link conservato",
+        "what_other": "{count} link conservati",
+        "why": "I link tengono l’indirizzo a cui sono andati: la prova di cosa è stato inviato."
+      },
+      "measurementProfiles": {
+        "what_one": "{count} profilo di misura conservato",
+        "what_other": "{count} profili di misura conservati",
+        "why": "Restano con gli ordini su misura che li hanno usati."
+      },
+      "other": {
+        "what_one": "{count} altro dato conservato",
+        "what_other": "{count} altri dati conservati",
+        "why": "Conservato perché la legge o un documento lo richiede."
+      }
+    }
+  },
+  "sampleKind": {
+    "PROTO": "Prototipo",
+    "FIT": "Vestibilità",
+    "SALESMAN": "Campionario",
+    "PRE_PRODUCTION": "Pre-produzione",
+    "CERTIFICATION": "Certificazione",
+    "BRAND": "Brand"
+  },
+  "sampleStage": {
+    "REQUESTED": "Richiesto",
+    "IN_MAKING": "In lavorazione",
+    "SENT": "Spedito",
+    "UNDER_REVIEW": "In valutazione",
+    "DECIDED": "Deciso",
+    "CANCELLED": "Annullato"
+  },
+  "repairKind": {
+    "REPAIR": "Riparazione",
+    "ALTERATION": "Modifica"
+  },
+  "repairStage": {
+    "AWAITING_GOODS": "In attesa del capo",
+    "RECEIVED": "Ricevuto",
+    "ESTIMATED": "Preventivato",
+    "APPROVED": "Approvato",
+    "IN_REPAIR": "In riparazione",
+    "REPAIRED": "Riparato",
+    "SHIPPED": "Rispedito",
+    "CANCELLED": "Annullato"
+  },
+  "partyStatus": {
+    "PROSPECT": "Potenziale",
+    "ACTIVE": "Attivo",
+    "BLOCKED": "Bloccato",
+    "ARCHIVED": "Archiviato"
+  },
+  "contactStatus": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  }
+}
