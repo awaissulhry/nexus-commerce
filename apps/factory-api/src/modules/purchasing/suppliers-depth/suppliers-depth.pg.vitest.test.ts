@@ -129,7 +129,7 @@ describe('a supplier’s kinds, lead time and origin (SCM-002, SCM-016)', () => 
     ).supplier
     expect(after).toMatchObject({ kinds: ['TANNERY', 'SUBCONTRACTOR'], leadTimeDays: 10, origin: { country: 'IT', region: 'Santa Croce sull’Arno', hideCountries: ['IT', 'ES'], tannages: ['VEGETABLE', 'CHROME_FREE'] }, version: before.version + 1 })
     expect((await eventsOf(A.supplier, 'party.updated')).at(-1)).toMatchObject({ fields: ['supplierKinds', 'leadTimeDays', 'originCountry', 'originRegion', 'hideOriginCountries', 'tannages'] })
-    const [audit] = await admin<Json>(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.suppliers.profile' ORDER BY "occurredAt" DESC, id DESC LIMIT 1`, [A.supplier])
+    const [audit] = await admin<Json>(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'purchasing.suppliers.profile' ORDER BY at DESC, id DESC LIMIT 1`, [A.supplier])
     expect(audit!.after).toMatchObject({ kinds: ['TANNERY', 'SUBCONTRACTOR'], leadTimeDays: 10 })
   })
 
