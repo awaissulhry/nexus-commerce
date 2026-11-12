@@ -15,6 +15,8 @@ import { scheduledStartsOf } from './pegging/starts'
 // B-W2b-293 (MR1:01, MR1:02): every garment through its multi-level explosion, with the order line's options.
 import type { Garments } from '@nexus/factory-domain/planning/planned-orders/multilevel'
 import { readGarments } from './planned-orders/store'
+// B-W2b-306 (PLN-072): the hard pegs carried from the latest plan, and the purchase lines bought for one order line.
+import { readOrderPegs } from './actions/pegs'
 import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
@@ -58,6 +60,9 @@ export const FIRM_COLUMNS = {
   firmSupplierId: true,
   firmedAt: true,
   firmedById: true,
+  // B-W2b-306 (PLN-072): a firm line kept for one order line is carried into that order line's own line.
+  orderSpecific: true,
+  reservedForLineId: true,
 } as const satisfies Prisma.MaterialRequirementSelect
 
 export interface PlanInputs {
@@ -74,6 +79,8 @@ export interface PlanInputs {
   readonly supplierLeadTimes: ReadonlyMap<string, number | null>
   /** B-W2b-293: the order lines' explosions (planning/planned-orders `planLevelled` plans with them); null: none. */
   readonly garments: Garments | null
+  /** B-W2b-306: the run it is read for supersedes this run (its firm lines and pegs are carried); null: none. */
+  readonly previousRunId?: string | null
 }
 
 const quantity = (value: { toString(): string }): string => {
@@ -97,6 +104,8 @@ export async function readFirmSupply(db: Reader, runId: string | null): Promise<
     supplierId: row.firmSupplierId,
     firmedAt: row.firmedAt!,
     firmedById: row.firmedById,
+    // B-W2b-306 (PLN-072).
+    orderLineId: row.orderSpecific ? row.reservedForLineId : null,
   }))
 }
 
@@ -164,8 +173,10 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     buying: buyingOf({ companyId: site.companyId, items, itemPlanning, sources, supplierLeadTimes }),
     workOrderStarts: await scheduledStartsOf(db, site),
     ...(explosion ? { lineSuppliers: explosion.lineSuppliers } : {}),
+    // B-W2b-306 (PLN-072): order-specific supply.
+    orderSpecific: await readOrderPegs(db, site.id, firmFromRunId),
   }
-  return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes, garments: explosion?.garments ?? null }
+  return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes, garments: explosion?.garments ?? null, previousRunId: firmFromRunId }
 }
 
 /**

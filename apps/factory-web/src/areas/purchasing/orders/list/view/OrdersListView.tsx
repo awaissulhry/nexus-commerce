@@ -16,6 +16,11 @@ import { dayAt, money } from '../../../../_shared/buying/model'
 import type { OrderRow } from '../../api'
 import { cancelHeld, confirmationPhrase, ORDER_TILES, ORDER_VIEWS, STATUS_TONE, type OrdersListActions, type OrdersListModel, type OrderView } from '../../model'
 import { SendManyDialog } from './SendManyDialog'
+// B-W2b-333: Confirmed later than needed (tile and view), What it blocks, the row verbs Resend link · Chase · Duplicate.
+import { blocksByOrder, CHASE_STATUSES, chaseVerbHeld, DEPTH } from '../../depth/model'
+import { ChaseDialog } from '../../depth/view/ChaseDialog'
+import { ConfirmedLateSection, confirmedLateTile, OrderBlocksCell } from '../../depth/view/ListDepth'
+import '../../depth/depth.css'
 import { DocumentNumberLine } from '../../../../admin/documents/override/view/DocumentNumberLine'
 import '../../../../_shared/buying/buying.css'
 
@@ -35,7 +40,7 @@ export type { OrdersListActions, OrdersListModel } from '../../model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'lists']}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -44,8 +49,11 @@ export function OrdersListView({ model, actions }: { model: OrdersListModel; act
 function OrdersList({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   const t = useT('buying')
   const td = useT('purchasing-orders')
+  const tw = useT(DEPTH)
   const tileWords = (id: string) => (DAILY_IDS.has(id) ? td(`tile.${id}`) : t(`po.tile.${id}`))
-  const viewWords = (id: string) => (DAILY_IDS.has(id) ? td(`view.${id}`) : t(`po.view.${id}`))
+  const viewWords = (id: string) => (id === 'confirmedLate' ? tw('view.confirmedLate') : DAILY_IDS.has(id) ? td(`view.${id}`) : t(`po.view.${id}`))
+  const worklist = model.worklist ?? null
+  const blocks = useMemo(() => (worklist?.status === 'ready' ? blocksByOrder(worklist.rows) : null), [worklist])
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -150,6 +158,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           <span className="fw-by-cell-sub">—</span>
         )
       ) : null
+    // B-W2b-333: the customer and work orders the order's late or unconfirmed lines put at risk (the worklist's, one read).
+    // A draft, a closed or cancelled order blocks nothing on the worklist (it lists sent orders' open lines only).
+    const BlocksCell = ({ data }: ICellRendererParams<OrderRow>) => (data && CHASE_STATUSES.has(data.status) ? <OrderBlocksCell blocks={blocks?.get(data.id)} known={worklist?.status === 'ready' && (worklist.complete || !!blocks?.has(data.id))} prefix={model.prefix} /> : null)
     const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
       data ? (
         <Menu
@@ -163,6 +174,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             { id: 'receipts', label: t('po.tab.receipts'), href: `${href(data)}?tab=receipts` },
             // B-W2a-69: row verbs Send (drafts) and Cancel (with its reach, on the record).
             ...(data.status === 'DRAFT' && model.can.poSend ? [{ id: 'send', label: td('list.send'), onSelect: () => actions?.onSendMany?.([data.id]) }] : []),
+            // B-W2b-333: Resend link (a sent order waiting), Chase (sent, not all received), Duplicate (a new draft from its lines).
+            ...(data.status === 'SENT' && model.can.poSend ? [{ id: 'newLink', label: tw('list.resendLink'), href: `${href(data)}?newLink=1` }] : []),
+            ...(model.depthCan && chaseVerbHeld(data.status, model.depthCan) === null ? [{ id: 'chase', label: tw('chase.open'), onSelect: () => actions?.chase?.onOpen?.({ orderId: data.id, number: data.number, supplier: data.supplierName }) }] : []),
+            ...(model.can.poManage ? [{ id: 'duplicate', label: tw('duplicate.open'), href: `${href(data)}?duplicate=1` }] : []),
             ...(cancelHeld(data, model.can) === null ? [{ id: 'cancel', label: t('po.record.cancel'), tone: 'danger' as const, href: `${href(data)}?cancel=1` }] : []),
           ]}
         />
@@ -174,12 +189,13 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       { colId: 'confirmation', headerName: t('po.col.confirmation'), minWidth: 200, flex: 1.6, cellRenderer: ConfirmationCell },
       { colId: 'dates', headerName: t('po.col.need'), minWidth: 150, flex: 1.1, cellRenderer: DatesCell },
       { colId: 'expected', headerName: td('list.colExpected'), minWidth: 130, flex: 0.9, cellRenderer: ExpectedCell },
+      ...(model.worklist !== undefined ? [{ colId: 'blocks', headerName: tw('blocks.colList'), minWidth: 150, flex: 1.1, cellRenderer: BlocksCell } satisfies ColDef<OrderRow>] : []),
       { colId: 'lines', headerName: t('po.col.lines'), field: 'lineCount', minWidth: 92, flex: 0.4, type: 'rightAligned' },
       ...(model.can.cost ? [{ colId: 'value', headerName: t('po.col.value'), minWidth: 110, flex: 0.8, type: 'rightAligned', cellRenderer: ValueCell } satisfies ColDef<OrderRow>] : []),
       { colId: 'site', headerName: t('po.col.site'), minWidth: 80, flex: 0.5, valueGetter: (params) => (params.data ? siteName(params.data.siteId) : '') },
       { colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, td, locale, model.prefix, model.can.cost, model.can.poSend, model.can.poManage, model.sites, now])
+  }, [t, td, tw, locale, model.prefix, model.can.cost, model.can.poSend, model.can.poManage, model.sites, model.depthCan, model.worklist, blocks, worklist, now])
 
   if (!model.can.poView) {
     return (
@@ -192,6 +208,15 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   }
 
   const tileView = ORDER_TILES.find((tile) => tile.view === model.view)?.view ?? null
+  const rowsMenu = (
+    <Select size="sm" aria-label={t('po.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as OrderView)}>
+      {ORDER_VIEWS.map((view) => (
+        <option key={view} value={view}>
+          {viewWords(view)}
+        </option>
+      ))}
+    </Select>
+  )
   const state = model.rows.problem ? (
     <EmptyState title={t('po.list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
@@ -269,14 +294,38 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
 
       <MetricStrip
-        metrics={ORDER_TILES.map((tile) => ({
-          label: tileWords(tile.id),
-          value: model.summary ? (tile.count(model.summary) === null ? '—' : String(tile.count(model.summary))) : '—',
-          onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
-          active: tileView === tile.view,
-        }))}
+        metrics={ORDER_TILES.flatMap((tile) => [
+          {
+            label: tileWords(tile.id),
+            value: model.summary ? (tile.count(model.summary) === null ? '—' : String(tile.count(model.summary))) : '—',
+            onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
+            active: tileView === tile.view,
+          },
+          // B-W2b-333 (design sec:tiles "Confirmed later than needed (W2b)"): after "Not confirmed after 48 h"; a saved view.
+          ...(tile.id === 'late' && model.worklist !== undefined
+            ? [{ label: tw('tile.confirmedLate'), value: confirmedLateTile(model.worklist, tw), onClick: () => actions?.onView?.(model.view === 'confirmedLate' ? 'all' : 'confirmedLate'), active: model.view === 'confirmedLate' }]
+            : []),
+        ])}
       />
+      {model.worklist?.status === 'error' && <p className="fw-by-hint fw-by-warning">{tw('list.worklistFailed', { problem: t(model.worklist.problem) })}</p>}
 
+      {model.view === 'confirmedLate' && model.confirmedLate ? (
+        <ConfirmedLateSection
+          part={model.confirmedLate}
+          more={model.confirmedLate.more}
+          can={model.depthCan ?? { send: model.can.poSend }}
+          prefix={model.prefix}
+          selected={model.selected}
+          tools={rowsMenu}
+          actions={{
+            onMore: actions?.late?.onMore,
+            onRetry: actions?.late?.onRetry,
+            onExport: actions?.late?.onExport,
+            onChase: (row) => actions?.chase?.onOpen?.({ orderId: row.purchaseOrderId, number: row.number, supplier: row.supplierName }),
+            onOpen: (row) => actions?.onOpen?.(row.purchaseOrderId),
+          }}
+        />
+      ) : (
       <ListFrame<OrderRow>
         label={t('po.list.tableLabel')}
         rows={state ? [] : items}
@@ -297,15 +346,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             }}
           />
         }
-        tools={
-          <Select size="sm" aria-label={t('po.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as OrderView)}>
-            {ORDER_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {viewWords(view)}
-              </option>
-            ))}
-          </Select>
-        }
+        tools={rowsMenu}
         selection={{
           selected,
           onChange: setSelected,
@@ -328,10 +369,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         state={state}
         focusRow={model.focusRow}
       />
+      )}
       {model.view !== 'all' && <p className="fw-by-hint">{t('po.list.viewing', { view: viewWords(model.view) })}</p>}
 
       {model.newOrder && <NewOrderDialog model={model} actions={actions} />}
       {model.sendMany && <SendManyDialog model={model} actions={actions} />}
+      {model.chase && <ChaseDialog model={model.chase} status={(model.rows.items ?? []).find((row) => row.id === model.chase!.orderId)?.status ?? (model.confirmedLate?.rows ?? []).find((row) => row.purchaseOrderId === model.chase!.orderId)?.status ?? null} can={model.depthCan ?? { send: model.can.poSend }} offline={model.live === 'offline'} actions={actions?.chase} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('common.shortcuts')} size="sm">
           <ul className="fw-by-list">
