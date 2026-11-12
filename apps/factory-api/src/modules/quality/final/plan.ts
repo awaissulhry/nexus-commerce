@@ -41,7 +41,8 @@ type CheckDbRow = Prisma.InspectionPlanCheckGetPayload<{ select: typeof CHECK_CO
 export const RESULT_COLUMNS = { id: true, planCheckId: true, sampleIndex: true, outcome: true, value: true, note: true, recordedById: true, recordedByWorkerId: true, deviceId: true, recordedAt: true, version: true } as const satisfies Prisma.InspectionCheckResultSelect
 export type ResultDbRow = Prisma.InspectionCheckResultGetPayload<{ select: typeof RESULT_COLUMNS }>
 
-export const MEASUREMENT_COLUMNS = { id: true, planCheckId: true, pointCode: true, size: true, sampleIndex: true, nominal: true, tolerance: true, measured: true, uom: true, pass: true, recordedById: true, recordedByWorkerId: true, deviceId: true, recordedAt: true, version: true } as const satisfies Prisma.InspectionMeasurementSelect
+// B-W2b-283 (FU1:05): with the band under and over (toleranceMinus, tolerancePlus) of a spec cell whose sides differ.
+export const MEASUREMENT_COLUMNS = { id: true, planCheckId: true, pointCode: true, size: true, sampleIndex: true, nominal: true, tolerance: true, toleranceMinus: true, tolerancePlus: true, measured: true, uom: true, pass: true, recordedById: true, recordedByWorkerId: true, deviceId: true, recordedAt: true, version: true } as const satisfies Prisma.InspectionMeasurementSelect
 export type MeasurementDbRow = Prisma.InspectionMeasurementGetPayload<{ select: typeof MEASUREMENT_COLUMNS }>
 
 /** The record type of a result's photos (StoredFile). */
@@ -118,6 +119,9 @@ export const measurementRow = (row: MeasurementDbRow): MeasurementRow => ({
   measured: row.measured.toFixed(3),
   uom: row.uom as Uom,
   pass: row.pass,
+  // B-W2b-283 (FU1:05).
+  toleranceMinus: row.toleranceMinus?.toFixed(3) ?? null,
+  tolerancePlus: row.tolerancePlus?.toFixed(3) ?? null,
 })
 
 /** A reader for what the floor role may not read (photos of every audience, the style, a rider's profile): the tenant's system view. */

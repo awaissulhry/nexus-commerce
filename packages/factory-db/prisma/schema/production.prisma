@@ -312,6 +312,11 @@ model WorkOrderSize {
   /// The work order's style.
   styleId              String   @db.Uuid
   colourwayId          String   @db.Uuid
+  /// W2b-5 (schema wave 38/44, B-W2b-280; B-W2b-225): the option values its garments are made with, copied from its order
+  /// line's chosen options (SalesOrderLineOption) when the cell is made, so that a routing step only for some options
+  /// (RoutingOperation.appliesToOptionValueIds) applies; each an OptionValue of the tenant, once, and one chosen on the
+  /// cell's order line when it names one. Empty: no option (every cell before W2b-5).
+  optionValueIds       String[] @default([]) @db.Uuid
   /// A size code of the style's range (for a made-to-measure unit: the base size it is graded from).
   size                 String
   /// Pieces, above 0.

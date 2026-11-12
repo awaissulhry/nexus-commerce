@@ -80,6 +80,23 @@
     "open": "Apri {number}",
     "failed": "Impossibile leggere su cosa si può creare l'ordine",
     "body": "Un ordine di lavoro campione si crea su una riga d'ordine del modello, dalla revisione {revision}, con le taglie del giro.",
+    "bodyNone": "Senza riga d'ordine, l'ordine di lavoro campione fa le taglie del giro, dalla revisione {revision}: non si spedisce, non si fattura e non si rende su un ordine.",
+    "way": {
+      "legend": "Come si crea",
+      "none": "Senza riga d'ordine",
+      "noneBody": "Le taglie del giro: un prototipo, un fit o un campionario vendita che nessun ordine paga.",
+      "lines": "Su una riga d'ordine",
+      "linesBody": "L'ordine che addebita i campioni: ne prendono le taglie."
+    },
+    "none": {
+      "colourway": "Variante delle taglie senza variante",
+      "colourwayHint": "Il giro indica taglie senza variante: scegli in quale si fanno.",
+      "pickColourway": "Scegli una variante",
+      "cells": "Cosa fa l'ordine di lavoro",
+      "size": "Taglia",
+      "pieces": "Pezzi",
+      "anyColour": "Qualsiasi variante: scegline una"
+    },
     "lines": "Righe d'ordine",
     "takeLine": "Crealo su {order} riga {seq}",
     "lineName": "{order} · riga {seq}",
@@ -102,7 +119,8 @@
       "pickLine": "Scegli almeno una riga d'ordine.",
       "pickSite": "Scegli lo stabilimento.",
       "other_one": "La fabbrica indica {count} motivo per cui ora non si può creare.",
-      "other_other": "La fabbrica indica {count} motivi per cui ora non si può creare."
+      "other_other": "La fabbrica indica {count} motivi per cui ora non si può creare.",
+      "pickColourway": "Scegli la variante delle taglie senza variante."
     },
     "warning": {
       "draft": "La revisione {revision} è una bozza: l'ordine si crea, ma si rilascia solo quando la revisione è rilasciata.",
@@ -230,7 +248,8 @@
     "LEATHER_ONLY": "Un campione pelle è di una pelle.",
     "NOT_THE_ROUNDS_PARTY": "Il campione colore va al cliente del giro.",
     "NO_COMPANY": "Un campione colore di un modello condiviso senza giro non si può chiedere al cliente: chiedilo su un giro o decidilo qui.",
-    "other": "La fabbrica lo ha rifiutato così com’è."
+    "other": "La fabbrica lo ha rifiutato così com’è.",
+    "ORDER_LINE_NEEDED": "Questo giro si crea su una riga d'ordine: solo un prototipo, un fit o un campionario vendita che non addebita nulla si crea senza."
   },
   "problem": {
     "unavailable": "La fabbrica non ha risposto. Riprova tra poco.",
@@ -478,6 +497,7 @@
   },
   "sample": {
     "made": "Cosa è stato fatto",
+    "noOrderLine": "Senza riga d'ordine",
     "make": "Crea ordine di lavoro campione",
     "none": "Ancora nessun ordine di lavoro campione",
     "noneBody": "I campioni si fanno in produzione con un ordine di lavoro campione, come ogni altro ordine.",

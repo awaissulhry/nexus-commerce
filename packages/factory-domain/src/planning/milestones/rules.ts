@@ -7,8 +7,9 @@ import type { BusinessDate } from '../../core/time'
  * when, whose) and the milestones of the order built from what the factory already records:
  *
  *   GATE    each gate: its target date, passed (the actual date) or started before it (an override with its reason)
- *   START   production start: the earliest bar of the order's work orders on the site's working plan (target) and the
- *           first work order that started (actual)
+ *   START   production start: the earliest bar of the order's production work orders (SIZE_GRID, MADE_TO_MEASURE) on the
+ *           site's working plan (target) and the first of them that started (actual); a sample or a repair work order never
+ *           counts (B-W2b-284, PRODUCTION_WORK_ORDER_KINDS)
  *   SHIP    the promise date (target) and the first shipment that left (actual)
  *
  * A gate is WAITING until it is passed (marked done by a person, or by its event: a SAMPLE_APPROVED / PP_SAMPLE gate that
@@ -256,6 +257,50 @@ export const existsRefusal = (number: string, kind: GateKind): GateRefusal =>
  * the gate, and a REPAIR mends a garment already made: neither is held.
  */
 export const HELD_WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
+
+// ---- production start and the order's work orders per kind (B-W2b-284, F22's follow-up) -----------------------------------
+
+/**
+ * The order's production work orders: what the START milestone follows (its target, the earliest bar on the working plan; its
+ * actual, the first that started) — the same kinds a waiting gate holds. A SAMPLE work order makes a sample of the order (a
+ * pre-production round on its line) and a REPAIR mends a garment already sold: neither starts the order's production.
+ */
+export const PRODUCTION_WORK_ORDER_KINDS = HELD_WORK_ORDER_KINDS
+export const isProductionWorkOrder = (kind: string): boolean => (PRODUCTION_WORK_ORDER_KINDS as readonly string[]).includes(kind)
+
+/** Every work order kind, in the order the order view lists them (factory-db WorkOrderKind). */
+export const ORDER_WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE', 'SAMPLE', 'REPAIR'] as const
+export type OrderWorkOrderKind = (typeof ORDER_WORK_ORDER_KINDS)[number]
+
+/** A work order of the order as the START milestone reads it: its kind, state, first start and earliest bar on the working plan. */
+export interface StartFacts {
+  readonly kind: string
+  readonly status: string
+  readonly startedAt: Date | null
+  readonly firstBar: Date | null
+}
+
+const DONE_STATUSES = ['COMPLETED', 'CLOSED', 'CANCELLED']
+
+/**
+ * The START milestone of an order from its work orders: null when it has no production work order (no START row), else the
+ * earliest bar of its production work orders (target) and the first of them that started (actual). A cancelled work order's
+ * bar never counts (its slots are gone), its start does (the work began).
+ */
+export function productionStartOf(workOrders: readonly StartFacts[]): { readonly firstBar: Date | null; readonly firstStart: Date | null } | null {
+  const production = workOrders.filter((row) => isProductionWorkOrder(row.kind))
+  if (production.length === 0) return null
+  const earliest = (values: readonly (Date | null)[]): Date | null => values.reduce<Date | null>((first, value) => (value !== null && (first === null || value < first) ? value : first), null)
+  return { firstBar: earliest(production.map((row) => row.firstBar)), firstStart: earliest(production.map((row) => row.startedAt)) }
+}
+
+/** The order's work orders per kind (every kind it has, in ORDER_WORK_ORDER_KINDS order): how many, how many not started. */
+export function workOrdersByKind(workOrders: readonly Pick<StartFacts, 'kind' | 'status' | 'startedAt'>[]): { kind: OrderWorkOrderKind; count: number; notStarted: number }[] {
+  return ORDER_WORK_ORDER_KINDS.flatMap((kind) => {
+    const own = workOrders.filter((row) => row.kind === kind)
+    return own.length === 0 ? [] : [{ kind, count: own.length, notStarted: own.filter((row) => row.startedAt === null && !DONE_STATUSES.includes(row.status)).length }]
+  })
+}
 
 /** What the planning board says when it holds a drop: the order and the gates it waits on (the API's English, for logs). */
 export function holdWords(workOrder: string, gates: readonly { readonly orderNumber: string; readonly kind: GateKind; readonly label: string | null }[]): string {

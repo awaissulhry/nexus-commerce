@@ -254,6 +254,9 @@ describe('the deposit gate (A1 §2.5, ported)', () => {
     expect(depositCheck([order(true, ['OPEN'])])).toMatchObject({ state: 'BLOCKED', problems: [{ path: `orders/${id(900)}/deposit` }] })
     expect(depositCheck([order(false, [])])).toMatchObject({ state: 'NOT_REQUIRED' })
     expect(depositCheck([order(true, ['PAID'])])).toMatchObject({ state: 'OK' })
+    // B-W2b-284: a sample work order of no order line needs no deposit; any other kind without an order is still held.
+    expect(depositCheck([], 'SAMPLE')).toMatchObject({ state: 'NOT_REQUIRED' })
+    expect(depositCheck([])).toMatchObject({ state: 'BLOCKED' })
   })
 })
 

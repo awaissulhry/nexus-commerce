@@ -647,6 +647,8 @@
     "NO_DRAFT_REVISION": "Avvia prima la revisione in bozza, fai lì la modifica, poi invia.",
     "NO_APPROVER": "Indica almeno un approvatore obbligatorio diverso dall’autore.",
     "OWN_APPROVAL": "L’autore non può approvare il proprio ordine di modifica (quattro occhi).",
+    "SELF_NAMED": "Nessuno si nomina approvatore da solo: chi decide lo nomina un’altra persona (quattro occhi).",
+    "OWN_REQUEST": "Hai sollevato una richiesta che questo ordine di modifica porta con sé: decide una persona che non ha chiesto la modifica (quattro occhi).",
     "APPROVER_CANNOT": "Il ruolo di quella persona non approva ordini di modifica per questa società.",
     "NOT_APPROVER": "Non sei un approvatore di questo ordine di modifica.",
     "ALREADY_DECIDED": "L’hai già decisa: una decisione si dà una volta.",

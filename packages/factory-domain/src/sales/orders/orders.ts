@@ -4,7 +4,7 @@ import type { PartyTaxMode } from '../../parties/tax'
 import { canTransition, defineMachine, isState } from '../../state/machine'
 import { Dec, ZERO, type Decimal } from '../../tax/decimal'
 import type { PriceBasis } from '../../tax/vat-summary'
-import { priceBasisOf, type SalesLineKind } from '../quotes/quotes'
+import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/quotes'
 
 /**
  * A sales order's life (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; plan A1 §2.5 "Sales order", PLAN §4.7
@@ -377,6 +377,8 @@ export interface AcceptedLine {
   readonly id: string
   readonly seq: number
   readonly kind: SalesLineKind
+  /** W2b-5 (B-W2b-280): what a FEE line charges for, copied with it; null (or absent) on a line of goods. */
+  readonly feeKind?: SalesFeeKind | null
   readonly styleId: string
   readonly styleRevisionId: string | null
   /** The line's revision is the style's RELEASED one now (only then the order fixes it; else the work order picks it). */
@@ -462,6 +464,7 @@ export function orderFromVersion(version: AcceptedVersion, lines: readonly Accep
         quoteLineId: line.id,
         seq: line.seq,
         kind: line.kind,
+        feeKind: line.feeKind ?? null,
         styleId: line.styleId,
         styleRevisionId: line.revisionReleased ? line.styleRevisionId : null,
         colourwayId: line.colourwayId,

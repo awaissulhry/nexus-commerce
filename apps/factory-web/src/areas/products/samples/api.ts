@@ -26,7 +26,7 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
  * without money.price and the screens never send it without it.
  */
 
-export type { ApprovalView, CommentView, FitView, RoundRow, RoundView, ShipmentView, SwatchView }
+export type { ApprovalView, CommentView, FitView, RoundRow, RoundView, ShipmentView, SwatchView, WorkOrderBody }
 export type RoundList = z.infer<typeof roundList>
 export type WorkOrderOptions = z.infer<typeof workOrderOptionsView>
 

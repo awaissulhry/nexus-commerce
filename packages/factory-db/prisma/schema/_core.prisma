@@ -125,6 +125,13 @@ model Company {
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries it was asked, its seasons, and the customer requirements, holds
+  // and terms set for it.
+  inquiries            Inquiry[]
+  seasons              Season[]
+  customerRequirements CustomerRequirement[]
+  partyHolds           PartyHold[]
+  partyCompanyTerms    PartyCompanyTerms[]
   // email.prisma: the company's sending identities (its mail goes out through them).
   emailIdentities     EmailIdentity[]
   // product.prisma: the company's own master data (tenant-wide rows have none).
@@ -217,6 +224,10 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quote templates, minimum order quantities and size curves.
+  quoteTemplates       QuoteTemplate[]
+  moqRules             MoqRule[]
+  sizeCurves           SizeCurve[]
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]

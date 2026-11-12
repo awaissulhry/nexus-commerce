@@ -165,6 +165,9 @@ enum NumberKind {
   /// W2b-5 wave 36/44: a transfer between sites (TRF-…; warehouse-depth.prisma TransferOrder.number). An office document
   /// kind: the API numbers it when it is made. Its DDT comes from the company's DDT series.
   TRANSFER
+  /// W2b-5 wave 37/44: an inquiry's number (INQ-…; sales-intake.prisma Inquiry.number). An office document kind: the API
+  /// numbers it when it is made.
+  INQUIRY
 }
 
 enum NumberReset {

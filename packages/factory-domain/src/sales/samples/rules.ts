@@ -106,6 +106,8 @@ export const SAMPLE_REFUSALS = [
   'RETURN_NO_ADDRESS',
   'NO_WORK_ORDER',
   'LINE_OF_ANOTHER_PARTY',
+  // B-W2b-284: a sample work order without an order line is for an internal or uncharged proto, fit or salesman round only.
+  'ORDER_LINE_NEEDED',
 ] as const
 export type SampleRefusalCode = (typeof SAMPLE_REFUSALS)[number]
 export interface SampleRefusal {
@@ -266,6 +268,62 @@ export function cellsForLines(
     return { salesOrderLineId: line.id, sizes }
   })
   return { lines: planned, left: cells.filter((_, index) => !taken.has(index)), problems }
+}
+
+// ---- the sample work order without an order line (B-W2b-284; W2b-5 wave 34's nullable cell) --------------------------------
+
+/**
+ * The kinds whose round may be made without an order line: a proto, fit or salesman sample that no order charges (the
+ * factory's own development, or a brand's round it does not charge). A pre-production, CE test or brand sample belongs to the
+ * order it is made for, and a charged round is made on the order that charges it.
+ */
+export const WITHOUT_LINE_KINDS = ['PROTO', 'FIT', 'SALESMAN'] as const satisfies readonly SampleKind[]
+
+/** Why the round's samples cannot be made without an order line (null: they can). */
+export function withoutLineRefusal(round: RoundFacts & { readonly kind: SampleKind; readonly charged: boolean }): SampleRefusal | null {
+  if (!(WITHOUT_LINE_KINDS as readonly string[]).includes(round.kind)) {
+    const what = round.kind === 'PRE_PRODUCTION' ? 'A pre-production sample' : round.kind === 'CERTIFICATION' ? 'A CE test sample' : 'A brand sample'
+    return refusal('ORDER_LINE_NEEDED', `${what} is made on the order line it belongs to: pick an order line (only a proto, fit or salesman round that charges nobody is made without one).`)
+  }
+  if (round.charged) return refusal('ORDER_LINE_NEEDED', `Sample round ${round.number} is charged to its customer: its samples are made on the order that charges them (pick an order line).`)
+  return null
+}
+
+/** A cell of a sample work order made without an order line: one colourway, one size, its pieces. */
+export interface CellWithoutLine {
+  readonly colourwayId: string
+  readonly size: string
+  readonly quantity: number
+}
+
+/**
+ * The round's cells as a work order without an order line takes them: each keeps its colourway; a cell of no colourway
+ * ("Any colourway") takes the colourway asked, else the style's only colourway; a colourway and size named twice add up
+ * (one work order cell per colourway and size). `problems` at `path` say what is missing, in words.
+ */
+export function cellsWithoutLine(
+  cells: readonly { readonly colourwayId: string | null; readonly size: string; readonly quantity: number }[],
+  style: { readonly code: string; readonly sizes: readonly string[]; readonly colourwayIds: readonly string[] },
+  colourwayId: string | null,
+  path: string,
+): { readonly cells: CellWithoutLine[]; readonly problems: Issue[] } {
+  const problems: Issue[] = []
+  if (colourwayId !== null && !style.colourwayIds.includes(colourwayId)) problems.push({ path: `${path}/colourwayId`, message: `Not a colourway of style ${style.code}.` })
+  const anyColour = colourwayId ?? (style.colourwayIds.length === 1 ? style.colourwayIds[0]! : null)
+  if (cells.length === 0) problems.push({ path, message: 'The round names no cells: write its colourways, sizes and pieces on its Request first.' })
+  if (anyColour === null && cells.some((cell) => cell.colourwayId === null)) {
+    problems.push({ path: `${path}/colourwayId`, message: `The round names sizes without a colourway: pick the colourway of style ${style.code} they are made in.` })
+  }
+  const made: CellWithoutLine[] = []
+  for (const cell of cells) {
+    const colour = cell.colourwayId ?? anyColour
+    if (colour === null) continue
+    if (!style.sizes.includes(cell.size)) problems.push({ path, message: `Size ${cell.size} is not in style ${style.code}'s size range.` })
+    const same = made.find((entry) => entry.colourwayId === colour && entry.size === cell.size)
+    if (same) made[made.indexOf(same)] = { ...same, quantity: same.quantity + cell.quantity }
+    else made.push({ colourwayId: colour, size: cell.size, quantity: cell.quantity })
+  }
+  return { cells: made, problems }
 }
 
 // ---- shipments (SAL-316) --------------------------------------------------------------------------------------------------

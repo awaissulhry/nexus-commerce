@@ -81,6 +81,7 @@ export function OverviewTab({ style, model, actions, depth }: { style: StyleView
       <div className="fw-st-col">
         <IdentityCard style={style} model={model} actions={actions} />
         {depth?.identity /* B-W2b-237 */}
+        {depth?.markets /* B-W2b-283 */}
         <WarningsCard style={style} model={model} />
       </div>
       <aside className="fw-st-side" aria-label={t('side.label')}>

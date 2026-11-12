@@ -22,6 +22,8 @@ import { manifest } from './manifest'
 import { announcePicture, clearPicture, completePicture, lookAtPicture } from './picture'
 import { createPom, getPom, listPoms, setPomStatus, updatePom } from './points'
 import { addSpecPoints, approveSpec, archiveSpec, getSpec, removeSpecPoints, reorderSpecPoints, reopenSpec, startSpec, updateSpec, writeSpecCells } from './spec'
+// B-W2b-283 (FU1:03): the measurement templates, listed for pickers.
+import { listTemplates, listTemplatesContract } from './templates'
 
 /**
  * Points of measure and the measurement spec (product module, B-W2b-224; PRD-049, PRD-052, PRD-062, PRD-063, PRD-069;
@@ -45,6 +47,8 @@ export default defineRoutes('product.measures', manifest, async (app) => {
   )
   app.get('/product/points-of-measure/:pomId/picture', { schema: lookAtPictureContract }, async (request) => lookAtPicture(request, request.params.pomId))
   app.delete('/product/points-of-measure/:pomId/picture', { schema: clearPictureContract }, async (request) => ({ point: await clearPicture(request, request.params.pomId, request.query.version, idempotencyKeyFrom(request)) }))
+  // B-W2b-283 (FU1:03).
+  app.get('/product/measurement-templates', { schema: listTemplatesContract }, async (request) => listTemplates(request, request.query))
 
   app.get('/product/styles/:styleId/revisions/:revisionId/measurement-spec', { schema: getSpecContract }, async (request) => ({ spec: await getSpec(request, request.params.styleId, request.params.revisionId) }))
   app.post('/product/styles/:styleId/revisions/:revisionId/measurement-spec', { schema: startSpecContract }, async (request, reply) =>

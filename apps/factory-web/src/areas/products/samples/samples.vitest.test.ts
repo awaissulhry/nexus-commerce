@@ -189,7 +189,8 @@ describe('the fit, the approval, shipments, the work order', () => {
 
   it('the work order dialog says its facts in our words', () => {
     expect(workOrderFacts(WO_OPTIONS, [WO_OPTIONS.lines[0]!.id])).toEqual({ blockers: [], warnings: [{ key: 'wo.warning.draft', params: { revision: 1 } }] })
-    expect(workOrderFacts(WO_OPTIONS_NONE, []).blockers[0]?.key).toBe('wo.blocker.noLines')
+    // B-W2b-284: a charged customer round with no order line says both why (no line; made on one).
+    expect(workOrderFacts(WO_OPTIONS_NONE, []).blockers.map((line) => line.key)).toEqual(['wo.blocker.noLinesCustomer', 'refusal.ORDER_LINE_NEEDED'])
     expect(workOrderFacts(WO_OPTIONS, []).blockers[0]?.key).toBe('wo.blocker.pickLine')
   })
 

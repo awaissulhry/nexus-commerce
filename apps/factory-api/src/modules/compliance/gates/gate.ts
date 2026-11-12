@@ -9,6 +9,8 @@ import { systemContext } from '../../../platform/outbox/system'
 import type { Reader } from '../register-of-rules/common'
 import { ensureW1Requirement, gateRequirements } from '../requirements/store'
 import { checkerFor, checksAsked, countryOf, marketOfCountry, overridesFor, readGateStyle, readMarkets, styleLabelTemplateId } from './facts'
+// B-W2b-283 (FU1:01): the markets the style is sold in.
+import { soldThereTargets, styleMarketCodes } from '../../product/markets/store'
 
 /**
  * The one gate through the API (B-W2b-254; PRD-272): work-order release, label print, final release and shipment call it
@@ -50,17 +52,19 @@ export async function decideGate(db: Reader, ask: GateAsk): Promise<GateAnswer> 
   const requirements = await gateRequirements(db)
   const overrides = await overridesFor(db, ask.gate, ask.subjectType, ask.subjectId, ask.now)
   const labelTemplateId = ask.labelTemplateId ?? (await styleLabelTemplateId(db, ask.styleId))
+  // B-W2b-283 (FU1:01): a market the style is sold in (Style.marketCodes) checks its languages; none named: as before.
+  const targets = soldThereTargets(ask.targets, await styleMarketCodes(db, ask.styleId))
   const check = await checkerFor(db, {
     style,
     labelTemplateId,
     day: ask.day,
     checks: checksAsked(requirements, checkOf),
-    marketCodes: ask.targets.flatMap((target) => (target.market ? [target.market.code] : [])),
-    targets: ask.targets,
+    marketCodes: targets.flatMap((target) => (target.market ? [target.market.code] : [])),
+    targets,
     subject: { type: ask.subjectType, id: ask.subjectId },
     companyId: ask.companyId,
   })
-  const decision = decide({ gate: ask.gate, subjectWords: ask.subjectWords, style: style.subject, targets: ask.targets, requirements, check, overrides, day: ask.day, now: ask.now })
+  const decision = decide({ gate: ask.gate, subjectWords: ask.subjectWords, style: style.subject, targets, requirements, check, overrides, day: ask.day, now: ask.now })
   return { ask, decision }
 }
 
