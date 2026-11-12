@@ -1,5 +1,7 @@
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { planRequirements, type PlanResult } from '@nexus/factory-domain/planning/explode'
+import type { PlanResult } from '@nexus/factory-domain/planning/explode'
+// B-W2b-293: the same multi-level netting as a run (every garment through its explosion).
+import { planLevelled } from '@nexus/factory-domain/planning/planned-orders/multilevel'
 import { readinessOf, type ReadinessMaterial, type WorkOrderReadiness } from '@nexus/factory-domain/planning/readiness/readiness'
 import { decimalOf } from '@nexus/factory-domain/product/units/units'
 import { serverClock } from '../../../core/time'
@@ -32,7 +34,7 @@ export interface LivePlan {
 export async function livePlanOf(db: Reader, site: SiteRow, today: BusinessDate = businessDate(serverClock.now(), site.timezone)): Promise<LivePlan> {
   const latest = await latestDoneRun(db, site.id)
   const inputs = await readPlanInputs(db, site, today, latest?.id ?? null)
-  const plan = planRequirements(inputs.input)
+  const plan = planLevelled(inputs.input, inputs.garments)
   const colourIds = [...new Set(plan.requirements.flatMap((line) => (line.itemColourId ? [line.itemColourId] : [])))]
   const colours = colourIds.length === 0 ? [] : await db.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true } })
   return { site, today, inputs, plan, latestRun: latest ? { id: latest.id, finishedAt: latest.finishedAt } : null, colourCodes: new Map(colours.map((colour) => [colour.id, colour.code])) }
