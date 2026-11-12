@@ -20,7 +20,6 @@ import {
   checklistBody,
   checklistProblems,
   checklistResult,
-  closeReasonText,
   ddtBody,
   ddtPreviewWords,
   ddtProblems,
@@ -234,11 +233,6 @@ describe('the dialogs’ drafts and what they send', () => {
   it('a DDT: who carries it, packages and weight', () => {
     expect(ddtProblems(BLANK_DDT).map((words) => words.key)).toEqual(['ddt.problem.carrier', 'ddt.problem.weight'])
     expect(ddtBody({ ...BLANK_DDT, carrier: ' C ', weight: '1,4' }, 'REPAIR')).toMatchObject({ reason: 'REPAIR', transportBy: 'CARRIER', carrier: { name: 'C' }, packages: 1, grossWeightKg: '1.4' })
-  })
-
-  it('the close reason is the chosen words, then the note', () => {
-    expect(closeReasonText('Credited', '  ')).toBe('Credited')
-    expect(closeReasonText('Other', 'customer kept it')).toBe('Other: customer kept it')
   })
 
   it('the milestones say the deadline and how many lines are decided', () => {

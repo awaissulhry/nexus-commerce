@@ -1,0 +1,407 @@
+{
+  "arrival": {
+    "NO_DEADLINE": "No deadline for the goods",
+    "noDeadlineArrived": "No deadline; the goods arrived on {date}",
+    "WAITING": "Waiting for the goods by {date}",
+    "OVERDUE_one": "Due by {date}: {count} day overdue",
+    "OVERDUE_other": "Due by {date}: {count} days overdue",
+    "ON_TIME": "Arrived on time ({date})",
+    "LATE_one": "Arrived {count} day after the deadline ({date})",
+    "LATE_other": "Arrived {count} days after the deadline ({date})"
+  },
+  "check": {
+    "policy": "Policy {name}: {days} days to return",
+    "noPolicy": "No live return policy for this customer: the sales settings apply",
+    "due": "The goods are due by {date}",
+    "outside_one": "{count} line is outside its return window",
+    "outside_other": "{count} lines are outside their return window",
+    "noWithdrawal": "The consumer's right of withdrawal does not apply to this return"
+  },
+  "credit": {
+    "title": "Credit without return",
+    "sub": "A credit for goods the customer keeps (nothing of the line came back), within the approval limit.",
+    "col": {
+      "value": "Value",
+      "state": "State"
+    },
+    "state": {
+      "credited": "Credited without the goods",
+      "waiting": "Waiting for a yes",
+      "allowed": "Can be credited",
+      "held": "Not now"
+    },
+    "open": "Credit line {seq}",
+    "openRequest": "Open Approvals",
+    "waitsFor": "Waits for a yes from {name}",
+    "waitsInbox": "Waits for a yes in Home › Approvals",
+    "limit": "Within the approval limit the credit is written at once; above it, it waits for a yes from someone else. Nobody approves their own request.",
+    "done": "Line {seq} is credited without the goods coming back.",
+    "asked": "The credit of line {seq} waits for a yes (Home › Approvals).",
+    "dialog": {
+      "title": "Credit line {seq} without the goods",
+      "body": "The customer keeps the goods: nothing of this line has come back. The credit note is made in Finance afterwards.",
+      "pieces": "Pieces",
+      "credit": "Credit",
+      "amount": "Credit amount",
+      "amountHint": "Empty: what its pieces are worth ({value}). Less is a partial credit.",
+      "note": "Why",
+      "noteHint": "Kept with the request and on the record's history.",
+      "needsYes": "Above your approval limit: this asks for a yes.",
+      "atOnce": "Within your approval limit: it is credited at once.",
+      "effect": "The line then expects no goods; the return can be closed as credited without the goods.",
+      "submit": "Credit",
+      "ask": "Ask for a yes"
+    },
+    "problem": {
+      "amount": "Type an amount above 0, like 12.50.",
+      "over": "More than the line is worth.",
+      "state": "The return is not in a state to credit without the goods.",
+      "line": "This line cannot be credited without the goods now.",
+      "other": "The credit cannot be asked like this.",
+      "nobodyElse": "Nobody else can approve this credit: ask your administrator."
+    }
+  },
+  "estimate": {
+    "tab": "Estimate",
+    "title": "Estimate {revision}",
+    "sub": "Parts and labour, approved by the customer before the work starts.",
+    "status": {
+      "DRAFT": "Draft",
+      "SENT": "Sent, waiting for the answer",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "kind": {
+      "PART": "Part",
+      "LABOUR": "Labour"
+    },
+    "failed": "Couldn't load the estimate",
+    "noPrices": "An estimate is prices: your role doesn't see prices, so it is drawn without them and can't be changed.",
+    "empty": "Add parts and jobs",
+    "emptyBody": "Make the estimate: the parts and the work, with their prices, for the customer to approve before the repair starts.",
+    "new": "New estimate",
+    "revise": "New revision",
+    "revisions": "Revision shown",
+    "revisionOption": "Estimate {revision} · {status}",
+    "revisionN": "Estimate {revision}",
+    "more": "More for this estimate",
+    "readOnly": "Read-only: {why}",
+    "editHint": "Enter edits a cell; each change is saved on its own.",
+    "addPart": "Add part",
+    "addLabour": "Add labour",
+    "table": "Lines of estimate {revision}",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "noLines": "No parts or jobs yet",
+    "noLinesBody": "Add a part or labour.",
+    "lineMenu": "Line {seq}: more",
+    "remove": "Remove line",
+    "removeN_one": "Remove {count} line",
+    "removeN_other": "Remove {count} lines",
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "costUnknown": "Not known for every line",
+    "notSent": "Not sent",
+    "by": "by {name}",
+    "recordedBy": "Recorded by the office: {name}",
+    "noDecision": "No answer yet",
+    "history": "Revisions",
+    "historySub": "Every revision is kept: what was sent and what the customer answered.",
+    "col": {
+      "what": "Part or job",
+      "quantity": "Qty",
+      "price": "Price",
+      "minutes": "Labour minutes",
+      "total": "Total",
+      "cost": "Our cost",
+      "revision": "Revision",
+      "status": "State",
+      "made": "Made",
+      "decision": "Customer decision"
+    },
+    "fact": {
+      "validUntil": "Valid until",
+      "sent": "Sent",
+      "decision": "Customer decision",
+      "customerNote": "Note for the customer",
+      "internalNote": "Internal note",
+      "withdrawn": "Withdrawn"
+    },
+    "sum": {
+      "total": "Total",
+      "parts": "Parts",
+      "labour": "Labour",
+      "minutes": "Labour minutes",
+      "cost": "Our cost"
+    },
+    "decision": {
+      "ACCEPTED": {
+        "PORTAL": "Accepted by the customer in the portal ({name})",
+        "LINK": "Accepted by the customer through a link ({name})",
+        "OFFICE": "Accepted by the customer, recorded by the office ({name})"
+      },
+      "DECLINED": {
+        "PORTAL": "Declined by the customer in the portal ({name})",
+        "LINK": "Declined by the customer through a link ({name})",
+        "OFFICE": "Declined by the customer, recorded by the office ({name})"
+      }
+    },
+    "work": {
+      "waiting": "Approval and the repair wait for the customer's answer to estimate {revision}.",
+      "declined": "The customer declined estimate {revision}: make a new revision, or cancel or send back the repair.",
+      "held": "The estimate holds the approval and the repair."
+    },
+    "held": {
+      "prices": "Estimates are prices: your role doesn't see prices.",
+      "edit": {
+        "SENT": "The estimate is sent: what the customer sees no longer changes (make a new revision).",
+        "ACCEPTED": "The customer accepted the estimate: it no longer changes.",
+        "DECLINED": "The customer declined the estimate: make a new revision.",
+        "WITHDRAWN": "The estimate is withdrawn."
+      },
+      "stage": "Not possible at this stage of the repair.",
+      "sentAlready": "The estimate is sent already.",
+      "noLines": "Add a part or labour first.",
+      "garmentFirst": "Receive the garment first: the estimate is sent once it is here.",
+      "expired": "The estimate's last valid day is past: change it in Edit terms.",
+      "notSent": "Only a sent estimate gets an answer.",
+      "notNewest": "Only the newest revision may be revised.",
+      "draftOpen": "Estimate {revision} is still a draft: finish it or withdraw it."
+    },
+    "problem": {
+      "description": "Say what the part or the job is, in one line the customer reads.",
+      "quantity": "A quantity above 0 (at most 4 decimals).",
+      "unitPrice": "A price of 0 or more, like 12.50.",
+      "minutes": "Whole minutes of work, 1 or more (labour only).",
+      "unitCost": "A cost of 0 or more, like 4.20, or empty."
+    },
+    "line": {
+      "titlePart": "Add a part",
+      "titleLabour": "Add labour",
+      "whatHint": "As the customer reads it.",
+      "price": "Price per unit",
+      "cost": "Our cost per unit",
+      "costHint": "Never shown to the customer.",
+      "submit": "Add"
+    },
+    "newDialog": {
+      "title": "Make estimate {revision}",
+      "first": "A new draft estimate, empty: add its parts and labour.",
+      "copies_one": "A new draft that starts from estimate {revision} with its {count} line.",
+      "copies_other": "A new draft that starts from estimate {revision} with its {count} lines.",
+      "replaces": "Estimate {revision} was sent: the new revision withdraws it, and the customer sees the new one once it is sent.",
+      "submit": "Make it"
+    },
+    "send": {
+      "open": "Send estimate",
+      "title": "Send estimate {revision} of {number}",
+      "to": "Customer",
+      "portal": "The customer sees it in their portal and accepts or declines it there.",
+      "frozen": "After sending, its lines and terms no longer change: a change is a new revision.",
+      "stage": "The repair moves to Estimated.",
+      "noMail": "Nothing is mailed: a customer without the portal answers by phone or mail, and the office records the answer.",
+      "submit": "Send"
+    },
+    "answer": {
+      "open": "Record the answer",
+      "title": "The customer's answer to estimate {revision}",
+      "body": "What the customer said, as the office heard it. An accepted estimate approves the repair.",
+      "label": "The answer",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "acceptedHint": "The repair is approved: the work can start.",
+      "declinedHint": "No work on this estimate.",
+      "how": "How we heard it",
+      "howHint": "For example: by phone, by mail of today.",
+      "name": "Who answered",
+      "reason": "The customer's reason",
+      "submit": "Record",
+      "problem": {
+        "answer": "Pick accepted or declined.",
+        "how": "Say how the office heard the answer.",
+        "reason": "Write the customer's reason for declining."
+      }
+    },
+    "withdraw": {
+      "open": "Withdraw the estimate",
+      "title": "Withdraw estimate {revision}",
+      "body": "The draft is withdrawn: it stays in the revisions.",
+      "bodySent": "The sent estimate is withdrawn: the customer can no longer answer it.",
+      "reason": "Why",
+      "submit": "Withdraw"
+    },
+    "terms": {
+      "open": "Edit terms",
+      "title": "Terms of estimate {revision}",
+      "sentOnly": "Sent: only the internal note changes.",
+      "noDate": "No last day",
+      "customerHint": "Shown to the customer with the estimate.",
+      "internalHint": "Only the office reads it.",
+      "submit": "Save",
+      "problem": {
+        "past": "The last valid day can't be in the past.",
+        "long": "At most 2000 characters."
+      }
+    },
+    "done": {
+      "added": "The line is added.",
+      "removed_one": "{count} line removed.",
+      "removed_other": "{count} lines removed.",
+      "new": "Estimate {revision} is made.",
+      "sent": "Estimate {revision} is sent: the customer sees it in the portal.",
+      "accepted": "Estimate {revision} accepted: the repair is approved.",
+      "declined": "Estimate {revision} declined.",
+      "withdrawn": "Estimate {revision} withdrawn.",
+      "terms": "The terms are saved."
+    }
+  },
+  "exchange": {
+    "size": "New size",
+    "sizeOf": "New size for line {seq}",
+    "pick": "Pick a size",
+    "noSizes": "No other size of this style",
+    "pickSize": "Line {seq}: pick the size the customer gets instead.",
+    "decided": "Exchanged: size {from} for {to}"
+  },
+  "fact": {
+    "policy": "Return policy",
+    "arrival": "The goods",
+    "withdrawal": "Right of withdrawal",
+    "scanCode": "Scan code"
+  },
+  "fee": {
+    "title": "Restocking or handling fee",
+    "sub": "Withheld from the credit by the policy's fee rules; dropped when the cause is ours.",
+    "col": {
+      "rule": "Rule",
+      "amount": "Fee"
+    },
+    "noPolicy": "This return follows the sales settings: no fee rule applies.",
+    "noRule": "No fee rule applies to this line.",
+    "atDecision": "Set when the line is decided.",
+    "withheld": "{rule}: withheld from the credit",
+    "draft": "Fee {rule}:",
+    "creditAfter": "credit after the fee",
+    "dropped": {
+      "OUR_CAUSE": "Fee {rule} dropped: the cause is ours",
+      "NO_CREDIT": "Fee {rule} dropped: no credit to take it from",
+      "OTHER_CURRENCY": "Fee {rule} dropped: the credit is in another currency"
+    },
+    "ours": "A fault of ours or damage in transit never pays a fee."
+  },
+  "finish": {
+    "COMPLETED": "Completed: every line decided and done",
+    "CREDITED_WITHOUT_RETURN": "Credited without the goods coming back",
+    "RETURNED_UNCHANGED": "Sent back to the customer as it came",
+    "GOODS_NOT_RECEIVED": "The goods never arrived",
+    "CUSTOMER_WITHDREW": "The customer no longer wants the return",
+    "OTHER": "Other (say why)",
+    "held": {
+      "COMPLETED": "No line is decided: nothing was done to complete.",
+      "CREDITED_WITHOUT_RETURN": "No line was credited without the goods.",
+      "RETURNED_UNCHANGED": "No line goes back to the customer as it came.",
+      "GOODS_NOT_RECEIVED": "Every piece expected arrived (or was credited without the goods).",
+      "CUSTOMER_WITHDREW": "A credit was given: the return was carried out, not withdrawn.",
+      "OTHER": "Not possible now.",
+      "undecided_one": "Decide received line {lines} first.",
+      "undecided_other": "Decide received lines {lines} first."
+    },
+    "tooLong": "At most 500 characters."
+  },
+  "held": {
+    "notNow": "Not possible in this state.",
+    "credit": {
+      "done": "Line {seq} is credited without the goods already.",
+      "waiting": "The credit of line {seq} waits for a yes.",
+      "decided": "Line {seq} is decided already.",
+      "arrived": "Goods of line {seq} arrived: decide it instead.",
+      "noPrice": "The line's value is not known: it was not sold at a price."
+    },
+    "papers": {
+      "code": "The scan code is set by someone who manages returns.",
+      "state": "No papers for a return in this state."
+    },
+    "policy": {
+      "bound": "The return follows policy {name}.",
+      "state": "The policy is bound once the return is authorised, before the goods arrive."
+    },
+    "split": {
+      "final": "The return is final.",
+      "beforeGoods": "Line {seq}: split once the goods arrive.",
+      "credited": "Line {seq} is credited without the goods.",
+      "nothing": "Nothing of line {seq} arrived yet.",
+      "all": "Every piece of line {seq} arrived."
+    }
+  },
+  "late": {
+    "tile": "Arrived after the deadline",
+    "tileHint": "Open returns whose goods came after their deadline",
+    "failed": "Couldn't read which returns arrived after the deadline."
+  },
+  "papers": {
+    "print": "Print the return papers"
+  },
+  "policy": {
+    "bind": "Bind the return policy",
+    "salesSettings": "The sales settings (no policy bound)",
+    "named": "{name} ({days} days)",
+    "namedOld": "{name} ({days} days, an earlier policy)",
+    "newer": "A newer return policy is live ({name}); this return keeps the one it was bound to.",
+    "notBound": "No return policy is bound yet: {name} is live. Bind it to set the deadline and the fees.",
+    "done": "The policy is bound: the goods are due by {date}.",
+    "doneNoDate": "The policy is bound.",
+    "dialog": {
+      "title": "Bind the return policy to {number}",
+      "body": "The live policy of the customer's channel: its deadline counts from the authorisation, and its fee rules apply to the credits.",
+      "withdrawal": "The consumer withdraws from the purchase (14 days, no reason needed)",
+      "reason": "Why accept it outside the window",
+      "reasonHint": "A courtesy: kept on the record's history.",
+      "submit": "Bind"
+    },
+    "problem": {
+      "checking": "Checking the policy…",
+      "none": "No live return policy for this channel (Sales › Settings).",
+      "reason": "A line is outside its window: say why it is accepted.",
+      "state": "The policy is bound only on an authorised return."
+    }
+  },
+  "read": {
+    "failed": "Couldn't load these details"
+  },
+  "remake": {
+    "title": "A remake was asked ({via}, {date})",
+    "via": {
+      "OFFICE": "by the office",
+      "PORTAL": "in the portal",
+      "LINK": "through a claim link"
+    },
+    "lines": "Lines: {lines}",
+    "fit": "What does not fit: {fit}",
+    "photos": "Line {seq}: {count} of {needed} photos",
+    "later": "The remake is decided by the made-to-measure office (later); for now, receive the garment.",
+    "decideLater": "The remake is decided by the made-to-measure office (later)."
+  },
+  "scanCode": {
+    "none": "Not set yet (set when the papers are printed)"
+  },
+  "split": {
+    "open_one": "Split the rest ({count} piece)",
+    "open_other": "Split the rest ({count} pieces)",
+    "title": "Split line {seq}",
+    "body": "Line {seq} keeps the {kept} received; the {rest} not arrived become a line of their own, still expected.",
+    "hint": "Each line is then decided on its own.",
+    "submit": "Split",
+    "done": "Line {seq} keeps {kept}; line {newSeq} expects the other {rest}.",
+    "child": "Split from line {seq}",
+    "parent": "Split into lines {seqs}"
+  },
+  "window": {
+    "over_one": "Returned {count} day after its window ({date})",
+    "over_other": "Returned {count} days after its window ({date})"
+  },
+  "withdrawal": {
+    "yes": "Withdrawal (14 days)",
+    "no": "No withdrawal"
+  }
+}

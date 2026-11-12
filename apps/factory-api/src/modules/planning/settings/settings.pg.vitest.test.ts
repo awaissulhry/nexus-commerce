@@ -101,7 +101,8 @@ describe('horizon and buckets (PLN-003)', () => {
     const a1 = sites.find((row: Json) => row.site.id === siteA1)
     const b1 = sites.find((row: Json) => row.site.id === siteB1)
     expect(a1.settings).toMatchObject({ horizonWeeks: 26, dayBucketWeeks: 2, weekBucketWeeks: 13, defaultEfficiencyPct: '85.00', scheduledRunTime: '02:00', isDefault: false, version: 1 })
-    expect(b1.settings).toEqual({ horizonWeeks: 26, dayBucketWeeks: 2, weekBucketWeeks: 13, defaultEfficiencyPct: '100.00', scheduledRunTime: null, isDefault: true, version: null, updatedAt: null })
+    // B-W2b-318: the size-run rule (one grid by default).
+    expect(b1.settings).toEqual({ horizonWeeks: 26, dayBucketWeeks: 2, weekBucketWeeks: 13, defaultEfficiencyPct: '100.00', scheduledRunTime: null, sizeRunRule: 'ONE_GRID', sizeGroups: [], isDefault: true, version: null, updatedAt: null })
     expect((await ok('plannerB', 'GET', '/planning/settings')).sites.map((row: Json) => row.site.id)).toEqual([siteB1])
     expect((await ok('other', 'GET', '/planning/settings')).sites).toEqual([])
   })

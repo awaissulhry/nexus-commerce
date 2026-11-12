@@ -14,6 +14,8 @@ import { cancelScheduleInCommand } from './schedule'
 import { orderSettlement } from './settlement'
 import { asDay, dayOrNull, lockOrder, moveFactsOf, readLines, readOrder, readOrderFacts, type OrderRow } from './store'
 import { orderView, type OrderView } from './views'
+// B-W2b-317 (PLN-173): a typed promise change writes the lines' promise history.
+import { typedPromiseRowsInCommand } from '../../planning/promise-keep/typed'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -78,8 +80,18 @@ export interface PromiseInput {
  */
 export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseInput, idempotencyKey?: string): Promise<{ order: OrderView }> {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => changePromiseInCommand(tools, order, body))
+  return { order: await recordAfter(caller, order.id) }
+}
+
+/**
+ * The promise change inside a command (the route's, or B-W2b-317's re-promise accepted by sales: `history: false`, as that
+ * command writes the rows per size itself). B-W2b-317 (PLN-173): the change also writes the lines' promise history
+ * (PromiseRecord: the first promise kept, the new date a re-promise; planning/promise-keep/typed.ts).
+ */
+export async function changePromiseInCommand(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId'>, body: PromiseInput, options: { readonly history?: boolean } = {}): Promise<{ orderId: string; promiseDate: BusinessDate; lineIds: string[] }> {
   const lineIds = [...(body.lineIds ?? [])]
-  await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+  {
     const { tx, now } = tools
     const locked = await lockOrder(tx, order.id, body.version)
     const stateProblem = promiseStateProblem(locked.status, lineIds.length > 0)
@@ -94,7 +106,7 @@ export async function changePromise(caller: CommandCaller, orderId: string, body
       const previous = dayOrNull(current.promiseDate)
       const originalPromiseDate = original ?? body.promiseDate
       await tx.salesOrder.update({ where: { id: order.id }, data: { promiseDate: asDay(body.promiseDate), ...(original === null ? { originalPromiseDate: asDay(originalPromiseDate) } : {}), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
-      tools.audit({ recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { promiseDate: previous, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate, lineIds: [] }, reason })
+      tools.audit({ action: 'orders.changePromise', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { promiseDate: previous, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate, lineIds: [] }, reason })
       tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds: [] } })
     } else {
       const chosen = lines.filter((line) => lineIds.includes(line.id))
@@ -102,12 +114,13 @@ export async function changePromise(caller: CommandCaller, orderId: string, body
       await tx.salesOrderLine.updateMany({ where: { id: { in: lineIds }, orderId: order.id }, data: { promiseDate: asDay(body.promiseDate), updatedAt: now, version: { increment: 1 } } })
       await tx.salesOrder.update({ where: { id: order.id }, data: { updatedAt: now, version: { increment: 1 } }, select: { id: true } })
       const previous = new Set(Object.values(before)).size === 1 ? (Object.values(before)[0] ?? null) : null
-      tools.audit({ recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { lines: before, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate: original, lineIds }, reason })
+      tools.audit({ action: 'orders.changePromise', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { lines: before, originalPromiseDate: original }, after: { promiseDate: body.promiseDate, previous, originalPromiseDate: original, lineIds }, reason })
       tools.emit({ type: 'sales_order.promise_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, promiseDate: body.promiseDate, previous, lineIds } })
     }
+    // B-W2b-317 (PLN-173): the lines' promise history.
+    if (options.history !== false) await typedPromiseRowsInCommand(tools, { order: { ...current, status: locked.status }, lines, lineIds, promiseDate: body.promiseDate, reason })
     return { orderId: order.id, promiseDate: body.promiseDate, lineIds }
-  })
-  return { order: await recordAfter(caller, order.id) }
+  }
 }
 
 // ---- ready by hand -------------------------------------------------------------------------------------------------------

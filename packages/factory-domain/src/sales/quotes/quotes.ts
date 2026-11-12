@@ -226,8 +226,9 @@ export function discountOf(line: { readonly unitPrice: string; readonly listUnit
   return decimalText(list.minus(lowest).times(HUNDRED).dividedBy(list).toDecimalPlaces(4, Dec.ROUND_HALF_UP))
 }
 
-/** A line is priced when every piece sells above 0. */
-export const isPriced = (line: { readonly unitPrice: string; readonly sizes: readonly SizeRow[] }): boolean => effectivePrices(line.unitPrice, line.sizes).every((price) => price.gt(ZERO))
+/** A line is priced when every piece sells above 0 (B-W2b-330: a line without size rows, a fee, at its own price). */
+export const isPriced = (line: { readonly unitPrice: string; readonly sizes: readonly SizeRow[] }): boolean =>
+  line.sizes.length === 0 ? new Dec(line.unitPrice).gt(ZERO) : effectivePrices(line.unitPrice, line.sizes).every((price) => price.gt(ZERO))
 
 // ---- a line's cost (costing's cost sheet, B-W1-16) ----------------------------------------------------------------
 
@@ -264,6 +265,8 @@ export interface MoneyLine {
   readonly sizes: readonly SizeRow[]
   /** The line's cost (LineCost.amount); null: incomplete. */
   readonly costAmount: MinorUnits | null
+  /** B-W2b-330 (SAL-181): the pieces of a line without size rows (a FEE line: how many times it is charged). */
+  readonly quantity?: number
 }
 
 export interface PricedLine {
@@ -322,6 +325,8 @@ export interface PricedVersion {
   readonly rules: readonly RuleCheck[]
   /** A rule breaks: the version needs an approval before it is sent. */
   readonly approvalNeeded: boolean
+  /** B-W2b-330 (SAL-189): the role whose floor the version is held to (its maker's role), or null: the company's floor. */
+  readonly marginFloorRole?: string | null
 }
 
 export interface VersionMoneyInput {
@@ -331,7 +336,8 @@ export interface VersionMoneyInput {
   readonly treatment: VatTreatment
   readonly lines: readonly MoneyLine[]
   readonly depositPct: string | null
-  readonly rules: Pick<QuoteRules, 'marginFloorPct' | 'discountLimitPct'>
+  /** B-W2b-330 (SAL-189): `marginFloorRole` names the role whose floor `marginFloorPct` is (price-waterfall/floors). */
+  readonly rules: Pick<QuoteRules, 'marginFloorPct' | 'discountLimitPct'> & { readonly marginFloorRole?: string | null }
 }
 
 /** Margin % (4 places), or null when the net is 0 or the figure passes Decimal(9,4). */
@@ -361,6 +367,8 @@ export function priceVersion(input: VersionMoneyInput): PricedVersion {
       const price = priceText(row.unitPrice ?? line.unitPrice)
       groups.set(price, (groups.get(price) ?? 0) + row.quantity)
     }
+    // B-W2b-330 (SAL-181): a line without size rows (a fee) sells its own pieces at its own price.
+    if (line.sizes.length === 0 && line.quantity !== undefined && line.quantity > 0) groups.set(priceText(line.unitPrice), line.quantity)
     for (const [price, quantity] of groups) {
       amounts.push({ treatment, quantity: new Dec(quantity), unitPrice: new Dec(price) })
       owners.push(index)
@@ -378,7 +386,7 @@ export function priceVersion(input: VersionMoneyInput): PricedVersion {
     const margin = line.costAmount === null ? null : net - line.costAmount
     return {
       seq: line.seq,
-      quantity: piecesOf(line.sizes),
+      quantity: line.sizes.length === 0 && line.quantity !== undefined ? line.quantity : piecesOf(line.sizes),
       netAmount: net,
       vatAmount: lineVat,
       discountPct: discountOf(line),
@@ -446,6 +454,7 @@ export function priceVersion(input: VersionMoneyInput): PricedVersion {
     marginFloorBreached,
     rules,
     approvalNeeded: rules.some((rule) => rule.broken),
+    marginFloorRole: input.rules.marginFloorRole ?? null,
   }
 }
 
@@ -475,7 +484,7 @@ export function approvalDetails(priced: PricedVersion, lines: readonly ApprovalL
       .filter((rule) => rule.broken)
       .map((rule) =>
         rule.reason === 'MARGIN_FLOOR'
-          ? { reason: rule.reason, marginPct: priced.marginPct, marginFloorPct: priced.marginFloorPct, lines: rule.lines.map((seq) => ({ seq, marginPct: bySeq.get(seq)?.marginPct ?? null })) }
+          ? { reason: rule.reason, marginPct: priced.marginPct, marginFloorPct: priced.marginFloorPct, ...(priced.marginFloorRole ? { marginFloorRole: priced.marginFloorRole } : {}), lines: rule.lines.map((seq) => ({ seq, marginPct: bySeq.get(seq)?.marginPct ?? null })) }
           : { reason: rule.reason, discountLimitPct: priced.discountLimitPct, lines: rule.lines.map((seq) => ({ seq, discountPct: bySeq.get(seq)?.discountPct ?? null })) },
       ),
     asked: {
@@ -561,6 +570,8 @@ export interface IssueFacts {
     readonly costRevision: 'RELEASED' | 'DRAFT' | 'OBSOLETE' | null
     /** Per size: the certificate gate's reasons (empty: covered or not required). */
     readonly certificates: readonly { readonly size: string; readonly reasons: readonly string[] }[]
+    /** B-W2b-330 (SAL-181): a fee line has no cost sheet (its cost is 0): no cost issue. */
+    readonly fee?: boolean
   }[]
   readonly rules: readonly RuleCheck[]
 }
@@ -575,6 +586,7 @@ export function quoteIssues(facts: IssueFacts): QuoteIssue[] {
   facts.lines.forEach((line, index) => {
     const at = `lines/${index}`
     if (!line.priced) add('NOT_PRICED', 'BLOCKS', `${at}/unitPrice`, `Line ${line.seq} (${line.label}) has no price: every piece sells above 0.`, line.id)
+    if (line.fee) return
     if (line.costRevision === null) add('NO_COST_REVISION', 'BLOCKS', `${at}/styleRevisionId`, `Line ${line.seq} (${line.label}): the style has no revision to cost it from.`, line.id)
     else if (line.costMissing.length > 0) add('COST_INCOMPLETE', 'BLOCKS', `${at}/cost`, `Line ${line.seq} (${line.label}): the cost is incomplete — ${line.costMissing.join('; ')}`, line.id)
     else if (line.costRevision === 'DRAFT') add('COST_ESTIMATE', 'INFO', `${at}/styleRevisionId`, `Line ${line.seq} (${line.label}) is costed from a draft revision: an estimate until the style is released.`, line.id)

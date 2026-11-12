@@ -45,6 +45,12 @@ export const manifest = defineManifest({
   'PATCH /planning/work-centres/:workCentreId/capacity': { audiences: ['office'], permission: 'planning.settings.manage', scope: 'record' },
   'GET /planning/capacity': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/capacity/cell': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  // B-W2b-318: the item's requirement profile (./item-profile), the calculated delays, scarce material by priority
+  // (./allocation-priority): read with planning.view over the site, from the plan computed now. The rules per item are
+  // written on the item-parameters routes (a plan level also asks planning.strategy.manage).
+  'GET /planning/item-profile': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/delays': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/allocation-priority': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   // B-W2a-22: MRP every day.
   'POST /planning/requirements/:requirementId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   'POST /planning/requirements/:requirementId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
@@ -132,6 +138,27 @@ export const manifest = defineManifest({
   'GET /planning/strategy': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'PUT /planning/strategy/items/:itemId': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
   'POST /planning/strategy/bulk': { audiences: ['office'], permission: 'planning.strategy.manage', scope: 'record' },
+  // B-W2b-317: keeping promises (./promise-keep): the promise list, a line's history and the re-promise draft read with
+  // planning.promise.view over the site (each line also orders.view over its order); a re-promise proposed with
+  // planning.promise.manage, accepted or declined by sales with orders.manage over the order (email.send to tell the
+  // customer), withdrawn by the planner who proposed it. The backlog (./backlog): read with planning.view over the company,
+  // ranked with planning.backlog.manage (rank-by-rule previews with planning.view). Supply too late
+  // (./exceptions/supply-late.ts): read with planning.view over the site, checked now with planning.exceptions.manage.
+  'GET /planning/promises': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promises/order-lines/:orderLineId/history': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promises/order-lines/:orderLineId/re-promise': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promises/order-lines/:orderLineId/re-promise': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
+  'GET /planning/promises/re-promises': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'GET /planning/promises/re-promises/:proposalId': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  'POST /planning/promises/re-promises/:proposalId/accept': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /planning/promises/re-promises/:proposalId/decline': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /planning/promises/re-promises/:proposalId/withdraw': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
+  'GET /planning/backlog': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'PUT /planning/backlog/ranks': { audiences: ['office'], permission: 'planning.backlog.manage', scope: 'record' },
+  'POST /planning/backlog/rank-by-rule': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/exceptions/supply-late': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/exceptions/supply-late/check': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
+  'GET /planning/exceptions/:exceptionId/fixes': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   // B-W2b-306: MRP you can trust (./run-log, ./actions): the run log and the action messages read with planning.view over the
   // run's site; messages decided with planning.actions.manage; planned orders edited, reset and bulk-edited with
   // planning.planned.edit; a requirement kept for one order line with planning.firm (the planner's act on the latest plan).
