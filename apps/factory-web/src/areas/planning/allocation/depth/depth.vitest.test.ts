@@ -161,7 +161,7 @@ describe('allocation in depth: the kit timing, the switch and the orders', () =>
 
   it('what became of the order when an operation went outside', () => {
     const answer = { operation: { id: 'o', seq: 20, name: 'Cucitura', version: 3, outsourced: true, subcontractOrderId: null }, workshop: { id: 'p', code: 'B', name: 'Laboratorio Beta' }, order: null, orderWords: 'No subcontract order yet: drafting it needs purchasing.subcontract.manage (the buyer makes it from Purchasing › Subcontracting).', timing: { start: '2026-11-23', kitShipOn: '2026-11-19', kitDueAt: 'x', late: false, backOn: '2026-11-26' }, warnings: [] }
-    expect(outsideDoneWords(answer, words())).toBe('Op 20 Cucitura sent outside to Laboratorio Beta. No subcontract order yet: the buyer drafts it from Purchasing › Subcontracting.')
+    expect(outsideDoneWords(answer, words())).toBe('Op 20 Cucitura sent outside to Laboratorio Beta. No subcontract order yet: the buyer drafts it from Purchasing › Subcontract orders.')
     expect(outsideDoneWords({ ...answer, order: { id: 's', number: 'SC-2026-0001', status: 'DRAFT', kitDueAt: 'x' }, orderWords: null }, words())).toMatch(/Draft subcontract order SC-2026-0001: the kit leaves Thu 19 Nov, back Thu 26 Nov\.$/)
     // A kit already late: the order's kit time is today 08:00 at the site; a name ending in a full stop closes with one.
     const late = { ...answer, workshop: { id: 'p', code: 'S1', name: 'Laboratorio Esempio S.p.A.' }, order: { id: 's', number: 'SC-2026-0002', status: 'DRAFT', kitDueAt: '2026-11-12T07:00:00.000Z' }, orderWords: null, timing: { ...answer.timing, kitShipOn: '2026-11-05', late: true } }
