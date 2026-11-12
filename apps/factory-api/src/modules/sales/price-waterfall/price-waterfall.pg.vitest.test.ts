@@ -13,6 +13,7 @@ import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_co
 import { seed as seedCompliance } from '../../../../../../packages/factory-db/seed/compliance'
 import { seed as seedCosting } from '../../../../../../packages/factory-db/seed/costing'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
+import { seed as seedReasons } from '../../../../../../packages/factory-db/seed/reasons'
 import { seed as seedSalesPricing, type SalesPricingSeed } from '../../../../../../packages/factory-db/seed/sales-pricing'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
@@ -61,7 +62,9 @@ const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
   Object.entries(PEOPLE).map(([key, person]) => {
     const role = templateOf(person.template)!
     const grains = role.grains.filter((grain) => !(person.dropGrains ?? []).includes(grain))
-    const grant: Grant = { permissions: [...role.permissions, ...grainsOf(grains), ...(person.template === 'finance' ? (['quotes.approve'] as Permission[]) : [])], companies: 'all', sites: 'all', parties: 'all' }
+    // finance decides quote approvals; the seller may approve too, so the test reaches "nobody approves their own request".
+    const approves = person.template === 'finance' || key === 'seller'
+    const grant: Grant = { permissions: [...role.permissions, ...grainsOf(grains), ...(approves ? (['quotes.approve'] as Permission[]) : [])], companies: 'all', sites: 'all', parties: 'all' }
     return [key, { audience: 'office', tenantId: tenant, actorId: IDS[key]!, grants: [grant] }]
   }),
 )
@@ -91,6 +94,8 @@ async function newQuote(who: string): Promise<Json> {
   return quote
 }
 const lineOf = (quote: Json) => quote.lines.find((line: Json) => line.kind === 'SIZE_GRID')
+/** The line's unit cost as priced (the seller holds no cost grain: read as the database keeps it). */
+const unitCostOf = async (lineId: string): Promise<string> => (await admin<{ cost: string }>(`SELECT trim(trailing '.' from trim(trailing '0' from "unitCost"::text)) AS cost FROM "QuoteLine" WHERE id = $1`, [lineId]))[0]!.cost
 
 beforeAll(async () => {
   db = await migratedDatabase('price_waterfall')
@@ -100,6 +105,8 @@ beforeAll(async () => {
   await seedCosting({ db: database, namespace: NS })
   await seedNumbering({ db: database, namespace: NS })
   seeded = await seedSalesPricing({ db: database, namespace: NS })
+  // The PRICE_ADJUSTMENT reasons (LOYALTY, COMPETITION, VOLUME, …, OTHER with words).
+  await seedReasons({ db: database, namespace: NS })
   // The people, with live assignments of the tenant's system roles: the floor of a quote is read from its maker's roles.
   for (const [key, person] of Object.entries(PEOPLE)) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [IDS[key], tenant, `${key}.waterfall@example.com`, `Waterfall ${key}`])
@@ -137,7 +144,7 @@ describe('a line priced by its waterfall, list to net (SAL-174, SAL-175)', () =>
       ['NET', '420'],
     ])
     // The cost of the revision as priced, at the seller's 25 %: cost ÷ 0.75, up to the cent.
-    const expected = suggestedPriceOf({ unitCost: line.unitCost, marginPct: '25', currency: 'EUR' })
+    const expected = suggestedPriceOf({ unitCost: await unitCostOf(line.id), marginPct: '25', currency: 'EUR' })
     expect(priced.suggested).toMatchObject({ unitPrice: 'unitPrice' in expected ? expected.unitPrice : null, marginPct: '25', problem: null, basedOn: { revisionId: line.styleRevisionId } })
     // Without the price and margin grains: no figure, no waterfall.
     const blind = (await ok('blind', 'GET', `${q(quotes.seller.id)}/pricing`)).lines[0]
@@ -212,7 +219,8 @@ describe('a line priced by its waterfall, list to net (SAL-174, SAL-175)', () =>
     const url = `${q(quotes.seller.id)}/lines/${line.id}/price`
     let answer = await ok('seller', 'PUT', url, { version: quotes.seller.version, start: 'SUGGESTED' })
     quotes.seller = answer.quote
-    const at25 = suggestedPriceOf({ unitCost: line.unitCost, marginPct: '25', currency: 'EUR' }) as { unitPrice: string }
+    const unitCost = await unitCostOf(line.id)
+    const at25 = suggestedPriceOf({ unitCost, marginPct: '25', currency: 'EUR' }) as { unitPrice: string }
     expect(answer.line.steps).toEqual([
       { kind: 'SUGGESTED', unitPrice: at25.unitPrice, source: { type: 'StyleRevision', id: line.styleRevisionId }, label: 'From the cost and the margin to earn' },
       { kind: 'NET', unitPrice: at25.unitPrice },
@@ -221,7 +229,7 @@ describe('a line priced by its waterfall, list to net (SAL-174, SAL-175)', () =>
     expect(quotes.seller.approval.rules.find((rule: Json) => rule.reason === 'MARGIN_FLOOR')).toMatchObject({ known: true, broken: false })
     answer = await ok('seller', 'PUT', url, { version: quotes.seller.version, start: 'SUGGESTED', marginPct: '40' })
     quotes.seller = answer.quote
-    expect(answer.line.unitPrice).toBe((suggestedPriceOf({ unitCost: line.unitCost, marginPct: '40', currency: 'EUR' }) as { unitPrice: string }).unitPrice)
+    expect(answer.line.unitPrice).toBe((suggestedPriceOf({ unitCost, marginPct: '40', currency: 'EUR' }) as { unitPrice: string }).unitPrice)
     // The margin asked is the margin grain.
     await refused('blind', 'PUT', url, { version: quotes.seller.version, start: 'SUGGESTED', marginPct: '30' }, 403)
   })
@@ -238,11 +246,11 @@ describe('the margin floor of the person quoting (SAL-189)', () => {
 
   it("holds the seller's quote to the sales floor and the owner's to the owner's; the approval names the role", async () => {
     const line = lineOf(quotes.seller)
-    quotes.seller = (await ok('seller', 'PUT', `${q(quotes.seller.id)}/lines/${line.id}/price`, { version: quotes.seller.version, start: 'MANUAL', startPrice: at21(line.unitCost), startReasonCode: 'TARGET_PRICE' })).quote
+    quotes.seller = (await ok('seller', 'PUT', `${q(quotes.seller.id)}/lines/${line.id}/price`, { version: quotes.seller.version, start: 'MANUAL', startPrice: at21(await unitCostOf(line.id)), startReasonCode: 'TARGET_PRICE' })).quote
     expect(quotes.seller.approval).toMatchObject({ needed: true, marginFloorPct: '25' })
     quotes.owner = await newQuote('owner')
     const ownerLine = lineOf(quotes.owner)
-    quotes.owner = (await ok('owner', 'PUT', `${q(quotes.owner.id)}/lines/${ownerLine.id}/price`, { version: quotes.owner.version, start: 'MANUAL', startPrice: at21(ownerLine.unitCost), startReasonCode: 'TARGET_PRICE' })).quote
+    quotes.owner = (await ok('owner', 'PUT', `${q(quotes.owner.id)}/lines/${ownerLine.id}/price`, { version: quotes.owner.version, start: 'MANUAL', startPrice: at21(await unitCostOf(ownerLine.id)), startReasonCode: 'TARGET_PRICE' })).quote
     expect(quotes.owner.approval).toMatchObject({ needed: false, marginFloorPct: '10' })
     expect((await ok('owner', 'GET', `${q(quotes.owner.id)}/pricing`)).floor).toMatchObject({ source: 'ROLE', roleKey: 'owner', marginFloorPct: '10' })
     // The owner reading the seller's quote sees the seller's floor: the floor is the quote's maker's, the same for every reader.
@@ -288,7 +296,9 @@ describe('development and sample fees (SAL-181)', () => {
     const before = quotes.seller.current.netAmount
     quotes.seller = (await ok('seller', 'POST', `${q(quotes.seller.id)}/fees`, { version: quotes.seller.version, feeKind: 'DEVELOPMENT', styleId: jkt01, unitPrice: '500' }, 201)).quote
     const fee = quotes.seller.lines.find((line: Json) => line.kind === 'FEE')
-    expect(fee).toMatchObject({ quantity: 1, unitPrice: '500', netAmount: 50_000, colourwayId: BLK, costAmount: 0, costMissing: [] })
+    expect(fee).toMatchObject({ quantity: 1, unitPrice: '500', netAmount: 50_000, colourwayId: BLK, costMissing: [] })
+    // Its cost is 0 (the cost grain: read as finance).
+    expect((await ok('finance', 'GET', q(quotes.seller.id))).quote.lines.find((line: Json) => line.id === fee.id)).toMatchObject({ costAmount: 0, unitCost: '0', marginPct: '100' })
     expect(fee.description).toMatch(/^Development fee - SEED-JKT-01 /)
     expect(quotes.seller.current.netAmount).toBe(before + 50_000)
     expect(quotes.seller.issues.filter((issue: Json) => issue.lineId === fee.id)).toEqual([])
@@ -332,6 +342,7 @@ describe('development and sample fees (SAL-181)', () => {
     // The invoice draft takes it once, as a SERVICE line naming the order line, taxed as the goods.
     const { result } = await command(system(), { name: 'test.feeLines', input: {} }, async (tools) => {
       const first = await feeLinesFor(tools.tx, tools.context, [order.orderId], () => taxable(22))
+      tools.audit({ recordType: 'SalesOrder', recordId: order.orderId, after: { feeLines: first.lines.length } })
       return { lines: first.lines.map((line) => ({ kind: line.core.kind, quantity: line.core.quantity, unitPrice: line.core.unitPrice, salesOrderLineId: line.salesOrderLineId, ddtId: line.ddtId, size: line.size })), left: first.left }
     })
     expect(result).toEqual({ lines: [{ kind: 'SERVICE', quantity: '1.0000', unitPrice: '500.000000', salesOrderLineId: feeLineId, ddtId: null, size: null }], left: [] })
@@ -345,7 +356,8 @@ describe('a revision keeps the waterfall', () => {
     const revised = (await ok('seller', 'POST', `${q(seeded.sentQuote.quoteId)}/revise`, { version: sent.version, changeNote: 'Made-up: a new delivery date.' })).quote
     expect(revised.current.revision).toBe(2)
     const pricing = await ok('seller', 'GET', `${q(seeded.sentQuote.quoteId)}/pricing`)
-    expect(pricing.lines[0].steps.map((step: Json) => [step.kind, step.unitPrice ?? null, step.reasonCode ?? null])).toEqual([
+    // (the seed writes six places)
+    expect(pricing.lines[0].steps.map((step: Json) => [step.kind, step.unitPrice === undefined ? null : Number(step.unitPrice).toString(), step.reasonCode ?? null])).toEqual([
       ['LIST', '430', null],
       ['MANUAL', '420', 'VOLUME'],
       ['NET', '420', null],
