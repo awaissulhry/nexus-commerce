@@ -6,6 +6,7 @@ import {
   APPROVAL_REASONS,
   APPROVAL_STATUSES,
   DEPOSIT_KINDS,
+  GOODS_LINE_KINDS,
   ISSUE_SEVERITIES,
   MAX_SIZE_QUANTITY,
   MAX_TEXT,
@@ -312,8 +313,8 @@ export const addLineContract = defineContract({
   params: quoteParams,
   body: input({
     version,
-    /** SIZE_GRID; MADE_TO_MEASURE is refused for now (Owner Q9: made-to-measure comes later). */
-    kind: z.enum(SALES_LINE_KINDS).optional(),
+    /** SIZE_GRID; MADE_TO_MEASURE is refused for now (Owner Q9: made-to-measure comes later). A FEE line is B-W2b-330's. */
+    kind: z.enum(GOODS_LINE_KINDS).optional(),
     measurementProfileId: id().nullish(),
     styleId: id(),
     ...lineFields,

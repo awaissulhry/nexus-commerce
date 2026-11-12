@@ -285,6 +285,9 @@ enum FileCategory {
   QUESTIONNAIRE
   PROOF
   SAMPLE_PHOTO
+  /// W2b-5 (schema wave 38/44, B-W2b-280; SAL-140): the customer's logo or artwork for a configured quote or order line (a
+  /// QuoteLine's or SalesOrderLine's file), for cutting or printing.
+  ARTWORK
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

@@ -19,6 +19,7 @@
     "CLAIM": "Reclami ai fornitori",
     "DOWNGRADE": "Declassamenti",
     "APPROVAL_REJECT": "Rifiuti di approvazione",
+    "PRICE_ADJUSTMENT": "Rettifiche di prezzo",
     "SCRAP": "Scarti",
     "REWORK": "Rilavorazioni"
   },
@@ -35,6 +36,7 @@
     "CLAIM": "Perché reclamiamo verso un fornitore.",
     "DOWNGRADE": "Perché la merce è passata a una qualità inferiore.",
     "APPROVAL_REJECT": "Perché chi approva ha detto no a una richiesta: ogni rifiuto ne indica uno, con le parole.",
+    "PRICE_ADJUSTMENT": "Perché il prezzo di una riga è stato cambiato a mano: ogni modifica manuale su una riga di offerta o ordine ne indica una.",
     "SCRAP": "Perché un capo va perso a un'operazione: i riquadri di scarto della schermata operazione.",
     "REWORK": "Perché un capo torna indietro per essere rifatto: i riquadri di rilavorazione della schermata operazione."
   },

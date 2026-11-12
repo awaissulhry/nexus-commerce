@@ -221,6 +221,10 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // W2b-5 sales-pricing.prisma (wave 38/44): its quote templates, minimum order quantities and size curves.
+  quoteTemplates       QuoteTemplate[]
+  moqRules             MoqRule[]
+  sizeCurves           SizeCurve[]
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]

@@ -7,8 +7,8 @@ import { mergedWords, movedOrder, nextSortOrder, orderProblems, REASON_CODE, REA
 import { BASE_REASONS, missingStandardReasons, standardReasonsOf } from './standard'
 
 describe('reason lists (B-W2a-18; PLT-116)', () => {
-  it('keeps twelve ReasonCode lists and the two scan lists, each with its source and what it keeps', () => {
-    expect(REASON_LISTS).toHaveLength(14)
+  it('keeps thirteen ReasonCode lists and the two scan lists, each with its source and what it keeps', () => {
+    expect(REASON_LISTS).toHaveLength(15)
     expect(sourceOf('WRITE_OFF')).toBe('REASON_CODE')
     expect(sourceOf('SCRAP')).toBe('SCRAP_REASON')
     expect(fieldsOf('RETURN')).toEqual({ icon: true, colour: true, languages: true, needsDetail: true })

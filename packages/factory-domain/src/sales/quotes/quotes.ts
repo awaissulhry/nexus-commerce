@@ -37,8 +37,18 @@ export const QUOTE_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 export const QUOTE_VERSION_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'SUPERSEDED', 'CANCELLED'] as const
 export type QuoteVersionStatus = (typeof QUOTE_VERSION_STATUSES)[number]
-export const SALES_LINE_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
+/** Every kind of a quote or order line: W1's size grid and made-to-measure unit, and W2b-5's FEE (B-W2b-280, SAL-181). */
+export const SALES_LINE_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE', 'FEE'] as const
 export type SalesLineKind = (typeof SALES_LINE_KINDS)[number]
+/** The kinds W1's line routes add: a FEE line comes with its fee kind from B-W2b-330's routes (the database asks for it). */
+export const GOODS_LINE_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
+export type GoodsLineKind = (typeof GOODS_LINE_KINDS)[number]
+/** What a FEE line charges for (factory-db SalesFeeKind; SAL-181): development, sample and tooling fees. */
+export const SALES_FEE_KINDS = ['DEVELOPMENT', 'SAMPLE', 'TOOLING'] as const
+export type SalesFeeKind = (typeof SALES_FEE_KINDS)[number]
+/** A line of goods (a size grid or a made-to-measure unit), not a fee: what work orders, reorders and W1's copies handle. */
+export const isGoodsLine = <Line extends { readonly kind: string }>(line: Line): line is Line & { readonly kind: GoodsLineKind } =>
+  (GOODS_LINE_KINDS as readonly string[]).includes(line.kind)
 export const DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA'] as const
 export type DepositKind = (typeof DEPOSIT_KINDS)[number]
 export const APPROVAL_REASONS = ['MARGIN_FLOOR', 'DISCOUNT_LIMIT', 'AMOUNT_LIMIT', 'SPECIAL_ITEM'] as const
