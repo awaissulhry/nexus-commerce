@@ -61,9 +61,13 @@ interface SourceLine {
   readonly sizes: readonly SizeRow[]
 }
 
-/** What a copy is made from (B-W2b-190: also a portal order request the office accepts as a quote). */
+/** What a copy is made from (B-W2b-190: also a portal order request the office accepts as a quote; B-W2b-295: an inquiry). */
 export interface Source {
-  readonly from: { readonly quoteId: string; readonly versionId: string } | { readonly orderId: string } | { readonly requestId: string }
+  readonly from: { readonly quoteId: string; readonly versionId: string } | { readonly orderId: string } | { readonly requestId: string } | { readonly inquiryId: string }
+  /** B-W2b-295: the quote may start with no line (an inquiry's lines that name no style and colourway yet); else refused. */
+  readonly emptyAllowed?: boolean
+  /** B-W2b-295: the audit row's action (default quotes.duplicate). */
+  readonly action?: 'quotes.duplicate' | 'quotes.fromInquiry'
   readonly companyId: string
   readonly partyId: string
   readonly basis: PriceBasis
@@ -225,10 +229,10 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
     })
     await tx.quoteLineSize.createMany({ data: sizes.map((size) => ({ id: newId(), lineId, partyId: party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, createdById: actorId })) })
   }
-  if (seq === 0) throw new ValidationError('Nothing could be copied: every line was left out.', dropped.map((entry) => ({ path: 'body', message: `Line ${entry.seq}${entry.size ? ` size ${entry.size}` : ''}: ${entry.reason}` })))
+  if (seq === 0 && !source.emptyAllowed) throw new ValidationError('Nothing could be copied: every line was left out.', dropped.map((entry) => ({ path: 'body', message: `Line ${entry.seq}${entry.size ? ` size ${entry.size}` : ''}: ${entry.reason}` })))
   await refreshVersion(tools, quote, await readCurrentVersion(tx, quote), 'all')
   tools.audit({
-    action: 'quotes.duplicate',
+    action: source.action ?? 'quotes.duplicate',
     recordType: 'Quote',
     recordId: id,
     companyId: company.id,
