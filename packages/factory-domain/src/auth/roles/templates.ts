@@ -51,6 +51,10 @@ import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
 import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
+// B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
+import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
+// B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
+import { INVENTORY_TASKS_ADDS } from '../../inventory/tasks/permissions'
 // B-W2b-326: transfers between sites (the warehouse).
 import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
@@ -940,6 +944,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-311
+  ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-292
+  ...(audience === 'office' ? (INVENTORY_TASKS_ADDS[key] ?? []) : []),
   // B-W2b-326
   ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : [])]
 /**
