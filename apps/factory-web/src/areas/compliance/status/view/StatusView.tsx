@@ -31,7 +31,7 @@ export type { Read, StatusActions, StatusModel } from './types'
  */
 export function StatusView({ model, actions }: { model: StatusModel; actions?: StatusActions }) {
   return (
-    <WithMessages namespaces={['compliance-status', 'quality-reports', 'quality']}>
+    <WithMessages namespaces={['compliance-status', 'quality-reports', 'quality', /* B-W2b-288 */ 'compliance-followups-w2b4']}>
       <Status model={model} actions={actions} />
     </WithMessages>
   )

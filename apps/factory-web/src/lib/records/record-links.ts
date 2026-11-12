@@ -172,6 +172,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   RegulationOrStandard: '/compliance/settings?tab=regulations&open=[id]',
   StandardChange: '/compliance/settings?tab=regulations&change=[id]',
   EconomicOperatorRole: '/compliance/settings?tab=operators&open=[id]',
+  // B-W2b-288 Compliance › Rules & markets › Templates (SCR-262): a PPE consultant's yes opens its template's window.
+  PpeTextApproval: '/compliance/settings?tab=templates&open=[id]',
   // B-W2b-268 Compliance › Declarations & instructions (SCR-052-record): a DoC or a leaflet, signed or generated.
   ComplianceDocument: '/compliance/declarations/[id]',
   // B-W2b-267 Compliance › Tests & substances: a supplier declaration opens in its DetailModal on the Supplier declarations

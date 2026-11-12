@@ -1692,6 +1692,7 @@
     "compliance_reports_view": "See a company's compliance reports: certificate coverage of styles and markets, shipped styles covered, open gaps by type, gate refusals, the expiry calendar, chromium VI per supplier, the register summary and the annual review (only from records you may see)",
     "compliance_claims_manage": "Keep the sustainability claims register: draft claims with their words, scope, evidence and expiry, record where they are used, withdraw them",
     "compliance_claims_approve": "Approve a sustainability claim once its evidence is there and still holds (with a fresh code)",
+    "compliance_ppeTexts_manage": "Record a PPE consultant's yes to a template of generated PPE texts, with the consultant's file (with a fresh code), and withdraw it",
     "product_materials_view": "See the material library",
     "product_materials_manage": "Add and edit materials",
     "product_materials_cost": "Set a material's standard price",

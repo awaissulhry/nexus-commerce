@@ -1,9 +1,11 @@
 import type { Prisma } from '@nexus/factory-db'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { holds, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { lotView } from './read'
+import { labCostsByLot, processLabResults, type LabCostSum } from './results-store'
 import { LOT_SELECT, officeOf } from './store'
 
 /**
@@ -34,8 +36,11 @@ export async function listLots(caller: CommandCaller, query: LotQuery) {
   }
   return caller.withClient(async (client) => {
     const rows = await client.lot.findMany({ where: { AND: [scope, filter] }, select: LOT_SELECT, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit })
+    // B-W2b-288 (FU2:03): the Lab cost column — the lab prices of each lot's results, per currency; read only for a caller
+    // with the cost grain (the grain filter drops the field for everyone else).
+    const costs = holds(actorOf(context), 'money.cost') ? labCostsByLot(await processLabResults().costs(client, rows.map((row) => row.id))) : new Map<string, LabCostSum[]>()
     const lots = []
-    for (const row of rows) lots.push(await lotView(client, row))
+    for (const row of rows) lots.push({ ...(await lotView(client, row)), labCost: asMoney('cost', costs.get(row.id) ?? []) })
     return { lots }
   })
 }
