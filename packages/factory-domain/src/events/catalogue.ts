@@ -153,6 +153,8 @@ import { events as planningPromise } from '../planning-promise/events'
 import { events as subcontractDepth } from '../subcontract-depth/events'
 // B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
 import { events as salesPricing } from '../sales-pricing/events'
+// B-W2b-342: repairs and alterations in depth (a request from outside, an estimate sent, answered or withdrawn).
+import { events as repairsDepth } from '../repairs-depth/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -536,6 +538,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...salesCredit,
   // B-W2b-298
   ...inventorySubstitutions,
+  // B-W2b-342
+  ...repairsDepth,
   // B-W2b-306
   ...planningActions] as const satisfies readonly EventDefinition[]
 
