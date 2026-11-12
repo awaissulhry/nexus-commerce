@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { COMPANY_TERMS_CHANGES } from './company-terms/terms'
+import { CONTACT_PRIVACY_CHANGES } from './contact-privacy/privacy'
+import { HOLD_REASONS } from './holds/holds'
+import { REQUIREMENT_CHANGES } from './requirements/requirements'
 import { PARTY_STATUSES } from './rules'
 import { VIES_RESULTS } from './vies'
 
@@ -61,5 +65,57 @@ export const events = [
     description: "A party's VAT number was checked with VIES: valid, not valid, or no answer (held).",
     payload: z.strictObject({ partyId: z.uuid(), code: z.string(), viesCheckId: z.uuid(), taxIdentityId: z.uuid(), result: z.enum(VIES_RESULTS) }),
     live: { ...live, fields: ['partyId', 'code', 'result'] },
+  }),
+  // ---- B-W2b-290: customers in depth (SAL-013, SAL-014, SAL-021, SAL-022, SAL-023, SAL-028; modules/parties/{requirements,holds,
+  // company-terms,contact-privacy,riders}). Ids, codes and states only: never a name, an e-mail, the words of a rule or a hold,
+  // a price list, a deposit or a limit.
+  defineEvent({
+    type: 'party.requirement_changed',
+    context: 'parties',
+    description: "A customer's requirement was added, replaced by a new one (the old one ended in the same change), or ended (packing, labels, documents, shipping, invoicing).",
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), requirementId: z.uuid(), change: z.enum(REQUIREMENT_CHANGES) }),
+    live: { ...live, fields: ['partyId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'party.hold_placed',
+    context: 'parties',
+    description: "A customer's account was put on hold for one company or every company, with a reason: new orders and shipments wait, quotes warn.",
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), holdId: z.uuid(), companyId: z.uuid().nullable(), reason: z.enum(HOLD_REASONS) }),
+    live: { ...live, fields: ['partyId', 'code', 'holdId'] },
+  }),
+  defineEvent({
+    type: 'party.hold_released',
+    context: 'parties',
+    description: "A customer's account hold was released with words: its orders and shipments go on (another hold may still be in force).",
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), holdId: z.uuid(), companyId: z.uuid().nullable(), reason: z.enum(HOLD_REASONS), stillOnHold: z.boolean() }),
+    live: { ...live, fields: ['partyId', 'code', 'holdId'] },
+  }),
+  defineEvent({
+    type: 'party.company_terms_changed',
+    context: 'parties',
+    description: "A customer's terms with one of our companies were set or changed (payment terms, price list, deposit, PO number required), or ended (back to the party's own).",
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), companyId: z.uuid(), termsId: z.uuid(), change: z.enum(COMPANY_TERMS_CHANGES), fields: z.array(z.string()) }),
+    live: { ...live, fields: ['partyId', 'code', 'companyId', 'change'] },
+  }),
+  defineEvent({
+    type: 'party.contact_privacy_changed',
+    context: 'parties',
+    description: "A contact's lawful basis and consent were recorded, or the person objected or withdrew their consent.",
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), contactId: z.uuid(), change: z.enum(CONTACT_PRIVACY_CHANGES) }),
+    live: { ...live, fields: ['partyId', 'code', 'contactId'] },
+  }),
+  defineEvent({
+    type: 'party.contact_erased',
+    context: 'parties',
+    description: 'A contact was erased on request: their name, e-mail and phone are blank for good; the row stays for the documents that name it.',
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), contactId: z.uuid() }),
+    live: { ...live, fields: ['partyId', 'code', 'contactId'] },
+  }),
+  defineEvent({
+    type: 'party.team_changed',
+    context: 'parties',
+    description: 'A rider (a person) was put under a team or dealer, moved to another, or taken off its team.',
+    payload: z.strictObject({ partyId: z.uuid(), code: z.string(), teamPartyId: z.uuid().nullable(), previousTeamPartyId: z.uuid().nullable() }),
+    live: { ...live, fields: ['partyId', 'code', 'teamPartyId', 'previousTeamPartyId'] },
   }),
 ] as const
