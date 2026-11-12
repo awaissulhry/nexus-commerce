@@ -62,6 +62,8 @@ import { gradeRules } from './grade-rules'
 import { sampleOrders } from './sample-orders'
 // B-W2b-325: Sales › Pricing › Price lists.
 import { priceLists } from './price-lists'
+// B-W2b-322: Sales › Inquiries (B-W2b-295's source, registered with its page).
+import { inquiries } from '../../../modules/sales/inquiries/export-source'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -136,4 +138,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   sampleOrders,
   // B-W2b-325: Sales › Pricing › Price lists (a version's prices go out as its file, in the price import's columns).
   priceLists,
+  // B-W2b-322: Sales › Inquiries.
+  inquiries,
 ])
