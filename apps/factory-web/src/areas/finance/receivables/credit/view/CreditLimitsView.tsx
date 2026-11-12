@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Download, Pencil, Plus, Search, X } from 'lucide-react'
-import { Banner, EmptyState, ProgressBar } from '@nexus/ui/components'
+import { Banner, EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, SegmentedControl } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -16,6 +16,7 @@ import { moneyText } from '../../../costing/model'
 import { LIMIT_VIEWS, type CreditLimits, type CustomerOption, type LimitRow, type LimitView } from '../api'
 import { CREDIT_NAMESPACE, heldPhrases, usedTone, type CreditCan } from '../model'
 import { ChangeLimitDialog, type ChangeState } from './ChangeLimitDialog'
+import { UsedMeter } from './UsedMeter'
 import '../credit.css'
 
 /** SCR-151 sec:credit — Credit limits' view model (the view draws it and fetches nothing). */
@@ -111,7 +112,7 @@ function CreditSection({ model, actions }: { model: CreditLimitsModel; actions?:
     const UsedCell = ({ data }: ICellRendererParams<LimitRow>) =>
       data ? (
         <span className="fw-frc-used">
-          <ProgressBar ariaLabel={t('col.used')} value={data.usedPct} tone={usedTone(data)} showValue />
+          <UsedMeter pct={data.usedPct} label={t('col.used')} over={usedTone(data) === 'missing'} />
           <span className="fw-frv-cell-sub fw-frv-num">{moneyText(data.used ?? null, data.currency, locale)}</span>
         </span>
       ) : null

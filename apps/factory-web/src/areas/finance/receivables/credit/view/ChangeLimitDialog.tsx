@@ -75,7 +75,7 @@ export function ChangeLimitDialog({
 
   if (step === 'review' && problems.length === 0 && company && partyId) {
     return (
-      <Modal open onClose={onClose} title={t('change.confirmTitle', { name, company: company.code })} size="md">
+      <Modal open onClose={onClose} title={row ? t('change.title', { name }) : t('action.add')} subtitle={t('change.company', { company: company.code })} size="md">
         {state.problem && (
           <Banner tone="danger" title={t(state.problem)}>
             {null}

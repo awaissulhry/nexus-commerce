@@ -35,8 +35,9 @@ export function CreditLimits({ prefix }: { prefix: string }) {
   const [customers, setCustomers] = useState<CustomerOption[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<CreditLimitsModel['notice']>(null)
-  const asked = useRef({ view, q })
-  asked.current = { view, q }
+  // The address asked last, by value (a re-render must not drop the answer of the same question).
+  const asked = useRef({ view, q, key: `${view}|${q ?? ''}` })
+  asked.current = { view, q, key: `${view}|${q ?? ''}` }
 
   const load = useCallback(async () => {
     if (!can.view) return
@@ -44,11 +45,11 @@ export function CreditLimits({ prefix }: { prefix: string }) {
     const slow = setTimeout(() => setState((current) => (current.rows || current.problem ? current : { ...current, slow: true })), SLOW_MS)
     try {
       const limits = await getCreditLimits(api, { companyId, view: target.view, q: target.q })
-      if (asked.current !== target) return
+      if (asked.current.key !== target.key) return
       setState({ limits, rows: limits.rows, problem: null, slow: false })
       setUpdates(0)
     } catch (error) {
-      if (asked.current === target) setState({ limits: null, rows: null, problem: readProblem(error), slow: false })
+      if (asked.current.key === target.key) setState({ limits: null, rows: null, problem: readProblem(error), slow: false })
     } finally {
       clearTimeout(slow)
     }

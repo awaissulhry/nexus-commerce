@@ -16,3 +16,21 @@
   flex-direction: column;
   gap: var(--nds-space-12);
 }
+
+.fw-frc-meter {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-frc-meter > .nds-progress {
+  flex: 1 1 auto;
+  min-width: 40px;
+}
+
+.fw-frc-meter-num {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}

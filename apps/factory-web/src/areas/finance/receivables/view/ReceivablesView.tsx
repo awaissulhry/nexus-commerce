@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { BellRing, CheckCheck, Download, MoreHorizontal, Printer, Search, X } from 'lucide-react'
-import { Banner, EmptyState, Menu, MetricStrip, ProgressBar, type Metric } from '@nexus/ui/components'
+import { Banner, EmptyState, Menu, MetricStrip, type Metric } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, SegmentedControl, Tag } from '@nexus/ui/primitives'
 import { DateField, Modal } from '../../../../lib/i18n/ds-parts'
@@ -33,6 +33,8 @@ import {
   type StatementRef,
 } from '../model'
 import { AgeBar, dayText } from './parts'
+// B-W2b-304: the credit limit used, the same meter as Credit limits.
+import { UsedMeter } from '../credit/view/UsedMeter'
 import { ReminderDialog, type ReminderDialogState } from './ReminderDialog'
 import { StatementDialog, type StatementState } from './StatementDialog'
 import '../receivables.css'
@@ -211,7 +213,7 @@ function ReceivablesPageView({ model, actions, credit }: { model: ReceivablesMod
         data.creditLimitUsed === null ? (
           <span className="fw-frv-muted">{t('row.noCreditLimit')}</span>
         ) : (
-          <ProgressBar ariaLabel={t('col.creditUsed')} value={data.creditLimitUsed} tone={data.creditLimitUsed > 100 ? 'missing' : data.creditLimitUsed >= 80 ? 'partial' : 'complete'} showValue />
+          <UsedMeter pct={data.creditLimitUsed} label={t('col.creditUsed')} />
         )
       ) : null
     const PaymentCell = ({ data }: ICellRendererParams<AgeingRow>) => (data ? <span>{data.lastPaymentOn ? dayText(data.lastPaymentOn, locale) : t('row.noPayment')}</span> : null)

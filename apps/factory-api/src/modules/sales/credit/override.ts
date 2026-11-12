@@ -1,7 +1,7 @@
 import { DomainError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
-import { CREDIT_LIMITS, findingsOf, ORDER_STEPS, overrideResult, type CreditReading, type CreditStep } from '@nexus/factory-domain/sales/credit/credit'
+import { CREDIT_LIMITS, findingsOf, ORDER_STEPS, overrideResult, type CreditReading, type CreditResult, type CreditStep } from '@nexus/factory-domain/sales/credit/credit'
 import { SALES_CREDIT_CHECKS } from '@nexus/factory-domain/sales/credit/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf as grantsOf, type OfficeContext } from '../../../core/context'
@@ -64,7 +64,7 @@ async function planNow(db: Reader, hold: HoldRow, now: Date, askers: readonly st
   const reading: CreditReading = await readAmounts(db, { partyId: hold.partyId, companyId: hold.companyId, exclude: input.exclude, now, currency: hold.currency, limit: null, subject: subject && subject.currency === hold.currency ? subject.amount : 0 })
   const party = await db.party.findUnique({ where: { id: hold.partyId }, select: { code: true } })
   const findings = findingsOf(reading)
-  const result = findings.length === 0 ? 'PASS' : 'WARN'
+  const result: CreditResult = findings.length === 0 ? 'PASS' : 'WARN'
   return { step: input.step, partyId: hold.partyId, companyId: hold.companyId, customerCode: party?.code ?? '', reading, findings, result, words: '', approver: null }
 }
 
@@ -92,7 +92,7 @@ export async function overrideInCommand(tools: CommandTools, task: TaskRef): Pro
 }
 
 /** Re-checks a held record in a command: the new check, the old request withdrawn, a waiting order on when it passes. */
-async function checkAgainInCommand(tools: CommandTools, hold: HoldRow, note: string | null): Promise<{ checkId: string; result: string; asked: boolean; orderGoesOn: boolean }> {
+async function checkAgainInCommand(tools: CommandTools, hold: HoldRow, note: string | null): Promise<{ checkId: string; result: CreditResult; asked: boolean; orderGoesOn: boolean }> {
   const actor = actorOf(tools)
   const requester = hold.createdById ?? actor
   const askers = [...new Set([requester, actor].filter((id): id is string => id !== null))]
