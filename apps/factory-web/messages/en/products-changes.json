@@ -647,6 +647,8 @@
     "NO_DRAFT_REVISION": "Start the draft revision first, make the change there, then submit.",
     "NO_APPROVER": "Name at least one required approver other than the author.",
     "OWN_APPROVAL": "The author cannot approve their own change order (four eyes).",
+    "SELF_NAMED": "Nobody names themselves an approver: someone else names who decides it (four eyes).",
+    "OWN_REQUEST": "You raised a request this change order carries: a person who did not ask for the change decides it (four eyes).",
     "APPROVER_CANNOT": "That person’s role does not approve change orders for this company.",
     "NOT_APPROVER": "You are not an approver of this change order.",
     "ALREADY_DECIDED": "You already decided it: a decision is given once.",

@@ -34,6 +34,7 @@ import {
   ORDER_TILES,
   orderEditRefusal,
   releaseRefusal,
+  selfNamedRefusal,
   submitRefusal,
   workInProgressRefusal,
   type ApprovalFacts,
@@ -41,6 +42,7 @@ import {
   type ChangeEffect,
   type ChangeRefusal,
   type OrderTile,
+  type OwnWorkFacts,
 } from '@nexus/factory-domain/product/changes/rules'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
@@ -83,11 +85,14 @@ import {
  *   PUT   /product/change-orders/:id/requests                 the requests it carries (an open one goes into review)
  *   POST  /product/change-orders/:id/lines                    a CHANGE line (a record before → after); PATCH / DELETE one
  *   PUT   /product/change-orders/:id/work-in-progress         every open work order's line and disposition (MES-006)
- *   PUT   /product/change-orders/:id/approvers                who decides (never its author), required or not
+ *   PUT   /product/change-orders/:id/approvers                who decides (never its author; nobody names themselves),
+ *                                                             required or not
  *   POST  /product/change-orders/:id/draft-revision           W1's copy of the released revision into the next DRAFT, named
  *                                                             its proposed revision (the edit rule lets it through for it)
  *   POST  /product/change-orders/:id/submit                   SUBMITTED: what it says is fixed; its approvers are told
- *   POST  /product/change-orders/:id/decide                   product.changes.approve: the caller's own decision (four eyes);
+ *   POST  /product/change-orders/:id/decide                   product.changes.approve: the caller's own decision (four eyes:
+ *                                                             not on an approval they named themselves to, nor on a change
+ *                                                             order carrying a request they raised);
  *                                                             every required approval → APPROVED (its requests ACCEPTED);
  *                                                             one rejection → REJECTED
  *   POST  /product/change-orders/:id/cancel                   CANCELLED with why (its draft revision stays a draft)
@@ -349,6 +354,13 @@ export function setWorkInProgress(caller: CommandCaller, changeOrderId: string, 
 const approvalFactsOf = (rows: readonly { approverId: string; required: boolean; decision: string | null }[]): ApprovalFacts[] =>
   rows.map((row) => ({ approverId: row.approverId, required: row.required, decision: row.decision as ChangeDecision | null }))
 
+/** What makes a decision the decider's own work: who named them its approver, who raised each request it carries. */
+const ownWorkOf = (mine: { readonly createdById: string | null } | null, carried: readonly { readonly number: string | null; readonly createdById: string | null }[]): OwnWorkFacts => ({
+  namedById: mine?.createdById ?? null,
+  carried: carried.map((request) => ({ number: request.number, raisedById: request.createdById })),
+})
+const carriedOf = (db: Pick<CommandTx, 'changeRequest'>, changeOrderId: string) => db.changeRequest.findMany({ where: { changeOrderId }, select: { number: true, createdById: true } })
+
 /** After a decision or a change of approvers of a SUBMITTED order: APPROVED (its requests accepted) or REJECTED when settled. */
 async function settle(tools: CommandTools, order: OrderData, deciderId: string): Promise<'APPROVED' | 'REJECTED' | null> {
   const { tx, now } = tools
@@ -385,6 +397,7 @@ export async function setApprovers(caller: CommandCaller, changeOrderId: string,
     const wanted = new Map(body.approvers.map((approver) => [approver.userId, approver.required ?? true]))
     for (const userId of wanted.keys()) {
       if (current.some((approval) => approval.approverId === userId)) continue
+      refuse(selfNamedRefusal(order, actorIdOf(tools), userId))
       const user = await tx.user.findFirst({ where: { id: userId, status: 'ACTIVE' }, select: { id: true, displayName: true } })
       if (!user || !(await personMay(tx, context.tenantId, userId, PRODUCT_CHANGES_APPROVE, order.companyId, now))) {
         refuse({ code: 'APPROVER_CANNOT', message: `${user?.displayName ?? 'This person'} cannot approve change orders of this company: name someone who holds the approval of changes (product.changes.approve).` })
@@ -452,13 +465,16 @@ export async function submitOrder(caller: CommandCaller, changeOrderId: string, 
 /** POST /product/change-orders/:id/decide: the caller's own decision (four eyes). */
 export async function decideOrder(caller: CommandCaller, changeOrderId: string, body: DecideBody, idempotencyKey?: string): Promise<OrderView> {
   const { context, row: seen } = await readOrderFor(caller, changeOrderId, PRODUCT_CHANGES_APPROVE)
-  const mine = await caller.withClient((db) => db.changeApproval.findFirst({ where: { changeOrderId, approverId: context.actorId }, select: { approverId: true, required: true, decision: true } }))
-  refuse(decideRefusal(seen, mine ? approvalFactsOf([mine])[0]! : null, context.actorId, body.decision, body.reason ?? null))
+  const { mine, carried } = await caller.withClient(async (db) => ({
+    mine: await db.changeApproval.findFirst({ where: { changeOrderId, approverId: context.actorId }, select: { approverId: true, required: true, decision: true, createdById: true } }),
+    carried: await carriedOf(db, changeOrderId),
+  }))
+  refuse(decideRefusal(seen, mine ? approvalFactsOf([mine])[0]! : null, context.actorId, body.decision, body.reason ?? null, ownWorkOf(mine, carried)))
   await command(caller, { name: 'product.changes.decide', idempotencyKey, input: { changeOrderId, ...body }, record: { type: 'ChangeOrder', id: changeOrderId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const order = await tx.changeOrder.findUniqueOrThrow({ where: { id: changeOrderId }, select: ORDER_COLUMNS })
-    const approval = await tx.changeApproval.findFirst({ where: { changeOrderId, approverId: context.actorId }, select: { id: true, approverId: true, required: true, decision: true } })
-    refuse(decideRefusal(order, approval ? approvalFactsOf([approval])[0]! : null, context.actorId, body.decision, body.reason ?? null))
+    const approval = await tx.changeApproval.findFirst({ where: { changeOrderId, approverId: context.actorId }, select: { id: true, approverId: true, required: true, decision: true, createdById: true } })
+    refuse(decideRefusal(order, approval ? approvalFactsOf([approval])[0]! : null, context.actorId, body.decision, body.reason ?? null, ownWorkOf(approval, await carriedOf(tx, changeOrderId))))
     await tx.changeApproval.update({ where: { id: approval!.id }, data: { decision: body.decision, decidedAt: now, reason: body.reason ?? null, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'product.changes.decideApproval', recordType: 'ChangeApproval', recordId: approval!.id, companyId: order.companyId, before: { decision: null }, after: { decision: body.decision, decidedAt: toUtcIso(now), changeOrderId }, ...(body.reason ? { reason: body.reason } : {}) })
     const outcome = await settle(tools, order, context.actorId)
@@ -544,7 +560,7 @@ export async function readOrder(caller: CommandCaller, changeOrderId: string): P
     const [base] = await orderRowsOf(db, [row])
     const requests = await db.changeRequest.findMany({ where: { changeOrderId }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     const items = await db.changeOrderItem.findMany({ where: { changeOrderId }, orderBy: { seq: 'asc' }, select: { id: true, seq: true, kind: true, recordType: true, recordId: true, field: true, before: true, after: true, workOrderId: true, disposition: true, note: true } })
-    const approvals = await db.changeApproval.findMany({ where: { changeOrderId }, orderBy: [{ stage: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], select: { id: true, stage: true, approverId: true, required: true, decision: true, decidedAt: true, reason: true } })
+    const approvals = await db.changeApproval.findMany({ where: { changeOrderId }, orderBy: [{ stage: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], select: { id: true, stage: true, approverId: true, required: true, decision: true, decidedAt: true, reason: true, createdById: true } })
     const names = new Map((await db.user.findMany({ where: { id: { in: approvals.map((approval) => approval.approverId) } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
     const wipIds = items.filter((item) => item.kind === 'WORK_IN_PROGRESS' && item.workOrderId !== null).map((item) => item.workOrderId!)
     const seesWork = can(actorOf(context), WORKORDERS_VIEW, { companyId: row.companyId })
@@ -579,14 +595,14 @@ export async function readOrder(caller: CommandCaller, changeOrderId: string): P
           const order = wipOrders.find((each) => each.id === item.workOrderId)
           return order ? [{ id: item.id, seq: item.seq, workOrder: workOf(order), disposition: item.disposition!, note: item.note, made: made.get(order.id) ?? NOTHING_MADE }] : []
         }),
-      approvalsList: approvals.map((approval) => ({ ...approval, approverName: names.get(approval.approverId) ?? null, decision: approval.decision as ChangeDecision | null, decidedAt: approval.decidedAt ? toUtcIso(approval.decidedAt) : null })),
+      approvalsList: approvals.map(({ createdById: _namedBy, ...approval }) => ({ ...approval, approverName: names.get(approval.approverId) ?? null, decision: approval.decision as ChangeDecision | null, decidedAt: approval.decidedAt ? toUtcIso(approval.decidedAt) : null })),
       openWorkOrders: open ? open.map(workOf) : null,
       compare: row.toRevisionId ? { styleId: row.styleId, from: row.fromRevisionId, to: row.toRevisionId } : null,
       actions: {
         edit: allowed(manage ? orderEditRefusal(row) : notYours('write change orders')),
         startDraft: allowed(manage ? startDraftRefusal(row, draft) : notYours('write change orders')),
         submit: allowed(manage ? submitRefusal(row, toRevision, facts) : notYours('write change orders')),
-        decide: allowed(approve ? decideRefusal(row, mine ? approvalFactsOf([mine])[0]! : null, context.actorId, 'APPROVED', 'given') : notYours('approve change orders')),
+        decide: allowed(approve ? decideRefusal(row, mine ? approvalFactsOf([mine])[0]! : null, context.actorId, 'APPROVED', 'given', ownWorkOf(mine, requests)) : notYours('approve change orders')),
         cancel: allowed(manage ? cancelRefusal(row, 'given') : notYours('write change orders')),
         release: allowed(manage ? releaseRefusal({ number: row.number, status: row.status, effect: row.effect as ChangeEffect, effectiveDate: dayOf(row.effectiveDate) }, businessDate(new Date())) : notYours('release change orders')),
       },
