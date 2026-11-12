@@ -291,6 +291,11 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { target: text(p.countId, 40), code: text(p.code) ?? text(p.placeCode, 64) }
     case 'inventory.count.finishBin':
       return { target: text(p.countId, 40), code: text(p.placeCode, 64) }
+    // B-W2b-298: what was scanned (or the stock named) and the work order; a substitute's issue its substitute.
+    case 'inventory.pick.issue':
+      return { code: text(p.code) ?? text(p.hideId, 40) ?? text(p.lotId, 40) ?? text(p.itemId, 40), ...(workOrderId ? { workOrderId } : {}) }
+    case 'inventory.substitute.issue':
+      return { target: text(p.substitutionId, 40), code: text(p.code) }
   }
 }
 

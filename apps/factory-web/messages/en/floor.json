@@ -771,7 +771,9 @@
       "taskGiveBack": "Warehouse task given back",
       "taskDone": "Warehouse task done",
       "countScan": "Unit scanned into a count",
-      "countFinishBin": "Bin of a count finished"
+      "countFinishBin": "Bin of a count finished",
+      "pickIssue": "Issued from the pick list",
+      "substituteIssue": "Approved substitute issued"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
