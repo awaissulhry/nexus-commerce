@@ -367,6 +367,10 @@ model PlanningRun {
   /// What the run could not plan, or planned on an assumption (factory-domain planning PlanWarning), in words:
   /// [{ "code": "NO_RELEASED_BOM", "message": "…", "orderId": "…", "orderLineId": "…", "itemId": "…", "size": "52" }].
   warnings    Json              @default("[]")
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-095, the run log): a snapshot of what the run read, written while it RUNS
+  /// (then frozen with it): { "horizonWeeks": 26, "orderLines": 12, "settings": { … }, "explosion": "MULTI_LEVEL", … }; an
+  /// object (empty: not recorded, as before W2b-5).
+  inputs      Json              @default("{}")
   version     Int               @default(1)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -374,6 +378,9 @@ model PlanningRun {
 
   site         Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   requirements MaterialRequirement[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders it proposed or moved on last, its action messages.
+  plannedWorkOrders PlannedWorkOrder[]
+  actionMessages    MrpActionMessage[]
   // W2a planning.prisma: the exceptions it found first, and those it found last.
   firstExceptions PlanningException[] @relation("PlanningExceptionFirstRun")
   lastExceptions  PlanningException[] @relation("PlanningExceptionLastRun")
@@ -456,6 +463,12 @@ model MaterialRequirement {
   /// written with the line, never changed. A carried line is written firm; W2b (schema wave 2/7, B-W2a-22's need): it
   /// may be made planned again (its firm columns cleared) and keeps this as its history.
   firmCarriedFromId   String?             @db.Uuid
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-072, B-W2b-306): hard-pegged supply for a special order: the requirement is
+  /// for one sales order line only (one of its sources), with that line and its party, all or none; written by the run, or
+  /// by a planner while it is OPEN (fixed once ORDERED or IGNORED). The purchase order line made from it serves that line.
+  orderSpecific       Boolean             @default(false)
+  reservedForLineId   String?             @db.Uuid
+  reservedForPartyId  String?             @db.Uuid
   version             Int                 @default(1)
   createdAt           DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -471,6 +484,9 @@ model MaterialRequirement {
   firmSupplier      Party?                @relation("MaterialRequirementFirmSupplier", fields: [tenantId, firmSupplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   firmCarriedFrom   MaterialRequirement?  @relation("MaterialRequirementFirmCarry", fields: [tenantId, siteId, firmCarriedFromId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   firmCarriedInto   MaterialRequirement[] @relation("MaterialRequirementFirmCarry")
+  // W2b-5 (wave 41/44): the order line it is hard-pegged to (Restrict, not Prisma's SetNull default: that would also clear
+  // tenantId).
+  reservedForLine   SalesOrderLine?       @relation("MaterialRequirementReservedFor", fields: [tenantId, reservedForPartyId, reservedForLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   peggings          RequirementPegging[]
   exceptions        PlanningException[]
 

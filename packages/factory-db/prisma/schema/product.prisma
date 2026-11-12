@@ -580,6 +580,8 @@ model Style {
   inquiryLines        InquiryLine[]            @relation("InquiryLineStyle")
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders that would make it.
+  plannedWorkOrders   PlannedWorkOrder[]
   // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
   pieceRateTables     PieceRateTable[]
   // quality.prisma: the PPE register's entries about it.
@@ -698,6 +700,8 @@ model Colourway {
   inquiryLines       InquiryLine[]            @relation("InquiryLineColourway")
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders in it.
+  plannedWorkOrders PlannedWorkOrder[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
   // pricing.prisma, returns.prisma: its own prices in price lists, its repairs.
@@ -805,6 +809,8 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the planned work orders whose demand names it.
+  plannedWorkOrders PlannedWorkOrder[]
   // W2b-2 cutting.prisma (wave 13/16): its pattern pieces (frozen with it).
   patternPieces   PatternPiece[]
   // quality.prisma: the PPE register entries about garments made to it.

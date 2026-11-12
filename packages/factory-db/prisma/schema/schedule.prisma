@@ -58,6 +58,12 @@ model PlanVersion {
   previous PlanVersion?   @relation("PlanVersionPrevious", fields: [tenantId, siteId, previousId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   next     PlanVersion[]  @relation("PlanVersionPrevious")
   slots    ScheduleSlot[]
+  // W2b-5 planning-depth.prisma (wave 41/44): the changes of the working plan, the changes that published this version,
+  // the what-ifs based on it, the promises that came from it.
+  scheduleChanges  ScheduleChange[] @relation("ScheduleChangePlan")
+  publishChanges   ScheduleChange[] @relation("ScheduleChangePublished")
+  whatIfScenarios  WhatIfScenario[] @relation("WhatIfScenarioBase")
+  promises         PromiseRecord[]
 
   @@unique([tenantId, siteId, number])
   // The target of the next version's reference: a plan of the same site.
@@ -101,6 +107,12 @@ model ScheduleSlot {
   minutes              Decimal         @db.Decimal(12, 3)
   /// Why a planner kept it on an overbooked lane (the drop warning's "Keep with a reason"); null: not kept over.
   overloadReason       String?
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-139): pinned where it is: a pinned slot keeps its lane and times until it is
+  /// unpinned (a reschedule moves around it); with when and by whom, exactly while pinned. A published version's copy may
+  /// keep it (B-W2b-312 adds the three columns to the publish copy).
+  pinned               Boolean         @default(false)
+  pinnedAt             DateTime?       @db.Timestamptz(3)
+  pinnedById           String?         @db.Uuid
   note                 String?
   version              Int             @default(1)
   createdAt            DateTime        @default(now()) @db.Timestamptz(3)

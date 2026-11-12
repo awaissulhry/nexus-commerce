@@ -60,6 +60,9 @@ model SubcontractOrder {
   orderDate        DateTime               @db.Date
   /// When the goods are due back at the site.
   expectedBackDate DateTime?              @db.Date
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-164, the kit-timing popover): when the kit must leave for the work to start
+  /// on time (not after the day the goods are due back); one of the order's terms (changed while DRAFT); null: not planned.
+  kitDueAt         DateTime?              @db.Timestamptz(3)
   /// ISO 4217: the currency of its fees.
   currency         String                 @default("EUR")
   /// The sum of its operations' amounts, in minor units; fixed when it is issued (the triggers check the sum).
@@ -107,6 +110,10 @@ model SubcontractOrder {
   workOrder  WorkOrder              @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operations SubcontractOperation[]
   kitLines   SubcontractKitLine[]
+  // W2b-5 production.prisma, planning-depth.prisma (wave 41/44): the work order's operations outsourced to it, and the
+  // planned work order it was made from.
+  outsourcedOperations WorkOrderOperation[] @relation("WorkOrderOperationOutsourced")
+  plannedWorkOrders    PlannedWorkOrder[]
   // W2b (B-W2b-01): the bundles that went out with its kit, and what came back.
   bundles    SubcontractBundle[]
   receipts   SubcontractReceipt[]
