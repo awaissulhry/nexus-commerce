@@ -25,6 +25,8 @@ import {
   type DoneModel,
   type Step,
 } from '../model'
+import { RepairsCard } from '../types/repair/Steps'
+import { OTHER_GARMENT, repairItemOf } from '../types/repair/model'
 import { CasesCard } from './Cases'
 import { itemTitle } from './items'
 import { PhotoDialog } from './PhotoDialog'
@@ -48,7 +50,7 @@ export type { ClaimViewModel, ClaimActions } from '../model'
  */
 export function ReportProblemView({ model, actions }: { model: ClaimViewModel; actions?: ClaimActions }) {
   return (
-    <WithMessages namespaces={['link-claim', 'photo-kit', 'returns-remake']}>
+    <WithMessages namespaces={['link-claim', 'photo-kit', 'returns-remake', 'returns-repair']}>
       <ReportProblem model={model} actions={actions} />
     </WithMessages>
   )
@@ -117,7 +119,9 @@ function ReadProblem({ model, actions }: { model: ClaimViewModel; actions?: Clai
 }
 
 function Wizard({ page, model, actions }: { page: ClaimPage; model: ClaimViewModel; actions?: ClaimActions }) {
+  // B-W2b-342: a repair's refusal names its own catalogue (`returns-repair:…`), B-W2b-346's remake `returns-remake:…`; every other key is link-claim's.
   const t = useScopedT('link-claim')
+  const r = useT('returns-repair')
   const locale = useLocale()
   const ds = useDsWords()
   const step = model.step
@@ -166,6 +170,7 @@ function Wizard({ page, model, actions }: { page: ClaimPage; model: ClaimViewMod
         </Banner>
       )}
       {page.cases.length > 0 && <CasesCard page={page} model={model} actions={actions} compact />}
+      <RepairsCard offer={model.repairOffer ?? null} timeZone={model.timeZone} compact />
       <div className="fw-cl-band">
         <Stepper steps={steps} current={stepIndex(step)} onSelect={(index) => actions?.onStep?.(STEPS[index]!)} canSelect={(index) => index !== stepIndex(step)} className="fw-cl-stepper" />
         <div className="fw-cl-save">
@@ -220,7 +225,7 @@ function Wizard({ page, model, actions }: { page: ClaimPage; model: ClaimViewMod
                   <Spinner size={14} /> {t('send.busy')}
                 </>
               ) : (
-                t(typeKey(model.form.type, 'send'))
+                model.form.type === 'REPAIR' ? r('link.send') : t(typeKey(model.form.type, 'send'))
               )}
             </Button>
           )}
@@ -251,6 +256,7 @@ function StepBody({ step, page, model, actions }: { step: Step; page: ClaimPage;
 /** Design sec:done — the case number and the next step, how the photos went, and this link's reports. */
 function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel; model: ClaimViewModel; actions?: ClaimActions }) {
   const t = useScopedT('link-claim')
+  const r = useT('returns-repair')
   const locale = useLocale()
   const ds = useDsWords()
   const sent = done.sent
@@ -258,8 +264,11 @@ function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel
   const asked = done.form.type === 'REMAKE' ? 'REMAKE' : sent.type
   const uploads = uploadSummary(done.uploads)
   const held = sendHeldKey(page)
+  const repairItem = sent.type === 'REPAIR' ? (done.form.repair.itemKey === OTHER_GARMENT ? r('link.item.other') : itemTitle(repairItemOf(page, done.form.repair.itemKey), t)) : null
   const items =
-    sent.type === 'RETURN'
+    repairItem !== null
+      ? [[repairItem, done.form.repair.serial.trim() ? r('common.serial', { serial: done.form.repair.serial.trim() }) : null].filter(Boolean).join(' · ')]
+      : sent.type === 'RETURN'
       ? done.form.picks.map((pick) => {
           const item = page.items.find((entry) => entry.key === pick.key)
           return t('done.itemLine', { item: item ? itemTitle(item, t) : pick.key, pieces: pick.quantity })
@@ -270,11 +279,11 @@ function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel
     <div className="fw-cl-stack">
       <EndState
         tone="success"
-        title={t(typeKey(asked, 'doneTitle'), { number: sent.number })}
+        title={sent.type === 'REPAIR' ? r('link.done.title', { number: sent.number }) : t(typeKey(asked, 'doneTitle'), { number: sent.number })}
         body={sent.answerBy ? t('done.answerBy', { day: formatDate(sent.answerBy, { locale, timeZone: model.timeZone }) }) : t('done.answerWithin', { days: ANSWER_DAYS })}
-        next={[t(typeKey(asked, 'doneNext')), ...(photosLine ? [photosLine] : []), page.link.usesLeft > 0 && page.link.live ? t('done.again', { day: formatDate(page.link.expiresAt, { locale, timeZone: model.timeZone }) }) : t('done.noMore', { sender: page.sender.companyName })]}
+        next={[sent.type === 'REPAIR' ? r('link.done.next') : t(typeKey(asked, 'doneNext')), ...(photosLine ? [photosLine] : []), page.link.usesLeft > 0 && page.link.live ? t('done.again', { day: formatDate(page.link.expiresAt, { locale, timeZone: model.timeZone }) }) : t('done.noMore', { sender: page.sender.companyName })]}
         facts={[
-          { label: t('done.fact.type'), value: t(typeKey(asked, 'typeTitle')) },
+          { label: t('done.fact.type'), value: sent.type === 'REPAIR' ? r(`common.kind.${done.form.repair.kind}`) : t(typeKey(asked, 'typeTitle')) },
           { label: t(sent.type === 'RETURN' ? 'done.fact.items' : 'done.fact.item'), value: items.join(' · ') },
           ...(done.form.customerRef.trim() ? [{ label: t('done.fact.yourRef'), value: done.form.customerRef.trim() }] : []),
           ...(done.form.typedName.trim() ? [{ label: t('done.fact.by'), value: done.form.typedName.trim() }] : []),
@@ -304,6 +313,7 @@ function Done({ page, done, model, actions }: { page: ClaimPage; done: DoneModel
         )}
       </EndState>
       <CasesCard page={page} model={model} actions={actions} />
+      <RepairsCard offer={model.repairOffer ?? null} timeZone={model.timeZone} />
     </div>
   )
 }

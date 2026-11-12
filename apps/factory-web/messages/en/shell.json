@@ -57,7 +57,9 @@
       "sourcing": "RFQs & sourcing",
       "claims": "Returns & claims",
       "reportsGroup": "Reports",
-      "reports": "Purchasing reports"
+      "reports": "Purchasing reports",
+      "settingsGroup": "Settings",
+      "settings": "Purchasing settings"
     },
     "people": {
       "area": "People",

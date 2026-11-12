@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Camera, PackageOpen, Ruler, ScanLine, ShieldAlert } from 'lucide-react'
+import { Camera, PackageOpen, Ruler, ScanLine, ShieldAlert, Wrench } from 'lucide-react'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, NumberStepper, RadioCard, Select } from '@nexus/ui/primitives'
 import { Textarea } from '../../../lib/i18n/ds-parts'
@@ -26,6 +26,7 @@ import {
 } from '../model'
 import { itemFacts, itemTitle } from './items'
 import { useShown } from './shown'
+import { RepairDetailsStep, RepairItemStep, RepairReview } from '../types/repair/Steps'
 // B-W2b-346 (SAL-298, RX2:01): the remake's own steps and words.
 import { offeredTypes, REMAKE_KEYS, remakePhotoKey, typeKey } from '../types/remake/model'
 import { RemakeDetailsStep, RemakeItemStep, RemakePhotosIntro, RemakeReview } from '../types/remake/view/RemakeSteps'
@@ -40,6 +41,8 @@ const TYPE_ICON: Record<ClaimType, ReactNode> = {
   RETURN: <PackageOpen size={22} aria-hidden />,
   COMPLAINT: <ShieldAlert size={22} aria-hidden />,
   REMAKE: <Ruler size={22} aria-hidden />,
+  // B-W2b-342: a repair or an alteration (types/repair).
+  REPAIR: <Wrench size={22} aria-hidden />,
 }
 
 /** A problem under a group of choices (a fieldset): said, and read with the group. */
@@ -55,6 +58,7 @@ export function GroupError({ id, text }: { id: string; text: string | undefined 
 /** Design sec:type — What do you need? Big choice cards, each with only its own questions. */
 export function TypeStep({ page, model, actions }: StepProps) {
   const t = useScopedT('link-claim')
+  const r = useT('returns-repair')
   const { error } = useShown(model, page)
   const id = fieldId('type')
   const problem = error('type')
@@ -75,16 +79,21 @@ export function TypeStep({ page, model, actions }: StepProps) {
               title={
                 <span className="fw-cl-choice">
                   <span className="fw-cl-choice-icon">{TYPE_ICON[type]}</span>
-                  <span>{t(typeKey(type, 'typeTitle'))}</span>
+                  <span>{type === 'REPAIR' ? r('link.type.title') : t(typeKey(type, 'typeTitle'))}</span>
                 </span>
               }
-              description={(type === 'RETURN' || type === 'REMAKE') && nothingBack ? t(type === 'REMAKE' ? REMAKE_KEYS.typeNone : 'type.RETURN.none') : t(typeKey(type, 'typeBody'))}
+              description={type === 'REPAIR' ? r('link.type.body') : (type === 'RETURN' || type === 'REMAKE') && nothingBack ? t(type === 'REMAKE' ? REMAKE_KEYS.typeNone : 'type.RETURN.none') : t(typeKey(type, 'typeBody'))}
             />
           ))}
         </div>
         <GroupError id={id} text={problem} />
       </fieldset>
-      <p className="fw-cl-hint">{t(offeredTypes(page).includes('REMAKE') ? REMAKE_KEYS.later : 'type.later', { sender: page.sender.companyName })}</p>
+      <p className="fw-cl-hint">
+        {/* B-W2b-342 + B-W2b-346: the hint names only what this page does not offer. */}
+        {page.types.includes('REPAIR')
+          ? r(offeredTypes(page).includes('REMAKE') ? 'link.type.laterSafety' : 'link.type.later', { sender: page.sender.companyName })
+          : t(offeredTypes(page).includes('REMAKE') ? REMAKE_KEYS.later : 'type.later', { sender: page.sender.companyName })}
+      </p>
     </>
   )
 }
@@ -106,6 +115,7 @@ export function SerialField({ id, value, error, onChange, onScan }: { id: string
 
 /** Design sec:item — Which item, from the order's items: what comes back (pieces, serial), or the one item of a complaint. */
 export function ItemStep({ page, model, actions }: StepProps) {
+  if (model.form.type === 'REPAIR') return <RepairItemStep page={page} model={model} actions={actions} />
   if (model.form.type === 'REMAKE') return <RemakeItemStep page={page} model={model} actions={actions} />
   return model.form.type === 'COMPLAINT' ? <ComplaintItem page={page} model={model} actions={actions} /> : <ReturnItems page={page} model={model} actions={actions} />
 }
@@ -240,6 +250,7 @@ export function DetailsStep({ page, model, actions }: StepProps) {
       <Input id={fieldId('customerRef')} value={form.customerRef} autoComplete="off" onChange={(event) => actions?.onField?.('customerRef', event.target.value)} />
     </Field>
   )
+  if (form.type === 'REPAIR') return <RepairDetailsStep page={page} model={model} actions={actions} />
   if (form.type === 'REMAKE') return <RemakeDetailsStep page={page} model={model} actions={actions} />
   if (form.type === 'COMPLAINT') {
     return (
@@ -381,6 +392,7 @@ export function Summary({ title, step, actions, children }: { title: string; ste
 /** Design sec:review — Check and send, on one screen: what you need, the items, what you told us, the photos, your name. */
 export function ReviewStep({ page, model, actions }: StepProps) {
   const t = useScopedT('link-claim')
+  const r = useT('returns-repair')
   const locale = useLocale()
   const { error } = useShown(model, page)
   const form = model.form
@@ -389,9 +401,11 @@ export function ReviewStep({ page, model, actions }: StepProps) {
   return (
     <>
       <Summary title={t('review.what')} step="type" actions={actions}>
-        <p className="fw-cl-value">{form.type ? t(typeKey(form.type, 'typeTitle')) : none}</p>
+        <p className="fw-cl-value">{form.type === 'REPAIR' ? r('link.type.title') : form.type ? t(typeKey(form.type, 'typeTitle')) : none}</p>
       </Summary>
-      {form.type === 'REMAKE' ? (
+      {form.type === 'REPAIR' ? (
+        <RepairReview page={page} model={model} actions={actions} />
+      ) : form.type === 'REMAKE' ? (
         <RemakeReview page={page} model={model} actions={actions} />
       ) : form.type === 'RETURN' ? (
         <>

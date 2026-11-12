@@ -215,6 +215,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   ApprovalTask: '/home/approvals?open=[id]',
   // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
   Inquiry: '/sales/inquiries/[id]',
+  // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
+  DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
 })
 
 /**

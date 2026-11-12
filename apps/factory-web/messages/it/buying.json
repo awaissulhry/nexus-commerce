@@ -256,7 +256,9 @@
       "SEVERAL_SUPPLIERS_one": "{count} materiale ha più fornitori nelle distinte: si propone il fornitore abituale.",
       "SEVERAL_SUPPLIERS_other": "{count} materiali hanno più fornitori nelle distinte: si propongono i fornitori abituali.",
       "SUB_ASSEMBLY_one": "{count} sottoassieme sotto una riga d’ordine non si può esplodere (taglia, variante colore o unità): quello che c’è sotto non è pianificato.",
-      "SUB_ASSEMBLY_other": "{count} sottoassiemi sotto righe d’ordine non si possono esplodere (taglia, variante colore o unità): quello che c’è sotto non è pianificato."
+      "SUB_ASSEMBLY_other": "{count} sottoassiemi sotto righe d’ordine non si possono esplodere (taglia, variante colore o unità): quello che c’è sotto non è pianificato.",
+      "LATE_one": "{count} riga d’ordine è in ritardo: pianificata da oggi, con il ritardo indicato.",
+      "LATE_other": "{count} righe d’ordine sono in ritardo: pianificate da oggi, con il ritardo indicato su ognuna."
     },
     "heldNotice_one": "{count} riga è in mancanza anche se esiste scorta che il piano non può usare",
     "heldNotice_other": "{count} righe sono in mancanza anche se esiste scorta che il piano non può usare",

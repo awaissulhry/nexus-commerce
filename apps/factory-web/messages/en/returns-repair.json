@@ -1,0 +1,240 @@
+{
+  "common": {
+    "kind": {
+      "question": "What do you need?",
+      "REPAIR": "Repair",
+      "REPAIRBody": "Something is damaged or worn: a seam, a zip, a panel, a protector.",
+      "ALTERATION": "Alteration",
+      "ALTERATIONBody": "A change of fit or of a detail, for example longer sleeves."
+    },
+    "problem": "What is wrong",
+    "problemHint": "Where it is on the garment and how it happened.",
+    "workWanted": "The work you want",
+    "workWantedHint": "For example 'add 2 cm to the sleeves'.",
+    "noPayment": "No payment details here: we send you an estimate first, and we start only once you accept it.",
+    "yourMove": "Your move:",
+    "opened": "Asked on {day}",
+    "serial": "Serial {serial}",
+    "size": "size {size}",
+    "garmentUnknown": "A garment of yours",
+    "stage": {
+      "AWAITING_GOODS": "Waiting for your garment",
+      "RECEIVED": "Received",
+      "ESTIMATED": "Estimate sent",
+      "APPROVED": "Approved",
+      "IN_REPAIR": "In repair",
+      "REPAIRED": "Repaired",
+      "SHIPPED": "Sent back",
+      "CANCELLED": "Cancelled"
+    },
+    "step": {
+      "RECEIVED": "Received",
+      "ESTIMATED": "Estimated",
+      "APPROVED": "Approved",
+      "IN_REPAIR": "In repair",
+      "REPAIRED": "Repaired",
+      "SHIPPED": "Sent back"
+    },
+    "next": {
+      "SEND_GARMENT": "Send us the garment with a transport document (DDT); we look at it as soon as it arrives.",
+      "WE_ESTIMATE": "We look at the garment and send you an estimate.",
+      "ANSWER_ESTIMATE": "Read the estimate and accept or decline it.",
+      "WE_DECIDE": "You declined the estimate: we write to you with a new one or send the garment back.",
+      "WE_REPAIR": "We repair the garment.",
+      "WE_CHECK": "We check the repaired garment before it goes back.",
+      "ON_ITS_WAY": "The garment is on its way back to you.",
+      "DONE": "The garment went back to you.",
+      "CANCELLED": "This request is cancelled."
+    }
+  },
+  "check": {
+    "item": "Pick the garment to repair, or 'Another garment'.",
+    "serial": "Type the serial on the garment's label (or scan it).",
+    "long": "At most {max} characters.",
+    "problem": "Say what is wrong with the garment.",
+    "workWanted": "Say the work you want."
+  },
+  "refusal": {
+    "serial": "This serial cannot be used: check the label.",
+    "open": "This garment is with us for a repair already",
+    "openBody": "Follow that repair instead, or write to us if it is another garment."
+  },
+  "link": {
+    "type": {
+      "title": "Repair or alteration",
+      "body": "A repair after a fall or wear, or a change of fit ('add 2 cm to the sleeve').",
+      "later": "For a remake or a safety incident, write to {sender} for now.",
+      "laterSafety": "For a safety incident, write to {sender} for now."
+    },
+    "item": {
+      "legend": "The garment to repair",
+      "other": "Another garment",
+      "otherBody": "Not in this delivery: type the serial on its label.",
+      "serialNeeded": "Needed for another garment: it is on the label inside."
+    },
+    "send": "Send the repair request",
+    "done": {
+      "title": "Repair request {number} sent",
+      "next": "Send us the garment with a transport document (DDT). We look at it and send you an estimate before any work."
+    },
+    "repairs": {
+      "title_one": "Your repair request by this link",
+      "title_other": "Your {count} repair requests by this link",
+      "hint": "Where they stand. The estimate is answered in your portal, or tell us by phone or mail."
+    }
+  },
+  "portal": {
+    "start": {
+      "typeBody": "A repair after a fall or wear, or a change of fit. You send the garment; we send an estimate first.",
+      "garment": "The garment",
+      "garmentHint": "One of what we delivered, or another garment by the serial on its label.",
+      "garmentPick": "Pick the garment",
+      "garmentOther": "Another garment (by its serial)",
+      "review": "Your repair request",
+      "photosAfter": "Add at least 2 photos of the damage on the request's page once it is sent.",
+      "send": "Send the repair request",
+      "sent": "Repair request {number} sent",
+      "sentPhotos": "Add photos of the damage on the request's page: they help us estimate it.",
+      "sentNext": "Send us the garment with a transport document (DDT). We send an estimate before any work.",
+      "open": "Open the repair"
+    },
+    "list": {
+      "title": "Your repairs",
+      "hint": "Repairs and alterations you asked for, newest first.",
+      "failed": "Your repairs could not be read.",
+      "open": "Open repair {number}"
+    },
+    "record": {
+      "title": "{kind} {number}",
+      "tabs": "Sections of the repair",
+      "status": "Status",
+      "request": "Request",
+      "missing": "Repair not found"
+    },
+    "keys": {
+      "tabs": "Move between the sections",
+      "close": "Close a pop-up"
+    },
+    "next": {
+      "forYou": "Next step for you",
+      "ours": "What we do next"
+    },
+    "notice": {
+      "hide": "Hide",
+      "accepted": "You accepted the estimate of {number}: we start the work.",
+      "declined": "You declined the estimate of {number}: we write to you."
+    },
+    "status": {
+      "where": "Where it is",
+      "steps": "Repair {number} progress",
+      "sendTo": "Send the garment to",
+      "sendToHint": "Put the number {number} on the transport document (DDT) that travels with it."
+    },
+    "estimate": {
+      "title": "Estimate",
+      "none": "No estimate yet: we send one once we have looked at the garment.",
+      "noneClosed": "No estimate was made for this repair.",
+      "revision": "Estimate {revision}",
+      "noPrices": "Your access does not show prices: the parts and the work are listed without them.",
+      "lines": "Parts and work",
+      "col": {
+        "what": "Part or work",
+        "quantity": "Quantity",
+        "minutes": "Work time",
+        "price": "Price",
+        "total": "Total"
+      },
+      "kind": {
+        "PART": "Part",
+        "LABOUR": "Work"
+      },
+      "minutesValue": "{minutes} min",
+      "total": "Total",
+      "labour": "Work time",
+      "validUntil": "Valid until",
+      "noEnd": "No end date",
+      "sent": "Sent",
+      "ourWords": "Our note",
+      "ask": "We start the work only once you accept the estimate.",
+      "accept": "Accept the estimate",
+      "decline": "Decline",
+      "answered": {
+        "ACCEPTED": "Accepted on {at} ({via})",
+        "DECLINED": "Declined on {at} ({via})"
+      },
+      "via": {
+        "LINK": "by link",
+        "PORTAL": "in the portal",
+        "OFFICE": "told to our office"
+      },
+      "yourReason": "Your reason: {reason}"
+    },
+    "request": {
+      "what": "What you asked",
+      "opened": "Asked on",
+      "via": "How",
+      "channel": {
+        "OFFICE": "Through our office",
+        "PORTAL": "In the portal",
+        "LINK": "By a link we sent"
+      },
+      "garment": "The garment",
+      "photos": "Photos of the damage",
+      "photosHint": "At least {count} photos help us estimate the repair.",
+      "photosHintAlteration": "Photos of the fit help, but are not needed.",
+      "noPhotos": "No photos yet.",
+      "photoAdded": "Added on {date}",
+      "view": "View",
+      "addPhotos": "Add photos"
+    },
+    "held": {
+      "busy": "Wait: we are sending it.",
+      "offline": "No connection: try again once you are back online.",
+      "photos": {
+        "PREVIEW": "A preview reads the portal; it never acts for the customer.",
+        "NO_REQUEST": "Your access lets you follow your repairs, not change them.",
+        "NO_UPLOAD": "Your access does not let you send files: ask your admin.",
+        "STAGE": "The work has started: photos are added before it.",
+        "FULL": "This repair holds {max} of your photos already: write to us."
+      },
+      "answer": {
+        "NOT_ASKED": "No estimate waits for your answer.",
+        "PREVIEW": "A preview reads the portal; it never acts for the customer.",
+        "NO_REQUEST": "Your access lets you follow your repairs, not answer an estimate: ask your admin.",
+        "NO_PRICES": "Your access does not show prices: someone who sees them answers the estimate.",
+        "EXPIRED": "The estimate's last day has passed: ask us for a new one."
+      }
+    },
+    "accept": {
+      "title": "Accept estimate {revision}?",
+      "amount": "You accept {amount} for this repair.",
+      "what": "You accept the estimate of repair {number}.",
+      "work": "We start the work and tell you when it goes back.",
+      "confirm": "Accept the estimate",
+      "busy": "Sending…",
+      "undo": "Write to us before the work starts"
+    },
+    "decline": {
+      "title": "Decline estimate {revision}?",
+      "what": "We will write to you with a new estimate, or send the garment back as it is.",
+      "reason": "Why do you decline it?",
+      "reasonHint": "Your words help us make a better offer.",
+      "needed": "Say why you decline it.",
+      "keep": "Keep it",
+      "confirm": "Decline the estimate",
+      "busy": "Sending…"
+    },
+    "problem": {
+      "internal": "Something went wrong on our side. Try again.",
+      "forbidden": "Your access does not let you do this.",
+      "missing": "This repair is no longer yours or no longer exists.",
+      "changed": "The repair changed meanwhile: we read it again. Check it and try again.",
+      "invalid": "This could not be sent as it is.",
+      "tooMany": "Too many tries: wait a minute and try again.",
+      "unavailable": "No connection: try again.",
+      "photoType": "A photo: JPEG, PNG, WebP or HEIC.",
+      "photoSize": "A photo of at most 15 MB."
+    },
+    "unsaved": "the repair you are answering"
+  }
+}
