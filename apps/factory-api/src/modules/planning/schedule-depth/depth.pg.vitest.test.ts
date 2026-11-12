@@ -83,7 +83,7 @@ const audits = async (action: string) => admin<{ recordType: string; after: Json
 
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'], now: NOW })
-  db = await migratedDatabase('planning_schedule_depth')
+  db = await migratedDatabase('plan_sched_depth')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 6 } })
   await seedCore({ db: database, namespace: NS })
   await seedCalendar({ db: database, namespace: NS })
