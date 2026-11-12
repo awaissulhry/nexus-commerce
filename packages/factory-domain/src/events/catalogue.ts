@@ -216,6 +216,8 @@ import { events as lotsDepth } from '../lots-depth/events'
 import { events as suppliersDepth } from '../suppliers-depth/events'
 // B-W2b-292: the warehouse task inbox.
 import { events as inventoryTasks } from '../inventory-tasks/events'
+// B-W2b-299: counts in depth (a unit scanned into a count, a count schedule changed or counted).
+import { events as inventoryCounts } from '../inventory-counts/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -498,7 +500,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-311
   ...suppliersDepth,
   // B-W2b-292
-  ...inventoryTasks] as const satisfies readonly EventDefinition[]
+  ...inventoryTasks,
+  // B-W2b-299
+  ...inventoryCounts] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -90,6 +90,9 @@ export const WHAT_KEY = {
   'inventory.task.take': 'taskTake',
   'inventory.task.giveBack': 'taskGiveBack',
   'inventory.task.done': 'taskDone',
+  // B-W2b-299: a unit scanned into a count and a bin finished (the Count screen is B-W2b-310's).
+  'inventory.count.scan': 'countScan',
+  'inventory.count.finishBin': 'countFinishBin',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

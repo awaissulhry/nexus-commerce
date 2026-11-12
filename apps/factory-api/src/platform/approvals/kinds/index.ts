@@ -8,6 +8,8 @@ import { STOCK_ADJUSTMENT_KIND } from './stock-adjustment'
 import { PURCHASE_REQUEST_KIND } from './purchase-request'
 // B-W2b-341: a return line credited without the goods coming back.
 import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
+// B-W2b-299: a stock count's differences, before they are approved.
+import { COUNT_VARIANCE_KIND } from './count-variance'
 
 /**
  * The approval kinds the engine knows (B-W2b-282): one file per kind (./kind.ts says what it gives). A later step adds its
@@ -19,6 +21,7 @@ import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
  *   STOCK_ADJUSTMENT an adjustment worth more than the warehouse rules' value, posted on the yes (B-W2b-314)
  *   PURCHASE_REQUEST a request to buy from someone in the office, before the buyer sees it (B-W2b-332)
  *   CREDIT_WITHOUT_RETURN  a return line credited without the goods coming back (B-W2b-341; the credit written on the yes)
+ *   COUNT_VARIANCE   a submitted stock count's differences (B-W2b-299; approved on the yes, sent back for a recount on the no)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
@@ -28,6 +31,8 @@ const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_REQUEST_KIND,
   // B-W2b-341
   CREDIT_WITHOUT_RETURN_KIND,
+  // B-W2b-299
+  COUNT_VARIANCE_KIND,
 ])
 
 function registry(kinds: readonly ApprovalKindDefinition[]): Map<ApprovalTaskKind, ApprovalKindDefinition> {
