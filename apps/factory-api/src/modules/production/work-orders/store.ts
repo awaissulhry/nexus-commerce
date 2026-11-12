@@ -6,6 +6,7 @@ import { whenWords } from '@nexus/factory-domain/planning/schedule/time'
 import type { OrderLineFacts } from '@nexus/factory-domain/production/work-orders/cells'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import type { PlannedOperation } from '@nexus/factory-domain/production/work-orders/spec'
+import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 
@@ -186,12 +187,13 @@ export interface LineRow extends OrderLineFacts {
 /**
  * These order lines with their size grids and orders, and the pieces of each size already on work orders that are not
  * CANCELLED, other than `exceptWorkOrderId`. A REPAIR work order's cell (B-W2a-12, MES-019) repairs a garment the line
- * sold: it is not production of the line and never counts here.
+ * sold: it is not production of the line and never counts here. W2b-5 (B-W2b-280): a FEE line is never made, so it is
+ * not read here (the callers find no such line).
  */
 export async function readOrderLines(db: Reader, lineIds: readonly string[], exceptWorkOrderId?: string): Promise<Map<string, LineRow>> {
   const ids = [...new Set(lineIds)].filter(isUuid)
   if (ids.length === 0) return new Map()
-  const lines = await db.salesOrderLine.findMany({
+  const found = await db.salesOrderLine.findMany({
     where: { id: { in: ids } },
     select: {
       id: true,
@@ -210,6 +212,7 @@ export async function readOrderLines(db: Reader, lineIds: readonly string[], exc
       priority: true,
     },
   })
+  const lines = found.filter(isGoodsLine)
   if (lines.length === 0) return new Map()
   const sizes = await db.salesOrderLineSize.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, size: true, quantity: true }, orderBy: { id: 'asc' } })
   const taken = await db.workOrderSize.groupBy({

@@ -18,7 +18,8 @@
     "PARTLY_SHIPPED": "Spedito in parte",
     "SHIPPED": "Spedito",
     "CLOSED": "Chiuso",
-    "CANCELLED": "Annullato"
+    "CANCELLED": "Annullato",
+    "PENDING_APPROVAL": "In attesa di approvazione"
   },
   "deposit": {
     "NOT_NEEDED": "Non serve",
@@ -92,6 +93,7 @@
     "SHIPPED": "Spediti",
     "CLOSED": "Chiusi",
     "CANCELLED": "Annullati",
+    "PENDING_APPROVAL": "In attesa di approvazione",
     "all": "Tutti gli ordini"
   },
   "tile": {
