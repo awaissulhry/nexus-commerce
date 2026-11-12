@@ -77,6 +77,7 @@
     "TERMS_VERSION": "Give your terms a version, so the acceptance records which ones were accepted.",
     "NO_BANK_DETAILS": "The company has no bank details yet: the deposit instructions follow separately.",
     "PROOF_NOT_READY": "A proof is still uploading, being checked or was refused (Documents › Proofs): finish it or remove it.",
+    "BELOW_MINIMUM": "A line is under a minimum order quantity of its style, kind of garment or material (Lines): add pieces, or ask the customer.",
     "pass": {
       "approval": "Approval done or not needed",
       "validity": "Validity set",

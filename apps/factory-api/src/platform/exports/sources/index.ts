@@ -58,6 +58,8 @@ import { productChanges } from './product-changes'
 // B-W2b-240: Products › Libraries › Sizes & measurements › Points of measure and Grade rules (B-W2b-224's reads).
 import { pointsOfMeasure } from './points-of-measure'
 import { gradeRules } from './grade-rules'
+// B-W2b-325: Sales › Pricing › Price lists.
+import { priceLists } from './price-lists'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -128,4 +130,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   // B-W2b-240: Products › Libraries › Sizes & measurements › Points of measure and Grade rules.
   pointsOfMeasure,
   gradeRules,
+  // B-W2b-325: Sales › Pricing › Price lists (a version's prices go out as its file, in the price import's columns).
+  priceLists,
 ])

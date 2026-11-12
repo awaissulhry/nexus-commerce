@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
-import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
+import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { costingCurrency } from '@nexus/factory-domain/costing/inputs'
@@ -32,6 +32,8 @@ export const LIST_COLUMNS = {
   name: true,
   kind: true,
   currency: true,
+  // B-W2b-325 (SAL-170): the customer's documents show the discount, or only the net price.
+  showDiscount: true,
   baseListId: true,
   note: true,
   status: true,
@@ -59,7 +61,8 @@ export const VERSION_COLUMNS = {
 } as const satisfies Prisma.PriceListVersionSelect
 export type ListVersionRow = Prisma.PriceListVersionGetPayload<{ select: typeof VERSION_COLUMNS }>
 
-export const ENTRY_COLUMNS = { id: true, versionId: true, styleId: true, colourwayId: true, unitPrice: true, version: true } as const satisfies Prisma.PriceListEntrySelect
+// B-W2b-325 (SAL-167): validFrom / validTo, the days a price holds inside its version.
+export const ENTRY_COLUMNS = { id: true, versionId: true, styleId: true, colourwayId: true, unitPrice: true, validFrom: true, validTo: true, version: true } as const satisfies Prisma.PriceListEntrySelect
 export type EntryRow = Prisma.PriceListEntryGetPayload<{ select: typeof ENTRY_COLUMNS }>
 
 export const LIST_SCOPE = { company: { field: 'companyId', nullable: true } } as const
@@ -145,6 +148,8 @@ export async function listRowsOf(db: Reader, lists: readonly ListRow[], today: B
       name: row.name,
       kind: row.kind as PriceListKind,
       currency: row.currency,
+      // B-W2b-325 (SAL-170)
+      showDiscount: row.showDiscount,
       baseList: row.baseListId ? (bases.get(row.baseListId) ?? { id: row.baseListId, code: '', name: '' }) : null,
       state: listStateOf(row.status as 'ACTIVE' | 'ARCHIVED', facts, today),
       status: row.status as 'ACTIVE' | 'ARCHIVED',
@@ -227,10 +232,14 @@ export async function entriesViewOf(db: Reader, context: RequestContext, list: P
       standardCost: asMoney('cost', cost),
       marginPct: asMoney('margin', margin),
       belowFloor: asMoney('margin', margin !== null && floor !== null && new Dec(margin).lt(new Dec(floor))),
+      // B-W2b-325 (SAL-167): the days the price holds (null and null: the whole version).
+      validFrom: dayText(entry.validFrom),
+      validTo: dayText(entry.validTo),
       version: entry.version,
     }
   })
-  return rows.sort((a, b) => (a.style.code < b.style.code ? -1 : a.style.code > b.style.code ? 1 : (a.colourway?.code ?? '') < (b.colourway?.code ?? '') ? -1 : 1))
+  // B-W2b-325: a style's dated prices in day order (an open start first).
+  return rows.sort((a, b) => (a.style.code < b.style.code ? -1 : a.style.code > b.style.code ? 1 : (a.colourway?.code ?? '') < (b.colourway?.code ?? '') ? -1 : (a.colourway?.code ?? '') > (b.colourway?.code ?? '') ? 1 : (a.validFrom ?? '') < (b.validFrom ?? '') ? -1 : 1))
 }
 
 // ---- the price chain a quote reads its list prices from (SAL-165) --------------------------------------------------------
@@ -247,6 +256,8 @@ export interface PriceChainStart {
   readonly day: BusinessDate
   /** Only these styles' prices are read (a line's style); undefined: every price. */
   readonly styleIds?: readonly string[] | undefined
+  /** B-W2b-325 (SAL-167): the day a dated price must hold on (the quote's date); default `day`. */
+  readonly entryDay?: BusinessDate | undefined
 }
 
 export interface PriceChain {
@@ -291,7 +302,9 @@ export async function priceChainOf(db: Reader, start: PriceChainStart): Promise<
   const versions = await versionsOf(db, lists.map((row) => row.id))
   const chosen = lists.map((list, index) => (index === 0 && pinned && pinned.listId === list.id ? pinned : (inForceOn(versions.filter((row) => row.listId === list.id).map((row) => ({ ...versionFactsOf(row), row })), start.day)?.row ?? null)))
   const versionIds = chosen.flatMap((row) => (row ? [row.id] : []))
-  const entries = versionIds.length === 0 ? [] : await db.priceListEntry.findMany({ where: { versionId: { in: versionIds }, ...(start.styleIds ? { styleId: { in: [...start.styleIds] } } : {}) }, select: ENTRY_COLUMNS })
+  const allEntries = versionIds.length === 0 ? [] : await db.priceListEntry.findMany({ where: { versionId: { in: versionIds }, ...(start.styleIds ? { styleId: { in: [...start.styleIds] } } : {}) }, select: ENTRY_COLUMNS })
+  // B-W2b-325 (SAL-167): only the prices that hold on the document's day (a dated price outside its days prices nothing).
+  const entries = allEntries.filter((entry) => entryHoldsOn(entry, start.entryDay ?? start.day))
   return {
     levels: lists.map((list, index) => ({
       listId: list.id,
@@ -301,4 +314,38 @@ export async function priceChainOf(db: Reader, start: PriceChainStart): Promise<
     keptVersionId: pinned && first?.id === pinned.listId ? pinned.id : (chosen.find((row) => row !== null)?.id ?? null),
     lists: lists.map((list, index) => ({ id: list.id, code: list.code, name: list.name, kind: list.kind as PriceListKind, versionId: chosen[index]?.id ?? null, revision: chosen[index]?.revision ?? null })),
   }
+}
+
+// ---- B-W2b-325: dated prices, and what the next version copies (breaks, surcharges, days) ------------------------------
+
+/** A price holds on a day (SAL-167): from its first day (or the version's start) to its last (or the version's end). */
+export const entryHoldsOn = (entry: Pick<EntryRow, 'validFrom' | 'validTo'>, day: BusinessDate): boolean => {
+  const from = dayText(entry.validFrom)
+  const to = dayText(entry.validTo)
+  return (from === null || from <= day) && (to === null || to >= day)
+}
+
+/**
+ * W2a's price write (PUT …/entries) keys a price by style and colourway: a style with dated prices in the version is
+ * changed through …/dated-prices instead (which price of the style a cell means is not known), refused in words.
+ */
+export function refuseDatedKeys(existing: readonly EntryRow[], entries: readonly { readonly styleId: string; readonly colourwayId: string | null }[]): void {
+  const dated = new Set(existing.filter((entry) => entry.validFrom !== null || entry.validTo !== null).map((entry) => `${entry.styleId}:${entry.colourwayId ?? '*'}`))
+  const issues = entries.flatMap((entry, index) => (dated.has(`${entry.styleId}:${entry.colourwayId ?? '*'}`) ? [{ path: `body/entries/${index}`, message: 'This style has prices by date in the version: change them under dated prices (PUT …/dated-prices), each with its days.' }] : []))
+  if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
+}
+
+/**
+ * "Make next version" copies a version's prices WITH their days, quantity breaks (each to the copy of its price) and the
+ * version's size surcharges, so a new season starts from everything the last one held. Inside the caller's command.
+ */
+export async function copyVersionParts(tx: CommandTx, fromVersionId: string, toVersionId: string, stamp: { readonly createdAt: Date; readonly updatedAt: Date; readonly createdById: string | null }): Promise<{ readonly entries: number; readonly breaks: number; readonly surcharges: number }> {
+  const entries = await tx.priceListEntry.findMany({ where: { versionId: fromVersionId }, select: ENTRY_COLUMNS })
+  const copyOf = new Map(entries.map((entry) => [entry.id, newId()]))
+  if (entries.length > 0) await tx.priceListEntry.createMany({ data: entries.map((entry) => ({ id: copyOf.get(entry.id)!, versionId: toVersionId, styleId: entry.styleId, colourwayId: entry.colourwayId, unitPrice: entry.unitPrice, validFrom: entry.validFrom, validTo: entry.validTo, ...stamp })) })
+  const breaks = await tx.priceBreak.findMany({ where: { versionId: fromVersionId }, select: { entryId: true, minQuantity: true, unitPrice: true, discountPct: true } })
+  if (breaks.length > 0) await tx.priceBreak.createMany({ data: breaks.map((row) => ({ id: newId(), versionId: toVersionId, entryId: row.entryId === null ? null : (copyOf.get(row.entryId) ?? null), minQuantity: row.minQuantity, unitPrice: row.unitPrice, discountPct: row.discountPct, ...stamp })) })
+  const surcharges = await tx.sizeSurcharge.findMany({ where: { versionId: fromVersionId }, select: { styleId: true, size: true, surchargeAmount: true, currency: true, surchargePct: true } })
+  if (surcharges.length > 0) await tx.sizeSurcharge.createMany({ data: surcharges.map((row) => ({ id: newId(), versionId: toVersionId, styleId: row.styleId, size: row.size, surchargeAmount: row.surchargeAmount, currency: row.currency, surchargePct: row.surchargePct, ...stamp })) })
+  return { entries: entries.length, breaks: breaks.length, surcharges: surcharges.length }
 }

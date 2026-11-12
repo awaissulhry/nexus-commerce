@@ -20,9 +20,16 @@ export interface QuoteListPrice extends ListPrice {
 }
 
 /** The chain of a quote version (its company, currency, customer's list, kept version), read today. */
-export function chainForQuote(db: Reader, quote: Pick<QuoteRow, 'companyId'>, version: Pick<VersionRow, 'currency' | 'priceListVersionId'>, party: QuoteParty, now: Date, styleIds?: readonly string[]): Promise<PriceChain> {
-  return priceChainOf(db, { companyId: quote.companyId, currency: version.currency, partyListId: party.row.priceListId, pinnedVersionId: version.priceListVersionId, day: businessDate(now), styleIds })
+export function chainForQuote(db: Reader, quote: Pick<QuoteRow, 'companyId'>, version: Pick<VersionRow, 'currency' | 'priceListVersionId'> & DatedVersion, party: QuoteParty, now: Date, styleIds?: readonly string[]): Promise<PriceChain> {
+  return priceChainOf(db, { companyId: quote.companyId, currency: version.currency, partyListId: party.row.priceListId, pinnedVersionId: version.priceListVersionId, day: businessDate(now), styleIds, entryDay: quoteDayOf(version) })
 }
+
+// B-W2b-325 (SAL-167): a dated price is the one that holds on the quote's date — the day its version was made (a new
+// version, a duplicate, a manual order: today), so every line of one version takes the same season's price.
+interface DatedVersion {
+  readonly createdAt?: Date | undefined
+}
+const quoteDayOf = (version: DatedVersion): string | undefined => (version.createdAt instanceof Date ? businessDate(version.createdAt) : undefined)
 
 /** The VAT rate a GROSS (consumer) quote's list price takes: the customer's standard treatment, when taxable. */
 function rateOf(party: QuoteParty): string | null {
