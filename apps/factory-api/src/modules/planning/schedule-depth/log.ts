@@ -42,6 +42,11 @@ const NO_LANE = { lineId: null, workCentreId: null, partyId: null }
 /** Writes the rows (one statement) in the command's transaction. */
 export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: string, changes: readonly LoggedChange[], actorId: string, now: Date): Promise<void> {
   if (changes.length === 0) return
+  // B-W2b-329: the database refuses a changedAt more than 5 minutes after its own clock: a row takes the command's time, or the
+  // database's when the app's clock runs more than a minute ahead of it (a skewed server, a test's fixed clock), so the log never
+  // refuses the change it records.
+  const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`
+  const at = clock && now.getTime() - clock.now.getTime() > 60_000 ? clock.now : now
   await tx.scheduleChange.createMany({
     data: changes.map((change) => {
       const from = change.from ? laneColumns(change.from.lane) : NO_LANE
@@ -69,8 +74,8 @@ export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: st
         publishedVersionId: change.publishedVersionId ?? null, // B-W2b-329
         undoesChangeId: change.undoesChangeId ?? null, // B-W2b-329
         changedById: actorId,
-        changedAt: now,
-        createdAt: now,
+        changedAt: at,
+        createdAt: at,
         createdById: actorId,
       }
     }),

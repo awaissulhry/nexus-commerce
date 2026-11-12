@@ -279,7 +279,7 @@ describe('day sheets per line, the board as a sheet, a published version to read
     expect(sheet.rows[0].cells[8]).toMatch(/^Running \d\/7$/)
     expect(sheet.footer).toMatch(/^Total: \d pieces · [\d.]+ min · load [\d.]+% \(/)
     // The working plan on another day, a work centre too: marked, and the floor's version named.
-    const centre = (await admin<{ id: string }>(`SELECT id FROM "WorkCentre" WHERE "tenantId" = $1 AND code = 'QC'`, [T]))[0]!.id
+    const centre = (await admin<{ id: string }>(`SELECT id FROM "WorkCentre" WHERE "tenantId" = $1 AND "siteId" = $2 AND code = 'QC'`, [T, siteA1]))[0]!.id
     const working = await ok('viewer', 'GET', `/planning/schedule/day-sheets/paper?siteId=${siteA1}&date=2026-11-18&plan=WORKING&lineIds=${lineL1}&workCentreIds=${centre}`)
     expect(working.sheets.map((entry: Json) => [entry.heading.split(' · ')[0], entry.banner, entry.rows.length])).toEqual([
       ['Linea L1', 'Piano di lavoro non ancora pubblicato al reparto: il reparto lavora con v2.', 0],
