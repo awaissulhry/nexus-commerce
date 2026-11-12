@@ -462,6 +462,8 @@ const decisionLine = input({
   /** Minor units: the credit value (price grain). */
   creditAmount: money.price(z.number().int().min(0).nullish()),
   toLocationId: id().nullish(),
+  /** B-W2b-346 (SAL-351): SIZE_EXCHANGE: the size the customer gets instead (one of the style's other sizes). */
+  exchangeSize: z.string().max(40).nullish(),
 })
 
 export const previewDecisionsContract = defineContract({

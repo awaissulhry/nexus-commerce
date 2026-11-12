@@ -43,6 +43,8 @@ import { orderDetail, type OrderDetail } from './views'
 import { closeConfirmTasks } from './portal-orders/tasks'
 import { refreshCompanyValue } from './po-depth/value'
 import { assertNoNewOrder } from './suppliers-depth/store'
+// B-W2b-305: a waiting order's request is withdrawn when the order is cancelled.
+import { withdrawPending } from '../../platform/approvals/engine'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053; A2 SCR-058 "Purchase orders", SCR-059 the record): the list, the record, a
@@ -533,6 +535,8 @@ export async function cancelOrder(caller: CommandCaller, orderId: string, body: 
     const reach = await reachOf(tx, current, (await endLineFactsOf(tx, current)).filter((line) => !line.cancelled && !line.closedShort))
     const revoked = told ? await revokeConfirmLinks(tools, current, context.actorId) : []
     const reopened = await reopenPlanLines(tools, current.id)
+    // B-W2b-305: the request a waiting order asked is taken back with it (by the person cancelling; its hook makes it a draft first).
+    if (from === 'PENDING_APPROVAL') await withdrawPending(tools, { kind: 'PURCHASE_ORDER', recordId: current.id, byId: context.actorId, words: reason })
     await tx.purchaseOrder.update({ where: { id: current.id }, data: { status: 'CANCELLED', cancelledAt: now, cancelReason: reason }, select: { id: true } })
     // B-W2b-174: nothing is left for the supplier to confirm.
     await closeConfirmTasks(tools, current.id, 'CANCELLED')

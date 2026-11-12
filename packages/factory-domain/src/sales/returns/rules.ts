@@ -42,7 +42,8 @@ export const RETURN_GRADES = ['NEW', 'LIKE_NEW', 'GOOD', 'DAMAGED', 'UNUSABLE'] 
 export type ReturnGrade = (typeof RETURN_GRADES)[number]
 export const RETURN_CAUSES = ['OUR_DEFECT', 'TRANSIT', 'MISUSE', 'WEAR', 'NO_FAULT'] as const
 export type ReturnCause = (typeof RETURN_CAUSES)[number]
-export const RETURN_DISPOSITIONS = ['REPAIR', 'REMAKE', 'REPLACE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP'] as const
+// B-W2b-346 (SAL-351): SIZE_EXCHANGE, the same garment in another size (ReturnLine.exchangeSize) on the replacement order.
+export const RETURN_DISPOSITIONS = ['REPAIR', 'REMAKE', 'REPLACE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP', 'SIZE_EXCHANGE'] as const
 export type ReturnDisposition = (typeof RETURN_DISPOSITIONS)[number]
 export const GOODS_OUTCOMES = ['RESTOCK', 'SECOND_QUALITY', 'QUARANTINE', 'REPAIR', 'SCRAP', 'BACK_TO_CUSTOMER'] as const
 export type GoodsOutcome = (typeof GOODS_OUTCOMES)[number]
@@ -240,6 +241,8 @@ export const OUTCOMES_BY_DISPOSITION: Readonly<Record<ReturnDisposition, readonl
   CREDIT_ONLY: ['RESTOCK', 'SECOND_QUALITY', 'QUARANTINE', 'REPAIR', 'SCRAP'],
   RETURN_UNCHANGED: ['BACK_TO_CUSTOMER'],
   SCRAP: ['SCRAP'],
+  // B-W2b-346 (SAL-351): the returned goods go where a Replace's go.
+  SIZE_EXCHANGE: ['RESTOCK', 'SECOND_QUALITY', 'QUARANTINE', 'REPAIR', 'SCRAP'],
 })
 
 /** The outcomes that put the goods into stock (a stock move into a place of the site). */
@@ -251,7 +254,7 @@ export type ReturnFollowUp = (typeof RETURN_FOLLOW_UPS)[number]
 
 export function followUpOf(disposition: ReturnDisposition, creditAmount: number): ReturnFollowUp | null {
   if (disposition === 'REPAIR') return 'REPAIR_ORDER'
-  if (disposition === 'REPLACE') return 'REPLACEMENT_ORDER'
+  if (disposition === 'REPLACE' || disposition === 'SIZE_EXCHANGE') return 'REPLACEMENT_ORDER'
   if (disposition === 'RETURN_UNCHANGED') return 'RETURN_DDT'
   return creditAmount > 0 ? 'CREDIT_NOTE' : null
 }
@@ -319,6 +322,7 @@ const DISPOSITION_WORDS: Readonly<Record<ReturnDisposition, string>> = {
   CREDIT_ONLY: 'Credit only',
   RETURN_UNCHANGED: 'Return unchanged',
   SCRAP: 'Scrap',
+  SIZE_EXCHANGE: 'Size exchange',
 }
 const OUTCOME_WORDS: Readonly<Record<GoodsOutcome, string>> = {
   RESTOCK: 'go back into stock',
@@ -476,7 +480,7 @@ export function returnActions(facts: ActionFacts): ActionState[] {
   const open = facts.lines.some((line) => line.received < line.quantity)
   const toGrade = received.filter((line) => !line.graded)
   const toDecide = received.filter((line) => line.graded && line.disposition === null)
-  const replace = received.filter((line) => line.disposition === 'REPLACE' && !line.replaced)
+  const replace = received.filter((line) => (line.disposition === 'REPLACE' || line.disposition === 'SIZE_EXCHANGE') && !line.replaced)
   const back = received.filter((line) => line.disposition === 'RETURN_UNCHANGED' || line.goodsOutcome === 'BACK_TO_CUSTOMER')
   const undecided = received.filter((line) => line.disposition === null)
   const held = (action: ReturnAction, why: string | null): ActionState => ({ action, allowed: why === null, held: why })
@@ -529,7 +533,9 @@ export function closeWarningsOf(lines: readonly CloseWarningLine[], liveReturnDd
   const add = (code: CloseWarningCode, path: string, found: readonly CloseWarningLine[], words: string) => {
     if (found.length > 0) warnings.push({ code, path, lineIds: found.map((line) => line.id), seqs: found.map((line) => line.seq), message: `${seqWords(found)} ${words}` })
   }
-  add('REPLACE_WITHOUT_ORDER', 'replacementOrder', lines.filter((line) => line.disposition === 'REPLACE' && !line.replaced), `${lines.filter((line) => line.disposition === 'REPLACE' && !line.replaced).length === 1 ? 'is' : 'are'} decided Replace and no replacement order was made.`)
+  // B-W2b-346: a size exchange waits for its replacement line as a Replace does.
+  const toReplace = lines.filter((line) => (line.disposition === 'REPLACE' || line.disposition === 'SIZE_EXCHANGE') && !line.replaced)
+  add('REPLACE_WITHOUT_ORDER', 'replacementOrder', toReplace, `${toReplace.length === 1 ? 'is' : 'are'} decided Replace and no replacement order was made.`)
   const back = lines.filter((line) => line.disposition === 'RETURN_UNCHANGED' || line.goodsOutcome === 'BACK_TO_CUSTOMER')
   if (!liveReturnDdt) add('BACK_WITHOUT_DDT', 'ddt', back, `${back.length === 1 ? 'goes' : 'go'} back unchanged and no return DDT is issued yet (it can still be issued after the close).`)
   const repair = lines.filter((line) => line.disposition === 'REPAIR' && line.received > 0 && line.repairs < line.received)

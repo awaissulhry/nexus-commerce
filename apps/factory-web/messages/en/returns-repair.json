@@ -63,7 +63,8 @@
     "type": {
       "title": "Repair or alteration",
       "body": "A repair after a fall or wear, or a change of fit ('add 2 cm to the sleeve').",
-      "later": "For a remake or a safety incident, write to {sender} for now."
+      "later": "For a remake or a safety incident, write to {sender} for now.",
+      "laterSafety": "For a safety incident, write to {sender} for now."
     },
     "item": {
       "legend": "The garment to repair",

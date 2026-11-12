@@ -7,7 +7,7 @@ import { fieldProblem, photosInForm, problemsOf, type ClaimViewModel, type Probl
 
 /** Where to show a problem: the API's refusal first, then the page's own check once the step's Continue was pressed. */
 export function useShown(model: ClaimViewModel, page: ClaimPage) {
-  // B-W2b-342: a repair's problems name their own catalogue (`returns-repair:…`); every other key is link-claim's.
+  // B-W2b-346 / B-W2b-342: scoped, so a remake's `returns-remake:` and a repair's `returns-repair:` keys say their words too.
   const t = useScopedT('link-claim')
   const problems = useMemo(() => problemsOf(model.form, page, photosInForm(model.form, model.photos)), [model.form, model.photos, page])
   return useMemo(() => {

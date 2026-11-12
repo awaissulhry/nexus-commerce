@@ -20,12 +20,14 @@ import { DocumentsTab } from './DocumentsTab'
 import { KitTab } from './KitTab'
 import { OperationsTab } from './OperationsTab'
 import { useSay } from './parts'
+import { DEPTH } from '../../depth/model'
 import '../../../../_shared/buying/buying.css'
 import '../record.css'
 
 export type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
 
-export const RECORD_NAMESPACES = ['subcontracting', 'subcontract-order', 'lists', 'records'] as const
+// B-W2b-344: the depth tabs' words (../../depth).
+export const RECORD_NAMESPACES = ['subcontracting', 'subcontract-order', 'lists', 'records', DEPTH] as const
 
 /**
  * SCR-128 record — a subcontract order (design purchasing.subcontracting "Record: Subcontract order"; 00 §2.2; Owner L1:
@@ -110,6 +112,7 @@ function journeyLine(index: number, t: (key: string, params?: Record<string, str
 function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions; panels?: ReactNode }) {
   const t = useT('subcontract-order')
   const sc = useT('subcontracting')
+  const depth = useT(DEPTH)
   const sayWords = useSay()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -146,7 +149,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrde
     if (tab === 'documents') return order.ddts.length + 1
     return null
   }
-  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({ id: tab, href: `${recordHref}?tab=${tab}`, label: t(`tab.${tab}`), count: tabCount(tab) }))
+  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({ id: tab, href: `${recordHref}?tab=${tab}`, label: tab === 'balance' || tab === 'cost' ? depth(`tab.${tab}`) : t(`tab.${tab}`), count: tabCount(tab) }))
 
   const button = (act: OrderAction, variant: 'primary' | 'secondary') => (
     <Button key={act} size="sm" variant={variant} heldReason={held(act)} onClick={() => open(act)}>
@@ -268,6 +271,8 @@ function ReadyRecord({ order, model, actions, panels }: { order: SubcontractOrde
           {model.tab === 'ops' && <OperationsTab order={order} model={model} actions={actions} />}
           {model.tab === 'kit' && <KitTab order={order} model={model} actions={actions} />}
           {model.tab === 'back' && <BackTab order={order} model={model} actions={actions} />}
+          {model.tab === 'balance' && model.depth?.balance}
+          {model.tab === 'cost' && model.depth?.cost}
           {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-by-hint">{t('record.noPanels')}</p>)}
         </div>

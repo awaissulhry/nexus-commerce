@@ -22,8 +22,9 @@ import { putToStore, readFromStore, sha256Hex } from '../../record-panels/store'
  * The token travels only in `x-factory-link` (the client the link landing made).
  */
 
+// B-W2b-346 (SAL-298, RX2:01): beside the API's types the page offers a remake (types/remake), sent to its own route.
 /** B-W2b-342: the page also offers a repair or an alteration (its own routes, types/repair/api.ts) when the API does. */
-export const CLAIM_TYPES = [...CASE_TYPES, 'REPAIR'] as const
+export const CLAIM_TYPES = [...CASE_TYPES, 'REMAKE', 'REPAIR'] as const
 export type ClaimType = (typeof CLAIM_TYPES)[number]
 export const OUTCOMES = OUTCOMES_WANTED
 export type Outcome = (typeof OUTCOMES_WANTED)[number]
@@ -104,6 +105,8 @@ export type ClaimBody =
       note: string | null
     }
   | { type: 'COMPLAINT'; typedName: string | null; description: string; salesOrderLineId: string | null; size: string | null; serial: string | null; batchNumber: string | null; customerRef: string | null }
+  // B-W2b-346: a remake (types/remake/model.ts remakeBodyOf); `type` stays on the page, the route is its own.
+  | { type: 'REMAKE'; typedName: string | null; lines: Array<{ invoiceLineId: string | null; salesOrderLineId: string | null; size: string | null; quantity: number; serial: string | null }>; fit: string; customerRef: string | null }
 
 /** `GET /link/claim?language=`. */
 export function readClaimPage(api: ApiClient, language: 'it' | 'en', signal?: AbortSignal): Promise<ClaimPage> {
@@ -112,6 +115,11 @@ export function readClaimPage(api: ApiClient, language: 'it' | 'en', signal?: Ab
 
 /** `POST /link/claim`: the case is made and the page comes back with `sent`. The same key on a retry replays it. */
 export function sendClaim(api: ApiClient, body: ClaimBody, language: 'it' | 'en', idempotencyKey: string): Promise<ClaimPage & { sent: ClaimSent }> {
+  // B-W2b-346: a remake goes to its own route (modules/sales/returns-outcomes), the body without the page's `type`.
+  if (body.type === 'REMAKE') {
+    const { type: _type, ...remake } = body
+    return api.post('/link/claim/remake', { query: { language }, body: remake, schema: submittedSchema, idempotencyKey })
+  }
   return api.post('/link/claim', { query: { language }, body, schema: submittedSchema, idempotencyKey })
 }
 

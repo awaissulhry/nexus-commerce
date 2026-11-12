@@ -19,6 +19,8 @@ import type {
   ReturnRequestBody,
   Words,
 } from './api'
+// B-W2b-346 (SAL-298, RX2:02): the remake's own checks.
+import { remakeDirty, remakeStartProblems } from './remake/model'
 
 /**
  * SCR-187 — the customer's Returns & claims (B-W2b-197; design portal.customer.returns), pure: the addresses, the tabs,
@@ -188,8 +190,8 @@ export function sendPhotosHeld(picked: readonly PickedPhoto[], held: string | nu
 
 // ── start a return or a claim ────────────────────────────────────────────────────────────────────────────────────────
 export type StartStep = 'type' | 'details' | 'review'
-/** B-W2b-342: what the start asks — a return, a quality complaint, or a repair or alteration (./repair). */
-export type StartType = CaseType | 'REPAIR'
+/** B-W2b-342 / B-W2b-346: what the start asks — a return, a quality complaint, a repair or alteration (./repair) or a remake (SAL-298, RX2:02; remake/model.ts). */
+export type StartType = CaseType | 'REMAKE' | 'REPAIR'
 export interface StartLine {
   picked: boolean
   quantity: string
@@ -209,11 +211,14 @@ export interface StartDraft extends RepairDraft {
   serial: string
   batchNumber: string
   description: string
+  /** B-W2b-346 REMAKE: the one item (a returnable key) and what is wrong with the fit (the serial is `serial`). */
+  remakeKey: string
+  fit: string
   /** Next was pressed with problems: they show at their fields. */
   tried: boolean
 }
 
-export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', tried: false, ...EMPTY_REPAIR_DRAFT }
+export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', remakeKey: '', fit: '', tried: false, ...EMPTY_REPAIR_DRAFT }
 
 export const LIMITS = { reasonNote: 500, serial: 60, customerRef: 80, note: 2000, description: 4000, batchNumber: 60, lines: 50 } as const
 
@@ -251,6 +256,8 @@ export function startProblems(draft: StartDraft, read: ReturnableRead | null): R
   // B-W2b-342: the repair's fields (their keys name the returns-repair catalogue).
   if (draft.type === 'REPAIR') Object.assign(problems, repairStartProblems(draft, read))
   if (draft.customerRef.trim().length > LIMITS.customerRef) problems.customerRef = 'start.problem.long'
+  // B-W2b-346: a remake's own problems (keys of `returns-remake`).
+  if (draft.type === 'REMAKE') Object.assign(problems, remakeStartProblems(draft, read))
   return problems
 }
 
@@ -275,7 +282,7 @@ export function complaintBodyOf(draft: StartDraft, read: ReturnableRead | null):
 /** The draft holds typed work (closing asks Discard / Stay; leaving the page asks first). */
 export const startDirty = (draft: StartDraft): boolean =>
   draft.type !== null &&
-  (Object.values(draft.lines).some((line) => line.picked) || repairDirty(draft) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
+  (Object.values(draft.lines).some((line) => line.picked) || repairDirty(draft) || remakeDirty(draft) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
 
 /** The next step of the start, or the problems that hold it (shown at their fields). */
 export function nextStep(draft: StartDraft, read: ReturnableRead | null): { step: StartStep } | { problems: Record<string, string> } {

@@ -294,7 +294,8 @@
     "REPLACE": "Una sostituzione",
     "CREDIT_ONLY": "Una nota di credito",
     "RETURN_UNCHANGED": "Ti viene rispedito com'è arrivato",
-    "SCRAP": "Non viene rispedito"
+    "SCRAP": "Non viene rispedito",
+    "SIZE_EXCHANGE": "Lo stesso capo in un’altra taglia"
   },
   "outcome": {
     "REPLACE": "Una sostituzione",

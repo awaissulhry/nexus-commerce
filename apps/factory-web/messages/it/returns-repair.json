@@ -63,7 +63,8 @@
     "type": {
       "title": "Riparazione o modifica",
       "body": "Una riparazione dopo una caduta o per usura, o un cambio di vestibilità ('allungare la manica di 2 cm').",
-      "later": "Per un rifacimento o un incidente di sicurezza, per ora scrivi a {sender}."
+      "later": "Per un rifacimento o un incidente di sicurezza, per ora scrivi a {sender}.",
+      "laterSafety": "Per un incidente di sicurezza, per ora scrivi a {sender}."
     },
     "item": {
       "legend": "Il capo da riparare",

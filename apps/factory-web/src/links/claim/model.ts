@@ -6,6 +6,8 @@ import { ANSWER_WORKING_DAYS, CASE_LIMITS } from '@nexus/factory-domain/sales/po
 import { isApiError, issuePath, type ApiIssue } from '../../lib/api/errors'
 import type { LinkState } from '../../shell/links/link-state'
 import { CASE_STATES, CLAIM_TYPES, OUTCOMES, type ClaimBody, type ClaimItem, type ClaimPage, type ClaimSent, type ClaimType, type Outcome } from './api'
+// B-W2b-346 (SAL-298, RX2:01): the remake's own rules.
+import { offeredTypes, REMAKE_KEYS, REMAKE_PHOTOS_NEEDED, remakeBodyOf, remakeProblems } from './types/remake/model'
 import type { RepairOffer } from './types/repair/api'
 import { EMPTY_REPAIR, repairDraftSchema, repairFromDraft, repairIssueProblem, repairPhotosNeeded, repairProblems, type RepairForm } from './types/repair/model'
 
@@ -69,11 +71,13 @@ export interface ClaimForm {
   description: string
   customerRef: string
   typedName: string
+  /** B-W2b-346 REMAKE: what is wrong with the fit (its one item is `picks[0]`). */
+  fit: string
   /** B-W2b-342: REPAIR — the garment, a repair or an alteration, what is wrong, the work wanted (types/repair). */
   repair: RepairForm
 }
 
-export const EMPTY_FORM: ClaimForm = Object.freeze({ type: null, picks: [], outcomeWanted: null, note: '', itemKey: null, serial: '', batchNumber: '', description: '', customerRef: '', typedName: '', repair: EMPTY_REPAIR }) as ClaimForm
+export const EMPTY_FORM: ClaimForm = Object.freeze({ type: null, picks: [], outcomeWanted: null, note: '', itemKey: null, serial: '', batchNumber: '', description: '', customerRef: '', typedName: '', fit: '', repair: EMPTY_REPAIR }) as ClaimForm
 
 /** A photo taken on this page (its bytes stay with the container until the send; `src` shows it). */
 export interface PhotoShot {
@@ -116,7 +120,7 @@ export const returnableCount = (page: Pick<ClaimPage, 'items'>): number => page.
 
 /** The photo groups of the form: one per item that comes back, or the complaint's one. */
 export function photoGroups(form: ClaimForm): string[] {
-  if (form.type === 'RETURN') return form.picks.map((pick) => pick.key)
+  if (form.type === 'RETURN' || form.type === 'REMAKE') return form.picks.map((pick) => pick.key)
   if (form.type === 'COMPLAINT' || form.type === 'REPAIR') return [CASE_GROUP]
   return []
 }
@@ -125,6 +129,8 @@ export function photoGroups(form: ClaimForm): string[] {
 export function photosNeeded(form: ClaimForm, group: string): number {
   if (form.type === 'COMPLAINT') return group === CASE_GROUP ? DAMAGE_PHOTOS : 0
   if (form.type === 'REPAIR') return group === CASE_GROUP ? repairPhotosNeeded(form.repair) : 0
+  // B-W2b-346: a remake's item needs its front and back.
+  if (form.type === 'REMAKE') return form.picks.some((pick) => pick.key === group) ? REMAKE_PHOTOS_NEEDED : 0
   const pick = form.picks.find((entry) => entry.key === group)
   return pick?.reasonCode && DAMAGE_REASONS.includes(pick.reasonCode) ? DAMAGE_PHOTOS : 0
 }
@@ -135,8 +141,9 @@ export function photosNeeded(form: ClaimForm, group: string): number {
  */
 export function problemsOf(form: ClaimForm, page: Pick<ClaimPage, 'items' | 'reasons' | 'types'>, photos: readonly Pick<PhotoShot, 'group'>[]): Problem[] {
   const problems: Problem[] = []
-  if (form.type === null || !page.types.includes(form.type)) return [{ step: 'type', field: 'type', key: 'check.type' }]
-  if (form.type === 'RETURN') {
+  if (form.type === null || !offeredTypes(page).includes(form.type)) return [{ step: 'type', field: 'type', key: 'check.type' }]
+  if (form.type === 'REMAKE') problems.push(...remakeProblems(form, page, LIMITS.serial))
+  else if (form.type === 'RETURN') {
     if (form.picks.length === 0) problems.push({ step: 'item', field: 'items', key: returnableCount(page) === 0 ? 'check.nothingBack' : 'check.items' })
     if (form.picks.length > LIMITS.lines) problems.push({ step: 'item', field: 'items', key: 'check.manyItems', params: { max: LIMITS.lines } })
     for (const pick of form.picks) {
@@ -172,7 +179,7 @@ export function problemsOf(form: ClaimForm, page: Pick<ClaimPage, 'items' | 'rea
   for (const group of photoGroups(form)) {
     const needed = photosNeeded(form, group)
     const have = photos.filter((photo) => photo.group === group).length
-    if (have < needed) problems.push({ step: 'photos', field: `photos.${group}`, key: 'check.photos', params: { count: needed - have, needed } })
+    if (have < needed) problems.push({ step: 'photos', field: `photos.${group}`, key: form.type === 'REMAKE' ? REMAKE_KEYS.checkPhotos : 'check.photos', params: { count: needed - have, needed } })
   }
   if (tooLong(form.typedName, LIMITS.typedName)) problems.push({ step: 'review', field: 'typedName', key: 'check.long', params: { max: LIMITS.typedName } })
   return problems
@@ -193,6 +200,7 @@ const trimmed = (value: string): string | null => (blank(value) ? null : value.t
 
 /** The body the API takes for the form (call it once `problemsOf` is empty). */
 export function bodyOf(form: ClaimForm, page: Pick<ClaimPage, 'items'>): ClaimBody {
+  if (form.type === 'REMAKE') return remakeBodyOf(form, page)
   const typedName = trimmed(form.typedName)
   if (form.type === 'RETURN') {
     return {
@@ -264,6 +272,8 @@ const draftDataSchema = z.object({
     description: z.string().max(8000),
     customerRef: z.string().max(400),
     typedName: z.string().max(400),
+    // B-W2b-346: a draft kept before the remake came has none.
+    fit: z.string().max(8000).default(''),
     repair: repairDraftSchema.optional(),
   }),
 })
@@ -290,7 +300,7 @@ export function formFromDraft(data: unknown, page: Pick<ClaimPage, 'items' | 're
     return [{ ...pick, quantity: Math.min(Math.max(1, pick.quantity), item.canReturn), reasonCode: pick.reasonCode && reasons.has(pick.reasonCode) ? pick.reasonCode : null }]
   })
   const itemKey = saved.itemKey === WHOLE_DELIVERY || complaintItems(page).some((item) => item.key === saved.itemKey) ? saved.itemKey : null
-  const form: ClaimForm = { ...saved, type: saved.type && page.types.includes(saved.type) ? saved.type : null, picks, itemKey, repair: repairFromDraft(saved.repair, page) }
+  const form: ClaimForm = { ...saved, type: saved.type && offeredTypes(page).includes(saved.type) ? saved.type : null, picks: saved.type === 'REMAKE' ? picks.slice(0, 1).map((pick) => ({ ...pick, quantity: 1 })) : picks, itemKey, repair: repairFromDraft(saved.repair, page) }
   if (!worthKeeping(form)) return null
   return { form, step: form.type === null ? 'type' : read.data.step }
 }
@@ -324,6 +334,7 @@ export function issueProblem(issue: ApiIssue, form: ClaimForm): Problem {
   }
   if (path.startsWith('body/lines')) return { step: 'item', field: 'items', key: 'check.items' }
   if (path === 'body/description') return { step: 'details', field: 'description', key: 'check.description' }
+  if (path === 'body/fit') return { step: 'details', field: 'fit', key: REMAKE_KEYS.checkFit }
   if (path === 'body/customerRef' || path === 'body/note' || path === 'body/outcomeWanted') return { step: 'details', field: path.slice(5), key: 'refusal.field' }
   if (path === 'body/salesOrderLineId' || path === 'body/size') return { step: 'item', field: 'complaintItem', key: 'check.complaintItem' }
   if (path === 'body/serial' || path === 'body/batchNumber') return { step: 'item', field: path.slice(5), key: 'refusal.field' }
@@ -439,7 +450,7 @@ export interface ClaimActions {
   onTogglePick?: (key: string) => void
   onPick?: (key: string, change: Partial<Omit<ReturnPick, 'key'>>) => void
   onComplaintItem?: (key: string) => void
-  onField?: (field: 'serial' | 'batchNumber' | 'description' | 'customerRef' | 'note' | 'typedName', value: string) => void
+  onField?: (field: 'serial' | 'batchNumber' | 'description' | 'customerRef' | 'note' | 'typedName' | 'fit', value: string) => void
   onOutcome?: (outcome: Outcome | null) => void
   /** B-W2b-342: a change of the repair's part of the form. */
   onRepair?: (change: Partial<RepairForm>) => void

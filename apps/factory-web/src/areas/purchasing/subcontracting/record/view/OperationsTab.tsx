@@ -46,6 +46,8 @@ export function OperationsTab({ order, model, actions }: { order: SubcontractOrd
   const editable = order.status === 'DRAFT' && model.can.manage
   return (
     <div className="fw-by-stack">
+      {/* B-W2b-344: the written terms that cover the order (../../depth). */}
+      {model.depth?.terms}
       {editable ? (
         <div className="fw-by-head">
           <span className="fw-by-hint">{t('ops.draftHint')}</span>

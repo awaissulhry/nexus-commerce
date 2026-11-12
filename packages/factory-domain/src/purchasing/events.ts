@@ -346,4 +346,47 @@ export const events = [
     payload: z.strictObject({ toleranceId: z.uuid(), companyId: z.uuid().nullable(), action: z.enum(['CREATED', 'UPDATED', 'ARCHIVED', 'REACTIVATED']) }),
     live: { permission: 'purchasing.view', fields: ['toleranceId', 'companyId', 'action'] },
   }),
+  // B-W2b-305: PO approvals (the order waits for a rule's yes, is sent with it, or is a draft again), duplicate, chase.
+  defineEvent({
+    type: 'purchase_order.approval_asked',
+    context: 'purchasing',
+    description: 'A purchase order matched an approval rule at its send: it waits for a yes (PENDING_APPROVAL) and nothing in it changes meanwhile.',
+    payload: z.strictObject({ ...base, taskId: z.uuid(), revision: z.number().int().min(1) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.approved',
+    context: 'purchasing',
+    description: 'The purchase order waiting for a yes was approved: it is sent to its supplier right after (the worker), with the words of its send.',
+    payload: z.strictObject({ ...base, taskId: z.uuid() }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.approval_ended',
+    context: 'purchasing',
+    description: 'The request for a yes on a purchase order was refused, taken back or found changed: the order is a draft again.',
+    payload: z.strictObject({ ...base, taskId: z.uuid(), outcome: z.enum(['REJECTED', 'WITHDRAWN', 'STALE']) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.send_held',
+    context: 'purchasing',
+    description: "An approved purchase order could not be sent with its yes (a send check failed, or the person who asked can no longer send it): it waits for the buyer's Send.",
+    payload: z.strictObject({ ...base, taskId: z.uuid(), codes: z.array(z.string().min(1).max(60)).max(40) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.copied',
+    context: 'purchasing',
+    description: 'A new draft purchase order was made from the lines of another one (duplicate or reorder).',
+    payload: z.strictObject({ ...base, fromPurchaseOrderId: z.uuid(), fromNumber: z.string().min(1).max(40), lines: z.number().int().min(1).max(200) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.chased',
+    context: 'purchasing',
+    description: 'The supplier was chased by mail for lines of a purchase order that are late, unconfirmed or confirmed later than needed.',
+    payload: z.strictObject({ ...base, lineIds: z.array(z.uuid()).min(1).max(200), outboundId: z.uuid() }),
+    live,
+  }),
 ] as const

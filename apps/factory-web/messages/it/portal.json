@@ -300,6 +300,8 @@
       "portal_supplierDocuments_view": "Vedere i documenti che chiediamo e inviarli",
       "portal_supplierProfile_view": "Vedere i dati aziendali, gli indirizzi e i contatti",
       "portal_supplierProfile_change": "Inviare modifiche di indirizzi e contatti",
+      "portal_supplierBank_view": "Vedere le vostre coordinate bancarie (mascherate)",
+      "portal_supplierBank_propose": "Proporre nuove coordinate bancarie (le verifichiamo prima di ogni pagamento)",
       "portal_returns_view": "Vedere i tuoi resi e reclami",
       "portal_returns_request": "Chiedere un reso o segnalare un problema di qualità",
       "portal_complaints_view": "Seguire i tuoi reclami di qualità",
