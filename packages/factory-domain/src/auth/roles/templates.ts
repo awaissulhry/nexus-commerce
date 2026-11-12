@@ -55,6 +55,8 @@ import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions
 import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-312: scheduling in depth (the planner and the production manager pin the board).
 import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
+// B-W2b-317: the backlog ranked (the planner and the production manager rank it).
+import { PLANNING_BACKLOG_ADDS } from '../../planning/backlog/permissions'
 // B-W2b-321: work to subcontractors.
 import { PLANNING_SUBCONTRACT_ADDS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
@@ -977,6 +979,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_SUBCONTRACT_ADDS[key] ?? []) : []),
   // B-W2b-312
   ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
+  // B-W2b-317
+  ...(audience === 'office' ? (PLANNING_BACKLOG_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
