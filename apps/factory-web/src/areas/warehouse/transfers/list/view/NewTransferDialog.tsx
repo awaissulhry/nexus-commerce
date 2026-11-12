@@ -99,10 +99,10 @@ export function NewTransferDialog({ model, can, actions }: { model: NewTransferM
               </Select>
             </Field>
             <Field label={t('new.shipOn')}>
-              <DateField value={draft.shipOn} clearable onChange={(value) => actions?.onDraft?.({ shipOn: value })} />
+              <DateField value={draft.shipOn ?? ''} clearable onChange={(value) => actions?.onDraft?.({ shipOn: value || null })} />
             </Field>
             <Field label={t('new.expectedOn')}>
-              <DateField value={draft.expectedOn} clearable onChange={(value) => actions?.onDraft?.({ expectedOn: value })} />
+              <DateField value={draft.expectedOn ?? ''} clearable onChange={(value) => actions?.onDraft?.({ expectedOn: value || null })} />
             </Field>
             {from && from.transitPlaces.length > 1 && (
               <Field label={t('new.transit')} required hint={t('new.transitHint')}>

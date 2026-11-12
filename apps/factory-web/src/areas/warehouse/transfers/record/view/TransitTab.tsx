@@ -100,7 +100,7 @@ export function TransitTab({ transfer, model, actions }: { transfer: TransferVie
           {transfer.actions.track.allowed ? (
             <div className="fw-trf-form-grid">
               <Field label={t('transit.expected')}>
-                <DateField value={transfer.expectedOn} clearable onChange={(value) => actions?.onSaveTracking?.({ expectedOn: value })} />
+                <DateField value={transfer.expectedOn ?? ''} clearable onChange={(value) => actions?.onSaveTracking?.({ expectedOn: value || null })} />
               </Field>
               <Field label={t('transit.trackingRef')}>
                 <Input size="sm" value={tracking.ref} maxLength={100} disabled={!!trackHeld} onChange={(event) => setTracking((now) => ({ ...now, ref: event.target.value }))} />

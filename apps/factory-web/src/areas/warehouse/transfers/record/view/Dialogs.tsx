@@ -137,7 +137,7 @@ function ShipDialog({ transfer, model, dialog, actions }: { transfer: TransferVi
             <Input size="sm" value={draft.appearance} maxLength={200} onChange={(event) => set({ appearance: event.target.value })} />
           </Field>
           <Field label={t('ship.expected')}>
-            <DateField value={draft.expectedOn} clearable onChange={(value) => set({ expectedOn: value })} />
+            <DateField value={draft.expectedOn ?? ''} clearable onChange={(value) => set({ expectedOn: value || null })} />
           </Field>
           <Field label={t('ship.trackingRef')}>
             <Input size="sm" value={draft.trackingRef} maxLength={100} onChange={(event) => set({ trackingRef: event.target.value })} />
