@@ -112,10 +112,10 @@ afterAll(async () => {
 
 describe('the rules per item on the item parameters (PLN-006, PLN-008, PLN-081, PLN-082)', { timeout: 90_000 }, () => {
   it('keeps lot sizing, scrap and yield and the delay days with W2a’s fields, in words; refuses what breaks a rule', async () => {
-    const created = await ok('buyer', 'POST', '/planning/item-parameters', { siteId: A.siteA1, itemId: A.leather, itemColourId: A.leatherBLK, lotSizing: 'FIXED', fixedLotQty: '105', scrapPct: '5', delayDays: 2 }, 201, key())
+    const created = await ok('buyer', 'POST', '/planning/item-parameters', { siteId: A.siteA1, itemId: A.leather, itemColourId: A.leatherBLK, lotSizing: 'FIXED', fixedLotQty: '315', scrapPct: '5', delayDays: 2 }, 201, key())
     leatherRow = created.parameters
-    expect(leatherRow).toMatchObject({ method: 'ORDERS', lotSizing: 'FIXED', fixedLotQty: '105.0000', lotPeriodDays: null, planLevel: null, scrapPct: '5.00', yieldPct: null, delayDays: 2, version: 1 })
-    expect(leatherRow.rules).toMatchObject({ lotSizing: 'Each order brings 105 FT2, as many as the need takes.', planLevel: null, delay: expect.stringMatching(/^2 days between arrival and use/) })
+    expect(leatherRow).toMatchObject({ method: 'ORDERS', lotSizing: 'FIXED', fixedLotQty: '315.0000', lotPeriodDays: null, planLevel: null, scrapPct: '5.00', yieldPct: null, delayDays: 2, version: 1 })
+    expect(leatherRow.rules).toMatchObject({ lotSizing: 'Each order brings 315 FT2, as many as the need takes.', planLevel: null, delay: expect.stringMatching(/^2 days between arrival and use/) })
     expect(leatherRow.rules.scrapYield).toMatch(/multiplied by 1\.05 \(5 % scrap\)/)
     // Refused in words, with the field.
     const fixedAlone = await refused('buyer', 'PATCH', `/planning/item-parameters/${leatherRow.id}`, { version: 1, lotSizing: 'PERIOD' }, 400)
@@ -126,7 +126,7 @@ describe('the rules per item on the item parameters (PLN-006, PLN-008, PLN-081, 
     await refused('viewer', 'PATCH', `/planning/item-parameters/${leatherRow.id}`, { version: 1, delayDays: 3 }, 403)
     // The audit row and the event carry the change.
     const audit = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 ORDER BY at, id`, [leatherRow.id])
-    expect(audit.at(-1)!.after).toMatchObject({ lotSizing: 'FIXED', fixedLotQty: '105.0000', scrapPct: '5.00', delayDays: 2 })
+    expect(audit.at(-1)!.after).toMatchObject({ lotSizing: 'FIXED', fixedLotQty: '315.0000', scrapPct: '5.00', delayDays: 2 })
     const events = await admin(`SELECT type, payload FROM "OutboxEvent" WHERE subject = $1`, [leatherRow.id])
     expect(events.map((event) => [event.type, event.payload.change])).toEqual([['planning.item_parameters_changed', 'CREATED']])
   })
@@ -163,13 +163,13 @@ describe('the run by the rules (PLN-006, PLN-081, PLN-008)', { timeout: 120_000 
     expect(Number(line.grossQuantity)).toBeGreaterThanOrEqual(583.604)
     expect(Number(line.grossQuantity)).toBeLessThan(583.8)
     expect(Number(line.netQuantity)).toBeGreaterThan(0)
-    // The next order is one lot of 105 ft² (the leather is bought by the hide: whole hides of it).
-    expect(Number(line.suggestedBaseQuantity)).toBeGreaterThanOrEqual(105)
-    expect(Number(line.suggestedBaseQuantity)).toBeLessThan(105 + 52.5)
+    // The next order is one lot of 315 ft² = 6 whole hides (lot for lot would be the net, ~216.8 ft²: 5 hides, the item's
+    // minimum of 5 hides included).
+    expect(line).toMatchObject({ suggestedQuantity: '6.0000', suggestedUom: 'HIDE', suggestedBaseQuantity: '315.0000' })
     const profile = await ok('viewer', 'GET', profileUrl)
-    expect(profile.lots.list[0]).toMatchObject({ seq: 1, quantity: '105.0000' })
+    expect(profile.lots.list[0]).toMatchObject({ seq: 1, quantity: '315.0000' })
     expect(sum(profile.lots.list.map((lot: Json) => lot.quantity))).toBeGreaterThanOrEqual(Number(profile.uncovered))
-    expect(profile.lots.list.every((lot: Json) => lot.quantity === '105.0000')).toBe(true)
+    expect(profile.lots.list.every((lot: Json) => lot.quantity === '315.0000')).toBe(true)
     // Plan by size: SEED-SO-0001's black jacket one planned work order per size; the red one by the site's size groups.
     const planned = (await ok('viewer', 'GET', `/planning/planned-orders?siteId=${A.siteA1}`)).plannedOrders as Json[]
     const jackets = planned.filter((row) => row.style.id === A.jkt01)
