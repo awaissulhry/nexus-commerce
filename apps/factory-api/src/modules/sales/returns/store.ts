@@ -361,11 +361,10 @@ const price = <T>(value: T) => asMoney('price', value)
 
 /**
  * W2b-5 (B-W2b-291): the database's ReturnDisposition grew SIZE_EXCHANGE (SAL-351: the same garment in another size, on the
- * replacement order's line). The W2a returns routes and screens know six dispositions; until B-W2b-346 adds the exchange to
- * them, a SIZE_EXCHANGE line reads as REPLACE (the closest of the six: another garment on the replacement order).
+ * replacement order's line). B-W2b-346 added it to factory-domain's RETURN_DISPOSITIONS, so every disposition reads as it
+ * is (this stays the one place the routes read a line's disposition through).
  */
-export const w2aDispositionOf = (disposition: string | null): ReturnDisposition | null =>
-  disposition === null ? null : disposition === 'SIZE_EXCHANGE' ? 'REPLACE' : (disposition as ReturnDisposition)
+export const w2aDispositionOf = (disposition: string | null): ReturnDisposition | null => (disposition === null ? null : (disposition as ReturnDisposition))
 
 /** One line of the record (prices and credit values marked with the price grain). */
 export function lineView(line: LineRow, facts: Pick<RecordFacts, 'sold' | 'reasons' | 'linePhotos' | 'moves'>) {

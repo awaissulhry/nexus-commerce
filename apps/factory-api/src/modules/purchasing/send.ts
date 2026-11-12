@@ -31,6 +31,8 @@ import { openConfirmTask } from './portal-orders/tasks'
 import { CONTACT_COLUMNS, dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
 // B-W2b-311 (SCM-004): the other contacts who receive POs get a copy when the office names none.
 import { copiesOf } from '@nexus/factory-domain/purchasing/suppliers-depth/routing'
+// B-W2b-315 (SCM-022): the compliance gate — a send without a valid document for a line's material is held (qualification/gate.ts).
+import { assertCompliant, complianceChecksOf, withCompliance } from './qualification/gate'
 import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 // B-W2b-296: a third party's delivery address and the lines' delivery schedules on the PDF.
 import { shipToPrintOf } from './po-depth/store'
@@ -39,6 +41,9 @@ import { kindWordsOf } from './line-kinds/store'
 // B-W2b-347: a sample order's PDF is the sample order (titled so, what it is for, not a production order).
 import { sampleOrderDocument } from '@nexus/factory-domain/purchasing/sample-orders/document'
 import { developmentOf } from './sample-orders/store'
+// B-W2b-305 (SCM-078, SCM-080): the approval gate of every send (po-approvals/gate.ts).
+import { approvedWaiting, gateInCommand, sendGate, sendOptionsFrom } from './po-approvals/gate'
+import { PO_APPROVAL_WORDS } from '@nexus/factory-domain/purchasing/po-approvals/approvals'
 
 /**
  * Sending a purchase order (B-W1-30; SCM-054, SCM-055; A1 §2.5; PLAN §4.7 stage 08-buy; the design's Send dialog, SCR-037):
@@ -161,6 +166,9 @@ const refusal = (checks: readonly SendCheck[]): DomainError => {
 
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 
+/** B-W2b-305: an order waiting for its yes, approved, is checked and sent as the draft it was. */
+const sendable = (facts: OrderFacts, approved: boolean): OrderFacts => (approved && facts.order.status === 'PENDING_APPROVAL' ? { ...facts, order: { ...facts.order, status: 'DRAFT' } } : facts)
+
 // ---- the checks (the Send dialog) -----------------------------------------------------------------------------------
 
 /** purchasing.view: what the send would check now, to whom it goes, and the mail it would write (no link: it does not exist yet). */
@@ -170,16 +178,17 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
   const today = businessDate(now)
   const companyLegal = legalProblems(await companyLegalOf(caller, order.companyId))
   return caller.withClient(async (client) => {
-    const facts = await readFacts(client, order, today)
+    const facts = sendable(await readFacts(client, order, today), await approvedWaiting(client, order))
     const checks = checksOf(facts, today, companyLegal)
+    const gated = withCompliance(checks, await complianceChecksOf(client, order, today))
     const language = supplierLanguageOf(facts.contact?.language, facts.party.language)
     const terms = confirmLinkTerms(today, latestNeedOf(facts), now)
     const number = purchaseOrderDocumentNumber(order.number, order.revision)
     const words = await sendWordsOf(client, order, facts, language, {})
     const mail = purchaseOrderMail({ language, number, recipientName: facts.contact?.name ?? null, linkUntil: businessDate(terms.expiresAt), message: words.message, resend: false })
     return {
-      ready: checks.ready,
-      checks: checks.checks,
+      ready: gated.ready,
+      checks: gated.checks,
       recipient: facts.contact ? { contactId: facts.contact.id, name: facts.contact.name, email: facts.contact.email } : null,
       documentNumber: number,
       language,
@@ -266,13 +275,37 @@ function confirmByOf(body: SendBody, now: Date, linkExpiresAt: Date | null): Dat
   return at
 }
 
+/**
+ * B-W2b-305: who sends — the office request (the person pressing Send), or the worker sending an approved order with its
+ * yes as the person who asked (po-approvals/approved-send.ts): the caller, the confirm link's address, the system caller
+ * the mail leaves with.
+ */
+export interface SendHost {
+  readonly caller: CommandCaller
+  link(token: string): string
+  system(tenantId: string): CommandCaller
+}
+
+const hostOf = (request: FastifyRequest): SendHost => ({ caller: request, link: (token) => officeAuthOf(request.server).link('/l', token), system: systemCallerOf(request) })
+
 /** purchasing.send: the PDF, the confirm link and the mail (see the module comment). */
 export async function sendOrder(request: FastifyRequest, orderId: string, body: SendBody, idempotencyKey?: string) {
-  const caller: CommandCaller = request
+  return sendAs(hostOf(request), orderId, body, idempotencyKey)
+}
+
+/**
+ * The send (see the module comment) for a host. B-W2b-305 (SCM-078, SCM-080): every send passes the approval gate
+ * (po-approvals/gate.ts): an order a switched-on rule holds for is checked, then asked (PENDING_APPROVAL, nothing made or
+ * mailed; the answer names the request: 202 on the route); an approved one is sent.
+ */
+export async function sendAs(host: SendHost, orderId: string, body: SendBody, idempotencyKey?: string) {
+  const caller = host.caller
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, PURCHASING_SEND)
   const now = serverClock.now()
   const today = businessDate(now)
+  // B-W2b-315 (SCM-022): held at Send without a valid document (409 in words), before anything is made.
+  if (order.version === body.version) await caller.withClient((client) => assertCompliant(client, order, today))
 
   // Steps 1 and 2, only for the version the caller read (a repeat or a stale send goes straight to the command: its
   // receipt answers, or the version guard refuses).
@@ -280,16 +313,19 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
   let refused: DomainError | null = null
   const changeNote = body.changeNote?.trim() ? body.changeNote.trim() : null
   if (changeNote !== null && changeNote.length > MAX_CHANGE_NOTE) throw new ValidationError('The change note is too long.', [{ path: 'body/changeNote', message: `At most ${MAX_CHANGE_NOTE} characters.` }])
+  // B-W2b-305: the gate (an order that waits for its yes is refused here in words; one a rule holds for is asked).
+  const gate = order.version === body.version ? await caller.withClient((client) => sendGate(client, order, context.actorId, now)) : null
   if (order.version === body.version) {
     const companyLegal = legalProblems(await companyLegalOf(caller, order.companyId))
     const read = await caller.withClient(async (client) => {
-      const facts = await readFacts(client, order, today)
+      const facts = sendable(await readFacts(client, order, today), gate?.mode === 'SEND' && gate.approvedTaskId !== null)
       const language = supplierLanguageOf(facts.contact?.language, facts.party.language)
       return { facts, supplier: await supplierParty(client, facts, today), words: await sendWordsOf(client, order, facts, language, { message: body.message, changeNote }) }
     })
     const { facts, supplier, words } = read
     const checks = checksOf(facts, today, companyLegal)
     if (!checks.ready || !facts.contact?.email) refused = refusal(checks.checks)
+    else if (gate?.mode === 'ASK') confirmByOf(body, now, null)
     else {
       const frozen = supplierOrderOf(facts, supplier, today)
       const composed = sampleOrderDocument(composeDocument({ ...purchaseOrderDocument(frozen), company: await companyLegalOf(caller, order.companyId), sample: false }), developmentOf(facts.sample))
@@ -319,13 +355,19 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
     caller,
     { name: 'purchasing.send', idempotencyKey, input: { orderId, ...body }, record: { type: 'PurchaseOrder', id: order.id, expectedVersion: body.version } },
     async (tools) => {
-      if (!plan) throw refused ?? new InvalidStateError('The order cannot be sent as it is: reload it.')
+      if (refused) throw refused
       const { tx } = tools
+      // B-W2b-305: the gate again, in the command: asked (the order waits for its yes) or sent.
+      const passed = await gateInCommand(tools, (await readOrder(tx, order.id))!, { askerId: context.actorId, options: sendOptionsFrom({ ...body, changeNote }) })
+      if (passed.mode === 'WAITING') return { ...(await detailInCommand(tools, order.id)), approval: passed.waiting }
+      if (!plan) throw gate?.mode === 'ASK' ? new DomainError('conflict', PO_APPROVAL_WORDS.noLongerAsked, [{ path: 'refusal/NO_LONGER_ASKED', message: PO_APPROVAL_WORDS.noLongerAsked }]) : new InvalidStateError('The order cannot be sent as it is: reload it.')
       const current = (await readOrder(tx, order.id))!
       // The supplier's data as the document printed it (the parties module writes it outside the order's commands).
-      const facts = await readFacts(tx, current, businessDate(tools.now))
+      const facts = sendable(await readFacts(tx, current, businessDate(tools.now)), passed.approvedTaskId !== null)
       const again = checksOf(facts, businessDate(tools.now), await letterheadProblems(tx, tools.context, current.companyId))
       if (!again.ready) throw refusal(again.checks)
+      // B-W2b-315 (SCM-022): the compliance gate again, in the command (a document expired, a yes withdrawn meanwhile).
+      await assertCompliant(tx, current, businessDate(tools.now))
       if (facts.contact?.email !== plan.to || !sameJson(await supplierParty(tx, facts, businessDate(tools.now)), plan.supplier)) {
         throw new DomainError('conflict', "The supplier's details changed while the order was being sent: send it again.", [{ path: 'partyId', message: 'Changed since the document was made.' }])
       }
@@ -375,6 +417,8 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
           confirmBy: toUtcIso(confirmBy),
           revisionId: revisionRow.id,
           changeNote,
+          // B-W2b-305: the request whose yes it was sent with (null: none was needed).
+          approvalTaskId: passed.approvedTaskId,
         },
       })
       tools.emit({
@@ -401,8 +445,10 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
       }
     },
   )
+  // B-W2b-305: asked, not sent: nothing leaves.
+  if ('approval' in result) return result
   // Step 4: the mail leaves with the link, once (a replay sends nothing again).
-  const delivery = replayed || !plan ? null : await deliverLinkMail(processEmail(), systemCallerOf(request)(context.tenantId), result.sent.emailId, { text: plan.mail.withLink(officeAuthOf(request.server).link('/l', plan.link.token)), attachment: { filename: plan.fileName, content: plan.pdf } })
+  const delivery = replayed || !plan ? null : await deliverLinkMail(processEmail(), host.system(context.tenantId), result.sent.emailId, { text: plan.mail.withLink(host.link(plan.link.token)), attachment: { filename: plan.fileName, content: plan.pdf } })
   return { ...result, delivery }
 }
 
@@ -506,12 +552,14 @@ export async function sendMany(request: FastifyRequest, body: SendManyBody, idem
   for (const entry of body.orders) {
     try {
       const answer = await sendOrder(request, entry.id, { version: entry.version, confirmBy: entry.confirmBy ?? null, message: body.message ?? null }, keyOf(idempotencyKey, entry.id))
-      outcomes.push({ id: entry.id, number: answer.order.number, outcome: 'SENT' as const, sent: answer.sent, delivery: answer.delivery, refused: null })
+      // B-W2b-305: an order a rule holds for waits for its yes (asked, not sent).
+      if ('approval' in answer) outcomes.push({ id: entry.id, number: answer.order.number, outcome: 'WAITING' as const, sent: null, delivery: null, approval: answer.approval, refused: null })
+      else outcomes.push({ id: entry.id, number: answer.order.number, outcome: 'SENT' as const, sent: answer.sent, delivery: answer.delivery, approval: null, refused: null })
     } catch (error) {
-      outcomes.push({ id: entry.id, number: null, outcome: 'REFUSED' as const, sent: null, delivery: null, refused: refusedOf(error) })
+      outcomes.push({ id: entry.id, number: null, outcome: 'REFUSED' as const, sent: null, delivery: null, approval: null, refused: refusedOf(error) })
     }
   }
-  return { sent: outcomes.filter((entry) => entry.outcome === 'SENT').length, refused: outcomes.filter((entry) => entry.outcome === 'REFUSED').length, outcomes }
+  return { sent: outcomes.filter((entry) => entry.outcome === 'SENT').length, refused: outcomes.filter((entry) => entry.outcome === 'REFUSED').length, waiting: outcomes.filter((entry) => entry.outcome === 'WAITING').length, outcomes }
 }
 
 /**

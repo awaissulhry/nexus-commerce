@@ -18,7 +18,8 @@ import { creditCausale, creditStateProblem } from './credit-note'
  *                     them. A line names the invoice line it returns (the RMA was made from the invoice); a line made
  *                     from a shipment before its invoice is matched to the issued TD01/TD24 line that billed its order
  *                     line and size since (the newest); one never billed has nothing to credit (named, skipped).
- *   the line          GOODS, the pieces received and decided, at the credit per piece (net, 6 decimals: the pieces ×
+ *   the line          GOODS, the pieces received and decided (B-W2b-346, lead fix F28: a line credited without the goods
+ *                     coming back, SAL-342, credits its authorised pieces: none of them arrive), at the credit per piece (net, 6 decimals: the pieces ×
  *                     the price give back exactly the decided credit), the billed line's own VAT (never decided again:
  *                     the note reverses what the invoice charged), its item code and unit; the description names the
  *                     RMA and its line ("Reso RMA-2026-0001 riga 10: …"); the line names the return line
@@ -70,6 +71,8 @@ export interface ReturnedLine {
   readonly seq: number
   readonly quantity: number
   readonly receivedQuantity: number
+  /** B-W2b-346 (F28; SAL-342): credited without the goods coming back: its pieces never arrive, it credits its quantity. */
+  readonly creditWithoutReturn?: boolean | undefined
   readonly disposition: string | null
   /** The decided credit (net, minor units); null: not decided. */
   readonly creditAmount: MinorUnits | null
@@ -146,7 +149,7 @@ export function planReturnCredit(rma: ReturnFacts, lines: readonly ReturnedLine[
       skip(line, 'NO_CREDIT', `${label(line)} was decided without a credit.`)
       continue
     }
-    if (line.receivedQuantity <= 0) {
+    if (line.receivedQuantity <= 0 && !line.creditWithoutReturn) {
       skip(line, 'NOT_RECEIVED', `Nothing of ${label(line).toLowerCase()} arrived: there is nothing to credit.`)
       continue
     }
@@ -174,7 +177,7 @@ export function planReturnCredit(rma: ReturnFacts, lines: readonly ReturnedLine[
       continue
     }
     const group = groups.get(invoice.id) ?? { invoice, lines: [] }
-    const pieces = line.receivedQuantity
+    const pieces = line.creditWithoutReturn ? line.quantity : line.receivedQuantity
     group.lines.push({
       returnLineId: line.id,
       seq: line.seq,

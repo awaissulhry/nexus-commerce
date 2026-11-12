@@ -40,6 +40,8 @@ import {
   type UploadState,
 } from './model'
 import { ReportProblemView } from './view/ReportProblemView'
+// B-W2b-346 (SAL-298, RX2:01): a remake takes one item; its photos go as the front and the back.
+import { pickRemakeItem, remakePhotoName } from './types/remake/model'
 
 const START: ClaimViewModel = {
   link: 'valid',
@@ -293,7 +295,8 @@ export function ReportProblem({ api }: { api: ApiClient }) {
         mark(shot.id, 'sending')
         try {
           const lineId = sent.type === 'RETURN' ? lineIdFor(shot.group, form.picks, lines.current?.lines ?? []) : null
-          await uploadClaimPhoto(api, { caseType: sent.type, caseId: sent.id, lineId }, { blob, name: `${sent.number}-${index + 1}.jpg` }, { announce: newIdempotencyKey(), complete: newIdempotencyKey() })
+          const name = form.type === 'REMAKE' ? remakePhotoName(sent.number, photosInForm(form, latest.current.photos).filter((other) => other.group === shot.group).findIndex((other) => other.id === shot.id)) : `${sent.number}-${index + 1}.jpg`
+          await uploadClaimPhoto(api, { caseType: sent.type, caseId: sent.id, lineId }, { blob, name }, { announce: newIdempotencyKey(), complete: newIdempotencyKey() })
           mark(shot.id, 'sent')
         } catch {
           mark(shot.id, 'failed')
@@ -398,7 +401,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
         onTogglePick: (key) =>
           editForm((form, current) => {
             const item = current.page ? itemOf(current.page, key) : null
-            return item ? togglePick(form, item) : form
+            return item ? (form.type === 'REMAKE' ? pickRemakeItem(form, item) : togglePick(form, item)) : form
           }),
         onPick: (key, edit) => editForm((form) => updatePick(form, key, edit)),
         onComplaintItem: (key) => editForm((form) => ({ ...form, itemKey: key })),

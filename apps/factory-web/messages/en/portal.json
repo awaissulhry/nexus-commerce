@@ -299,6 +299,8 @@
       "portal_supplierDocuments_view": "See the documents we ask for and send them",
       "portal_supplierProfile_view": "See your company data, addresses and contacts",
       "portal_supplierProfile_change": "Send changes of your addresses and contacts",
+      "portal_supplierBank_view": "See your bank details with us (masked)",
+      "portal_supplierBank_propose": "Propose new bank details (we check them before any payment)",
       "portal_returns_view": "See your returns and complaints",
       "portal_returns_request": "Ask for a return or report a quality problem",
       "portal_complaints_view": "Follow your quality complaints",
