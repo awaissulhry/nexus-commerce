@@ -10,6 +10,7 @@ import { quantity, type Phrase } from '../../../../_shared/buying/model'
 import type { OrderReach, PurchaseOrder } from '../../api'
 import { addedInDraft, reachHeld, reachLineHeld, type DailyDialog, type SendExtra } from '../../daily-model'
 import type { OrderRecordActions, OrderRecordModel } from '../../model'
+import { useDepthSay } from '../../depth/view/words'
 
 const dateLocale = (locale: string) => (locale === 'it' ? 'it-IT' : 'en-GB')
 
@@ -20,8 +21,11 @@ const dateLocale = (locale: string) => (locale === 'it' ? 'it-IT' : 'en-GB')
 export function useSay(own: 'purchasing-orders' | 'buying' = 'purchasing-orders') {
   const t = useT('purchasing-orders')
   const tb = useT('buying')
+  // B-W2b-333: this step's phrases (`purchasing-orders-depth:`), its notices and the band's held send.
+  const depthSay = useDepthSay()
   return (words: Phrase | null | undefined): string | null => {
     if (!words) return null
+    if (words.key.startsWith('purchasing-orders-depth:')) return depthSay(words)
     if (words.key.startsWith('buying:')) return tb(words.key.slice('buying:'.length), words.params)
     if (words.key.startsWith('purchasing-orders:')) return t(words.key.slice('purchasing-orders:'.length), words.params)
     return own === 'buying' ? tb(words.key, words.params) : t(words.key, words.params)

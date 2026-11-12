@@ -1,0 +1,84 @@
+/* B-W2b-333 — purchase orders in depth on screen: layout only, semantic tokens; no page max-width (the cards fill the main area). */
+
+/* The schedule's mini calendar and the date history side by side on a wide screen, stacked on a narrow one. */
+.fw-pod-two {
+  display: grid;
+  gap: var(--nds-space-14);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  align-items: start;
+  min-width: 0;
+}
+
+/* The schedule dialog: one row per delivery (quantity, day, note, remove), wrapping on a phone. */
+.fw-pod-rows {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-pod-row {
+  display: grid;
+  gap: var(--nds-space-8);
+  grid-template-columns: minmax(96px, 0.8fr) minmax(150px, 1fr) minmax(140px, 1.4fr) auto;
+  align-items: end;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .fw-pod-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/* The kind dialog's rolls. */
+.fw-pod-fieldset {
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-pod-fieldset > legend {
+  padding: 0 var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* The chase mail as the supplier reads it. */
+.fw-pod-mail {
+  margin: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-pod-mail-subject {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.fw-pod-mail-body {
+  margin: 0;
+  font-family: var(--nds-font-sans);
+  font-size: var(--nds-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* The PO list's "What it blocks" cell and the Confirmed later than needed view. */
+.fw-pod-blocks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 var(--nds-space-4);
+  min-width: 0;
+}
+
+/* A person's words in a table cell wrap (never past the card's edge). */
+.fw-pod-wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
