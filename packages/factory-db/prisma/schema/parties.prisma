@@ -65,6 +65,9 @@ model Party {
   /// W2b (schema wave 23, B-W2b-189's gap): its website, as printed on its profile (an http or https address, up to 200
   /// characters); null: none known.
   website              String?
+  /// W2b-5 (schema wave 37/44, SAL-021): a rider (a PERSON party) under the team or dealer it rides for (an ORGANISATION
+  /// party with the CUSTOMER or BRAND role, not archived, of the rider's company or tenant-wide); null: on its own.
+  teamPartyId          String?            @db.Uuid
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -74,6 +77,10 @@ model Party {
   createdById  String?     @db.Uuid
 
   company             Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 sales-intake (wave 37/44): the team or dealer a rider rides for, and a team's riders (Restrict, not Prisma's
+  // SetNull default for an optional relation: that would also clear tenantId).
+  team                Party?               @relation("PartyTeam", fields: [tenantId, teamPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  riders              Party[]              @relation("PartyTeam")
   addresses           PartyAddress[]
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
@@ -187,6 +194,12 @@ model Party {
   repairOrders         RepairOrder[]
   complaints           Complaint[]
 
+  // W2b-5 sales-intake.prisma (wave 37/44): its inquiries, its requirements, holds and terms per company.
+  inquiries            Inquiry[]
+  customerRequirements CustomerRequirement[]
+  holds                PartyHold[]
+  companyTerms         PartyCompanyTerms[]
+
   // calendar.prisma: as a supplier or subcontractor, its calendar (its closed days).
   workCalendars       WorkCalendar[]
   // W2a: as a supplier, its approved sources, the discrepancies of its deliveries and the claims to it; as a
@@ -210,6 +223,8 @@ model Party {
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
   @@unique([tenantId, id])
+  // W2b-5 (wave 37/44): a team's riders.
+  @@index([tenantId, teamPartyId])
 }
 
 enum PartyKind {
@@ -351,6 +366,19 @@ model PartyContact {
   /// The language they read, ISO 639-1; null: the party's language.
   language    String?
   status      MasterStatus       @default(ACTIVE)
+  /// W2b-5 (schema wave 37/44, SAL-022; design customer.contacts.grid "Consent and lawful basis"): why we keep the person's
+  /// data (GDPR art. 6(1)); null: not recorded yet. CONSENT needs when and how it was given (consentAt, consentSource: up
+  /// to 500 characters, both or neither, not in the future); objectedAt: when the person objected (art. 21) or withdrew
+  /// their consent (art. 7(3)), not in the future.
+  lawfulBasis    ContactLawfulBasis?
+  consentAt      DateTime?          @db.Timestamptz(3)
+  consentSource  String?
+  objectedAt     DateTime?          @db.Timestamptz(3)
+  /// W2b-5 (SAL-022; GDPR art. 17): the erasure, when and by whom (an office user), both or neither, set once, never
+  /// cleared. An erased contact is ARCHIVED with its personal fields blanked for good (name '', no e-mail, no phone): the row
+  /// stays for the quotes, invoices and DDTs that name it (they keep their own copies), and refuses new personal data.
+  erasedAt       DateTime?          @db.Timestamptz(3)
+  erasedById     String?            @db.Uuid
   version     Int                @default(1)
   createdAt   DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -358,6 +386,8 @@ model PartyContact {
 
   party               Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   measurementProfiles MeasurementProfile[]
+  // W2b-5 sales-intake.prisma (wave 37/44): the inquiries they made.
+  inquiries           Inquiry[]
   // email-in.prisma: the mail received from this contact.
   inboundEmails       InboundEmail[]
   // sales.prisma: the quotes sent to them.

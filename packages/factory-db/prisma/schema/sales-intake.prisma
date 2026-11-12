@@ -1,0 +1,396 @@
+// Sales intake and customers (W2b-5, schema wave 37/44, B-W2b-279; features SAL-013, SAL-014, SAL-021, SAL-022, SAL-023,
+// SAL-028, SAL-032, SAL-033, SAL-237, SAL-277, SAL-305): who the customer is and what is asked of us, before the quote of W1
+// (sales.prisma) starts. An inquiry or RFQ typed by the office, from a phone call or a fair, or made from a mail (the mail it
+// came from and its attachments kept), with what is asked (styles or descriptions, sizes and quantities, a target price, a
+// wanted date), its assignee, and how it ended: QUOTED (the quote it became), DECLINED (with the reason) or LOST. A customer's
+// requirements per kind and where they apply; an account hold with its reason, placed and released, the history kept; the
+// terms per company of a tenant-wide customer (W1's Party columns stay the default for every company); and the seasons of a
+// company that quotes and orders name. Beside them, in parties.prisma: a contact's lawful basis, consent, objection and
+// erasure marks (PartyContact), and a rider under a team or dealer (Party.teamPartyId); in sales.prisma the season of a
+// quote version and of an order.
+//
+// A hold and a requirement are rows with a history, never a free-text note: a hold is placed and released (both with words),
+// never edited or removed; a requirement is fixed once written and ended, a change being a new row that supersedes it. Erasure
+// (GDPR art. 17) blanks a contact's or a prospect's personal fields and keeps the row the quotes, invoices and DDTs name (they
+// keep their own copies of what they printed); a database guard keeps an erased contact or prospect blank for good.
+//
+// apps/factory-api's modules/parties (B-W2b-290: requirements, holds, terms per company, contact privacy, riders) and
+// modules/sales (B-W2b-295 inquiries, B-W2b-303 seasons) write these tables through command(); the hand-written
+// …_sales_intake_w2b_guards migration holds their rules for every login. What a hold stops (new quotes warn, new orders and
+// shipments wait) and the PO-number check at confirm are the API's (B-W2b-290, -303, -304): the database keeps the rows.
+// Records of parallel W2b-5 waves are not keyed into: the approval of an override is named by B-W2b-276's approval kinds
+// (CREDIT_OVERRIDE), a credit check (B-W2b-281's CreditCheck) names its terms row's party and company.
+//
+// Who sees what (ownership/sales-intake.json): the office reads and writes; the floor, the portal and links read nothing here
+// (the customer portal's inquiries are W3; a partyId here is the policy key, with no partner grant). Money: an inquiry's target
+// price and a credit limit, both @grain price. Personal data: an inquiry's prospect (name, company, e-mail, phone), kept for
+// answering the request (GDPR art. 6(1)(b): steps at the request of the person before a contract) under its lawful basis,
+// blanked by erasure; who placed, released or set a row is a person inside the one record.
+
+/// Where an inquiry came from (SAL-032, SAL-033).
+enum InquirySource {
+  /// Typed in the office (a visit, a letter).
+  OFFICE
+  /// Made from a received mail (Mail to sort › Make an inquiry): the mail and its attachments are kept with it.
+  MAIL
+  /// Sent from the customer portal (W3 opens it to customers; the office may record one meanwhile).
+  PORTAL
+  PHONE
+  /// Taken at a trade fair.
+  FAIR
+}
+
+/// NEW → ASSIGNED ⇄ NEED_INFO → QUOTED | DECLINED | LOST (the last three final). NEW has nobody assigned, ASSIGNED has
+/// someone; NEED_INFO waits for the customer (design: "Need info", the "Waiting for the customer" tile); ASSIGNED goes back
+/// to NEW when the assignee is taken off.
+enum InquiryStatus {
+  NEW
+  ASSIGNED
+  NEED_INFO
+  /// Answered with a quote (the inquiry names it).
+  QUOTED
+  /// We said no (with the reason).
+  DECLINED
+  /// The customer went away before a quote (with the words).
+  LOST
+}
+
+/// Why an inquiry was declined (design inquiries.decline).
+enum InquiryDeclineReason {
+  CAPACITY
+  LEAD_TIME
+  NOT_OUR_PRODUCT
+  PRICE
+  /// Said in words (closeNote).
+  OTHER
+}
+
+/// The lawful basis of processing a person's data (GDPR art. 6(1)): a contact's (PartyContact.lawfulBasis) and an inquiry's
+/// prospect's.
+enum ContactLawfulBasis {
+  /// The contract with the party, or steps before it at the person's request (art. 6(1)(b)).
+  CONTRACT
+  /// The person's consent (art. 6(1)(a)), with when and how it was given (art. 7(1)).
+  CONSENT
+  /// Our legitimate interest (art. 6(1)(f)); the person may object (art. 21).
+  LEGITIMATE_INTEREST
+  /// A legal obligation (art. 6(1)(c)): invoices, tax and PPE records.
+  LEGAL_DUTY
+}
+
+/// An inquiry or request for quotation (SAL-032, SAL-033, SAL-305; design sales.inquiries, SCR-105): who asks (a party, or a
+/// prospect not yet a party), what is asked, by when and at what target price, the brand's tech pack files, who answers it
+/// and how it ended. Numbered from the company's INQUIRY series (INQ-…). Its lines change only while it is open (NEW,
+/// ASSIGNED, NEED_INFO); a QUOTED, DECLINED or LOST inquiry is frozen but for its note and the erasure of its prospect.
+/// Never deleted.
+model Inquiry {
+  id                   String                @id @db.Uuid
+  tenantId             String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company asked (one of the brands the office answers for). Never changes.
+  companyId            String                @db.Uuid
+  /// From the company's INQUIRY series (INQ-…), unique in the company; given at insert, never changed.
+  number               String
+  /// How it came, and the mail it was made from (MAIL exactly: an InboundEmail of the tenant, one inquiry per mail; its
+  /// attachments stay files of the mail). Both fixed once made, as is when it came (not in the future).
+  source               InquirySource
+  sourceEmailId        String?               @db.Uuid
+  receivedAt           DateTime              @db.Timestamptz(3)
+  /// The customer, when it is a party (matched, or made from the prospect), and the person there who asked (a contact of
+  /// that party). A prospect not yet a party is named by the prospect columns below; one of the two (or an erased prospect).
+  partyId              String?               @db.Uuid
+  contactId            String?               @db.Uuid
+  /// The prospect as given: the person's name, their company, e-mail (trimmed, lower case) and phone. Personal data, kept
+  /// for answering the request under prospectLawfulBasis (required with any of them); blanked for good by erasure.
+  prospectName         String?
+  prospectCompany      String?
+  prospectEmail        String?
+  prospectPhone        String?
+  prospectLawfulBasis  ContactLawfulBasis?
+  /// The prospect's erasure (GDPR art. 17): when and by whom, both or neither, set once; the four columns above stay null.
+  prospectErasedAt     DateTime?             @db.Timestamptz(3)
+  prospectErasedById   String?               @db.Uuid
+  /// What is asked, in words (the mail's text or the call's notes; 1 to 20 000 characters).
+  request              String
+  /// The day the customer wants the goods by, when said.
+  wantedDate           DateTime?             @db.Date
+  /// The target unit price the customer named, net, in `currency` (0 or more); null: none.
+  /// @grain price
+  targetUnitPrice      Decimal?              @db.Decimal(18, 6)
+  /// ISO 4217.
+  currency             String                @default("EUR")
+  /// The brand's tech pack (SAL-305): the files of it (StoredFile rows of this inquiry or of its mail, each once, at most
+  /// 50) and the version in force as the brand names it ("TP 3 · 2026-10"), carried to the quote and the order.
+  techPackFileIds      String[]              @default([]) @db.Uuid
+  techPackVersion      String?
+  status               InquiryStatus         @default(NEW)
+  /// The office user who answers it (an active office user), and since when; required while ASSIGNED, none while NEW.
+  assigneeId           String?               @db.Uuid
+  assignedAt           DateTime?             @db.Timestamptz(3)
+  /// QUOTED: the quote it became (a quote of the company, for its party), named once; exactly then.
+  quoteId              String?               @db.Uuid
+  /// DECLINED: why (OTHER with closeNote).
+  declineReason        InquiryDeclineReason?
+  /// When it ended (QUOTED, DECLINED, LOST) and by whom, exactly then; the words of a decline or a loss (LOST and a decline
+  /// OTHER need them; up to 2000 characters).
+  closedAt             DateTime?             @db.Timestamptz(3)
+  closedById           String?               @db.Uuid
+  closeNote            String?
+  /// The office's notes (up to 4000 characters); the one column a closed inquiry still changes.
+  note                 String?
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?               @db.Uuid
+
+  company  Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and partyId).
+  party    Party?        @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contact  PartyContact? @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignee User?         @relation("InquiryAssignee", fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  quote    Quote?        @relation(fields: [tenantId, partyId, quoteId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines    InquiryLine[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of its lines' reference.
+  @@unique([tenantId, id])
+  // The queue (status, oldest first), someone's inquiries ("Mine"), a customer's.
+  @@index([tenantId, companyId, status, receivedAt])
+  @@index([tenantId, assigneeId, status])
+  @@index([tenantId, partyId])
+}
+
+/// One thing an inquiry asks for (design inquiry.req.form): a style (in a colourway, or a colour in words) or, until the
+/// office picks a style, a description; the pieces by size when given, else a total. Written only while its inquiry is open.
+model InquiryLine {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  inquiryId   String   @db.Uuid
+  /// Its place: 10, 20, 30 …
+  seq         Int
+  /// The style asked, when known, and its colourway (only with the style); or the colour as the customer wrote it.
+  styleId     String?  @db.Uuid
+  colourwayId String?  @db.Uuid
+  colourText  String?
+  /// What the customer asked in their words (required without a style; up to 2000 characters).
+  description String?
+  /// Pieces per size code ({ "50": 5, "52": 10 }: each 1 to 100 000, at most 60 sizes); {} when not given by size.
+  sizes       Json     @default("{}")
+  /// Pieces in all (1 to 1 000 000): the sum of the sizes when they are given; null: not said.
+  quantity    Int?
+  note        String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  inquiry   Inquiry    @relation(fields: [tenantId, inquiryId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and styleId).
+  style     Style?     @relation("InquiryLineStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway Colourway? @relation("InquiryLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, inquiryId, seq])
+}
+
+/// What a customer requirement is about (SAL-014).
+enum CustomerRequirementKind {
+  PACKING
+  DOCUMENT
+  LABEL
+  QUALITY
+  SHIPPING
+  INVOICING
+  OTHER
+}
+
+/// Where a customer requirement is shown (SAL-014; design customer.req.rules "Shown on").
+enum RequirementStage {
+  QUOTE
+  ORDER
+  PACKING
+  SHIPMENT
+  INVOICE
+}
+
+/// A customer's requirement (SAL-014; design customer.requirements): packing, labelling, document and routing-guide rules,
+/// for one company or every company, for every style or some, shown where it applies. Fixed once written: a change is a new
+/// requirement that supersedes it (the old one ended first); ended once (active false), with when and by whom. The history
+/// is the rows. Never deleted.
+model CustomerRequirement {
+  id           String                  @id @db.Uuid
+  tenantId     String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The customer (a CUSTOMER or BRAND party).
+  partyId      String                  @db.Uuid
+  /// The company it is for; null: every company (a party of one company: only that one).
+  companyId    String?                 @db.Uuid
+  kind         CustomerRequirementKind
+  /// The rule in words (1 to 2000 characters).
+  words        String
+  /// Where it is shown: one or more, each once.
+  appliesAt    RequirementStage[]
+  /// The styles it is for (each once, at most 200); empty: every style.
+  styleIds     String[]                @default([]) @db.Uuid
+  /// The customer's document it comes from (a routing guide, a vendor manual): a file of this requirement or of the party.
+  fileId       String?                 @db.Uuid
+  /// The requirement it replaces (of the same party, ended before), each replaced once.
+  supersedesId String?                 @db.Uuid
+  /// In force. Ended once (false) with when and by whom (and why, up to 500 characters); never back on.
+  active       Boolean                 @default(true)
+  endedAt      DateTime?               @db.Timestamptz(3)
+  endedById    String?                 @db.Uuid
+  endReason    String?
+  version      Int                     @default(1)
+  createdAt    DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?                 @db.Uuid
+
+  party        Party                 @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and partyId).
+  company      Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file         StoredFile?           @relation("CustomerRequirementFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes   CustomerRequirement?  @relation("CustomerRequirementSupersedes", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy CustomerRequirement[] @relation("CustomerRequirementSupersedes")
+
+  // The target of the supersedes reference: a requirement replaces one of its own party.
+  @@unique([tenantId, partyId, id])
+  // A customer's requirements in force (the record's tab, the warnings where they apply).
+  @@index([tenantId, partyId, active])
+}
+
+/// Why a customer's account is on hold (SAL-023; design customer.tax.hold).
+enum PartyHoldReason {
+  CREDIT
+  LEGAL
+  QUALITY_DISPUTE
+  DATA_MISSING
+  OTHER
+}
+
+/// A customer's account on hold (SAL-023): for one company or every company, with the reason and the words, placed by
+/// someone (or by the system: a credit check) at a time, released by someone with words. New quotes warn, new orders and
+/// shipments wait while one is in force (the API's). Placed, then released once; never edited or removed: the history is
+/// the rows. At most one in force per party, company and reason.
+model PartyHold {
+  id           String          @id @db.Uuid
+  tenantId     String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The customer (a CUSTOMER or BRAND party).
+  partyId      String          @db.Uuid
+  /// The company whose sales it stops; null: every company (a party of one company: only that one).
+  companyId    String?         @db.Uuid
+  reason       PartyHoldReason
+  /// Why, in words (1 to 2000 characters).
+  words        String
+  /// When it was placed (not in the future) and by whom; null: by the system (a credit check, B-W2b-304).
+  placedAt     DateTime        @db.Timestamptz(3)
+  placedById   String?         @db.Uuid
+  /// The release: when (not before it was placed, not in the future), by whom and why (1 to 2000 characters), all three or
+  /// none; set once.
+  releasedAt   DateTime?       @db.Timestamptz(3)
+  releasedById String?         @db.Uuid
+  releaseWords String?
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?         @db.Uuid
+
+  party   Party    @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A customer's holds, those in force first (the record, the warnings).
+  @@index([tenantId, partyId, releasedAt])
+}
+
+/// A tenant-wide customer's terms with one of our companies (SAL-013, SAL-028, SAL-237; design customer.tax.terms): its
+/// payment terms, price list and deposit there, whether its orders need its PO number, and its credit limit. One live row
+/// per party and company; the party's own columns (W1, W2a) stay the default for every company without one. Changed in
+/// place by the office (who last set it is kept; the audit keeps each change), ended once when the company's terms go back
+/// to the party's defaults, then frozen. Never deleted.
+model PartyCompanyTerms {
+  id                  String    @id @db.Uuid
+  tenantId            String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The customer (a CUSTOMER or BRAND party, tenant-wide or of this company) and the company. Never change.
+  partyId             String    @db.Uuid
+  companyId           String    @db.Uuid
+  /// Payment terms as printed (up to 500 characters), and the library's terms (ACTIVE, of the company or tenant-wide);
+  /// null: the party's.
+  paymentTerms        String?
+  paymentTermsId      String?   @db.Uuid
+  /// @not-money a reference: the price list its quotes start from with this company (ACTIVE, of the company or tenant-wide); null: the party's
+  priceListId         String?   @db.Uuid
+  /// The deposit asked at acceptance, percent of the gross total, above 0 and at most 100; null: the party's, else the
+  /// sales settings'.
+  depositPct          Decimal?  @db.Decimal(7, 4)
+  /// Its orders with this company need its purchase order number at confirm (SAL-013; the API refuses one without).
+  poNumberRequired    Boolean   @default(false)
+  /// The credit limit (0 or more, in minor units of creditLimitCurrency, ISO 4217), both or neither; null: no limit set.
+  /// Exposure (open orders, open and overdue invoices) is checked against it at quote, order, release and shipment
+  /// (B-W2b-304).
+  /// @grain price
+  creditLimitAmount   Int?
+  creditLimitCurrency String?
+  /// Who set these terms last (an office user).
+  updatedById         String?   @db.Uuid
+  /// Ended: when and by whom, both or neither, set once; the row is then frozen and a new one may be made.
+  endedAt             DateTime? @db.Timestamptz(3)
+  endedById           String?   @db.Uuid
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?   @db.Uuid
+
+  party          Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company        Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  termsOfPayment PaymentTerms? @relation("PartyCompanyTermsPayment", fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money the relation to its price list with this company
+  priceList      PriceList?    @relation("PartyCompanyTermsPriceList", fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A customer's terms per company (one live row each: a partial unique index of …_sales_intake_w2b_guards).
+  @@index([tenantId, partyId, companyId])
+}
+
+/// OPEN while quotes and orders may name it; CLOSED when it is over.
+enum SeasonStatus {
+  OPEN
+  CLOSED
+}
+
+/// A season of a company (SAL-277; design sales.collections, planning.mps): its code ("FW27", the text Style.season holds,
+/// picked from this list: B-W2b-237), name, the days it runs, the day its order book closes, and whether it is open. Quote
+/// versions and sales orders name one (sales.prisma seasonId), only while it is OPEN. Its company and code never change.
+/// Closed, never deleted.
+model Season {
+  id                String       @id @db.Uuid
+  tenantId          String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String       @db.Uuid
+  /// 1 to 20 characters, one line (letters, digits, space . _ / -), unique in the company.
+  code              String
+  /// 1 to 100 characters.
+  name              String
+  /// The days it runs (startsOn ≤ endsOn), and the last day its order book takes orders (on or before endsOn; null: open
+  /// until it is closed).
+  startsOn          DateTime     @db.Date
+  endsOn            DateTime     @db.Date
+  orderBookClosesOn DateTime?    @db.Date
+  status            SeasonStatus @default(OPEN)
+  /// CLOSED: when and by whom, exactly then (reopened: cleared).
+  closedAt          DateTime?    @db.Timestamptz(3)
+  closedById        String?      @db.Uuid
+  note              String?
+  version           Int          @default(1)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?      @db.Uuid
+
+  company       Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // sales.prisma: the quote versions and sales orders of the season.
+  quoteVersions QuoteVersion[]
+  salesOrders   SalesOrder[]
+
+  @@unique([tenantId, companyId, code])
+  // The target of the references from quote versions (tenant, id) and sales orders (tenant, company, id: the order's own
+  // company).
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, status])
+}
