@@ -38,6 +38,8 @@ import { PRODUCT_GTINS_ADDS } from '../../product/gtin/permissions'
 import { PRODUCT_CHANGES_ADDS } from '../../product/changes/permissions'
 // B-W2b-282: one approval engine.
 import { APPROVALS_ADDS } from '../../approvals/permissions'
+// B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
+import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
 import { PRODUCT_OPTIONS_ADDS } from '../../product/options/permissions'
 // B-W2b-238: materials in depth (the production manager and quality decide a material's approval).
@@ -907,7 +909,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PRODUCT_COLOURS_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (PRODUCT_BRANDING_ADDS[key] ?? []) : []),
   // B-W2b-282
-  ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (APPROVALS_ADDS[key] ?? []) : []),
+  // B-W2b-311
+  ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

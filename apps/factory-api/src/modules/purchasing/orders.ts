@@ -41,6 +41,7 @@ import {
 } from './store'
 import { orderDetail, type OrderDetail } from './views'
 import { closeConfirmTasks } from './portal-orders/tasks'
+import { assertNoNewOrder } from './suppliers-depth/store'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053; A2 SCR-058 "Purchase orders", SCR-059 the record): the list, the record, a
@@ -87,6 +88,8 @@ export function assertBuyable(party: PartyRow, path = 'body/partyId'): void {
   if (party.status === 'BLOCKED' || party.status === 'ARCHIVED') {
     throw new DomainError('conflict', `${party.legalName} is ${party.status.toLowerCase()}: no purchase order goes to it; pick another approved source.`, [{ path, message: `The supplier is ${party.status}.` }])
   }
+  // B-W2b-311 (SCM-008): on hold, blocked or inactive as a supplier, in words.
+  assertNoNewOrder(party, path)
 }
 
 /**

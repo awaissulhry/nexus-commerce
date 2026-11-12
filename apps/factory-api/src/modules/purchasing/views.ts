@@ -118,8 +118,10 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
   return sendChecks({
     status: order.status as PurchaseOrderStatus,
     today,
-    supplier: { name: party.legalName, status: party.status, roles: party.roles },
-    contact: contact && contact.partyId === order.partyId ? { name: contact.name, email: contact.email, roles: contact.roles, active: contact.status === 'ACTIVE' } : null,
+    // B-W2b-311 (SCM-008, SCM-004): where the supplier stands, the order's kind, and whether the contact receives POs.
+    supplier: { name: party.legalName, status: party.status, roles: party.roles, supplierStatus: party.supplierStatus, supplierStatusReason: party.supplierStatusReason, supplierStatusSince: party.supplierStatusChangedAt ? businessDate(party.supplierStatusChangedAt) : null },
+    orderKind: order.kind,
+    contact: contact && contact.partyId === order.partyId ? { name: contact.name, email: contact.email, roles: contact.roles, receives: contact.receives, active: contact.status === 'ACTIVE' } : null,
     companyLegal,
     deliveryAddress: siteAddressOf(facts.site) !== null,
     requestedDate: dayOf(order.requestedDate),

@@ -1758,6 +1758,7 @@
     "purchasing_manage": "Make and edit draft purchase orders",
     "purchasing_send": "Send a purchase order to its supplier",
     "purchasing_sources_manage": "Manage supplier prices and approved sources",
+    "purchasing_suppliers_status": "Set where a supplier stands with us (prospect, approved, approved with conditions, on hold, blocked, inactive) with the reason",
     "purchasing_subcontract_manage": "Prepare, issue, cancel and close subcontract orders",
     "purchasing_subcontract_kit": "Send a subcontract order's kit with its DDT",
     "purchasing_subcontract_receive": "Receive goods back from a workshop",

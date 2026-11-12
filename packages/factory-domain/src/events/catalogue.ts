@@ -196,6 +196,8 @@ import { events as productMtm } from '../product-mtm/events'
 import { events as complianceClaims } from '../compliance-claims/events'
 // B-W2b-247: the colour library and the brands' branding sets (colour.changed, branding_set.changed).
 import { events as productColours } from '../product-colours/events'
+// B-W2b-311: suppliers in depth (supplier.status_changed).
+import { events as suppliersDepth } from '../suppliers-depth/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -458,7 +460,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-247
   ...productColours,
   // B-W2b-282
-  ...approvals] as const satisfies readonly EventDefinition[]
+  ...approvals,
+  // B-W2b-311
+  ...suppliersDepth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

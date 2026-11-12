@@ -5,6 +5,9 @@ import { isBusinessDate, type BusinessDate } from '../core/time'
 import { addDays, hidesFor } from '../planning/buy'
 import type { PartyRole, PartyStatus } from '../parties/rules'
 import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
+// W2b (B-W2b-311): where the supplier stands (SCM-008) and who receives purchase orders (SCM-004).
+import { sendProblem, type SupplierStatus } from './suppliers-depth/rules'
+import { takesOrders } from './suppliers-depth/routing'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053, SCM-054, SCM-055, SCM-075; A1 §2.5 "Purchase order"; PLAN §4.7 stage
@@ -227,8 +230,18 @@ export interface SendLineFacts {
 export interface SendFacts {
   readonly status: PurchaseOrderStatus
   readonly today: BusinessDate
-  readonly supplier: { readonly name: string; readonly status: PartyStatus; readonly roles: readonly PartyRole[] }
-  readonly contact: { readonly name: string; readonly email: string | null; readonly roles: readonly string[]; readonly active: boolean } | null
+  readonly supplier: {
+    readonly name: string
+    readonly status: PartyStatus
+    readonly roles: readonly PartyRole[]
+    /** W2b (B-W2b-311): where it stands with us (null or left out: not set, W1's status alone), its reason and since when. */
+    readonly supplierStatus?: SupplierStatus | null | undefined
+    readonly supplierStatusReason?: string | null | undefined
+    readonly supplierStatusSince?: BusinessDate | null | undefined
+  }
+  /** W2b (B-W2b-311): a standard order or a sample order (left out: standard). */
+  readonly orderKind?: 'STANDARD' | 'SAMPLE' | undefined
+  readonly contact: { readonly name: string; readonly email: string | null; readonly roles: readonly string[]; readonly receives?: readonly string[] | undefined; readonly active: boolean } | null
   /** The company's letterhead problems (documents/legal legalProblems). */
   readonly companyLegal: readonly Issue[]
   readonly deliveryAddress: boolean
@@ -250,10 +263,15 @@ export function sendChecks(facts: SendFacts): { readonly ready: boolean; readonl
   if (facts.supplier.status !== 'ACTIVE') {
     const why = facts.supplier.status === 'PROSPECT' ? 'still a prospect: approve it as a supplier first' : `${facts.supplier.status.toLowerCase()}: pick another approved source`
     block('SUPPLIER_NOT_ACTIVE', 'partyId', `${facts.supplier.name} is ${why}.`)
+  } else {
+    // W2b (B-W2b-311, SCM-008): on hold, blocked or inactive as a supplier (a prospect: a sample order only), in words.
+    const standing = sendProblem({ name: facts.supplier.name, partyStatus: facts.supplier.status, supplierStatus: facts.supplier.supplierStatus ?? null, reason: facts.supplier.supplierStatusReason ?? null, since: facts.supplier.supplierStatusSince ?? null }, facts.orderKind)
+    if (standing) block('SUPPLIER_NOT_ACTIVE', 'partyId', standing)
   }
   if (facts.contact === null || !facts.contact.active) block('NO_CONTACT', 'contactId', 'Choose the contact at the supplier who receives purchase orders.')
   else {
-    if (!facts.contact.roles.includes('ORDERS')) block('CONTACT_NOT_ORDERS', 'contactId', `${facts.contact.name} does not receive purchase orders: choose a contact with the orders role.`)
+    // W2b (B-W2b-311, SCM-004): a contact who receives POs by routing, or (W1) one with the orders role.
+    if (!takesOrders(facts.contact)) block('CONTACT_NOT_ORDERS', 'contactId', `${facts.contact.name} does not receive purchase orders: choose a contact who receives them (or has the orders role).`)
     if (!facts.contact.email) block('NO_CONTACT_EMAIL', 'contactId', `${facts.contact.name} has no e-mail: the order and its confirm link go by e-mail.`)
   }
   if (facts.companyLegal.length > 0) block('COMPANY_LEGAL', 'companyId', `The company's letterhead is incomplete: ${facts.companyLegal.map((issue) => issue.message).join(' ')}`)
@@ -350,9 +368,13 @@ export function confirmLinkDays(today: BusinessDate, latestNeedDate: BusinessDat
 
 // ---- the supplier's contact ---------------------------------------------------------------------------------------------------
 
-/** The contact a new order goes to: the supplier's first ACTIVE contact who takes ORDERS and has an e-mail. */
-export function ordersContactOf<Contact extends { readonly status: string; readonly roles: readonly string[]; readonly email: string | null }>(contacts: readonly Contact[]): Contact | null {
-  return contacts.find((contact) => contact.status === 'ACTIVE' && contact.roles.includes('ORDERS') && contact.email !== null && contact.email !== '') ?? null
+/**
+ * The contact a new order goes to: the supplier's first ACTIVE contact with an e-mail who receives POs (W2b, B-W2b-311:
+ * PartyContact.receives), else (W1, and every supplier before W2b) its first who takes ORDERS.
+ */
+export function ordersContactOf<Contact extends { readonly status: string; readonly roles: readonly string[]; readonly email: string | null; readonly receives?: readonly string[] | undefined }>(contacts: readonly Contact[]): Contact | null {
+  const open = contacts.filter((contact) => contact.status === 'ACTIVE' && contact.email !== null && contact.email !== '')
+  return open.find((contact) => (contact.receives ?? []).includes('PO')) ?? open.find((contact) => contact.roles.includes('ORDERS')) ?? null
 }
 
 /** The language the supplier reads: the contact's, else the party's; Italian or English (the documents' languages). */

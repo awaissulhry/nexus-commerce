@@ -29,6 +29,8 @@ import { lotFactsOf, readLots, readPurchases, readStock, type PurchaseRead } fro
 import { sourcesOf } from '../../planning/views'
 import { dayOf, decimal, ITEM_COLUMNS, quantityText, unitsOf, type Reader } from '../store'
 import { activeSourcesOf } from '../supplier-items/store'
+import { newOrderProblem } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
+import { standingOf } from '../suppliers-depth/store'
 
 /**
  * What each request to buy proposes (B-W2a-10; SCM-034, SCM-036; factory-domain purchasing/requests): one function for
@@ -106,7 +108,8 @@ const RULE_COLUMNS = {
 } as const satisfies Prisma.ItemPlanningSelect
 type RuleRow = Prisma.ItemPlanningGetPayload<{ select: typeof RULE_COLUMNS }>
 
-const SUPPLIER_COLUMNS = { id: true, companyId: true, code: true, legalName: true, tradeName: true, roles: true, status: true, currency: true, leadTimeDays: true } as const satisfies Prisma.PartySelect
+// B-W2b-311 (SCM-008): with where the supplier stands (a supplier on hold, blocked or inactive holds its requests).
+const SUPPLIER_COLUMNS = { id: true, companyId: true, code: true, legalName: true, tradeName: true, roles: true, status: true, currency: true, leadTimeDays: true, supplierStatus: true, supplierStatusReason: true, supplierStatusChangedAt: true } as const satisfies Prisma.PartySelect
 type SupplierRow = Prisma.PartyGetPayload<{ select: typeof SUPPLIER_COLUMNS }>
 
 const MATERIAL_COLUMNS = { ...ITEM_COLUMNS, sourcing: true } as const satisfies Prisma.ItemSelect
@@ -429,7 +432,7 @@ export async function buildRequests(db: Reader, raws: readonly Raw[], options: B
       latest: raw.kind === 'REORDER' || raw.run.status === 'DONE',
       needed: reorder === null || reorder.need.triggered,
       material: { code: item.code, active: item.status === 'ACTIVE' },
-      supplier: party ? { name: party.tradeName ?? party.legalName, roles: party.roles as PartyRole[], status: party.status as PartyStatus } : null,
+      supplier: party ? { name: party.tradeName ?? party.legalName, roles: party.roles as PartyRole[], status: party.status as PartyStatus, newOrderProblem: newOrderProblem(standingOf(party)) } : null,
       approved,
     })
     // What the buyer should know before drafting: only for what is still to buy.

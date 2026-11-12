@@ -183,6 +183,12 @@ import * as questionnaireLink from './questionnaire/link'
 import { reviewAnswer, supplierQuestionnaire } from './questionnaire/review'
 import { sendQuestionnaireLink } from './questionnaire/send'
 import { createVersion, listVersions, publishVersion, updateVersion } from './questionnaire/versions'
+// B-W2b-311: suppliers in depth (./suppliers-depth): kinds, status, origin, closures, what each contact receives.
+import * as suppliersDepthContracts from './suppliers-depth/contract'
+import { listSuppliers, supplierCounts } from './suppliers-depth/list'
+import { getProfile, updateProfile } from './suppliers-depth/profile'
+import { setReceives } from './suppliers-depth/receives'
+import { setStatus, statusReach } from './suppliers-depth/status'
 import { registerLinkRenewer } from '../../platform/links/renew'
 // B-W2b-219: the leather area tolerance where a PO line names none (PurchasingSettings.leatherAreaTolerancePct).
 import { getLeatherTolerance, getLeatherToleranceContract, putLeatherTolerance, putLeatherToleranceContract } from '../inventory/hides/tolerance'
@@ -549,4 +555,18 @@ export default defineRoutes('purchasing', manifest, async (app) => {
     const { pdf, fileName } = await questionnaireLink.linkCodeOfConduct(request, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+  // B-W2b-311 (SCM-002, SCM-004, SCM-008, SCM-012, SCM-016): suppliers in depth (./suppliers-depth).
+  app.get('/purchasing/suppliers', { schema: suppliersDepthContracts.listSuppliersContract }, async (request) => listSuppliers(request, request.query))
+
+  app.get('/purchasing/suppliers/counts', { schema: suppliersDepthContracts.supplierCountsContract }, async (request) => supplierCounts(request, request.query))
+
+  app.get('/purchasing/suppliers/:partyId/profile', { schema: suppliersDepthContracts.getProfileContract }, async (request) => getProfile(request, request.params.partyId))
+
+  app.patch('/purchasing/suppliers/:partyId/profile', { schema: suppliersDepthContracts.updateProfileContract }, async (request) => updateProfile(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/suppliers/:partyId/status', { schema: suppliersDepthContracts.setStatusContract }, async (request) => setStatus(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/suppliers/:partyId/status-reach', { schema: suppliersDepthContracts.statusReachContract }, async (request) => statusReach(request, request.params.partyId, request.query.status))
+
+  app.put('/purchasing/suppliers/:partyId/contacts/:contactId/receives', { schema: suppliersDepthContracts.setReceivesContract }, async (request) => setReceives(request, request.params.partyId, request.params.contactId, request.body, idempotencyKeyFrom(request)))
 })
