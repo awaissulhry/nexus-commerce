@@ -1,0 +1,350 @@
+/*
+ * Warehouse › Settings › Warehouse rules (SCR-258): layout only, semantic --nds-* tokens (no raw colours, no restyled
+ * controls). The page fills the shell's main area (no max-width, Owner rule 2026-10-29): the cards in a two-column grid on a
+ * wide screen (Separation of duties beside Posting dates; Default locations, Adjustment approval and the Cr VI rule across the
+ * whole width), one column below 1100px. The default-places table scrolls inside its card on a narrow screen, never the page.
+ */
+
+.fw-whs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-whs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-whs-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 24rem;
+}
+
+.fw-whs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-whs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-whs-card {
+  min-width: 0;
+}
+
+.fw-whs-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1100px) {
+  .fw-whs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-whs-stack,
+.fw-whs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-whs-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--nds-space-20);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-whs-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-whs-stepper {
+  display: inline-flex;
+  width: 11rem;
+  max-width: 100%;
+}
+
+.fw-whs-stepper.wide {
+  width: 14rem;
+}
+
+.fw-whs-intro,
+.fw-whs-hint,
+.fw-whs-asof,
+.fw-whs-value {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.fw-whs-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+}
+
+.fw-whs-value {
+  color: var(--nds-text-strong);
+}
+
+.fw-whs-description {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-whs-changed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-whs-link,
+.fw-whs-rowlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-whs-rowlink {
+  display: inline;
+}
+
+.fw-whs-link:hover,
+.fw-whs-link:focus-visible,
+.fw-whs-rowlink:hover,
+.fw-whs-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-whs-held,
+.fw-whs-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-whs-warn.small {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-whs-hint svg,
+.fw-whs-warn svg {
+  flex: none;
+  margin-top: 0.2em;
+}
+
+.fw-whs-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-whs-question {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-whs-switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-whs-switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-whs-inforce,
+.fw-whs-inforce-row,
+.fw-whs-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-whs-switch-row {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.fw-whs-sub {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-whs-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.fw-whs-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.fw-whs-viewonly {
+  display: inline-flex;
+}
+
+/* The default places: a small table of kinds × purposes (named in the step's notes: no DS editable matrix yet). */
+.fw-whs-tablewrap {
+  overflow-x: auto;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-whs-table {
+  width: 100%;
+  min-width: 56rem;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-whs-caption {
+  caption-side: top;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  text-align: start;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-whs-table th,
+.fw-whs-table td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.fw-whs-table thead th {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-whs-table tbody th {
+  width: 12rem;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-whs-cellbox {
+  display: table-cell;
+  min-width: 10rem;
+}
+
+.fw-whs-cellbox > * + * {
+  margin-top: var(--nds-space-2);
+  display: block;
+}
+
+.fw-whs-cellbox.typed {
+  background: var(--nds-info-soft);
+}
+
+.fw-whs-add {
+  display: inline-flex;
+  width: 16rem;
+  max-width: 100%;
+}
+
+.fw-whs-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-whs-panel-icon {
+  flex: none;
+  margin-top: var(--nds-space-2);
+  color: var(--nds-text-2);
+}
+
+.fw-whs-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-whs-keymap-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-whs-keymap-row dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  min-width: 5rem;
+}
+
+.fw-whs-keymap-row dd {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
