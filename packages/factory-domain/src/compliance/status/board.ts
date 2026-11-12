@@ -6,11 +6,13 @@ import { GATE_WORDS, type ComplianceGate, type FixPlace, type Who } from '../req
  * The compliance status board's reads (B-W2b-254; PRD-277, PRD-271; design compliance.status SCR-119: cs-kpi readiness
  * tiles, cs-actions "Needs action", cs-matrix style × market, cs-cell the checklist, cs-expiry "What expires next"), pure.
  * A cell is one style for one market: the requirement checklist the gate function computes with the market's languages
- * (every market is asked, as if the style sold there), folded into one state — Ready, Missing n, Blocked (a missing
+ * (every market the style sells in: B-W2b-288 reads Style.marketCodes; a market it leaves out is "Not sold there"), folded into one state — Ready, Missing n, Blocked (a missing
  * requirement blocks a gate: work cannot go on), Expiring — in words and a code, never a colour alone.
  */
 
-export const CELL_STATES = ['READY', 'MISSING', 'BLOCKED', 'EXPIRING'] as const
+// B-W2b-288 (FU2:02): NOT_SOLD — a market the style does not sell in (Style.marketCodes names others): "Not sold there", not a
+// gap (no line is asked, it never counts as missing, blocked or ready).
+export const CELL_STATES = ['READY', 'MISSING', 'BLOCKED', 'EXPIRING', 'NOT_SOLD'] as const
 export type CellState = (typeof CELL_STATES)[number]
 
 export interface CellSummary {
@@ -51,7 +53,10 @@ export function cellOf(lines: readonly GateLine[]): CellSummary {
   }
 }
 
-export const CELL_WORDS: Readonly<Record<CellState, string>> = { READY: 'Ready', MISSING: 'Missing', BLOCKED: 'Blocked', EXPIRING: 'Expiring' }
+export const CELL_WORDS: Readonly<Record<CellState, string>> = { READY: 'Ready', MISSING: 'Missing', BLOCKED: 'Blocked', EXPIRING: 'Expiring', NOT_SOLD: 'Not sold there' }
+
+/** B-W2b-288 (FU2:02): the cell of a market the style is not sold in: nothing asked, nothing missing. */
+export const NOT_SOLD_CELL: CellSummary = Object.freeze({ state: 'NOT_SOLD', missing: 0, blocking: 0, expiring: 0, manual: 0, blockedGates: [], first: null })
 
 /** "Missing 2", "Blocked", "Ready" — the cell's words (screens say their own per code). */
 export const cellWords = (cell: Pick<CellSummary, 'state' | 'missing'>): string => (cell.state === 'MISSING' ? `Missing ${cell.missing}` : CELL_WORDS[cell.state])
@@ -82,9 +87,10 @@ const WHO_WORDS: Readonly<Record<Who, string>> = { COMPLIANCE: 'Compliance', QUA
  * blocked gates first, then the style and market), each with who can clear it. `limit` lines and how many there are in all (`count`).
  */
 export function needsAction(cells: readonly ActionInput[], limit = 5): { readonly lines: NeedsAction[]; readonly count: number } {
-  const rank = { BLOCKED: 0, MISSING: 1, EXPIRING: 2, READY: 3 } as const
+  const rank = { BLOCKED: 0, MISSING: 1, EXPIRING: 2, READY: 3, NOT_SOLD: 4 } as const
   const all = cells
-    .filter((entry) => entry.cell.state !== 'READY' && entry.cell.first !== null)
+    // B-W2b-288: a market the style is not sold in never needs action.
+    .filter((entry) => entry.cell.state !== 'READY' && entry.cell.state !== 'NOT_SOLD' && entry.cell.first !== null)
     .sort((a, b) => rank[a.cell.state] - rank[b.cell.state] || b.cell.blockedGates.length - a.cell.blockedGates.length || a.styleCode.localeCompare(b.styleCode) || a.marketCode.localeCompare(b.marketCode))
     .map((entry): NeedsAction => {
       const first = entry.cell.first!
@@ -98,7 +104,7 @@ export function needsAction(cells: readonly ActionInput[], limit = 5): { readonl
         words: `${head}: ${first.message.replace(/[.\s]+$/u, '')}. ${WHO_WORDS[first.who]}${first.fix ? ` · ${first.fix}` : ''}`,
         who: first.who,
         fixPlace: first.fixPlace,
-        severity: entry.cell.state === 'READY' ? 'EXPIRING' : entry.cell.state,
+        severity: entry.cell.state === 'BLOCKED' || entry.cell.state === 'MISSING' ? entry.cell.state : 'EXPIRING',
       }
     })
   return { lines: all.slice(0, limit), count: all.length }

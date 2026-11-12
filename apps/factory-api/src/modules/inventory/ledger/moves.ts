@@ -16,6 +16,9 @@ import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf } from './acc
 import type { MoveView } from './contract'
 import { completeKeys, LEDGER_SELECT, lockStock, postMoves, readBalances, type MoveDraft, type PostedMove } from './post-moves'
 import { remnantsOnScrapReversed } from '../remnants/lifecycle'
+// B-W2b-314: an adjustment above the warehouse rules' value waits for a yes.
+import { AdjustmentAboveLimit, askToAdjust, holdAboveLimit } from '../stock/adjust-approval'
+import type { WaitingAdjustmentView } from '../posting/contract'
 
 /**
  * The stock ledger's own commands (SCM-189, SCM-192, SCM-193; A2 SCR-064) and the moves list (SCM-195). Each write is
@@ -36,6 +39,8 @@ interface StockInput {
   readonly reference?: string | null | undefined
   /** B-W2b-22: why the move goes into a soft-locked month (B-W2a-F8's body field, passed to postMoves). */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** B-W2b-314 (SCM-196): the day it counts on in the books, apart from when it happened (passed to postMoves). */
+  readonly postingDate?: string | undefined
 }
 
 /** The stock fields of a body as a draft (an absent colour or lot stays absent: postMoves fills it in). */
@@ -67,7 +72,7 @@ export interface AdjustInput extends StockInput {
  * inventory.adjust: a correction up or down at one location, with its reason (SCM-192); optionally at a typed cost.
  * B-W2b-15: with a code of the tenant's ADJUSTMENT list (active), kept on the move (StockMove.reasonCode: usage counts).
  */
-export async function adjust(caller: CommandCaller, body: AdjustInput, idempotencyKey?: string): Promise<{ move: MoveView }> {
+export async function adjust(caller: CommandCaller, body: AdjustInput, idempotencyKey?: string): Promise<{ move: MoveView } | { waiting: WaitingAdjustmentView }> {
   officeContextOf(caller)
   const site = await siteFor(caller, body.siteId, INVENTORY_ADJUST, 'body/siteId')
   const draft: MoveDraft = {
@@ -79,15 +84,29 @@ export async function adjust(caller: CommandCaller, body: AdjustInput, idempoten
     ...(body.reasonCode ? { reasonCode: body.reasonCode } : {}),
     cost: body.unitCost ? { method: 'MANUAL', unitCost: body.unitCost } : null,
   }
-  const { result } = await command(caller, { name: 'inventory.adjust', idempotencyKey, input: body }, async (tools) => {
-    if (body.reasonCode) {
-      const code = await tools.tx.reasonCode.findFirst({ where: { list: 'ADJUSTMENT', code: body.reasonCode }, select: { active: true } })
-      if (!code?.active) throw new ValidationError('Not an active adjustment reason of this company.', [{ path: 'body/reasonCode', message: 'Pick an active adjustment reason.' }])
-    }
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.adjust', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
-    return { move: view(move!) }
-  })
-  return result
+  const options = { key: keyFor('inventory.adjust', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride, postingDate: body.postingDate }
+  // B-W2b-314: `asking` (the second run): the adjustment was worth more than the warehouse rules' value: ask for a yes instead.
+  const run = (asking: AdjustmentAboveLimit | null) =>
+    command(caller, { name: 'inventory.adjust', idempotencyKey, input: body }, async (tools): Promise<{ move: MoveView } | { waiting: WaitingAdjustmentView }> => {
+      if (body.reasonCode) {
+        const code = await tools.tx.reasonCode.findFirst({ where: { list: 'ADJUSTMENT', code: body.reasonCode }, select: { active: true } })
+        if (!code?.active) throw new ValidationError('Not an active adjustment reason of this company.', [{ path: 'body/reasonCode', message: 'Pick an active adjustment reason.' }])
+      }
+      if (asking) {
+        const waiting = await askToAdjust(tools, asking.pending)
+        if (waiting) return { waiting }
+      }
+      const [move] = await postMoves(tools, [draft], options)
+      // Worth more than the value and an approval rule is on: this run rolls back (AdjustmentAboveLimit), the next one asks.
+      if (!asking) await holdAboveLimit(tools, move!, draft, options)
+      return { move: view(move!) }
+    })
+  try {
+    return (await run(null)).result
+  } catch (error) {
+    if (error instanceof AdjustmentAboveLimit) return (await run(error)).result
+    throw error
+  }
 }
 
 export interface TransferInput extends StockInput {
@@ -116,7 +135,7 @@ export async function transfer(caller: CommandCaller, body: TransferInput, idemp
     caller,
     { name: 'inventory.transfer', idempotencyKey, input: body, ...(context.audience === 'floor' && occurredAt ? { deviceTime: occurredAt } : {}) },
     async (tools) => {
-      const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.transfer', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
+      const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.transfer', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride, postingDate: body.postingDate })
       return { move: view(move!) }
     },
   )
@@ -135,7 +154,7 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
   const site = await siteFor(caller, body.siteId, INVENTORY_SCRAP, 'body/siteId')
   const draft: MoveDraft = { siteId: site.id, reason: 'SCRAP', ...stockOf(body), fromLocationId: body.fromLocationId, note: body.note }
   const { result } = await command(caller, { name: 'inventory.scrap', idempotencyKey, input: body }, async (tools) => {
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.scrap', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
+    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.scrap', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride, postingDate: body.postingDate })
     return { move: view(move!) }
   })
   return result
@@ -148,7 +167,7 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
  * refused (409) when that stock is gone. B-W2b-15: reversing the scrap of a SCRAPPED hide (its write-off) opens the hide
  * again, back to the state it had, in the same command (`reopenedHide`).
  */
-export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
+export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string; readonly periodLockOverride?: PeriodLockOverride | undefined; readonly postingDate?: string | undefined }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
   const context = officeContextOf(caller)
   const original = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: { ...LEDGER_SELECT, reversals: { select: { id: true } } } })) : null
   if (!original || !mayAt(context, INVENTORY_REVERSE, original)) throw new NotFoundError('Stock move not found.')
@@ -172,7 +191,7 @@ export async function reverse(caller: CommandCaller, moveId: string, body: { rea
   }
   const draft: MoveDraft = { ...reversalOf({ ...original, quantity: original.quantity.toString(), baseQuantity: original.baseQuantity.toString() }, body.note), uom: original.uom }
   const { result } = await command(caller, { name: 'inventory.reverse', idempotencyKey, input: { moveId, ...body } }, async (tools) => {
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
+    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride, postingDate: body.postingDate })
     const reopenedHide = original.reason === 'SCRAP' && original.hideId ? await reopenScrappedHide(tools, { hideId: original.hideId, companyId: original.companyId, siteId: original.siteId }, body.note) : null
     return { move: view(move!), reversed: original.id, ...(reopenedHide ? { reopenedHide } : {}) }
   })
@@ -204,6 +223,8 @@ export interface CountInput {
   readonly lines: readonly { readonly itemId: string; readonly itemColourId?: string | null | undefined; readonly lotId?: string | null | undefined; readonly hideId?: string | null | undefined; readonly counted: string }[]
   /** B-W2b-22: why the differences go into a soft-locked month. */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** B-W2b-314: the day the differences count on in the books. */
+  readonly postingDate?: string | undefined
 }
 
 /**
@@ -238,7 +259,7 @@ export async function postCount(caller: CommandCaller, body: CountInput, idempot
       note: body.note,
       reference: body.reference ?? null,
     }))
-    const moves = drafts.length > 0 ? await postMoves(tools, drafts, { key: keyFor('inventory.count', idempotencyKey), issuePath: (index) => `body/lines/${booked[index]!.index}`, periodLockOverride: body.periodLockOverride }) : []
+    const moves = drafts.length > 0 ? await postMoves(tools, drafts, { key: keyFor('inventory.count', idempotencyKey), issuePath: (index) => `body/lines/${booked[index]!.index}`, periodLockOverride: body.periodLockOverride, postingDate: body.postingDate }) : []
     if (moves.length === 0) {
       tools.audit({ action: 'inventory.count', recordType: 'Location', recordId: body.locationId, companyId: site.companyId, siteId: site.id, after: { counted: lines.length, differences: 0 }, reason: body.note })
     }

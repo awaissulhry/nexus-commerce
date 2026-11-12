@@ -10,6 +10,8 @@ import { useCr6, useGates } from './use-cr6-gates'
 import { useMarkets, usePhrases } from './use-markets-phrases'
 import { useOperators } from './use-operators'
 import { useRegs } from './use-regs'
+// B-W2b-288 (FU2:01): Templates.
+import { useTemplates } from './ppe-texts/use-ppe-texts'
 import type { TabContext } from './use-settings'
 import type { Notice } from './view-model'
 import { RulesMarketsView } from './view/RulesMarketsView'
@@ -39,7 +41,7 @@ export function RulesMarketsPage() {
   const [today] = useState(todayInRome)
   const [readAt, setReadAt] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
-  const [ticks, setTicks] = useState<Record<SettingsTab, number>>({ cr6: 0, gates: 0, regulations: 0, markets: 0, phrases: 0, operators: 0 })
+  const [ticks, setTicks] = useState<Record<SettingsTab, number>>({ cr6: 0, gates: 0, regulations: 0, markets: 0, phrases: 0, operators: 0, /* B-W2b-288 */ templates: 0 })
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
 
   const go = useCallback(
@@ -59,6 +61,8 @@ export function RulesMarketsPage() {
   const markets = useMarkets(contextOf('markets'))
   const phrases = usePhrases(contextOf('phrases'))
   const operators = useOperators(contextOf('operators'))
+  // B-W2b-288 (FU2:01)
+  const templates = useTemplates(contextOf('templates'))
 
   // Live: a hint per tab, coalesced (rows never move under the cursor while typing: a cell read again keeps its mark).
   const pending = useRef(new Set<SettingsTab>())
@@ -82,7 +86,7 @@ export function RulesMarketsPage() {
       const tabs = liveTabsOf(change.type)
       if (tabs.length > 0) bump(tabs)
     },
-    () => bump(['cr6', 'gates', 'regulations', 'markets', 'phrases', 'operators']),
+    () => bump(['cr6', 'gates', 'regulations', 'markets', 'phrases', 'operators', /* B-W2b-288 */ 'templates']),
   )
 
   return (
@@ -105,6 +109,8 @@ export function RulesMarketsPage() {
         markets: markets.state,
         phrases: phrases.state,
         operators: operators.state,
+        // B-W2b-288
+        templates: templates.state,
       }}
       actions={{
         onAddress: go,
@@ -118,6 +124,8 @@ export function RulesMarketsPage() {
         markets: markets.actions,
         phrases: phrases.actions,
         operators: operators.actions,
+        // B-W2b-288
+        templates: templates.actions,
       }}
     />
   )

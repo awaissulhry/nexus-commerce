@@ -116,6 +116,8 @@ describe('the index (worker side)', () => {
       ...['BrandingSet', 'Colour'],
       // B-W2b-244: the change requests and change orders (Products › Development › Changes & versions).
       ...['ChangeOrder', 'ChangeRequest'],
+      // B-W2b-295: inquiries and requests for quotation (Sales › Inquiries, B-W2b-322).
+      ...['Inquiry'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])
