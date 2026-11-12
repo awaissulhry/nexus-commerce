@@ -218,7 +218,9 @@ describe('forward scheduling for late orders (PLN-130)', () => {
     expect(applied.moves.map((move: Json) => move.to)).toEqual(preview.moves.map((move: Json) => move.to))
     const slots = await admin<{ code: string; startAt: Date }>(`SELECT o.code, s."startAt" FROM "ScheduleSlot" s JOIN "WorkOrderOperation" o ON o.id = s."workOrderOperationId" WHERE s."planKind" = 'WORKING' AND s."workOrderId" = $1 ORDER BY o.seq`, [wo2])
     expect(slots.map((slot) => [slot.code, slot.startAt.toISOString()])).toEqual(preview.moves.map((move: Json) => [move.operation.code, move.to.startAt]))
-    expect((await changes()).filter((row) => row.kind === 'PLACE' || row.kind === 'MOVE').map((row) => row.kind).sort()).toEqual(['MOVE', 'PLACE', 'PLACE', 'PLACE'])
+    // B-W2b-329: B-W2a-34's moves are logged too: the run's rows are those of its work order's slots.
+    const wo2Slots = new Set((await admin<{ id: string }>(`SELECT id FROM "ScheduleSlot" WHERE "planKind" = 'WORKING' AND "workOrderId" = $1`, [wo2])).map((row) => row.id))
+    expect((await changes()).filter((row) => (row.kind === 'PLACE' || row.kind === 'MOVE') && wo2Slots.has(row.slotId)).map((row) => row.kind).sort()).toEqual(['MOVE', 'PLACE', 'PLACE', 'PLACE'])
     expect((await audits('planning.schedule.forward'))[0]).toMatchObject({ recordType: 'PlanVersion' })
     expect((await changeKinds()).at(-1)).toBe('SCHEDULED_FORWARD')
     // Nothing moves a second time.

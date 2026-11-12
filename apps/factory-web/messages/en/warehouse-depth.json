@@ -1,0 +1,426 @@
+{
+  "wd": {
+    "why": {
+      "label": "Why is it this number?",
+      "open": "{quantity}: why is it this number?",
+      "title": "Why is it {quantity} {unit}?",
+      "loading": "Adding up the moves…",
+      "formula": "Receipts + returns − issues − scrap ± adjustments ± counts ± transfers.",
+      "tableLabel": "The moves by reason",
+      "col": {
+        "reason": "Reason",
+        "moves": "Moves",
+        "net": "In − out"
+      },
+      "startOn": "On hand before {day}",
+      "sum": "Adds up to",
+      "addsUp": "Adds up to {quantity} {unit} ✓",
+      "gap": "Does not add up by {gap} {unit}: this is a fault, and it is reported.",
+      "last_one": "The last move",
+      "last_other": "The last {count} moves",
+      "backDated": "dated apart",
+      "allMoves_one": "Open the move",
+      "allMoves_other": "Open all {count} moves",
+      "key": "Why is this number (the focused row's quantity)",
+      "period": "From {from} to {to}",
+      "periodAll": "Every move up to {to}",
+      "basisPosting": "By the day each move counts on in the books.",
+      "basisEntry": "By the day each move happened.",
+      "now": "On hand now: {quantity} {unit}."
+    },
+    "bridge": {
+      "label": "Balance bridge: the start, each reason, the end",
+      "start": "To start",
+      "startOn": "On hand before {day}",
+      "endOn": "On hand at the end of {day}",
+      "mismatch": "The steps add up to {total}; the stock says otherwise ({gap}): a fault, reported."
+    },
+    "transit": {
+      "col": "In transit",
+      "link": "Goods on the way to another site: open the transfers in transit",
+      "notHere": "In transit"
+    },
+    "low": {
+      "tile": "Below minimum",
+      "tileCount_one": "{count} material",
+      "tileCount_other": "{count} materials",
+      "tileHint": "below their minimum",
+      "tableLabel": "Materials below their minimum",
+      "count_one": "{count} material below its minimum",
+      "count_other": "{count} materials below their minimum",
+      "allColours": "Every colour",
+      "col": {
+        "material": "Material",
+        "minimum": "Minimum",
+        "onHand": "On hand",
+        "onOrder": "On order",
+        "reserved": "Reserved",
+        "position": "Position",
+        "short": "Short"
+      },
+      "basis": {
+        "MIN_MAX": "Minimum stock",
+        "REORDER_POINT": "Reorder point",
+        "SAFETY_STOCK": "Safety stock"
+      },
+      "shortSub": "to the minimum",
+      "rowMenu": "Actions for {code}",
+      "openItem": "Open the material",
+      "showStock": "Show its stock",
+      "none": "Nothing is below its minimum",
+      "noneBody": "Position = on hand + on order − reserved, against the minimum each material's planning sets.",
+      "alertsOff": "Low-stock alerts are switched off in the warehouse rules: nobody is told when a material drops below its minimum.",
+      "csv": {
+        "site": "Site",
+        "material": "Material",
+        "materialName": "Material name",
+        "colour": "Colour",
+        "minimum": "Minimum",
+        "onHand": "On hand",
+        "onOrder": "On order",
+        "reserved": "Reserved",
+        "position": "Position",
+        "short": "Short",
+        "unit": "Unit"
+      }
+    },
+    "move": {
+      "row": "Move…",
+      "bulk_one": "Move {count}",
+      "bulk_other": "Move {count}",
+      "title_one": "Move {count} stock row",
+      "title_other": "Move {count} stock rows",
+      "from": "From {places}",
+      "what": "What moves",
+      "andMore": "and {count} more",
+      "to": "To",
+      "toHint": "A place of the same site. A blocked place takes nothing in.",
+      "pick": "Pick a place",
+      "blockedSuffix": "blocked",
+      "quantity": "Quantity ({unit})",
+      "quantityHint": "All of it: {quantity} {unit}.",
+      "whole": "Each row moves whole; leather moves hide by hide.",
+      "note": "Note",
+      "noteHint": "Why it moves (optional): the ledger keeps it.",
+      "keys": "⌘↵ moves · Esc cancels",
+      "do_one": "Move",
+      "do_other": "Move {count}",
+      "posting": "Moving…",
+      "doneTitle_one": "{count} move posted",
+      "doneTitle_other": "{count} moves posted",
+      "done_one": "{count} move to {place} posted.",
+      "done_other": "{count} moves to {place} posted.",
+      "refusedTitle_one": "{count} not moved",
+      "refusedTitle_other": "{count} not moved",
+      "refusedLine": "{what}: {why}",
+      "held": {
+        "nothing": "Nothing to move.",
+        "sites": "Move one site at a time: a move between sites is a transfer (Warehouse › Transfers).",
+        "fromBlocked": "{code} is blocked: nothing moves in or out of it.",
+        "transit": "{code} is a transit place: only its transfer moves those goods.",
+        "pick": "Pick the place it goes to.",
+        "toBlocked": "{code} is blocked: it takes nothing in.",
+        "same": "It already lies there.",
+        "quantity": "Type how much moves.",
+        "tooMuch": "More than lies there.",
+        "note": "The note is at most 500 characters.",
+        "pastDate": "Stock as of a past date cannot be changed.",
+        "noRight": "Your role may not move stock.",
+        "pickRows": "Select the rows to move first."
+      },
+      "problem": {
+        "blocked": "The place is blocked (a count, damage or a clean-up): nothing moves in or out.",
+        "kind": "That place does not hold this kind of material.",
+        "notEnough": "That stock is not there any more: read the figures again.",
+        "changed": "Someone changed it meanwhile. Check and try again.",
+        "forbidden": "Your role may not move stock.",
+        "offline": "No connection to the server. Try again when it is back.",
+        "invalid": "Something in it was not accepted.",
+        "write": "It was not moved. Try again."
+      }
+    },
+    "adj": {
+      "approvalAbove": "Needs approval above {amount}",
+      "approvalHeld": "Needs approval above the value the warehouse rules set",
+      "approvers": "Who approves: {names}. Up to that value it posts at once; above it, it waits for their yes.",
+      "approversUnknown": "Above that value it waits for a yes (Admin › Approvals, automation & AI › Approval rules)."
+    },
+    "posting": {
+      "label": "Posting date",
+      "hint": "The day it counts on in the books. Empty: today.",
+      "checking": "Checking the day…",
+      "checkFailed": "The day could not be checked. Try again.",
+      "closed": "That month is closed in the books: nothing goes into it.",
+      "closedBody": "From {from} to {to}. Finance reopens a month.",
+      "tooFar": "Further back than the warehouse rules allow: the earliest is {earliest}.",
+      "notAllowed": "That day may not be used.",
+      "ok": "Counts on {day} in the books.",
+      "lockReason": "Say why it goes into a closed month.",
+      "lockReasonLabel": "Why it goes into a closed month",
+      "lockReasonHint": "The month from {from} to {to} is closed for most changes: the reason is kept with the move.",
+      "byLabel": "Period by",
+      "byEntry": "Day it happened",
+      "byPosting": "Posting day",
+      "datedLabel": "Posting date",
+      "datedAny": "Any posting date",
+      "datedBack": "Dated apart only",
+      "datedSame": "Not dated apart",
+      "countsOn": "Counts on",
+      "countsOnHint": "Dated apart from the day it happened.",
+      "countsOnShort": "Counts on {day}"
+    },
+    "waiting": {
+      "button": "Waiting for approval",
+      "buttonLabel_one": "{count} adjustment waiting for approval",
+      "buttonLabel_other": "{count} adjustments waiting for approval",
+      "buttonFailed": "The adjustments waiting for approval could not be read",
+      "title": "Waiting for approval",
+      "by": "Waiting for approval by {approver} since {since}",
+      "byUnknown": "Waiting for approval since {since}",
+      "what": "{material} at {place}: {from} → {to} {unit} once approved. Nothing is posted until then.",
+      "up": "Up {quantity} {unit}: {from} → {to}",
+      "down": "Down {quantity} {unit}: {from} → {to}",
+      "open": "Open request",
+      "more_one": "{count} more in Approvals",
+      "more_other": "{count} more in Approvals",
+      "note": "Adjustments worth more than the warehouse rules' value wait here; the approver decides in Home › Approvals."
+    },
+    "loc": {
+      "busy": "Working…",
+      "col": {
+        "defaults": "Default for",
+        "label": "Label"
+      },
+      "status": {
+        "ACTIVE": "Active",
+        "BLOCKED": "Blocked",
+        "ARCHIVED": "Archived",
+        "byCount": "Count {number}",
+        "until": "{reason} · until {day}"
+      },
+      "reason": {
+        "COUNT": "A count",
+        "DAMAGE": "Damage",
+        "CLEAN_UP": "Clean-up",
+        "OTHER": "Other"
+      },
+      "purpose": {
+        "RECEIVING": "Receiving",
+        "QUALITY": "Quality",
+        "ISSUE": "Issue",
+        "RETURN": "Returns",
+        "PUT_AWAY": "Put-away"
+      },
+      "purposeFor": "{purpose} ({kind})",
+      "purposeAll": "{purpose} (every material)",
+      "itemKind": {
+        "LEATHER": "leather",
+        "TEXTILE": "textile",
+        "LINING": "lining",
+        "MEMBRANE": "membrane",
+        "PADDING": "padding",
+        "THREAD": "thread",
+        "TRIM": "trims",
+        "HARDWARE": "hardware",
+        "PROTECTOR": "protectors",
+        "LABEL": "labels",
+        "PACKAGING": "packaging",
+        "COMPONENT": "components",
+        "FINISHED": "finished garments"
+      },
+      "holds": {
+        "ANY": "Holds any goods",
+        "MATERIALS": "Holds materials only",
+        "FINISHED": "Holds finished garments only"
+      },
+      "group": {
+        "STORE": "a storage place",
+        "DOCK": "a dock",
+        "LINE": "line side",
+        "OUTSIDE": "outside the site",
+        "TRANSIT": "between two sites"
+      },
+      "kind": {
+        "atTop": "at the top of the tree",
+        "noInside": "nothing sits inside it",
+        "noLabel": "no bin label",
+        "transferOnly": "only a transfer moves its goods",
+        "namesCustomer": "names its customer",
+        "namesWorkshop": "names its workshop"
+      },
+      "menu": {
+        "block": "Block…",
+        "changeBlock": "Change block…",
+        "unblock": "Unblock",
+        "printLabel": "Print label…"
+      },
+      "held": {
+        "noManage": "Your role may not change places.",
+        "archived": "An archived place is not blocked.",
+        "notBlockable": "A place outside the site or in transit is not blocked: its moves are its orders' own.",
+        "countBlock": "Count {number} is running here: the count unblocks it when its counting ends.",
+        "notBlocked": "It is not blocked."
+      },
+      "block": {
+        "title": "Block {code}",
+        "changeTitle": "Change the block of {code}",
+        "effect": "While it is blocked nothing moves in or out of it (a count's own moves go through).",
+        "reason": "Reason",
+        "pickReason": "Pick a reason",
+        "note": "Note",
+        "noteHint": "What happened (required for Other).",
+        "until": "Until",
+        "untilHint": "The last day it holds. Empty: until it is unblocked.",
+        "do": "Block",
+        "change": "Save the block",
+        "held": {
+          "reason": "Pick a reason.",
+          "note": "Say why in words (the reason is Other).",
+          "long": "The note is at most 500 characters.",
+          "past": "The last day is not before today."
+        }
+      },
+      "unblock": {
+        "title": "Unblock {code}?",
+        "now": "Blocked now: {reason}.",
+        "effect": "Moves in and out of it go through again.",
+        "do": "Unblock"
+      },
+      "done": {
+        "blocked": "{code} blocked.",
+        "unblocked": "{code} unblocked."
+      },
+      "problem": {
+        "changed": "Someone changed this place meanwhile: it was read again. Check and try again.",
+        "notNow": "This place cannot be blocked or unblocked in its present state.",
+        "forbidden": "Your role may not do this.",
+        "gone": "It no longer exists, or it belongs to another company.",
+        "offline": "No connection to the server. Try again when it is back.",
+        "write": "It was not saved. Try again."
+      },
+      "new": {
+        "atTop": "A customer's place or a transit place sits at the top of the site's tree: pick no parent.",
+        "noInside": "Nothing sits inside {code}.",
+        "customer": "Customer",
+        "workshop": "Workshop",
+        "partyPick": "Pick who it belongs to",
+        "partiesLoading": "Reading…",
+        "partyNoRight": "Naming the customer or workshop needs access to customers and suppliers.",
+        "noCustomers": "There is no active customer or brand to name.",
+        "noWorkshops": "There is no active workshop to name."
+      },
+      "record": {
+        "blocked": "Blocked: {reason}",
+        "countBlocked": "Blocked while count {number} runs",
+        "openCount": "Open the count",
+        "until": "until {day}",
+        "untilUnblocked": "until it is unblocked",
+        "since": "since {day}",
+        "kindTitle": "What it holds",
+        "defaultsTitle": "Default for",
+        "noDefaults": "No command takes it by default.",
+        "kindFixed": "This kind stays what it is: its party or its transfers depend on it."
+      },
+      "tab": {
+        "labels": "Labels"
+      },
+      "label": {
+        "none": "No label yet",
+        "noneKind": "Carries no label",
+        "noneBody": "Only places on the floor carry a bin label: a scan of it confirms a put-away, a move or a count.",
+        "previewTitle": "The bin label",
+        "labelName": "Bin label {code}",
+        "barcode": "Barcode {code}",
+        "invalid": "This code cannot be printed as a barcode: {code}",
+        "print": "Print label",
+        "reprint": "Reprint",
+        "suggestedNote": "It has no code yet: printing gives it {code}.",
+        "ownNote": "A scan of this label names this place.",
+        "codeTitle": "The label's code",
+        "codeNow": "Code on the label",
+        "placeCode": "The place's own code",
+        "getsCode": "It gets {code}",
+        "codeField": "Label code",
+        "codeHint": "Letters, digits and . _ : / - without spaces; unique in the company.",
+        "oldCode": "Labels already printed with the old code will no longer scan: print new ones.",
+        "saveCode": "Save the code",
+        "giveSuggested": "Give it {code}",
+        "saved": "The code is saved.",
+        "savedPrinted_one": "The code is saved. {count} label printed with the old code no longer scans: print a new one.",
+        "savedPrinted_other": "The code is saved. {count} labels printed with the old code no longer scan: print new ones.",
+        "history": "Print history",
+        "neverPrinted": "Never printed.",
+        "copies_one": "{count} copy",
+        "copies_other": "{count} copies",
+        "failedHint": "Not printed: try again from Print label.",
+        "code": {
+          "missing": "Type the code.",
+          "shape": "Letters, digits and . _ : / - only, without spaces (at most 64).",
+          "taken": "Another place already carries this code.",
+          "same": "It already carries this code."
+        },
+        "refused": {
+          "archived": "An archived place carries no label.",
+          "kind": "A place outside the site or in transit carries no label.",
+          "other": "Not printed."
+        }
+      },
+      "job": {
+        "QUEUED": "Queued",
+        "SENT": "Sent",
+        "PRINTED": "Printed",
+        "FAILED": "Not printed"
+      },
+      "print": {
+        "band": "Print labels",
+        "bulk_one": "Print {count} label",
+        "bulk_other": "Print {count} labels",
+        "title_one": "Print {count} bin label",
+        "title_other": "Print {count} bin labels",
+        "site": "Site {site}",
+        "printer": "Printer",
+        "printerHint": "A label printer of this site.",
+        "pdfHint": "A PDF in a new tab: print it on any printer (one label per page).",
+        "printersLoading": "Reading the printers…",
+        "noPrinters": "No label printer at this site",
+        "pickPrinter": "Pick a label printer",
+        "inBrowser": "PDF in the browser",
+        "copies": "Copies",
+        "copiesHint": "Of each label, 1 to 10.",
+        "language": "Label language",
+        "lang": {
+          "it": "Italian",
+          "en": "English"
+        },
+        "needCode_one": "{count} place has no label code yet: it gets its suggested code first.",
+        "needCode_other": "{count} places have no label code yet: they get their suggested codes first.",
+        "leftOut_one": "{count} place is left out",
+        "leftOut_other": "{count} places are left out",
+        "refusedLine": "{code}: {why}",
+        "do_one": "Print",
+        "do_other": "Print {count}",
+        "pdf_one": "Open the PDF",
+        "pdf_other": "Open the PDF of {count}",
+        "posting": "Sending…",
+        "doneTitle_one": "{count} label sent to the printer",
+        "doneTitle_other": "{count} labels sent to the printer",
+        "done_one": "{count} print job queued.",
+        "done_other": "{count} print jobs queued.",
+        "doneBody": "Each place's Labels tab shows where its job stands.",
+        "refusedTitle_one": "{count} not printed",
+        "refusedTitle_other": "{count} not printed",
+        "noRightPdf": "Your role prints labels as a PDF only (a label printer needs the print permission).",
+        "held": {
+          "none": "None of these places carries a label.",
+          "tooMany": "At most 200 labels at once.",
+          "copies": "1 to 10 copies.",
+          "noRight": "Your role may not send labels to a printer: pick the PDF.",
+          "needCode_one": "{count} place has no label code yet and your role may not give it one: pick places with a code, or the PDF.",
+          "needCode_other": "{count} places have no label code yet and your role may not give them one: pick places with a code, or the PDF.",
+          "printer": "Pick a label printer, or the PDF.",
+          "select": "Select the places to print first."
+        }
+      }
+    }
+  }
+}

@@ -39,6 +39,8 @@ export interface GarmentSource {
   readonly effects: readonly EffectFacts[]
   /** A component that is a phantom at the site (its colour, null: any). */
   readonly isPhantom: (itemId: string, itemColourId: string | null) => boolean
+  /** B-W2b-318 (PLN-081): a part's scrap and yield factor at the site (../lot-sizing/scrap); it multiplies what is below it. */
+  readonly factorOf?: (itemId: string, itemColourId: string | null) => Decimal | null
 }
 
 /** Per order line, size and component (`shareKey`): the share of the component still to make, 0 to 1. */
@@ -134,6 +136,9 @@ export function garmentNeeds(source: GarmentSource, at: { readonly orderLineId: 
     let value = decimalOf('1')
     for (const step of via) {
       const component = componentOf.get(`${step.revisionId}|${step.lineId}`)
+      // B-W2b-318 (PLN-081): a made part's (or a phantom's) scrap and yield take more of what is below it.
+      const factor = component ? source.factorOf?.(component.itemId, component.itemColourId) : null
+      if (factor) value = value.times(factor)
       if (!component || source.isPhantom(component.itemId, component.itemColourId)) continue
       const share = shares.get(shareKey(at.orderLineId, at.size, component.itemId, component.itemColourId))
       if (share) value = value.times(share)

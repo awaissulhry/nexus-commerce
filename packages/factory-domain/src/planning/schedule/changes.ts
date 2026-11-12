@@ -12,6 +12,9 @@
  *   SCHEDULED_FORWARD     late work orders were scheduled forward from today on the lanes' free time
  *   BACKLOG_RESCHEDULED   bars left in the past were moved into the first free time (and what they pushed)
  *   WHAT_IF_APPLIED       a planner's private what-if moves were applied to the working plan
+ *
+ * B-W2b-329 (PLN-149), added at the end:
+ *   UNDONE                a change of the board's log was undone (a bar taken off, moved back, put back, unpinned or pinned)
  */
-export const SCHEDULE_CHANGES = ['PLACED', 'MOVED', 'REMOVED', 'PLACED_BY_DUE_DATE', 'ALLOCATED', /* B-W2b-312 */ 'PINNED', 'UNPINNED', 'SCHEDULED_FORWARD', 'BACKLOG_RESCHEDULED', 'WHAT_IF_APPLIED'] as const
+export const SCHEDULE_CHANGES = ['PLACED', 'MOVED', 'REMOVED', 'PLACED_BY_DUE_DATE', 'ALLOCATED', /* B-W2b-312 */ 'PINNED', 'UNPINNED', 'SCHEDULED_FORWARD', 'BACKLOG_RESCHEDULED', 'WHAT_IF_APPLIED', /* B-W2b-329 */ 'UNDONE'] as const
 export type ScheduleChange = (typeof SCHEDULE_CHANGES)[number]

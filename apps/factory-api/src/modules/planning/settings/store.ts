@@ -4,6 +4,10 @@ import { DEFAULT_EFFICIENCY_PCT, DEFAULT_PLANNING_SETTINGS, type PlanningSetting
 import { EMPTY_ITEM_PLANNING, QUANTITY_FIELDS, type ItemPlanningValues } from '@nexus/factory-domain/planning/settings/items'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
+// B-W2b-318: the planning rules per item and the size-run setting.
+import { itemRuleWords, type ItemRuleValues, type LotSizing, type PlanLevel } from '@nexus/factory-domain/planning/lot-sizing/parameters'
+import { DEFAULT_SIZE_RUN, sizeGroupsOfJson, type SizeRunValues } from '@nexus/factory-domain/planning/lot-sizing/size-run'
+import { SIZE_RUN_RULES, type SizeRunRule } from '@nexus/factory-domain/planning/planned-orders/rules'
 import { IdempotencyKeyReusedError, requestHash, type CommandCaller, type CommandRecord } from '../../../core/command'
 import type { Reader, SiteRow } from '../store'
 import type { ItemParametersView, SettingsView } from './contract'
@@ -26,6 +30,9 @@ export const SETTINGS_SELECT = {
   weekBucketWeeks: true,
   defaultEfficiencyPct: true,
   scheduledRunTime: true,
+  // B-W2b-318 (PLN-068).
+  sizeRunRule: true,
+  sizeGroups: true,
   version: true,
   updatedAt: true,
 } as const satisfies Prisma.PlanningSettingsSelect
@@ -40,8 +47,15 @@ export function settingsValuesOf(row: SettingsRow | null): PlanningSettingsValue
   return { horizonWeeks: row.horizonWeeks, dayBucketWeeks: row.dayBucketWeeks, weekBucketWeeks: row.weekBucketWeeks, defaultEfficiencyPct: pct(row.defaultEfficiencyPct), scheduledRunTime: row.scheduledRunTime }
 }
 
+/** B-W2b-318 (PLN-068): the site's size-run rule and groups (the defaults: one grid). */
+export const sizeRunOf = (row: Pick<SettingsRow, 'sizeRunRule' | 'sizeGroups'> | null): SizeRunValues =>
+  row ? { sizeRunRule: (SIZE_RUN_RULES as readonly string[]).includes(row.sizeRunRule) ? (row.sizeRunRule as SizeRunRule) : 'ONE_GRID', sizeGroups: sizeGroupsOfJson(row.sizeGroups) } : DEFAULT_SIZE_RUN
+
 export const settingsViewOf = (row: SettingsRow | null): SettingsView => ({
   ...settingsValuesOf(row),
+  // B-W2b-318 (PLN-068).
+  sizeRunRule: sizeRunOf(row).sizeRunRule,
+  sizeGroups: sizeRunOf(row).sizeGroups.map((group) => [...group]),
   isDefault: row === null,
   version: row?.version ?? null,
   updatedAt: row ? toUtcIso(row.updatedAt) : null,
@@ -75,9 +89,17 @@ export const ITEM_PLANNING_SELECT = {
   orderMultiple: true,
   maxOrderQty: true,
   note: true,
+  // B-W2b-318 (PLN-006, PLN-008, PLN-081, PLN-082): the planning rules per item.
+  lotSizing: true,
+  fixedLotQty: true,
+  lotPeriodDays: true,
+  planLevel: true,
+  scrapPct: true,
+  yieldPct: true,
+  delayDays: true,
   version: true,
   updatedAt: true,
-  item: { select: { id: true, code: true, name: true, baseUom: true } },
+  item: { select: { id: true, code: true, name: true, baseUom: true, kind: true } },
   itemColour: { select: { id: true, code: true, name: true } },
   supplier: { select: { id: true, code: true, legalName: true, tradeName: true } },
   makeSite: { select: { id: true, code: true, name: true } },
@@ -93,14 +115,31 @@ export function itemPlanningValuesOf(row: ItemPlanningRow): ItemPlanningValues {
   return values as unknown as ItemPlanningValues
 }
 
+/** B-W2b-318: a row's planning rules as stored (quantities four decimals, percents two). */
+export function itemRulesOf(row: Pick<ItemPlanningRow, 'lotSizing' | 'fixedLotQty' | 'lotPeriodDays' | 'planLevel' | 'scrapPct' | 'yieldPct' | 'delayDays'>): ItemRuleValues {
+  return {
+    lotSizing: row.lotSizing as LotSizing,
+    fixedLotQty: q4(row.fixedLotQty),
+    lotPeriodDays: row.lotPeriodDays,
+    planLevel: (row.planLevel as PlanLevel | null) ?? null,
+    scrapPct: row.scrapPct === null ? null : pct(row.scrapPct),
+    yieldPct: row.yieldPct === null ? null : pct(row.yieldPct),
+    delayDays: row.delayDays,
+  }
+}
+
 export const itemParametersViewOf = (row: ItemPlanningRow): ItemParametersView => {
   const values = itemPlanningValuesOf(row)
+  // B-W2b-318: the planning rules per item, and what each does.
+  const rules = itemRulesOf(row)
   return {
     id: row.id,
     siteId: row.siteId,
     item: row.item,
     colour: row.itemColour,
     ...values,
+    ...rules,
+    rules: itemRuleWords(rules, { method: values.method, itemKind: row.item.kind, uom: row.item.baseUom, minOrderQty: values.minOrderQty, orderMultiple: values.orderMultiple, maxOrderQty: values.maxOrderQty }),
     supplier: row.supplier ? { id: row.supplier.id, code: row.supplier.code, name: row.supplier.tradeName ?? row.supplier.legalName } : null,
     makeSite: row.makeSite,
     version: row.version,
