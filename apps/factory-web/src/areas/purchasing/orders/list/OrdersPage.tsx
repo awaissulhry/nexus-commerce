@@ -15,6 +15,11 @@ import { NO_NEW_ORDER, orderQuery, orderViewOf, type NewOrderModel, type OrdersL
 import { OrdersListView } from './view/OrdersListView'
 import { typedNumberRefusal } from '../../../admin/documents/override/model'
 import { useNumberField } from '../../../admin/documents/override/use-number-field'
+// B-W2b-333: the expediting worklist (What it blocks, Confirmed later than needed) and the chase.
+import { getWorklist, type WorklistRow } from '../depth/api'
+import { DEPTH, depthCanOf, type WorklistPart } from '../depth/model'
+import { DEPTH_PREFIX } from '../depth/use-order-depth'
+import { useChase } from '../depth/use-chase'
 
 /**
  * `/w/<company>/purchasing/orders` (SCR-058): the orders of the saved view (`?view=`, or the API's own `?status=` and
@@ -24,7 +29,7 @@ import { useNumberField } from '../../../admin/documents/override/use-number-fie
  */
 export function OrdersPage() {
   return (
-    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'lists']}>
       <OrdersContainer />
     </WithMessages>
   )
@@ -53,6 +58,12 @@ function OrdersContainer() {
   const [newOrder, setNewOrder] = useState<NewOrderModel | null>(null)
   // B-W2a-69: Send n (one key per dialog: a retry of the same dialog is the same sends).
   const [sendManyState, setSendMany] = useState<SendManyModel | null>(null)
+  // B-W2b-333: the lines at risk (one page of the worklist), the Confirmed later than needed view's lines.
+  const depthCan = useMemo(() => depthCanOf(session.permissions), [session.permissions])
+  const tw = useT(DEPTH)
+  const [worklist, setWorklist] = useState<WorklistPart>({ status: 'loading' })
+  const [late, setLate] = useState<{ rows: WorklistRow[] | null; more: boolean; problem: string | null }>({ rows: null, more: false, problem: null })
+  const lateCursor = useRef<string | null>(null)
   const sendManyKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
   // B-W2b-24 (PLT-125): the number the new order will get, or a migrated order's old number (numbering.override).
@@ -94,6 +105,38 @@ function OrdersContainer() {
     void load()
   }, [load])
 
+  // B-W2b-333: the worklist's lines at risk, ranked by the customer orders they put at risk (200 read: "What it blocks").
+  const readWorklist = useCallback(() => {
+    if (!can.poView) return
+    getWorklist(api, { atRisk: true, limit: 200 })
+      .then((page) => setWorklist({ status: 'ready', rows: page.rows, complete: page.complete && page.nextCursor === null, confirmedLate: page.tiles.confirmedLate }))
+      .catch((error: unknown) => setWorklist({ status: 'error', problem: readProblem(error) }))
+  }, [api, can.poView])
+  const readLate = useCallback(
+    (more = false) => {
+      if (!can.poView) return
+      if (!more) setLate({ rows: null, more: false, problem: null })
+      getWorklist(api, { reason: 'CONFIRMED_LATE', cursor: more ? lateCursor.current : null, limit: 50 })
+        .then((page) => {
+          lateCursor.current = page.nextCursor
+          setLate((current) => ({ rows: more ? [...(current.rows ?? []), ...page.rows] : page.rows, more: page.nextCursor !== null, problem: null }))
+        })
+        .catch((error: unknown) => setLate((current) => ({ ...current, problem: readProblem(error) })))
+    },
+    [api, can.poView],
+  )
+  useEffect(() => readWorklist(), [readWorklist])
+  useEffect(() => {
+    if (view === 'confirmedLate') readLate()
+  }, [view, readLate])
+  const chase = useChase({
+    api,
+    onSent: (to) => {
+      setNotice({ tone: 'success', words: phrase(`${DEPTH_PREFIX}notice.chased`, { to }) })
+      readWorklist()
+    },
+  })
+
   useEffect(() => {
     if (!can.sites) return
     listSites(api, session.company?.id ?? null)
@@ -118,11 +161,14 @@ function OrdersContainer() {
       .then((page) => setSummary(page.summary))
       .catch(() => undefined)
   }, 800)
+  const rereadWorklist = useCoalesced(() => readWorklist(), 1500)
   const live = useLive(
     (change) => {
       if (!change.type.startsWith('purchase_order.')) return
       setUpdates((count) => count + 1)
       recount()
+      // B-W2b-333: a re-dated or confirmed line moves the worklist (the rows wait for Show, as the list's).
+      if (change.type === 'purchase_order.date_changed' || change.type === 'purchase_order.dates_confirmed' || change.type === 'purchase_order.confirmed') rereadWorklist()
     },
     () => void load(),
     can.poView,
@@ -233,7 +279,26 @@ function OrdersContainer() {
     }
   }, [api, sendManyState, load])
 
-  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder: newOrder ? { ...newOrder, number: numberField.model } : null, sendMany: sendManyState }
+  // B-W2b-333: the Confirmed later than needed view's rows as CSV (no money, no customer name).
+  const exportLate = useCallback(
+    (picked: WorklistRow[]) => {
+      const header = [tw('late.csv.order'), tw('late.csv.supplier'), tw('late.csv.line'), tw('late.csv.material'), tw('late.csv.asked'), tw('late.csv.theirs'), tw('late.csv.later'), tw('late.csv.atRisk')]
+      const csvRows = picked.map((row) => [
+        row.number,
+        row.supplierName,
+        row.seq,
+        `${row.item.code} ${row.item.name}`,
+        row.nextDelivery?.needDate ?? row.needDate,
+        row.nextDelivery?.confirmedDate ?? row.confirmedDate ?? '',
+        row.confirmedLaterBy,
+        row.blocks.entries.filter((entry) => entry.lateBy > 0).map((entry) => entry.salesOrder?.number ?? entry.workOrder?.number ?? '').filter(Boolean).join(' '),
+      ])
+      downloadText(`confirmed-later-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(header, csvRows))
+    },
+    [tw],
+  )
+
+  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder: newOrder ? { ...newOrder, number: numberField.model } : null, sendMany: sendManyState, worklist, confirmedLate: view === 'confirmedLate' ? late : null, chase: chase.model, depthCan }
 
   return (
     <OrdersListView
@@ -248,6 +313,8 @@ function OrdersContainer() {
         onOpen: (id) => router.push(`${prefix}/purchasing/orders/${id}`),
         onDismissNotice: () => setNotice(null),
         onSendMany: openSendMany,
+        chase: { ...chase.actions, onOpen: (order) => chase.open(order) },
+        late: { onMore: () => readLate(true), onRetry: () => readLate(), onExport: exportLate },
         sendMany: {
           onConfirmBy: (orderId, confirmBy) => setSendMany((current) => (current ? { ...current, confirmBy: { ...current.confirmBy, [orderId]: confirmBy } } : current)),
           onMessage: (message) => setSendMany((current) => (current ? { ...current, message } : current)),

@@ -363,6 +363,7 @@
       "quarantine": "Move to quarantine",
       "receive": "Open Receive",
       "pick": "Open Pick & issue",
+      "count": "Open Count",
       "take": "Take it",
       "giveBack": "Give it back",
       "done": "Done"

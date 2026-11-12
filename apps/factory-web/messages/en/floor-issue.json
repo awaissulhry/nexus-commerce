@@ -219,6 +219,42 @@
     "REMNANT_GONE_ON": {
       "message": "The remnant went on (issued, cut or scrapped): this is not taken back.",
       "fix": "Ask the office."
+    },
+    "STOP_BLOCKED": {
+      "message": "This place is blocked: nothing is taken from it",
+      "fix": "Take it from another stop, or ask the office to unblock the place."
+    },
+    "STOP_ON_HOLD": {
+      "message": "This lot is on a quality hold: it is not issued",
+      "fix": "Quality releases it first. Take the next stop."
+    },
+    "STOP_NOT_RELEASED": {
+      "message": "Not released for use: only released stock is issued",
+      "fix": "Take the next stop, or ask quality."
+    },
+    "LINES_SHORT": {
+      "message": "Lines are still short: the kit is not complete",
+      "fix": "Pick every line in full, then Kit complete."
+    },
+    "NOTHING_PLANNED": {
+      "message": "The work order plans no material",
+      "fix": "There is no kit to check."
+    },
+    "ALREADY_CHECKED": {
+      "message": "The kit is checked complete already",
+      "fix": "The office opens it again if something is missing."
+    },
+    "NOT_CHECKED": {
+      "message": "The kit is not checked complete",
+      "fix": "There is nothing to open again."
+    },
+    "NOT_A_PLACE": {
+      "message": "No place carries this label",
+      "fix": "Scan the label of a place of this site."
+    },
+    "NOT_A_KIT_PLACE": {
+      "message": "A kit does not wait at this place",
+      "fix": "Scan a place of this site in use (not a workshop's)."
     }
   },
   "unit": {
@@ -335,6 +371,93 @@
       "lot": "Lot",
       "code": "Code {code}",
       "invalid": "Code {code} cannot be drawn"
+    }
+  },
+  "walk": {
+    "title": "Pick by bin",
+    "empty": "Nothing to pick by bin: no stock of the site is reserved or proposed for what is still needed.",
+    "allTaken": "Every stop is taken",
+    "summary_one": "{count} place by bin path, first {first}",
+    "summary_other": "{count} places by bin path, first {first}",
+    "kitAt": "the kit waits at {place}",
+    "count_one": "{count} stop",
+    "count_other": "{count} stops",
+    "source": {
+      "RESERVED": "Reserved",
+      "PROPOSED": "Suggested",
+      "SUBSTITUTE": "Approved substitute"
+    },
+    "held": {
+      "blocked": "the place is blocked",
+      "onHold": "on a quality hold",
+      "notReleased": "not released for use"
+    },
+    "stopTitle": "{turn}. {place}",
+    "taken": "Taken",
+    "notNow": "Not taken now",
+    "next": "Next: go here",
+    "scanIt": "Scan {code}",
+    "toTake": "to take",
+    "padHere": "At this stop: {quantity}",
+    "offline": "No network: a pick from the list by bin is kept on this tablet and sent when the network is back. Anything else waits for the network.",
+    "offlineScan": "No network: scan what you take at a stop of the list by bin",
+    "last": {
+      "taken": "Taken from {place}: {code}, {quantity}",
+      "takenWhole": "Taken from {place}: {code}",
+      "substitute": "Substitute taken from {place}: {code}, {quantity}",
+      "substituteWhole": "Substitute taken from {place}: {code}",
+      "refused": "{code} from {place} was refused: see Waiting to send"
+    }
+  },
+  "kit": {
+    "open": "Kit",
+    "noWalk": "Kit staging needs the work order's pick list by bin: open it once with the network.",
+    "back": "Back to the pick list",
+    "complete": "Kit complete",
+    "kind": "Kit",
+    "state": {
+      "checked": "Checked complete",
+      "complete": "All picked",
+      "partly": "Partly picked",
+      "open": "Not picked yet"
+    },
+    "fact": {
+      "place": "Waits at",
+      "lines": "Lines",
+      "checked": "Checked at"
+    },
+    "noPlace": "No place yet",
+    "picked": "{picked} of {total} picked",
+    "readPlace": "Waits at {place}",
+    "offline": "No network: the kit's place and its check wait for the network.",
+    "last": {
+      "staged": "The kit waits at {place}",
+      "checked": "Kit of {number} checked complete"
+    },
+    "scan": {
+      "label": "Scan the kit's place",
+      "hint": "The label of the place where the kit waits",
+      "move": "Scan another place's label to move the kit from {place}"
+    },
+    "lines": "In the kit",
+    "noLines": "The work order plans no material: there is no kit to check.",
+    "line": {
+      "picked": "Picked",
+      "short": "Still to pick"
+    },
+    "held": {
+      "offline": "Needs the network.",
+      "busy": "Sending…",
+      "WORK_ORDER_NOT_OPEN": "Work order {number} is not picked for now.",
+      "LINES_SHORT_one": "{count} line is still short: the kit is complete once every line is picked.",
+      "LINES_SHORT_other": "{count} lines are still short: the kit is complete once every line is picked.",
+      "NOTHING_PLANNED": "The work order plans no material.",
+      "ALREADY_CHECKED": "Checked complete already. The office opens it again if something is missing.",
+      "NOT_CHECKED": "Not checked complete."
+    },
+    "keys": {
+      "complete": "Kit complete",
+      "back": "Back to the pick list"
     }
   }
 }

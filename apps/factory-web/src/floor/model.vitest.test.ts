@@ -182,7 +182,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-308 */ 'move', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-308 */ 'move', 'pick', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'])
   })
 
   it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {
