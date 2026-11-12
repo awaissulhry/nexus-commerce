@@ -38,6 +38,8 @@ import { differenceTolerance, lockOrderForReceipt, readOrderForFloorReceipt, rec
 // shipped to a third party lands.
 import { beyondToleranceRefusal, upToWords } from '@nexus/factory-domain/purchasing/po-depth/tolerances'
 import { receiptPlaceOf } from '../../purchasing/po-depth/hooks'
+// B-W2b-328 (SCM-077, SCM-186): a protector line's certificate checked again on the day the goods come, a variant line's lots.
+import { receiptKindsOf, withReceiptHolds } from '../../purchasing/line-kinds/hooks'
 import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
@@ -242,7 +244,10 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const colours = await readColours(tx, orderLines.map((line) => line.itemColourId))
   // B-W2a-31: the unit the supplier counts in, from its approved source (the office; the floor reads no source).
   const sourceUnits = floor ? new Map<string, Uom>() : await sourceUnitsOf(tx, order, orderLines, body)
-  const planned = planLines(body, orderLines, items, colours, sourceUnits, floor)
+  // B-W2b-328: each order line's variant (its lots carry it), and a named certificate checked again on the receipt's day:
+  // when it no longer holds, the line's lots start in quarantine with the reason in words.
+  const kinds = await receiptKindsOf(tx, order, businessDate(receivedAt))
+  const planned = planLines(withReceiptHolds(body, kinds), orderLines, items, colours, sourceUnits, floor)
   const moveCount = planned.reduce((sum, line) => sum + (line.lots.length === 0 ? 1 : line.lots.reduce((count, lot) => count + Math.max(1, lot.hides.length), 0)), 0)
   if (moveCount > RECEIPT_LIMITS.moves) {
     throw new ValidationError(`One receipt posts at most ${RECEIPT_LIMITS.moves} hides and lots; this one has ${moveCount}. Split the delivery into two receipts.`, [{ path: 'body/lines', message: `At most ${RECEIPT_LIMITS.moves}.` }])
@@ -389,6 +394,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
           siteId: order.siteId,
           itemId: line.item.id,
           itemColourId: line.orderLine.itemColourId,
+          // B-W2b-328 (SCM-186): a lot of a variant's line is of that variant (the database's rule).
+          variantCode: kinds.get(line.orderLine.id)?.variantCode ?? null,
           code,
           supplierId: order.partyId,
           supplierLotRef: blank(lot.body.supplierLotRef),

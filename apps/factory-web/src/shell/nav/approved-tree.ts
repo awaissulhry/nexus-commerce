@@ -282,6 +282,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'warehouse.shipments', title: 'Shipments', titleIt: 'Spedizioni', wave: 'W1', href: '/warehouse/shipments' }],
       },
+      // W2b: B-W2b-356 Warehouse reports (SCR-257). The tree's Reports group, after Outbound and before Settings.
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'warehouse.reports', title: 'Warehouse reports', titleIt: 'Report magazzino', wave: 'W2b', href: '/warehouse/reports' }] },
       {
         label: 'Settings',
         labelIt: 'Impostazioni',
