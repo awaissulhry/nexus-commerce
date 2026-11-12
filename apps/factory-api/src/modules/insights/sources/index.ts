@@ -18,6 +18,11 @@ import { portalChangeRequests } from './portal-change-requests'
 import { supplierChange, supplierDocument } from './supplier-changes'
 // B-W2b-F13b: delivery addresses customers added in the portal, waiting for our check.
 import { deliveryAddress } from './delivery-addresses'
+// B-W2b-307: change orders, SMV changes and inspection plan versions waiting for my approval, and the approval engine's requests.
+import { changeOrderApproval } from './change-orders'
+import { smvChange } from './smv-changes'
+import { planVersion } from './plan-versions'
+import { approvalTask } from './approval-tasks'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -51,4 +56,9 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   SUPPLIER_DOCUMENT: supplierDocument,
   // B-W2b-F13b: delivery addresses customers added in the portal, waiting for our check (the Approvals tile).
   DELIVERY_ADDRESS: deliveryAddress,
+  // B-W2b-307 (PLT-085; AW2:01-03): every request that needs my yes, in the Approvals tile and Home › Approvals.
+  CHANGE_ORDER: changeOrderApproval,
+  SMV_CHANGE: smvChange,
+  PLAN_VERSION: planVersion,
+  APPROVAL_TASK: approvalTask,
 })

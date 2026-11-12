@@ -102,6 +102,10 @@ export const MESSAGE_TEMPLATES = {
   'notifications.changes.orderDecided': { en: '{actor} {status} change order {record}', it: '{actor} ha {status} l’ordine di modifica {record}' },
   'notifications.changes.orderReleased': { en: 'Change order {record} was released: {title}', it: 'L’ordine di modifica {record} è stato rilasciato: {title}' },
   'notifications.changes.workInProgress': { en: 'Change order {record} was released: {title}. It decides what happens to work orders {kind}', it: 'L’ordine di modifica {record} è stato rilasciato: {title}. Decide cosa succede agli ordini di lavoro {kind}' },
+  // B-W2b-307: the approval engine's requests (to their deciders; the decision to who asked) and an SMV change to its approvers.
+  'notifications.approval.taskAsked': { en: '{actor} asks for your yes on {record}: {title}', it: '{actor} chiede il tuo sì su {record}: {title}' },
+  'notifications.approval.taskDecided': { en: '{actor} {status} your request on {record}: {title}', it: '{actor} ha {status} la tua richiesta su {record}: {title}' },
+  'notifications.approval.smvAsked': { en: '{actor} asks you to approve an SMV change of operation {record}: {title}', it: '{actor} ti chiede di approvare una modifica del tempo standard dell’operazione {record}: {title}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
