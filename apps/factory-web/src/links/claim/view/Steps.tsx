@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Camera, PackageOpen, ScanLine, ShieldAlert } from 'lucide-react'
+import { Camera, PackageOpen, ScanLine, ShieldAlert, Wrench } from 'lucide-react'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, NumberStepper, RadioCard, Select } from '@nexus/ui/primitives'
 import { Textarea } from '../../../lib/i18n/ds-parts'
@@ -26,6 +26,7 @@ import {
 } from '../model'
 import { itemFacts, itemTitle } from './items'
 import { useShown } from './shown'
+import { RepairDetailsStep, RepairItemStep, RepairReview } from '../types/repair/Steps'
 
 interface StepProps {
   page: ClaimPage
@@ -36,6 +37,8 @@ interface StepProps {
 const TYPE_ICON: Record<ClaimType, ReactNode> = {
   RETURN: <PackageOpen size={22} aria-hidden />,
   COMPLAINT: <ShieldAlert size={22} aria-hidden />,
+  // B-W2b-342: a repair or an alteration (types/repair).
+  REPAIR: <Wrench size={22} aria-hidden />,
 }
 
 /** A problem under a group of choices (a fieldset): said, and read with the group. */
@@ -51,6 +54,7 @@ function GroupError({ id, text }: { id: string; text: string | undefined }) {
 /** Design sec:type — What do you need? Big choice cards, each with only its own questions. */
 export function TypeStep({ page, model, actions }: StepProps) {
   const t = useT('link-claim')
+  const r = useT('returns-repair')
   const { error } = useShown(model, page)
   const id = fieldId('type')
   const problem = error('type')
@@ -71,16 +75,16 @@ export function TypeStep({ page, model, actions }: StepProps) {
               title={
                 <span className="fw-cl-choice">
                   <span className="fw-cl-choice-icon">{TYPE_ICON[type]}</span>
-                  <span>{t(`type.${type}.title`)}</span>
+                  <span>{type === 'REPAIR' ? r('link.type.title') : t(`type.${type}.title`)}</span>
                 </span>
               }
-              description={type === 'RETURN' && nothingBack ? t('type.RETURN.none') : t(`type.${type}.body`)}
+              description={type === 'REPAIR' ? r('link.type.body') : type === 'RETURN' && nothingBack ? t('type.RETURN.none') : t(`type.${type}.body`)}
             />
           ))}
         </div>
         <GroupError id={id} text={problem} />
       </fieldset>
-      <p className="fw-cl-hint">{t('type.later', { sender: page.sender.companyName })}</p>
+      <p className="fw-cl-hint">{page.types.includes('REPAIR') ? r('link.type.later', { sender: page.sender.companyName }) : t('type.later', { sender: page.sender.companyName })}</p>
     </>
   )
 }
@@ -102,6 +106,7 @@ function SerialField({ id, value, error, onChange, onScan }: { id: string; value
 
 /** Design sec:item — Which item, from the order's items: what comes back (pieces, serial), or the one item of a complaint. */
 export function ItemStep({ page, model, actions }: StepProps) {
+  if (model.form.type === 'REPAIR') return <RepairItemStep page={page} model={model} actions={actions} />
   return model.form.type === 'COMPLAINT' ? <ComplaintItem page={page} model={model} actions={actions} /> : <ReturnItems page={page} model={model} actions={actions} />
 }
 
@@ -235,6 +240,7 @@ export function DetailsStep({ page, model, actions }: StepProps) {
       <Input id={fieldId('customerRef')} value={form.customerRef} autoComplete="off" onChange={(event) => actions?.onField?.('customerRef', event.target.value)} />
     </Field>
   )
+  if (form.type === 'REPAIR') return <RepairDetailsStep page={page} model={model} actions={actions} />
   if (form.type === 'COMPLAINT') {
     return (
       <>
@@ -373,6 +379,7 @@ function Summary({ title, step, actions, children }: { title: string; step: Step
 /** Design sec:review — Check and send, on one screen: what you need, the items, what you told us, the photos, your name. */
 export function ReviewStep({ page, model, actions }: StepProps) {
   const t = useT('link-claim')
+  const r = useT('returns-repair')
   const locale = useLocale()
   const { error } = useShown(model, page)
   const form = model.form
@@ -381,9 +388,11 @@ export function ReviewStep({ page, model, actions }: StepProps) {
   return (
     <>
       <Summary title={t('review.what')} step="type" actions={actions}>
-        <p className="fw-cl-value">{form.type ? t(`type.${form.type}.title`) : none}</p>
+        <p className="fw-cl-value">{form.type === 'REPAIR' ? r('link.type.title') : form.type ? t(`type.${form.type}.title`) : none}</p>
       </Summary>
-      {form.type === 'RETURN' ? (
+      {form.type === 'REPAIR' ? (
+        <RepairReview page={page} model={model} actions={actions} />
+      ) : form.type === 'RETURN' ? (
         <>
           <Summary title={t('review.items')} step="item" actions={actions}>
             <ul className="fw-cl-review-items">

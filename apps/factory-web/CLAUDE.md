@@ -126,6 +126,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status|messages` (`CasePage.tsx`: Add photos, Cancel
   this request?, the return label and credit note PDFs in a new tab, the case's thread). `RECORD_PAGES.ReturnAuthorisation`
   and `.Complaint` open them; their partner views are in factory-api `platform/search/partner/views/`.
+- `src/portal/customer/returns/repair/` and `src/links/claim/types/repair/` — repairs and alterations from outside (B-W2b-342 on its
+  own API, factory-api `modules/sales/repairs-depth`; catalogue `returns-repair`): the start's third card "Repair or alteration"
+  (`StartParts.tsx`, its fields on the start's draft), "Your repairs" on Returns & claims (`RepairsSection.tsx`), the repair's page
+  `/returns/repairs/<id>?tab=status|request` (SCR-358, `RepairPage.tsx`: the steps, where to send the garment, the estimate with
+  Accept / Decline — prices only with the price grain —, the damage photos); on the claim link the REPAIR type (offered when GET
+  /link/claim/repair says so; its steps, checks, body and draft part in `types/repair`). `RECORD_PAGES.RepairOrder` opens the page.
 - `src/portal/customer/documents/` — the customer's Documents (B-W2b-195, SCR-186, `/p/<party>/documents?group=&q=&by=&versions=&invoice=`;
   catalogue `portal-documents`, CSS prefix `fw-pdoc-`) on B-W2b-178's and B-W2b-185's APIs: the chips of the role's groups, To pay
   (Finance/Admin: the open invoices and deposits, PDF/XML in new tabs, Pay = the DS PaymentPanel on the FAKE provider's own answers,

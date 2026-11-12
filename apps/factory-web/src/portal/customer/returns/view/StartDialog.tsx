@@ -6,8 +6,10 @@ import { Banner, EmptyState, Field, Stepper, SummaryTable } from '@nexus/ui/comp
 import { EndState } from '@nexus/ui/components/EndState/index'
 import { Button, Checkbox, Input, RadioCard, Select, Skeleton } from '@nexus/ui/primitives'
 import { Modal, Textarea, useDsWords } from '../../../../lib/i18n/ds-parts'
-import type { CaseType, OutcomeWanted, ReturnableItem, ReturnableRead } from '../api'
-import { itemFacts, LIMITS, pickable, startLineOf, type StartDraft, type StartLine, type StartStep } from '../model'
+import type { OutcomeWanted, ReturnableItem, ReturnableRead } from '../api'
+import { itemFacts, LIMITS, pickable, startLineOf, type StartDraft, type StartLine, type StartStep, type StartType } from '../model'
+import { useScopedT, useT } from '../../../../lib/i18n/provider'
+import { RepairStartDetails, RepairStartReview } from '../repair/StartParts'
 import { useReturnWords } from '../words'
 
 /**
@@ -32,11 +34,11 @@ export interface StartDialogModel {
   problem: string | null
   /** Close was asked with typed work. */
   discard: boolean
-  sent: { type: CaseType; number: string; answerBy: string | null; href: string } | null
+  sent: { type: StartType; number: string; answerBy: string | null; href: string } | null
 }
 
 export interface StartDialogActions {
-  onType?: (type: CaseType) => void
+  onType?: (type: StartType) => void
   onLine?: (key: string, patch: Partial<StartLine>) => void
   onDraft?: (patch: Partial<StartDraft>) => void
   onNext?: () => void
@@ -52,6 +54,9 @@ const STEPS: readonly StartStep[] = ['type', 'details', 'review']
 
 export function StartDialog({ model, actions }: { model: StartDialogModel; actions?: StartDialogActions }) {
   const { t, day } = useReturnWords()
+  const r = useT('returns-repair')
+  // B-W2b-342: a repair's refusal names its own catalogue (`returns-repair:…`).
+  const scoped = useScopedT('portal-returns')
   const ds = useDsWords()
   const draft = model.draft
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -86,12 +91,12 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
       <Modal open onClose={close} size="lg" sheet title={t('start.title')}>
         <div ref={bodyRef} className="fw-pret-dialog">
           <EndState
-            title={t(sent.type === 'RETURN' ? 'start.sent.return' : 'start.sent.complaint', { number: sent.number })}
+            title={sent.type === 'REPAIR' ? r('portal.start.sent', { number: sent.number }) : t(sent.type === 'RETURN' ? 'start.sent.return' : 'start.sent.complaint', { number: sent.number })}
             body={sent.answerBy ? t('start.sent.answerBy', { date: day(sent.answerBy) }) : t('start.sent.answerSoon')}
-            next={[t('start.sent.photos'), t(sent.type === 'RETURN' ? 'start.sent.nextReturn' : 'start.sent.nextComplaint')]}
+            next={sent.type === 'REPAIR' ? [r('portal.start.sentPhotos'), r('portal.start.sentNext')] : [t('start.sent.photos'), t(sent.type === 'RETURN' ? 'start.sent.nextReturn' : 'start.sent.nextComplaint')]}
             reference={{ value: sent.number, label: t('start.sent.reference') }}
             actions={[
-              { label: t(sent.type === 'RETURN' ? 'start.sent.openReturn' : 'start.sent.openComplaint'), href: sent.href, variant: 'primary' },
+              { label: sent.type === 'REPAIR' ? r('portal.start.open') : t(sent.type === 'RETURN' ? 'start.sent.openReturn' : 'start.sent.openComplaint'), href: sent.href, variant: 'primary' },
               { label: t('start.sent.close'), onClick: close },
             ]}
             labels={ds.endState}
@@ -122,7 +127,7 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
       ) : null}
       {draft.step === 'review' ? (
         <Button variant="primary" onClick={() => actions?.onSend?.()} heldReason={model.held ? t(model.held) : null}>
-          {model.busy ? t('start.sending') : t(draft.type === 'RETURN' ? 'start.sendReturn' : 'start.sendComplaint')}
+          {model.busy ? t('start.sending') : draft.type === 'REPAIR' ? r('portal.start.send') : t(draft.type === 'RETURN' ? 'start.sendReturn' : 'start.sendComplaint')}
         </Button>
       ) : (
         <Button variant="primary" onClick={() => actions?.onNext?.()} heldReason={model.state === 'loading' && draft.step === 'details' ? t('held.reading') : null} aria-keyshortcuts="ArrowRight">
@@ -151,7 +156,7 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
             {t('start.discardBody')}
           </Banner>
         ) : null}
-        {model.problem ? <Banner tone="danger" title={t(model.problem)} /> : null}
+        {model.problem ? <Banner tone="danger" title={scoped(model.problem)} /> : null}
         {draft.step === 'type' ? <TypeStep draft={draft} error={problem('type')} onType={actions?.onType} /> : null}
         {draft.step === 'details' ? (
           model.state === 'loading' ? (
@@ -161,27 +166,32 @@ export function StartDialog({ model, actions }: { model: StartDialogModel; actio
             </div>
           ) : model.state === 'error' || !model.read ? (
             <EmptyState title={t('start.readFailed')} description={t('start.readFailedBody')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('state.retry')}</Button>} />
+          ) : draft.type === 'REPAIR' ? (
+            <RepairStartDetails draft={draft} read={model.read} problems={model.problems} onDraft={actions?.onDraft} />
           ) : draft.type === 'RETURN' ? (
             <ReturnDetails model={model} read={model.read} problem={problem} actions={actions} />
           ) : (
             <ComplaintDetails model={model} read={model.read} problem={problem} actions={actions} />
           )
         ) : null}
-        {draft.step === 'review' && model.read ? <Review draft={draft} read={model.read} /> : null}
+        {draft.step === 'review' && model.read ? draft.type === 'REPAIR' ? <RepairStartReview draft={draft} read={model.read} /> : <Review draft={draft} read={model.read} /> : null}
         {draft.step === 'review' ? <p className="fw-pret-hint">{t('start.photosLater')}</p> : null}
       </div>
     </Modal>
   )
 }
 
-function TypeStep({ draft, error, onType }: { draft: StartDraft; error?: string; onType?: (type: CaseType) => void }) {
+function TypeStep({ draft, error, onType }: { draft: StartDraft; error?: string; onType?: (type: StartType) => void }) {
   const { t } = useReturnWords()
+  const r = useT('returns-repair')
   return (
     <fieldset className="fw-pret-choices" aria-describedby={error ? 'fw-pret-type-error' : undefined}>
       <legend className="fw-pret-h3">{t('start.what')}</legend>
       {(['RETURN', 'COMPLAINT'] as const).map((type) => (
         <RadioCard key={type} name="fw-pret-type" value={type} checked={draft.type === type} selected={draft.type === type} onChange={() => onType?.(type)} title={t(`start.type.${type}`)} description={t(`start.typeBody.${type}`)} />
       ))}
+      {/* B-W2b-342: a repair or an alteration (./repair). */}
+      <RadioCard name="fw-pret-type" value="REPAIR" checked={draft.type === 'REPAIR'} selected={draft.type === 'REPAIR'} onChange={() => onType?.('REPAIR')} title={r('link.type.title')} description={r('portal.start.typeBody')} />
       {error ? (
         <p id="fw-pret-type-error" className="fw-pret-error">
           {error}

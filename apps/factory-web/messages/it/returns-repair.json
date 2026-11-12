@@ -1,0 +1,238 @@
+{
+  "common": {
+    "kind": {
+      "question": "Di cosa hai bisogno?",
+      "REPAIR": "Riparazione",
+      "REPAIRBody": "Qualcosa è danneggiato o consumato: una cucitura, una zip, un pannello, una protezione.",
+      "ALTERATION": "Modifica",
+      "ALTERATIONBody": "Un cambio di vestibilità o di un dettaglio, per esempio maniche più lunghe."
+    },
+    "problem": "Cosa non va",
+    "problemHint": "Dove si trova sul capo e come è successo.",
+    "workWanted": "Il lavoro che vuoi",
+    "workWantedHint": "Per esempio 'allungare le maniche di 2 cm'.",
+    "noPayment": "Nessun dato di pagamento qui: prima ti mandiamo un preventivo e iniziamo solo dopo che lo accetti.",
+    "yourMove": "Tocca a te:",
+    "opened": "Chiesta il {day}",
+    "serial": "Matricola {serial}",
+    "size": "taglia {size}",
+    "garmentUnknown": "Un tuo capo",
+    "stage": {
+      "AWAITING_GOODS": "In attesa del tuo capo",
+      "RECEIVED": "Ricevuto",
+      "ESTIMATED": "Preventivo inviato",
+      "APPROVED": "Approvata",
+      "IN_REPAIR": "In riparazione",
+      "REPAIRED": "Riparato",
+      "SHIPPED": "Rispedito",
+      "CANCELLED": "Annullata"
+    },
+    "step": {
+      "RECEIVED": "Ricevuto",
+      "ESTIMATED": "Preventivato",
+      "APPROVED": "Approvata",
+      "IN_REPAIR": "In riparazione",
+      "REPAIRED": "Riparato",
+      "SHIPPED": "Rispedito"
+    },
+    "next": {
+      "SEND_GARMENT": "Mandaci il capo con un documento di trasporto (DDT); lo guardiamo appena arriva.",
+      "WE_ESTIMATE": "Guardiamo il capo e ti mandiamo un preventivo.",
+      "ANSWER_ESTIMATE": "Leggi il preventivo e accettalo o rifiutalo.",
+      "WE_DECIDE": "Hai rifiutato il preventivo: ti scriviamo con uno nuovo o ti rimandiamo il capo.",
+      "WE_REPAIR": "Ripariamo il capo.",
+      "WE_CHECK": "Controlliamo il capo riparato prima di rimandarlo.",
+      "ON_ITS_WAY": "Il capo è in viaggio verso di te.",
+      "DONE": "Il capo ti è stato rimandato.",
+      "CANCELLED": "Questa richiesta è annullata."
+    }
+  },
+  "check": {
+    "item": "Scegli il capo da riparare, oppure 'Un altro capo'.",
+    "serial": "Scrivi la matricola sull'etichetta del capo (o scansionala).",
+    "long": "Al massimo {max} caratteri.",
+    "problem": "Di' cosa non va nel capo.",
+    "workWanted": "Di' il lavoro che vuoi."
+  },
+  "refusal": {
+    "serial": "Questa matricola non si può usare: controlla l'etichetta.",
+    "open": "Questo capo è già da noi per una riparazione",
+    "openBody": "Segui quella riparazione, oppure scrivici se è un altro capo."
+  },
+  "link": {
+    "type": {
+      "title": "Riparazione o modifica",
+      "body": "Una riparazione dopo una caduta o per usura, o un cambio di vestibilità ('allungare la manica di 2 cm').",
+      "later": "Per un rifacimento o un incidente di sicurezza, per ora scrivi a {sender}."
+    },
+    "item": {
+      "legend": "Il capo da riparare",
+      "other": "Un altro capo",
+      "otherBody": "Non è in questa consegna: scrivi la matricola sulla sua etichetta.",
+      "serialNeeded": "Serve per un altro capo: è sull'etichetta interna."
+    },
+    "send": "Invia la richiesta di riparazione",
+    "done": {
+      "title": "Richiesta di riparazione {number} inviata",
+      "next": "Mandaci il capo con un documento di trasporto (DDT). Lo guardiamo e ti mandiamo un preventivo prima di qualsiasi lavoro."
+    },
+    "repairs": {
+      "title_one": "La tua richiesta di riparazione da questo link",
+      "title_other": "Le tue {count} richieste di riparazione da questo link",
+      "hint": "A che punto sono. Il preventivo si accetta nel tuo portale, oppure diccelo per telefono o per e-mail."
+    }
+  },
+  "portal": {
+    "start": {
+      "typeBody": "Una riparazione dopo una caduta o per usura, o un cambio di vestibilità. Tu mandi il capo; noi prima ti mandiamo un preventivo.",
+      "garment": "Il capo",
+      "garmentHint": "Uno di quelli che ti abbiamo consegnato, o un altro capo con la matricola sulla sua etichetta.",
+      "garmentPick": "Scegli il capo",
+      "garmentOther": "Un altro capo (con la matricola)",
+      "review": "La tua richiesta di riparazione",
+      "photosAfter": "Aggiungi almeno 2 foto del danno nella pagina della richiesta, dopo l'invio.",
+      "send": "Invia la richiesta di riparazione",
+      "sent": "Richiesta di riparazione {number} inviata",
+      "sentPhotos": "Aggiungi le foto del danno nella pagina della richiesta: ci aiutano a preventivarlo.",
+      "sentNext": "Mandaci il capo con un documento di trasporto (DDT). Ti mandiamo un preventivo prima di qualsiasi lavoro.",
+      "open": "Apri la riparazione"
+    },
+    "list": {
+      "title": "Le tue riparazioni",
+      "hint": "Riparazioni e modifiche che hai chiesto, dalla più recente.",
+      "failed": "Non è stato possibile leggere le tue riparazioni.",
+      "open": "Apri la riparazione {number}"
+    },
+    "record": {
+      "title": "{kind} {number}",
+      "tabs": "Sezioni della riparazione",
+      "status": "Stato",
+      "request": "Richiesta",
+      "missing": "Riparazione non trovata"
+    },
+    "keys": {
+      "tabs": "Passa da una sezione all'altra",
+      "close": "Chiudi una finestra"
+    },
+    "next": {
+      "forYou": "Il prossimo passo per te",
+      "ours": "Cosa facciamo noi"
+    },
+    "notice": {
+      "hide": "Nascondi",
+      "accepted": "Hai accettato il preventivo di {number}: iniziamo il lavoro.",
+      "declined": "Hai rifiutato il preventivo di {number}: ti scriviamo."
+    },
+    "status": {
+      "where": "A che punto è",
+      "steps": "Avanzamento della riparazione {number}",
+      "sendTo": "Manda il capo a",
+      "sendToHint": "Scrivi il numero {number} sul documento di trasporto (DDT) che viaggia con il capo."
+    },
+    "estimate": {
+      "title": "Preventivo",
+      "none": "Nessun preventivo ancora: te lo mandiamo dopo aver guardato il capo.",
+      "noneClosed": "Per questa riparazione non è stato fatto un preventivo.",
+      "revision": "Preventivo {revision}",
+      "noPrices": "Il tuo accesso non mostra i prezzi: parti e lavoro sono elencati senza.",
+      "lines": "Parti e lavoro",
+      "col": {
+        "what": "Parte o lavoro",
+        "quantity": "Quantità",
+        "minutes": "Tempo di lavoro",
+        "price": "Prezzo",
+        "total": "Totale"
+      },
+      "kind": {
+        "PART": "Parte",
+        "LABOUR": "Lavoro"
+      },
+      "minutesValue": "{minutes} min",
+      "total": "Totale",
+      "labour": "Tempo di lavoro",
+      "validUntil": "Valido fino al",
+      "noEnd": "Senza scadenza",
+      "sent": "Inviato",
+      "ourWords": "La nostra nota",
+      "ask": "Iniziamo il lavoro solo dopo che accetti il preventivo.",
+      "accept": "Accetta il preventivo",
+      "decline": "Rifiuta",
+      "answered": {
+        "ACCEPTED": "Accettato il {at} ({via})",
+        "DECLINED": "Rifiutato il {at} ({via})"
+      },
+      "via": {
+        "LINK": "tramite link",
+        "PORTAL": "nel portale",
+        "OFFICE": "detto al nostro ufficio"
+      },
+      "yourReason": "Il tuo motivo: {reason}"
+    },
+    "request": {
+      "what": "Cosa hai chiesto",
+      "opened": "Chiesta il",
+      "via": "Come",
+      "channel": {
+        "OFFICE": "Tramite il nostro ufficio",
+        "PORTAL": "Nel portale",
+        "LINK": "Con un link che ti abbiamo mandato"
+      },
+      "garment": "Il capo",
+      "photos": "Foto del danno",
+      "photosHint": "Almeno {count} foto ci aiutano a preventivare la riparazione.",
+      "photosHintAlteration": "Le foto della vestibilità aiutano, ma non servono.",
+      "noPhotos": "Ancora nessuna foto.",
+      "photoAdded": "Aggiunta il {date}",
+      "view": "Vedi",
+      "addPhotos": "Aggiungi foto"
+    },
+    "held": {
+      "busy": "Attendi: lo stiamo inviando.",
+      "offline": "Nessuna connessione: riprova quando sei di nuovo online.",
+      "photos": {
+        "PREVIEW": "Un'anteprima legge il portale; non agisce mai per il cliente.",
+        "NO_REQUEST": "Il tuo accesso ti permette di seguire le riparazioni, non di modificarle.",
+        "NO_UPLOAD": "Il tuo accesso non ti permette di inviare file: chiedi al tuo amministratore.",
+        "STAGE": "Il lavoro è iniziato: le foto si aggiungono prima.",
+        "FULL": "Questa riparazione ha già {max} tue foto: scrivici."
+      },
+      "answer": {
+        "NOT_ASKED": "Nessun preventivo aspetta la tua risposta.",
+        "PREVIEW": "Un'anteprima legge il portale; non agisce mai per il cliente.",
+        "NO_REQUEST": "Il tuo accesso ti permette di seguire le riparazioni, non di rispondere a un preventivo: chiedi al tuo amministratore.",
+        "NO_PRICES": "Il tuo accesso non mostra i prezzi: risponde al preventivo chi li vede.",
+        "EXPIRED": "L'ultimo giorno del preventivo è passato: chiedici un preventivo nuovo."
+      }
+    },
+    "accept": {
+      "title": "Accetti il preventivo {revision}?",
+      "amount": "Accetti {amount} per questa riparazione.",
+      "what": "Accetti il preventivo della riparazione {number}.",
+      "work": "Iniziamo il lavoro e ti diciamo quando il capo torna da te.",
+      "confirm": "Accetta il preventivo",
+      "busy": "Invio…"
+    },
+    "decline": {
+      "title": "Rifiuti il preventivo {revision}?",
+      "what": "Ti scriveremo con un preventivo nuovo, oppure ti rimanderemo il capo com'è.",
+      "reason": "Perché lo rifiuti?",
+      "reasonHint": "Le tue parole ci aiutano a fare un'offerta migliore.",
+      "needed": "Di' perché lo rifiuti.",
+      "keep": "Tienilo",
+      "confirm": "Rifiuta il preventivo",
+      "busy": "Invio…"
+    },
+    "problem": {
+      "internal": "Qualcosa non ha funzionato da parte nostra. Riprova.",
+      "forbidden": "Il tuo accesso non ti permette di farlo.",
+      "missing": "Questa riparazione non è più tua o non esiste più.",
+      "changed": "La riparazione è cambiata nel frattempo: l'abbiamo riletta. Controllala e riprova.",
+      "invalid": "Non è stato possibile inviarla così com'è.",
+      "tooMany": "Troppi tentativi: aspetta un minuto e riprova.",
+      "unavailable": "Nessuna connessione: riprova.",
+      "photoType": "Una foto: JPEG, PNG, WebP o HEIC.",
+      "photoSize": "Una foto di al massimo 15 MB."
+    },
+    "unsaved": "la riparazione a cui stai rispondendo"
+  }
+}

@@ -184,6 +184,7 @@
       "Party": "Account",
       "ReturnAuthorisation": "Reso",
       "Complaint": "Reclamo",
+      "RepairOrder": "Riparazione",
       "other": "Documento"
     }
   },

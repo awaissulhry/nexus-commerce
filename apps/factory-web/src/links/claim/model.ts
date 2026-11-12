@@ -6,6 +6,8 @@ import { ANSWER_WORKING_DAYS, CASE_LIMITS } from '@nexus/factory-domain/sales/po
 import { isApiError, issuePath, type ApiIssue } from '../../lib/api/errors'
 import type { LinkState } from '../../shell/links/link-state'
 import { CASE_STATES, CLAIM_TYPES, OUTCOMES, type ClaimBody, type ClaimItem, type ClaimPage, type ClaimSent, type ClaimType, type Outcome } from './api'
+import type { RepairOffer } from './types/repair/api'
+import { EMPTY_REPAIR, repairDraftSchema, repairFromDraft, repairIssueProblem, repairPhotosNeeded, repairProblems, type RepairForm } from './types/repair/model'
 
 /**
  * SCR-197 — Report a problem (design links.claim; SAL-334 by link, SAL-385 photos): what the page shows and checks, from
@@ -67,9 +69,11 @@ export interface ClaimForm {
   description: string
   customerRef: string
   typedName: string
+  /** B-W2b-342: REPAIR — the garment, a repair or an alteration, what is wrong, the work wanted (types/repair). */
+  repair: RepairForm
 }
 
-export const EMPTY_FORM: ClaimForm = Object.freeze({ type: null, picks: [], outcomeWanted: null, note: '', itemKey: null, serial: '', batchNumber: '', description: '', customerRef: '', typedName: '' }) as ClaimForm
+export const EMPTY_FORM: ClaimForm = Object.freeze({ type: null, picks: [], outcomeWanted: null, note: '', itemKey: null, serial: '', batchNumber: '', description: '', customerRef: '', typedName: '', repair: EMPTY_REPAIR }) as ClaimForm
 
 /** A photo taken on this page (its bytes stay with the container until the send; `src` shows it). */
 export interface PhotoShot {
@@ -113,13 +117,14 @@ export const returnableCount = (page: Pick<ClaimPage, 'items'>): number => page.
 /** The photo groups of the form: one per item that comes back, or the complaint's one. */
 export function photoGroups(form: ClaimForm): string[] {
   if (form.type === 'RETURN') return form.picks.map((pick) => pick.key)
-  if (form.type === 'COMPLAINT') return [CASE_GROUP]
+  if (form.type === 'COMPLAINT' || form.type === 'REPAIR') return [CASE_GROUP]
   return []
 }
 
 /** Photos a group needs: two for a damage (a return's damage reason, every quality complaint), else none. */
 export function photosNeeded(form: ClaimForm, group: string): number {
   if (form.type === 'COMPLAINT') return group === CASE_GROUP ? DAMAGE_PHOTOS : 0
+  if (form.type === 'REPAIR') return group === CASE_GROUP ? repairPhotosNeeded(form.repair) : 0
   const pick = form.picks.find((entry) => entry.key === group)
   return pick?.reasonCode && DAMAGE_REASONS.includes(pick.reasonCode) ? DAMAGE_PHOTOS : 0
 }
@@ -153,6 +158,8 @@ export function problemsOf(form: ClaimForm, page: Pick<ClaimPage, 'items' | 'rea
       if (tooLong(pick.reasonNote, LIMITS.reasonNote)) problems.push({ step: 'details', field: at('reasonNote'), key: 'check.long', params: { max: LIMITS.reasonNote } })
     }
     if (tooLong(form.note, LIMITS.note)) problems.push({ step: 'details', field: 'note', key: 'check.long', params: { max: LIMITS.note } })
+  } else if (form.type === 'REPAIR') {
+    problems.push(...repairProblems(form.repair, page))
   } else {
     const items = complaintItems(page)
     if (form.itemKey === null ? items.length > 0 : form.itemKey !== WHOLE_DELIVERY && !items.some((item) => item.key === form.itemKey)) problems.push({ step: 'item', field: 'complaintItem', key: 'check.complaintItem' })
@@ -257,6 +264,7 @@ const draftDataSchema = z.object({
     description: z.string().max(8000),
     customerRef: z.string().max(400),
     typedName: z.string().max(400),
+    repair: repairDraftSchema.optional(),
   }),
 })
 
@@ -282,7 +290,7 @@ export function formFromDraft(data: unknown, page: Pick<ClaimPage, 'items' | 're
     return [{ ...pick, quantity: Math.min(Math.max(1, pick.quantity), item.canReturn), reasonCode: pick.reasonCode && reasons.has(pick.reasonCode) ? pick.reasonCode : null }]
   })
   const itemKey = saved.itemKey === WHOLE_DELIVERY || complaintItems(page).some((item) => item.key === saved.itemKey) ? saved.itemKey : null
-  const form: ClaimForm = { ...saved, type: saved.type && page.types.includes(saved.type) ? saved.type : null, picks, itemKey }
+  const form: ClaimForm = { ...saved, type: saved.type && page.types.includes(saved.type) ? saved.type : null, picks, itemKey, repair: repairFromDraft(saved.repair, page) }
   if (!worthKeeping(form)) return null
   return { form, step: form.type === null ? 'type' : read.data.step }
 }
@@ -298,6 +306,7 @@ export function readRefusal(error: unknown): LinkState {
 
 /** Where an issue of the API's refusal belongs (`body/lines/<i>/quantity` …), in this page's words. */
 export function issueProblem(issue: ApiIssue, form: ClaimForm): Problem {
+  if (form.type === 'REPAIR') return repairIssueProblem(issue)
   const path = issuePath(issue).replace(/\./g, '/')
   const line = /^body\/lines\/(\d+)\/(\w+)/.exec(path)
   if (line) {
@@ -338,6 +347,8 @@ export function sendRefusal(error: unknown, form: ClaimForm): { key: string; lin
     case 'invalid':
       return { key: 'problem.invalid', issues, reload: false, keepKey: false }
     case 'conflict':
+      // B-W2b-342: a repair is refused while the same garment is with us for one (said in our words, no read again).
+      if (form.type === 'REPAIR') return { key: 'returns-repair:refusal.open', issues, reload: false, keepKey: false }
       return issues.some((issue) => issue.key === 'refusal.quantity') ? { key: 'problem.aboveSold', issues, reload: true, keepKey: false } : { key: 'problem.changed', issues: [], reload: true, keepKey: false }
     case 'rate_limited':
       return { key: 'problem.rateLimited', issues: [], reload: false, keepKey: true }
@@ -416,6 +427,8 @@ export interface ClaimViewModel {
   /** A case's document or the return instructions being opened (its id), or one that failed to open. */
   opening: { id: string; failed: boolean } | null
   timeZone?: string
+  /** B-W2b-342: the repair the API offers on this link and this link's repairs (null: no repair offered). */
+  repairOffer?: RepairOffer | null
   /** A photo to mark from the start in "Add a photo" (the design cases; the camera in real use). */
   photoSample?: { src: string; width: number; height: number }
 }
@@ -428,6 +441,8 @@ export interface ClaimActions {
   onComplaintItem?: (key: string) => void
   onField?: (field: 'serial' | 'batchNumber' | 'description' | 'customerRef' | 'note' | 'typedName', value: string) => void
   onOutcome?: (outcome: Outcome | null) => void
+  /** B-W2b-342: a change of the repair's part of the form. */
+  onRepair?: (change: Partial<RepairForm>) => void
   onStep?: (step: Step) => void
   onNext?: () => void
   onBack?: () => void

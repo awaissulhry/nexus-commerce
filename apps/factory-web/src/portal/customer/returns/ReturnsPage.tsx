@@ -10,6 +10,9 @@ import { fetchCases, fetchComplaints, fetchReturnable, isCaseChip, reportComplai
 import { listBandOf } from './band'
 import { saveText, useOffline } from './hooks'
 import { caseHref, casesCsv, complaintBodyOf, EMPTY_START, listQuery, nextStep, NS, refusalKey, returnBodyOf, sendHeld, startDirty, startHeld, type StartDraft } from './model'
+import { fetchRepairs, requestRepair } from './repair/api'
+import { NS as REPAIR_NS, repairBodyOf, repairHref, repairRefusalKey } from './repair/model'
+import type { RepairsSectionModel } from './repair/RepairsSection'
 import { NotInAccess } from './view/parts'
 import { ReturnsListView, type ReturnsListViewModel } from './view/ReturnsListView'
 import type { StartDialogModel } from './view/StartDialog'
@@ -25,7 +28,7 @@ import { useReturnWords } from './words'
  */
 export function CustomerReturnsPage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, REPAIR_NS, 'ds-words', 'lists']}>
       <Suspense fallback={null}>
         <ReturnsRoute />
       </Suspense>
@@ -75,6 +78,8 @@ function ListContainer() {
   const [updates, setUpdates] = useState(0)
   const [complaints, setComplaints] = useState<ReturnsListViewModel['complaints']>({ state: readsComplaints ? 'loading' : 'hidden', read: null })
   const [start, setStart] = useState<StartState | null>(null)
+  // B-W2b-342: the customer's repairs (their own section, read beside the cases).
+  const [repairs, setRepairs] = useState<RepairsSectionModel>({ state: 'loading', read: null })
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
   const reading = useRef<AbortController | null>(null)
   const writeKey = useRef<{ body: string; key: string } | null>(null)
@@ -119,6 +124,16 @@ function ListContainer() {
   useEffect(() => {
     void loadComplaints()
   }, [loadComplaints])
+  const loadRepairs = useCallback(async () => {
+    try {
+      setRepairs({ state: 'ready', read: await fetchRepairs(api) })
+    } catch {
+      setRepairs((current) => ({ state: 'error', read: current.read }))
+    }
+  }, [api])
+  useEffect(() => {
+    void loadRepairs()
+  }, [loadRepairs])
 
   // A hint on the live channel (the bell's news of a decision, a parcel received, an answer; a question from us): the rows
   // never move under the pointer — "N updates · Show".
@@ -144,7 +159,7 @@ function ListContainer() {
   )
 
   const openStart = useCallback(
-    (type: 'RETURN' | 'COMPLAINT' | null = null, order: string | null = null) => {
+    (type: 'RETURN' | 'COMPLAINT' | 'REPAIR' | null = null, order: string | null = null) => {
       if (startHeld(whoNow.current)) return
       writeKey.current = null
       setStart({ draft: { ...EMPTY_START, type, step: type ? 'details' : 'type' }, read: { state: 'loading', read: null }, problems: {}, busy: false, problem: null, discard: false, order, sent: null })
@@ -158,7 +173,7 @@ function ListContainer() {
   const orderParam = search?.get('order') ?? null
   useEffect(() => {
     if (!startParam) return
-    openStart(startParam === 'RETURN' || startParam === 'COMPLAINT' ? startParam : null, orderParam)
+    openStart(startParam === 'RETURN' || startParam === 'COMPLAINT' || startParam === 'REPAIR' ? startParam : null, orderParam)
     router.replace(`${pathname}${listQuery(chip, q)}`, { scroll: false })
   }, [startParam, orderParam, openStart, router, pathname, chip, q])
 
@@ -174,26 +189,33 @@ function ListContainer() {
     const draft = start.draft
     const returnable = start.read.read
     setStart({ ...start, busy: true, problem: null })
-    const call =
-      draft.type === 'RETURN'
+    const call: Promise<{ id: string; sent: { number: string; answerBy: string | null } }> =
+      draft.type === 'REPAIR'
         ? (() => {
-            const body = returnBodyOf(draft, returnable)
-            return requestReturn(api, body, keyFor(body))
+            const body = repairBodyOf(draft, returnable)
+            return requestRepair(api, body, keyFor(body))
           })()
-        : (() => {
-            const body = complaintBodyOf(draft, returnable)
-            return reportComplaint(api, body, keyFor(body))
-          })()
+        : draft.type === 'RETURN'
+          ? (() => {
+              const body = returnBodyOf(draft, returnable)
+              return requestReturn(api, body, keyFor(body))
+            })()
+          : (() => {
+              const body = complaintBodyOf(draft, returnable)
+              return reportComplaint(api, body, keyFor(body))
+            })()
     call
       .then((answer) => {
         writeKey.current = null
-        setStart((current) => (current ? { ...current, busy: false, sent: { type: draft.type ?? 'RETURN', number: answer.sent.number, answerBy: answer.sent.answerBy, href: caseHref(frame.prefix, draft.type ?? 'RETURN', answer.id, 'request') } } : current))
+        const href = draft.type === 'REPAIR' ? repairHref(frame.prefix, answer.id, 'request') : caseHref(frame.prefix, draft.type ?? 'RETURN', answer.id, 'request')
+        setStart((current) => (current ? { ...current, busy: false, sent: { type: draft.type ?? 'RETURN', number: answer.sent.number, answerBy: answer.sent.answerBy, href } } : current))
         void load()
         void loadComplaints()
+        void loadRepairs()
         frame.refreshTasks()
       })
       .catch((error: unknown) => {
-        const key = refusalKey(error)
+        const key = draft.type === 'REPAIR' ? `${REPAIR_NS}:${repairRefusalKey(error)}` : refusalKey(error)
         setStart((current) => (current ? { ...current, busy: false, problem: key } : current))
         if (key === 'start.problem.tooManyNow') void loadReturnable(start.order)
       })
@@ -236,6 +258,7 @@ function ListContainer() {
         updates,
         offlineSince: offline ? loadedAt : null,
         complaints,
+        repairs,
         startHeld: startHeldKey ? t(startHeldKey) : null,
         start: startModel,
       }}
@@ -246,6 +269,11 @@ function ListContainer() {
         onSelect: setSelected,
         onOpen: (row: CaseItem) => router.push(caseHref(frame.prefix, row.type, row.id)),
         onOpenComplaint: (id) => router.push(caseHref(frame.prefix, 'COMPLAINT', id)),
+        onOpenRepair: (id) => router.push(repairHref(frame.prefix, id)),
+        onRetryRepairs: () => {
+          setRepairs({ state: 'loading', read: null })
+          void loadRepairs()
+        },
         onRetry: () => {
           setState('loading')
           void load()
@@ -257,6 +285,7 @@ function ListContainer() {
         onShowUpdates: () => {
           void load()
           void loadComplaints()
+          void loadRepairs()
         },
         onExport: exportRows,
         onStart: () => openStart(),

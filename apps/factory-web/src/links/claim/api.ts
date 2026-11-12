@@ -22,8 +22,9 @@ import { putToStore, readFromStore, sha256Hex } from '../../record-panels/store'
  * The token travels only in `x-factory-link` (the client the link landing made).
  */
 
-export const CLAIM_TYPES = CASE_TYPES
-export type ClaimType = (typeof CASE_TYPES)[number]
+/** B-W2b-342: the page also offers a repair or an alteration (its own routes, types/repair/api.ts) when the API does. */
+export const CLAIM_TYPES = [...CASE_TYPES, 'REPAIR'] as const
+export type ClaimType = (typeof CLAIM_TYPES)[number]
 export const OUTCOMES = OUTCOMES_WANTED
 export type Outcome = (typeof OUTCOMES_WANTED)[number]
 export const CASE_STATES = [...RETURN_CASE_STATES, ...COMPLAINT_CASE_STATES] as const
@@ -76,7 +77,7 @@ const complaintSchema = z.object({
 export const claimPageSchema = z.object({
   sender: z.object({ companyName: z.string() }),
   record: z.object({ type: z.string(), id: z.string(), label: z.string() }),
-  types: z.array(z.enum(CASE_TYPES)),
+  types: z.array(z.enum(CLAIM_TYPES)),
   items: z.array(itemSchema),
   reasons: z.array(z.object({ code: z.string(), words, needsNote: z.boolean() })),
   outcomes: z.array(z.object({ code: z.enum(OUTCOMES_WANTED), words })),
@@ -88,7 +89,7 @@ export const claimPageSchema = z.object({
 export type ClaimPage = z.infer<typeof claimPageSchema>
 export type ClaimReason = ClaimPage['reasons'][number]
 
-const sentSchema = z.object({ type: z.enum(CASE_TYPES), id: z.string(), number: z.string(), answerBy: z.string().nullable() })
+const sentSchema = z.object({ type: z.enum(CLAIM_TYPES), id: z.string(), number: z.string(), answerBy: z.string().nullable() })
 export type ClaimSent = z.infer<typeof sentSchema>
 const submittedSchema = claimPageSchema.extend({ sent: sentSchema })
 

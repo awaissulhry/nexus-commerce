@@ -9,6 +9,8 @@ import { useLocale } from '../../lib/i18n/provider'
 import { LinkBrandingContext } from '../../shell/links/view/LinkFrameView'
 import { openCaseDocument, readClaimPage, readDraft, readReturnLines, returnInstructions, saveDraft, sendClaim, uploadClaimPhoto, type ClaimPage, type ClaimSent } from './api'
 import { labelCamera } from './camera'
+import { readRepairOffer, sendRepair, uploadRepairPhoto, type RepairOffer } from './types/repair/api'
+import { repairBodyOf } from './types/repair/model'
 import {
   bodyOf,
   CASE_GROUP,
@@ -63,6 +65,9 @@ const SAVE_AFTER_MS = 1500
 
 /** The page as the send answered it, without its `sent`. */
 const pageOf = ({ sent: _sent, ...page }: ClaimPage & { sent: ClaimSent }): ClaimPage => page
+
+/** B-W2b-342: the page with the repair among its types when the API offers it on this link. */
+const withRepair = (page: ClaimPage, offer: RepairOffer | null | undefined): ClaimPage => (offer?.offered && !page.types.includes('REPAIR') ? { ...page, types: [...page.types, 'REPAIR'] } : page)
 
 /** Puts the focus on a field (after a check) or the step's heading (after a move), once the step is drawn. */
 function focusSoon(id: string) {
@@ -131,8 +136,9 @@ export function ReportProblem({ api }: { api: ApiClient }) {
     async (withDraft: boolean) => {
       setModel((current) => (current.page ? current : { ...current, problem: null }))
       try {
-        const page = await readClaimPage(api, language.current)
-        setModel((current) => ({ ...current, link: 'valid', page, problem: current.problem === 'problem.read' ? null : current.problem }))
+        const [claim, offer] = await Promise.all([readClaimPage(api, language.current), readRepairOffer(api)])
+        const page = withRepair(claim, offer)
+        setModel((current) => ({ ...current, link: 'valid', page, repairOffer: offer, problem: current.problem === 'problem.read' ? null : current.problem }))
         if (!withDraft) return
         const read = await readDraft(api).catch(() => null)
         if (!read?.draft) return
@@ -292,8 +298,12 @@ export function ReportProblem({ api }: { api: ApiClient }) {
         }
         mark(shot.id, 'sending')
         try {
-          const lineId = sent.type === 'RETURN' ? lineIdFor(shot.group, form.picks, lines.current?.lines ?? []) : null
-          await uploadClaimPhoto(api, { caseType: sent.type, caseId: sent.id, lineId }, { blob, name: `${sent.number}-${index + 1}.jpg` }, { announce: newIdempotencyKey(), complete: newIdempotencyKey() })
+          const keys = { announce: newIdempotencyKey(), complete: newIdempotencyKey() }
+          if (sent.type === 'REPAIR') await uploadRepairPhoto(api, sent.id, { blob, name: `${sent.number}-${index + 1}.jpg` }, keys)
+          else {
+            const lineId = sent.type === 'RETURN' ? lineIdFor(shot.group, form.picks, lines.current?.lines ?? []) : null
+            await uploadClaimPhoto(api, { caseType: sent.type, caseId: sent.id, lineId }, { blob, name: `${sent.number}-${index + 1}.jpg` }, keys)
+          }
           mark(shot.id, 'sent')
         } catch {
           mark(shot.id, 'failed')
@@ -307,7 +317,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
 
   const reread = useCallback(async () => {
     const page = await readClaimPage(api, language.current).catch(() => null)
-    if (page) setModel((now) => ({ ...now, page }))
+    if (page) setModel((now) => ({ ...now, page: withRepair(page, now.repairOffer) }))
   }, [api])
 
   const onSend = useCallback(() => {
@@ -322,7 +332,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
       return
     }
     if (sendHeldKey(page)) return
-    const body = bodyOf(current.form, page)
+    const body = current.form.type === 'REPAIR' ? repairBodyOf(current.form.repair, page, current.form.typedName) : bodyOf(current.form, page)
     const json = JSON.stringify(body)
     if (!sendKey.current || sendKey.current.body !== json) sendKey.current = { key: newIdempotencyKey(), body: json }
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -330,7 +340,12 @@ export function ReportProblem({ api }: { api: ApiClient }) {
     const form = current.form
     const shots = photosInForm(form, current.photos)
     setModel((now) => ({ ...now, send: 'busy', problem: null, issues: [] }))
-    sendClaim(api, body, language.current, sendKey.current.key)
+    // B-W2b-342: a repair goes to its own route; its answer carries this link's repairs and the uses left.
+    const sending: Promise<{ page: ClaimPage; sent: ClaimSent; offer?: RepairOffer }> =
+      current.form.type === 'REPAIR'
+        ? sendRepair(api, body as ReturnType<typeof repairBodyOf>, sendKey.current.key).then(({ sent, link, ...offer }) => ({ page: { ...page, link: { ...page.link, usesLeft: link.usesLeft, live: link.live } }, sent, offer }))
+        : sendClaim(api, body as ReturnType<typeof bodyOf>, language.current, sendKey.current.key).then((answer) => ({ page: pageOf(answer), sent: answer.sent }))
+    sending
       .then((answer) => {
         sendKey.current = null
         // The send dropped the draft (B-W2b-163): the next report starts a new one.
@@ -338,7 +353,8 @@ export function ReportProblem({ api }: { api: ApiClient }) {
         touched.current = false
         setModel((now) => ({
           ...now,
-          page: pageOf(answer),
+          page: withRepair(answer.page, answer.offer ?? now.repairOffer),
+          repairOffer: answer.offer ?? now.repairOffer,
           send: 'idle',
           problem: null,
           photoFor: null,
@@ -369,7 +385,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
     for (const photo of latest.current.photos) URL.revokeObjectURL(photo.src)
     blobs.current.clear()
     lines.current = null
-    setModel((now) => ({ ...START, link: now.link, page: now.page }))
+    setModel((now) => ({ ...START, link: now.link, page: now.page, repairOffer: now.repairOffer }))
     focusSoon('fw-cl-step-heading')
   }, [])
 
@@ -404,6 +420,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
         onComplaintItem: (key) => editForm((form) => ({ ...form, itemKey: key })),
         onField: (field, value) => editForm((form) => ({ ...form, [field]: value })),
         onOutcome: (outcomeWanted) => editForm((form) => ({ ...form, outcomeWanted })),
+        onRepair: (edit) => editForm((form) => ({ ...form, repair: { ...form.repair, ...edit } })),
         onStep,
         onNext,
         onBack: () => {
@@ -419,7 +436,7 @@ export function ReportProblem({ api }: { api: ApiClient }) {
           const target = latest.current.scanFor
           if (!target) return
           const serial = code.trim().slice(0, 60)
-          change((current) => ({ scanFor: null, issues: [], form: target === 'serial' ? { ...current.form, serial } : updatePick(current.form, target, { serial }) }))
+          change((current) => ({ scanFor: null, issues: [], form: target === 'serial' ? { ...current.form, serial } : target === 'repair.serial' ? { ...current.form, repair: { ...current.form.repair, serial } } : updatePick(current.form, target, { serial }) }))
         },
         onScanClose: () => setModel((now) => ({ ...now, scanFor: null })),
         scanner: labelCamera,

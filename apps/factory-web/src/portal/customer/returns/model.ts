@@ -2,6 +2,7 @@ import type { MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import { stageReachedWords } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { STAGES } from '@nexus/factory-domain/quality/capa/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { EMPTY_REPAIR_DRAFT, repairDirty, repairStartProblems, type RepairDraft } from './repair/model'
 import type { Locale } from '../../../lib/i18n/locales'
 import type {
   CaseChip,
@@ -187,6 +188,8 @@ export function sendPhotosHeld(picked: readonly PickedPhoto[], held: string | nu
 
 // ── start a return or a claim ────────────────────────────────────────────────────────────────────────────────────────
 export type StartStep = 'type' | 'details' | 'review'
+/** B-W2b-342: what the start asks — a return, a quality complaint, or a repair or alteration (./repair). */
+export type StartType = CaseType | 'REPAIR'
 export interface StartLine {
   picked: boolean
   quantity: string
@@ -194,9 +197,9 @@ export interface StartLine {
   reasonNote: string
   serial: string
 }
-export interface StartDraft {
+export interface StartDraft extends RepairDraft {
   step: StartStep
-  type: CaseType | null
+  type: StartType | null
   lines: Readonly<Record<string, StartLine>>
   outcomeWanted: OutcomeWanted | null
   customerRef: string
@@ -210,7 +213,7 @@ export interface StartDraft {
   tried: boolean
 }
 
-export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', tried: false }
+export const EMPTY_START: StartDraft = { step: 'type', type: null, lines: {}, outcomeWanted: null, customerRef: '', note: '', itemKey: '', serial: '', batchNumber: '', description: '', tried: false, ...EMPTY_REPAIR_DRAFT }
 
 export const LIMITS = { reasonNote: 500, serial: 60, customerRef: 80, note: 2000, description: 4000, batchNumber: 60, lines: 50 } as const
 
@@ -245,6 +248,8 @@ export function startProblems(draft: StartDraft, read: ReturnableRead | null): R
     if (draft.serial.trim().length > LIMITS.serial) problems.serial = 'start.problem.long'
     if (draft.batchNumber.trim().length > LIMITS.batchNumber) problems.batchNumber = 'start.problem.long'
   }
+  // B-W2b-342: the repair's fields (their keys name the returns-repair catalogue).
+  if (draft.type === 'REPAIR') Object.assign(problems, repairStartProblems(draft, read))
   if (draft.customerRef.trim().length > LIMITS.customerRef) problems.customerRef = 'start.problem.long'
   return problems
 }
@@ -270,7 +275,7 @@ export function complaintBodyOf(draft: StartDraft, read: ReturnableRead | null):
 /** The draft holds typed work (closing asks Discard / Stay; leaving the page asks first). */
 export const startDirty = (draft: StartDraft): boolean =>
   draft.type !== null &&
-  (Object.values(draft.lines).some((line) => line.picked) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
+  (Object.values(draft.lines).some((line) => line.picked) || repairDirty(draft) || draft.customerRef.trim() !== '' || draft.note.trim() !== '' || draft.description.trim() !== '' || draft.serial.trim() !== '' || draft.batchNumber.trim() !== '' || draft.outcomeWanted !== null || draft.itemKey !== '')
 
 /** The next step of the start, or the problems that hold it (shown at their fields). */
 export function nextStep(draft: StartDraft, read: ReturnableRead | null): { step: StartStep } | { problems: Record<string, string> } {
