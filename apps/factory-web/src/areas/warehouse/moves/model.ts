@@ -1,10 +1,16 @@
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { PickerReason } from '../../_shared/reasons/api'
-import { MOVE_REASONS, type Explain, type LedgerCounts, type LedgerQuery, type LedgerRow, type MoveDetail, type MoveReason } from '../../_shared/stock/api'
+import { MOVE_REASONS, type LedgerCounts, type LedgerRow, type MoveDetail, type MoveReason } from '../../_shared/stock/api'
 import { decimalValue, type Phrase, type StockCan } from '../../_shared/stock/model'
 import type { AdjustDialogModel } from '../stock/adjust/model'
 import type { WriteOffDialogModel } from '../stock/daily/dialog-model'
 import type { DailyCan, SiteChoice } from '../stock/model'
+// B-W2b-327: the balance bridge (GET /inventory/why), posting days against entry days, adjustments waiting for a yes.
+import type { PostedLedgerQuery, PostedLedgerRow, WaitingAdjustment, Why } from '../stock/depth/api'
+import { periodFromDay } from '../stock/depth/model'
+
+/** A ledger row with its posting day (B-W2b-314's fields; absent in older fixtures). */
+export type MoveRow = LedgerRow & Partial<Pick<PostedLedgerRow, 'postingDate' | 'postingDay'>>
 
 /**
  * Warehouse › Movements (SCR-064; design warehouse.moves, Owner answer W2 B: one long fast grid), pure: the filters in
@@ -38,6 +44,12 @@ export interface MovesAddress {
   writeOffs: 'yes' | null
   /** The move open in its detail (`?open=`). */
   open: string | null
+  /** B-W2b-327 (SCM-196): the period counts the days the moves happened (entry) or the days they count on in the books (posting). */
+  by: 'entry' | 'posting'
+  /** B-W2b-327: only moves dated apart from the day they happened (back), or none of them (same). */
+  dated: 'back' | 'same' | null
+  /** B-W2b-327 (design mv-approval): the adjustments waiting for a yes open (`?waiting=all`, or one request's id). */
+  waiting: string | null
 }
 
 /** A stock key is named (material, lot, hide or place): the ledger of that stock, whole by default. */
@@ -61,6 +73,9 @@ export function movesAddressOf(params: { get(name: string): string | null } | nu
     q: (get('q') ?? '').trim().slice(0, 80),
     writeOffs: get('writeOffs') === 'yes' ? 'yes' : null,
     open: get('open'),
+    by: get('by') === 'posting' ? 'posting' : 'entry',
+    dated: get('dated') === 'back' ? 'back' : get('dated') === 'same' ? 'same' : null,
+    waiting: get('waiting'),
   }
 }
 
@@ -74,11 +89,20 @@ export function movesQueryString(address: MovesAddress): string {
   if (address.q.trim()) query.set('q', address.q.trim())
   if (address.writeOffs) query.set('writeOffs', address.writeOffs)
   if (address.open) query.set('open', address.open)
+  if (address.by === 'posting') query.set('by', 'posting')
+  if (address.dated) query.set('dated', address.dated)
+  if (address.waiting) query.set('waiting', address.waiting)
   return query.toString()
 }
 
-/** The API's query for the address (`from` = the period's start; no `to`, so the running balance holds). */
-export function ledgerQueryOf(address: MovesAddress, now: Date, cursor: string | null, limit = 500): LedgerQuery {
+/**
+ * The API's query for the address (`from` = the period's start; no `to`, so the running balance holds). B-W2b-327: by
+ * posting day the period is `postedFrom` (Rome) instead, and `dated` asks only moves dated apart (or none of them); the
+ * ledger then answers no running balance.
+ */
+export function ledgerQueryOf(address: MovesAddress, now: Date, cursor: string | null, limit = 500, timeZone = 'Europe/Rome'): PostedLedgerQuery {
+  const days = address.period === 'all' ? null : DAYS[address.period]
+  const byPosting = address.by === 'posting'
   return {
     siteId: address.site ?? undefined,
     itemId: address.item ?? undefined,
@@ -89,7 +113,9 @@ export function ledgerQueryOf(address: MovesAddress, now: Date, cursor: string |
     reasons: address.reasons,
     hasNote: address.note === 'with' ? true : address.note === 'without' ? false : null,
     reversed: address.reversed === 'yes' ? true : address.reversed === 'no' ? false : null,
-    from: address.period === 'all' ? null : new Date(now.getTime() - DAYS[address.period] * 86_400_000).toISOString(),
+    from: byPosting || days === null ? null : new Date(now.getTime() - days * 86_400_000).toISOString(),
+    postedFrom: byPosting ? periodFromDay(days, now, timeZone) : null,
+    backDated: address.dated === 'back' ? true : address.dated === 'same' ? false : null,
     cursor,
     limit,
     q: address.q.trim() || null,
@@ -134,6 +160,9 @@ export function tileCount(tile: MoveTile, counts: LedgerCounts | null): number |
       return counts.unvalued ?? null
   }
 }
+
+/** The first day of the address's period (Rome), for the balance bridge; null: the whole ledger. */
+export const periodStartOf = (address: Pick<MovesAddress, 'period'>, now: Date, timeZone = 'Europe/Rome'): string | null => periodFromDay(address.period === 'all' ? null : DAYS[address.period], now, timeZone)
 
 /** The balance after each row (newest first): the balance now, less the deltas of the rows above it. */
 export function runningBalances(rows: readonly LedgerRow[], closing: string | null): Map<string, number> | null {
@@ -184,7 +213,7 @@ export interface MovesPageModel {
   address: MovesAddress
   sites: SiteChoice[]
   /** Loaded so far, newest first (null while the first page is read). */
-  rows: LedgerRow[] | null
+  rows: MoveRow[] | null
   problem: string | null
   loadingMore: boolean
   /** Every row of the filter is loaded. */
@@ -194,7 +223,8 @@ export interface MovesPageModel {
   /** Every move of the filter (the first page's `rowCount`), else null. */
   rowCount?: number | null
   counts: LedgerCounts | null
-  explain: Loaded<Explain> | null
+  /** B-W2b-327: why is it this number — the balance bridge of the stock key (GET /inventory/why, the address's period). */
+  explain: Loaded<Why> | null
   asOf: string | null
   live: LiveState
   updates: number
@@ -213,6 +243,10 @@ export interface MovesPageModel {
   helpOpen?: boolean
   /** "Now" for the period words (the design cases fix it). */
   now?: string
+  /** B-W2b-327 (design mv-approval, page.conn Approvals): the adjustments waiting for a yes at the sites shown. */
+  waiting?: Loaded<{ rows: WaitingAdjustment[]; count: number }> | null
+  /** B-W2b-327: an adjustment just asked that waits for a yes (nothing posted yet). */
+  waitingNotice?: WaitingAdjustment | null
 }
 
 export interface MovesPageActions {
@@ -229,6 +263,10 @@ export interface MovesPageActions {
   onWriteOff?: () => void
   onExport?: (rows: LedgerRow[]) => void
   onNotice?: () => void
+  /** B-W2b-327: the waiting adjustments' popover open or closed; read again; the waiting notice dismissed. */
+  onWaiting?: (open: boolean) => void
+  onRetryWaiting?: () => void
+  onDismissWaitingNotice?: () => void
 }
 
 /** Why Write off… cannot start here (a key of warehouse-daily), or null: inventory.scrap and a stock key at a site. */

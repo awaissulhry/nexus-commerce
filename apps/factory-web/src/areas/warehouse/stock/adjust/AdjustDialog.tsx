@@ -4,9 +4,13 @@ import { useEffect, useRef } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, SegmentedControl, Select } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import { formatDate } from '../../../../lib/i18n/format'
+import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { quantity } from '../../../_shared/stock/model'
+import { ApprovalBanner, PostingNote } from '../depth/view/AdjustParts'
+import { DEPTH_NAMESPACE, postingHeldOf } from '../depth/model'
 import { adjustChecks, adjustPreview, type AdjustActions, type AdjustDialogModel } from './model'
 
 /**
@@ -14,16 +18,32 @@ import { adjustChecks, adjustPreview, type AdjustActions, type AdjustDialogModel
  * lot, hide and place, from the row), Up or Down, the quantity in the item's base unit, the reason (required: the ledger
  * keeps it), a reference, the unit cost with the cost grain only, and the preview. "Post adjustment" is held with the
  * missing field named; ⌘↵ posts; a refusal says why in our words. The stock changes only through this move.
+ * B-W2b-327: the warehouse rules' "Needs approval above € 500" banner with who approves (the value with the cost grain
+ * only), and the posting day (SCM-196: the day it counts on in the books, checked as the post will: the back-dating limit,
+ * a closed month, the reason a soft-locked month asks). Above the value the post waits for a yes (the page says so).
  */
+const formatDay = (day: string, locale: Parameters<typeof quantity>[1]) => formatDate(`${day}T12:00:00Z`, { locale, timeZone: 'UTC' })
+
 export function AdjustDialog({ model, actions }: { model: AdjustDialogModel; actions?: AdjustActions }) {
   const t = useT('warehouse-stock')
   const s = useT('stock')
+  const w = useT(DEPTH_NAMESPACE)
   const locale = useLocale()
   const { target, draft } = model
+  const posting = { day: draft.postingDay ?? '', check: model.postingCheck ?? null, lockReason: draft.lockReason ?? '' }
+  const postingHeld = postingHeldOf(posting)
   const unit = s(`uom.${target.item.baseUom}`)
   const checks = adjustChecks(model)
   const preview = adjustPreview(model)
-  const held = model.offline ? s('held.offline') : model.posting ? t('adj.posting') : checks.length > 0 ? t(`adj.held.${checks[0]}`, { quantity: quantity(target.onHand, locale), unit }) : null
+  const held = model.offline
+    ? s('held.offline')
+    : model.posting
+      ? t('adj.posting')
+      : checks.length > 0
+        ? checks[0] === 'posting' && postingHeld
+          ? w(postingHeld.key, postingHeld.params ? { ...postingHeld.params, earliest: postingHeld.params.earliest ? formatDay(postingHeld.params.earliest, locale) : '' } : undefined)
+          : t(`adj.held.${checks[0]}`, { quantity: quantity(target.onHand, locale), unit })
+        : null
   const latest = useRef(actions)
   latest.current = actions
   const set = (patch: Partial<typeof draft>) => latest.current?.onChange?.({ ...draft, ...patch })
@@ -73,6 +93,7 @@ export function AdjustDialog({ model, actions }: { model: AdjustDialogModel; act
     >
       <div className="fw-stk-form">
         {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
+        {model.approval && <ApprovalBanner notice={model.approval} />}
         <p className="fw-stk-hint">{t('adj.intro', { site: target.siteCode, place: placeName(target.location.id), quantity: quantity(target.onHand, locale), unit })}</p>
         <Field label={t('adj.direction')}>
           <SegmentedControl
@@ -113,6 +134,16 @@ export function AdjustDialog({ model, actions }: { model: AdjustDialogModel; act
             <Input inputMode="decimal" value={draft.unitCost} onChange={(event) => set({ unitCost: event.target.value })} />
           </Field>
         )}
+        <Field label={w('wd.posting.label')} hint={w('wd.posting.hint')}>
+          <DateField
+            value={draft.postingDay ?? ''}
+            onChange={(day) => set({ postingDay: day && day !== model.today ? day : '', lockReason: '' })}
+            locale={INTL_LOCALE[locale]}
+            {...(model.today ? { max: model.today } : {})}
+            ariaLabel={w('wd.posting.label')}
+          />
+        </Field>
+        {draft.postingDay ? <PostingNote posting={posting} onLockReason={(lockReason) => set({ lockReason })} /> : null}
         <p className="fw-stk-preview" role="status">
           {previewText}
         </p>

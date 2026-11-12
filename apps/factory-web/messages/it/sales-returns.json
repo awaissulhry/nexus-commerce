@@ -68,9 +68,6 @@
       "state": "Stato SDI"
     },
     "draft": "Bozza",
-    "later": "Più avanti",
-    "laterFee": "La trattenuta di rientro (tolta quando la causa è nostra) è registrata nella politica ma non ancora applicata.",
-    "laterWithout": "L’accredito senza reso, entro il limite di approvazione, arriverà più avanti.",
     "makeInFinance": "Creala in Amministrazione",
     "makeReplacement": "Crea ordine di sostituzione",
     "noRepairs": "Nessun ordine di riparazione da questo reso.",
@@ -265,14 +262,6 @@
     "freight": "Trasporto a carico di",
     "owner": "Responsabile",
     "site": "Merce a"
-  },
-  "finish": {
-    "CREDITED": "Accreditato",
-    "OTHER": "Altro (spiega perché)",
-    "REPAIRED": "Riparato",
-    "REPLACED": "Sostituito",
-    "RETURNED": "Restituito al cliente",
-    "SCRAPPED": "Rottamato"
   },
   "freight": {
     "byCauseOpen": "Secondo la causa: noto dopo il controllo",

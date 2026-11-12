@@ -4,6 +4,10 @@ import { inShell, LOCATIONS, NOW, PREFIX, ROLE_PERMISSIONS, TIME_ZONE, type Role
 import { EMPTY_SITE, NORTH, NORTH_ALL, overviewOf, SOUTH, STOCK_ROWS } from '../demo/fixtures'
 import { locationsCan, type ListAddress } from '../model'
 import { LocationsView, type LocationsListModel } from './view/LocationsView'
+// B-W2b-327: Status (blocked), Default for, Label, Block / Unblock, Print labels, the W2b kinds of a new place.
+import { CUSTOMERS, DEFAULTS, PLACES, PRINTERS } from '../../stock/depth/demo/fixtures'
+import type { PlaceSite } from '../depth/api'
+import type { PrintDialogModel } from '../depth/model'
 
 /**
  * Design cases of SCR-065, Warehouse › Settings › Locations (made-up data: ../demo.ts). Roles: the owner (stock with
@@ -29,10 +33,37 @@ function base(role: RoleCase, over: Partial<LocationsListModel> = {}): { role: R
       updates: 0,
       timeZone: TIME_ZONE,
       notice: null,
+      permissions: ROLE_PERMISSIONS[role],
+      today: '2026-10-30',
       ...over,
     },
   }
 }
+
+// ---- B-W2b-327 ------------------------------------------------------------------------------------------------------------
+const DEPTH: PlaceSite = { ...NORTH, locations: PLACES.filter((place) => place.status === 'ACTIVE') }
+const deep = (role: RoleCase, over: Partial<LocationsListModel> = {}) => base(role, { sites: { status: 'ready', items: [DEPTH] }, site: DEPTH, defaults: DEFAULTS, ...over })
+const at = (code: string) => DEPTH.locations.find((place) => place.code === code)!
+const print = (codes: string[], over: Partial<PrintDialogModel> = {}): PrintDialogModel => ({ places: codes.map(at), siteCode: NORTH.code, draft: { printerId: PRINTERS[0]!.id, copies: 1, language: 'it' }, printers: { status: 'ready', value: PRINTERS }, posting: false, problem: null, done: null, ...over })
+const W2B_CASES: { id: string; label: string; model: { role: RoleCase; model: LocationsListModel }; note?: string }[] = [
+  { id: 'w2b-status', label: 'W2b · Status (bin A1 blocked by a running count, the quarantine shelf damaged until 2 Nov), Default for, Label', model: deep('warehouse'), note: 'Row ⋯: Block… / Change block… / Unblock · Print label… ; the band’s Print labels prints the selected places.' },
+  { id: 'w2b-select-print', label: 'W2b · Three places selected: Print 3 labels beside Export', model: deep('warehouse', { selected: [LOCATIONS.binA1.id, LOCATIONS.binA2.id, at('N-TRANSIT').id] }) },
+  { id: 'w2b-block', label: 'W2b · Block bin A2: the reason, a note, the last day it holds', model: deep('warehouse', { depthDialog: { kind: 'block', locationId: LOCATIONS.binA2.id, draft: { reason: 'CLEAN_UP', note: 'Pulizia scaffale', until: '2026-10-31' } } }) },
+  { id: 'w2b-block-other', label: 'W2b · Block with reason Other and no words: held, the field says why', model: deep('warehouse', { depthDialog: { kind: 'block', locationId: LOCATIONS.binA2.id, draft: { reason: 'OTHER', note: '', until: '' } } }) },
+  { id: 'w2b-block-change', label: 'W2b · Change the block of the quarantine shelf (damage, until 2 Nov)', model: deep('warehouse', { depthDialog: { kind: 'block', locationId: LOCATIONS.quarantine.id } }) },
+  { id: 'w2b-block-refused', label: 'W2b · Block refused: someone changed the place meanwhile (409, in our words)', model: deep('warehouse', { depthDialog: { kind: 'block', locationId: LOCATIONS.binA2.id, draft: { reason: 'DAMAGE', note: '', until: '' }, refusal: { key: 'wd.loc.problem.changed' } } }) },
+  { id: 'w2b-unblock', label: 'W2b · Unblock the quarantine shelf: moves go through again', model: deep('warehouse', { depthDialog: { kind: 'unblock', locationId: LOCATIONS.quarantine.id } }) },
+  { id: 'w2b-print', label: 'W2b · Print labels: 2 of 3 places (bin A2 gets its suggested code first; the transit place is left out)', model: deep('warehouse', { print: print(['N-MAG-A-01', 'N-MAG-A-02', 'N-TRANSIT']) }) },
+  { id: 'w2b-print-pdf', label: 'W2b · Print labels as a PDF in the browser (a new tab, one label per page)', model: deep('warehouse', { print: print(['N-MAG-A-01', 'N-MAG-A-02'], { draft: { printerId: 'PDF', copies: 2, language: 'en' } }) }) },
+  { id: 'w2b-print-no-printer', label: 'W2b · No label printer at this site: the PDF only', model: deep('warehouse', { print: print(['N-MAG-A-01'], { printers: { status: 'ready', value: [] }, draft: { printerId: 'PDF', copies: 1, language: 'it' } }) }) },
+  { id: 'w2b-print-read-only', label: 'W2b · Read-only: labels as a PDF only (a label printer needs print.labels)', model: deep('readOnly', { print: print(['N-MAG-A-01'], { draft: { printerId: 'PDF', copies: 1, language: 'it' } }) }) },
+  { id: 'w2b-print-quality', label: 'W2b · Quality (print.labels, does not manage places): bin A2 has no code yet — held, in words', model: deep('quality', { print: print(['N-MAG-A-01', 'N-MAG-A-02']) }) },
+  { id: 'w2b-print-done', label: 'W2b · Printed: 2 jobs queued, 1 place left out', model: deep('warehouse', { print: print(['N-MAG-A-01', 'N-MAG-A-02', 'N-TRANSIT'], { done: { jobs: [{ locationId: LOCATIONS.binA1.id, labelCode: 'STAB-N-N-MAG-A-01', jobId: 'job-1', state: 'QUEUED' }, { locationId: LOCATIONS.binA2.id, labelCode: 'STAB-N-N-MAG-A-02', jobId: 'job-2', state: 'QUEUED' }], refused: [{ code: 'N-TRANSIT', key: 'wd.loc.label.refused.kind' }] } }) }) },
+  { id: 'w2b-new-customer', label: 'W2b · New location “At a customer” inside rack A: held (it sits at the top) and the customer to name', model: deep('warehouse', { parties: { status: 'ready', value: CUSTOMERS }, dialog: { kind: 'new', parentId: LOCATIONS.rackA.id, form: { parentId: LOCATIONS.rackA.id, code: 'N-CLI-01', name: 'Presso Moto Esempio', kind: 'CUSTOMER', partyId: null } } }) },
+  { id: 'w2b-new-customer-top', label: 'W2b · New location “At a customer” at the top: the customer picked', model: deep('warehouse', { parties: { status: 'ready', value: CUSTOMERS }, dialog: { kind: 'new', parentId: null, form: { parentId: null, code: 'N-CLI-01', name: 'Presso Moto Esempio', kind: 'CUSTOMER', partyId: CUSTOMERS[0]!.id } } }) },
+  { id: 'w2b-new-inside-pickface', label: 'W2b · New location inside a pick face: held (nothing sits inside it)', model: deep('warehouse', { dialog: { kind: 'new', parentId: at('N-PF-01').id, form: { parentId: at('N-PF-01').id, code: 'N-PF-01-A', name: 'Vaschetta A', kind: 'BIN', partyId: null } } }) },
+  { id: 'w2b-blocked-notice', label: 'W2b · Blocked: “N-MAG-A-02 blocked.”', model: deep('warehouse', { notice: { tone: 'success', key: 'wd.loc.done.blocked', params: { code: 'N-MAG-A-02' } } }) },
+]
 
 function LocationsDesign({ model }: { model: { role: RoleCase; model: LocationsListModel } }) {
   return inShell('/warehouse/locations', createElement(LocationsView, { model: model.model }), model.role)
@@ -72,6 +103,7 @@ export const designScreen = defineDesignScreen<{ role: RoleCase; model: Location
     { id: 'error', label: 'The read failed: in words with Try again (never an empty list)', model: base('warehouse', { sites: { status: 'error', problem: 'problem.offline' }, site: null }) },
     { id: 'stock-failed', label: 'The places read, the stock did not: said above the list', model: base('warehouse', { stock: { value: null, problem: 'problem.read' } }) },
     { id: 'no-sites', label: 'No site within the person’s access', model: base('warehouse', { sites: { status: 'ready', items: [] }, site: null }) },
+    ...W2B_CASES,
   ],
 })
 

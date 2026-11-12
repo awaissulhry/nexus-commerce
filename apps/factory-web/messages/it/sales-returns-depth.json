@@ -1,0 +1,407 @@
+{
+  "arrival": {
+    "NO_DEADLINE": "Nessuna scadenza per la merce",
+    "noDeadlineArrived": "Nessuna scadenza; la merce è arrivata il {date}",
+    "WAITING": "In attesa della merce entro il {date}",
+    "OVERDUE_one": "Attesa entro il {date}: in ritardo di {count} giorno",
+    "OVERDUE_other": "Attesa entro il {date}: in ritardo di {count} giorni",
+    "ON_TIME": "Arrivata in tempo ({date})",
+    "LATE_one": "Arrivata {count} giorno dopo la scadenza ({date})",
+    "LATE_other": "Arrivata {count} giorni dopo la scadenza ({date})"
+  },
+  "check": {
+    "policy": "Politica {name}: {days} giorni per il reso",
+    "noPolicy": "Nessuna politica di reso attiva per questo cliente: valgono le impostazioni vendite",
+    "due": "La merce è attesa entro il {date}",
+    "outside_one": "{count} riga è fuori dalla finestra di reso",
+    "outside_other": "{count} righe sono fuori dalla finestra di reso",
+    "noWithdrawal": "Il diritto di recesso del consumatore non si applica a questo reso"
+  },
+  "credit": {
+    "title": "Accredito senza reso",
+    "sub": "Un accredito per merce che il cliente tiene (nulla della riga è rientrato), entro il limite di approvazione.",
+    "col": {
+      "value": "Valore",
+      "state": "Stato"
+    },
+    "state": {
+      "credited": "Accreditata senza la merce",
+      "waiting": "In attesa di un sì",
+      "allowed": "Accreditabile",
+      "held": "Non ora"
+    },
+    "open": "Accredita la riga {seq}",
+    "openRequest": "Apri Approvazioni",
+    "waitsFor": "Attende un sì da {name}",
+    "waitsInbox": "Attende un sì in Home › Approvazioni",
+    "limit": "Entro il limite di approvazione l'accredito è scritto subito; oltre, attende il sì di un'altra persona. Nessuno approva una propria richiesta.",
+    "done": "La riga {seq} è accreditata senza il rientro della merce.",
+    "asked": "L'accredito della riga {seq} attende un sì (Home › Approvazioni).",
+    "dialog": {
+      "title": "Accredita la riga {seq} senza la merce",
+      "body": "Il cliente tiene la merce: nulla di questa riga è rientrato. La nota di credito si fa poi in Finanza.",
+      "pieces": "Pezzi",
+      "credit": "Accredito",
+      "amount": "Importo dell'accredito",
+      "amountHint": "Vuoto: quanto valgono i suoi pezzi ({value}). Meno è un accredito parziale.",
+      "note": "Perché",
+      "noteHint": "Conservato con la richiesta e nella storia della pratica.",
+      "needsYes": "Oltre il tuo limite di approvazione: serve un sì.",
+      "atOnce": "Entro il tuo limite di approvazione: viene accreditata subito.",
+      "effect": "La riga poi non attende più merce; il reso si può chiudere come accreditato senza la merce.",
+      "submit": "Accredita",
+      "ask": "Chiedi un sì"
+    },
+    "problem": {
+      "amount": "Scrivi un importo sopra 0, come 12,50.",
+      "over": "Più di quanto vale la riga.",
+      "state": "Il reso non è in uno stato in cui accreditare senza la merce.",
+      "line": "Questa riga ora non si può accreditare senza la merce.",
+      "other": "L'accredito non si può chiedere così.",
+      "nobodyElse": "Nessun altro può approvare questo accredito: chiedi all'amministratore."
+    }
+  },
+  "estimate": {
+    "tab": "Preventivo",
+    "title": "Preventivo {revision}",
+    "sub": "Ricambi e manodopera, approvati dal cliente prima che il lavoro inizi.",
+    "status": {
+      "DRAFT": "Bozza",
+      "SENT": "Inviato, in attesa di risposta",
+      "ACCEPTED": "Accettato",
+      "DECLINED": "Rifiutato",
+      "WITHDRAWN": "Ritirato"
+    },
+    "kind": {
+      "PART": "Ricambio",
+      "LABOUR": "Manodopera"
+    },
+    "failed": "Impossibile caricare il preventivo",
+    "noPrices": "Un preventivo è fatto di prezzi: il tuo ruolo non vede i prezzi, quindi è mostrato senza e non si può modificare.",
+    "empty": "Aggiungi ricambi e lavorazioni",
+    "emptyBody": "Fai il preventivo: i ricambi e il lavoro, con i loro prezzi, da far approvare al cliente prima della riparazione.",
+    "new": "Nuovo preventivo",
+    "revise": "Nuova revisione",
+    "revisions": "Revisione mostrata",
+    "revisionOption": "Preventivo {revision} · {status}",
+    "revisionN": "Preventivo {revision}",
+    "more": "Altro per questo preventivo",
+    "readOnly": "Sola lettura: {why}",
+    "editHint": "Invio modifica una cella; ogni modifica si salva da sola.",
+    "addPart": "Aggiungi ricambio",
+    "addLabour": "Aggiungi manodopera",
+    "table": "Righe del preventivo {revision}",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "noLines": "Ancora nessun ricambio o lavorazione",
+    "noLinesBody": "Aggiungi un ricambio o la manodopera.",
+    "lineMenu": "Riga {seq}: altro",
+    "remove": "Togli la riga",
+    "removeN_one": "Togli {count} riga",
+    "removeN_other": "Togli {count} righe",
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "costUnknown": "Non noto per ogni riga",
+    "notSent": "Non inviato",
+    "by": "da {name}",
+    "recordedBy": "Registrata dall'ufficio: {name}",
+    "noDecision": "Ancora nessuna risposta",
+    "history": "Revisioni",
+    "historySub": "Ogni revisione resta: cosa è stato inviato e cosa ha risposto il cliente.",
+    "col": {
+      "what": "Ricambio o lavorazione",
+      "quantity": "Q.tà",
+      "price": "Prezzo",
+      "minutes": "Minuti di manodopera",
+      "total": "Totale",
+      "cost": "Nostro costo",
+      "revision": "Revisione",
+      "status": "Stato",
+      "made": "Creata",
+      "decision": "Decisione del cliente"
+    },
+    "fact": {
+      "validUntil": "Valido fino al",
+      "sent": "Inviato",
+      "decision": "Decisione del cliente",
+      "customerNote": "Nota per il cliente",
+      "internalNote": "Nota interna",
+      "withdrawn": "Ritirato"
+    },
+    "sum": {
+      "total": "Totale",
+      "parts": "Ricambi",
+      "labour": "Manodopera",
+      "minutes": "Minuti di manodopera",
+      "cost": "Nostro costo"
+    },
+    "decision": {
+      "ACCEPTED": {
+        "PORTAL": "Accettato dal cliente nel portale ({name})",
+        "LINK": "Accettato dal cliente tramite link ({name})",
+        "OFFICE": "Accettato dal cliente, registrato dall'ufficio ({name})"
+      },
+      "DECLINED": {
+        "PORTAL": "Rifiutato dal cliente nel portale ({name})",
+        "LINK": "Rifiutato dal cliente tramite link ({name})",
+        "OFFICE": "Rifiutato dal cliente, registrato dall'ufficio ({name})"
+      }
+    },
+    "work": {
+      "waiting": "L'approvazione e la riparazione attendono la risposta del cliente al preventivo {revision}.",
+      "declined": "Il cliente ha rifiutato il preventivo {revision}: fai una nuova revisione, oppure annulla o restituisci la riparazione.",
+      "held": "Il preventivo blocca l'approvazione e la riparazione."
+    },
+    "held": {
+      "prices": "I preventivi sono prezzi: il tuo ruolo non vede i prezzi.",
+      "edit": {
+        "SENT": "Il preventivo è inviato: ciò che vede il cliente non cambia più (fai una nuova revisione).",
+        "ACCEPTED": "Il cliente ha accettato il preventivo: non cambia più.",
+        "DECLINED": "Il cliente ha rifiutato il preventivo: fai una nuova revisione.",
+        "WITHDRAWN": "Il preventivo è ritirato."
+      },
+      "stage": "Non possibile in questa fase della riparazione.",
+      "sentAlready": "Il preventivo è già inviato.",
+      "noLines": "Aggiungi prima un ricambio o la manodopera.",
+      "garmentFirst": "Ricevi prima il capo: il preventivo si invia quando è qui.",
+      "expired": "L'ultimo giorno di validità è passato: cambialo in Modifica condizioni.",
+      "notSent": "Solo un preventivo inviato riceve una risposta.",
+      "notNewest": "Si può rivedere solo la revisione più recente.",
+      "draftOpen": "Il preventivo {revision} è ancora in bozza: completalo o ritiralo."
+    },
+    "problem": {
+      "description": "Di' cos'è il ricambio o la lavorazione, in una riga che legge il cliente.",
+      "quantity": "Una quantità sopra 0 (al massimo 4 decimali).",
+      "unitPrice": "Un prezzo di 0 o più, come 12,50.",
+      "minutes": "Minuti interi di lavoro, 1 o più (solo manodopera).",
+      "unitCost": "Un costo di 0 o più, come 4,20, oppure vuoto."
+    },
+    "line": {
+      "titlePart": "Aggiungi un ricambio",
+      "titleLabour": "Aggiungi manodopera",
+      "whatHint": "Come lo legge il cliente.",
+      "price": "Prezzo unitario",
+      "cost": "Nostro costo unitario",
+      "costHint": "Mai mostrato al cliente.",
+      "submit": "Aggiungi"
+    },
+    "newDialog": {
+      "title": "Crea il preventivo {revision}",
+      "first": "Un nuovo preventivo in bozza, vuoto: aggiungi ricambi e manodopera.",
+      "copies_one": "Una nuova bozza che parte dal preventivo {revision} con la sua {count} riga.",
+      "copies_other": "Una nuova bozza che parte dal preventivo {revision} con le sue {count} righe.",
+      "replaces": "Il preventivo {revision} è stato inviato: la nuova revisione lo ritira e il cliente vede quella nuova quando sarà inviata.",
+      "submit": "Crea"
+    },
+    "send": {
+      "open": "Invia il preventivo",
+      "title": "Invia il preventivo {revision} di {number}",
+      "to": "Cliente",
+      "portal": "Il cliente lo vede nel suo portale e lì lo accetta o lo rifiuta.",
+      "frozen": "Dopo l'invio righe e condizioni non cambiano più: una modifica è una nuova revisione.",
+      "stage": "La riparazione passa a Preventivata.",
+      "noMail": "Non viene inviata nessuna email: un cliente senza portale risponde per telefono o per email e l'ufficio registra la risposta.",
+      "submit": "Invia"
+    },
+    "answer": {
+      "open": "Registra la risposta",
+      "title": "La risposta del cliente al preventivo {revision}",
+      "body": "Quello che ha detto il cliente, come l'ha sentito l'ufficio. Un preventivo accettato approva la riparazione.",
+      "label": "La risposta",
+      "ACCEPTED": "Accettato",
+      "DECLINED": "Rifiutato",
+      "acceptedHint": "La riparazione è approvata: il lavoro può iniziare.",
+      "declinedHint": "Nessun lavoro su questo preventivo.",
+      "how": "Come l'abbiamo saputo",
+      "howHint": "Per esempio: per telefono, per email di oggi.",
+      "name": "Chi ha risposto",
+      "reason": "Il motivo del cliente",
+      "submit": "Registra",
+      "problem": {
+        "answer": "Scegli accettato o rifiutato.",
+        "how": "Di' come l'ufficio ha saputo la risposta.",
+        "reason": "Scrivi il motivo del rifiuto del cliente."
+      }
+    },
+    "withdraw": {
+      "open": "Ritira il preventivo",
+      "title": "Ritira il preventivo {revision}",
+      "body": "La bozza viene ritirata: resta tra le revisioni.",
+      "bodySent": "Il preventivo inviato viene ritirato: il cliente non può più rispondere.",
+      "reason": "Perché",
+      "submit": "Ritira"
+    },
+    "terms": {
+      "open": "Modifica condizioni",
+      "title": "Condizioni del preventivo {revision}",
+      "sentOnly": "Inviato: cambia solo la nota interna.",
+      "noDate": "Nessun ultimo giorno",
+      "customerHint": "Mostrata al cliente con il preventivo.",
+      "internalHint": "La legge solo l'ufficio.",
+      "submit": "Salva",
+      "problem": {
+        "past": "L'ultimo giorno di validità non può essere nel passato.",
+        "long": "Al massimo 2000 caratteri."
+      }
+    },
+    "done": {
+      "added": "La riga è aggiunta.",
+      "removed_one": "{count} riga tolta.",
+      "removed_other": "{count} righe tolte.",
+      "new": "Il preventivo {revision} è creato.",
+      "sent": "Il preventivo {revision} è inviato: il cliente lo vede nel portale.",
+      "accepted": "Preventivo {revision} accettato: la riparazione è approvata.",
+      "declined": "Preventivo {revision} rifiutato.",
+      "withdrawn": "Preventivo {revision} ritirato.",
+      "terms": "Le condizioni sono salvate."
+    }
+  },
+  "exchange": {
+    "size": "Nuova taglia",
+    "sizeOf": "Nuova taglia per la riga {seq}",
+    "pick": "Scegli una taglia",
+    "noSizes": "Nessun'altra taglia di questo modello",
+    "pickSize": "Riga {seq}: scegli la taglia che il cliente riceve al suo posto.",
+    "decided": "Cambiata: taglia {from} con {to}"
+  },
+  "fact": {
+    "policy": "Politica di reso",
+    "arrival": "La merce",
+    "withdrawal": "Diritto di recesso",
+    "scanCode": "Codice da scansionare"
+  },
+  "fee": {
+    "title": "Costo di rimessa a magazzino o gestione",
+    "sub": "Trattenuto dall'accredito secondo le regole della politica; annullato quando la causa è nostra.",
+    "col": {
+      "rule": "Regola",
+      "amount": "Costo"
+    },
+    "noPolicy": "Questo reso segue le impostazioni vendite: nessuna regola di costo si applica.",
+    "noRule": "Nessuna regola di costo si applica a questa riga.",
+    "atDecision": "Fissato quando la riga viene decisa.",
+    "withheld": "{rule}: trattenuto dall'accredito",
+    "draft": "Costo {rule}:",
+    "creditAfter": "accredito dopo il costo",
+    "dropped": {
+      "OUR_CAUSE": "Costo {rule} annullato: la causa è nostra",
+      "NO_CREDIT": "Costo {rule} annullato: nessun accredito da cui trattenerlo",
+      "OTHER_CURRENCY": "Costo {rule} annullato: l'accredito è in un'altra valuta"
+    },
+    "ours": "Un nostro difetto o un danno nel trasporto non paga mai un costo."
+  },
+  "finish": {
+    "COMPLETED": "Completato: ogni riga decisa ed eseguita",
+    "CREDITED_WITHOUT_RETURN": "Accreditato senza rientro della merce",
+    "RETURNED_UNCHANGED": "Restituito al cliente tal quale",
+    "GOODS_NOT_RECEIVED": "La merce non è mai arrivata",
+    "CUSTOMER_WITHDREW": "Il cliente ha rinunciato al reso",
+    "OTHER": "Altro (spiega perché)",
+    "held": {
+      "COMPLETED": "Nessuna riga è decisa: non c'è nulla di completato.",
+      "CREDITED_WITHOUT_RETURN": "Nessuna riga è stata accreditata senza la merce.",
+      "RETURNED_UNCHANGED": "Nessuna riga torna al cliente tal quale.",
+      "GOODS_NOT_RECEIVED": "Ogni pezzo atteso è arrivato (o è stato accreditato senza la merce).",
+      "CUSTOMER_WITHDREW": "È stato dato un accredito: il reso è stato eseguito, non ritirato.",
+      "OTHER": "Non possibile ora.",
+      "undecided_one": "Decidi prima la riga ricevuta {lines}.",
+      "undecided_other": "Decidi prima le righe ricevute {lines}."
+    },
+    "tooLong": "Al massimo 500 caratteri."
+  },
+  "held": {
+    "notNow": "Non possibile in questo stato.",
+    "credit": {
+      "done": "La riga {seq} è già accreditata senza la merce.",
+      "waiting": "L'accredito della riga {seq} attende un sì.",
+      "decided": "La riga {seq} è già decisa.",
+      "arrived": "La merce della riga {seq} è arrivata: decidila invece.",
+      "noPrice": "Il valore della riga non è noto: non è stata venduta a un prezzo."
+    },
+    "papers": {
+      "code": "Il codice da scansionare lo imposta chi gestisce i resi.",
+      "state": "Nessun documento per un reso in questo stato."
+    },
+    "policy": {
+      "bound": "Il reso segue la politica {name}.",
+      "state": "La politica si applica quando il reso è autorizzato, prima che arrivi la merce."
+    },
+    "split": {
+      "final": "Il reso è concluso.",
+      "beforeGoods": "Riga {seq}: si divide quando arriva la merce.",
+      "credited": "La riga {seq} è accreditata senza la merce.",
+      "nothing": "Della riga {seq} non è ancora arrivato nulla.",
+      "all": "Ogni pezzo della riga {seq} è arrivato."
+    }
+  },
+  "late": {
+    "tile": "Arrivati dopo la scadenza",
+    "tileHint": "Resi aperti la cui merce è arrivata dopo la scadenza",
+    "failed": "Impossibile leggere quali resi sono arrivati dopo la scadenza."
+  },
+  "papers": {
+    "print": "Stampa i documenti del reso"
+  },
+  "policy": {
+    "bind": "Applica la politica di reso",
+    "salesSettings": "Le impostazioni vendite (nessuna politica applicata)",
+    "named": "{name} ({days} giorni)",
+    "namedOld": "{name} ({days} giorni, una politica precedente)",
+    "newer": "È attiva una politica di reso più recente ({name}); questo reso mantiene quella applicata.",
+    "notBound": "Nessuna politica di reso applicata: è attiva {name}. Applicala per fissare la scadenza e i costi.",
+    "done": "La politica è applicata: la merce è attesa entro il {date}.",
+    "doneNoDate": "La politica è applicata.",
+    "dialog": {
+      "title": "Applica la politica di reso a {number}",
+      "body": "La politica attiva del canale del cliente: la scadenza conta dall'autorizzazione e le sue regole di costo valgono per gli accrediti.",
+      "withdrawal": "Il consumatore recede dall'acquisto (14 giorni, senza motivo)",
+      "reason": "Perché accettarlo fuori dalla finestra",
+      "reasonHint": "Una cortesia: resta nella storia della pratica.",
+      "submit": "Applica"
+    },
+    "problem": {
+      "checking": "Verifica della politica…",
+      "none": "Nessuna politica di reso attiva per questo canale (Vendite › Impostazioni).",
+      "reason": "Una riga è fuori dalla finestra: di' perché è accettata.",
+      "state": "La politica si applica solo a un reso autorizzato."
+    }
+  },
+  "read": {
+    "failed": "Impossibile caricare questi dettagli"
+  },
+  "remake": {
+    "title": "È stato chiesto un rifacimento ({via}, {date})",
+    "via": {
+      "OFFICE": "dall'ufficio",
+      "PORTAL": "nel portale",
+      "LINK": "tramite un link di reclamo"
+    },
+    "lines": "Righe: {lines}",
+    "fit": "Cosa non calza: {fit}",
+    "photos": "Riga {seq}: {count} di {needed} foto",
+    "later": "Il rifacimento lo decide l'ufficio su misura (più avanti); per ora ricevi il capo.",
+    "decideLater": "Il rifacimento lo decide l'ufficio su misura (più avanti)."
+  },
+  "scanCode": {
+    "none": "Non ancora impostato (si imposta stampando i documenti)"
+  },
+  "split": {
+    "open_one": "Dividi il resto ({count} pezzo)",
+    "open_other": "Dividi il resto ({count} pezzi)",
+    "title": "Dividi la riga {seq}",
+    "body": "La riga {seq} tiene i {kept} ricevuti; i {rest} non arrivati diventano una riga a sé, ancora attesa.",
+    "hint": "Ogni riga poi si decide da sola.",
+    "submit": "Dividi",
+    "done": "La riga {seq} tiene {kept}; la riga {newSeq} attende gli altri {rest}.",
+    "child": "Divisa dalla riga {seq}",
+    "parent": "Divisa nelle righe {seqs}"
+  },
+  "window": {
+    "over_one": "Resa {count} giorno dopo la sua finestra ({date})",
+    "over_other": "Resa {count} giorni dopo la sua finestra ({date})"
+  },
+  "withdrawal": {
+    "yes": "Recesso (14 giorni)",
+    "no": "Nessun recesso"
+  }
+}

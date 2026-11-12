@@ -3,6 +3,8 @@ import { MAX_BOM_LEVELS } from '../../product/bom-structure/rules'
 import { decimalOf } from '../../product/units/units'
 import { planRequirements, type PlanInput, type PlanOrderLine, type PlanResult, type PlanWarning } from '../explode'
 import { garmentNeeds, problemWarning, shareKey, type GarmentSource, type Shares } from './explosion'
+// B-W2b-318 (PLN-081): a made part's scrap and yield multiply what is below it.
+import { withComponentFactors } from '../lot-sizing/scrap'
 
 /**
  * The run on the multi-level explosion (B-W2b-293; MR1:01), pure: W1's netting (../explode `planRequirements`) with each
@@ -83,6 +85,11 @@ const sameShares = (a: Shares, b: Shares): boolean => {
 
 /** The site's run with every garment exploded through its levels; the explosion's problems join the warnings. */
 export function planLevelled(input: PlanInput, garments: Garments | null): LevelledPlan {
+  // B-W2b-318 (PLN-081): each part's factor passed on to what is below it (../lot-sizing/scrap).
+  return levelled(input, garments && input.scrapYield ? withComponentFactors(garments, input.scrapYield.itemFactor) : garments)
+}
+
+function levelled(input: PlanInput, garments: Garments | null): LevelledPlan {
   if (!garments) return { ...planRequirements(input), passes: 1 }
   let shares: Shares = new Map()
   let plan: PlanResult | null = null

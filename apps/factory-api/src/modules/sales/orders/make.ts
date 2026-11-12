@@ -121,6 +121,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
       vatAmount: true,
       unitCost: true,
       costAmount: true,
+      // B-W2b-330 (SAL-174): the waterfall goes with the price.
+      priceSteps: true,
     },
     orderBy: { seq: 'asc' },
   })
@@ -239,6 +241,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
         vatAmount: line.vatAmount,
         unitCost: line.unitCost,
         costAmount: line.costAmount,
+        // B-W2b-330 (SAL-174): the quote line's waterfall, written with its price (the same unit price: it adds up).
+        ...stepsOf(quoteLines, line.quoteLineId),
         ...stamp,
       },
       select: { id: true },
@@ -292,4 +296,10 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string,
     payload: { orderId: id, number: number.formatted, quoteId: quote.id, versionId: version.id, partyId: version.partyId, depositRequestIds: linked },
   })
   return { order: { id, number: number.formatted }, created: true, waits: null, linkedDepositRequestIds: linked }
+}
+
+/** B-W2b-330: the waterfall of the quote line an order line is made from, when it has one. */
+function stepsOf(lines: readonly { readonly id: string; readonly priceSteps: Prisma.JsonValue | null }[], quoteLineId: string): { priceSteps?: Prisma.InputJsonValue } {
+  const steps = lines.find((line) => line.id === quoteLineId)?.priceSteps
+  return Array.isArray(steps) ? { priceSteps: steps as Prisma.InputJsonValue } : {}
 }

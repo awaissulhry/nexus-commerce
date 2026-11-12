@@ -9,7 +9,7 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadText, useLive } from '../../_shared/buying/hooks'
 import { pickerReasons, type PickerReason } from '../../_shared/reasons/api'
-import { explainFigure, ledgerCounts, ledgerMove, listLocations, readLedger, reverseMove, stockOverview, type Explain, type LedgerCounts, type LedgerRow, type MoveDetail } from '../../_shared/stock/api'
+import { ledgerCounts, ledgerMove, listLocations, reverseMove, stockOverview, type LedgerCounts, type LedgerRow, type MoveDetail } from '../../_shared/stock/api'
 import { csvOf, readProblem, stockCan, TIME_ZONE } from '../../_shared/stock/model'
 import { StockMessages } from '../../_shared/stock/parts'
 import { useAdjust } from '../stock/adjust/useAdjust'
@@ -17,8 +17,12 @@ import { listHolds } from '../stock/daily/api'
 import { DAILY_NAMESPACE, holdOfRow, holdsBySubject } from '../stock/daily/model'
 import { useWriteOff } from '../stock/daily/useWriteOff'
 import { dailyCan, type SiteChoice } from '../stock/model'
-import { explainsFigure, ledgerQueryOf, movesAddressOf, movesQueryString, reverseProblemKey, type Loaded, type MovesAddress, type MovesPageModel, type ReverseModel } from './model'
+import { explainsFigure, ledgerQueryOf, movesAddressOf, movesQueryString, periodStartOf, reverseProblemKey, type Loaded, type MoveRow, type MovesAddress, type MovesPageModel, type ReverseModel } from './model'
 import { MovesView } from './view/MovesView'
+// B-W2b-327: the balance bridge, posting days, adjustments waiting for a yes.
+import { readPostedLedger, waitingAdjustments, whyFigure, type WaitingAdjustment, type Why } from '../stock/depth/api'
+import { DEPTH_NAMESPACE } from '../stock/depth/model'
+import { wallOf } from '../stock/daily/model'
 
 const PAGE = 500
 
@@ -37,7 +41,7 @@ const PAGE = 500
  */
 export function MovesPage() {
   return (
-    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE, DEPTH_NAMESPACE]}>
       <MovesContainer />
     </StockMessages>
   )
@@ -56,9 +60,10 @@ function MovesContainer() {
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
   const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const address = useMemo(() => movesAddressOf(params), [params])
-  const listKey = useMemo(() => movesQueryString({ ...address, open: null }), [address])
+  // The list reads again when its filters change (not when a move or the waiting adjustments open).
+  const listKey = useMemo(() => movesQueryString({ ...address, open: null, waiting: null }), [address])
 
-  const [rows, setRows] = useState<LedgerRow[] | null>(null)
+  const [rows, setRows] = useState<MoveRow[] | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
   const [rowCount, setRowCount] = useState<number | null>(null)
@@ -66,7 +71,9 @@ function MovesContainer() {
   const [problem, setProblem] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [counts, setCounts] = useState<LedgerCounts | null>(null)
-  const [explain, setExplain] = useState<Loaded<Explain> | null>(null)
+  const [explain, setExplain] = useState<Loaded<Why> | null>(null)
+  const [waiting, setWaiting] = useState<MovesPageModel['waiting']>(null)
+  const [waitingNotice, setWaitingNotice] = useState<WaitingAdjustment | null>(null)
   const [detail, setDetail] = useState<Loaded<MoveDetail> | null>(null)
   const [reverse, setReverse] = useState<ReverseModel | null>(null)
   const [sites, setSites] = useState<SiteChoice[]>([])
@@ -99,12 +106,13 @@ function MovesContainer() {
       .catch(() => setCounts(null))
     if (explainsFigure(address)) {
       setExplain({ status: 'loading' })
-      explainFigure(api, { siteId: address.site!, itemId: address.item!, itemColourId: address.colour, lotId: address.lot, hideId: address.hide, locationId: address.location })
+      // B-W2b-327: the balance bridge over the address's period (by the days the moves happened, or count on in the books).
+      whyFigure(api, { siteId: address.site!, itemId: address.item!, itemColourId: address.colour, lotId: address.lot, hideId: address.hide, locationId: address.location }, { from: periodStartOf(address, new Date(), TIME_ZONE), basis: address.by === 'posting' ? 'POSTING' : 'ENTRY' })
         .then((value) => id === readId.current && setExplain({ status: 'ready', value }))
         .catch((error: unknown) => id === readId.current && setExplain({ status: 'error', problem: readProblem(error) }))
     } else setExplain(null)
     try {
-      const page = await readLedger(api, ledgerQueryOf(address, new Date(), null, PAGE))
+      const page = await readPostedLedger(api, ledgerQueryOf(address, new Date(), null, PAGE, TIME_ZONE))
       if (id !== readId.current) return
       setRows(page.moves)
       setCursor(page.nextCursor)
@@ -133,7 +141,7 @@ function MovesContainer() {
     setLoadingMore(true)
     const id = readId.current
     try {
-      const page = await readLedger(api, ledgerQueryOf(address, new Date(), cursor, PAGE))
+      const page = await readPostedLedger(api, ledgerQueryOf(address, new Date(), cursor, PAGE, TIME_ZONE))
       if (id !== readId.current) return
       setRows((current) => [...(current ?? []), ...page.moves.filter((row) => !current?.some((seen) => seen.id === row.id))])
       setCursor(page.nextCursor)
@@ -157,18 +165,43 @@ function MovesContainer() {
   }, [api, openId])
   useEffect(loadDetail, [loadDetail])
 
+  // B-W2b-327 (design mv-approval, page.conn Approvals): the adjustments waiting for a yes at the site shown.
+  const loadWaiting = useCallback(() => {
+    if (!can.stockView) return
+    setWaiting((current) => current ?? { status: 'loading' })
+    waitingAdjustments(api, { siteId: address.site })
+      .then((value) => setWaiting({ status: 'ready', value }))
+      .catch((error: unknown) => setWaiting({ status: 'error', problem: readProblem(error) }))
+  }, [api, can.stockView, address.site])
+  useEffect(loadWaiting, [loadWaiting])
+
   const live = useLive(
     (change) => {
       if (change.type === 'inventory.moved') setUpdates((count) => count + 1)
+      if (change.type === 'inventory.adjustment_request_changed') loadWaiting()
     },
     () => void load(),
     can.stockView,
   )
 
-  const adjust = useAdjust(api, can.cost, (words) => {
-    setNotice({ tone: 'success', key: words.key, params: words.params })
-    void load()
-  })
+  const adjust = useAdjust(
+    api,
+    can.cost,
+    (words) => {
+      setNotice({ tone: 'success', key: words.key, params: words.params })
+      void load()
+    },
+    // B-W2b-327: the approval banner, the posting day; above the value the adjustment waits for a yes.
+    {
+      companyId: session.company?.id ?? null,
+      approvers: session.permissions.includes('approvals.view'),
+      today: wallOf(Date.now(), TIME_ZONE).day,
+      onWaiting: (asked) => {
+        setWaitingNotice(asked)
+        loadWaiting()
+      },
+    },
+  )
 
   // A write-off's reason in words on its row (the WRITE_OFF list, read once).
   useEffect(() => {
@@ -321,6 +354,8 @@ function MovesContainer() {
     writeOff: writeOff.model,
     writeOffReasons,
     daily,
+    waiting,
+    waitingNotice,
   }
 
   return (
@@ -345,6 +380,9 @@ function MovesContainer() {
         onWriteOff: () => void startWriteOff(),
         onExport: exportRows,
         onNotice: () => setNotice(null),
+        onWaiting: (open) => go({ waiting: open ? 'all' : null }),
+        onRetryWaiting: loadWaiting,
+        onDismissWaitingNotice: () => setWaitingNotice(null),
       }}
     />
   )

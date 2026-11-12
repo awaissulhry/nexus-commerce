@@ -17,6 +17,8 @@ import { dayOf, SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import type { PublishBody, PublishQuery } from './contract'
 import { scheduleWorld, type ScheduleWorld } from './service'
 import { diffSlotOf, lockedWorkingPlan, PLAN_COLUMNS, publishedOf, SLOT_COLUMNS, slotsOf, userNamesOf, type PlanRow, type SlotRow } from './store'
+// B-W2b-329 (PLN-149): the publish joins the board's change log (a PUBLISH of the working plan naming the version).
+import { logChanges } from '../schedule-depth/log'
 
 /**
  * Publish the working plan to the floor (B-W2a-34; PLN-147; design planning.board pop "Publish schedule v13 to the
@@ -241,7 +243,7 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
   const site = await siteFor(caller, body.siteId, PLANNING_SCHEDULE_PUBLISH)
   const { result, replayed } = await command(caller, { name: 'planning.schedule.publish', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
-    await lockedWorkingPlan(tx, site, context.tenantId, { actorId: context.actorId, now, expectedVersion: body.version, bump: false })
+    const working = await lockedWorkingPlan(tx, site, context.tenantId, { actorId: context.actorId, now, expectedVersion: body.version, bump: false }) // B-W2b-329: named for the log
     const today = businessDate(now, site.timezone)
     const world = await scheduleWorld(tx, site, { from: today, to: plusDays(today, 70) }, now)
     const range = rangeOf(world, body)
@@ -298,6 +300,7 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
       })
     }
     await tx.planVersion.update({ where: { id: versionId }, data: { publishedAt: now, publishedById: context.actorId, version: 2, updatedAt: now }, select: { id: true } })
+    await logChanges(tx, site, working.id, [{ kind: 'PUBLISH', slotId: null, workOrderId: null, operationId: null, publishedVersionId: versionId, reason: body.note?.trim() || null }], context.actorId, now) // B-W2b-329
     tools.audit({
       action: 'planning.schedule.publish',
       recordType: 'PlanVersion',

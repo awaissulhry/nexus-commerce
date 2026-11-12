@@ -260,6 +260,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const inquiry = await client.inquiry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return inquiry ? { companyId: inquiry.companyId, siteId: null, partyId: inquiry.partyId } : null
   },
+  // B-W2b-345 (modules/sales/service; design "Service case" Activity, SAL-436 the status mails): a service case's company, no
+  // site, and the customer it names (its status mails and the replies reach that customer only); a rider's case without a
+  // customer takes internal notes only.
+  ServiceCase: async (client, id) => {
+    const serviceCase = await client.serviceCase.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return serviceCase ? { companyId: serviceCase.companyId, siteId: null, partyId: serviceCase.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
