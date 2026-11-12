@@ -6,13 +6,28 @@ import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR
 import type { RepairModel, RmaModel } from '../view-model'
 import { RepairRecordView } from '../repair/view/RepairRecordView'
 import { RmaRecordView } from './view/RmaRecordView'
+import { DEPTH_AUTHORISED, DEPTH_CREDIT_WAITING, DEPTH_INSPECTED, DEPTH_RECEIVED, DEPTH_RECEIVED_LATE, depthModel, FEES_DRAFTED, OUTCOMES_AUTHORISED, OUTCOMES_INSPECTED, OUTCOMES_PART_RECEIVED, OUTCOMES_RECEIVED, OUTCOMES_REMAKE, POLICY_CHECK, RMA_PART_RECEIVED, RMA_RECEIVED_LATE } from '../depth/demo/fixtures'
+import { finishOptionsOf } from '../depth/model'
+import type { RmaDepthModel } from '../depth/view-model'
+import { DEMO_LINE_IDS, ESTIMATES_ACCEPTED, ESTIMATES_DECLINED, ESTIMATES_HISTORY, ESTIMATES_NO_PRICES, ESTIMATES_NONE, ESTIMATES_SENT, estimateModel } from '../estimate/demo/fixtures'
+import { blankLine } from '../estimate/model'
+import type { EstimateModel } from '../estimate/view-model'
+import type { Rma } from '../api'
 
 /**
  * Design cases of SCR-112, a return or repair record: the RMA (Lines autosaved per cell, Inspection & decision, Replacement
  * & credit, Shipments; the MilestoneTracker) and the repair order (Intake & photos, Work, Safety check with the
  * GateChecklist and the sign-off, Return), with their dialogs, read-only and held states and the role cases. Made-up
- * data only (demo/fixtures.ts).
+ * data only (demo/fixtures.ts). B-W2b-352 (`w2b-352-*`): the RMA's W2b parts (policy, deadline, credit without return,
+ * fees, split, size exchange, remake asked, the finish reasons) and the repair's Estimate tab.
  */
+
+/** The W2b parts that go with each demo RMA (B-W2b-352). */
+function depthFor(rma: Rma): RmaDepthModel {
+  if (rma.status === 'INSPECTED') return depthModel({ depth: { value: DEPTH_INSPECTED, problem: null }, outcomes: { value: OUTCOMES_INSPECTED, problem: null } })
+  if (rma.status === 'RECEIVED') return depthModel({ depth: { value: rma.goodsDueBy === RMA_RECEIVED_LATE.goodsDueBy ? DEPTH_RECEIVED_LATE : DEPTH_RECEIVED, problem: null }, outcomes: { value: OUTCOMES_RECEIVED, problem: null } })
+  return depthModel({ depth: { value: DEPTH_AUTHORISED, problem: null }, outcomes: { value: OUTCOMES_AUTHORISED, problem: null } })
+}
 
 type DesignModel = { readonly kind: 'rma'; readonly role: RoleCase; readonly model: RmaModel } | { readonly kind: 'repair'; readonly role: RoleCase; readonly model: RepairModel }
 
@@ -43,6 +58,7 @@ function rmaModel(role: RoleCase, over: Partial<RmaModel> = {}): RmaModel {
     close: null,
     newRepair: null,
     dockOpen: false,
+    depth: depthFor(over.rma ?? RMA_AUTHORISED),
     ...over,
   }
 }
@@ -72,6 +88,7 @@ function repairModel(role: RoleCase, over: Partial<RepairModel> = {}): RepairMod
     dialogBusy: false,
     dialogProblem: null,
     dockOpen: false,
+    estimate: estimateModel(),
     ...over,
   }
 }
@@ -96,6 +113,7 @@ function RecordDesign({ model }: { model: DesignModel }) {
           onNewRepairDraft: (patch) => set({ newRepair: state.model.newRepair ? { ...state.model.newRepair, draft: { ...state.model.newRepair.draft, ...patch } } : null }),
           onNewRepairClose: () => set({ newRepair: null }),
           onDismissReceipt: () => set({ receipt: null }),
+          onDepthDialog: (dialog) => set({ depth: state.model.depth ? { ...state.model.depth, dialog } : state.model.depth }),
         },
       }),
       state.role,
@@ -115,11 +133,17 @@ function RecordDesign({ model }: { model: DesignModel }) {
         onEditCancel: () => set({ edit: null }),
         onStepUpCancel: () => set({ stepUp: STEP_UP_CLOSED }),
         onDismissReceipt: () => set({ receipt: null }),
+        onEstimateDialog: (dialog) => set({ estimate: state.model.estimate ? { ...state.model.estimate, dialog } : state.model.estimate }),
+        onEstimateShow: (estimateId) => set({ estimate: state.model.estimate ? { ...state.model.estimate, shownId: estimateId } : state.model.estimate }),
+        onEstimateAdd: (kind) => set({ estimate: state.model.estimate ? { ...state.model.estimate, dialog: { kind: 'line', draft: blankLine(kind), showProblems: false } } : state.model.estimate }),
       },
     }),
     state.role,
   )
 }
+
+const est = (over: Partial<EstimateModel> = {}) => estimateModel(over)
+const PART_LINE = RMA_PART_RECEIVED.lines[1]!
 
 const decided: Record<string, DecisionDraft> = { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'CREDIT_ONLY', outcome: 'RESTOCK', credit: '' } }
 const filledChecklist = { seams: 'PASS' as const, abrasionZones: 'PASS' as const, closures: 'NOT_APPLICABLE' as const, protectors: 'PASS' as const, replaced: true, lot: 'PRT-DEMO-07', level: '2' as const, certificateCovers: true, note: '' }
@@ -171,13 +195,13 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'rma-shipments', label: 'Shipments: goods in with the customer’s DDT', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'shipments' }) } },
     { id: 'rma-shipments-empty', label: 'Shipments: nothing booked', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'shipments' }) } },
     { id: 'rma-ddt', label: 'Issue return DDT (preview)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'shipments', dialog: { kind: 'ddt', draft: { ...BLANK_DDT, carrier: 'Demo courier', weight: '1.4' }, preview: { draft: { lines: [{ seq: 1, description: 'Demo touring jacket, Red, size 52', quantity: '1', uom: 'PCS' }] }, problems: [], expectedNumber: '147/2026', reasons: ['RETURN'] }, previewing: false } }) } },
-    { id: 'rma-close', label: 'Close return: finish reason', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: [] } }) } },
+    { id: 'rma-close', label: 'Close return: finish reason (the six reasons; the suggested one picked, the others held with why)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: 'COMPLETED', note: '', busy: false, problem: null, warnings: null, pending: [], options: finishOptionsOf(OUTCOMES_INSPECTED, RMA_INSPECTED) } }) } },
     {
       id: 'rma-close-pending',
       label: 'Close return: what it would leave behind, said before the click (a line decided Repair without its repair order)',
-      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: 'REPAIRED', note: '', busy: false, problem: null, warnings: null, pending: [{ code: 'REPAIR_WITHOUT_ORDER', seqs: [10], lineIds: [RMA_INSPECTED.lines[0]!.id] }, { code: 'BACK_WITHOUT_DDT', seqs: [20, 30], lineIds: [] }] } }) },
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: 'COMPLETED', note: '', busy: false, problem: null, warnings: null, pending: [{ code: 'REPAIR_WITHOUT_ORDER', seqs: [10], lineIds: [RMA_INSPECTED.lines[0]!.id] }, { code: 'BACK_WITHOUT_DDT', seqs: [20, 30], lineIds: [] }], options: finishOptionsOf(OUTCOMES_INSPECTED, RMA_INSPECTED) } }) },
     },
-    { id: 'rma-close-checking', label: 'Close return from the list: reading what it would leave behind', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null } }) } },
+    { id: 'rma-close-checking', label: 'Close return from the list: reading what it would leave behind', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null, options: null } }) } },
     {
       id: 'rma-add-lines',
       label: 'Add lines on an open return: what may still come back (one line already on it, one with nothing left)',
@@ -228,5 +252,76 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'repair-send', label: 'Send back: the DDT (reason repair) with its preview', model: { kind: 'repair', role: 'warehouse', model: repairModel('warehouse', { repair: REPAIR_PASSED, tab: 'return', dialog: { kind: 'ship', draft: { ...BLANK_DDT, carrier: 'Demo courier', weight: '1.4' }, note: '', preview: { draft: { lines: [{ seq: 1, description: 'Demo touring jacket, Red, size 52 (repaired)', quantity: '1', uom: 'PCS' }] }, problems: [], expectedNumber: '146/2026', reasons: ['REPAIR'] }, previewing: false, useLive: false } }) } },
     { id: 'repair-shipped', label: 'Shipped back: the DDT and date; nothing changes any more', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_SHIPPED, tab: 'return' }) } },
     { id: 'repair-offline', label: 'Repair offline: writes held', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { offline: true, live: 'offline' }) } },
+    // ---- B-W2b-352: the RMA's W2b parts -------------------------------------------------------------------------------
+    { id: 'w2b-352-facts', label: 'W2b RMA: policy, the goods against the deadline, scan code; "no policy bound yet" (⋯ Bind the return policy, Print the papers)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner') } },
+    { id: 'w2b-352-policy', label: 'W2b RMA: Bind the return policy — the live policy, the deadline it sets', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'policy', draft: { withdrawal: false, reason: '' }, check: POLICY_CHECK } } }) } },
+    {
+      id: 'w2b-352-policy-outside',
+      label: 'W2b RMA: Bind the policy with a line outside its window (a reason needed, held until written)',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'policy', draft: { withdrawal: false, reason: '' }, check: { ...POLICY_CHECK, outsideWindow: true, lines: [{ ...POLICY_CHECK.lines[0]!, window: { deliveredOn: '2026-09-01', lastDay: '2026-10-01', inWindow: false, daysOver: 28 } }, POLICY_CHECK.lines[1]!] } } } }) },
+    },
+    { id: 'w2b-352-late', label: 'W2b RMA: received 3 days after the deadline (the fact in amber), the scan code set', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_RECEIVED_LATE, tab: 'inspection' }) } },
+    {
+      id: 'w2b-352-fee-draft',
+      label: 'W2b Inspection: a drafted decision with the restocking fee it withholds and the credit after it',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: { ...RMA_RECEIVED, lines: [RMA_RECEIVED.lines[0]!, { ...RMA_RECEIVED.lines[1]!, grade: 'LIKE_NEW', cause: 'NO_FAULT', suggestedOutcome: 'RESTOCK' }] }, tab: 'inspection', decisions: { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'CREDIT_ONLY', outcome: 'RESTOCK', credit: '' } }, depth: { ...depthFor(RMA_RECEIVED), fees: FEES_DRAFTED } }) },
+    },
+    {
+      id: 'w2b-352-size-exchange',
+      label: 'W2b Inspection: Size exchange picked, the new size from the style’s other sizes',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: { ...RMA_RECEIVED, lines: [RMA_RECEIVED.lines[0]!, { ...RMA_RECEIVED.lines[1]!, grade: 'LIKE_NEW', cause: 'NO_FAULT', suggestedOutcome: 'RESTOCK' }] }, tab: 'inspection', decisions: { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'SIZE_EXCHANGE', outcome: 'RESTOCK', credit: '', exchangeSize: '52' } } }) },
+    },
+    {
+      id: 'w2b-352-size-missing',
+      label: 'W2b Inspection: Size exchange without the size (Decide held: pick the size)',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: { ...RMA_RECEIVED, lines: [RMA_RECEIVED.lines[0]!, { ...RMA_RECEIVED.lines[1]!, grade: 'LIKE_NEW', cause: 'NO_FAULT', suggestedOutcome: 'RESTOCK' }] }, tab: 'inspection', decisions: { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'SIZE_EXCHANGE', outcome: 'RESTOCK', credit: '' } } }) },
+    },
+    { id: 'w2b-352-split', label: 'W2b Inspection: 1 of 2 arrived — Split the rest', model: { kind: 'rma', role: 'warehouse', model: rmaModel('warehouse', { rma: RMA_PART_RECEIVED, tab: 'inspection', depth: depthModel({ depth: { value: DEPTH_RECEIVED, problem: null }, outcomes: { value: OUTCOMES_PART_RECEIVED, problem: null } }) }) } },
+    { id: 'w2b-352-split-dialog', label: 'W2b: Split line 20 (what stays, what becomes its own line)', model: { kind: 'rma', role: 'warehouse', model: rmaModel('warehouse', { rma: RMA_PART_RECEIVED, tab: 'inspection', depth: depthModel({ depth: { value: DEPTH_RECEIVED, problem: null }, outcomes: { value: OUTCOMES_PART_RECEIVED, problem: null }, dialog: { kind: 'split', lineId: PART_LINE.id } }) }) } },
+    { id: 'w2b-352-split-held', label: 'W2b: Split held for sales (the warehouse receives)', model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { rma: RMA_PART_RECEIVED, tab: 'inspection', depth: depthModel({ depth: { value: DEPTH_RECEIVED, problem: null }, outcomes: { value: OUTCOMES_PART_RECEIVED, problem: null } }) }) } },
+    { id: 'w2b-352-credit', label: 'W2b Replacement & credit: Credit without return per line; the fee (no policy bound: none)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit' }) } },
+    {
+      id: 'w2b-352-credit-dialog',
+      label: 'W2b: Credit without return — within the limit: credited at once',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[0]!.id, amount: '', note: 'The customer keeps the jacket (made-up).' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[0]!.id, seq: 10, pieces: 1, currency: 'EUR', value: 25000, creditAmount: 25000, approval: { needed: false, approverRoleId: null, approverUserId: null, nobodyElse: false }, waiting: null }, previewing: false } } }) },
+    },
+    {
+      id: 'w2b-352-credit-ask',
+      label: 'W2b: Credit without return — above the limit: asks a yes (from Bea Demo)',
+      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[1]!.id, amount: '200', note: '' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[1]!.id, seq: 20, pieces: 2, currency: 'EUR', value: 32400, creditAmount: 20000, approval: { needed: true, approverRoleId: null, approverUserId: PEOPLE[1]!.id, nobodyElse: false }, waiting: null }, previewing: false } } }) },
+    },
+    {
+      id: 'w2b-352-credit-over',
+      label: 'W2b: Credit without return — more than the line is worth (held with why)',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[0]!.id, amount: '400', note: '' }, preview: { ok: false, problems: [{ path: 'body/creditAmount', message: 'More than the line is worth.' }], lineId: RMA_AUTHORISED.lines[0]!.id, seq: 10, pieces: 1, currency: 'EUR', value: 25000, creditAmount: 40000, approval: { needed: false, approverRoleId: null, approverUserId: null, nobodyElse: false }, waiting: null }, previewing: false } } }) },
+    },
+    { id: 'w2b-352-credit-waiting', label: 'W2b: line 10 waits for a yes (Open Approvals), line 20 credited without the goods', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', depth: depthModel({ depth: { value: DEPTH_CREDIT_WAITING, problem: null } }) }) } },
+    { id: 'w2b-352-credit-held', label: 'W2b: the warehouse — no decide right, no prices: each credit held with why', model: { kind: 'rma', role: 'warehouse', model: rmaModel('warehouse', { tab: 'credit', credit: { value: null, problem: null } }) } },
+    { id: 'w2b-352-fees', label: 'W2b: inspected — the restocking fee withheld on line 20, dropped on line 10 (the cause is ours)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'credit' }) } },
+    { id: 'w2b-352-remake', label: 'W2b: a remake asked through a claim link (the decision is later)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { depth: depthModel({ outcomes: { value: OUTCOMES_REMAKE, problem: null } }) }) } },
+    { id: 'w2b-352-depth-failed', label: "W2b: the depth couldn't be read: the record stays usable, the parts say so with Try again", model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', depth: depthModel({ depth: { value: null, problem: 'quality:problem.unavailable' }, outcomes: { value: null, problem: 'quality:problem.unavailable' } }) }) } },
+    { id: 'w2b-352-depth-loading', label: 'W2b: the depth reading', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', depth: depthModel({ depth: { value: null, problem: null }, outcomes: { value: null, problem: null } }) }) } },
+    { id: 'w2b-352-depth-offline', label: 'W2b: offline — credit, split, policy and papers held', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'credit', offline: true, live: 'offline' }) } },
+    // ---- B-W2b-352: the repair's Estimate tab ---------------------------------------------------------------------------
+    { id: 'w2b-352-estimate-empty', label: 'W2b Estimate: none yet — Add parts and jobs (New estimate)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ value: ESTIMATES_NONE }) }) } },
+    { id: 'w2b-352-estimate-draft', label: 'W2b Estimate: a draft — the grid autosaved per cell, the sums, Send', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate' }) }, note: 'Enter edits a cell; minutes only on labour; Our cost only with the cost grain; x selects rows for Remove N.' },
+    { id: 'w2b-352-estimate-saving', label: 'W2b Estimate: a cell saving, a cell refused with why', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ marks: { [`${DEMO_LINE_IDS[0]}:unitPrice`]: { state: 'saving' }, [`${DEMO_LINE_IDS[2]}:minutes`]: { state: 'refused', words: { key: 'depth:estimate.problem.minutes' } } } }) }) } },
+    { id: 'w2b-352-estimate-add-part', label: 'W2b Estimate: Add part', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ dialog: { kind: 'line', draft: { ...blankLine('PART'), description: 'Back protector, level 2', unitPrice: '38.00', unitCost: '15.00' }, showProblems: false } }) }) } },
+    { id: 'w2b-352-estimate-add-labour', label: 'W2b Estimate: Add labour pressed with the minutes and price missing', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ dialog: { kind: 'line', draft: { ...blankLine('LABOUR'), description: 'Fit the protector' }, showProblems: true } }) }) } },
+    { id: 'w2b-352-estimate-send', label: 'W2b Estimate: Send — the customer sees it in the portal; nothing is mailed', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ dialog: { kind: 'send' } }) }) } },
+    { id: 'w2b-352-estimate-sent', label: 'W2b Estimate: sent — approval and the repair wait for the answer (band button held), Record the answer', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_SENT }) }) } },
+    { id: 'w2b-352-estimate-answer', label: 'W2b Estimate: Record the answer (accepted, by phone)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_SENT, dialog: { kind: 'answer', draft: { answer: 'ACCEPTED', how: 'By phone this morning (made-up)', name: 'Mario Esempio', declineReason: '' }, showProblems: false } }) }) } },
+    { id: 'w2b-352-estimate-answer-problems', label: 'W2b Estimate: declined pressed without how or the reason', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_SENT, dialog: { kind: 'answer', draft: { answer: 'DECLINED', how: '', name: '', declineReason: '' }, showProblems: true } }) }) } },
+    { id: 'w2b-352-estimate-accepted', label: 'W2b Estimate: accepted in the portal — the customer decision with its time', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'APPROVED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_ACCEPTED }) }) } },
+    { id: 'w2b-352-estimate-declined', label: 'W2b Estimate: declined (recorded by the office) — the work refused; New estimate', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_DECLINED }) }) } },
+    { id: 'w2b-352-estimate-history', label: 'W2b Estimate: revision 2 drafted after a declined revision 1 — the revisions', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_HISTORY }) }) } },
+    { id: 'w2b-352-estimate-new-replaces', label: 'W2b Estimate: New revision of a sent estimate (it withdraws the sent one)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_SENT, dialog: { kind: 'new', replaces: ESTIMATES_SENT.estimates[0]!.id } }) }) } },
+    { id: 'w2b-352-estimate-terms', label: 'W2b Estimate: Edit terms (valid until, the notes)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ dialog: { kind: 'terms', draft: { validUntil: '2026-11-15', customerNote: 'Valid for 15 days (made-up).', internalNote: '' } } }) }) } },
+    { id: 'w2b-352-estimate-withdraw', label: 'W2b Estimate: Withdraw a sent estimate', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: { ...REPAIR_RECEIVED, stage: 'ESTIMATED' }, tab: 'estimate', estimate: est({ value: ESTIMATES_SENT, dialog: { kind: 'withdraw', reason: '' } }) }) } },
+    { id: 'w2b-352-estimate-no-prices', label: 'W2b Estimate: a role without the price grain — no prices, nothing to change (held with why)', model: { kind: 'repair', role: 'inspector', model: repairModel('inspector', { tab: 'estimate', estimate: est({ value: ESTIMATES_NO_PRICES }) }) } },
+    { id: 'w2b-352-estimate-read-only', label: 'W2b Estimate: read-only person — every step held with the permission', model: { kind: 'repair', role: 'readOnly', model: repairModel('readOnly', { tab: 'estimate' }) } },
+    { id: 'w2b-352-estimate-loading', label: 'W2b Estimate: loading', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ value: null }) }) } },
+    { id: 'w2b-352-estimate-error', label: "W2b Estimate: couldn't load (Try again); the rest of the record stays usable", model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', estimate: est({ value: null, problem: 'quality:problem.unavailable' }) }) } },
+    { id: 'w2b-352-estimate-offline', label: 'W2b Estimate: offline — cells and every step held', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'estimate', offline: true, live: 'offline' }) } },
   ],
 })

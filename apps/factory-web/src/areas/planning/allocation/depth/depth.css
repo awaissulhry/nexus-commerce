@@ -1,0 +1,68 @@
+/*
+ * Lines & subcontractors in depth (SCR-126, B-W2b-338) LAYOUT: the kit timing, an operation's switch, the card's
+ * operations and the review of "Create subcontract orders". The controls are the design system's; this file only places
+ * them, with semantic tokens (no colour of its own). Dialog content may keep its own width (Owner rule 2026-10-29: inner
+ * parts only).
+ */
+.fw-ald-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ald-h3 {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-ald-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-ald-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-ald-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-ald-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-ald-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ald-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+/* The workshop tile's capacity words: a line of their own under the lane's own detail. */
+.fw-ald-block {
+  display: block;
+}

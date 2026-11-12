@@ -106,6 +106,8 @@ async function referencesOf(db: Reader, lineIds: readonly string[]): Promise<Map
   for (const row of await db.returnLine.findMany({ where, select: { salesOrderLineId: true } })) note(row.salesOrderLineId, 'a return')
   // B-W2b-183: a customer's change or cancel request names the line (OrderChangeRequestLine keeps it).
   for (const row of await db.orderChangeRequestLine.findMany({ where: { orderLineId: { in: [...lineIds] } }, select: { orderLineId: true } })) note(row.orderLineId, "a customer's change request")
+  // B-W2b-317 (PLN-173): a line promised is kept with its promise history (append-only PromiseRecord rows refer to it).
+  for (const row of await db.promiseRecord.findMany({ where, select: { salesOrderLineId: true }, distinct: ['salesOrderLineId'] })) note(row.salesOrderLineId, 'its promise history')
   return found
 }
 

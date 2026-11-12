@@ -44,7 +44,7 @@ let moneyA: MoneySeed
 
 const ns = { a: 'invd-a', b: 'invd-b' } as const
 const A = { tenant: seedUuid(ns.a, 'tenant'), companyA: seedUuid(ns.a, 'company:A'), companyB: seedUuid(ns.a, 'company:B'), siteA1: seedUuid(ns.a, 'site:A1'), brand: seedUuid(ns.a, 'party:P1') }
-const B = { tenant: seedUuid(ns.b, 'tenant'), companyA: seedUuid(ns.b, 'company:A') }
+const B = { tenant: seedUuid(ns.b, 'tenant'), companyA: seedUuid(ns.b, 'company:A'), brand: seedUuid(ns.b, 'party:P1') }
 const YEAR = businessDate(new Date()).slice(0, 4)
 const TODAY = () => businessDate(new Date())
 const MONTH = () => TODAY().slice(0, 7)
@@ -410,7 +410,10 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     expect(line).not.toHaveProperty('unitPrice')
     expect((await wall('companyB', 'GET', '/invoicing/deferred', undefined, 200)).body.groups).toEqual([])
     expect((await wall('companyB', 'POST', '/invoicing/invoices/deferred', { companyId: A.companyA, partyId: A.brand, month: MONTH() })).status).toBe(404)
-    expect((await wall('otherTenant', 'GET', '/invoicing/deferred', undefined, 200)).body.groups).toEqual([])
+    // Tenant B has a DDT of its own (the shipping seed's 144, dated 2026-10-30, per shipment): past its 12 days and before
+    // the 15th of the next month it is on B's own list (a TD24 is still in time). The wall: none of tenant A's is.
+    const otherTenant = (await wall('otherTenant', 'GET', '/invoicing/deferred', undefined, 200)).body.groups as Json[]
+    expect(otherTenant.filter((group) => group.companyId !== B.companyA || group.partyId !== B.brand)).toEqual([])
     expect((await wall('noPrice', 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [S.ddtA.id], lines: [{ ddtId: S.ddtA.id, salesOrderLineId: newId(), size: '52', quantity: 1 }] })).status).toBe(409)
   })
 })

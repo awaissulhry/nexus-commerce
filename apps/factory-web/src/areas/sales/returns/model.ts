@@ -80,10 +80,11 @@ export function returnsCan(permissions: readonly string[]): ReturnsCan {
 // ---- the list's address: one filter model -------------------------------------------------------------------------------
 
 /** Rows ▾ (design returns.grid savedRows) and the tiles (returns.tiles): one set of named filters in `?view=`. */
-export const AFTER_SALES_VIEWS = ['open', 'openReturns', 'openRepairs', 'toInspect', 'closed', 'all', 'waiting', 'inRepair', 'replacement', 'late'] as const
+export const AFTER_SALES_VIEWS = ['open', 'openReturns', 'openRepairs', 'toInspect', 'closed', 'all', 'waiting', 'inRepair', 'replacement', 'late', 'arrivedLate'] as const
 export type AfterSalesView = (typeof AFTER_SALES_VIEWS)[number]
 export const ROW_VIEWS: readonly AfterSalesView[] = ['open', 'openReturns', 'openRepairs', 'toInspect', 'closed', 'all']
-export const TILES = ['waiting', 'toInspect', 'inRepair', 'replacement'] as const
+/** B-W2b-352: `arrivedLate` = "Arrived after the deadline" (the open returns whose first receipt came after their deadline). */
+export const TILES = ['waiting', 'toInspect', 'inRepair', 'replacement', 'arrivedLate'] as const
 export type AfterSalesTile = (typeof TILES)[number]
 
 export interface ListAddress {
@@ -133,6 +134,9 @@ export function sourcesOf(view: AfterSalesView): { returns: ReturnListView | nul
       return { returns: 'replacement', repairs: null }
     case 'late':
       return { returns: 'late', repairs: null }
+    case 'arrivedLate':
+      // B-W2b-352: the open returns, kept to those `GET /sales/returns/arrived-late` names (the container filters).
+      return { returns: 'open', repairs: null }
   }
 }
 
@@ -524,12 +528,17 @@ export interface DecisionDraft {
   readonly outcome: GoodsOutcome | ''
   /** Typed credit (price grain), empty = the default for the disposition. */
   readonly credit: string
+  /** B-W2b-352: SIZE_EXCHANGE: the size the customer gets instead (one of the style's other sizes, from the outcomes). */
+  readonly exchangeSize?: string
 }
 
 export const EMPTY_DECISION: DecisionDraft = Object.freeze({ disposition: '', outcome: '', credit: '' })
 
-/** The dispositions an office person picks from (REMAKE is refused in W2a: made to measure is deferred). */
-export const PICKABLE_DISPOSITIONS: readonly ReturnDisposition[] = ['REPAIR', 'REPLACE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP']
+/**
+ * The dispositions an office person picks from (REMAKE is refused in W2a: the made-to-measure office decides it later).
+ * B-W2b-352: SIZE_EXCHANGE (B-W2b-346), the same garment in another size on the replacement order.
+ */
+export const PICKABLE_DISPOSITIONS: readonly ReturnDisposition[] = ['REPAIR', 'REPLACE', 'SIZE_EXCHANGE', 'CREDIT_ONLY', 'RETURN_UNCHANGED', 'SCRAP']
 
 /** Where the goods may go for a disposition, the usual one first. */
 export const outcomesFor = (disposition: ReturnDisposition | ''): readonly GoodsOutcome[] => (disposition ? OUTCOMES_BY_DISPOSITION[disposition] : [])
@@ -550,7 +559,8 @@ export function decisionLinesOf(drafts: Readonly<Record<string, DecisionDraft>>,
     const draft = drafts[line.id]
     if (!draft || !draft.disposition) continue
     const credit = price && draft.credit.trim() !== '' ? minorOf(draft.credit) : null
-    out.push({ lineId: line.id, disposition: draft.disposition, goodsOutcome: outcomeOf(draft, line), ...(credit !== null ? { creditAmount: credit } : {}) })
+    const exchangeSize = draft.disposition === 'SIZE_EXCHANGE' && draft.exchangeSize ? { exchangeSize: draft.exchangeSize } : {}
+    out.push({ lineId: line.id, disposition: draft.disposition, goodsOutcome: outcomeOf(draft, line), ...(credit !== null ? { creditAmount: credit } : {}), ...exchangeSize })
   }
   return out
 }
@@ -561,6 +571,7 @@ export function decisionDraftProblems(drafts: Readonly<Record<string, DecisionDr
   for (const line of lines) {
     const draft = drafts[line.id]
     if (!draft || !draft.disposition) continue
+    if (draft.disposition === 'SIZE_EXCHANGE' && !draft.exchangeSize) out.push({ key: 'depth:exchange.pickSize', params: { seq: line.seq } })
     if (price && draft.credit.trim() !== '') {
       const credit = minorOf(draft.credit)
       if (credit === null) out.push({ key: 'decide.problem.creditNumber', params: { seq: line.seq } })
@@ -893,15 +904,11 @@ export function ddtBody(draft: DdtDraft, reason: DdtBody['reason']): DdtBody {
 
 // ---- close (design pop:returns.close) --------------------------------------------------------------------------------------
 
-/** The finish reasons offered (SAL-360 is a later row: the chosen words are stored as the close reason's text). */
-export const FINISH_REASONS = ['CREDITED', 'REPLACED', 'REPAIRED', 'RETURNED', 'SCRAPPED', 'OTHER'] as const
-export type FinishReason = (typeof FINISH_REASONS)[number]
-
-/** The close reason sent: the reason's words in the person's language, then the note. */
-export function closeReasonText(reasonWords: string, note: string): string {
-  const extra = note.trim()
-  return extra ? `${reasonWords}: ${extra}` : reasonWords
-}
+/**
+ * The finish reasons (SAL-360; B-W2b-346's `POST …/finish`, the DB's six): which fit is the outcomes' answer (B-W2b-352
+ * reads it with the close dialog); the note is kept as the close's words.
+ */
+export { FINISH_REASONS, type FinishReason } from '@nexus/factory-domain/sales/returns-outcomes/rules'
 
 // ---- the RMA's milestones (the design's MilestoneTracker; SAL-362) --------------------------------------------------------
 

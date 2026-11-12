@@ -4,14 +4,16 @@ import { useEffect, useId } from 'react'
 import { Banner, Field, Listbox } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
-import { FINISH_REASONS, type FinishReason } from '../model'
+import { finishProblems } from '../depth/model'
+import type { FinishReason } from '../model'
 import type { CloseActions, CloseModel } from '../view-model'
 import { say, useWords } from './parts'
 
 /**
- * Close return (design sales.returns/pop:returns.close; row ⋯ and the record): the finish reason (required; SAL-360's own
- * list is a later row, so the chosen words are kept as the close reason), a note, Close (⌘↵). B-W2b-16: what the close
- * would leave behind is said BEFORE the click (the record's closeWarnings: lines to replace without the replacement order,
+ * Close return (design sales.returns/pop:returns.close; row ⋯ and the record): the finish reason (required; SAL-360's six,
+ * B-W2b-346's `POST …/finish` — B-W2b-352 lists them from the return's outcomes: the suggested one first, a reason that does
+ * not fit held with why), a note (needed for Other; kept as the close's words), Close (⌘↵). B-W2b-16: what the close would
+ * leave behind is said BEFORE the click (the record's closeWarnings: lines to replace without the replacement order,
  * unchanged goods without their return DDT, lines decided Repair without a repair order); after the close the API's count
  * is said. "Unused reserved parts returned to stock" is Later.
  */
@@ -19,7 +21,9 @@ export function CloseReturnModal({ model, actions }: { model: CloseModel; action
   const t = useWords()
   const ids = { reason: useId(), note: useId() }
   const done = model.warnings !== null
-  const held = model.busy ? t('quality:common.working') : !model.reason ? t('close.pickReason') : model.reason === 'OTHER' && !model.note.trim() ? t('close.otherNote') : null
+  const options = model.options ?? null
+  const problem = options ? finishProblems(model.reason, model.note, options) : { key: 'close.checking' }
+  const held = model.busy ? t('quality:common.working') : problem ? say(t, problem) : null
 
   useEffect(() => {
     if (done) return
@@ -87,10 +91,10 @@ export function CloseReturnModal({ model, actions }: { model: CloseModel; action
               <Listbox
                 id={ids.reason}
                 ariaLabel={t('close.reason')}
-                options={FINISH_REASONS.map((reason) => ({ value: reason, label: t(`finish.${reason}`) }))}
+                options={(options ?? []).map((option) => (option.held ? { value: option.reason, label: t(`depth:finish.${option.reason}`), heldReason: say(t, option.held), note: say(t, option.held) } : { value: option.reason, label: t(`depth:finish.${option.reason}`) }))}
                 value={model.reason}
                 onChange={(value) => actions?.onCloseDraft?.({ reason: value as FinishReason })}
-                placeholder={t('close.pickReason')}
+                placeholder={options ? t('close.pickReason') : t('close.checking')}
               />
             </Field>
             <Field label={t('close.note')} required={model.reason === 'OTHER'} htmlFor={ids.note}>
