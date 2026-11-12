@@ -104,12 +104,24 @@ export interface CheckRecord {
 
 const writerOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
+/**
+ * When the check happened: the command's time, unless that clock runs more than a minute ahead of the database's (a
+ * command on an app clock a test moves on: the …_guards refuse a check "in the future"), then the database's. An override
+ * keeps the command's time: it must not be before the yes its command wrote.
+ */
+async function checkedAtOf(tools: CommandTools, override: boolean): Promise<Date> {
+  if (override) return tools.now
+  const [row] = await tools.tx.$queryRaw<{ now: Date }[]>`SELECT now() AS now`
+  return row && tools.now.getTime() > row.now.getTime() + 60_000 ? row.now : tools.now
+}
+
 /** Writes one CreditCheck (the step's, or an override's), its audit row and credit_check.recorded; the row's id. */
 export async function writeCheck(tools: CommandTools, plan: CreditPlan, record: CheckRecord, override: { readonly checkId: string; readonly taskId: string } | null = null): Promise<string> {
   const id = newId()
   const { reading } = plan
   const exposure = exposureOf(reading)
   const words = override ? checkWords(plan.findings, plan.result, 'en', true) : plan.words
+  const checkedAt = await checkedAtOf(tools, override !== null)
   await tools.tx.creditCheck.create({
     data: {
       id,
@@ -130,7 +142,7 @@ export async function writeCheck(tools: CommandTools, plan: CreditPlan, record: 
       words,
       overridesCheckId: override?.checkId ?? null,
       overrideTaskId: override?.taskId ?? null,
-      checkedAt: tools.now,
+      checkedAt,
       requestId: tools.context.requestId,
       createdAt: tools.now,
       createdById: writerOf(tools),
