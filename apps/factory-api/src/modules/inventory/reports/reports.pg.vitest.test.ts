@@ -35,7 +35,7 @@ const NOW = new Date('2026-11-30T15:00:00.000Z')
 let f: InventoryFixture
 let app: FastifyInstance
 let ids: InventoryFixture['ids']
-const extra = { supplier: newId(), receipt: newId(), line: newId(), lot: newId(), hideR1: newId(), hideR2: newId(), child: newId(), childHide: newId(), ownedLot: newId(), customer: newId() }
+const extra = { supplier: newId(), order: newId(), orderLine: newId(), receipt: newId(), line: newId(), lot: newId(), hideR1: newId(), hideR2: newId(), child: newId(), childHide: newId(), ownedLot: newId(), customer: newId() }
 let keys = 0
 const key = () => `w2b356-${++keys}`
 
@@ -77,11 +77,19 @@ beforeAll(async () => {
     tenantB: office([...READER, 'money.cost'], 'all', 'all', 'B'),
   })
   const admin = f.admin
-  // A supplier and an unplanned receipt of leather (no PO), the lot it made with its two hides, a child lot (a split), and a
+  // A supplier, a purchase order and its receipt of leather, the lot it made with its two hides, a child lot (a split), and a
   // customer-owned lining lot.
   await admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles) VALUES ($1, $2, $3, 'FORN-356', 'ORGANISATION', 'Conceria Inventata S.r.l.', '{SUPPLIER}'), ($4, $2, $3, 'CLI-356', 'ORGANISATION', 'Cliente Inventato S.r.l.', '{CUSTOMER}')`, [extra.supplier, ids.tenantA, ids.companyA, extra.customer])
-  await admin(`INSERT INTO "GoodsReceipt" (id, "tenantId", "companyId", "siteId", number, "supplierId", kind, "receivedAt", status, "holdingLocationId") VALUES ($1, $2, $3, $4, 'GR-356-1', $5, 'UNPLANNED', $6, 'OPEN', $7)`, [extra.receipt, ids.tenantA, ids.companyA, ids.siteA1, extra.supplier, day('2026-10-10'), ids.store])
-  await admin(`INSERT INTO "GoodsReceiptLine" (id, "tenantId", "siteId", "receiptId", seq, "itemId", "itemColourId", quantity, uom, "baseQuantity") VALUES ($1, $2, $3, $4, 1, $5, $6, 100, 'FT2', 100)`, [extra.line, ids.tenantA, ids.siteA1, extra.receipt, ids.leather, ids.leatherBlack])
+  // A purchase order sent to the tannery (100 ft² at 4.20), received against it.
+  await admin(`INSERT INTO "PurchaseOrder" (id, "tenantId", "companyId", "siteId", number, "partyId", "orderDate") VALUES ($1, $2, $3, $4, 'PO-356-1', $5, '2026-10-01')`, [extra.order, ids.tenantA, ids.companyA, ids.siteA1, extra.supplier])
+  await admin(
+    `INSERT INTO "PurchaseOrderLine" (id, "tenantId", "purchaseOrderId", "partyId", "siteId", seq, "itemId", "itemColourId", quantity, uom, "baseQuantity", "unitPrice", "netAmount", "needDate")
+     VALUES ($1, $2, $3, $4, $5, 1, $6, $7, 100, 'FT2', 100, 4.2, 42000, '2026-10-10')`,
+    [extra.orderLine, ids.tenantA, extra.order, extra.supplier, ids.siteA1, ids.leather, ids.leatherBlack],
+  )
+  await admin(`UPDATE "PurchaseOrder" SET status = 'SENT', "netAmount" = 42000, "sentAt" = $2 WHERE id = $1`, [extra.order, day('2026-10-01')])
+  await admin(`INSERT INTO "GoodsReceipt" (id, "tenantId", "companyId", "siteId", number, "supplierId", "purchaseOrderId", kind, "receivedAt", status) VALUES ($1, $2, $3, $4, 'GR-356-1', $5, $6, 'STANDARD', $7, 'OPEN')`, [extra.receipt, ids.tenantA, ids.companyA, ids.siteA1, extra.supplier, extra.order, day('2026-10-10')])
+  await admin(`INSERT INTO "GoodsReceiptLine" (id, "tenantId", "siteId", "receiptId", seq, "purchaseOrderLineId", "itemId", "itemColourId", quantity, uom, "baseQuantity") VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 100, 'FT2', 100)`, [extra.line, ids.tenantA, ids.siteA1, extra.receipt, extra.orderLine, ids.leather, ids.leatherBlack])
   await admin(
     `INSERT INTO "Lot" (id, "tenantId", "companyId", "siteId", "itemId", "itemColourId", code, "supplierId", "supplierLotRef", "dyeBatch", "receiptLineId", "receivedAt", "qualityStatus", "qualityDecidedAt")
      VALUES ($1, $2, $3, $4, $5, $6, 'TEST-LOT-LEA-R', $7, 'TAN-77', 'DB-1', $8, $9, 'RELEASED', $9)`,
@@ -121,8 +129,15 @@ beforeAll(async () => {
   )
   // Leather: R1 received in October, R2 in November (4.20 a ft²); 8 ft² of R1 scrapped; R2 split into the child lot; 2 ft² found on the child's hide.
   const cost = { method: 'PURCHASE_PRICE' as const, unitCost: '4.2' }
-  await post([{ ...A1, reason: 'RECEIPT', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR1, receiptLineId: extra.line, quantity: '60', occurredAt: day('2026-10-10'), cost }])
-  await post([{ ...A1, reason: 'RECEIPT', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR2, receiptLineId: extra.line, quantity: '40', occurredAt: day('2026-11-03'), cost }])
+  // A receipt's moves come with its posting (the database's rule at commit): both hides in one command, each on its own day.
+  await command(f.caller('manager'), { name: 'test.w2b356.receipt', idempotencyKey: key(), input: {} }, async (tools) => {
+    await postMoves(tools, [
+      { ...A1, reason: 'RECEIPT', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR1, receiptLineId: extra.line, quantity: '60', occurredAt: day('2026-10-10'), cost },
+      { ...A1, reason: 'RECEIPT', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR2, receiptLineId: extra.line, quantity: '40', occurredAt: day('2026-11-03'), cost },
+    ])
+    await tools.tx.goodsReceipt.update({ where: { id: extra.receipt }, data: { status: 'POSTED', postedAt: day('2026-11-03') } })
+    return { posted: true }
+  })
   await post([{ siteId: ids.siteA1, fromLocationId: ids.store, reason: 'SCRAP', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR1, quantity: '8', note: 'A hole.', reasonCode: 'WRITE_OFF', occurredAt: day('2026-11-06') }])
   await post([
     { siteId: ids.siteA1, fromLocationId: ids.store, reason: 'ADJUSTMENT', itemId: ids.leather, lotId: extra.lot, hideId: extra.hideR2, quantity: '40', note: 'Split into shade groups.', reasonCode: 'LOT_SPLIT', occurredAt: day('2026-11-07') },
@@ -146,7 +161,7 @@ afterAll(async () => {
 describe('stock ageing by material type', () => {
   it('ages every stock key at the period end: a lot by its received day (else its first move), untracked first in, first out', async () => {
     const answer = await ok('reader', `/inventory/reports/ageing?siteId=${ids.siteA1}`)
-    expect(answer).toMatchObject({ from: '2026-11-01', to: '2026-11-30', asAt: '2026-11-30', today: '2026-11-30', site: { id: ids.siteA1, code: 'A1' }, sight: { stock: true, cost: true } })
+    expect(answer).toMatchObject({ from: '2026-11-01', to: '2026-11-30', asAt: '2026-11-30', today: '2026-11-30', site: { id: ids.siteA1, code: 'A1' }, sight: { stock: true, values: true } })
     expect(answer.sites.map((row: Json) => row.code)).toEqual(['A1'])
     const byType = Object.fromEntries(answer.types.map((row: Json) => [row.type, row]))
     expect(Object.keys(byType)).toEqual(['LEATHER', 'TEXTILE', 'LINING', 'PROTECTOR'])
@@ -235,7 +250,7 @@ describe('reports per role', () => {
   it('without the cost grain no value leaves the API; the quantities are the same', async () => {
     const ageing = await ok('noCost', `/inventory/reports/ageing?siteId=${ids.siteA1}`)
     const leather = await ok('noCost', `/inventory/reports/leather?siteId=${ids.siteA1}`)
-    expect(ageing.sight).toEqual({ stock: true, cost: false })
+    expect(ageing.sight).toEqual({ stock: true, values: false })
     expect(keysOf(ageing).filter((name) => name === 'value')).toEqual([])
     expect(leather.articles[0].lots[0].figures.values).toEqual({})
     expect(leather.articles[0].figures.values).toEqual({})
@@ -248,7 +263,7 @@ describe('reports per role', () => {
 
   it('the page alone shows no figure: the stock needs inventory.stock.view, said by `sight`', async () => {
     const ageing = await ok('reportsOnly', '/inventory/reports/ageing')
-    expect(ageing).toMatchObject({ sight: { stock: false, cost: false }, sites: [], types: [], customerOwned: 0 })
+    expect(ageing).toMatchObject({ sight: { stock: false, values: false }, sites: [], types: [], customerOwned: 0 })
     const leather = await ok('reportsOnly', '/inventory/reports/leather')
     expect(leather).toMatchObject({ sight: { stock: false }, articles: [], more: 0 })
   })

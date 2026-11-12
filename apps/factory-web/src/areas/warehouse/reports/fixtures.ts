@@ -87,7 +87,7 @@ const TYPES: AgeingType[] = [
   },
 ]
 
-export const AGEING: Ageing = { ...head, sight: { stock: true, cost: true }, asAt: TO, types: TYPES, all: { value: 7_226_100, currency: 'EUR', mixedCurrencies: false, unvalued: 0 }, customerOwned: 1 }
+export const AGEING: Ageing = { ...head, sight: { stock: true, values: true }, asAt: TO, types: TYPES, all: { value: 7_226_100, currency: 'EUR', mixedCurrencies: false, unvalued: 0 }, customerOwned: 1 }
 
 /** The same figures as a reader without the cost grain gets them: no value field at all. */
 const strip = <T extends { value?: number | null | undefined }>(row: T): T => {
@@ -97,7 +97,7 @@ const strip = <T extends { value?: number | null | undefined }>(row: T): T => {
 }
 export const noValues = (answer: Ageing): Ageing => ({
   ...answer,
-  sight: { stock: true, cost: false },
+  sight: { stock: true, values: false },
   all: strip(answer.all),
   types: answer.types.map((type) => {
     const clean = <F extends Pick<AgeingType, 'buckets' | 'whole'>>(row: F): F => ({ ...row, whole: strip(row.whole), buckets: { d0to90: strip(row.buckets.d0to90), d91to180: strip(row.buckets.d91to180), d181to365: strip(row.buckets.d181to365), overYear: strip(row.buckets.overYear) } })
@@ -146,7 +146,7 @@ const add = (a: LeatherFigures, b: LeatherFigures): LeatherFigures => {
 const BLACK = add(LOT_1, LOT_2)
 export const LEATHER: Leather = {
   ...head,
-  sight: { stock: true, cost: true },
+  sight: { stock: true, values: true },
   articles: [
     { item: { id: uid('7561', 1), code: 'DEMO-LEA-100', name: 'Pelle bovina pieno fiore 1,2 mm' }, colour: { id: uid('7562', 1), code: 'NER', name: 'Nero' }, figures: BLACK, lots: [lot(1, 'LOT-DEMO-0007', 'TAN-4471', TANNERY_A, 2, LOT_1, 'DB-118'), lot(2, 'LOT-DEMO-0012', 'TAN-4502', TANNERY_A, 0, LOT_2, 'DB-121')] },
     { item: { id: uid('7561', 2), code: 'DEMO-LEA-110', name: 'Pelle bovina stampata 1,4 mm' }, colour: { id: uid('7562', 2), code: 'TES', name: 'Testa di moro' }, figures: LOT_3, lots: [lot(3, 'LOT-DEMO-0009', 'PE-88-2026', TANNERY_B, 0, LOT_3)] },
@@ -157,7 +157,7 @@ export const LEATHER: Leather = {
 }
 export const leatherNoValues = (answer: Leather): Leather => {
   const clean = (row: LeatherFigures): LeatherFigures => ({ ...row, values: {} })
-  return { ...answer, sight: { stock: true, cost: false }, all: clean(answer.all), articles: answer.articles.map((row) => ({ ...row, figures: clean(row.figures), lots: row.lots.map((one) => ({ ...one, figures: clean(one.figures) })) })) }
+  return { ...answer, sight: { stock: true, values: false }, all: clean(answer.all), articles: answer.articles.map((row) => ({ ...row, figures: clean(row.figures), lots: row.lots.map((one) => ({ ...one, figures: clean(one.figures) })) })) }
 }
 const LOT_3_OFF = lf('M2', { start: 96.2, received: 0, issued: 38.6, returned: 2.0, remnant: 4.4, scrapped: 2.8, other: 0 }, { start: 410_900, received: 0, cut: 137_500, scrapped: 12_000, end: 261_400 }, [0, 12], false)
 const NOT_ADDING: Leather = { ...LEATHER, articles: [{ ...LEATHER.articles[1]!, figures: LOT_3_OFF, lots: [lot(3, 'LOT-DEMO-0009', 'PE-88-2026', TANNERY_B, 0, LOT_3_OFF)] }] }
@@ -217,7 +217,7 @@ export const designScreen = defineDesignScreen<ReportsModel>({
     { id: 'half-widths', label: 'Panels at half width', model: model({ layout: halfLayout }) },
     { id: 'keys', label: 'Keyboard shortcuts', model: model({ keysOpen: true }) },
     { id: 'offline', label: 'Offline (live off)', model: model({ live: 'offline' }) },
-    { id: 'stock-not-in-role', label: 'The page without the stock', model: model({ ageing: ready({ ...AGEING, sight: { stock: false, cost: false }, sites: [], types: [], customerOwned: 0 }), leather: ready({ ...LEATHER, sight: { stock: false, cost: false }, sites: [], articles: [] }) }, ['home.view', 'inventory.reports.view']), note: 'Each panel says the stock is not in the role.' },
+    { id: 'stock-not-in-role', label: 'The page without the stock', model: model({ ageing: ready({ ...AGEING, sight: { stock: false, values: false }, sites: [], types: [], customerOwned: 0 }), leather: ready({ ...LEATHER, sight: { stock: false, values: false }, sites: [], articles: [] }) }, ['home.view', 'inventory.reports.view']), note: 'Each panel says the stock is not in the role.' },
     { id: 'no-permission', label: 'No right (sales)', model: model({}, rolePermissions('sales')) },
   ],
 })

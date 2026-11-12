@@ -27,7 +27,7 @@ const head = {
   today: z.string(),
   asOf: z.string(),
 }
-const sight = z.object({ stock: z.boolean(), cost: z.boolean() })
+const sight = z.object({ stock: z.boolean(), values: z.boolean() })
 export type Sight = z.infer<typeof sight>
 const unitQuantity = z.object({ uom, quantity: z.string() })
 export type UnitQuantity = z.infer<typeof unitQuantity>

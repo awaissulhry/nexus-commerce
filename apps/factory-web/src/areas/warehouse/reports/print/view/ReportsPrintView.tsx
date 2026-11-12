@@ -54,7 +54,7 @@ function Print({ model }: { model: ReportsPrintModel }) {
   const day = (date: string) => formatDate(`${date}T12:00:00Z`, { locale })
   const { ageing, leather } = model
   const ready = !!ageing && !!leather
-  const cost = model.can.cost && (ageing?.sight.cost ?? false)
+  const cost = model.can.cost && (ageing?.sight.values ?? false)
   const filters = [
     { label: t('print.period'), value: `${day(model.range.from)} – ${day(model.range.to)}` },
     { label: t('print.asAt'), value: day(model.range.to) },

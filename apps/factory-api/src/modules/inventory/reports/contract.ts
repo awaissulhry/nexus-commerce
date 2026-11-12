@@ -35,8 +35,8 @@ const head = {
   today: businessDate(),
   asOf: instant(),
 }
-/** Which records the reader may see: the stock (inventory.stock.view at some site of the company) and its values (money.cost). */
-const sight = output({ stock: z.boolean(), cost: z.boolean() })
+/** Which records the reader may see: the stock (inventory.stock.view at some site of the company) and its values (`values`: the cost grain). */
+const sight = output({ stock: z.boolean(), values: z.boolean() })
 const unitQuantity = output({ uom, quantity: quantity() })
 
 const bucket = output({

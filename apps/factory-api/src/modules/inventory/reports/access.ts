@@ -15,7 +15,7 @@ import { officeContextOf } from '../ledger/access'
 /**
  * Who reads a warehouse report and of what (B-W2b-356). The office caller needs inventory.reports.view over the screen's company
  * (else 403 in words); the figures are counted only at the sites of that company where the caller also holds
- * inventory.stock.view (`sites`; none: `sight.stock` false and no figure), and every value needs the cost grain (`sight.cost`;
+ * inventory.stock.view (`sites`; none: `sight.stock` false and no figure), and every value needs the cost grain (`sight.values`;
  * the contract's money.cost fields are dropped for everyone else). A site asked must be one of the company's (else 404).
  */
 
@@ -36,7 +36,7 @@ export interface Place {
   readonly span: { readonly start: Date; readonly end: Date }
   readonly today: BusinessDate
   readonly now: Date
-  readonly sight: { readonly stock: boolean; readonly cost: boolean }
+  readonly sight: { readonly stock: boolean; readonly values: boolean }
 }
 
 const SITE_SCOPE = { company: 'companyId', site: 'id' } as const
@@ -93,7 +93,7 @@ export async function placeOf(db: Reader, caller: CommandCaller, query: { readon
     span: spanOf(period),
     today,
     now,
-    sight: { stock: sites.length > 0, cost: heldGrains(actor).has('cost') },
+    sight: { stock: sites.length > 0, values: heldGrains(actor).has('cost') },
   }
 }
 

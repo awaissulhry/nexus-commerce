@@ -112,7 +112,7 @@ export function AgeingPanel({ model, actions }: Props) {
   const read = model.ageing
   const answer = read.status === 'ready' ? read.value : null
   const [picked, setPicked] = useState<AgeingType['type'] | null>(null)
-  const cost = model.can.cost && (answer?.sight.cost ?? true)
+  const cost = model.can.cost && (answer?.sight.values ?? true)
   const series = cost ? model.series : 'share'
   const hint = answer ? t('ageing.hint', { day: dayText(answer.asAt, locale) }) : t('ageing.hintLoading')
   const head = (
@@ -274,7 +274,7 @@ export function LeatherPanel({ model, actions }: Props) {
   const unitWord = useUnitWord()
   const read = model.leather
   const answer = read.status === 'ready' ? read.value : null
-  const cost = model.can.cost && (answer?.sight.cost ?? true)
+  const cost = model.can.cost && (answer?.sight.values ?? true)
   const period = answer ? { from: answer.from, to: answer.to } : model.range
   const head = (
     <Head id="wr-leather" title={t('section.leather')} hint={t('leather.hint', { from: dayText(period.from, locale), to: dayText(period.to, locale) })}>

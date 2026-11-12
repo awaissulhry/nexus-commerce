@@ -217,7 +217,7 @@ export function slicesOf(position: AgeingPosition, asOf: BusinessDate): Position
     const days = part.at === null ? null : ageDays(part.at, asOf)
     let value: number | null = null
     if (position.value !== null && valueLeft !== null) {
-      value = index === parts.length - 1 ? valueLeft : Math.round(part.quantity.div(onHand).times(position.value).toNumber())
+      value = index === parts.length - 1 ? valueLeft : Number.parseInt(part.quantity.div(onHand).times(position.value).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0), 10)
       valueLeft -= value
     }
     return { bucket: days === null ? null : bucketOf(days), days, quantity: part.quantity, value }
@@ -327,14 +327,13 @@ export function figuresOf(slices: readonly { readonly slice: PositionSlice; read
     oldestDays = oldestDays === null ? slice.days : Math.max(oldestDays, slice.days)
   }
   const one = total.single
-  const buckets = Object.fromEntries(
-    AGE_BUCKETS.map((bucket) => {
-      const part = per[bucket]
-      const mine = part.quantities.single
-      const share = one && (part.quantities.units === 0 || (mine && mine.uom === one.uom)) ? pct(mine?.quantity ?? ZERO, one.quantity) : null
-      return [bucket, { quantities: part.quantities.list(), value: values.mixedCurrencies ? null : part.values.value, share }]
-    }),
-  ) as Record<AgeBucket, BucketFigures>
+  const figuresOfBucket = (bucket: AgeBucket): BucketFigures => {
+    const part = per[bucket]
+    const mine = part.quantities.single
+    const share = one !== null && (part.quantities.units === 0 || (mine !== null && mine.uom === one.uom)) ? pct(mine?.quantity ?? ZERO, one.quantity) : null
+    return { quantities: part.quantities.list(), value: values.mixedCurrencies ? null : part.values.value, share }
+  }
+  const buckets: Record<AgeBucket, BucketFigures> = { d0to90: figuresOfBucket('d0to90'), d91to180: figuresOfBucket('d91to180'), d181to365: figuresOfBucket('d181to365'), overYear: figuresOfBucket('overYear') }
   return {
     buckets,
     undated: undated.list(),
