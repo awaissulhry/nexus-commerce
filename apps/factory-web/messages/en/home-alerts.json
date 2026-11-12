@@ -16,6 +16,13 @@
     "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Site {label}: someone is under the minimum rest, or would be before their next shift.",
     "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Site {label}: someone is close to or over the weekly average of working hours.",
     "alerts.LOW_STOCK": "{label} is below its minimum: {position} {unit} against {minimum} {unit}.",
+    "alerts.PO_CONFIRMED_LATE": "Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}).",
+    "alerts.PO_CONFIRMED_LATE.AT_RISK": "Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}): it puts customer order {salesOrder} at risk.",
+    "alerts.SUPPLIER_STATUS_CHANGED": "The status of supplier {label} changed on {changedOn}.",
+    "alerts.SUPPLIER_STATUS_CHANGED.CONDITIONAL": "Supplier {label} is approved with conditions since {changedOn}.",
+    "alerts.SUPPLIER_STATUS_CHANGED.ON_HOLD": "Supplier {label} is on hold since {changedOn}: no new purchase order until it is approved again.",
+    "alerts.SUPPLIER_STATUS_CHANGED.BLOCKED": "Supplier {label} is blocked since {changedOn}: no new purchase order.",
+    "alerts.SUPPLIER_STATUS_CHANGED.INACTIVE": "Supplier {label} is inactive since {changedOn}: no new purchase order.",
     "alerts.UNKNOWN": "Alert on {label}."
   },
   "refused": {
@@ -163,7 +170,9 @@
       "INVOICE_DEADLINE": "{record}: invoice deadline near",
       "INTEGRATION_FAILING": "{record} is failing",
       "WORKING_TIME_LIMIT": "{record}: working-time limit close",
-      "LOW_STOCK": "{record} below its minimum"
+      "LOW_STOCK": "{record} below its minimum",
+      "PO_CONFIRMED_LATE": "{record} confirmed later than needed",
+      "SUPPLIER_STATUS_CHANGED": "{record}: supplier status changed"
     },
     "snooze": "Snooze",
     "assign": "Assign",

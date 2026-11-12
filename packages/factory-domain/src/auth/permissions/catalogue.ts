@@ -21,6 +21,8 @@ import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/
 import { INVENTORY_HIDES_DEFINITIONS, INVENTORY_HIDES_PERMISSIONS } from '../../inventory/hides/permissions'
 // B-W2b-100: one shade lot per order (inventory.shade.override: a hide of another shade lot let through with the reason).
 import { INVENTORY_SHADE_DEFINITIONS, INVENTORY_SHADE_PERMISSIONS } from '../../inventory/reservations/permissions'
+// B-W2b-326: transfers between sites (inventory.transfers.manage).
+import { INVENTORY_TRANSFERS_DEFINITIONS, INVENTORY_TRANSFERS_PERMISSIONS } from '../../inventory/transfers/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -215,6 +217,8 @@ import { BANK_DEFINITIONS, BANK_PERMISSIONS, PORTAL_BANK_DEFINITIONS, PORTAL_BAN
 import { QUALIFICATION_DEFINITIONS, QUALIFICATION_PERMISSIONS } from '../../purchasing/qualification/permissions'
 // B-W2b-319: the production strategy per item (planning.strategy.manage); the one demand view reads with planning.view.
 import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '../../planning/strategy/permissions'
+// B-W2b-350: purchasing reports (purchasing.reports.view: spend and late lines; each figure also purchasing.view).
+import { PURCHASING_REPORTS_DEFINITIONS, PURCHASING_REPORTS_PERMISSIONS } from '../../purchasing/reports/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -630,6 +634,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_HIDES_DEFINITIONS,
   // B-W2b-100: one shade lot per order.
   INVENTORY_SHADE_DEFINITIONS,
+  // B-W2b-326: transfers between sites.
+  INVENTORY_TRANSFERS_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -944,6 +950,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALIFICATION_DEFINITIONS,
   // B-W2b-319: the production strategy per item (area `planning`, declared above).
   PLANNING_STRATEGY_DEFINITIONS,
+  // B-W2b-350: purchasing reports (area `purchasing`, declared above).
+  PURCHASING_REPORTS_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
 ])
@@ -1028,6 +1036,8 @@ for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of INVENTORY_HIDES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-100: one shade lot per order.
 for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-326: transfers between sites.
+for (const name of INVENTORY_TRANSFERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-168: portal search, flagged partner (never in an office or floor role).
@@ -1276,6 +1286,8 @@ for (const name of INVENTORY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 // B-W2b-315: bank details, qualification and the compliance gate; the portal's bank permissions flagged partner.
 for (const name of [...BANK_PERMISSIONS, ...QUALIFICATION_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PORTAL_BANK_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// B-W2b-350: purchasing reports.
+for (const name of PURCHASING_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-299: counts in depth.
 for (const name of INVENTORY_COUNTS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

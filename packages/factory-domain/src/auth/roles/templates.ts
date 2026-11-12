@@ -62,6 +62,8 @@ import { SUBCONTRACT_DEPTH_ADDS } from '../../purchasing/subcontract-depth/permi
 // B-W2b-315: bank details (finance), qualification (the buyer and quality) and the compliance override (quality); the portal's bank details.
 import { BANK_ADDS, PORTAL_BANK_ADDS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_ADDS } from '../../purchasing/qualification/permissions'
+// B-W2b-326: transfers between sites (the warehouse).
+import { TRANSFERS_ADDS } from '../../inventory/transfers/permissions'
 // B-W2b-299: counts by scanning every unit (the warehouse's phone; the floor's operator and team leader).
 import { INVENTORY_COUNTS_DEPTH_ADDS, INVENTORY_COUNTS_DEPTH_FLOOR_ADDS } from '../../inventory/counts-depth/permissions'
 // B-W2b-229: the option library (production manager) and option prices (sales).
@@ -98,6 +100,8 @@ import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
 import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permissions'
 // B-W2b-356: warehouse reports (the warehouse, buyer, planner, production manager and finance read them).
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
+// B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
+import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -970,6 +974,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
   // B-W2b-319
   ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : []),
+  // B-W2b-350
+  ...(audience === 'office' ? (PURCHASING_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-326
+  ...(audience === 'office' ? (TRANSFERS_ADDS[key] ?? []) : []),
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? [])]
 /**
