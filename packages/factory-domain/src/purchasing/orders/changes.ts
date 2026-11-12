@@ -31,6 +31,8 @@ export type ReachAction = (typeof REACH_ACTIONS)[number]
 export function cancelOrderProblem(status: PurchaseOrderStatus): string | null {
   switch (status) {
     case 'DRAFT':
+    // W2b-5 (B-W2b-285): an order waiting for its yes was never sent; it is cancelled as a draft is.
+    case 'PENDING_APPROVAL':
     case 'SENT':
     case 'DECLINED':
     case 'CONFIRMED':
@@ -48,7 +50,8 @@ export function cancelOrderProblem(status: PurchaseOrderStatus): string | null {
 
 /** The supplier holds the order: it was sent (and a draft of revision 2 or later replaces one it holds). */
 export function supplierHolds(status: PurchaseOrderStatus, revision: number): boolean {
-  return status !== 'DRAFT' ? status !== 'CANCELLED' && status !== 'CLOSED' : revision > 1
+  // W2b-5 (B-W2b-285): an order waiting for its yes is a draft the supplier has not seen yet.
+  return status !== 'DRAFT' && status !== 'PENDING_APPROVAL' ? status !== 'CANCELLED' && status !== 'CLOSED' : revision > 1
 }
 
 /** A change of this state is mailed to the supplier now (a draft's change goes with its next revision's mail). */

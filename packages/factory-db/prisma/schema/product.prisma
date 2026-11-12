@@ -215,6 +215,11 @@ model Item {
   purchaseOrderLines   PurchaseOrderLine[]
   // W2b (wave 22/22): the purchase order lines whose supplier proposes it as a substitute.
   substituteProposals  PurchaseOrderLine[] @relation("PurchaseOrderLineSubstitute")
+  // W2b-5 buying-depth.prisma (wave 40/44): its variants (colours and sizes), its delivery tolerances and the requests to
+  // buy it.
+  variants             ItemVariant[]
+  deliveryTolerances   DeliveryTolerance[] @relation("DeliveryToleranceItem")
+  purchaseRequests     PurchaseRequest[]   @relation("PurchaseRequestItem")
   materialRequirements MaterialRequirement[]
   // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -348,6 +353,9 @@ model ItemColour {
   // supply.prisma: the purchase order lines and requirements in this colour.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2b-5 buying-depth.prisma (wave 40/44): the variants and the requests to buy in this colour.
+  variants             ItemVariant[]
+  purchaseRequests     PurchaseRequest[]   @relation("PurchaseRequestItemColour")
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: the same, of this colour.
   reservations         Reservation[]
   stockCountLines      StockCountLine[]
@@ -597,6 +605,8 @@ model Style {
   changeOrders        ChangeOrder[]
   sampleRounds        SampleRound[]
   sampleSwatches      SampleSwatch[]
+  // W2b-5 supply.prisma (wave 40/44): the sample and development purchase orders for it.
+  samplePurchaseOrders PurchaseOrder[]     @relation("PurchaseOrderDevelopmentStyle")
   // W2b-4 compliance-rules.prisma (wave 30/33): its own economic operators and the gate events about it.
   economicOperatorRoles EconomicOperatorRole[]
   gateEvents          GateEvent[]

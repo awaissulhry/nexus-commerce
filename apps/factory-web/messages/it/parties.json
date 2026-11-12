@@ -260,6 +260,7 @@
   },
   "poStatus": {
     "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione, non inviato",
     "SENT": "Inviato, non confermato",
     "CONFIRMED": "Confermato",
     "DECLINED": "Rifiutato",

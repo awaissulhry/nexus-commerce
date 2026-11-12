@@ -1,0 +1,65 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/buying-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 40/44 (B-W2b-285): buying and subcontracting in depth. The office (factory_runtime) writes every row through apps/factory-api's modules/purchasing (B-W2b-296, -305, -328, -331, -332, -347), always with command(); the API keeps staff to the companies and sites their grants reach. The floor of the delivery site (factory_floor_runtime, scoped by site) reads the delivery schedule of its purchase orders (what to expect at the dock), and the delivery tolerances and material variants a receipt is checked against (master data with no site: every floor session of the tenant reads them); no money here reaches it. A portal or one-off link session (factory_partner_runtime) reads only its OWN party's delivery schedule (every row carries the supplier's partyId) without who wrote it, and confirms each delivery's date while its order is SENT, as it confirms a line (the …_buying_depth_w2b_guards triggers refuse anything else); it reads no date history, tolerance, variant, request to buy, material balance or workshop cost. The date history, the material balance and the workshop's cost entries are append-only (no update or delete grant; their triggers refuse it for every login). Nobody deletes a tolerance, variant or request (archived or cancelled; the triggers); the office deletes only the deliveries of a DRAFT order. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PurchaseOrderLineDelivery": {
+      "about": "The office splits a line of a DRAFT purchase order into deliveries (and removes them), and records each delivery's confirmed date heard by mail or phone, or moves it with its date change. The delivery site's floor reads them. A link or portal session reads its own party's deliveries without who wrote them, and sets each one's confirmed date once while the order is SENT.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "PoDateChange": {
+      "about": "The office records each move of a confirmed date (a line's or a delivery's) in the command that moves it: from, to, the supplier or a buyer, when and why. Office only; never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "DeliveryTolerance": {
+      "about": "The office keeps how far over or under the ordered quantity a receipt may be, per company, supplier and material or kind of material, and what happens beyond it; archived, never deleted. Every floor session of the tenant reads them to receive.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ItemVariant": {
+      "about": "The office keeps the variants (colours and sizes, each a code) of a material; archived, never deleted. Every floor session of the tenant reads them (a lot and a line name one).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "PurchaseRequest": {
+      "about": "Anyone in the office asks to buy (or makes a request from a work order's shortage); a rule may ask a yes; the buyer converts it into a purchase order line or refuses it with the reason; the person who asked may cancel it. Office only; cancelled, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SubcontractConsumption": {
+      "about": "The office records what a workshop declared it used, returned and scrapped of a kit line's material with the goods back, and the adjustments after the receipt with their reason. Office only; never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "SubcontractCostEntry": {
+      "about": "The office books a workshop's cost (the fee for an operation's pieces, transport, its material, another charge) to the subcontract order's work order, and takes a wrong one back with a reversal. Office only (cost grain); never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}
