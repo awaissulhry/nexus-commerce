@@ -379,9 +379,6 @@ export const removeReturnLine = (api: ApiClient, rma: Versioned, lineId: string)
 export const cancelReturn = (api: ApiClient, rma: Versioned, reason: string) =>
   api.post(`/sales/returns/${seg(rma.id)}/cancel`, { body: { version: rma.version, reason }, schema: oneReturn, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.return)
 
-export const closeReturn = (api: ApiClient, rma: Versioned, reason: string, idempotencyKey: string) =>
-  api.post(`/sales/returns/${seg(rma.id)}/close`, { body: { version: rma.version, reason }, schema: z.object({ return: returnSchema, warnings: z.array(issue) }), idempotencyKey })
-
 export interface ReceiptBody {
   parcels: number
   parcelCondition: ParcelCondition
@@ -414,6 +411,8 @@ export interface DecisionLine {
   /** Minor units (price grain). */
   creditAmount?: number | null
   toLocationId?: string | null
+  /** B-W2b-346 (SIZE_EXCHANGE): the size the customer gets instead. */
+  exchangeSize?: string | null
 }
 
 const decisionPreviewSchema = z.object({

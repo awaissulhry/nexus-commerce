@@ -10,7 +10,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { Freshness, NoAccess, PageHead } from '../../../quality/_shared/parts'
-import { isFiltered, isOpenRow, ownerName, ROW_VIEWS, rowHref, rowStatusWords, TILES, type AfterSalesRow, type AfterSalesTile } from '../model'
+import { isFiltered, isOpenRow, ownerName, ROW_VIEWS, rowHref, rowStatusWords, TILES, type AfterSalesRow, type AfterSalesTile, type AfterSalesView } from '../model'
 import type { ReturnsListActions, ReturnsListModel } from '../view-model'
 import { CloseReturnModal } from './CloseReturnModal'
 import { NewRepairModal } from './NewRepairModal'
@@ -46,7 +46,15 @@ function tileCount(model: ReturnsListModel, tile: AfterSalesTile): number | null
       return repairs ? repairs.inRepair : null
     case 'replacement':
       return returns ? returns.replacement : null
+    case 'arrivedLate':
+      return model.counts.arrivedLate ?? null
   }
+}
+
+/** The tile cannot be counted (its read failed, or the role sees no repairs): '—', never 0. */
+function tileUnknown(model: ReturnsListModel, tile: AfterSalesTile): boolean {
+  if (tile === 'arrivedLate') return model.counts.arrivedLate === null
+  return model.counts.failed || (tile === 'inRepair' && !model.can.repairsView)
 }
 
 function ReturnsList({ model, actions }: { model: ReturnsListModel; actions?: ReturnsListActions }) {
@@ -217,14 +225,16 @@ function ReturnsList({ model, actions }: { model: ReturnsListModel; actions?: Re
     const count = tileCount(model, id)
     const unknown = count === null
     return {
-      label: t(`tile.${id}`),
-      value: !unknown ? String(count) : model.counts.failed || (id === 'inRepair' && !can.repairsView) ? '—' : <Skeleton width={36} height={22} />,
-      hint: model.counts.failed ? t('tile.unknown') : id === 'inRepair' && !can.repairsView ? t('tile.noRepairs') : t(`tileHint.${id}`),
+      label: id === 'arrivedLate' ? t('depth:late.tile') : t(`tile.${id}`),
+      value: !unknown ? String(count) : tileUnknown(model, id) ? '—' : <Skeleton width={36} height={22} />,
+      hint: id === 'arrivedLate' ? (model.counts.arrivedLate === null ? t('tile.unknown') : t('depth:late.tileHint')) : model.counts.failed ? t('tile.unknown') : id === 'inRepair' && !can.repairsView ? t('tile.noRepairs') : t(`tileHint.${id}`),
       active,
       onClick: () => actions?.onAddress?.({ view: active ? 'open' : id }),
     }
   }
 
+  // B-W2b-352: "Arrived after the deadline" is the W2b catalogue's.
+  const viewLabel = (view: AfterSalesView) => (view === 'arrivedLate' ? t('depth:late.tile') : t(`view.${view}`))
   const viewItems: MenuItemDef[] = [
     { id: 'heading', heading: true, label: t('list.rowsHeading') } as MenuItemDef,
     ...ROW_VIEWS.map((view) => ({ id: view, label: t(`view.${view}`), checked: address.view === view, onSelect: () => actions?.onAddress?.({ view }), disabled: view === 'openRepairs' && !can.repairsView }) as MenuItemDef),
@@ -236,10 +246,10 @@ function ReturnsList({ model, actions }: { model: ReturnsListModel; actions?: Re
   )
   const tools = (
     <>
-      <Menu label={t('list.rows', { view: t(`view.${address.view}`) })} items={viewItems} />
+      <Menu label={t('list.rows', { view: viewLabel(address.view) })} items={viewItems} />
       {filtered && (
         <span className="fw-q-chips" aria-label={t('list.activeFilters')}>
-          {address.view !== 'open' && chip('view', t(`view.${address.view}`), () => actions?.onAddress?.({ view: 'open' }))}
+          {address.view !== 'open' && chip('view', viewLabel(address.view), () => actions?.onAddress?.({ view: 'open' }))}
           {address.q.trim() !== '' && chip('q', `“${address.q.trim()}”`, () => actions?.onAddress?.({ q: '' }))}
           <Button size="sm" variant="quiet" onClick={() => actions?.onClearFilters?.()}>
             {t('list.clearAll')}

@@ -1,14 +1,17 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { BLANK_REPAIR, BLANK_RETURN, mergedRows, type ListAddress } from './model'
-import { canFor, CLOSED_RETURN, CUSTOMER, CUSTOMERS, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_COUNTS, REPAIR_ROWS, RETURN_COUNTS, RETURN_ROWS, RETURNABLE, TODAY, type RoleCase } from './demo/fixtures'
+import { canFor, CLOSED_RETURN, CUSTOMER, CUSTOMERS, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_COUNTS, REPAIR_ROWS, RETURN_COUNTS, RETURN_ROWS, RETURNABLE, RMA_INSPECTED, TODAY, type RoleCase } from './demo/fixtures'
+import { OUTCOMES_INSPECTED } from './depth/demo/fixtures'
+import { finishOptionsOf } from './depth/model'
 import type { CloseModel, NewRepairModel, NewReturnModel, Notice, ReturnsListModel } from './view-model'
 import { ReturnsView } from './view/ReturnsView'
 
 /**
  * Design cases of Sales › Returns & repairs (SCR-111): the list with its notices and tiles, New return, New repair and
  * Close return, each state the design names (loading, empty, filtered, error, no permission, offline, held with its
- * reason) and the role cases. Made-up data only (demo/fixtures.ts).
+ * reason) and the role cases. Made-up data only (demo/fixtures.ts). B-W2b-352 (`w2b-352-*`): the tile "Arrived after the
+ * deadline" and its view, and the close with the six finish reasons (held ones say why).
  */
 
 interface DesignModel {
@@ -47,7 +50,7 @@ function listModel(role: RoleCase, over: Partial<ReturnsListModel> = {}): Return
     me: ME,
     address: address({ view }),
     rows: { items: priced, problem: null, truncated: false },
-    counts: { returns: RETURN_COUNTS, repairs: can.repairsView ? REPAIR_COUNTS : null, failed: false },
+    counts: { returns: RETURN_COUNTS, repairs: can.repairsView ? REPAIR_COUNTS : null, failed: false, arrivedLate: 1 },
     people: PEOPLE,
     asOf: NOW,
     live: 'live',
@@ -91,7 +94,8 @@ export function newRepairModel(over: Partial<NewRepairModel> = {}): NewRepairMod
   return { draft: BLANK_REPAIR, fromLine: null, customers: { items: CUSTOMERS, problem: null }, preview: null, previewing: false, showProblems: false, busy: false, problem: null, today: TODAY, ...over }
 }
 
-const closeModel = (over: Partial<CloseModel> = {}): CloseModel => ({ number: 'RMA-DEMO-0003', reason: '', note: '', busy: false, problem: null, warnings: null, ...over })
+const FINISH_OPTIONS = finishOptionsOf(OUTCOMES_INSPECTED, RMA_INSPECTED)
+const closeModel = (over: Partial<CloseModel> = {}): CloseModel => ({ number: 'RMA-DEMO-0003', reason: '', note: '', busy: false, problem: null, warnings: null, options: FINISH_OPTIONS, ...over })
 
 /** The list with its own address and dialog drafts (tiles, menus and the dialogs' fields work in review). */
 function ReturnsDesign({ model }: { model: DesignModel }) {
@@ -179,6 +183,19 @@ export const designScreen = defineDesignScreen<DesignModel>({
     },
     { id: 'new-repair-problems', label: 'New repair: pressed with the customer and the problem missing', model: { role: 'owner', list: listModel('owner', { newRepair: newRepairModel({ showProblems: true }) }) } },
     { id: 'close', label: 'Close return: the finish reason', model: { role: 'owner', list: listModel('owner', { close: closeModel() }) } },
-    { id: 'close-done', label: 'Close return: closed, with a thing to look at', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'REPLACED', warnings: 1 }) }) } },
+    { id: 'close-done', label: 'Close return: closed, with a thing to look at', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'COMPLETED', warnings: 1 }) }) } },
+    // ---- B-W2b-352 --------------------------------------------------------------------------------------------------------
+    { id: 'w2b-352-late-tile', label: 'W2b: the tile "Arrived after the deadline" (1 open return)', model: { role: 'owner', list: listModel('owner') }, note: 'The fifth tile counts the open returns whose first receipt came after their deadline (GET /sales/returns/arrived-late).' },
+    {
+      id: 'w2b-352-late-view',
+      label: 'W2b: the tile pressed — only the returns that arrived late; its chip in the toolbar',
+      model: { role: 'owner', list: listModel('owner', { address: address({ view: 'arrivedLate' }), rows: { items: mergedRows([RETURN_ROWS[1]!], []), problem: null, truncated: false } }) },
+    },
+    { id: 'w2b-352-late-none', label: 'W2b: the tile pressed, none arrived late (Clear filters)', model: { role: 'owner', list: listModel('owner', { address: address({ view: 'arrivedLate' }), rows: empty, counts: { returns: RETURN_COUNTS, repairs: REPAIR_COUNTS, failed: false, arrivedLate: 0 } }) } },
+    { id: 'w2b-352-late-unknown', label: "W2b: the late count couldn't be read: the tile says '—'", model: { role: 'owner', list: listModel('owner', { counts: { returns: RETURN_COUNTS, repairs: REPAIR_COUNTS, failed: false, arrivedLate: null } }) } },
+    { id: 'w2b-352-late-loading', label: 'W2b: the late count still reading (skeleton)', model: { role: 'owner', list: listModel('owner', { counts: { returns: RETURN_COUNTS, repairs: REPAIR_COUNTS, failed: false } }) } },
+    { id: 'w2b-352-close-reasons', label: 'W2b: Close from the list — the suggested reason picked, the reasons that do not fit held with why', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'COMPLETED' }) }) } },
+    { id: 'w2b-352-close-other', label: 'W2b: Close with Other and no words (held: say why)', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'OTHER' }) }) } },
+    { id: 'w2b-352-close-reading', label: 'W2b: Close from the list while the reasons are read', model: { role: 'owner', list: listModel('owner', { close: closeModel({ options: null, pending: null }) }) } },
   ],
 })

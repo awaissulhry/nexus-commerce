@@ -30,6 +30,7 @@ import {
 import { BLANK_CHECKLIST, checklistBody, checklistProblems, ddtBody, MOVE_OF, refusalOf, repairHref, returnsCan, romeToday, type ChecklistDraft, type Words } from '../model'
 import { REPAIR_TABS, type IntakeDraft, type PhotoView, type RepairDialog, type RepairModel } from '../view-model'
 import { ReturnsMessages, useWords } from '../view/parts'
+import { useEstimate } from '../estimate/use-estimate'
 import { RepairRecordView } from './view/RepairRecordView'
 
 /**
@@ -38,7 +39,8 @@ import { RepairRecordView } from './view/RepairRecordView'
  * repair again and says so). The safety check is an e-signature: the API asks a fresh code after every other check, the
  * DS step-up dialog takes it and the check is sent once more. The way back previews its DDT (Shipping's source DDT) and
  * issues it inside the ship step. Live repair events of this repair read it again, or, while a dialog or an edit is
- * open, say it changed with Reload. `?created=1` says the repair was made.
+ * open, say it changed with Reload. `?created=1` says the repair was made. B-W2b-352: the Estimate tab (`useEstimate`: the
+ * revisions, autosaved cells, send, the customer's answer), read again with every move of the repair.
  */
 export function RepairRecord({ repairId }: { repairId: string }) {
   return (
@@ -131,7 +133,9 @@ function Container({ repairId }: { repairId: string }) {
   const latest = useRef<Repair | null>(null)
   latest.current = repair
   const quiet = useRef(false)
-  quiet.current = dialog !== null || edit !== null || checkBusy
+  const estimateOpen = useRef(false)
+  quiet.current = dialog !== null || edit !== null || checkBusy || estimateOpen.current
+  const estimateReload = useRef<() => void>(() => undefined)
   const dialogKey = useRef<string>(newIdempotencyKey())
 
   const load = useCallback(async () => {
@@ -178,14 +182,19 @@ function Container({ repairId }: { repairId: string }) {
 
   const live = useLive(
     (change) => {
-      if (!liveMatches(change, ['repair.', 'workorder.']) ) return
-      if (change.type.startsWith('repair.') && change.fields.repairId !== repairId) return
+      if (!liveMatches(change, ['repair.', 'repair_estimate.', 'workorder.']) ) return
+      if ((change.type.startsWith('repair.') || change.type.startsWith('repair_estimate.')) && change.fields.repairId !== repairId) return
+      if (change.type.startsWith('repair_estimate.')) return void estimateReload.current()
       if (change.type.startsWith('workorder.') && change.fields.workOrderId !== latest.current?.workOrder?.id) return
       if (quiet.current) setChangedAt(new Date().toISOString())
       else void load()
     },
     () => void load(),
   )
+
+  const estimate = useEstimate({ api, repairId, repairVersion: repair?.version ?? null, can, today, reloadRepair: load, onDone: (words, tone = 'success') => setReceipt({ tone, words }) })
+  estimateReload.current = estimate.reload
+  estimateOpen.current = estimate.model.dialog !== null
 
   const created = params?.get('created') === '1'
   useEffect(() => {
@@ -364,6 +373,7 @@ function Container({ repairId }: { repairId: string }) {
     dialogBusy,
     dialogProblem,
     dockOpen,
+    estimate: estimate.model,
   }
 
   return (
@@ -371,6 +381,7 @@ function Container({ repairId }: { repairId: string }) {
       model={model}
       panels={panels}
       actions={{
+        ...estimate.actions,
         onReload: () => void load(),
         onDismissReceipt: () => setReceipt(null),
         onDock: () =>

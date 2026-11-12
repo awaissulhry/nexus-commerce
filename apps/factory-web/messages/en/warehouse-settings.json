@@ -1,0 +1,345 @@
+{
+  "head": {
+    "intro": "Who may do both steps of a stock decision, where goods go when nobody names a place, which adjustments wait for a yes, and how far back a move may be dated.",
+    "reload": "Read again",
+    "history": "History (audit log)",
+    "more": "More"
+  },
+  "live": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline",
+    "changedTitle": "Someone else changed these rules",
+    "changedBody": "Your changes on this page are kept until you read again; saving now may be refused because the rules moved on.",
+    "reload": "Read again"
+  },
+  "scope": {
+    "label": "Whose rules",
+    "company": "{company}",
+    "all": "Every company",
+    "companyHint": "The warehouse rules of {company}. Where it keeps none of its own, it follows every company’s.",
+    "allHint": "The warehouse rules every company follows where it keeps none of its own."
+  },
+  "noAccess": {
+    "title": "Warehouse rules are not in your role",
+    "body": "Reading them needs the right to see stock (inventory.stock.view). An administrator gives it in Admin › Roles & permissions."
+  },
+  "card": {
+    "neverChanged": "Never changed here.",
+    "changedBy": "Changed by {name} · {time}",
+    "changedAt": "Changed {time}",
+    "rowChangedBy": "These rules last changed by {name} · {time}",
+    "rowChangedAt": "These rules last changed {time}",
+    "history": "History",
+    "viewOnly": "View only"
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "everyCompany": "Every company",
+    "less": "Less",
+    "more": "More",
+    "on": "On",
+    "off": "Off",
+    "notKnown": "not known yet",
+    "save": "Save",
+    "saveWithCode": "Save (asks for a code)",
+    "appliesNow": "In force now:",
+    "appliesOnceSaved": "Once saved:"
+  },
+  "source": {
+    "COMPANY": "this company’s own",
+    "TENANT": "as every company",
+    "ALL_OWN": "every company’s own",
+    "DEFAULT": "the default"
+  },
+  "reason": {
+    "label": "Why",
+    "hint": "This widens what one person can do: say why (kept in the audit log). Saving then asks for a fresh code."
+  },
+  "sod": {
+    "title": "Separation of duties",
+    "description": "Two steps of one stock decision are never done by the same person.",
+    "failed": "The separation rules could not be read",
+    "locked": "Nobody approves their own request, the Owner included.",
+    "rule": {
+      "COUNTER_NOT_APPROVER": {
+        "title": "Who counted does not approve the count",
+        "on": "Who counted, recounted or scanned a line that differs never approves the count; a recount is another person’s.",
+        "off": "Off: one person may count, recount and approve the same differences.",
+        "where": "Counts"
+      },
+      "RECEIVER_NOT_MATCHER": {
+        "title": "Who received the goods does not approve their invoice",
+        "on": "Who received the goods never approves their supplier invoice nor accepts a difference of its match.",
+        "off": "Off: the person who received the goods may approve their invoice.",
+        "where": "Supplier invoices"
+      }
+    },
+    "follow": "Follow every company ({state})",
+    "backToDefault": "Back to the default (on)",
+    "offReason": "Switched off because: {reason}",
+    "loosens_one": "Switching this rule off lets one person do both steps: Save asks why, then a fresh code.",
+    "loosens_other": "Switching these {count} rules off lets one person do both steps: Save asks why, then a fresh code.",
+    "reasonHint": "Say why one person may now do both steps (kept with the rule while it is off, and in the audit log).",
+    "noteDefault": "Both rules are on by default. Switching one on again never asks for a code.",
+    "noteWorkers": "A floor worker counts as the office user they are: scanning on the floor and approving in the office are the same person.",
+    "applyOff": "Switch off…"
+  },
+  "posting": {
+    "title": "Posting dates",
+    "description": "How far back a move may be dated. Closed months come from Finance.",
+    "failed": "The posting-date rule could not be read",
+    "modeLabel": "Which limit",
+    "mode": {
+      "OWN": "Own limit",
+      "FOLLOW": "As every company",
+      "LIMIT": "A limit",
+      "NONE": "No limit"
+    },
+    "daysLabel": "Days back allowed",
+    "daysHint": "{min} (the same day only) to {max} days before the day a move is entered.",
+    "daysSuffix": "days",
+    "daysPlaceholder": "Days",
+    "followHint": "This company follows every company: {days}.",
+    "noneHint": "No limit: a move may be dated any earlier day, except in a closed month.",
+    "noLimit": "No limit",
+    "sameDay": "The same day only",
+    "days_one": "{count} day back",
+    "days_other": "{count} days back",
+    "window": "Today, {today}, a move may be dated back to {earliest}.",
+    "windowOpen": "Today, {today}, a move may be dated any earlier day outside a closed month.",
+    "loosens": "More days back, or no limit, widens what one person can do: Save asks why, then a fresh code.",
+    "closed": "A closed month refuses a date inside it, whatever this says. Months are closed in Finance:",
+    "closedLink": "Finance › Accounting export",
+    "floor": "A move made on the floor always counts on the day it is entered.",
+    "future": "No move is dated after today."
+  },
+  "adjust": {
+    "title": "Adjustment approval",
+    "description": "Stock adjustments worth more than a value wait for a yes.",
+    "failed": "The adjustment rule could not be read",
+    "addRule": "New adjustment rule",
+    "valueTitle": "The value",
+    "modeLabel": "Which value",
+    "mode": {
+      "OWN": "Own value",
+      "FOLLOW": "As every company",
+      "LIMIT": "A value",
+      "NONE": "None"
+    },
+    "valueLabel": "Adjustments worth more than",
+    "valueHint": "In {currency}, valued at the stock’s cost.",
+    "valueHintAll": "In each company’s own currency, valued at the stock’s cost.",
+    "valuePlaceholder": "Value",
+    "followHint": "This company follows every company: {value}.",
+    "noneHint": "No value: no adjustment waits for a yes.",
+    "noValue": "None",
+    "state": {
+      "NO_VALUE": "No value is set: every adjustment posts at once, without a yes.",
+      "NO_RULE": "A value is set, but no approval rule for stock adjustments is switched on: adjustments above it post without a yes until the Owner switches one on.",
+      "WAITS_one": "Adjustments above the value wait for a yes: {count} approval rule is switched on.",
+      "WAITS_other": "Adjustments above the value wait for a yes: {count} approval rules are switched on.",
+      "UNKNOWN": "Whether adjustments wait is not known yet."
+    },
+    "loosens": "A higher value, or none, lets more adjustments post without a yes: Save asks why, then a fresh code.",
+    "onlyAdjust": "Only an adjustment made by hand waits. Counts, lot splits and transfers post as they always did.",
+    "unknownValue": "An adjustment whose value nobody can tell (no cost, another currency) waits too.",
+    "approverTitle": "Who approves",
+    "byRole": "a role",
+    "byPerson": "one person",
+    "col": {
+      "rule": "Rule",
+      "company": "Company",
+      "approver": "Approver",
+      "state": "State"
+    },
+    "rulesFailed": "The approval rules could not be read",
+    "table": "Approval rules for stock adjustments",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "empty": {
+      "title": "No approval rule for stock adjustments",
+      "body": "Who approves an adjustment is an approval rule’s. Write one in Admin › Approvals, automation & AI; it starts switched off."
+    },
+    "firstDecides": "The first rule switched on whose approver is not the person asking decides.",
+    "noneByDefault": "No approval rule is switched on by default: only the Owner switches one on.",
+    "inbox": "The requests wait in",
+    "inboxLink": "Home › Approvals"
+  },
+  "alerts": {
+    "title": "Low-stock alerts",
+    "on": "On: a material below its minimum raises an alert.",
+    "off": "Off: no low-stock alert is raised."
+  },
+  "defaults": {
+    "title": "Default locations",
+    "description": "Where goods go when nobody names a place: per site, per kind of material and per purpose.",
+    "failed": "The default locations could not be read",
+    "noSite": {
+      "title": "No site yet",
+      "body": "Default locations are kept per site. Add a site and its places in Warehouse › Locations first."
+    },
+    "site": "Site",
+    "siteOf": "Site: {site}",
+    "noteOrder": "A command takes the kind’s own place, else the first row’s place when it may hold the goods, else its own rule.",
+    "noteKinds": "Only places that may serve the purpose are offered: a quality place is a quarantine shelf, finished garments go only where they may lie.",
+    "notePlaces": "The places themselves are kept in",
+    "locationsLink": "Warehouse › Locations",
+    "everyKind": "Every material",
+    "everyKindHint": "Every kind without a row of its own",
+    "usesFallback": "Uses the first row: {place}",
+    "ownRule": {
+      "RECEIVING": "None: the receipt asks for the goods-in place",
+      "QUALITY": "None: the hold names its quarantine place",
+      "ISSUE": "None: the pick names its place",
+      "RETURN": "None: the return names its place",
+      "PUT_AWAY": "None: the move names its place"
+    },
+    "cellLabel": "{purpose} · {kind}",
+    "none": "None",
+    "pick": "Choose a place",
+    "archivedPlace": "This place is archived: choose another.",
+    "noneServes": "No active place on this site may serve this (it takes: {kinds}).",
+    "caption": "Default places of site {site}",
+    "kindColumn": "Material",
+    "addKind": "Add a kind of material…"
+  },
+  "purpose": {
+    "RECEIVING": "Receiving",
+    "QUALITY": "Quality",
+    "ISSUE": "Issue",
+    "RETURN": "Return",
+    "PUT_AWAY": "Put away"
+  },
+  "purposeHint": {
+    "RECEIVING": "where a receipt lands",
+    "QUALITY": "where held goods wait",
+    "ISSUE": "where work orders pick from",
+    "RETURN": "where returns come back",
+    "PUT_AWAY": "where goods are stored"
+  },
+  "itemKind": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Textile",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trim",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protector",
+    "LABEL": "Label",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Component",
+    "FINISHED": "Finished garments"
+  },
+  "locationKind": {
+    "WAREHOUSE": "Warehouse",
+    "ZONE": "Zone",
+    "BIN": "Bin",
+    "RECEIVING": "Goods in",
+    "QUARANTINE": "Quarantine shelf",
+    "PRODUCTION": "Line side",
+    "SHIPPING": "Shipping",
+    "SUBCONTRACTOR": "Subcontractor",
+    "FINISHED_GOODS": "Finished goods",
+    "CUSTOMER": "At a customer",
+    "TRANSIT": "In transit",
+    "PICK_FACE": "Pick face",
+    "BULK": "Bulk storage"
+  },
+  "crvi": {
+    "title": "Cr VI evidence rule",
+    "description": "Which evidence counts for the hexavalent chromium of a leather lot. It is kept in Compliance, not here.",
+    "failed": "The Cr VI evidence rule could not be read",
+    "rule": {
+      "LOT_REPORT_REQUIRED": "A report per lot",
+      "SUPPLIER_REPORT_ACCEPTED": "A supplier report covering the article and period"
+    },
+    "isDefault": "(nobody chose another)",
+    "why": "Receipts and lots use it to decide whether a leather lot may be released.",
+    "link": "Change it in Compliance › Rules & markets"
+  },
+  "held": {
+    "reading": "Still reading the rules.",
+    "busy": "Saving: wait a moment.",
+    "noRight": "Changing the warehouse rules needs inventory.rules.manage over this company (warehouse, finance, the Owner).",
+    "noRightAll": "Every company’s warehouse rules are changed only by a role over every company.",
+    "offline": "Offline: changes are kept on this page until the connection is back.",
+    "offlineTitle": "Offline",
+    "offlineBody": "This is the last copy read. Nothing can be saved until the connection is back.",
+    "noApprovalsView": "Reading the approval rules needs the right to see approvals (approvals.view).",
+    "noRulesManage": "Writing approval rules needs the right to keep them (approvals.rules.manage): the Owner or an administrator.",
+    "noCost": "The value is a cost: it is shown and changed only with the right to see costs (money.cost).",
+    "noLocationsView": "Default locations need the right to see locations (inventory.locations.view).",
+    "noLocationsRight": "Changing default locations needs inventory.locations.manage.",
+    "noCrViView": "Reading this rule needs the right to see lots and their tests (quality.lots.view)."
+  },
+  "problem": {
+    "reasonNeeded": "Say why: this widens what one person can do.",
+    "reasonLong": "At most 500 characters.",
+    "daysNeeded": "Type the days back allowed.",
+    "daysRange": "From 0 to 366 days.",
+    "amountNeeded": "Type the value.",
+    "amountRange": "The value is 0 or more, and not that large.",
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not reach these rules.",
+      "not_found": "This company was not found.",
+      "unavailable": "The server could not be reached. Try again.",
+      "rate_limited": "Too many requests: wait a moment and try again.",
+      "contract": "The server answered something this page does not understand. Try again later.",
+      "internal": "Something went wrong reading this. Try again."
+    },
+    "write": {
+      "moved": "Someone changed these rules meanwhile: read again (nothing was overwritten).",
+      "reasonNeeded": "Say why first: this widens what one person can do.",
+      "placeRefused": "That place may not be this default (its kind, or it is archived): choose another.",
+      "invalid": "The server refused a value: check the card.",
+      "noCost": "The value is a cost: changing it needs the right to see costs.",
+      "forbidden": "Your role may not change the warehouse rules of this company.",
+      "forbiddenAll": "Every company’s rules are changed only by a role over every company.",
+      "not_found": "It was not found any more: read again.",
+      "signed_out": "Your session ended: sign in again. Your changes are kept on this page.",
+      "rate_limited": "Too many requests: wait a moment and save again.",
+      "unavailable": "The server could not be reached: your changes are kept, save again.",
+      "internal": "Something went wrong saving this. Try again."
+    }
+  },
+  "done": {
+    "separation": "The separation rules are saved.",
+    "separationOff": "Saved: one person may now do both steps of the rule switched off (the reason is kept).",
+    "posting": "The posting-date rule is saved.",
+    "postingLoosened": "Saved: moves may now be dated further back (the reason is kept).",
+    "adjust": "The adjustment value is saved.",
+    "adjustLoosened": "Saved: more adjustments now post without a yes (the reason is kept).",
+    "alerts": "The low-stock alerts are saved.",
+    "defaults_one": "{count} default location saved.",
+    "defaults_other": "{count} default locations saved.",
+    "defaultsSome": "{count} of {total} default locations saved; the others were refused and stay typed (read the card)."
+  },
+  "stepUp": {
+    "title": "Confirm it is you",
+    "confirm": "Confirm",
+    "cancelled": "Not saved: the code was not given. The rule stays as it was.",
+    "sentence": {
+      "separation": "Switching a separation rule off lets one person do both steps. Type a fresh 6-digit code from your authenticator app.",
+      "posting": "Allowing moves dated further back widens what one person can do. Type a fresh 6-digit code from your authenticator app.",
+      "adjust": "A higher adjustment value lets more adjustments post without a yes. Type a fresh 6-digit code from your authenticator app."
+    },
+    "problem": {
+      "wrong": "That code is wrong or already used. Type the code your app shows now.",
+      "locked": "Too many wrong codes. Wait a few minutes and try again.",
+      "unavailable": "The code could not be checked now. Try again."
+    }
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "save": "Save the card you changed",
+    "openRule": "Open the approval rule in Admin › Approvals, automation & AI",
+    "close": "Close the dialog"
+  }
+}
