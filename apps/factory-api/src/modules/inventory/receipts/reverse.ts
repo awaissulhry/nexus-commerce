@@ -7,7 +7,7 @@ import { INVENTORY_REVERSE, INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/i
 import { expectedBaseOf, orderStatusAfter } from '@nexus/factory-domain/inventory/receipts/rules'
 import { ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller } from '../../../core/command'
-import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/receiving'
+import { differenceTolerance, lockOrderForReceipt, receiptTolerancesOf, setOrderReceiptProgress } from '../../purchasing/receiving'
 import { mayAt, officeContextOf, postedBy } from '../ledger/access'
 import { lockStock, postMoves, type PostedMove } from '../ledger/post-moves'
 import { blockersOf, receiptDetail } from './read'
@@ -81,12 +81,14 @@ export async function reverseReceipt(caller: CommandCaller, receiptId: string, b
       let orderStatus = null
       if (order) {
         const after = await readOrderLines(tx, order.id)
+        const tolerances = await receiptTolerancesOf(tx, order, after.lines)
         orderStatus = orderStatusAfter(
           { status: order.status, confirmed: order.confirmed },
           after.lines.map((line) => ({
             expected: expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }),
             received: after.received.get(line.id) ?? ZERO,
-            tolerancePct: line.areaTolerancePct?.toString() ?? null,
+            // B-W2b-296 (SCM-061): received within the line's tolerance under (its own, else the delivery tolerance).
+            ...differenceTolerance(tolerances.get(line.id), line.areaTolerancePct),
             // B-W2a-52: a cancelled or closed-short line takes no more goods: it counts as complete.
             ended: line.cancelledAt !== null || line.closedShortAt !== null,
           })),
