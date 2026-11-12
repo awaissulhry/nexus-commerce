@@ -764,6 +764,11 @@
       "BELOW_MINIMUM": "A line is below the supplier’s minimum (a warning: it still sends).",
       "NOT_A_MULTIPLE": "A line is not a multiple of what the supplier sells (a warning).",
       "LATE_FOR_LEAD_TIME": "With the supplier’s lead time a line arrives after it is needed (a warning).",
+      "SCHEDULE_NOT_THE_LINE": "A line’s deliveries no longer add up to the line: write its delivery schedule again.",
+      "DELIVERY_DATE_PAST": "A delivery of a line is asked for a day in the past.",
+      "NO_RATE_AT_ORDER": "The order is in another currency than the company’s: type the rate at order.",
+      "SHIP_TO_NOT_USABLE": "The party the order ships to, or its address, cannot take the goods any more.",
+      "SHIP_TO_NO_WORKSHOP_PLACE": "The workshop it ships to has no place of ours on the site: the receipt will not land on its stock (a warning).",
       "pass": {
         "supplierActive": "The supplier is active",
         "linesPriced": "Every line has a price",

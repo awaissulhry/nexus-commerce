@@ -19,7 +19,7 @@ import '../lab.css'
  */
 
 export function LabMessages({ children }: { children?: ReactNode }) {
-  return <QualityMessages namespaces={['lab']}>{children}</QualityMessages>
+  return <QualityMessages namespaces={['lab', /* B-W2b-288: the lab's price */ 'compliance-followups-w2b4']}>{children}</QualityMessages>
 }
 
 export function LotStatusPill({ status }: { status: Lot['qualityStatus'] }) {

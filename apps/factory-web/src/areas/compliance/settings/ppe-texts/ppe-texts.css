@@ -1,0 +1,63 @@
+/*
+ * Compliance › Rules & markets › Templates (SCR-262 tab `templates`, B-W2b-288, FU2:01) LAYOUT: a template's window (its
+ * approvals, each with the consultant's file and Withdraw), the record dialog's file row. The page's own `fw-rm-` classes do
+ * the rest; semantic tokens only (light and dark follow the theme); no max-width.
+ */
+.fw-ppt-window,
+.fw-ppt-approvals,
+.fw-ppt-approval,
+.fw-ppt-withdraw,
+.fw-ppt-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ppt-approvals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-ppt-approval {
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-ppt-approval-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ppt-withdraw {
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-ppt-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ppt-p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ppt-file {
+  gap: var(--nds-space-6);
+}
+
+.fw-ppt-file-label {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ppt-file-name {
+  overflow-wrap: anywhere;
+  font-family: var(--nds-font-mono);
+}

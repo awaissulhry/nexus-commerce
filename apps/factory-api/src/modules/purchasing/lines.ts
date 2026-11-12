@@ -10,6 +10,8 @@ import type { CommandCaller, CommandTools } from '../../core/command'
 import { assertDraft, detailInCommand, onOrder, refreshTotal, reopenPlanLines } from './orders'
 import { actorIdOf, dayOf, dayValue, decimal, ITEM_COLUMNS, LINE_COLUMNS, officeOrder, quantityText, unitsOf, type ItemRow, type LineRow, type OrderRow } from './store'
 import { activeSourcesOf } from './supplier-items/store'
+// B-W2b-296 (SCM-052): a scheduled line's deliveries go with it; its quantity, unit and need date are its deliveries'.
+import { assertScheduledEdit, removeDeliveriesOf, sameQuantity } from './po-depth/hooks'
 import type { OrderDetail } from './views'
 
 /**
@@ -195,6 +197,11 @@ export async function editLine(caller: CommandCaller, orderId: string, lineId: s
     if (!line || line.purchaseOrderId !== current.id) throw new NotFoundError('Line not found.')
     if (Object.values(input).every((value) => value === undefined)) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send at least one field.' }])
     const item = await itemFor(tools, current, line.itemId)
+    await assertScheduledEdit(tx, line, {
+      quantity: input.quantity !== undefined && !sameQuantity(line.quantity, input.quantity),
+      uom: input.uom !== undefined && input.uom !== line.uom,
+      needDate: input.needDate !== undefined && input.needDate !== dayOf(line.needDate),
+    })
     if (input.itemColourId !== undefined && input.itemColourId !== line.itemColourId && (await tx.materialRequirement.count({ where: { purchaseOrderLineId: line.id } })) > 0) {
       throw new ConflictError('The line buys a line of the plan in its colour: remove it and add the other colour instead.')
     }
@@ -260,6 +267,7 @@ export async function removeLines(tools: CommandTools, order: OrderRow, lineIds:
     )
   }
   const reopened = await reopenPlanLines(tools, order.id, lines.map((line) => line.id))
+  await removeDeliveriesOf(tx, lines.map((line) => line.id))
   await tx.purchaseOrderLine.deleteMany({ where: { id: { in: lines.map((line) => line.id) }, purchaseOrderId: order.id } })
   return { removed: lines, reopened }
 }
