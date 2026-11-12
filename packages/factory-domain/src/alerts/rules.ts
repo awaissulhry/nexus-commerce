@@ -299,6 +299,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
       return it ? `Quando un collegamento non funziona da più di ${n('hours')} h` : `When a connection has not worked for more than ${n('hours')} h`
     case 'WORKING_TIME_LIMIT':
       return it ? 'Quando qualcuno si avvicina a un limite di orario o lo supera' : 'When someone comes close to a working-time limit, or passes it'
+    // B-W2b-314
+    case 'LOW_STOCK':
+      return it ? 'Quando un materiale scende sotto il minimo dei suoi parametri di pianificazione' : 'When a material falls below the minimum of its planning parameters'
   }
 }
 
@@ -344,6 +347,8 @@ export const ALERT_TEMPLATES = {
   'alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP': { en: 'Site {label}: someone is close to or over the yearly overtime cap.', it: 'Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.' },
   'alerts.WORKING_TIME_LIMIT.DAILY_REST': { en: 'Site {label}: someone is under the minimum rest, or would be before their next shift.', it: 'Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.' },
   'alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE': { en: 'Site {label}: someone is close to or over the weekly average of working hours.', it: 'Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.' },
+  // B-W2b-314: a material below its minimum at a site ({label} "LEA-BLK at A1"; {position} what the site has and expects, {minimum}, {unit}).
+  'alerts.LOW_STOCK': { en: '{label} is below its minimum: {position} {unit} against {minimum} {unit}.', it: '{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.' },
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
@@ -381,6 +386,8 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
         : { key: 'alerts.INVOICE_DEADLINE', params: { label, dueDate: text('dueDate'), days: num('daysLeft') } }
     case 'INTEGRATION_FAILING':
       return { key: f.never === true ? 'alerts.INTEGRATION_FAILING.NEVER' : 'alerts.INTEGRATION_FAILING', params: { label, hours: num('hours') } }
+    case 'LOW_STOCK':
+      return { key: 'alerts.LOW_STOCK', params: { label, position: text('position'), minimum: text('minimum'), unit: text('unit') } }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

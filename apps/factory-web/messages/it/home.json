@@ -543,6 +543,7 @@
       "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.",
       "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.",
       "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.",
+      "alerts.LOW_STOCK": "{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.",
       "why.RULE_ALERT.assigned": "È assegnato a te.",
       "why.RULE_ALERT.recipient": "La regola \"{rule}\" avvisa te.",
       "alerts.UNKNOWN": "Avviso su {label}."
