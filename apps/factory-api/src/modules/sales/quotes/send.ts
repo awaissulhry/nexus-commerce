@@ -513,7 +513,11 @@ async function copyLines(tools: CommandTools, fromVersionId: string, toVersionId
     select: {
       id: true,
       seq: true,
+      // W2b-5 (B-W2b-280): the section a line is printed under and a FEE line's fee kind go with it (the database asks for
+      // the fee kind); its waterfall, options and schedule are copied by the steps that write them (B-W2b-330, -340, -294).
+      section: true,
       kind: true,
+      feeKind: true,
       styleId: true,
       styleRevisionId: true,
       colourwayId: true,

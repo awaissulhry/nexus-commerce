@@ -1,6 +1,6 @@
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { summaryOf } from '../../quality/complaints/store'
-import { RETURN_REASON_LIST, type ReturnDisposition, type ReturnGrade, type ReturnStatus } from '@nexus/factory-domain/sales/returns/rules'
+import { RETURN_REASON_LIST, type ReturnGrade, type ReturnStatus } from '@nexus/factory-domain/sales/returns/rules'
 import type { ComplaintStatus } from '@nexus/factory-domain/quality/complaints/rules'
 import type { CapaStatus, CapaType } from '@nexus/factory-domain/quality/capa/rules'
 import {
@@ -29,6 +29,7 @@ import {
   type Words,
 } from '@nexus/factory-domain/sales/portal-returns/rules'
 import { reasonWords } from '../../../platform/reasons/service'
+import { w2aDispositionOf } from '../returns/store'
 import { answerByFor } from './create'
 import {
   capasOf,
@@ -82,7 +83,7 @@ const complaintRef = (row: CaseComplaint) => ({ type: COMPLAINT_RECORD, id: row.
 /** A return in the cases list. */
 function returnItem(row: CaseRma, lines: readonly CaseLine[], tasks: ReadonlySet<string>, answerBy: BusinessDate | null) {
   const status = row.status as ReturnStatus
-  const next = returnNextStep({ status, goodsDueBy: dayOrNull(row.goodsDueBy), answerBy, rejectReason: status === 'REJECTED' ? row.statusReason : null, openTask: tasks.has(`${RETURN_RECORD}:${row.id}`), dispositions: lines.flatMap((line) => (line.disposition ? [line.disposition as ReturnDisposition] : [])) })
+  const next = returnNextStep({ status, goodsDueBy: dayOrNull(row.goodsDueBy), answerBy, rejectReason: status === 'REJECTED' ? row.statusReason : null, openTask: tasks.has(`${RETURN_RECORD}:${row.id}`), dispositions: lines.flatMap((line) => (line.disposition ? [w2aDispositionOf(line.disposition)!] : [])) })
   const open = isOpenReturn(status)
   return {
     type: 'RETURN' as const,
@@ -200,7 +201,7 @@ export async function returnRecord(db: Reader, place: Place, row: CaseRma, optio
   const replacement = row.replacementOrderId ? await db.salesOrder.findUnique({ where: { id: row.replacementOrderId }, select: { id: true, number: true, status: true } }) : null
   const site = await db.site.findUnique({ where: { id: row.siteId }, select: { name: true } })
   const answerBy = status === 'REQUESTED' ? await answerByFor(db, place.companyId, options.now) : null
-  const dispositions = lines.flatMap((line) => (line.disposition ? [line.disposition as ReturnDisposition] : []))
+  const dispositions = lines.flatMap((line) => (line.disposition ? [w2aDispositionOf(line.disposition)!] : []))
   const next: NextStep = returnNextStep({ status, goodsDueBy: dayOrNull(row.goodsDueBy), answerBy, rejectReason: status === 'REJECTED' ? row.statusReason : null, openTask: tasks.has(`${RETURN_RECORD}:${row.id}`), dispositions })
   const cancel = cancelHeld(status)
   const takesPhotos = returnTakesPhotos(status)
@@ -251,7 +252,7 @@ export async function returnRecord(db: Reader, place: Place, row: CaseRma, optio
           seq: line.seq,
           received: line.receivedQuantity,
           grade: line.grade ? { code: line.grade, words: GRADE_WORDS[line.grade as ReturnGrade] } : null,
-          outcome: line.disposition ? { code: line.disposition, words: DISPOSITION_WORDS[line.disposition as ReturnDisposition] } : null,
+          outcome: line.disposition ? { code: w2aDispositionOf(line.disposition)!, words: DISPOSITION_WORDS[w2aDispositionOf(line.disposition)!] } : null,
         })),
       creditNotes: credits,
       replacementOrder: replacement ? { id: replacement.id, number: replacement.number } : null,

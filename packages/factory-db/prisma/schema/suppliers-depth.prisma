@@ -1,0 +1,289 @@
+// Suppliers in depth (W2b-5, schema wave 42/44, B-W2b-287; features SCM-002, SCM-004, SCM-007, SCM-008, SCM-016, SCM-027,
+// SCM-049, PLN-162): who our suppliers are and what they may do. What kind of supplier a party is, where it stands with us
+// and where it makes what it sells us are columns of Party (parties.prisma: supplierKinds, supplierStatus with its reason,
+// time and person, the origin); what each contact receives is a column of PartyContact (receives). This file holds their
+// enums and three tables:
+//
+//   SupplierBankAccount    the accounts payments to a supplier use (SCM-007). A bank account is NEVER changed in place: a
+//                          change is a new account, PROPOSED by an office user or by a person of the supplier in its portal,
+//                          checked by a call-back to a number we had on file BEFORE the proposal (a contact or an address of
+//                          the party, unchanged since), VERIFIED by a second person (never the one who proposed it, nor the
+//                          one who wrote it, the Owner included: Owner answer 11-10, Q3 = A), then ACTIVE; or REFUSED; an
+//                          ACTIVE account is RETIRED when a newer one replaces it. Payments use only an ACTIVE account (one
+//                          per party and currency); until a new one is ACTIVE they go to the old one. A changed IBAN is the
+//                          classic fraud: these rules are the database's, for every login.
+//   SupplierQualification  what a supplier or workshop is qualified for (SCM-027, PLN-162): kinds of work (the work centre
+//                          kind an operation needs), particular operations of the library (armour pockets), kinds of
+//                          material; PENDING → APPROVED | CONDITIONAL | REFUSED, suspended and lifted, withdrawn; the days it
+//                          holds and the evidence it rests on by record type + id (the accepted questionnaire, accepted
+//                          documents, an audit or visit report). Planning offers only workshops qualified for the work, the
+//                          others with the reason (B-W2b-315 writes, B-W2b-312 / -338 read).
+//   SubcontractAgreement   the written terms with a workshop (L. 192/1998 art. 2: a subcontracting contract is made in
+//                          writing; SCM-049): per company and workshop a numbered revision, the signed file, the days it
+//                          covers; DRAFT → SIGNED → SUPERSEDED | TERMINATED, one SIGNED at a time. Every subcontract order
+//                          links the revision in force on its order date (B-W2b-331).
+//
+// apps/factory-api's modules/purchasing (B-W2b-311, B-W2b-315, B-W2b-331) writes them through command(); the hand-written
+// …_suppliers_depth_w2b_guards migration holds their rules for every login, the owner included. Records of parallel waves are
+// named by record type + id (an approval task names its subject, never the reverse).
+//
+// Who sees what (ownership/suppliers-depth.json): the office reads and writes. A supplier's portal session
+// (factory_partner_runtime) reads its OWN party's bank accounts and inserts only a PROPOSED one of its own party, proposed by
+// one of its own active people, never the call-back or who in the office checked it; it reads nothing of another party and
+// none of the qualifications or agreements. The floor reads nothing here. No money column.
+
+/// What kind of supplier a party is (Party.supplierKinds, one or more; SCM-002).
+enum SupplierKind {
+  /// Leather: hides and skins, finished (its hides' origin and tannages on Party).
+  TANNERY
+  /// Fabrics, linings, membranes, mesh.
+  TEXTILE_MILL
+  /// Zips, snaps, buckles, labels, thread, hardware.
+  TRIMS
+  /// Impact protectors (EN 1621-1, -2) and their inserts.
+  PROTECTOR_MAKER
+  /// A workshop that does operations for us (terzista).
+  SUBCONTRACTOR
+  /// Carries our goods.
+  CARRIER
+  /// A service: a lab, maintenance, a consultant.
+  SERVICE
+}
+
+/// Where a supplier stands with us (Party.supplierStatus; SCM-008).
+enum SupplierStatus {
+  /// Being looked at: may get a sample order, not a production order.
+  PROSPECT
+  APPROVED
+  /// Approved with conditions (the reason says which).
+  CONDITIONAL
+  /// No new purchase order for a while (the reason says why); open orders run on.
+  ON_HOLD
+  /// No new purchase order (the reason says why).
+  BLOCKED
+  /// No longer used.
+  INACTIVE
+}
+
+/// What a contact receives from us (PartyContact.receives; SCM-004): each mail goes to the contacts that receive it.
+enum PartyContactReceives {
+  /// Purchase orders and their changes.
+  PO
+  /// Claims about its deliveries.
+  CLAIM
+  /// Remittance advices of our payments.
+  REMITTANCE
+  /// Quality mail: inspection results, nonconformances, 8Ds.
+  QUALITY
+  /// Requests for documents (certificates, declarations, the questionnaire) and their expiry.
+  DOCUMENT
+}
+
+/// A supplier bank account's life: PROPOSED → VERIFIED → ACTIVE → RETIRED; PROPOSED or VERIFIED → REFUSED.
+enum SupplierBankAccountStatus {
+  /// Waiting for the call-back and the second person's check; payments still go to the ACTIVE account.
+  PROPOSED
+  /// Called back and checked by a second person; not used for payments until ACTIVE.
+  VERIFIED
+  /// The account payments use (one per party and currency).
+  ACTIVE
+  /// Not taken (the call-back did not confirm it, a mistake): with why. Final.
+  REFUSED
+  /// Replaced by a newer account, or closed. Final.
+  RETIRED
+}
+
+/// A qualification's life: PENDING → APPROVED | CONDITIONAL | REFUSED; APPROVED | CONDITIONAL ⇄ SUSPENDED; any but REFUSED
+/// → WITHDRAWN.
+enum SupplierQualificationStatus {
+  /// Asked and being reviewed (the questionnaire, documents, a visit).
+  PENDING
+  APPROVED
+  /// Approved with conditions (in words).
+  CONDITIONAL
+  /// Not qualified (why in words). Final.
+  REFUSED
+  /// Held for a while (why in words), then lifted back to its decision.
+  SUSPENDED
+  /// Ended (why in words). Final.
+  WITHDRAWN
+}
+
+/// A subcontract agreement's life: DRAFT → SIGNED → SUPERSEDED | TERMINATED.
+enum SubcontractAgreementStatus {
+  /// Being written: its terms may change; may be deleted.
+  DRAFT
+  /// Signed by both sides: its terms and file are fixed; the one in force for its company and workshop.
+  SIGNED
+  /// Replaced by a newer revision. Final.
+  SUPERSEDED
+  /// Ended before or without a newer revision (why in words). Final.
+  TERMINATED
+}
+
+/// A bank account of a supplier or workshop that payments to it use (SCM-007). Never changed in place: a change is a new row
+/// (`replacesId` names the ACTIVE account it replaces); only its status moves, each step once, with when and by whom. Never
+/// deleted (its history is the record of every change).
+model SupplierBankAccount {
+  id                String                    @id @db.Uuid
+  tenantId          String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The supplier or workshop whose account it is (the partner policy key). Never changes.
+  partyId           String                    @db.Uuid
+  /// The IBAN: a country, two check digits (ISO 7064 mod 97-10) and 11 to 30 letters or digits, upper case, no spaces. The
+  /// portal and the lists show `ibanCountry` and `ibanLast4` only; the full IBAN is read by Finance behind a step-up
+  /// (B-W2b-315). Never changes.
+  iban              String
+  /// The IBAN's country and its last four characters ("IT", "3456"): set by the database from the IBAN at insert (any value
+  /// given is replaced), for a masked IBAN ("IT** **** **** 3456"). Never change.
+  ibanCountry       String                    @default("")
+  ibanLast4         String                    @default("")
+  /// The bank's BIC (8 or 11 letters and digits), when given; the bank's name (1 to 140 characters), when given. Never change.
+  bic               String?
+  bankName          String?
+  /// The account holder as the bank knows it (1 to 140 characters, one line). Never changes.
+  holder            String
+  /// The account's currency, ISO 4217. Never changes.
+  currency          String                    @default("EUR")
+  status            SupplierBankAccountStatus @default(PROPOSED)
+  /// The ACTIVE account of the same party it replaces (when proposed), if any. Never changes.
+  replacesId        String?                   @db.Uuid
+  /// Who proposed it: an active office user, or an active person of the party in its portal; when (not in the future).
+  /// Never change.
+  proposedById      String                    @db.Uuid
+  proposedAt        DateTime                  @default(now()) @db.Timestamptz(3)
+  /// The call-back (SCM-007): who of the office called (never the one who proposed or wrote the account), when (after the
+  /// proposal, not in the future) and the number called: the phone of exactly one contact or address of the party that was
+  /// on file before the proposal and unchanged since. All or none; recorded once, while PROPOSED, then fixed.
+  callBackAt        DateTime?                 @db.Timestamptz(3)
+  callBackById      String?                   @db.Uuid
+  callBackContactId String?                   @db.Uuid
+  callBackAddressId String?                   @db.Uuid
+  /// The number as dialled (its digits are the contact's or address's phone digits).
+  callBackPhone     String?
+  /// The second person's check: who (an active office user who neither proposed nor wrote the account, the Owner included:
+  /// Owner answer Q3 = A) and when (after the call-back, not in the future). Set once, with VERIFIED (or ACTIVE at once).
+  verifiedAt        DateTime?                 @db.Timestamptz(3)
+  verifiedById      String?                   @db.Uuid
+  /// When it became the account payments use (after its check, not in the future). Set once.
+  activatedAt       DateTime?                 @db.Timestamptz(3)
+  /// REFUSED: when, by whom (an active office user) and why (1 to 2000 characters). Set once.
+  refusedAt         DateTime?                 @db.Timestamptz(3)
+  refusedById       String?                   @db.Uuid
+  refuseReason      String?
+  /// RETIRED: when (after it became active, not in the future) and, when given, why (1 to 500 characters: "replaced by …",
+  /// "account closed"). Set once.
+  retiredAt         DateTime?                 @db.Timestamptz(3)
+  retireReason      String?
+  version           Int                       @default(1)
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                   @db.Uuid
+
+  party           Party                 @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  replaces        SupplierBankAccount?  @relation("SupplierBankAccountReplaces", fields: [tenantId, partyId, replacesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  replacedBy      SupplierBankAccount[] @relation("SupplierBankAccountReplaces")
+  callBackContact PartyContact?         @relation("SupplierBankAccountCallBackContact", fields: [tenantId, partyId, callBackContactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  callBackAddress PartyAddress?         @relation("SupplierBankAccountCallBackAddress", fields: [tenantId, partyId, callBackAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The target of the replaced account's reference (an account of the same party).
+  @@unique([tenantId, partyId, id])
+  // A party's accounts by status (the Bank details tab, the payment run's ACTIVE account). One ACTIVE per party and currency
+  // is a partial unique index of the guards migration.
+  @@index([tenantId, partyId, status])
+}
+
+/// What a supplier or workshop is qualified for, by one company (SCM-027, PLN-162): kinds of work, operations, kinds of
+/// material; the decision and the days it holds; the evidence it rests on. Scope, days and evidence change only while
+/// PENDING; the decision is made once. Never deleted (withdrawn instead).
+model SupplierQualification {
+  id              String                      @id @db.Uuid
+  tenantId        String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that qualifies it (its buyers and planners read it). Never changes.
+  companyId       String                      @db.Uuid
+  /// The supplier or workshop: a party of the company or tenant-wide. Never changes.
+  partyId         String                      @db.Uuid
+  /// What it is qualified for: at least one entry in all, each once. Kinds of work (the work centre kind an operation needs:
+  /// SEWING, FINISHING …) and operations of the tenant's library (at most 100: armour pockets) for a party with the
+  /// SUBCONTRACTOR role; kinds of material (LEATHER, PROTECTOR …) for a party with the SUPPLIER role.
+  workCentreKinds WorkCentreKind[]            @default([])
+  operationIds    String[]                    @default([]) @db.Uuid
+  materialKinds   ItemKind[]                  @default([])
+  status          SupplierQualificationStatus @default(PENDING)
+  /// The days it holds: from (required once decided APPROVED or CONDITIONAL), until (not before from); until null: until it
+  /// is withdrawn.
+  validFrom       DateTime?                   @db.Date
+  validUntil      DateTime?                   @db.Date
+  /// What it rests on: a list of { "recordType", "recordId" } (each once, at most 50): an ACCEPTED SupplierQuestionnaireResponse
+  /// of the party, an ACCEPTED SupplierDocumentUpload of the party, or an AVAILABLE StoredFile of the party or of this
+  /// qualification (an audit or visit report). At least one once APPROVED or CONDITIONAL.
+  evidence        Json                        @default("[]")
+  /// The decision: when (not in the future) and by whom (an active office user), exactly once decided (APPROVED,
+  /// CONDITIONAL, REFUSED), then fixed; CONDITIONAL with its conditions, REFUSED with why (1 to 2000 characters each).
+  decidedAt       DateTime?                   @db.Timestamptz(3)
+  decidedById     String?                     @db.Uuid
+  conditions      String?
+  refuseReason    String?
+  /// SUSPENDED: since when (not before the decision, not in the future) and why (1 to 2000), exactly while suspended; lifted
+  /// back to its decision (CONDITIONAL when it has conditions, else APPROVED).
+  suspendedAt     DateTime?                   @db.Timestamptz(3)
+  suspendReason   String?
+  /// WITHDRAWN: when (not before its decision, not in the future) and why (1 to 2000). Final.
+  withdrawnAt     DateTime?                   @db.Timestamptz(3)
+  withdrawReason  String?
+  version         Int                         @default(1)
+  createdAt       DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                     @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A party's qualifications (the supplier record's Documents & qualification tab, planning's workshop check).
+  @@index([tenantId, partyId, status])
+  @@index([tenantId, companyId, status])
+}
+
+/// The written terms with a workshop (L. 192/1998 art. 2; SCM-049): per company and workshop a numbered revision with its
+/// signed file and the days it covers. DRAFT while written; SIGNED fixes it (one SIGNED per company and workshop); then
+/// SUPERSEDED by a newer revision or TERMINATED. Only a DRAFT is deleted.
+model SubcontractAgreement {
+  id          String                     @id @db.Uuid
+  tenantId    String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Our company, the client (committente). Never changes.
+  companyId   String                     @db.Uuid
+  /// The workshop (subfornitore): a party with the SUBCONTRACTOR role, of the company or tenant-wide. Never changes.
+  partyId     String                     @db.Uuid
+  /// Its number among the company's agreements with the workshop, from 1 (the agreement's version; `version` is the row's
+  /// compare-and-set counter). Never changes.
+  revision    Int
+  /// Its title (1 to 200 characters, one line): "Contratto di subfornitura 2026".
+  title       String
+  /// The signed terms: a file of this agreement or of its party, AVAILABLE once SIGNED.
+  termsFileId String?                    @db.Uuid
+  status      SubcontractAgreementStatus @default(DRAFT)
+  /// When both sides signed it (not in the future): exactly once SIGNED, and after.
+  signedAt    DateTime?                  @db.Timestamptz(3)
+  /// The first and last day it covers (until not before from); until null: until a newer revision or its end.
+  validFrom   DateTime                   @db.Date
+  validUntil  DateTime?                  @db.Date
+  /// SUPERSEDED or TERMINATED: when (not before it was signed, not in the future), and why (1 to 2000 characters; required
+  /// for TERMINATED).
+  endedAt     DateTime?                  @db.Timestamptz(3)
+  endReason   String?
+  version     Int                        @default(1)
+  createdAt   DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?                    @db.Uuid
+
+  company   Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party     Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  termsFile StoredFile? @relation("SubcontractAgreementTerms", fields: [tenantId, termsFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A company's revisions with a workshop are numbered once each. One SIGNED per company and workshop is a partial unique
+  // index of the guards migration.
+  @@unique([tenantId, companyId, partyId, revision])
+  // A workshop's agreements (the subcontract order's "Written terms" link, the supplier record).
+  @@index([tenantId, partyId, status])
+}
