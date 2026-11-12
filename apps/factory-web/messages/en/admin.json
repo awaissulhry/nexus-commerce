@@ -1732,6 +1732,7 @@
     "inventory_issue": "Pick and issue stock to a work order",
     "inventory_issue_over": "Issue more than a work order needs",
     "inventory_rolls_manage": "Correct what a fabric roll is: width, shade, shrinkage",
+    "inventory_rules_manage": "Change the warehouse rules: how far back a move may be dated, the adjustment value that waits for a yes, the low-stock alerts",
     "inventory_protectors_record": "Record the protector lot a batch or garment holds",
     "inventory_receive": "Receive goods against a purchase order",
     "inventory_reserve": "Reserve stock and release it",
