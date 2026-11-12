@@ -1,0 +1,175 @@
+/* B-W2b-324 — Customer 360 and customers in depth (fw-cdp-*): the glance's groups under Now and on the side panel, Tax &
+   terms › Hold and Customer PO number required, the Requirements tab, the contacts' consent and personal-data actions.
+   DS tokens only; no page max-width (the record fills the main area); two columns from 1280 px, one on a phone. */
+
+.fw-cdp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cdp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-cdp-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.fw-cdp-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-cdp-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-cdp-subtitle {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-cdp-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-cdp-warn {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-cdp-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-cdp-error {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}
+
+.fw-cdp-loading,
+.fw-cdp-stack,
+.fw-cdp-now,
+.fw-cdp-hold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-cdp-now {
+  gap: var(--nds-space-14);
+}
+
+.fw-cdp-two,
+.fw-cdp-two-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 720px) {
+  .fw-cdp-two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .fw-cdp-two-wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-cdp-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-cdp-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cdp-name {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-cdp-link {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-primary);
+}
+
+.fw-cdp-tags,
+.fw-cdp-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-cdp-checks {
+  gap: var(--nds-space-12);
+}
+
+.fw-cdp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cdp-clip {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.fw-cdp-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-cdp-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-cdp-bar {
+  position: sticky;
+  bottom: var(--nds-space-8);
+}

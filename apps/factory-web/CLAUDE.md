@@ -108,6 +108,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the end of access as a site day, reaches, drafts, refusals in words), Admin › Users audience Partners (SCR-010-partners,
   `use-partners.ts`) and User › Partner organisation (SCR-011-partner). Catalogue `portal-access`. The order studio's ⋯
   "See it in the customer's portal" previews `/p/<code>/open/SalesOrder/<id>`.
+- `src/areas/sales/customers/depth/` — Customer 360 and customers in depth (B-W2b-324 on its own `GET /sales/customer-360/:id` and
+  B-W2b-290's routes; SCR-033 cases `w2b-324-*`, SCR-032 `w2b-324-riders*`; catalogue `sales-customers-depth`, CSS prefix `fw-cdp-`): ONE
+  container (`use-depth.ts`, provided by `CustomerDepth.tsx` above the shared party record) fills B-W2b-334's `depth` slot for a customer —
+  key numbers Free credit and Promises, Now's samples in progress, measurement profiles, a team's riders and repairs, the side panel's hold
+  and its reason, a rider's team and the requirements in force, Tax & terms › Hold (Toggle, Put on hold, Release, history, accepted quotes
+  waiting) and Customer PO number required per company (EditModeBar), the Requirements tab (`?tab=requirements`: add, replace, end), and
+  the contacts' lawful basis, consent, objection, access copy and erasure (the step-up on 403 `stepUp`; 409 `privacy/PORTAL_USER` links
+  Portal access). The list's Rows ▾ Riders (people) = `?view=riders` (GET /parties `kind=PERSON`).
 - `src/portal/customer/account/` — the customer's Account (B-W2b-196, SCR-188, `/p/<party>/account`; catalogue
   `portal-account`): `AccountRoute.tsx` (the gate: a customer with portal.colleagues.view), `AccountPage.tsx` (the container:
   each card reads on its own; the profile draft with ⌘S and the frame's unsaved guard; delivery addresses and company data;
