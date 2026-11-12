@@ -90,7 +90,8 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
       // B-W2a-59: Planning settings reads with planning.view too.
       // B-W2a-70: Capacity & load and Exceptions read with planning.view too. B-W2b-132: Leather & cut plan too.
       // B-W2b-263: Time & action (Planning › Dates) reads with planning.view too.
-      ['planning', ['planning-mrp', 'planning-leather', 'planning-board', 'planning-capacity', 'planning-allocation', 'planning-exceptions', 'planning-milestones', 'planning-settings-page']],
+      // B-W2b-339: Long range › Demand & forecast and Master schedule & S&OP read with planning.view too.
+      ['planning', ['planning-mrp', 'planning-leather', 'planning-board', 'planning-capacity', 'planning-allocation', 'planning-exceptions', 'planning-milestones', 'planning-demand', 'planning-mps', 'planning-settings-page']],
       // B-W2a-56: Subcontract orders read with purchasing.view too; B-W2a-63: Returns & claims too; B-W2b-347: RFQs & sourcing too.
       ['purchasing', ['purchasing-requests', 'purchasing-orders', 'purchasing-subcontracting', 'purchasing-sourcing', 'purchasing-claims']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking', 'warehouse-transfers']],
