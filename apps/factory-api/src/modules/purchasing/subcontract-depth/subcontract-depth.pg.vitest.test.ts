@@ -272,15 +272,14 @@ describe('the kit out, partial returns by bundle (SCM-145) and the workshop’s 
   })
 
   it('reads the workshop’s kit check and what its send-back announces', async () => {
-    let answer = await ok('buyer', 'POST', url(order.id, '/workshop/accept'), { version: (await fresh()).version, name: 'Rosa (made-up)' })
-    answer = await ok('buyer', 'POST', url(order.id, '/workshop/kit'), { version: answer.job.version, lines: [{ kitLineId, quantity: '12.4', note: 'Short by 20 cm on arrival (made-up).' }] })
-    answer = await ok('buyer', 'POST', url(order.id, '/workshop/returns'), {
-      version: answer.job.version,
-      quantities: [{ operationId: order.operations[0].id, bundleId: bundles[0]!.id, finished: 2 }],
-      materialBack: [{ kitLineId, quantity: '2' }],
-      parcels: 1,
-      expectedDate: TODAY,
-    })
+    // Set-up: the workshop's kit check and its send-back notice as B-W2b-176's acts write them (the live check walks those
+    // routes; this test app has no office sign-in, which their links need).
+    await admin(`UPDATE "SubcontractKitLine" SET "receivedByWorkshopAt" = now(), "receivedByWorkshopQuantity" = 12.4, "receivedByWorkshopNote" = 'Short by 20 cm on arrival (made-up).' WHERE id = $1`, [kitLineId])
+    await admin(
+      `INSERT INTO "SubcontractReturnNotice" (id, "tenantId", "siteId", "workOrderId", "partyId", "subcontractOrderId", seq, quantities, "materialBack", parcels, "expectedDate", "announcedByName", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, 1, $7::jsonb, $8::jsonb, 1, $9::date, 'Rosa (made-up)', now())`,
+      [newId(), A.tenant, A.siteA1, seed.production.workOrderId, A.P2, order.id, JSON.stringify([{ subcontractOperationId: order.operations[0].id, bundleId: bundles[0]!.id, finished: 2, scrapped: 0 }]), JSON.stringify([{ kitLineId, quantity: '2.0000' }]), TODAY],
+    )
     const line = (await ok('buyer', 'GET', url(order.id, '/balance'))).lines[0]
     expect(line).toMatchObject({ checkedByWorkshop: { quantity: '12.4000' }, short: '-0.2000', announcedBack: '2.0000' })
     expect(line.flags.map((flag: Json) => flag.flag)).toEqual(['SHORT_AT_WORKSHOP'])
