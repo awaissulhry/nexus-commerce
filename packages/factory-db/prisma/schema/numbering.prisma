@@ -168,6 +168,11 @@ enum NumberKind {
   /// W2b-5 wave 37/44: an inquiry's number (INQ-…; sales-intake.prisma Inquiry.number). An office document kind: the API
   /// numbers it when it is made.
   INQUIRY
+  /// W2b-5 wave 43/44: a service case's number (SVC-…; service.prisma ServiceCase.number) and a product-safety report's
+  /// (PSR-…; ProductSafetyReport.number). Office document kinds: the API numbers them when they are made (a report from the
+  /// public page or the portal in the tenant's system context).
+  SERVICE_CASE
+  SAFETY_REPORT
 }
 
 enum NumberReset {

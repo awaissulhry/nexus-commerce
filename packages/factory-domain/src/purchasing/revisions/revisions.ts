@@ -112,6 +112,9 @@ export function changeProblem(status: PurchaseOrderStatus): string | null {
       return null
     case 'DRAFT':
       return 'The order is a draft: change it and send it.'
+    // W2b-5 (B-W2b-285): its terms are frozen while the yes is awaited.
+    case 'PENDING_APPROVAL':
+      return 'The order waits for a yes before it is sent: withdraw the request to change it.'
     case 'CHANGES_PROPOSED':
       return "The supplier proposed changes: accept them, refuse them, or counter-propose (a new revision from what you asked)."
     case 'PARTLY_RECEIVED':

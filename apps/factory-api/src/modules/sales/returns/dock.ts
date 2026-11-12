@@ -25,7 +25,7 @@ import { asTenantSystem } from '../../production/bundles/codes'
 import { defaultPlaceOf, finishedPlaces } from '../../inventory/finished/post'
 import { actorIdOf, dockReturn } from './access'
 import { lockReturn, touchReturn } from './rma'
-import { asDay, FLOOR_LINE_COLUMNS, FLOOR_RMA_COLUMNS, lineKeyOf, lineMoves, LINE_RECORD, photoCounts, RECEIPT_COLUMNS, RECEIPT_RECORD, soldFactsOf, type FloorRmaRow, type Reader } from './store'
+import { asDay, FLOOR_LINE_COLUMNS, FLOOR_RMA_COLUMNS, lineKeyOf, lineMoves, LINE_RECORD, photoCounts, RECEIPT_COLUMNS, RECEIPT_RECORD, soldFactsOf, w2aDispositionOf, type FloorRmaRow, type Reader } from './store'
 
 /**
  * The dock (B-W2a-43; LOG-114 "Receive a return at the dock", QHS-117 "Return inspection and grading"; design
@@ -147,7 +147,7 @@ async function dockView(db: Reader, rma: FloorRmaRow, garments: Garments) {
         photos: linePhotos.get(line.id) ?? 0,
         suggestedOutcome: graded ? suggestedOutcome(graded) : null,
         restockHeld: graded ? restockHeldWords(graded) : null,
-        disposition: line.disposition,
+        disposition: w2aDispositionOf(line.disposition),
         goodsOutcome: line.goodsOutcome,
         /** Where the goods go: the decided outcome's place, else (received) the inspection place. */
         place: stock[0]?.locationCode ?? (line.receivedQuantity > 0 && line.disposition === null ? (places.inspection?.code ?? null) : null),

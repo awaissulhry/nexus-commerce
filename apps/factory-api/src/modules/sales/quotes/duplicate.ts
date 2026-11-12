@@ -3,7 +3,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { usableForOrders } from '@nexus/factory-domain/parties/address-approval'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
-import { addDays, piecesOf, priceBasisOf, priceText, versionTaxModeOf, type DepositKind, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
+import { addDays, piecesOf, priceBasisOf, priceText, versionTaxModeOf, type DepositKind, type SalesLineKind, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { quoteDefaultsOf } from '@nexus/factory-domain/sales/terms/terms'
 import type { PriceBasis } from '@nexus/factory-domain/tax/vat-summary'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -51,7 +51,7 @@ export interface Dropped {
 
 interface SourceLine {
   readonly seq: number
-  readonly kind: 'SIZE_GRID' | 'MADE_TO_MEASURE'
+  readonly kind: SalesLineKind
   readonly styleId: string
   readonly colourwayId: string
   readonly description: string | null
@@ -171,6 +171,11 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
   for (const line of [...source.lines].sort((a, b) => a.seq - b.seq)) {
     if (line.kind === 'MADE_TO_MEASURE') {
       dropped.push({ seq: line.seq, size: null, reason: 'Made-to-measure comes later: the unit is not copied.' })
+      continue
+    }
+    // W2b-5 (B-W2b-280): a fee line keeps its fee kind, which this copy does not write (B-W2b-330's pricing does).
+    if (line.kind === 'FEE') {
+      dropped.push({ seq: line.seq, size: null, reason: 'A fee is not copied: add it again if it is due.' })
       continue
     }
     let target: Awaited<ReturnType<typeof lineTarget>>

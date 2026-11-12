@@ -164,6 +164,7 @@
         },
         "PURCHASE_ORDERS": {
           "DRAFT": "Bozza",
+          "PENDING_APPROVAL": "In attesa di approvazione",
           "SENT": "Inviati",
           "CHANGES_PROPOSED": "Modifiche proposte",
           "CONFIRMED": "Confermati",

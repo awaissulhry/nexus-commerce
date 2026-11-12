@@ -54,6 +54,9 @@ export function customerStatusOf(status: SalesOrderStatus, shipments: LeftShipme
     case 'SHIPPED':
     case 'CLOSED':
       return shipments.left > 0 && shipments.delivered >= shipments.left ? 'DELIVERED' : 'SHIPPED'
+    // W2b-5 (B-W2b-281): an order waiting for the office's yes is, to the customer, still requested.
+    case 'PENDING_APPROVAL':
+      return 'REQUESTED'
   }
 }
 
