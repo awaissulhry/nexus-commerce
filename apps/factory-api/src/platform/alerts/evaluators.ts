@@ -12,6 +12,8 @@ import { invoicedOf, readDdts, shippedOf } from '../../modules/invoicing/from-sh
 import { readSubjects } from '../../modules/quality/holds/store'
 // B-W2b-42: a site's people close to or over a working-time limit.
 import { workingTimeFindings } from '../../modules/people/limits/warnings'
+// B-W2b-314: a material below its planning minimum at a site.
+import { lowStockFindings } from '../../modules/inventory/low-stock/alerts'
 
 /**
  * What each kind of rule watches (B-W2a-33; factory-domain alerts/kinds), read in the tenant's system scope: the records a
@@ -254,6 +256,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   INTEGRATION_FAILING: integrationFailing,
   // B-W2b-42: the working-time limits (one alert per site and limit, naming nobody).
   WORKING_TIME_LIMIT: workingTimeFindings,
+  // B-W2b-314: the low-stock alerts (one per material, colour and site; off where the warehouse rules switch them off).
+  LOW_STOCK: lowStockFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

@@ -11,6 +11,7 @@ import { checkTaxIdentity, compactTaxNumber, identityAt, type TaxIdentityFields 
 import { viesStanding } from '@nexus/factory-domain/parties/vies'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { assertRequiredDocuments } from '../../platform/files/required/check'
+import { approveOnActivation, assertSupplierRoleKept } from '../purchasing/suppliers-depth/parties-hooks'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -246,6 +247,8 @@ export async function updateParty(caller: CommandCaller, partyId: string, body: 
       if (!change.ok) throw invalid(prefixed(change.issues))
       const next = change.party
       if (change.changed.includes('code') && (await codeTaken(tx, next.code, partyId))) throw codeConflict(next.code)
+      // B-W2b-311: a party with supplier kinds or a supplier status keeps a supplier role (B-W2b-287's gap), in words.
+      if (change.changed.includes('roles')) await assertSupplierRoleKept(tx, partyId, next.tradeName ?? next.legalName, current.roles, next.roles)
       const changes = Object.fromEntries(change.changed.map((field) => [field, next[field]])) as Partial<PartyFields>
       await tx.party.update({ where: { id: partyId }, data: { ...changes, roles: changes.roles ? [...changes.roles] : undefined }, select: { id: true } })
       const before = Object.fromEntries(change.changed.map((field: PartyField) => [field, current[field]]))
@@ -301,6 +304,8 @@ export async function moveParty(caller: CommandCaller, partyId: string, move: Pa
       // B-W2b-189 (COL-048, B-W2b-177's seam): the documents the company's rules need before a party is active — a BLOCK rule
       // not met refuses the move in words; the WARN ones not met are kept in the audit row.
       const documents = spec.to === 'ACTIVE' ? await assertRequiredDocuments(tools, { recordType: 'Party', recordId: partyId, toStatus: 'ACTIVE' }) : null
+      // B-W2b-311 (SCM-008): activating a prospect approves it as a supplier too (its supplier status was PROSPECT).
+      if (move === 'activate') await approveOnActivation(tools, partyId)
       tools.audit({ recordType: 'Party', recordId: partyId, companyId: seen.companyId, before: { status: from }, after: { status: spec.to, ...(documents && documents.sentences.length > 0 ? { documentWarnings: documents.sentences } : {}) }, ...(reason ? { reason } : {}) })
       tools.emit({ type: 'party.status_changed', subject: partyId, companyId: seen.companyId, payload: { partyId, code: seen.code, from, status: spec.to } })
       const view = await viewInTx(tx, partyId, tools.now)

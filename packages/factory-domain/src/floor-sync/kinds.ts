@@ -83,6 +83,14 @@ export const FLOOR_SYNC_KINDS = [
   // B-W2b-226: a spec problem reported from the floor (PRD-259; design floor.instructions "Report a spec problem"): the request
   // waits on the tablet when offline; its photo goes up once the queue answered with the request's id.
   'product.change.report',
+  // B-W2b-292: moves on the floor (design floor.move "Works offline"; SCM-202, SCM-218, SCM-274): a put-away and a move between
+  // bins by their two scans (what, then the place's label), and a warehouse task taken, given back or done (a quarantine move
+  // by the scan of the quarantine place). Applied as the stock and the task stand when they arrive.
+  'inventory.putAway',
+  'inventory.binMove',
+  'inventory.task.take',
+  'inventory.task.giveBack',
+  'inventory.task.done',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -153,6 +161,12 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.instruction.ack': { kind: 'production.instruction.ack', permission: 'production.scan', numbers: null, what: 'Say a work instruction was seen' },
   // B-W2b-226: every floor role reports a spec problem.
   'product.change.report': { kind: 'product.change.report', permission: 'floor.work', numbers: null, what: 'Report a spec problem' },
+  // B-W2b-292: a move is the transfers' right; a task step is anyone's at the site (the module asks the task's act's right again).
+  'inventory.putAway': { kind: 'inventory.putAway', permission: 'inventory.transfer', numbers: null, what: 'Put goods away into a bin (two scans)' },
+  'inventory.binMove': { kind: 'inventory.binMove', permission: 'inventory.transfer', numbers: null, what: 'Move goods between bins (two scans)' },
+  'inventory.task.take': { kind: 'inventory.task.take', permission: 'floor.work', numbers: null, what: 'Take a warehouse task' },
+  'inventory.task.giveBack': { kind: 'inventory.task.giveBack', permission: 'floor.work', numbers: null, what: 'Give a warehouse task back' },
+  'inventory.task.done': { kind: 'inventory.task.done', permission: 'floor.work', numbers: null, what: 'Mark a warehouse task done' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

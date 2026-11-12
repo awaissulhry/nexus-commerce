@@ -1,0 +1,179 @@
+// The made-to-measure office (W2b-5, schema wave 44/44, B-W2b-297; features SAL-054, SAL-291, SAL-292, SAL-297, SAL-303,
+// PRD-017; design sales.mtm "Book a fitting", "Fittings", "Factory review", "MTM worksheet and order form"): what the
+// office does around a rider's measurement profile once made-to-measure starts. Built switched OFF (GATE-MTM, Owner answer
+// Q1 of 11-10): no style is made to measure until a person flags it (product.prisma Style.mtmAllowed, false by default),
+// and a template's rules stay off (MeasurementTemplate.rulesOn) until its first made-to-measure order.
+//
+//   Appointment     a fitting, a showroom visit or a measuring session with a customer (SAL-054): the customer (a private
+//                   rider, a team, a dealer or a brand), the rider when known (a contact, a name, the profile revision it is
+//                   about), when and until when, where, with whom (an office person of ours or someone outside, by name),
+//                   BOOKED → DONE | MISSED | CANCELLED, the .ics invite and the reminder sent to the rider (e-mail through
+//                   the FAKE provider until the Owner's switch).
+//   FittingResult   what came out of a fitting (SAL-297): of an appointment, of a made-to-measure order line or both, the
+//                   rider's profile revision the unit was made to, per point of measure the change asked (signed, in the
+//                   point's unit), the verdict OK | ALTER | REMAKE, the words; photos are StoredFile rows of the result. An
+//                   ALTER opens an alteration (returns.prisma RepairOrder of kind ALTERATION, named once) and says how many
+//                   days it adds (the order line's date moves by them: planning-depth.prisma PromiseRecord); an ALTER or a
+//                   REMAKE may lead to a new profile revision (named once).
+//
+// The factory review of a revision (SAL-292: WAITING → CONFIRMED | NEED_MORE, who, when, the words) and who measured and
+// where (SAL-291) are columns of parties.prisma MeasurementProfile; the worksheet and order form (SAL-303) a
+// GeneratedDocument of kind MTM_WORKSHEET of the profile (gendocs.prisma); "a made-to-measure quote or order line names a
+// style flagged made-to-measure" (PRD-017) a guard on sales.prisma QuoteLine and SalesOrderLine.
+//
+// apps/factory-api's modules/sales/mtm (B-W2b-358) and modules/sales/fittings (B-W2b-360) write these tables, always through
+// command(); the hand-written …_mtm_office_w2b_guards migration holds their rules for every login, the owner included.
+//
+// Who sees what (ownership/mtm-office.json): the office only. A rider gets the invite and the reminder by e-mail; no portal or
+// link page shows an appointment or a fitting result, and the floor reads none of them. Body measures and their changes
+// are personal data of the rider (GDPR art. 13 notice on the profile): office only, on the record.
+
+/// What an appointment is for (SAL-054).
+enum AppointmentKind {
+  /// Trying a made-to-measure unit on (a fitting of a profile revision): its outcome is a FittingResult.
+  FITTING
+  /// A visit to the showroom (choosing a style, colours, options).
+  SHOWROOM
+  /// Taking the rider's measurements (its outcome is a profile revision).
+  MEASURING
+}
+
+/// Where an appointment stands: BOOKED → DONE | MISSED | CANCELLED (final).
+enum AppointmentStatus {
+  BOOKED
+  /// It took place.
+  DONE
+  /// The rider did not come.
+  MISSED
+  CANCELLED
+}
+
+/// A fitting, a showroom visit or a measuring session with a customer (SAL-054; design sales.mtm "Book a fitting":
+/// date and time, place, fitter, the .ics invite to the rider). Changes while BOOKED (moved, another place or person);
+/// DONE, MISSED or CANCELLED is final, but its notes and, once, the profile revision it led to. Never deleted.
+model Appointment {
+  id                   String            @id @db.Uuid
+  tenantId             String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose showroom, fitter or event it is. Never changes.
+  companyId            String            @db.Uuid
+  /// The customer: a private rider (a PERSON party), or the team, dealer or brand the rider is with. Never changes.
+  partyId              String            @db.Uuid
+  /// The rider, when known: a contact of the party (role RIDER), or the name as told (1 to 200, one line).
+  contactId            String?           @db.Uuid
+  riderName            String?
+  /// The rider's measurement profile revision it is about (of the party); exactly for a FITTING; a MEASURING session
+  /// names the revision it led to, once it exists.
+  measurementProfileId String?           @db.Uuid
+  /// Never changes.
+  kind                 AppointmentKind
+  /// When it starts and ends (ends after it starts, at most 24 hours later).
+  startsAt             DateTime          @db.Timestamptz(3)
+  endsAt               DateTime          @db.Timestamptz(3)
+  /// Where, in words (1 to 200, one line): "Showroom", "Mugello paddock", the dealer's shop.
+  place                String
+  /// With whom: an office person of ours (the fitter), or someone outside by name (a dealer's fitter; 1 to 200, one
+  /// line); one or both; a DONE appointment says who was there.
+  withUserId           String?           @db.Uuid
+  withName             String?
+  status               AppointmentStatus @default(BOOKED)
+  /// When it left BOOKED (DONE and MISSED once it had started), and who set it (null: the system); set exactly then.
+  closedAt             DateTime?         @db.Timestamptz(3)
+  closedById           String?           @db.Uuid
+  /// CANCELLED: why (1 to 500), exactly then.
+  cancelReason         String?
+  /// Notes for the office (1 to 4000, line breaks allowed).
+  notes                String?
+  /// When the .ics invite was last sent to the rider, and when the reminder was (FAKE e-mail until the Owner's switch).
+  inviteSentAt         DateTime?         @db.Timestamptz(3)
+  reminderSentAt       DateTime?         @db.Timestamptz(3)
+  version              Int               @default(1)
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?           @db.Uuid
+  /// Who changed it last ("Changed by").
+  updatedById          String?           @db.Uuid
+
+  company            Company             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party              Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  contact            PartyContact?       @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementProfile MeasurementProfile? @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  withUser           User?               @relation("AppointmentWithUser", fields: [tenantId, withUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  fittingResults     FittingResult[]
+
+  // The target of the fitting results' reference: a result of the appointment's own customer.
+  @@unique([tenantId, partyId, id])
+  // "Fittings this week", the calendar of a fitter.
+  @@index([tenantId, startsAt])
+  // A rider profile's Fittings tab, "Next fitting".
+  @@index([tenantId, measurementProfileId])
+}
+
+/// What a fitting found.
+enum FittingVerdict {
+  /// It fits: nothing to change.
+  OK
+  /// It needs an alteration (the points to change, an alteration order).
+  ALTER
+  /// It cannot be altered: a new unit is made (often to a new revision of the measurements).
+  REMAKE
+}
+
+/// What came out of a fitting (SAL-297; design sales.mtm "Fittings": outcome fits / alteration needed, the alteration sent
+/// back with the date moved by its time): of a FITTING appointment, of a made-to-measure order line, or both; the profile
+/// revision the unit was made to; per point the change asked; the verdict and its words. Written once; afterwards only the
+/// alteration it opened and the new revision it led to are named, once each. Never deleted. Photos: StoredFile rows of
+/// the result (recordType "FittingResult", kind PHOTO).
+model FittingResult {
+  id                   String         @id @db.Uuid
+  tenantId             String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company of the appointment and of the order line. Never changes.
+  companyId            String         @db.Uuid
+  /// The customer (the appointment's, the order line's and the profile's). Never changes.
+  partyId              String         @db.Uuid
+  /// The FITTING appointment it came from (not cancelled or missed); and/or the MADE_TO_MEASURE order line fitted (its
+  /// profile is the profile below). At least one.
+  appointmentId        String?        @db.Uuid
+  salesOrderLineId     String?        @db.Uuid
+  /// The rider's profile revision the unit was made to.
+  measurementProfileId String         @db.Uuid
+  /// When the fitting took place (not in the future, not before the profile was measured).
+  fittedAt             DateTime       @db.Timestamptz(3)
+  verdict              FittingVerdict
+  /// Per point of measure the change asked, keyed by a point code of the profile's measurements, in that point's unit:
+  /// { "<point code>": { "change": "+2.0", "unit": "cm", "note": "…" } }; the change a signed decimal string (not zero, up
+  /// to 4 digits and 2 decimals), the note optional (1 to 500, one line); at most 60 points. OK: none; ALTER: one or more,
+  /// or the words.
+  pointChanges         Json           @default("{}")
+  /// What was seen and agreed (1 to 4000, line breaks allowed); required for a REMAKE (why it cannot be altered) and for an
+  /// ALTER without a point.
+  notes                String?
+  /// ALTER: the days the alteration adds to the unit's date (1 to 365), when known.
+  alterationDays       Int?
+  /// ALTER: the alteration it opened (a RepairOrder of kind ALTERATION of the same company and customer), named once;
+  /// one result per alteration.
+  alterationRepairId   String?        @db.Uuid
+  /// ALTER or REMAKE: the new profile revision it led to (the same rider and garment type, a later revision), named once.
+  newProfileId         String?        @db.Uuid
+  version              Int            @default(1)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office person who recorded it.
+  createdById          String?        @db.Uuid
+
+  company            Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party              Party              @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  appointment        Appointment?       @relation(fields: [tenantId, partyId, appointmentId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrderLine     SalesOrderLine?    @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementProfile MeasurementProfile @relation("FittingResultProfile", fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  alterationRepair   RepairOrder?       @relation("FittingResultAlteration", fields: [tenantId, partyId, alterationRepairId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  newProfile         MeasurementProfile? @relation("FittingResultNewProfile", fields: [tenantId, partyId, newProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One fitting result per alteration order.
+  @@unique([tenantId, alterationRepairId])
+  // A rider profile's Fittings tab; an appointment's and an order line's results.
+  @@index([tenantId, measurementProfileId])
+  @@index([tenantId, appointmentId])
+  @@index([tenantId, salesOrderLineId])
+}

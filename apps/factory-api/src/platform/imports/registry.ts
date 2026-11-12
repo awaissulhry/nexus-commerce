@@ -29,6 +29,8 @@ import { pointsOfMeasureImportAdapter } from '../../modules/product/measures/imp
 import { gradeRulesImportAdapter } from '../../modules/product/grading/importer'
 // W2b (B-W2b-250): the restricted substance list and the rules over it (an AFIRM RSL, the ECHA Candidate List, a brand's RSL).
 import { substanceRulesImportAdapter, substancesImportAdapter } from '../../modules/compliance/substances/importer'
+// W2b (B-W2b-311): a supplier's price list (Purchasing › Supplier › Items & prices › Import price list).
+import { supplierPricesImportAdapter } from '../../modules/purchasing/suppliers-depth/import-prices'
 // W2b (B-W2b-325): the prices of price lists (Sales › Price lists › Import prices), into each list's draft version.
 import { priceListImportAdapter } from '../../modules/sales/pricing-depth/importer'
 
@@ -137,6 +139,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   // B-W2b-250
   substancesImportAdapter,
   substanceRulesImportAdapter,
+  // B-W2b-311
+  supplierPricesImportAdapter,
   // B-W2b-325
   priceListImportAdapter,
 ])

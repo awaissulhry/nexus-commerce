@@ -69,6 +69,8 @@ export interface WriteOffInput {
   readonly lines: readonly WriteOffLineInput[]
   /** B-W2a-F8: the reason a write-off inside a SOFT-locked month is posted anyway. */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** B-W2b-314 (SCM-196): the day it counts on in the books, apart from when it happened. */
+  readonly postingDate?: string | undefined
 }
 
 const prefixed = (path: string) => `body/${path}`
@@ -163,6 +165,7 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
       key,
       issuePath: (index) => prefixed(`lines/${lineOf[index]}`),
       periodLockOverride: body.periodLockOverride,
+      postingDate: body.postingDate,
     })
     for (const hide of hides.values()) {
       await tx.hide.update({ where: { id: hide.id }, data: { state: 'SCRAPPED', version: { increment: 1 } }, select: { id: true } })

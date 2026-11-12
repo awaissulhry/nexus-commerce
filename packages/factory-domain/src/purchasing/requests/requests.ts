@@ -208,7 +208,13 @@ export interface HoldFacts {
   /** REORDER: the stock is still at or below the reorder point (below the minimum). */
   readonly needed: boolean
   readonly material: { readonly code: string; readonly active: boolean }
-  readonly supplier: { readonly name: string; readonly roles: readonly PartyRole[]; readonly status: PartyStatus } | null
+  readonly supplier: {
+    readonly name: string
+    readonly roles: readonly PartyRole[]
+    readonly status: PartyStatus
+    /** W2b (B-W2b-311, SCM-008): why no new order goes to it as its supplier status stands (on hold, blocked, inactive). */
+    readonly newOrderProblem?: string | null | undefined
+  } | null
   /** The supplier is one of the material's approved sources for the need (or the material has none). */
   readonly approved: boolean
 }
@@ -226,6 +232,7 @@ export function holdOf(facts: HoldFacts): RequestHold | null {
   if (!isPurchaseParty(supplier.roles)) return { code: 'NOT_A_SUPPLIER', message: `${supplier.name} is not a supplier: pick an approved source.` }
   if (supplier.status === 'BLOCKED') return { code: 'SUPPLIER_BLOCKED', message: `${supplier.name} is blocked: pick another approved source.` }
   if (supplier.status === 'ARCHIVED') return { code: 'SUPPLIER_ARCHIVED', message: `${supplier.name} is archived: pick another approved source.` }
+  if (supplier.newOrderProblem) return { code: 'SUPPLIER_BLOCKED', message: supplier.newOrderProblem }
   if (!facts.approved) return { code: 'NOT_APPROVED', message: `${supplier.name} is not an approved source of ${facts.material.code}: pick one of its sources, or add this supplier to them first.` }
   return null
 }
