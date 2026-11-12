@@ -1,0 +1,603 @@
+{
+  "common": {
+    "dismiss": "Chiudi",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "working": "In corso…",
+    "cancel": "Annulla",
+    "retry": "Riprova",
+    "clearFilters": "Togli i filtri"
+  },
+  "live": {
+    "connecting": "connessione in corso",
+    "live": "in tempo reale",
+    "offline": "offline — le modifiche aspettano di essere inviate"
+  },
+  "noAccess": {
+    "title": "Non hai accesso alle richieste",
+    "body": "Le vendite vedono e rispondono alle richieste (Vendite › Richieste). Chiedi all'amministratore il ruolo vendite se ti servono."
+  },
+  "list": {
+    "intro": "Nuove richieste e RFQ da e-mail, portale, telefono, fiera o visita, finché diventano un preventivo. Prima le più vecchie in attesa.",
+    "new": "Nuova richiesta",
+    "more": "Altro",
+    "rulesLater": "Regole di assegnazione",
+    "rulesLaterHint": "Arriva più avanti: per ora le richieste si assegnano a mano",
+    "tableLabel": "Richieste",
+    "search": "Cerca numero, cliente, richiesta…",
+    "rows": "Righe",
+    "sourceLabel": "Come è arrivata",
+    "allSources": "Ogni provenienza",
+    "fromLabel": "Da",
+    "allFrom": "Ogni cliente e potenziale cliente",
+    "prospectsOnly": "Solo potenziali clienti (non ancora clienti)",
+    "count_one": "{count} richiesta",
+    "count_other": "{count} richieste",
+    "countCapped": "Le prime {count} richieste: restringi i filtri per vedere le altre",
+    "countReading": "Lettura in corso…",
+    "failed": "Impossibile caricare le richieste",
+    "noMatch": "Nessuna riga con questi filtri",
+    "noMatchBody": "Cambia o togli i filtri per vedere altre richieste.",
+    "empty": "Ancora nessuna richiesta",
+    "emptyBody": "Nessuna richiesta. Una mail di un cliente diventa una richiesta da Posta da smistare (\"Crea una richiesta\"); una telefonata o una visita con Nuova richiesta.",
+    "foot": "L’attesa conta il tempo lavorativo sul calendario della società; oltre un giorno lavorativo diventa rossa. Un elenco non nomina mai una persona: \"Tu\" o \"Un collega\".",
+    "copied_one": "{count} numero copiato",
+    "copied_other": "{count} numeri copiati",
+    "withheldPrice": "serve il permesso sui prezzi"
+  },
+  "col": {
+    "number": "Richiesta",
+    "from": "Da",
+    "summary": "Sintesi",
+    "source": "Provenienza",
+    "products": "Prodotti richiesti",
+    "sizes": "Quantità per taglia",
+    "pieces": "Pezzi",
+    "targetPrice": "Prezzo obiettivo",
+    "wantedDate": "Data desiderata",
+    "waiting": "In attesa",
+    "assignedTo": "Assegnata a",
+    "status": "Stato",
+    "more": "Azioni"
+  },
+  "row": {
+    "menu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri la pagina intera in una nuova scheda",
+    "copy": "Copia il numero"
+  },
+  "keys": {
+    "new": "Nuova richiesta",
+    "quote": "Crea il preventivo (la richiesta evidenziata o selezionata, o quella aperta)",
+    "assign": "Assegna",
+    "decline": "Rifiuta"
+  },
+  "tile": {
+    "NEW": "Nuove",
+    "WAITING_US": "Ferme da noi da oltre 1 giorno lavorativo",
+    "WAITING_CUSTOMER": "In attesa del cliente",
+    "QUOTED_THIS_WEEK": "Preventivate questa settimana",
+    "MINE": "Mie",
+    "OPEN": "Aperte (tutte quelle in attesa)",
+    "QUOTED": "Preventivate",
+    "DECLINED": "Rifiutate",
+    "LOST": "Perse",
+    "ALL": "Tutte",
+    "hint": {
+      "NEW": "Ancora di nessuno",
+      "WAITING_US": "Nuove o in lavorazione, sul calendario lavorativo",
+      "WAITING_CUSTOMER": "Abbiamo chiesto più informazioni",
+      "QUOTED_THIS_WEEK": "Diventate preventivo da lunedì"
+    },
+    "failed": "Impossibile contare",
+    "partial": "Contate sulle 1000 richieste aperte più vecchie"
+  },
+  "chip": {
+    "label": "Filtri",
+    "tile": "Righe: {tile}",
+    "source": "Provenienza: {source}",
+    "prospect": "Da: solo potenziali clienti",
+    "party": "Da: {name}",
+    "partyUnknown": "Da: un cliente",
+    "q": "Ricerca: “{q}”",
+    "clear": "Togli il filtro {what}",
+    "clearAll": "Togli tutti"
+  },
+  "notice": {
+    "label": "Avvisi",
+    "more_one": "Ancora {count} avviso",
+    "more_other": "Ancora {count} avvisi",
+    "fewer": "Mostra un solo avviso",
+    "partial": "Sono aperte più di 1000 richieste: \"Ferme da noi da oltre 1 giorno lavorativo\" conta solo le 1000 più vecchie.",
+    "capped": "L'elenco mostra le prime {count} richieste di questi filtri: restringili per vedere le altre.",
+    "prospects_one": "{count} richiesta aperta viene da un potenziale cliente: abbinala a un cliente (Richiesta) prima del preventivo.",
+    "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Richiesta) prima del preventivo."
+  },
+  "status": {
+    "NEW": "Nuova",
+    "ASSIGNED": "In lavorazione",
+    "NEED_INFO": "Servono informazioni",
+    "QUOTED": "Preventivata",
+    "DECLINED": "Rifiutata",
+    "LOST": "Persa"
+  },
+  "source": {
+    "OFFICE": "Ufficio",
+    "MAIL": "E-mail",
+    "PORTAL": "Portale",
+    "PHONE": "Telefono",
+    "FAIR": "Fiera"
+  },
+  "waiting": {
+    "us": "Ferma da noi",
+    "usOverdue": "Ferma da noi da oltre 1 giorno",
+    "customer": "In attesa del cliente"
+  },
+  "time": {
+    "minutes": "{n} min",
+    "hours": "{n} h lavorative",
+    "days": "{d} g lavorativi",
+    "daysHours": "{d} g lavorativi {h} h"
+  },
+  "assignee": {
+    "me": "Tu",
+    "other": "Un collega",
+    "nobody": "Nessuno"
+  },
+  "bulk": {
+    "reach_one": "{count} richiesta aperta",
+    "reach_other": "{count} richieste aperte",
+    "reachClosed": "{open} aperte · {closed} chiuse escluse",
+    "assign_one": "Assegna {count}",
+    "assign_other": "Assegna {count}",
+    "decline_one": "Rifiuta {count}",
+    "decline_other": "Rifiuta {count}",
+    "noneOpen": "Si possono assegnare o rifiutare solo le richieste aperte",
+    "tooMany": "Al massimo {max} richieste alla volta",
+    "subject_one": "{count} richiesta selezionata",
+    "subject_other": "{count} richieste selezionate",
+    "assigned_one": "{count} richiesta data a {name}",
+    "assigned_other": "{count} richieste date a {name}",
+    "assignedMe_one": "{count} richiesta ora è tua",
+    "assignedMe_other": "{count} richieste ora sono tue",
+    "unassigned_one": "{count} richiesta torna a nessuno",
+    "unassigned_other": "{count} richieste tornano a nessuno",
+    "declined_one": "{count} richiesta rifiutata ({reason})",
+    "declined_other": "{count} richieste rifiutate ({reason})"
+  },
+  "held": {
+    "right": "Il tuo ruolo non lo consente ({right})",
+    "offline": "Offline — aspetta che torni la connessione",
+    "offlineKept": "Offline — le modifiche restano su questa pagina",
+    "notNow": "Non possibile ora per questa richiesta"
+  },
+  "right": {
+    "sales": {
+      "inquiries": {
+        "manage": "gestire le richieste"
+      }
+    },
+    "quotes": {
+      "manage": "creare preventivi"
+    },
+    "email": {
+      "send": "inviare e-mail",
+      "triage": "smistare la posta"
+    },
+    "files": {
+      "upload": "aggiungere file"
+    }
+  },
+  "refusal": {
+    "CLOSED": "{number} è chiusa: si può cambiare solo la nota",
+    "SAME_ASSIGNEE": "{number} è già di questa persona",
+    "NOT_ASSIGNED": "{number} non è di nessuno",
+    "ALREADY_WAITING": "{number} aspetta già il cliente",
+    "NOT_WAITING": "{number} non aspetta il cliente",
+    "NEEDS_CUSTOMER": "{number} viene da un potenziale cliente: prima abbinala a un cliente (Richiesta) — il preventivo si fa per un cliente",
+    "OTHER_NEEDS_WORDS": "Scrivi perché viene rifiutata (il motivo è Altro)",
+    "MAIL_TAKEN": "Da questa mail è già stata creata {number}",
+    "QUOTE_TAKEN": "Questo preventivo è già stato creato da un’altra richiesta",
+    "MAIL_NOT_WAITING": "Solo una mail già letta (in Posta da smistare o in una conversazione) diventa una richiesta",
+    "other": "La fabbrica ha rifiutato questa modifica"
+  },
+  "problem": {
+    "unavailable": "Non si riesce a raggiungere la fabbrica. Riprova tra poco.",
+    "forbidden": "Il tuo ruolo non può leggerlo",
+    "notFound": "Non c’è più (o non in questa società)",
+    "signedOut": "Sei uscito: accedi di nuovo",
+    "contract": "La fabbrica ha risposto in un modo che questa pagina non legge: ricarica la pagina",
+    "rateLimited": "Troppe richieste insieme: aspetta un attimo e riprova",
+    "stale": "Qualcuno l’ha appena cambiata: è stata riletta — controlla e riprova",
+    "staleSome": "Alcune di queste richieste sono appena cambiate: l’elenco è stato riletto — selezionale e riprova",
+    "invalid": "Qualcosa di scritto non va: guarda i campi qui sotto",
+    "writeForbidden": "Il tuo ruolo non può farlo"
+  },
+  "field": {
+    "request": "Cosa chiedono",
+    "wantedDate": "Data desiderata",
+    "targetUnitPrice": "Prezzo obiettivo",
+    "currency": "Valuta",
+    "note": "Nota",
+    "techPackFileIds": "I file del tech pack",
+    "techPackVersion": "La versione del tech pack",
+    "partyId": "Il cliente",
+    "contactId": "Il contatto",
+    "prospect": "Il potenziale cliente (nome, azienda, e-mail, telefono)",
+    "lines": "Le righe richieste",
+    "lineAt": "Riga {n}",
+    "assigneeId": "A chi viene data",
+    "receivedAt": "Quando è arrivata",
+    "reason": "Il motivo",
+    "items": "Le richieste selezionate",
+    "customerRef": "Il riferimento del cliente",
+    "companyId": "La società",
+    "other": "Un altro campo"
+  },
+  "tab": {
+    "request": "Richiesta",
+    "files": "File e specifiche",
+    "quote": "Preventivo",
+    "activity": "Attività"
+  },
+  "record": {
+    "tabs": "Parti della richiesta",
+    "noun": "richiesta",
+    "reading": "Lettura della richiesta…",
+    "openFull": "Apri la pagina intera",
+    "more": "Altre azioni",
+    "copyNumber": "Copia il numero",
+    "copied": "{number} copiato",
+    "back": "Richieste",
+    "backToList": "Torna alle richieste",
+    "notFoundTitle": "Richiesta non trovata",
+    "notFoundBody": "Questa richiesta non c’è più, o è di un’altra società o di un cliente che non vedi.",
+    "failedTitle": "Impossibile caricare la richiesta",
+    "offline": "Offline — la richiesta come letta l’ultima volta; Applica e ogni azione aspettano la connessione",
+    "stale": "Qualcuno ha cambiato questa richiesta alle {time}: ricarica per vederla (quello che hai scritto resta fino ad allora)",
+    "reload": "Ricarica",
+    "withMe": "Ce l’hai tu",
+    "with": "Ce l’ha {name}",
+    "withNobody": "Ancora di nessuno"
+  },
+  "verb": {
+    "quote": "Crea preventivo",
+    "quoteKey": "Crea preventivo (Q)",
+    "assign": "Assegna",
+    "assignKey": "Assegna… (A)",
+    "decline": "Rifiuta",
+    "declineKey": "Rifiuta… (D)",
+    "askInfo": "Chiedi più informazioni",
+    "askInfoHint": "Aspetta il cliente; scrivigli in Attività",
+    "resume": "Il cliente ha risposto",
+    "unassign": "Togli l’assegnazione (torna a nessuno)",
+    "lost": "Segna come persa…"
+  },
+  "done": {
+    "askInfo": "{number} aspetta il cliente: scrivigli qui in Attività",
+    "resume": "{number} torna da noi",
+    "unassign": "{number} torna a nessuno",
+    "assign": "{number} data a {name}",
+    "assignMe": "{number} ora è tua",
+    "decline": "{number} rifiutata ({reason})",
+    "messageSent": "Il messaggio è stato inviato a {to} (in Attività)",
+    "messageFailed": "Il messaggio non è stato inviato: riscrivilo in Attività",
+    "lost": "{number} segnata come persa",
+    "quote": "{quote} creato da {number}",
+    "quoteWarnings_one": "{quote} creato da {number}: {count} cosa da controllare sul preventivo",
+    "quoteWarnings_other": "{quote} creato da {number}: {count} cose da controllare sul preventivo",
+    "openQuote": "Apri {quote}"
+  },
+  "closed": {
+    "quoted": "Preventivata come {quote} il {when}",
+    "declined": "Rifiutata ({reason}) il {when}",
+    "lost": "Persa il {when}",
+    "by": "da {name}",
+    "noteOnly": "Una richiesta chiusa non cambia più: solo la sua nota."
+  },
+  "who": {
+    "title": "Chi chiede",
+    "customer": "Cliente",
+    "contact": "Contatto",
+    "noContact": "Nessun contatto",
+    "channel": "Come è arrivata",
+    "received": "Ricevuta",
+    "createdBy": "Registrata da",
+    "createdByOn": "{name}, {when}",
+    "prospectTag": "Potenziale cliente",
+    "erased": "Potenziale cliente cancellato (i dati personali sono stati rimossi)",
+    "unknown": "Mittente sconosciuto — abbinalo a un cliente",
+    "unknownBody": "Il preventivo si fa per un cliente: abbina questo potenziale cliente a uno (una sola volta), o crea prima il cliente in Vendite › Clienti.",
+    "match": "Abbina a un cliente",
+    "matchHint": "Una volta abbinato, il cliente resta: la mail entra nella sua conversazione",
+    "matchNone": "Non ancora abbinato"
+  },
+  "prospect": {
+    "name": "Nome",
+    "company": "Azienda",
+    "email": "E-mail",
+    "phone": "Telefono",
+    "basis": "Base giuridica",
+    "problem": {
+      "who": "Indica chi chiede: un nome, un’azienda o un indirizzo e-mail",
+      "email": "L’indirizzo e-mail non è valido",
+      "phone": "Un numero di telefono: cifre, spazi e ( ) . / -, un + iniziale facoltativo"
+    }
+  },
+  "basis": {
+    "CONTRACT": "Misure su loro richiesta (una richiesta di preventivo)",
+    "CONSENT": "Consenso",
+    "LEGITIMATE_INTEREST": "Legittimo interesse",
+    "LEGAL_DUTY": "Un obbligo di legge"
+  },
+  "request": {
+    "what": "Cosa chiedono",
+    "request": "La richiesta, a parole",
+    "requestHint": "Come l’hanno detta; le righe sotto sono la stessa richiesta, strutturata",
+    "target": "Prezzo obiettivo (al pezzo, netto)",
+    "targetHint": "Il prezzo indicato dal cliente; un prezzo, visibile solo con il permesso sui prezzi",
+    "currency": "Valuta",
+    "wanted": "Data desiderata",
+    "lines": "Modelli e quantità per taglia",
+    "linesHint": "Trasforma il testo in righe: scegli un modello per ogni prodotto richiesto",
+    "pieces_one": "{count} pezzo richiesto",
+    "pieces_other": "{count} pezzi richiesti",
+    "notes": "Note",
+    "note": "Nota",
+    "noteHint": "Solo per noi; si può cambiare anche a richiesta chiusa",
+    "readOnly": "Sola lettura: {reason}",
+    "viewOnly": "Puoi vedere, non cambiare",
+    "closedReadOnly": "{number} è chiusa",
+    "saved": "{number} salvata",
+    "problem": {
+      "request": "Scrivi cosa chiedono",
+      "price": "Il prezzo obiettivo non è un importo (12,50 o 12.50)"
+    }
+  },
+  "line": {
+    "title": "Riga {n}",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "remove": "Togli la riga {n}",
+    "removeShort": "Togli",
+    "style": "Modello",
+    "pickStyle": "Scegli un modello, o descrivilo a parole",
+    "inWords": "Non è un nostro modello: a parole",
+    "thisStyle": "Questo modello",
+    "colourway": "Variante colore",
+    "colourInWords": "Non è una variante: a parole",
+    "colourText": "Colore, a parole",
+    "colourTextHint": "Come l’ha detto il cliente (\"blu scuro\")",
+    "description": "Cosa viene chiesto",
+    "descriptionHint": "Un prodotto che non abbiamo ancora come modello: scrivilo a parole",
+    "descriptionStyleHint": "Quello che il cliente aggiunge al modello (facoltativo)",
+    "sizes": "Taglie",
+    "sizesHint": "Taglia e pezzi, ad es. 50:5 52:10",
+    "quantity": "Pezzi in tutto",
+    "quantityHint": "Quando le taglie non si sanno ancora",
+    "note": "Nota sulla riga",
+    "gridCaption": "Pezzi per taglia, riga {n}",
+    "add": "Aggiungi una riga",
+    "none": "Ancora nessuna riga: la richiesta a parole basta per iniziare; aggiungi righe per farne un preventivo.",
+    "noneAsked": "Nessuna riga: la richiesta è solo a parole.",
+    "noStylesRight": "Il tuo ruolo non legge i modelli: descrivi i prodotti a parole",
+    "stylesFailed": "Impossibile leggere i modelli",
+    "styleFailed": "Impossibile leggere taglie e varianti di questo modello",
+    "tableLabel": "Le righe richieste",
+    "col": {
+      "n": "N.",
+      "what": "Modello o prodotto",
+      "colour": "Colore",
+      "sizes": "Taglie",
+      "pieces": "Pezzi",
+      "note": "Nota"
+    },
+    "problem": {
+      "at": "Riga {n}: {problem}",
+      "styleOrWords": "Scegli un modello, o scrivi cosa viene chiesto",
+      "sizes": "Le taglie non si leggono: taglia:pezzi, ad es. 50:5 52:10",
+      "tooManySizes": "Al massimo {max} taglie su una riga",
+      "quantity": "Pezzi interi da 1 a {max}",
+      "quantitySum": "I pezzi in tutto sono la somma delle taglie ({total})",
+      "tooMany": "Al massimo {max} righe"
+    }
+  },
+  "grid": {
+    "anyColour": "Qualsiasi colore",
+    "caption": "Pezzi per taglia",
+    "colour": "Colore",
+    "total": "Totale",
+    "cellName": "{colour}, taglia {size}",
+    "notOffered": "Non prodotto in questa taglia",
+    "empty": "Ancora nessun pezzo",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. In tutto: {grand}.",
+    "notWhole": "{cell}: pezzi interi fino a {max}.",
+    "cutToMax": "{cell}: ridotto a {max}.",
+    "pasted": "{applied} celle incollate, {skipped} escluse.",
+    "issues": "Da controllare"
+  },
+  "mail": {
+    "title": "La mail del mittente, come inviata",
+    "from": "Da",
+    "subject": "Oggetto",
+    "received": "Ricevuta",
+    "frame": "La mail del mittente",
+    "empty": "La mail non ha testo.",
+    "pictures_one": "Mostra {count} immagine",
+    "pictures_other": "Mostra {count} immagini",
+    "waits": "La mail di un potenziale cliente resta in Posta da smistare finché la richiesta non è abbinata a un cliente; poi entra nella conversazione."
+  },
+  "pack": {
+    "title": "Il tech pack del marchio",
+    "hint": "Passa al preventivo e all’ordine: sempre la versione in vigore",
+    "version": "Versione del tech pack (come la chiama il marchio)",
+    "versionHint": "Ad es. \"SS27 v3\"",
+    "none": "Ancora nessun file del tech pack: spuntali tra i file.",
+    "inForce": "Versione {version}, in vigore",
+    "newer": "Indicata la versione {named}; ora è in vigore la {current}",
+    "gone": "Nessuna versione di questo file è disponibile ora",
+    "choose": "File della richiesta e della sua mail",
+    "chooseHint": "Spunta i file che sono il tech pack; Applica salva la scelta",
+    "chooseReadOnly": "Come indicati",
+    "inPack": "Tech pack"
+  },
+  "files": {
+    "fromMail": "Dalla mail",
+    "added": "Aggiunto qui",
+    "none": "Ancora nessun file: aggiungili sotto, o arrivano con la mail.",
+    "download": "Scarica {name}",
+    "noRight": "Il tuo ruolo non legge i file e la conversazione della richiesta",
+    "problem": {
+      "type": "Questo tipo di file non si può aggiungere",
+      "empty": "Il file è vuoto",
+      "size": "Più grande di {max} MB"
+    }
+  },
+  "quote": {
+    "none": "Non ancora preventivata",
+    "noneBody": "Crea preventivo copia {lines} riga/e con le taglie; {left} escluse (senza modello, variante o taglie).",
+    "noneProspect": "Il preventivo si fa per un cliente: prima abbina il potenziale cliente a un cliente in Richiesta.",
+    "made": "Il preventivo creato da questa richiesta",
+    "col": {
+      "quote": "Preventivo",
+      "status": "Stato",
+      "revision": "Revisione",
+      "value": "Valore (netto)",
+      "style": "Modello · variante"
+    },
+    "revision": "Revisione {n}",
+    "noRight": "Il tuo ruolo non legge i preventivi",
+    "oneOnly": "Una richiesta diventa un preventivo; le revisioni successive sono sul preventivo.",
+    "title": "Crea preventivo",
+    "go": "Crea preventivo",
+    "customer": "Cliente",
+    "contact": "Contatto",
+    "promise": "Data promessa",
+    "promiseHint": "La data desiderata, se è nel futuro",
+    "customerRef": "Riferimento del cliente (facoltativo)",
+    "customerRefHint": "Stampato sul preventivo",
+    "copied_one": "{count} riga va nel preventivo",
+    "copied_other": "{count} righe vanno nel preventivo",
+    "copiedLabel": "Righe che vanno nel preventivo",
+    "emptyDraft": "Nessuna riga indica un modello in una variante con taglie: il preventivo parte vuoto (una bozza da completare).",
+    "leftOut_one": "{count} riga esclusa",
+    "leftOut_other": "{count} righe escluse",
+    "closes": "Le righe prendono il listino del cliente, altrimenti 0. La richiesta si chiude come Preventivata e mostra il suo preventivo."
+  },
+  "leftOut": {
+    "noStyle": "Riga {n}: nessun modello scelto — aggiungilo sul preventivo",
+    "noColourway": "Riga {n}: nessuna variante scelta — aggiungila sul preventivo",
+    "noSizes": "Riga {n}: nessun pezzo per taglia — aggiungi le taglie sul preventivo",
+    "size": "Riga {n}: la taglia {size} non è più offerta in quella variante"
+  },
+  "quoteStatus": {
+    "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "APPROVED": "Approvato",
+    "SENT": "Inviato",
+    "ACCEPTED": "Accettato",
+    "DECLINED": "Rifiutato",
+    "EXPIRED": "Scaduto",
+    "CANCELLED": "Annullato"
+  },
+  "activity": {
+    "none": "Ancora niente. Qui compare la prima modifica o il primo messaggio.",
+    "noRight": "Il tuo ruolo non legge la conversazione della richiesta"
+  },
+  "dialog": {
+    "subject": "{number} · {from}"
+  },
+  "assign": {
+    "title": "Assegna",
+    "me": "Io ({name})",
+    "nobody": "Nessuno (togli l’assegnazione)",
+    "now": "Ora ce l’ha {name}",
+    "nobodyNow": "Ora di nessuno",
+    "noPeople": "Qui nessuno gestisce le richieste: un amministratore assegna il ruolo vendite.",
+    "listLabel": "Persone che gestiscono le richieste qui",
+    "search": "Cerca un nome…",
+    "partial": "Sono elencate solo le prime persone: cerca un nome.",
+    "hint": "↑ ↓ per scegliere, Invio per assegnare. Le persone sono elencate per nome; nessuno viene contato."
+  },
+  "decline": {
+    "title": "Rifiuta la richiesta",
+    "go": "Rifiuta",
+    "reason": "Perché",
+    "CAPACITY": "Capacità",
+    "LEAD_TIME": "Tempi di consegna",
+    "NOT_OUR_PRODUCT": "Non è un nostro prodotto",
+    "PRICE": "Prezzo",
+    "OTHER": "Altro",
+    "hint": {
+      "CAPACITY": "Non riusciamo a produrlo nei tempi",
+      "LEAD_TIME": "La data che vogliono è troppo vicina",
+      "NOT_OUR_PRODUCT": "Non facciamo questo tipo di prodotto",
+      "PRICE": "Il loro prezzo obiettivo non è raggiungibile",
+      "OTHER": "Scrivi perché"
+    },
+    "note": "Perché, a parole",
+    "noteHint": "Facoltativo; resta sulla richiesta",
+    "noteOther": "Necessario quando il motivo è Altro",
+    "messageLabel": "Messaggio al cliente (facoltativo)",
+    "messageTo": "Inviato a {to} tramite la conversazione della richiesta, dopo il rifiuto",
+    "message": {
+      "many": "Un messaggio va a un cliente alla volta: scrivi dall’Attività di ogni richiesta",
+      "prospect": "Un potenziale cliente non ha ancora una conversazione: rispondi alla sua mail da Posta da smistare",
+      "noEmail": "La richiesta non indica un contatto con e-mail: scegline uno in Richiesta"
+    },
+    "preview": "Anteprima — a {to}",
+    "final": "Una richiesta chiusa non cambia più (solo la nota).",
+    "held": {
+      "reason": "Scegli un motivo",
+      "long": "Al massimo {max} caratteri"
+    }
+  },
+  "lost": {
+    "title": "Segna come persa",
+    "go": "Segna come persa",
+    "note": "Perché il cliente se n’è andato",
+    "noteHint": "A parole; resta sulla richiesta",
+    "held": {
+      "note": "Scrivi perché"
+    }
+  },
+  "new": {
+    "title": "Nuova richiesta",
+    "subtitle": "Una telefonata, una visita, una fiera, o una richiesta dal portale registrata a mano",
+    "fromMailTitle": "Crea una richiesta da questa mail",
+    "fromMailSubtitle": "Da {from}, {when}",
+    "go": "Crea la richiesta",
+    "source": "Come è arrivata",
+    "who": "Chi chiede",
+    "whoCustomer": "Un cliente",
+    "whoCustomerHint": "Già in Vendite › Clienti",
+    "whoProspect": "Un nuovo potenziale cliente",
+    "whoProspectHint": "Non ancora cliente: da abbinare a uno prima del preventivo",
+    "pickCustomer": "Scegli un cliente",
+    "noCustomersRight": "Il tuo ruolo non legge i clienti: registra un potenziale cliente",
+    "prospectBasis": "Conservato come misure su loro richiesta (richiesta di preventivo, GDPR art. 6(1)(b)).",
+    "requestHint": "Cosa chiedono, come l’hanno detto",
+    "requestFromMail": "Oggetto e testo della mail; cambiali se vuoi",
+    "toMe": "Assegnala a me",
+    "files": "File",
+    "filesHint": "Tech pack, schizzi, foto: aggiunti dopo aver creato la richiesta (solo per noi; condividili poi da File e specifiche)",
+    "filesNoRight": "Il tuo ruolo non aggiunge file",
+    "fileLater": "Aggiunto dopo aver creato la richiesta",
+    "attachments": "Gli allegati della mail",
+    "mailStays": "La mail e i suoi allegati restano con la richiesta.",
+    "mailContact": "Il mittente è un contatto di {name}",
+    "mailDomain": "Il mittente scrive dal dominio di {name}",
+    "mailProspect": "Nexus non conosce il mittente: un potenziale cliente, dal campo Da della mail",
+    "mailFailed": "Impossibile leggere la mail",
+    "mailGone": "Questa mail non c’è più, o il tuo ruolo non smista la posta",
+    "openMade": "Apri {number}",
+    "held": {
+      "customer": "Scegli il cliente, o registra un potenziale cliente",
+      "request": "Scrivi cosa chiedono",
+      "mail": "Lettura della mail…"
+    },
+    "done": "{number} creata",
+    "doneFiles_one": "{number} creata; {count} file non è stato aggiunto: aggiungilo in File e specifiche",
+    "doneFiles_other": "{number} creata; {count} file non sono stati aggiunti: aggiungili in File e specifiche"
+  }
+}

@@ -109,6 +109,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
       '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/sales/customers': 'parties.view', // GET /parties
+      '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
@@ -275,6 +276,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/reports',
       '/home/alerts',
       '/sales/customers',
+      // B-W2b-322: Sales › Inquiries.
+      '/sales/inquiries',
       '/sales/quotes',
       '/sales/orders',
       '/sales/returns',
