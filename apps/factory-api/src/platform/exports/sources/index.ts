@@ -60,6 +60,8 @@ import { pointsOfMeasure } from './points-of-measure'
 import { gradeRules } from './grade-rules'
 // B-W2b-347: Purchasing › Sourcing & claims › RFQs & sourcing (the sample and development orders).
 import { sampleOrders } from './sample-orders'
+// B-W2b-322: Sales › Inquiries (B-W2b-295's source, registered with its page).
+import { inquiries } from '../../../modules/sales/inquiries/export-source'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -132,4 +134,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   gradeRules,
   // B-W2b-347: Purchasing › Sourcing & claims › RFQs & sourcing.
   sampleOrders,
+  // B-W2b-322: Sales › Inquiries.
+  inquiries,
 ])

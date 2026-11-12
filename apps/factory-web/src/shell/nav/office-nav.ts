@@ -130,6 +130,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
+  // B-W2b-322: Sales › Inquiries (SCR-105) and an inquiry's full page.
+  '/sales/inquiries',
+  '/sales/inquiries/[id]',
   '/sales/quotes',
   '/sales/quotes/[id]',
   '/sales/orders',
