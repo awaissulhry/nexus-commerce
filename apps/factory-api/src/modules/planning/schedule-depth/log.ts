@@ -12,7 +12,8 @@ import type { SiteRow } from '../store'
  * planning.schedule_changed of this step's commands (the board, capacity and allocation screens read again).
  */
 
-export type LoggedKind = 'PLACE' | 'MOVE' | 'REMOVE' | 'PIN' | 'UNPIN'
+// B-W2b-329 (PLN-149): the publish and the undo join the log (B-W2a-34's publish; the undo of schedule-log/undo.ts).
+export type LoggedKind = 'PLACE' | 'MOVE' | 'REMOVE' | 'PIN' | 'UNPIN' | 'PUBLISH' | 'UNDO'
 
 export interface LoggedPlace {
   readonly lane: LaneRef
@@ -22,13 +23,18 @@ export interface LoggedPlace {
 
 export interface LoggedChange {
   readonly kind: LoggedKind
-  readonly slotId: string
-  readonly workOrderId: string
+  /** B-W2b-329: null for a PUBLISH only (it names no slot and no work order). */
+  readonly slotId: string | null
+  readonly workOrderId: string | null
   readonly operationId: string | null
   readonly from?: LoggedPlace | null
   readonly to?: LoggedPlace | null
   readonly reason?: string | null
   readonly whatIfScenarioId?: string | null
+  // B-W2b-329: a PUBLISH names the version it made; an UNDO the change it undoes; the row's id when the caller needs it.
+  readonly publishedVersionId?: string | null
+  readonly undoesChangeId?: string | null
+  readonly id?: string
 }
 
 const NO_LANE = { lineId: null, workCentreId: null, partyId: null }
@@ -41,7 +47,7 @@ export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: st
       const from = change.from ? laneColumns(change.from.lane) : NO_LANE
       const to = change.to ? laneColumns(change.to.lane) : NO_LANE
       return {
-        id: newId(),
+        id: change.id ?? newId(),
         siteId: site.id,
         planVersionId,
         kind: change.kind,
@@ -60,6 +66,8 @@ export async function logChanges(tx: CommandTx, site: SiteRow, planVersionId: st
         toEndAt: change.to?.endAt ?? null,
         reason: change.reason ?? null,
         whatIfScenarioId: change.whatIfScenarioId ?? null,
+        publishedVersionId: change.publishedVersionId ?? null, // B-W2b-329
+        undoesChangeId: change.undoesChangeId ?? null, // B-W2b-329
         changedById: actorId,
         changedAt: now,
         createdAt: now,

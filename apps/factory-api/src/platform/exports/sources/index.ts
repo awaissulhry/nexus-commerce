@@ -66,6 +66,8 @@ import { priceLists } from './price-lists'
 import { inquiries } from '../../../modules/sales/inquiries/export-source'
 // B-W2b-339: Planning › Long range › Demand & forecast › Demand rows.
 import { demandRows } from './demand'
+// B-W2b-329: Planning › Board as a sheet (the working plan's bars, or a published version's).
+import { scheduleBoard } from './schedule-board'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -144,4 +146,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   inquiries,
   // B-W2b-339: Planning › Long range › Demand & forecast › Demand rows (the page's second list).
   demandRows,
+  // B-W2b-329: Planning › Board (Export board, XLSX).
+  scheduleBoard,
 ])

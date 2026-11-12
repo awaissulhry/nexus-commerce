@@ -47,6 +47,13 @@ import { workOrderMaterial } from './schedule-depth/material'
 import { pinSlot, pinWorkOrder } from './schedule-depth/pins'
 import { rescheduleBacklog, scheduleForward } from './schedule-depth/reschedule'
 import { applyWhatIf, createWhatIf, discardWhatIf, getWhatIf, listWhatIfs, setWhatIfMoves } from './schedule-depth/whatif'
+// B-W2b-329: the board's record (the change log with undo, day sheets per line, a published version read-only).
+import { changesContract, daySheetsContract, daySheetsPaperContract, undoContract, versionBoardContract } from './schedule-log/contract'
+import { daySheetsPaper, daySheetsPdf } from './schedule-log/day-sheets'
+import { changes } from './schedule-log/feed'
+import { undoChange } from './schedule-log/undo'
+import { versionBoard } from './schedule-log/version-board'
+import { inlineDisposition } from '../production/work-orders/traveller'
 // B-W2b-132: the leather and cut plan (need per order with one shade's answer, certified protectors, yield and the cutting loss).
 import { acceptLossContract, dismissLossContract, needContract, protectorsContract, yieldContract } from './leather/contract'
 import { acceptLoss, dismissLoss } from './leather/loss'
@@ -169,6 +176,18 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.put('/planning/schedule/what-ifs/:scenarioId/moves', { schema: setWhatIfMovesContract }, async (request) => setWhatIfMoves(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/schedule/what-ifs/:scenarioId/apply', { schema: applyWhatIfContract }, async (request) => applyWhatIf(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/schedule/what-ifs/:scenarioId/discard', { schema: discardWhatIfContract }, async (request) => discardWhatIf(request, request.params.scenarioId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-329: the board's record.
+  app.get('/planning/schedule/changes', { schema: changesContract }, async (request) => changes(request, request.query))
+  app.post('/planning/schedule/changes/:changeId/undo', { schema: undoContract }, async (request) => undoChange(request, request.params.changeId, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/schedule/day-sheets/paper', { schema: daySheetsPaperContract }, async (request) => {
+    const paper = await daySheetsPaper(request, request.query)
+    return { ...paper, columns: [...paper.columns], sheets: paper.sheets.map((sheet) => ({ ...sheet, facts: [...sheet.facts], rows: sheet.rows.map((row) => ({ ...row, cells: [...row.cells] })) })) }
+  })
+  app.get('/planning/schedule/day-sheets', { schema: daySheetsContract }, async (request, reply) => {
+    const { pdf, fileName } = await daySheetsPdf(request, request.query)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+  app.get('/planning/schedule/versions/:versionId/board', { schema: versionBoardContract }, async (request) => versionBoard(request, request.params.versionId))
   // B-W2b-132: the leather and cut plan.
   app.get('/planning/leather/need', { schema: needContract }, async (request) => leatherNeed(request, request.query))
   app.get('/planning/leather/protectors', { schema: protectorsContract }, async (request) => certifiedProtectors(request, request.query))

@@ -24,6 +24,8 @@ import { diffSlotOf, publishedOf, slotsOf, userNamesOf, type SlotRow } from './s
 // B-W2b-312: the earliest start with material (PLN-134) and the problems list's three W2b kinds.
 import { materialStartsOf, materialStartViewOf } from '../schedule-depth/material'
 import { depthProblemsOf } from '../schedule-depth/problems'
+// B-W2b-329 (PLN-133): each bar's state on the floor (not started, running, paused, done) and its progress.
+import { floorStatusesOf } from '../schedule-log/floor'
 
 /**
  * The planning board's reads (B-W2a-34; PLN-129, PLN-131, PLN-132; design planning.board "Board controls", "Load per
@@ -249,6 +251,7 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
     ]
     // B-W2b-312: operations in the past, material not in time, gate not passed (their own list).
     const moreProblems = await depthProblemsOf(db, world, starts)
+    const floor = await floorStatusesOf(db, world, shown) // B-W2b-329
     return {
       site: siteViewOf(site),
       from,
@@ -259,7 +262,7 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
       plan: header,
       buckets: buckets.map((entry) => ({ key: entry.key, kind: entry.kind, from: entry.from, to: entry.to })),
       lanes,
-      slots: shown.map((slot) => slotViewOf(world, slot, names)),
+      slots: shown.map((slot) => ({ ...slotViewOf(world, slot, names), floor: floor.get(slot.id) ?? null })), // B-W2b-329: floor
       workOrders,
       tray,
       problems,
@@ -321,13 +324,14 @@ export async function workOrderSchedule(caller: CommandCaller, workOrderId: stri
     const slots = world.slots.filter((slot) => slot.workOrderId === workOrder.id)
     const names = await userNamesOf(db, slots.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
     const laneKeys = new Set([...slots.map((slot) => laneKey(laneOfSlot(slot))), ...workOrder.operations.map((operation) => laneKey(world.operationLanes.get(operation.id)!))])
+    const floor = await floorStatusesOf(db, world, slots) // B-W2b-329 (PLN-133)
     return {
       site: siteViewOf(row!.site),
       asOf: toUtcIso(now),
       // B-W2b-312: the earliest start with material (PLN-134).
       workOrder: { ...workOrderViewOf(world, workOrder, readiness ?? null), materialStart: materialStartViewOf(world, workOrder, (await materialStartsOf(db, world, [workOrder.id], readiness ? [readiness] : [])).get(workOrder.id)!) },
       sizes: row!.sizes.map((size) => ({ colourway: size.colourway.code, size: size.size, quantity: size.quantity })),
-      slots: slots.map((slot) => slotViewOf(world, slot, names)),
+      slots: slots.map((slot) => ({ ...slotViewOf(world, slot, names), floor: floor.get(slot.id) ?? null })), // B-W2b-329: floor
       lanes: [...world.lanes.values()]
         .filter((lane) => laneKeys.has(laneKey(lane.ref)))
         .map((lane) => ({
