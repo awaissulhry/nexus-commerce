@@ -119,7 +119,8 @@ function CloseDialog({ order, model, actions, dialog }: DialogProps & { dialog: 
     <Frame model={model} actions={actions} title={t('close.title', { number: order.number })} held={null} label={t('close.confirm')} onConfirm={() => actions?.onClose?.()}>
       <ul className="fw-by-list">
         <li>{t('close.back', { good: order.pieces.backGood, defective: order.pieces.backDefective, scrapped: order.pieces.scrapped })}</li>
-        <li>{t('close.balanceLater')}</li>
+        {/* B-W2b-344: the Material balance tab says what of the kit is still out. */}
+        <li>{t('close.balance')}</li>
         <li>{t('close.final')}</li>
       </ul>
       <Field label={t('close.note')} hint={t('close.noteHint')}>
