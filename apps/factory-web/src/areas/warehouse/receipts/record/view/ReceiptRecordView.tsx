@@ -19,6 +19,9 @@ import { DAILY_TABS, RECEIPT_TABS, RECEIPT_TONE, reversalMoves, type ReceiptReco
 import { blankDiscrepancy, NAMESPACE as DAILY, takesDiscrepancies } from '../../daily-model'
 import { DailyDialogs } from './DailyDialogs'
 import { DailyNoticeBanner, DiscrepanciesTab, DiscrepancyDetail, DocumentsTab } from './DailyTabs'
+// B-W2b-300: the reception report and goods without a PO (their own folder; the record mounts the slot).
+import type { ReceiptDepthSlot } from '../../reception/useReceiptDepth'
+import { NAMESPACE as DEPTH } from '../../reception/model'
 import '../../../../_shared/buying/buying.css'
 
 export type { ReceiptRecordActions, ReceiptRecordModel } from '../../model'
@@ -34,15 +37,15 @@ const CR_VI_TONE = { NOT_REQUIRED: 'neutral', PENDING: 'warning', PASS: 'success
  * they wait; SCR-061 every hide one by one on the list frame, with what lies of it now), Activity. Reverse: only while
  * its stock is untouched — else held with what used it, in words — with the reason; nothing is deleted.
  */
-export function ReceiptRecordView({ model, actions, panels }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode }) {
+export function ReceiptRecordView({ model, actions, panels, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
   return (
-    <WithMessages namespaces={['buying', 'lists', 'records', DAILY, 'photo-kit']}>
-      <ReceiptRecord model={model} actions={actions} panels={panels} />
+    <WithMessages namespaces={['buying', 'lists', 'records', DAILY, 'photo-kit', /* B-W2b-300 */ DEPTH]}>
+      <ReceiptRecord model={model} actions={actions} panels={panels} depth={depth} />
     </WithMessages>
   )
 }
 
-function ReceiptRecord({ model, actions, panels }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode }) {
+function ReceiptRecord({ model, actions, panels, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
   const t = useT('buying')
   const listHref = `${model.prefix}/warehouse/receipts`
   const loaded = model.receipt
@@ -86,10 +89,10 @@ function ReceiptRecord({ model, actions, panels }: { model: ReceiptRecordModel; 
       </div>
     )
   }
-  return <ReadyReceipt receipt={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyReceipt receipt={loaded.value} model={model} actions={actions} panels={panels} depth={depth} />
 }
 
-function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode }) {
+function ReadyReceipt({ receipt, model, actions, panels, depth }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
   const t = useT('buying')
   const td = useT(DAILY)
   const daily = model.daily ?? null
@@ -144,6 +147,8 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
     ...(daily?.can.claimsView ? [{ id: 'claims', label: td('band.claims'), href: `${model.prefix}/purchasing/claims?receipt=${encodeURIComponent(receipt.id)}` }] : []),
     ...(daily ? [{ id: 'discrepancies', label: td('band.discrepancies'), href: `${href}?tab=discrepancies` }] : []),
     { id: 'copy', label: t('rc.record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(receipt.number).catch(() => undefined) },
+    // B-W2b-300 (design pop:rc-reception, "Receipt ⋯"): the reception report.
+    ...(depth?.more ?? []),
   ]
 
   return (
@@ -217,6 +222,8 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
         />
       )}
       {daily && <DailyNoticeBanner daily={daily} actions={actions?.daily} />}
+      {/* B-W2b-300: goods without a PO, while they wait (or what became of them). */}
+      {depth?.banner}
       {receipt.status === 'REVERSED' && <Banner tone="danger" title={t('rc.record.reversed', { time: receipt.reversedAt ? formatDateTime(receipt.reversedAt, place) : '—' })}>{receipt.reversalReason}</Banner>}
       {receipt.status === 'POSTED' && <Banner tone="info" title={t('rc.record.posted', { time: receipt.postedAt ? formatDateTime(receipt.postedAt, place) : '—' })} />}
 
@@ -238,6 +245,8 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
       {model.dialog?.kind === 'reverse' && <ReverseDialog receipt={receipt} model={model} actions={actions} />}
       {daily && daily.open && !daily.dialog && <DiscrepancyDetail receipt={receipt} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
       {daily && <DailyDialogs receipt={receipt} daily={daily} actions={actions?.daily} timeZone={model.timeZone} />}
+      {/* B-W2b-300 */}
+      {depth?.dialogs}
     </div>
   )
 }

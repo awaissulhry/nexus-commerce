@@ -145,4 +145,32 @@ export const manifest = defineManifest({
   'GET /planning/exceptions/supply-late': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'POST /planning/exceptions/supply-late/check': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
   'GET /planning/exceptions/:exceptionId/fixes': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  // B-W2b-306: MRP you can trust (./run-log, ./actions): the run log and the action messages read with planning.view over the
+  // run's site; messages decided with planning.actions.manage; planned orders edited, reset and bulk-edited with
+  // planning.planned.edit; a requirement kept for one order line with planning.firm (the planner's act on the latest plan).
+  'GET /planning/runs/:runId/log': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/action-messages': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/action-messages/decide': { audiences: ['office'], permission: 'planning.actions.manage', scope: 'record' },
+  'POST /planning/planned-orders/bulk': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'PATCH /planning/planned-orders/:plannedOrderId': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'POST /planning/planned-orders/:plannedOrderId/reset': { audiences: ['office'], permission: 'planning.planned.edit', scope: 'record' },
+  'POST /planning/requirements/:requirementId/order-specific': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  // B-W2b-321: work to subcontractors (./subcontract-capacity, ./capacity/subcontractors.ts, ./heatmap): read with planning.view over
+  // the site (a workshop's capacity: over the workshop); a workshop's weekly capacity kept with planning.subcontract.capacity; an
+  // operation sent outside or brought back in, the kit's time and "Create subcontract orders" with planning.subcontract.outsource
+  // (making or cancelling the subcontract order also needs purchasing.subcontract.manage, checked in the handler).
+  'GET /planning/subcontract-capacity': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/subcontract-capacity': { audiences: ['office'], permission: 'planning.subcontract.capacity', scope: 'record' },
+  'PATCH /planning/subcontract-capacity/:capacityId': { audiences: ['office'], permission: 'planning.subcontract.capacity', scope: 'record' },
+  'DELETE /planning/subcontract-capacity/:capacityId': { audiences: ['office'], permission: 'planning.subcontract.capacity', scope: 'record' },
+  'GET /planning/capacity/subcontractors': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/capacity/subcontractors/cell': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/heatmap': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/allocation/workshops': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/allocation/subcontract-orders': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
+  'GET /planning/work-orders/:workOrderId/workshops': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/work-orders/:workOrderId/kit-timing': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/work-orders/:workOrderId/operations/:operationId/outside': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
+  'POST /planning/work-orders/:workOrderId/operations/:operationId/in-house': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
+  'PUT /planning/subcontract-orders/:subcontractOrderId/kit-due': { audiences: ['office'], permission: 'planning.subcontract.outsource', scope: 'record' },
 })

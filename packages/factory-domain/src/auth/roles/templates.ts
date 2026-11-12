@@ -57,6 +57,8 @@ import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
 // B-W2b-317: the backlog ranked (the planner and the production manager rank it).
 import { PLANNING_BACKLOG_ADDS } from '../../planning/backlog/permissions'
+// B-W2b-321: work to subcontractors.
+import { PLANNING_SUBCONTRACT_ADDS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -97,6 +99,8 @@ import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permis
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
 // B-W2b-319: the production strategy per item.
 import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
+// B-W2b-306: MRP you can trust (action messages; protected edits and bulk edit of planned orders).
+import { PLANNING_ACTIONS_ADDS } from '../../planning/actions/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
@@ -106,6 +110,8 @@ import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permission
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
 // B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
 import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
+// B-W2b-300: goods without a PO (the buyer and the warehouse name the order or send them back).
+import { INVENTORY_UNPLANNED_ADDS } from '../../inventory/unplanned/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -967,6 +973,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
   // B-W2b-301
   ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
+  // B-W2b-321
+  ...(audience === 'office' ? (PLANNING_SUBCONTRACT_ADDS[key] ?? []) : []),
   // B-W2b-312
   ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-317
@@ -991,7 +999,11 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-304
-  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
+  // B-W2b-306
+  ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : []),
+  // B-W2b-300
+  ...(audience === 'office' ? (INVENTORY_UNPLANNED_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

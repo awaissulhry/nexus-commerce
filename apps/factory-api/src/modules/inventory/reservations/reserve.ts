@@ -19,7 +19,7 @@ import {
 import { isHeld, type LotQualityStatus } from '@nexus/factory-domain/inventory/stock/overview'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { actorOf } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeContextOf, siteFor } from '../ledger/access'
 import { itemUnitsOf, readHides, readItems, readLots, type HideRow, type ItemRow, type LotRow } from '../issue/store'
 import { viewsOf, type ReservationView } from './read'
@@ -217,142 +217,149 @@ export async function reserve(caller: CommandCaller, body: ReserveInput, idempot
   }
   if (body.lines.length === 0 || body.lines.length > MAX_RESERVATION_LINES) throw new ValidationError(`Reserve 1 to ${MAX_RESERVATION_LINES} lines at once.`, [{ path: 'body/lines', message: `1 to ${MAX_RESERVATION_LINES} lines.` }])
   try {
-    const { result } = await command(caller, { name: 'inventory.reserve', idempotencyKey, input: body }, async (tools) => {
-      const demand = await readDemand(tools, site, body)
-      const { resolved, problems } = await resolveLines(tools, site.id, body.lines)
-      for (const line of resolved) {
-        if (demand.planned && !demand.planned.has(`${line.item.id}|${line.itemColourId ?? '-'}`)) {
-          problems.push({ path: `body/lines/${line.index}/itemId`, message: `${demand.words} does not plan ${line.item.code} in this colour: reserve what it uses.` })
-        }
-      }
-      if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot be reserved as they are.', problems)
-
-      const keys = new Map<string, ReserveKey>(resolved.map((line) => {
-        const key = { siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId }
-        return [reserveKeyOf(key), key]
-      }))
-      await lockReservations(tools.tx, context.tenantId, [...keys.values()])
-      const sized = new Map<number, string>()
-      const refusals: Issue[] = []
-      for (const [id, key] of keys) {
-        const facts = await readKeyFacts(tools.tx, key, { withOrders: true })
-        const requests: ReserveRequest[] = resolved
-          .filter((line) => reserveKeyOf({ siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId }) === id)
-          .map((line) => {
-            const quantity = line.hide ? quantityText(facts.stock.filter((part) => part.hideId === line.hide!.id).reduce((sum, part) => sum.plus(new Dec(part.onHand)), ZERO)) : line.baseQuantity!
-            sized.set(line.index, quantity)
-            return {
-              index: line.index,
-              kind: line.kind,
-              lotId: line.lot?.id ?? null,
-              hideId: line.hide?.id ?? null,
-              baseQuantity: quantity,
-              label: [line.item.code, line.lot ? `lot ${line.lot.code}` : null, line.hide ? `hide ${line.hide.code}` : null].filter(Boolean).join(', '),
-              lotCode: line.lot?.code ?? null,
-              lotHeld: line.lot ? isHeld(line.lot.qualityStatus as LotQualityStatus) : false,
-              hideCode: line.hide?.code ?? null,
-              baseUom: line.item.baseUom,
-            }
-          })
-        for (const refusal of reserveRefusals(facts.stock, facts.reservations, requests, (reservation) => demandWords(facts.rows.find((row) => row.id === reservation.id)!, facts.demands))) {
-          refusals.push({ path: `body/lines/${refusal.index}/refusal/${refusal.code}`, message: refusal.message })
-        }
-      }
-      // B-W2b-100 (SCM-206): one shade lot per order — the demand's hides (issued, reserved) and these lines', in their order.
-      const override = shadeOverrideOf(tools.context, { companyId: site.companyId, siteId: site.id }, body.shadeOverrideReason, 'body/shadeOverrideReason')
-      const overridden = new Set<number>()
-      const rule = await shadeRuleFor(tools.tx, site.id)
-      const hideLines = resolved.filter((line) => line.hide !== null).sort((a, b) => a.index - b.index)
-      if (asksOneShadePerOrder(rule) && hideLines.length > 0) {
-        const facts = await shadeFactsOf(tools.tx, hideLines.map((line) => line.hide!.id))
-        const held = new Map<string, ShadeFacts[]>()
-        for (const line of hideLines) {
-          const id = reserveKeyOf({ siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId })
-          if (!held.has(id)) held.set(id, await heldShades(tools.tx, { siteId: site.id, workOrderId: demand.workOrderId, salesOrderLineId: demand.salesOrderLineId, itemId: line.item.id, itemColourId: line.itemColourId }))
-          const fact = facts.get(line.hide!.id)!
-          const refusal = shadeRefusal(rule, demand.words, held.get(id)!, fact)
-          if (refusal && !override) refusals.push({ path: `body/lines/${line.index}/refusal/${refusal.code}`, message: refusal.message })
-          else {
-            if (refusal) overridden.add(line.index)
-            held.get(id)!.push(fact)
-          }
-        }
-      }
-      if (refusals.length > 0) {
-        refusals.sort((a, b) => (a.path < b.path ? -1 : 1))
-        throw new ReservationRefusedError(refusals.length === 1 ? refusals[0]!.message : `${refusals.length} lines cannot be reserved: ${refusals[0]!.message}`, refusals)
-      }
-
-      const needDate = body.needDate ? new Date(`${body.needDate}T00:00:00.000Z`) : demand.needDate
-      const ids: string[] = []
-      for (const line of [...resolved].sort((a, b) => a.index - b.index)) {
-        const id = newId()
-        const row = await tools.tx.reservation.create({
-          data: {
-            id,
-            companyId: site.companyId,
-            siteId: site.id,
-            kind: line.kind,
-            itemId: line.item.id,
-            itemColourId: line.itemColourId,
-            lotId: line.lot?.id ?? null,
-            hideId: line.hide?.id ?? null,
-            quantity: sized.get(line.index)!,
-            workOrderId: demand.workOrderId,
-            salesOrderLineId: demand.salesOrderLineId,
-            partyId: demand.partyId,
-            needDate,
-            note: body.note?.trim() || null,
-            createdAt: tools.now,
-            updatedAt: tools.now,
-            createdById: context.actorId,
-          },
-          select: RESERVATION_COLUMNS,
-        })
-        ids.push(id)
-        tools.audit({
-          action: 'inventory.reserve',
-          recordType: 'Reservation',
-          recordId: id,
-          companyId: site.companyId,
-          siteId: site.id,
-          after: {
-            kind: row.kind,
-            itemId: row.itemId,
-            itemColourId: row.itemColourId,
-            lotId: row.lotId,
-            hideId: row.hideId,
-            quantity: row.quantity.toFixed(4),
-            workOrderId: row.workOrderId,
-            salesOrderLineId: row.salesOrderLineId,
-            needDate: body.needDate ?? (needDate ? needDate.toISOString().slice(0, 10) : null),
-            ...(overridden.has(line.index) ? { shadeOverride: true } : {}),
-          },
-          ...(overridden.has(line.index) && override ? { reason: `Shade rule overridden: ${override}` } : {}),
-        })
-      }
-      tools.emit({
-        type: 'inventory.reserved',
-        subject: demand.workOrderId ?? demand.salesOrderLineId!,
-        companyId: site.companyId,
-        siteId: site.id,
-        payload: {
-          reservationIds: ids,
-          workOrderId: demand.workOrderId,
-          salesOrderLineId: demand.salesOrderLineId,
-          itemIds: [...new Set(resolved.map((line) => line.item.id))],
-          hideIds: resolved.flatMap((line) => (line.hide ? [line.hide.id] : [])),
-        },
-      })
-      const rows = await tools.tx.reservation.findMany({ where: { id: { in: ids } }, select: RESERVATION_COLUMNS, orderBy: { id: 'asc' } })
-      return { reservations: await viewsOf(tools.tx, rows, { withOrders: true }) }
-    })
+    const { result } = await command(caller, { name: 'inventory.reserve', idempotencyKey, input: body }, (tools) => reserveInCommand(tools, context, site, body))
     return result
   } catch (error) {
     // Another request reserved one of these hides meanwhile (the partial unique index; the lock makes it rare).
     if (isUniqueViolation(error)) throw new ConflictError('A hide of this request was reserved meanwhile by another request: read the stock again.')
     throw error
   }
+}
+
+/**
+ * B-W2b-300 (SCM-119): the reserve's work INSIDE the caller's command — the demand read and checked, the lines against what is
+ * available under the reserve locks, the shade rule, the rows, their audit and `inventory.reserved` — so the reception report
+ * reserves for several demands in one command. The caller checked the site (inventory.reserve) and the body's shape.
+ */
+export async function reserveInCommand(tools: CommandTools, context: OfficeContext, site: { readonly id: string; readonly companyId: string }, body: ReserveInput): Promise<{ reservations: ReservationView[] }> {
+  const demand = await readDemand(tools, site, body)
+  const { resolved, problems } = await resolveLines(tools, site.id, body.lines)
+  for (const line of resolved) {
+    if (demand.planned && !demand.planned.has(`${line.item.id}|${line.itemColourId ?? '-'}`)) {
+      problems.push({ path: `body/lines/${line.index}/itemId`, message: `${demand.words} does not plan ${line.item.code} in this colour: reserve what it uses.` })
+    }
+  }
+  if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot be reserved as they are.', problems)
+
+  const keys = new Map<string, ReserveKey>(resolved.map((line) => {
+    const key = { siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId }
+    return [reserveKeyOf(key), key]
+  }))
+  await lockReservations(tools.tx, context.tenantId, [...keys.values()])
+  const sized = new Map<number, string>()
+  const refusals: Issue[] = []
+  for (const [id, key] of keys) {
+    const facts = await readKeyFacts(tools.tx, key, { withOrders: true })
+    const requests: ReserveRequest[] = resolved
+      .filter((line) => reserveKeyOf({ siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId }) === id)
+      .map((line) => {
+        const quantity = line.hide ? quantityText(facts.stock.filter((part) => part.hideId === line.hide!.id).reduce((sum, part) => sum.plus(new Dec(part.onHand)), ZERO)) : line.baseQuantity!
+        sized.set(line.index, quantity)
+        return {
+          index: line.index,
+          kind: line.kind,
+          lotId: line.lot?.id ?? null,
+          hideId: line.hide?.id ?? null,
+          baseQuantity: quantity,
+          label: [line.item.code, line.lot ? `lot ${line.lot.code}` : null, line.hide ? `hide ${line.hide.code}` : null].filter(Boolean).join(', '),
+          lotCode: line.lot?.code ?? null,
+          lotHeld: line.lot ? isHeld(line.lot.qualityStatus as LotQualityStatus) : false,
+          hideCode: line.hide?.code ?? null,
+          baseUom: line.item.baseUom,
+        }
+      })
+    for (const refusal of reserveRefusals(facts.stock, facts.reservations, requests, (reservation) => demandWords(facts.rows.find((row) => row.id === reservation.id)!, facts.demands))) {
+      refusals.push({ path: `body/lines/${refusal.index}/refusal/${refusal.code}`, message: refusal.message })
+    }
+  }
+  // B-W2b-100 (SCM-206): one shade lot per order — the demand's hides (issued, reserved) and these lines', in their order.
+  const override = shadeOverrideOf(tools.context, { companyId: site.companyId, siteId: site.id }, body.shadeOverrideReason, 'body/shadeOverrideReason')
+  const overridden = new Set<number>()
+  const rule = await shadeRuleFor(tools.tx, site.id)
+  const hideLines = resolved.filter((line) => line.hide !== null).sort((a, b) => a.index - b.index)
+  if (asksOneShadePerOrder(rule) && hideLines.length > 0) {
+    const facts = await shadeFactsOf(tools.tx, hideLines.map((line) => line.hide!.id))
+    const held = new Map<string, ShadeFacts[]>()
+    for (const line of hideLines) {
+      const id = reserveKeyOf({ siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId })
+      if (!held.has(id)) held.set(id, await heldShades(tools.tx, { siteId: site.id, workOrderId: demand.workOrderId, salesOrderLineId: demand.salesOrderLineId, itemId: line.item.id, itemColourId: line.itemColourId }))
+      const fact = facts.get(line.hide!.id)!
+      const refusal = shadeRefusal(rule, demand.words, held.get(id)!, fact)
+      if (refusal && !override) refusals.push({ path: `body/lines/${line.index}/refusal/${refusal.code}`, message: refusal.message })
+      else {
+        if (refusal) overridden.add(line.index)
+        held.get(id)!.push(fact)
+      }
+    }
+  }
+  if (refusals.length > 0) {
+    refusals.sort((a, b) => (a.path < b.path ? -1 : 1))
+    throw new ReservationRefusedError(refusals.length === 1 ? refusals[0]!.message : `${refusals.length} lines cannot be reserved: ${refusals[0]!.message}`, refusals)
+  }
+
+  const needDate = body.needDate ? new Date(`${body.needDate}T00:00:00.000Z`) : demand.needDate
+  const ids: string[] = []
+  for (const line of [...resolved].sort((a, b) => a.index - b.index)) {
+    const id = newId()
+    const row = await tools.tx.reservation.create({
+      data: {
+        id,
+        companyId: site.companyId,
+        siteId: site.id,
+        kind: line.kind,
+        itemId: line.item.id,
+        itemColourId: line.itemColourId,
+        lotId: line.lot?.id ?? null,
+        hideId: line.hide?.id ?? null,
+        quantity: sized.get(line.index)!,
+        workOrderId: demand.workOrderId,
+        salesOrderLineId: demand.salesOrderLineId,
+        partyId: demand.partyId,
+        needDate,
+        note: body.note?.trim() || null,
+        createdAt: tools.now,
+        updatedAt: tools.now,
+        createdById: context.actorId,
+      },
+      select: RESERVATION_COLUMNS,
+    })
+    ids.push(id)
+    tools.audit({
+      action: 'inventory.reserve',
+      recordType: 'Reservation',
+      recordId: id,
+      companyId: site.companyId,
+      siteId: site.id,
+      after: {
+        kind: row.kind,
+        itemId: row.itemId,
+        itemColourId: row.itemColourId,
+        lotId: row.lotId,
+        hideId: row.hideId,
+        quantity: row.quantity.toFixed(4),
+        workOrderId: row.workOrderId,
+        salesOrderLineId: row.salesOrderLineId,
+        needDate: body.needDate ?? (needDate ? needDate.toISOString().slice(0, 10) : null),
+        ...(overridden.has(line.index) ? { shadeOverride: true } : {}),
+      },
+      ...(overridden.has(line.index) && override ? { reason: `Shade rule overridden: ${override}` } : {}),
+    })
+  }
+  tools.emit({
+    type: 'inventory.reserved',
+    subject: demand.workOrderId ?? demand.salesOrderLineId!,
+    companyId: site.companyId,
+    siteId: site.id,
+    payload: {
+      reservationIds: ids,
+      workOrderId: demand.workOrderId,
+      salesOrderLineId: demand.salesOrderLineId,
+      itemIds: [...new Set(resolved.map((line) => line.item.id))],
+      hideIds: resolved.flatMap((line) => (line.hide ? [line.hide.id] : [])),
+    },
+  })
+  const rows = await tools.tx.reservation.findMany({ where: { id: { in: ids } }, select: RESERVATION_COLUMNS, orderBy: { id: 'asc' } })
+  return { reservations: await viewsOf(tools.tx, rows, { withOrders: true }) }
 }
 
 // ---- release -------------------------------------------------------------------------------------------------------------

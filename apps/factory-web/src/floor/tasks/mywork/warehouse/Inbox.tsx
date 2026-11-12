@@ -10,6 +10,7 @@ import { readScan } from '../../../scan/scan-model'
 import { queuedView } from '../../shared/queued'
 import { TASK_ROUTES, taskForScan } from '../../routes'
 import { handTaskToMove } from '../../move/handoff'
+import { handWorkOrderToPick } from '../../issue/picklist/handoff'
 import { stepOrKeep } from './api'
 import { changedTasks, codeOfTask, doneHeld, screenOf, stepsStill, withStep, withSteps, type OwnStep, type StepKind, type WarehouseTask } from './model'
 import { useTaskInbox } from './use-inbox'
@@ -105,6 +106,9 @@ export function FloorWarehouseInbox() {
     const screen = screenOf(task.kind)
     if (!screen) return
     if (screen === 'move') handTaskToMove(task)
+    // B-W2b-310: Count opens on the task's place (handed like a scan); Pick & issue on the task's work order.
+    if (screen === 'count') return store.openWith(TASK_ROUTES.count, task.from?.code ?? null)
+    if (screen === 'pick' && task.source?.type === 'WorkOrder') handWorkOrderToPick(task.source.id)
     router.push(TASK_ROUTES[screen])
   }
 
@@ -160,7 +164,7 @@ export function FloorWarehouseInbox() {
         asOf: inbox.asOf,
         problem: inbox.shown ? null : inbox.problem,
         changed: inbox.fresh && inbox.shown ? changedTasks(inbox.shown, inbox.fresh) : 0,
-        screens: { move: permissions.includes('inventory.transfer'), receive: permissions.includes('inventory.receive'), pick: permissions.includes('inventory.issue') },
+        screens: { move: permissions.includes('inventory.transfer'), receive: permissions.includes('inventory.receive'), pick: permissions.includes('inventory.issue'), /* B-W2b-310 */ count: permissions.includes('inventory.counts.scan') },
         busy,
         line: lineShown,
       }}

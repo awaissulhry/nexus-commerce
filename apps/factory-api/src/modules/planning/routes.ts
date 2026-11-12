@@ -79,6 +79,36 @@ import { acceptRepromise, declineRepromise, getRepromise, listRepromises, propos
 import { backlogContract as readBacklogContract, rankByRuleContract, ranksContract } from './backlog/contract'
 import { rankByRule, readBacklog, setRanks } from './backlog/backlog'
 import { checkSupplyLateNow, supplyLateCheckContract, supplyLateFixes, supplyLateFixesContract, supplyLateList, supplyLateListContract } from './exceptions/supply-late'
+// B-W2b-321: work to subcontractors (weekly capacity, only approved workshops, kit timing, in-house or outside, the heatmap).
+import { subcontractorCapacity, subcontractorCell } from './capacity/subcontractors'
+import { heatmapContract } from './heatmap/contract'
+import { heatmap } from './heatmap/heatmap'
+import {
+  allocationWorkshopsContract,
+  createCapacityContract,
+  deleteCapacityContract,
+  editCapacityContract,
+  fromAllocationContract,
+  inHouseContract,
+  kitTimingContract,
+  listCapacityContract,
+  outsideContract,
+  setKitDueContract,
+  subcontractorCapacityContract,
+  subcontractorCellContract,
+  workOrderWorkshopsContract,
+} from './subcontract-capacity/contract'
+import { kitTiming, setKitDue } from './subcontract-capacity/kit-timing'
+import { bringInHouse, createFromAllocation, sendOutside } from './subcontract-capacity/outside'
+import { createCapacity, deleteCapacity, editCapacity, listCapacity } from './subcontract-capacity/rows'
+import { allocationWorkshops, workOrderWorkshops } from './subcontract-capacity/workshops'
+// B-W2b-306: MRP you can trust (action messages, protected edits and bulk edit of planned orders, order-specific supply, the run log).
+import { bulkEditPlannedOrdersContract, decideActionMessagesContract, editPlannedOrderContract, listActionMessagesContract, pegRequirementContract, resetPlannedOrderContract } from './actions/contract'
+import { bulkEditPlannedOrders, editPlannedOrder, resetPlannedOrder } from './actions/edit'
+import { decideActionMessages, listActionMessages } from './actions/messages'
+import { pegRequirement } from './actions/peg'
+import { runLogContract } from './run-log/contract'
+import { runLog } from './run-log/log'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -106,6 +136,11 @@ import { checkSupplyLateNow, supplyLateCheckContract, supplyLateFixes, supplyLat
  * B-W2b-20 (W2a follow-ups): bulk writes of a site's item parameters (POST /planning/item-parameters/bulk) and lanes
  * (PATCH /planning/lanes), each ONE command; the other follow-ups are fields of the routes above (stable refusal codes,
  * per-component readiness, customer and family, lanes without a calendar, exceptions' age in working days).
+ *
+ * B-W2b-306 (PLN-072, PLN-073, PLN-076, PLN-078, PLN-083, PLN-095; design planning.mrp "To make", the protected cell, the
+ * run log): a run's log (./run-log), its action messages on existing orders and their decisions, a planned order's edit
+ * protected from the next run, Reset to plan and the bulk edit with one review, and a requirement kept for one order line
+ * (./actions).
  *
  * B-W2b-319 (PLN-017, PLN-040, PLN-041, PLN-042, PLN-061; design planning.demand, planning.mps sec:strategy): one demand view
  * (./demand: the tiles and the time-phased rows, and the same demand as a list with its source) and the production strategy per
@@ -231,4 +266,29 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/exceptions/supply-late', { schema: supplyLateListContract }, async (request) => supplyLateList(request, request.query))
   app.post('/planning/exceptions/supply-late/check', { schema: supplyLateCheckContract }, async (request) => checkSupplyLateNow(request, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/exceptions/:exceptionId/fixes', { schema: supplyLateFixesContract }, async (request) => supplyLateFixes(request, request.params.exceptionId))
+  // B-W2b-321: work to subcontractors.
+  app.get('/planning/subcontract-capacity', { schema: listCapacityContract }, async (request) => listCapacity(request, request.query))
+  app.post('/planning/subcontract-capacity', { schema: createCapacityContract }, async (request, reply) => reply.code(201).send(await createCapacity(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/planning/subcontract-capacity/:capacityId', { schema: editCapacityContract }, async (request) => editCapacity(request, request.params.capacityId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/planning/subcontract-capacity/:capacityId', { schema: deleteCapacityContract }, async (request) => deleteCapacity(request, request.params.capacityId, request.query.version, idempotencyKeyFrom(request)))
+  app.get('/planning/capacity/subcontractors', { schema: subcontractorCapacityContract }, async (request) => subcontractorCapacity(request, request.query))
+  app.get('/planning/capacity/subcontractors/cell', { schema: subcontractorCellContract }, async (request) => subcontractorCell(request, request.query))
+  app.get('/planning/heatmap', { schema: heatmapContract }, async (request) => heatmap(request, request.query))
+  app.get('/planning/allocation/workshops', { schema: allocationWorkshopsContract }, async (request) => allocationWorkshops(request, request.query))
+  app.post('/planning/allocation/subcontract-orders', { schema: fromAllocationContract }, async (request) => createFromAllocation(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/work-orders/:workOrderId/workshops', { schema: workOrderWorkshopsContract }, async (request) => workOrderWorkshops(request, request.params.workOrderId, request.query))
+  app.get('/planning/work-orders/:workOrderId/kit-timing', { schema: kitTimingContract }, async (request) => kitTiming(request, request.params.workOrderId, request.query))
+  app.post('/planning/work-orders/:workOrderId/operations/:operationId/outside', { schema: outsideContract }, async (request) => sendOutside(request, request.params.workOrderId, request.params.operationId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/work-orders/:workOrderId/operations/:operationId/in-house', { schema: inHouseContract }, async (request) => bringInHouse(request, request.params.workOrderId, request.params.operationId, request.body, idempotencyKeyFrom(request)))
+  app.put('/planning/subcontract-orders/:subcontractOrderId/kit-due', { schema: setKitDueContract }, async (request) => setKitDue(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-306: MRP you can trust. The run log of a run; the run's action messages (decided several at once); a planned order's
+  // edit (its fields protected from the next run), Reset to plan and the bulk edit; a requirement kept for one order line.
+  app.get('/planning/runs/:runId/log', { schema: runLogContract }, async (request) => runLog(request, request.params.runId))
+  app.get('/planning/action-messages', { schema: listActionMessagesContract }, async (request) => listActionMessages(request, request.query))
+  app.post('/planning/action-messages/decide', { schema: decideActionMessagesContract }, async (request) => decideActionMessages(request, request.body, idempotencyKeyFrom(request)))
+  // Before /:plannedOrderId (a static path).
+  app.post('/planning/planned-orders/bulk', { schema: bulkEditPlannedOrdersContract }, async (request) => bulkEditPlannedOrders(request, request.body, idempotencyKeyFrom(request)))
+  app.patch('/planning/planned-orders/:plannedOrderId', { schema: editPlannedOrderContract }, async (request) => editPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/planned-orders/:plannedOrderId/reset', { schema: resetPlannedOrderContract }, async (request) => resetPlannedOrder(request, request.params.plannedOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/requirements/:requirementId/order-specific', { schema: pegRequirementContract }, async (request) => pegRequirement(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))
 })

@@ -98,6 +98,8 @@ export interface DetectMaterial {
   readonly keptInStock: boolean
   /** The site's safety stock for it (base unit); null: none. */
   readonly safetyStock: string | null
+  /** B-W2b-306 (PLN-072): a line planned for one order line alone keys its own exceptions (`:OL:<order line>`). */
+  readonly keySuffix?: string
 }
 
 /** A material with a safety stock that the run has no demand for, with its stock and arrivals. */
@@ -144,7 +146,7 @@ export function detectExceptions(input: DetectInput): ExceptionCondition[] {
   const pastDue = new Map<string, { orderNumber: string; lineSeq: number; dueDate: BusinessDate; orderId: string }>()
   for (const material of input.materials) {
     const { pegging } = material
-    const ref = refOf(material.itemId, material.itemColourId)
+    const ref = refOf(material.itemId, material.itemColourId) + (material.keySuffix ?? '')
     const base = { itemId: material.itemId, itemColourId: material.itemColourId, requirementSeq: material.seq }
     const w = (value: Decimal | string) => `${n(value)} ${material.uom}`
     const walked = pegging.coverage.filter((coverage) => decimalOf(coverage.part.quantity).minus(decimalOf(coverage.part.issued)).gt(0))
