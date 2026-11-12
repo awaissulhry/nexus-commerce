@@ -147,6 +147,8 @@ import { events as returnsOutcomes } from '../returns-outcomes/events'
 import { events as planningPlannedOrders } from '../planning-planned-orders/events'
 // B-W2b-331: subcontracting in depth (the written terms, the material balance booked, a workshop charge booked).
 import { events as subcontractDepth } from '../subcontract-depth/events'
+// B-W2b-325: price lists in depth (breaks and surcharges, a style's own surcharges, minimum order quantities).
+import { events as salesPricing } from '../sales-pricing/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -510,7 +512,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-331
   ...subcontractDepth,
   // B-W2b-315
-  ...supplierQualification] as const satisfies readonly EventDefinition[]
+  ...supplierQualification,
+  // B-W2b-325
+  ...salesPricing] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
