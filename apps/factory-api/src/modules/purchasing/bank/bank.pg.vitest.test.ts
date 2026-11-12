@@ -88,8 +88,9 @@ async function portalStepUp(browser: Browser, email: string): Promise<void> {
 
 beforeAll(async () => {
   h = await startHarness('bank_315')
-  // The guards refuse a time more than 5 minutes ahead of the database: the app's clock starts behind it (sign-ins move it on).
-  h.clock.set(new Date(Date.now() - 20 * 60_000))
+  // The bank guards refuse a time more than 5 minutes ahead of the database, the portal a code past its 15 minutes: the app's
+  // clock starts 8 minutes behind the database (sign-ins and step-ups move it on, about 9 minutes in all).
+  h.clock.set(new Date(Date.now() - 8 * 60_000))
   usePortalOptions({ answerFloorMs: 0 })
   await seedCore({ db: h.database, namespace: NS })
   await seedProduction({ db: h.database, namespace: NS })

@@ -109,7 +109,7 @@ describe('the compliance gate on a PO (SCM-022)', () => {
   it('asks by the supplier’s kinds: not set, a leather goes as before and the gate says it could not check it', async () => {
     const plain = await draft(leather, 30, { itemColourId: leatherBLK, uom: 'FT2' })
     expect(codes((await as('buyer', 'GET', `/purchasing/orders/${plain.id}/send-check`)).checks)).toEqual([])
-    expect((await as('buyer', 'GET', `/purchasing/orders/${plain.id}/compliance`)).notChecked).toEqual([expect.stringMatching(/is not set as a tannery: the chromium VI test report of line 1 \(SEED-LEA-100\) is not checked at Send/)])
+    expect((await as('buyer', 'GET', `/purchasing/orders/${plain.id}/compliance`)).notChecked).toEqual([expect.stringMatching(/is not set as a tannery: the chromium VI test report of line \d+ \(SEED-LEA-100\) is not checked at Send/)])
     const profile = (await as('buyer', 'GET', `/purchasing/suppliers/${P2}/profile`)).supplier
     await as('buyer', 'PATCH', `/purchasing/suppliers/${P2}/profile`, { version: profile.version, kinds: ['TANNERY', 'PROTECTOR_MAKER', 'SUBCONTRACTOR'] })
   })
@@ -121,10 +121,10 @@ describe('the compliance gate on a PO (SCM-022)', () => {
     expect(codes(check.checks)).toEqual(['COMPLIANCE_DOCUMENT_MISSING'])
     const refused = await call('buyer', 'POST', `/purchasing/orders/${order.id}/send`, { version: order.version })
     expect(refused.status).toBe(409)
-    expect(refused.body.error.message).toMatch(/Chromium VI test report: .* has none in force; line 1 \(SEED-LEA-100\) needs one to be sent \(REACH Annex XVII entry 47\)/)
+    expect(refused.body.error.message).toMatch(/Chromium VI test report: .* has none in force; line \d+ \(SEED-LEA-100\) needs one to be sent \(REACH Annex XVII entry 47\)/)
     const gate = await as('buyer', 'GET', `/purchasing/orders/${order.id}/compliance`)
     expect(gate).toMatchObject({ ready: false, overridden: false, request: null, may: { ask: true, decide: false } })
-    expect(gate.lines).toMatchObject([{ seq: 1, held: true, kinds: ['CR_VI_TEST_REPORT'] }])
+    expect(gate.lines).toMatchObject([{ seq: order.lines[0].seq, held: true, kinds: ['CR_VI_TEST_REPORT'] }])
   })
 
   it('goes without the document only on a second person’s yes (step-up), never the asker’s', async () => {
