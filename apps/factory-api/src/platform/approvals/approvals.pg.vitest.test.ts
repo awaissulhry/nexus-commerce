@@ -184,7 +184,8 @@ describe('approval rules by condition (PLT-086)', () => {
     const kinds = await ok('buyer', 'GET', '/approvals/kinds')
     const po = kinds.kinds.find((kind: Json) => kind.kind === 'PURCHASE_ORDER')
     expect(po).toMatchObject({ recordType: 'PurchaseOrder', askable: true, label: { en: 'Purchase order' } })
-    expect(po.fields.map((field: Json) => field.id)).toEqual(['orderValue', 'currency', 'lineCount', 'supplierStatus', 'supplierCode', 'siteCode'])
+    // B-W2b-305 (SCM-080): + the revision and the value added since the last send.
+    expect(po.fields.map((field: Json) => field.id)).toEqual(['orderValue', 'currency', 'lineCount', 'supplierStatus', 'supplierCode', 'siteCode', 'revision', 'valueIncrease'])
     expect(po.fields[0]).toMatchObject({ grain: 'cost', heldReason: null })
     expect(kinds.notRegistered).toContain('SALES_ORDER')
     const blind = await ok('buyerNoCost', 'GET', '/approvals/kinds')
