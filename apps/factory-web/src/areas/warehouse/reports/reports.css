@@ -1,0 +1,159 @@
+/*
+ * Warehouse › Reports (SCR-257) and its print view (SCR-353) LAYOUT: the band, the scope row, the panels' heads, the skeletons,
+ * the chart's frame, the articles' head, the keys and the print notes. The controls are the design system's; this file only
+ * places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the
+ * shell's main area and every panel starts full width.
+ */
+.fw-wr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-wr-band,
+.fw-wr-scope,
+.fw-wr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-wr-scope {
+  justify-content: flex-start;
+}
+
+.fw-wr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-wr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-wr-head-controls,
+.fw-wr-status,
+.fw-wr-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-wr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-wr-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-wr-hint,
+.fw-wr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-wr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-wr-sections {
+  min-width: 0;
+}
+
+.fw-wr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-wr-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-wr-articles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-wr-articles > .fw-wr-head {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.fw-wr-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-wr-lot {
+  padding-left: var(--nds-space-12);
+}
+
+.fw-wr-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-wr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.fw-wr-link.fw-wr-sub {
+  color: var(--nds-primary);
+}
+
+.fw-wr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-wr-keymap > div {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+
+.fw-wr-keymap dd {
+  margin: 0;
+}
+
+.fw-wr-print-note {
+  margin: var(--nds-space-6) 0 0;
+  font-size: var(--nds-font-size-sm);
+}
