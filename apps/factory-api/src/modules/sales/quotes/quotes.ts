@@ -280,6 +280,11 @@ export async function updateQuote(caller: CommandCaller, quoteId: string, body: 
       : undefined
     const termsDeposit = chosen && body.depositPct === undefined ? (depositOf(chosen.instalments)?.sharePct ?? undefined) : undefined
     const depositPct = body.depositPct === undefined ? (termsDeposit ?? decimal(version.depositPct)) : blankToNull(body.depositPct)
+    // W2b-5 (B-W2b-280; SAL-144): a version accepted by paying keeps its deposit (the database refuses it otherwise).
+    if (depositPct === null && body.depositPct !== undefined) {
+      const { acceptanceMode } = await tools.tx.quoteVersion.findUniqueOrThrow({ where: { id: version.id }, select: { acceptanceMode: true } })
+      if (acceptanceMode !== 'SIGN') throw new ValidationError('This quote is accepted by paying the deposit: it keeps a deposit.', [{ path: 'body/depositPct', message: 'A quote accepted by paying asks a deposit.' }])
+    }
     const versionData: Prisma.QuoteVersionUncheckedUpdateInput = {
       ...(body.validUntil !== undefined ? { validUntil: body.validUntil === null ? null : dayValue(body.validUntil) } : {}),
       ...(body.firmOffer !== undefined ? { firmOffer: body.firmOffer } : {}),

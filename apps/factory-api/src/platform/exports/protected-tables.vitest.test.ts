@@ -15,7 +15,8 @@ import { describe, expect, it } from 'vitest'
 
 const SRC = fileURLToPath(new URL('../..', import.meta.url))
 const FOLDERS = ['platform/exports/sources', 'platform/search/indexers', 'modules/insights/reports']
-const PROTECTED = ['HealthVisit', 'FitnessJudgement', 'ProtectedView', 'IncidentPerson', 'InailFiling'] as const
+// W2b-5 (B-W2b-291; SAL-415, GDPR art. 9): the injury of a product-safety report, kept apart from the report.
+const PROTECTED = ['HealthVisit', 'FitnessJudgement', 'ProtectedView', 'IncidentPerson', 'InailFiling', 'ProductSafetyInjury'] as const
 
 const delegate = (model: string): string => model[0]!.toLowerCase() + model.slice(1)
 /** A Prisma delegate (`tx.healthVisit.`) or the table in SQL text (`"HealthVisit"`). */
@@ -42,6 +43,7 @@ describe('protected safety data stays out of exports, reports and search', () =>
   it('would see a delegate or a table name', () => {
     expect(readsOf('await tx.fitnessJudgement.findMany({})')).toEqual(['FitnessJudgement'])
     expect(readsOf('SELECT * FROM "IncidentPerson" p')).toEqual(['IncidentPerson'])
+    expect(readsOf('await tx.productSafetyInjury.findMany({})')).toEqual(['ProductSafetyInjury'])
     expect(readsOf('await tx.incident.findMany({}); await tx.chemical.findMany({})')).toEqual([])
   })
 })

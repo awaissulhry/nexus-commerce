@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/returns.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes returns (RMAs, their lines, receipts, inspections and decisions) and repairs through apps/factory-api's modules/sales/returns (B-W2a-43) and modules/sales/repairs (B-W2a-57), always through command(); the API keeps staff to the companies and parties their grants reach. The floor (factory_floor_runtime, the dock's tablet: floor.returnsin, B-W2a-76) works only on its own site's RMAs: it reads them and their lines (never a price, a discount or a credit value: those columns are hidden from it), writes the dock receipt, moves an AUTHORISED RMA to RECEIVED and a RECEIVED one to INSPECTED, and writes a line's received pieces, grade, cause, condition and outcome; the …_sales_w2a_guards triggers refuse any other floor change. The floor reads no repair yet (the floor's repair queue is W2b, MES-132: then select and update by site). W2b schema wave 23 (B-W2b-192's need): a portal or link session (factory_partner_runtime) reads its own party's RMAs and lines, without the internal note, the owner and who authorised, inspected, decided or wrote a row (the prices are those it was invoiced); it inserts nothing (the API makes a customer's request as the person or the tenant's system). Receipts and repairs stay the office's. Nothing is deleted but an RMA line before the goods arrive. ReturnReceipt and RepairStageEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/returns.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes returns (RMAs, their lines, receipts, inspections and decisions) and repairs through apps/factory-api's modules/sales/returns (B-W2a-43) and modules/sales/repairs (B-W2a-57), always through command(); the API keeps staff to the companies and parties their grants reach. The floor (factory_floor_runtime, the dock's tablet: floor.returnsin, B-W2a-76) works only on its own site's RMAs: it reads them and their lines (never a price, a discount or a credit value: those columns are hidden from it), writes the dock receipt, moves an AUTHORISED RMA to RECEIVED and a RECEIVED one to INSPECTED, and writes a line's received pieces, grade, cause, condition and outcome; the …_sales_w2a_guards triggers refuse any other floor change. The floor reads no repair yet (the floor's repair queue is W2b, MES-132: then select and update by site). W2b schema wave 23 (B-W2b-192's need): a portal or link session (factory_partner_runtime) reads its own party's RMAs and lines, without the internal note, the owner and who authorised, inspected, decided or wrote a row (the prices are those it was invoiced); it inserts nothing (the API makes a customer's request as the person or the tenant's system). Receipts stay the office's; W2b-5 (schema wave 43/44, B-W2b-291): a portal or link session reads its own party's repairs too, without the internal note, the owner and who checked or wrote them, and the dock never reads a line's fee. Nothing is deleted but an RMA line before the goods arrive. ReturnReceipt and RepairStageEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "ReturnAuthorisation": {
       "about": "The office makes an RMA (numbered, authorised), names its order and replacement order, closes, rejects or cancels it. The dock of its site reads it and moves it AUTHORISED → RECEIVED (with a receipt) and RECEIVED → INSPECTED. W2b (schema wave 23): a portal or link session reads its own party's RMAs (how it asked, what it would like, the state and deadline), never the internal note, the owner, who authorised or who wrote it.",
@@ -17,7 +17,7 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["unitPrice", "discountPct", "creditAmount"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["unitPrice", "discountPct", "creditAmount", "feeAmount"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["inspectedById", "decidedById", "createdById"] }
       }
     },
@@ -31,11 +31,12 @@
       }
     },
     "RepairOrder": {
-      "about": "The office makes a repair or alteration (numbered), moves it through its stages, makes its repair work order, records the safety check of a PPE garment, and ships it back or cancels it.",
+      "about": "The office makes a repair or alteration (numbered), moves it through its stages, makes its repair work order, records the safety check of a PPE garment, and ships it back or cancels it. W2b-5 (schema wave 43/44, B-W2b-342's need): a portal or link session reads its own party's repairs (the garment, the work wanted, the stage), never the internal note, the owner, who checked it or who wrote it; it inserts nothing (the API makes a customer's repair request as the person or the tenant's system).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "ownerId", "safetyCheckedById", "createdById"] }
       }
     },
     "RepairStageEvent": {

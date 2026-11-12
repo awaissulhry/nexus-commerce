@@ -352,6 +352,8 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     if (!site || site.companyId !== order.companyId) throw new ValidationError("Not a site of the order's company.", [{ path: 'body/siteId', message: "Expected a site of the order's company." }])
     assertMay(context, SHIPPING_VIEW, SHIPPING_MANAGE, { companyId: order.companyId, siteId, partyId: order.partyId }, 'Sales order')
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
+    // W2b-5 (B-W2b-281): the database refuses a shipment of an order that waits for a yes; say it in words first.
+    if (order.status === 'PENDING_APPROVAL') throw new InvalidStateError('The sales order waits for a yes; nothing ships for it until it is confirmed.')
     const shipment = { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT' as const }
     const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, ShippableCell>()
     const shipTo = body.shipToAddressId ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId') : (order.shipTo as Prisma.InputJsonValue)

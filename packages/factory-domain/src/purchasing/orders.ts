@@ -31,11 +31,14 @@ import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, ro
  *              newer version (409) and, read again, a state that refuses it.
  */
 
-export const PURCHASE_ORDER_STATUSES = ['DRAFT', 'SENT', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED'] as const
+// W2b-5 (schema wave 40/44, B-W2b-285): PENDING_APPROVAL, a DRAFT that waits for a rule's yes before it is sent (B-W2b-305 asks
+// and sends it; no route moves an order there yet).
+export const PURCHASE_ORDER_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'SENT', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED'] as const
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number]
 
 export const STATUS_WORDS: Readonly<Record<PurchaseOrderStatus, string>> = Object.freeze({
   DRAFT: 'a draft',
+  PENDING_APPROVAL: 'waiting for a yes before it is sent',
   SENT: 'sent and waiting for the supplier',
   CONFIRMED: 'confirmed by the supplier',
   DECLINED: 'declined by the supplier',
@@ -305,6 +308,8 @@ export function newLinkProblem(status: PurchaseOrderStatus): string | null {
 export function cancelProblem(status: PurchaseOrderStatus): string | null {
   switch (status) {
     case 'DRAFT':
+    // W2b-5 (B-W2b-285): an order waiting for its yes was never sent; it is cancelled as a draft is.
+    case 'PENDING_APPROVAL':
     case 'SENT':
     case 'DECLINED':
       return null

@@ -56,6 +56,10 @@
 // holding place for a buyer; a lot has a lifecycle beside its quality status, a parent lot it was split from and its own
 // attributes; a move has a posting date apart from the day it happened, and the transfer line it carries (TRANSFER_OUT and
 // TRANSFER_IN between two sites: stock in transit stays on the from-site's TRANSIT location until it is received).
+//
+// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306; sales-orders-depth.prisma): a customer's own material (leather, trims the
+// brand sends for its orders) is stock the customer owns: its lots name their owner (Lot.ownerPartyId); it is never valued,
+// never bought and never used for another party's order (the …_sales_orders_depth_w2b_guards triggers).
 
 /// A place on a site where stock lies (SCM-176): a warehouse, a zone, a bin, the goods-in dock, the quarantine shelf,
 /// a line-side supply point. A tree inside the site. Archived (never deleted) once used; an archived location takes no
@@ -106,6 +110,8 @@ model Location {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   party             Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   subcontractOrders SubcontractOrder[]
+  // W2b-5 supply.prisma (wave 40/44): the purchase orders delivered straight to it (a workshop's place).
+  shipToPurchaseOrders PurchaseOrder[] @relation("PurchaseOrderShipToLocation")
   // W2b kits.prisma: the work-order kits staged here.
   workOrderKits     WorkOrderKit[]
   // W2b leather.prisma (wave 12/16): the remnants and fabric rolls lying here.
@@ -248,6 +254,10 @@ enum GoodsReceiptKind {
   STANDARD
   /// Goods nobody ordered: held in a holding place for a buyer until a purchase order names them (or they go back).
   UNPLANNED
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306): goods a customer sends for its orders (the brand's own leather, trims):
+  /// from a CUSTOMER or BRAND party, with no purchase order or ship notice, of materials tracked by LOT or HIDE; its lots are
+  /// owned by the sender (Lot.ownerPartyId), never valued, never matched to a supplier invoice.
+  CUSTOMER_SUPPLIED
 }
 
 /// OPEN → POSTED → REVERSED; OPEN → CANCELLED.
@@ -325,6 +335,11 @@ model Lot {
   supplierId         String?          @db.Uuid
   /// The supplier's batch number.
   supplierLotRef     String?
+  /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-306, B-W2b-228): customer-owned stock: the customer or brand whose material
+  /// it is (sent to us for its orders: a CUSTOMER_SUPPLIED receipt of that party, or opening stock); null: ours. Set when the
+  /// lot is made, never changed. Never valued, never bought, never issued or reserved for another party's order (the
+  /// …_sales_orders_depth_w2b_guards triggers, for every login).
+  ownerPartyId       String?          @db.Uuid
   /// The tannery's dye batch (one shade).
   dyeBatch           String?
   shade              String?
@@ -364,6 +379,10 @@ model Lot {
   /// TEXTILE, LINING, MEMBRANE, PADDING { "widthCm", "weightGsm", "origin" }; any other kind { "origin" }; texts 1 to 100
   /// characters. {}: nothing recorded.
   attributes         Json             @default("{}")
+  /// W2b-5 (schema wave 40/44, B-W2b-285; SCM-186): the variant of the item the lot is (buying-depth.prisma ItemVariant, by
+  /// its code; of the lot's colour when the variant has one, ACTIVE when named); set when the lot is made (or once on an
+  /// older lot), never changed. A lot received on a purchase order line of a variant is of that variant.
+  variantCode        String?
   version            Int              @default(1)
   createdAt          DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
@@ -371,9 +390,13 @@ model Lot {
 
   site        Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   item        Item              @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 40/44): its variant (Restrict, not Prisma's SetNull default: that would also clear tenantId and itemId).
+  variant     ItemVariant?      @relation(fields: [tenantId, itemId, variantCode], references: [tenantId, itemId, code], onDelete: Restrict, onUpdate: Restrict)
   itemColour  ItemColour?       @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier    Party?            @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   receiptLine GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 39/44): the customer who owns it. Restrict, not Prisma's SetNull default: that would also clear tenantId.
+  owner       Party?            @relation("LotOwner", fields: [tenantId, ownerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   hides       Hide[]
   moves       StockMove[]
   valuations  StockValuation[]

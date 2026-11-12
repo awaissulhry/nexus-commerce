@@ -78,6 +78,16 @@ model ReturnAuthorisation {
   /// For the office and the dock only.
   /// @internal
   internalNote       String?
+  /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-337, SAL-338): the return policy it was checked against (service.prisma
+  /// ReturnPolicy, of its company; its days gave goodsDueBy, the deadline), and whether it is a consumer's withdrawal
+  /// (Codice del Consumo art. 52; only with a CONSUMER_DISTANCE policy). Both change only before the goods arrive.
+  policyId           String?      @db.Uuid
+  withdrawal         Boolean      @default(false)
+  /// W2b-5 (SAL-360): why it was closed; set with CLOSED, never on another status (RMAs closed before have none).
+  finishReason       ReturnFinishReason?
+  /// W2b-5 (SAL-346): the code printed as a barcode on the RMA sheet and the box label, which the dock's "Scan the
+  /// return" reads (`^[A-Z0-9][A-Z0-9-]{5,39}$`, unique in the tenant); set once, never changed.
+  scanCode           String?
   version            Int          @default(1)
   createdAt          DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -89,6 +99,8 @@ model ReturnAuthorisation {
   contact          PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   salesOrder       SalesOrder?    @relation("ReturnSalesOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   replacementOrder SalesOrder?    @relation("ReturnReplacementOrder", fields: [tenantId, companyId, partyId, replacementOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 service.prisma (wave 43/44): the return policy it was checked against.
+  policy           ReturnPolicy?  @relation(fields: [tenantId, companyId, policyId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines            ReturnLine[]
   receipts         ReturnReceipt[]
   // complaints.prisma: the complaints that came with or led to it.
@@ -100,6 +112,8 @@ model ReturnAuthorisation {
   @@unique([tenantId, siteId, partyId, id])
   @@unique([tenantId, siteId, id])
   @@unique([tenantId, companyId, partyId, id])
+  // W2b-5 (SAL-346): one RMA per scan code in the tenant (a null is not compared).
+  @@unique([tenantId, scanCode])
   // The returns list and its tiles (waiting for goods, to inspect).
   @@index([tenantId, status])
   @@index([tenantId, partyId])
@@ -195,6 +209,27 @@ model ReturnLine {
   creditAmount       Int?
   /// REPLACE: the replacement order's line that replaces it.
   replacementLineId  String?             @db.Uuid
+  /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-336): the garment's serial and lot when they are ours, so a recall and a
+  /// trace find the line: the serial (quality.prisma GarmentSerial.serial; never a sample made for no order) and the lot,
+  /// the batch number of the work order that made it (production.prisma WorkOrder.batchNumber); they agree when both are
+  /// set. Set with what comes back, or by the dock when it scans the label at the receipt.
+  garmentSerial      String?
+  garmentBatch       String?
+  /// W2b-5 (SAL-350): the line it was split from when only part of it arrived (the parent keeps what arrived, this line
+  /// the rest, still expected); of the same RMA, never changed.
+  parentLineId       String?             @db.Uuid
+  /// W2b-5 (SAL-342): credited without the goods coming back (within the approval limit: an ApprovalTask of kind
+  /// CREDIT_WITHOUT_RETURN names the line where a rule asks one): no pieces arrive, the decision is CREDIT_ONLY without an
+  /// inspection. Set on a line none of whose pieces arrived (before the goods, or for the rest after a partial receipt).
+  creditWithoutReturn Boolean            @default(false)
+  /// W2b-5 (SAL-351): SIZE_EXCHANGE: the size the customer gets instead (exactly then, another size).
+  exchangeSize       String?
+  /// W2b-5 (SAL-343): the restocking or handling fee withheld from the credit (minor units, 0 or more) and the rule it
+  /// came from (service.prisma ReturnFeeRule, of the RMA's company); only with a decision, never a fee when the cause found
+  /// is ours.
+  feeRuleId          String?             @db.Uuid
+  /// @grain price
+  feeAmount          Int?
   version            Int                 @default(1)
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -207,6 +242,13 @@ model ReturnLine {
   invoiceLine     InvoiceLine?        @relation("ReturnLineInvoiceLine", fields: [tenantId, partyId, invoiceLineId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
   receipt         ReturnReceipt?      @relation(fields: [tenantId, siteId, returnId, receiptId], references: [tenantId, siteId, returnId, id], onDelete: Restrict, onUpdate: Restrict)
   replacementLine SalesOrderLine?     @relation("ReturnLineReplacement", fields: [tenantId, partyId, replacementLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 43/44): the garment and lot of ours it is, the line it was split from and the lines split from it, the
+  // fee rule.
+  serialOfOurs    GarmentSerial?      @relation("ReturnLineGarmentSerial", fields: [tenantId, garmentSerial], references: [tenantId, serial], onDelete: Restrict, onUpdate: Restrict)
+  batchOfOurs     WorkOrder?          @relation("ReturnLineGarmentBatch", fields: [tenantId, garmentBatch], references: [tenantId, batchNumber], onDelete: Restrict, onUpdate: Restrict)
+  parentLine      ReturnLine?         @relation("ReturnLineSplit", fields: [tenantId, returnId, parentLineId], references: [tenantId, returnId, id], onDelete: Restrict, onUpdate: Restrict)
+  splitLines      ReturnLine[]        @relation("ReturnLineSplit")
+  feeRule         ReturnFeeRule?      @relation(fields: [tenantId, feeRuleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   repairOrders    RepairOrder[]
   // W2b inventory.prisma (B-W2b-01): the CUSTOMER_RETURN moves that put its goods into stock.
   stockMoves      StockMove[]
@@ -217,9 +259,14 @@ model ReturnLine {
   // The target of the references from the repair orders (and the money module's credit note lines, wave 7/7): a line of
   // the same customer.
   @@unique([tenantId, partyId, id])
+  // W2b-5 (SAL-350): the target of a split line's reference: a line of the same RMA.
+  @@unique([tenantId, returnId, id])
   // What was sold, less what live RMAs take back (the guard's sums).
   @@index([tenantId, invoiceLineId])
   @@index([tenantId, salesOrderLineId])
+  // W2b-5 (SAL-336): a recall's or a trace's lines by serial and by lot.
+  @@index([tenantId, garmentSerial])
+  @@index([tenantId, garmentBatch])
 }
 
 /// The grade of returned garments (QHS-117; floor.returnsin "Grade each garment").
@@ -254,6 +301,8 @@ enum ReturnDisposition {
   CREDIT_ONLY
   RETURN_UNCHANGED
   SCRAP
+  /// W2b-5 (SAL-351): the same garment in another size (ReturnLine.exchangeSize), on the replacement order's line.
+  SIZE_EXCHANGE
 }
 
 /// Where the returned goods go (floor.returnsin "the suggested outcome": restock, repair, second quality, scrap).
@@ -376,6 +425,13 @@ model RepairOrder {
   /// For the office only.
   /// @internal
   internalNote      String?
+  /// W2b-5 (schema wave 43/44, B-W2b-291; SAL-384, SAL-391, SAL-393): the garment's serial when it is one of ours
+  /// (quality.prisma GarmentSerial.serial: the repair history of a garment), the work the customer asks for ("add 2 cm
+  /// to the sleeve", 1 to 2000 characters), and how the request reached us (the office, the portal, a claim link; never
+  /// changes). Its damage photos are StoredFile rows of the repair with the category DAMAGE_PHOTO (SAL-385).
+  garmentSerial     String?
+  workWanted        String?
+  channel           ReturnRequestChannel @default(OFFICE)
   version           Int               @default(1)
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -390,6 +446,9 @@ model RepairOrder {
   style      Style?             @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   colourway  Colourway?         @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrder  WorkOrder?         @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-5 (wave 43/44): the garment of ours it is; its estimates (service.prisma).
+  serialOfOurs GarmentSerial?   @relation("RepairOrderGarmentSerial", fields: [tenantId, garmentSerial], references: [tenantId, serial], onDelete: Restrict, onUpdate: Restrict)
+  estimates  RepairEstimate[]
   stages     RepairStageEvent[]
 
   @@unique([tenantId, companyId, number])
@@ -399,6 +458,8 @@ model RepairOrder {
   @@index([tenantId, stage])
   @@index([tenantId, returnLineId])
   @@index([tenantId, serial])
+  // W2b-5 (SAL-391): the repair history of a garment of ours.
+  @@index([tenantId, garmentSerial])
 }
 
 enum RepairKind {

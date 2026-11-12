@@ -5,7 +5,7 @@ import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { DAILY_ORDER_ACTIONS } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
-import { DEPOSIT_KINDS, MAX_TEXT, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { MAX_TEXT, SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -77,7 +77,7 @@ const depositView = output({
   id: id(),
   quoteVersionId: id().nullable(),
   orderId: id().nullable(),
-  kind: z.enum(DEPOSIT_KINDS),
+  kind: z.enum(STORED_DEPOSIT_KINDS),
   depositPct: z.string().nullable(),
   currency: z.string(),
   amount: money.price(z.number().int()),
