@@ -267,6 +267,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const serviceCase = await client.serviceCase.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return serviceCase ? { companyId: serviceCase.companyId, siteId: null, partyId: serviceCase.partyId } : null
   },
+  // B-W2b-351 (modules/sales/safety-reports; SAL-414): a product-safety report's company, no site, and the customer it names (a
+  // report from the public DoC page names none: internal notes only). Never anything of an injury (ProductSafetyInjury has no thread).
+  ProductSafetyReport: async (client, id) => {
+    const report = await client.productSafetyReport.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return report ? { companyId: report.companyId, siteId: null, partyId: report.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
