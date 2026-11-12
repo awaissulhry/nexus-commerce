@@ -183,6 +183,10 @@ import { PRODUCT_COLOURS_DEFINITIONS, PRODUCT_COLOURS_PERMISSIONS } from '../../
 import { PRODUCT_BRANDING_DEFINITIONS, PRODUCT_BRANDING_PERMISSIONS } from '../../product/branding-sets/permissions'
 // B-W2b-282: one approval engine (approvals.view | request | decide | rules.manage).
 import { APPROVALS_DEFINITIONS, APPROVALS_PERMISSIONS } from '../../approvals/permissions'
+// B-W2b-296: purchase orders in depth (purchasing.tolerances.manage: the delivery tolerances).
+import { PO_DEPTH_DEFINITIONS, PO_DEPTH_PERMISSIONS } from '../../purchasing/po-depth/permissions'
+// B-W2b-332: ask to buy (purchasing.requests.ask).
+import { ASK_TO_BUY_DEFINITIONS, ASK_TO_BUY_PERMISSIONS } from '../../purchasing/ask-to-buy/permissions'
 // B-W2b-288: the PPE text approvals (compliance.ppeTexts.manage, the owner's); reading is compliance.certificates.view.
 import { PPE_TEXTS_DEFINITIONS, PPE_TEXTS_PERMISSIONS } from '../../compliance/ppe-texts/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -880,6 +884,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_BRANDING_DEFINITIONS,
   // B-W2b-282: one approval engine.
   APPROVALS_DEFINITIONS,
+  // B-W2b-296: purchase orders in depth (area `purchasing`, declared above).
+  PO_DEPTH_DEFINITIONS,
+  // B-W2b-332: ask to buy (area `purchasing`).
+  ASK_TO_BUY_DEFINITIONS,
   // B-W2b-288: the PPE text approvals (area `compliance`, declared above).
   PPE_TEXTS_DEFINITIONS,
 ])
@@ -1180,6 +1188,10 @@ for (const name of PORTAL_SAMPLES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)
 for (const name of [...PRODUCT_COLOURS_PERMISSIONS, ...PRODUCT_BRANDING_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-282: one approval engine.
 for (const name of APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-296: purchase orders in depth.
+for (const name of PO_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-332: ask to buy.
+for (const name of ASK_TO_BUY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-288: the PPE text approvals.
 for (const name of PPE_TEXTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

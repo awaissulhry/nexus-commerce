@@ -133,6 +133,8 @@ import { events as stylesDepth } from '../styles-depth/events'
 import { events as productChanges } from '../product-changes/events'
 // B-W2b-282: one approval engine.
 import { events as approvals } from '../approvals/events'
+// B-W2b-332: ask to buy (a request asked, a request moved).
+import { events as purchaseRequests } from '../purchase-requests/events'
 // B-W2b-238: materials in depth (a material's approval decided).
 import { events as materialsDepth } from '../materials-depth/events'
 // B-W2b-230: the tech pack (a new PDF version of a revision's tech pack kept).
@@ -461,6 +463,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...productColours,
   // B-W2b-282
   ...approvals,
+  // B-W2b-332
+  ...purchaseRequests,
   // B-W2b-288
   ...compliancePpeTexts] as const satisfies readonly EventDefinition[]
 

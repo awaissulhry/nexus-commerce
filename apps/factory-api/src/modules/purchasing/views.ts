@@ -12,6 +12,8 @@ import type { RequestContext } from '../../core/context'
 import { supplierCalendarsFor } from '../../platform/calendars/service'
 import { companyLegalOf } from '../../platform/documents/documents'
 import { confirmLinksOf } from './confirm-links'
+// B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/store.ts).
+import { depthChecks, readDepthFacts, type DepthFacts } from './po-depth/store'
 import {
   CONTACT_COLUMNS,
   dayOf,
@@ -54,6 +56,8 @@ export interface OrderFacts {
    */
   readonly supplierCalendar?: WorkingCalendar | null | undefined
   readonly today?: string | undefined
+  /** B-W2b-296: the lines' delivery schedules, the rate at order with the company's currency, and the ship-to. */
+  readonly depth?: DepthFacts | undefined
 }
 
 /** B-W2a-52: a line cancelled or closed short takes no goods and is no part of what is sent. */
@@ -103,7 +107,8 @@ export async function readFacts(db: Reader, order: OrderRow, today?: string): Pr
     const longest = Math.max(2, party.leadTimeDays ?? 0, ...items.map((item) => item.leadTimeDays ?? 0))
     supplierCalendar = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(today, Math.min(longest, 400), 'forward'))).get(party.id)?.calendar ?? null
   }
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today }
+  const depth = await readDepthFacts(db, order, lines)
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -115,7 +120,7 @@ export async function letterheadProblems(db: Reader, context: RequestContext, co
 /** What a send would check now (factory-domain purchasing/orders sendChecks). */
 export function checksOf(facts: OrderFacts, today: string, companyLegal: readonly Issue[]): { ready: boolean; checks: SendCheck[] } {
   const { order, party, contact } = facts
-  return sendChecks({
+  const w1 = sendChecks({
     status: order.status as PurchaseOrderStatus,
     today,
     supplier: { name: party.legalName, status: party.status, roles: party.roles },
@@ -145,6 +150,10 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
       }
     }),
   })
+  // B-W2b-296: the schedules of the lines sent, the rate at order, the ship-to.
+  const depth = facts.depth ? depthChecks(facts.depth, facts.lines.filter((line) => !isCancelledLine(line)), facts.items, today) : []
+  const checks = [...w1.checks, ...depth]
+  return { ready: !checks.some((check) => check.severity === 'BLOCKS'), checks }
 }
 
 function lineView(facts: OrderFacts, line: LineRow, received: ReadonlyMap<string, string>) {
