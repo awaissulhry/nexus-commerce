@@ -243,7 +243,7 @@ describe('a change in the supplier’s portal, with a second approval the rule a
 
   it('asks the second approval a switched-on SUPPLIER_BANK_CHANGE rule names; the asker never approves it', async () => {
     const financeRole = (await sql<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'finance'`, [tenant]))[0]!.id
-    const rule = (await as(admin, 'POST', '/approvals/rules', { kind: 'SUPPLIER_BANK_CHANGE', companyId: companyA, name: 'Every bank change', condition: { combinator: 'AND', rows: [] }, approver: { roleId: financeRole } }, 201)).rule
+    const rule = (await as(admin, 'POST', '/approvals/rules', { kind: 'SUPPLIER_BANK_CHANGE', companyId: companyA, name: 'Every bank change', condition: { combinator: 'and', rows: [] }, approver: { roleId: financeRole } }, 201)).rule
     await as(admin, 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
     let version = account(await as(people.fin1!.browser, 'GET', bankUrl), '5003').version
     await as(people.fin1!.browser, 'POST', `${bankUrl}/${portalId}/call-back`, { version, contactId: ORDER_DESK, phone: '+39 000 0000315' })
