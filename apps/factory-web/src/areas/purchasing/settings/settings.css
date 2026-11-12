@@ -1,0 +1,279 @@
+/*
+ * Purchasing › Settings › Purchasing settings (SCR-256): layout only, semantic --nds-* tokens (no raw colours, no restyled
+ * controls). The page fills the shell's main area (no max-width, Owner rule 2026-10-29): the PO approval rules and the
+ * delivery tolerances across the whole width, the Confirmation card in two columns on a wide screen, one column below 1100px.
+ */
+
+.fw-pus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pus-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-pus-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 24rem;
+}
+
+.fw-pus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pus-card {
+  min-width: 0;
+}
+
+.fw-pus-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pus-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-pus-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pus-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--nds-space-10) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pus-stepper {
+  display: inline-flex;
+  width: 11rem;
+  max-width: 100%;
+}
+
+.fw-pus-default,
+.fw-pus-exceptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pus-intro,
+.fw-pus-hint,
+.fw-pus-asof,
+.fw-pus-value {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.fw-pus-value {
+  color: var(--nds-text-strong);
+}
+
+.fw-pus-description {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pus-changed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-pus-link,
+.fw-pus-rowlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-pus-rowlink {
+  display: inline;
+}
+
+.fw-pus-link:hover,
+.fw-pus-link:focus-visible,
+.fw-pus-rowlink:hover,
+.fw-pus-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pus-held,
+.fw-pus-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-pus-hint svg,
+.fw-pus-warn svg {
+  flex: none;
+  margin-top: 0.2em;
+}
+
+.fw-pus-problem {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-danger-text);
+}
+
+.fw-pus-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-pus-question {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pus-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--nds-space-6) var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-pus-choices > legend {
+  margin-bottom: var(--nds-space-4);
+}
+
+.fw-pus-inforce,
+.fw-pus-inforce-row,
+.fw-pus-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pus-switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pus-sub {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-pus-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.4;
+  padding-block: var(--nds-space-4);
+}
+
+.fw-pus-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.fw-pus-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pus-alert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-pus-viewonly {
+  display: inline-flex;
+}
+
+.fw-pus-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-pus-keymap-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-pus-keymap-row dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  min-width: 5rem;
+}
+
+.fw-pus-keymap-row dd {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}

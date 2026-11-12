@@ -247,6 +247,10 @@
       "planning_itemParameters": {
         "name": "Item planning",
         "fills": "How each site plans each item and colour: method, source, supplier, lead times and stock levels."
+      },
+      "purchasing_supplierPrices": {
+        "name": "Supplier price lists",
+        "fills": "A supplier's approved sources: material, colour, purchase unit, price (cost), minimum, lead time and primary or backup, keyed by supplier, material and colour code."
       }
     },
     "keys": {

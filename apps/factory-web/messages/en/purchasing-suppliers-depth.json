@@ -1,0 +1,880 @@
+{
+  "problem": {
+    "forbidden": "You may not do this here.",
+    "notFound": "It is not there any more: read the page again.",
+    "conflict": "Someone else changed it meanwhile: it was read again. Check and try once more.",
+    "invalid": "Something typed is not right: check the fields.",
+    "stepUp": "A fresh code is needed for this.",
+    "rateLimited": "Too many tries: wait a minute and try again.",
+    "signedOut": "You were signed out: sign in again.",
+    "offline": "The factory's server did not answer: check the connection and try again.",
+    "unavailable": "It did not work this time: try again."
+  },
+  "read": {
+    "failed": "Couldn't load {what}",
+    "retry": "Try again",
+    "loading": "Still loading…"
+  },
+  "dialog": {
+    "cancel": "Cancel",
+    "saving": "Saving…"
+  },
+  "notice": {
+    "hide": "Hide"
+  },
+  "held": {
+    "manage": "Changing a supplier's data needs the right to manage parties.",
+    "archived": "An archived supplier is read only: reactivate it first.",
+    "status": "Setting a supplier's status needs the purchasing right to set supplier status.",
+    "qualify": "Qualifying a supplier needs the right to manage qualifications.",
+    "review": "Checking what suppliers send needs the right to review supplier documents.",
+    "decideChanges": "Deciding a supplier's changes needs the right to decide supplier changes.",
+    "ask": "Asking a supplier for something needs the right to send requests to partners.",
+    "bankPropose": "Proposing bank details needs the right to propose them.",
+    "bankCallBack": "Recording the call-back needs the right to call suppliers back.",
+    "bankVerify": "The second check needs the right to check bank details.",
+    "bankReveal": "Seeing the whole IBAN needs the finance right to reveal it.",
+    "receipts": "The receipts need the right to see stock.",
+    "claims": "The claims need the right to see purchasing.",
+    "files": "Opening a file needs the right to read files.",
+    "noEmail": "This contact has no e-mail address: add one first.",
+    "sources": "Importing a price list needs the right to manage approved sources.",
+    "importRun": "Importing needs the rights to run imports and upload files."
+  },
+  "import": {
+    "suppliers": "Import",
+    "prices": "Import price list",
+    "everyCompany": "Every company"
+  },
+  "kind": {
+    "TANNERY": "Tannery",
+    "TEXTILE_MILL": "Textile mill",
+    "TRIMS": "Trims",
+    "PROTECTOR_MAKER": "Protector maker",
+    "SUBCONTRACTOR": "Subcontractor",
+    "CARRIER": "Carrier",
+    "SERVICE": "Services"
+  },
+  "tannage": {
+    "CHROME": "Chrome",
+    "VEGETABLE": "Vegetable",
+    "CHROME_FREE": "Chrome-free",
+    "COMBINATION": "Combination"
+  },
+  "status": {
+    "PROSPECT": "Prospect",
+    "APPROVED": "Approved",
+    "CONDITIONAL": "Conditional",
+    "ON_HOLD": "On hold",
+    "BLOCKED": "Blocked",
+    "INACTIVE": "Inactive",
+    "label": "Status with us",
+    "fromParty": "Read from the party's status: no supplier status set yet.",
+    "sinceBy": "Since {date}, by {name}",
+    "sinceSystem": "Since {date}, set by the system",
+    "reasonIs": "Why: {reason}",
+    "change": "Change status",
+    "problem": {
+      "pick": "Pick the new status.",
+      "reason": "Say why: conditional, on hold and blocked need a reason."
+    },
+    "dialog": {
+      "title": "Change the status of {name}",
+      "now": "Now: {status}.",
+      "to": "New status",
+      "pick": "Pick a status",
+      "reason": "Reason",
+      "reasonHint": "One line. Needed for conditional, on hold and blocked; it shows on the record and at a held send.",
+      "confirm": "Make it {status}",
+      "stops": "No new purchase order goes to it from now; drafts are held at their send, sent orders run on.",
+      "prospect": "A prospect gets sample orders only.",
+      "reaching": "Counting what it reaches…",
+      "reachFailed": "Couldn't count what it reaches: the change still works.",
+      "reachStops": "{drafts} draft purchase orders held at their send; {open} sent purchase orders run on unchanged.",
+      "reachGoes": "{drafts} draft purchase orders can be sent; {open} sent purchase orders run on unchanged."
+    }
+  },
+  "profile": {
+    "title": "Kinds, origin and closures",
+    "hint": "What kind of supplier it is, its lead time, where it makes what it sells us and when it is closed.",
+    "kinds": "Kinds",
+    "noKinds": "No kind set",
+    "leadTime": "Default lead time (days)",
+    "leadTimeHint": "Calendar days from the order to the delivery; its closed days are walked past.",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "country": "Country of manufacture",
+    "countryHint": "Two letters, e.g. IT",
+    "region": "Region",
+    "note": "Origin, in words",
+    "hides": "Raw hides from",
+    "hidesHint": "Countries, two letters each, separated by commas",
+    "tannages": "Tannages",
+    "clearsTannery": "No longer a tannery: saving clears where its raw hides come from and its tannages.",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "save": "Save",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "refused": "Refused: check this field.",
+    "problem": {
+      "leadTime": "Whole days from 0 to {max}.",
+      "country": "Two letters of the country (ISO), e.g. IT.",
+      "hides": "Two letters per country, separated by commas.",
+      "tooLong": "At most {max} characters.",
+      "tooMany": "At most {max}."
+    }
+  },
+  "closures": {
+    "title": "Closures",
+    "label": "Closures of {name}",
+    "kind": {
+      "work": "Working day",
+      "off": "Day off",
+      "closed": "Closed"
+    },
+    "noCalendar": "No closures calendar: only its days off of the week count.",
+    "none": "No closure in the next twelve months.",
+    "day": "{date}: {name}",
+    "span": "{from} – {to}: {name} ({count} days)",
+    "ordered": "Ordered today ({date}), it arrives on {arrives} at the earliest: {count} days' lead time.",
+    "orderedPast": "Ordered today ({date}), it arrives on {arrives} at the earliest: {count} days' lead time, past {closed}.",
+    "noLeadTime": "No default lead time: set one to see when an order placed today arrives."
+  },
+  "now": {
+    "title": "Status and documents",
+    "since": "since {date}",
+    "newOrders": "New purchase orders",
+    "nextStep": "Next step",
+    "nextExpiry": "Next document to expire",
+    "noExpiry": "None with an end date",
+    "unknown": "— couldn't load",
+    "noOrder": {
+      "PROSPECT": "Sample orders only until it is approved.",
+      "APPROVED": "It may get new orders.",
+      "CONDITIONAL": "It may get new orders, on its conditions.",
+      "ON_HOLD": "None: it is on hold.",
+      "BLOCKED": "None: it is blocked as a supplier.",
+      "INACTIVE": "None: it is inactive.",
+      "partyBlocked": "None: the party is blocked.",
+      "archived": "None: the party is archived."
+    }
+  },
+  "receives": {
+    "title": "What each contact receives",
+    "hint": "Tick what each contact gets by e-mail. It saves as you tick.",
+    "contact": "Contact",
+    "noEmail": "No e-mail",
+    "kind": {
+      "PO": "Purchase orders",
+      "CLAIM": "Claims",
+      "REMITTANCE": "Remittances",
+      "QUALITY": "Quality",
+      "DOCUMENT": "Document requests"
+    },
+    "box": "{name} receives {kind}",
+    "saved": "Saved",
+    "refused": "Not saved",
+    "invalid": "Not saved: a contact needs an e-mail address and must be active.",
+    "conflict": "Someone else changed this contact meanwhile: it was read again.",
+    "empty": "No contacts",
+    "emptyBody": "POs cannot be e-mailed until one receives POs. Add a contact on the left.",
+    "nobodyPo": "Nobody receives purchase orders: POs cannot be e-mailed until a contact receives them.",
+    "routes": "Who gets what"
+  },
+  "routing": {
+    "receives": {
+      "PO": "POs go to {who}.",
+      "CLAIM": "Claims go to {who}.",
+      "REMITTANCE": "Remittances go to {who}.",
+      "QUALITY": "Quality mail goes to {who}.",
+      "DOCUMENT": "Document requests go to {who}."
+    },
+    "role": {
+      "PO": "POs go to {who}, by their role (orders): nobody ticked them.",
+      "CLAIM": "Claims go to {who}, by their role: nobody ticked them.",
+      "REMITTANCE": "Remittances go to {who}, by their role (invoices): nobody ticked them.",
+      "QUALITY": "Quality mail goes to {who}, by their role: nobody ticked it.",
+      "DOCUMENT": "Document requests go to {who}, by their role: nobody ticked them."
+    },
+    "none": {
+      "PO": "Nobody receives purchase orders.",
+      "CLAIM": "Nobody receives claims.",
+      "REMITTANCE": "Nobody receives remittances.",
+      "QUALITY": "Nobody receives quality mail.",
+      "DOCUMENT": "Nobody receives document requests."
+    }
+  },
+  "vault": {
+    "title": "Documents",
+    "hint": "Certificates and declarations with their expiry, and what each one unlocks at PO send.",
+    "request": "Request documents",
+    "questionnaire": "Send the questionnaire link",
+    "noKinds": "Its kinds are not set: set them on Overview to know what to ask of it.",
+    "asked": "What we ask of it",
+    "materials": "What the materials it sells us need",
+    "inForce": "Documents in force",
+    "or": " or ",
+    "required": "Required",
+    "askedOnly": "Asked",
+    "waiting": "Waiting for our check",
+    "needsCertificate": "Certificate {number} ({standard})",
+    "held": "Held at send",
+    "checked": "Checked at send",
+    "notChecked": "Not checked",
+    "empty": "No documents",
+    "emptyBody": "Materials that need one will be held at PO send.",
+    "unnamed": "Document",
+    "covers": "Covers {codes}",
+    "number": "No. {number}",
+    "col": {
+      "document": "Document",
+      "required": "Required",
+      "law": "Law",
+      "state": "State",
+      "expires": "Expires",
+      "material": "Material",
+      "needs": "Needs",
+      "atSend": "At PO send",
+      "file": "File",
+      "kind": "Kind",
+      "issuer": "Issuer",
+      "issued": "Issued",
+      "source": "From"
+    }
+  },
+  "ask": {
+    "MET": "Valid",
+    "EXPIRING": "Expires in 30 days",
+    "EXPIRED": "Expired",
+    "MISSING": "Missing"
+  },
+  "doc": {
+    "CR_VI_TEST_REPORT": "a chromium VI test report (below 3 mg/kg)",
+    "REACH_DECLARATION": "a REACH declaration",
+    "LWG_AUDIT": "an LWG audit or an ISO 9001 / 14001 certificate",
+    "AZO_TEST_REPORT": "a test report on azo dyes",
+    "EN_1621_CERTIFICATE": "the EU type-examination certificate of the protectors (EN 1621)",
+    "DECLARATION_OF_CONFORMITY": "the EU declaration of conformity of the protectors",
+    "DURC": "the DURC (regular social contributions, valid 120 days)",
+    "CODE_OF_CONDUCT": "the signed code of conduct",
+    "CARRIER_INSURANCE": "the carrier's insurance and registration",
+    "state": {
+      "VALID": "Valid",
+      "EXPIRING": "Expires in 30 days",
+      "EXPIRED": "Expired"
+    }
+  },
+  "need": {
+    "CR_VI_TEST_REPORT": "A chromium VI test report",
+    "PPE_CERTIFICATE": "A valid certificate of the register"
+  },
+  "gate": {
+    "CR_VI_TEST_REPORT_one": "POs for {codes} need a valid chromium VI test report to be sent.",
+    "CR_VI_TEST_REPORT_other": "POs for {codes} need a valid chromium VI test report to be sent.",
+    "PPE_CERTIFICATE_one": "POs for {codes} need a valid certificate in the register to be sent.",
+    "PPE_CERTIFICATE_other": "POs for {codes} need a valid certificate in the register to be sent."
+  },
+  "category": {
+    "SUPPLIER_CERTIFICATE": "Certificate",
+    "TEST_REPORT": "Test report",
+    "DECLARATION": "Declaration"
+  },
+  "source": {
+    "PORTAL": "Its portal",
+    "QUESTIONNAIRE": "Questionnaire",
+    "OFFICE": "Office"
+  },
+  "expiry": {
+    "none": "No expiry",
+    "today": "Expires today",
+    "in_one": "Expires in {count} day",
+    "in_other": "Expires in {count} days",
+    "ago_one": "Expired {count} day ago",
+    "ago_other": "Expired {count} days ago"
+  },
+  "next": {
+    "nothing": "Nothing waiting.",
+    "waiting_one": "{count} upload waits for our check.",
+    "waiting_other": "{count} uploads wait for our check.",
+    "missing_one": "{count} required document is missing.",
+    "missing_other": "{count} required documents are missing.",
+    "expired_one": "{count} document has expired.",
+    "expired_other": "{count} documents have expired.",
+    "expiring_one": "{count} document expires in 30 days.",
+    "expiring_other": "{count} documents expire in 30 days."
+  },
+  "review": {
+    "title": "Waiting for our check",
+    "hint": "What the supplier sent through its portal: nothing counts until someone here accepts it.",
+    "empty": "Nothing waits for our check.",
+    "uploads": "Documents sent",
+    "changes": "Company data changes",
+    "changesHeld_one": "{count} change of its company data waits: deciding it needs the right to decide supplier changes.",
+    "changesHeld_other": "{count} changes of its company data wait: deciding them needs the right to decide supplier changes.",
+    "col": {
+      "document": "Document",
+      "said": "What they said",
+      "for": "For",
+      "sent": "Sent by",
+      "decide": "Decide"
+    },
+    "replaces": "Replaces a document in force",
+    "until": "Valid until {date}",
+    "note": "Their note: {note}",
+    "accept": "Accept",
+    "refuse": "Refuse",
+    "approve": "Approve",
+    "changeFrom": "From {name}, {date}",
+    "acceptTitle": "Accept the document",
+    "acceptBody": "Accepted, it is shared with the supplier, counts for the rules and starts its expiry reminders.",
+    "saidUntil": "Valid until (as they said)",
+    "kind": "What it is",
+    "kindHint": "Check it against the file.",
+    "lastDay": "Last valid day",
+    "lastDayHint": "Leave empty for a document with no end date.",
+    "replacesField": "It replaces",
+    "replacesHint": "The accepted copy becomes the next version of that document.",
+    "replacesNone": "Nothing: a new document",
+    "refuseTitle": "Refuse the document",
+    "refuseBody": "The supplier sees why and is asked to upload it again within 14 days.",
+    "refuseChangeTitle": "Refuse the change",
+    "refuseChangeBody": "Nothing changes; the supplier sees why.",
+    "reason": "Why",
+    "approveTitle": "Approve the change",
+    "approveBody": "Each change is made on the supplier's record now, as shown.",
+    "accepted": "Accepted: it counts from now.",
+    "refused": "Refused: the supplier is asked again.",
+    "changeApproved": "Approved: the record shows the change.",
+    "changeRefused": "Refused: nothing changed.",
+    "problem": {
+      "date": "A day, please.",
+      "past": "That day has passed: an expired document is not accepted.",
+      "reason": "Say why in at least {min} characters."
+    }
+  },
+  "change": {
+    "ADDRESS": {
+      "ADD": "New address: {what}",
+      "CHANGE": "Address changed: {what}",
+      "REMOVE": "Address removed: {what}"
+    },
+    "CONTACT": {
+      "ADD": "New contact: {what}",
+      "CHANGE": "Contact changed: {what}",
+      "REMOVE": "Contact removed: {what}"
+    },
+    "website": "Website changed",
+    "field": "{field}: {before} → {after}"
+  },
+  "field": {
+    "name": "Name",
+    "line1": "Address",
+    "line2": "Address line 2",
+    "postalCode": "Postcode",
+    "city": "City",
+    "province": "Province",
+    "country": "Country",
+    "contactName": "Contact",
+    "phone": "Phone",
+    "deliveryNotes": "Delivery notes",
+    "email": "E-mail",
+    "roles": "Handles",
+    "language": "Language",
+    "website": "Website",
+    "kinds": "Use"
+  },
+  "request": {
+    "titleOne": "Request documents",
+    "title_one": "Request documents from {count} supplier",
+    "title_other": "Request documents from {count} suppliers",
+    "body": "Each supplier gets a request on its portal's Home to upload what we ask of it; it shows there with the due day.",
+    "due": "Due by",
+    "dueHint": "Optional. At most 180 days ahead.",
+    "send": "Send the request",
+    "sendMany_one": "Ask {count} supplier",
+    "sendMany_other": "Ask {count} suppliers",
+    "sending": "Asking…",
+    "close": "Close",
+    "toAsk": "to ask",
+    "waiting": "waiting…",
+    "outcome": {
+      "asked": "asked",
+      "already": "a request waits already"
+    },
+    "refused": "not asked: {why}",
+    "summary": "{asked} of {count} asked.",
+    "done": "Asked: the request is on its portal.",
+    "already": "A request waits on its portal already.",
+    "held": {
+      "none": "Select the suppliers to ask.",
+      "max": "At most {max} at a time."
+    },
+    "problem": {
+      "future": "A day from tomorrow on.",
+      "far": "At most 180 days ahead."
+    }
+  },
+  "qual": {
+    "title": "Qualification",
+    "hint": "What it is qualified for now, per kind of work or material, on what evidence and until when.",
+    "ask": "Ask a qualification",
+    "heldAsk": "This supplier cannot be qualified here.",
+    "work": "Qualified for",
+    "col": {
+      "work": "Work",
+      "company": "Company",
+      "standing": "Now"
+    },
+    "empty": "No qualification yet",
+    "emptyBody": "Ask one: it rests on the newest accepted questionnaire and the documents it put in force.",
+    "status": {
+      "PENDING": "Waiting for a decision",
+      "APPROVED": "Approved",
+      "CONDITIONAL": "Conditional",
+      "REFUSED": "Refused",
+      "SUSPENDED": "Suspended",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "move": {
+      "decide": "Decide",
+      "suspend": "Suspend",
+      "lift": "Lift the suspension",
+      "withdraw": "Withdraw"
+    },
+    "heldMove": {
+      "decide": "Only a qualification waiting for a decision is decided.",
+      "suspend": "Only an approved qualification is suspended.",
+      "lift": "Only a suspended qualification is lifted.",
+      "withdraw": "This qualification cannot be withdrawn now."
+    },
+    "scope": "Scope",
+    "days": "Valid",
+    "fromTo": "{from} – {to}",
+    "noEnd": "no end",
+    "evidence": "Evidence",
+    "noEvidence": "None named",
+    "evidenceExpired": "expired",
+    "decided": "Decided",
+    "decidedBy": "{date}, {name}",
+    "conditions": "Conditions",
+    "refuseReason": "Why it was refused",
+    "suspended": "Suspended",
+    "withdrawn": "Withdrawn",
+    "whyOn": "{date}: {reason}",
+    "askTitle": "Ask a qualification",
+    "askConfirm": "Ask",
+    "askBody": "It waits for a decision; with no evidence named it rests on the newest accepted questionnaire of the company.",
+    "company": "Company",
+    "workKinds": "Kinds of work",
+    "materialKinds": "Kinds of material",
+    "from": "From",
+    "fromHint": "Default today.",
+    "until": "Until",
+    "untilHint": "Leave empty for no end.",
+    "decideTitle": "Decide the qualification",
+    "decision": "Decision",
+    "decisionOf": {
+      "APPROVED": "Approve",
+      "CONDITIONAL": "Approve on conditions",
+      "REFUSED": "Refuse"
+    },
+    "suspendTitle": "Suspend the qualification",
+    "withdrawTitle": "Withdraw the qualification",
+    "reason": "Why",
+    "liftTitle": "Lift the suspension",
+    "liftBody": "It counts again from now. It was suspended because: {reason}",
+    "done": {
+      "ask": "Asked: it waits for a decision.",
+      "decide": "Decided.",
+      "suspend": "Suspended: it does not count until lifted.",
+      "lift": "Lifted: it counts again.",
+      "withdraw": "Withdrawn."
+    },
+    "problem": {
+      "work": "Pick at least one kind of work.",
+      "materials": "Pick at least one kind of material.",
+      "days": "The end comes after the start.",
+      "conditions": "Say the conditions.",
+      "refuse": "Say why it is refused.",
+      "reason": "Say why.",
+      "noEvidence": "A yes needs evidence it rests on: an accepted questionnaire, an accepted document or a visit report. Refuse it, or ask a new one once it has evidence."
+    }
+  },
+  "standing": {
+    "QUALIFIED": "Qualified",
+    "CONDITIONAL": "Conditional",
+    "NOT_YET": "Not yet in force",
+    "EXPIRED": "Expired",
+    "EVIDENCE_EXPIRED": "Evidence expired",
+    "SUSPENDED": "Suspended",
+    "PENDING": "Waiting for a decision",
+    "REFUSED": "Refused",
+    "NONE": "Not qualified"
+  },
+  "work": {
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "ASSEMBLY": "Assembly",
+    "FINISHING": "Finishing",
+    "INSPECTION": "Inspection",
+    "PACKING": "Packing",
+    "SUBCONTRACT": "Subcontracted work"
+  },
+  "material": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Textile",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trims",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protectors",
+    "LABEL": "Labels",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Components"
+  },
+  "evidence": {
+    "SupplierQuestionnaireResponse": "Questionnaire",
+    "SupplierDocumentUpload": "Upload",
+    "StoredFile": "File"
+  },
+  "quality": {
+    "tile": {
+      "receipts": "Receipts posted",
+      "recent": "the latest 50",
+      "lots": "Lots received",
+      "released_one": "{count} released",
+      "released_other": "{count} released",
+      "discrepancies": "Discrepancies at receipt",
+      "open_one": "{count} open",
+      "open_other": "{count} open",
+      "claims": "Open claims",
+      "claimsAll_one": "{count} in all",
+      "claimsAll_other": "{count} in all"
+    },
+    "noRight": "—",
+    "receipts": "Receipts",
+    "receiptsHint": "What came in from this supplier and what we accepted.",
+    "claims": "Claims and returns",
+    "claimsHint": "What we claimed from it afterwards.",
+    "noReceipts": "No receipts yet",
+    "noClaims": "No claims",
+    "lotsOf": "{released} of {count} released",
+    "discOf": "{count} ({open} open)",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "scoreLater": "The scorecard (on time in full, quality, responsiveness) comes later.",
+    "col": {
+      "receipt": "Receipt",
+      "received": "Received",
+      "order": "Order",
+      "lots": "Lots accepted",
+      "discrepancies": "Discrepancies",
+      "status": "Status",
+      "claim": "Claim",
+      "kind": "Kind",
+      "materials": "Materials",
+      "lotsClaimed": "Lots",
+      "quantity": "Quantity",
+      "age": "Age"
+    }
+  },
+  "receipt": {
+    "OPEN": "Open",
+    "POSTED": "Posted",
+    "REVERSED": "Reversed",
+    "CANCELLED": "Cancelled"
+  },
+  "claim": {
+    "kind": {
+      "RETURN": "Return",
+      "CLAIM": "Claim"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "SENT": "Sent",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "bank": {
+    "title": "Bank account",
+    "hint": "The IBAN payments use. A change waits for a call-back on a number we had before it and for a second person's check.",
+    "change": "Change IBAN",
+    "empty": "No bank account",
+    "emptyBody": "Payments to this supplier are held.",
+    "reveal": "Reveal the IBAN",
+    "retire": "Retire",
+    "refuse": "Refuse",
+    "callBack": "Record the call-back",
+    "verify": "Second check",
+    "bankName": "Bank",
+    "holder": "Holder",
+    "bic": "BIC",
+    "currency": "Currency",
+    "iban": "IBAN",
+    "ibanHint": "As on the bank's letter; spaces are fine. It is checked as you type.",
+    "inUseSince": "In use since",
+    "source": "Came from",
+    "sourceOf": {
+      "OFFICE": "the office",
+      "PORTAL": "the supplier's portal"
+    },
+    "letter": "Bank letter",
+    "noLetter": "None attached",
+    "waitingTitle": "Change waiting",
+    "oldNew": "{old} → {next}",
+    "proposed": "Proposed",
+    "proposedBy": "{date}, {name}",
+    "callBackLabel": "Call-back",
+    "calledBy": "{name} called {who} on {number}, {date}",
+    "notCalled": "Not yet",
+    "waitingYes": "A second approval waits in Home › Approvals (due {date}).",
+    "nextCall": "Next: someone other than who proposed it calls the supplier on a number we had before the change.",
+    "nextCheck": "Next: a second person checks it; payments use it only then.",
+    "pill": {
+      "WAITING_CALL_BACK": "Waiting call-back check",
+      "WAITING_SECOND_CHECK": "Waiting second approval",
+      "VERIFIED": "Checked",
+      "USABLE": "Usable",
+      "REFUSED": "Refused",
+      "RETIRED": "Retired"
+    },
+    "held": {
+      "oneAtATime": "A change waits already: decide that one first.",
+      "notWaiting": "This account does not wait for that step.",
+      "calledBack": "Already called back.",
+      "ownCallBack": "You proposed this change: someone else calls the supplier back.",
+      "ownCheck": "You proposed this change: someone else checks it.",
+      "noNumber": "No number on file from before the change: add one on the supplier's contacts.",
+      "notYou": "Not for you on this change.",
+      "callBackFirst": "Record the call-back first.",
+      "waitingYes": "A second approval waits in Home › Approvals."
+    },
+    "propose": {
+      "title": "New IBAN",
+      "body": "The new account waits: payments keep using the account in use until the call-back and the second check.",
+      "review": "Review",
+      "reviewTitle": "Check the change",
+      "back": "Back",
+      "send": "Propose the change",
+      "old": "Account in use",
+      "new": "New account",
+      "noOld": "None in this currency",
+      "waits": "Payments keep using the account in use until the supplier is called back on a number we had and a second person checks it.",
+      "fix_one": "Fix {count} field first",
+      "fix_other": "Fix {count} fields first",
+      "letter": "Attach the bank's letter to the account's files once it is proposed."
+    },
+    "problem": {
+      "ibanEmpty": "Type the IBAN.",
+      "ibanShape": "Two letters of the country, two check digits, then 11 to 30 letters or digits.",
+      "ibanLength": "An IBAN of {country} has {length} characters; this one has {typed}.",
+      "ibanDigits": "The check digits do not match: a character is mistyped.",
+      "holder": "Type the account holder.",
+      "bic": "A BIC has 8 or 11 letters and digits.",
+      "currency": "Three letters, e.g. EUR.",
+      "own": "You proposed this change: someone else must do this step."
+    },
+    "callBackDialog": {
+      "title": "Call-back for {iban}",
+      "body": "Call the supplier on a number we had before the change and confirm the new account with them.",
+      "onFile": "Number on file",
+      "dialled": "Number dialled",
+      "dialledHint": "As you dialled it: its digits must be the record's.",
+      "leftOut": "Not offered",
+      "pick": "Pick the number you called.",
+      "phoneDiffers": "The digits differ from the number on file.",
+      "confirm": "Record the call-back"
+    },
+    "onFile": {
+      "CONTACT": "Contact",
+      "ADDRESS": "Address"
+    },
+    "hold": {
+      "NO_PHONE": "No phone number on file.",
+      "ADDED_AFTER": "Added after the change was proposed: it may have come with the change.",
+      "CHANGED_AFTER": "Changed after the change was proposed: it may have come with the change.",
+      "NOT_ACTIVE": "No longer active."
+    },
+    "verifyDialog": {
+      "title": "Second check of {iban}",
+      "body": "You confirm the call-back and the new account: payments use it from now and the account in use retires.",
+      "rule": "If an approval rule is switched on, the change waits for that yes instead.",
+      "confirm": "Check it"
+    },
+    "refuseDialog": {
+      "title": "Refuse the change to {iban}",
+      "body": "Payments keep using the account in use; the supplier sees it refused.",
+      "confirm": "Refuse the change"
+    },
+    "retireDialog": {
+      "title": "Retire {iban}",
+      "body": "Payments in this currency are held until another account is in use.",
+      "confirm": "Retire the account"
+    },
+    "revealDialog": {
+      "title": "The whole IBAN of {iban}",
+      "body": "Seeing it asks a fresh code and is recorded with your name.",
+      "confirm": "Reveal",
+      "done": "Done",
+      "recorded": "Recorded with your name. It is not kept on this page once closed."
+    },
+    "reason": "Why",
+    "stepUp": {
+      "title": "Confirm it's you",
+      "confirm": "Confirm",
+      "propose": "The code lets you propose new bank details for 5 minutes.",
+      "verify": "The code lets you check bank details for 5 minutes.",
+      "reveal": "The code lets you see the whole IBAN for 5 minutes."
+    },
+    "done": {
+      "proposed": "Proposed: it waits for the call-back.",
+      "calledBack": "Call-back recorded: it waits for the second check.",
+      "verified": "Checked: payments use the new account now.",
+      "waitsYes": "Checked: it waits for the approval in Home › Approvals.",
+      "refused": "Refused: payments keep using the account in use.",
+      "retired": "Retired: payments in that currency are held."
+    },
+    "history": {
+      "title": "History of changes",
+      "proposed": "{iban} proposed from {source}",
+      "calledBack": "{iban}: supplier called back",
+      "checked": "{iban}: second check",
+      "inUse": "{iban} in use",
+      "refused": "{iban} refused",
+      "retired": "{iban} retired"
+    }
+  },
+  "stepUp": {
+    "sentence": {
+      "default": "The code lets you go on for 5 minutes."
+    },
+    "problem": {
+      "wrong": "That code is not right: type the newest one.",
+      "locked": "Too many wrong codes: wait a few minutes.",
+      "noAuthenticator": "Set up your authenticator in My profile first.",
+      "tooMany": "Too many tries: wait a minute.",
+      "failed": "The code could not be checked: try again."
+    }
+  },
+  "list": {
+    "documents": {
+      "col": "Documents",
+      "none": "None asked",
+      "cell": "{valid} valid · {expiring} expiring · {expired} expired · {missing} missing"
+    },
+    "request_one": "Request documents ({count})",
+    "request_other": "Request documents ({count})"
+  },
+  "tile": {
+    "expiring": "Documents expiring in 30 days",
+    "expiringHint": "Suppliers with a document that runs out soon",
+    "unknown": "Couldn't count"
+  },
+  "expiring": {
+    "title": "Suppliers with documents expiring in 30 days",
+    "intro": "Ask them for the new ones before a PO send is held.",
+    "close": "Back to the list",
+    "count_one": "{count} supplier",
+    "count_other": "{count} suppliers",
+    "empty": "No document expires in the next 30 days",
+    "emptyBody": "The tile counts them as their days come.",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "col": {
+      "code": "Code",
+      "supplier": "Supplier",
+      "kinds": "Kinds",
+      "expiring": "Expiring",
+      "expired": "Expired",
+      "missing": "Missing",
+      "valid": "Valid"
+    }
+  },
+  "portalBank": {
+    "title": "Bank details",
+    "hint": "Changed only with our call-back and a second check.",
+    "change": "Change bank details",
+    "reading": "Reading…",
+    "failedRead": "Couldn't load your bank details.",
+    "none": "No bank account with us yet: add one with Change bank details.",
+    "state": {
+      "USABLE": "In use",
+      "WAITING": "Waiting for our check",
+      "REFUSED": "Refused",
+      "RETIRED": "No longer used"
+    },
+    "bank": "Bank",
+    "holder": "Account holder",
+    "bic": "BIC",
+    "currency": "Currency",
+    "iban": "IBAN",
+    "lastChanged": "Last changed",
+    "sentOn": "Sent on",
+    "refusedOn": "Refused on",
+    "why": "Why: {reason}",
+    "waitingWords": "Waiting: we call you on your registered number before any payment uses the new account. Payments go to the old account until then.",
+    "held": {
+      "preview": "This is a preview of the portal: nothing can be changed here.",
+      "admin": "Only your admin changes the bank details.",
+      "waiting": "A change waits for our check already.",
+      "offline": "You are offline: try again when the connection is back."
+    },
+    "formTitle": "New bank details",
+    "formBody": "Type the new account as on your bank's letter.",
+    "ibanHint": "Spaces are fine. It is checked as you type.",
+    "letter": "Keep your bank's letter at hand: we ask for it when we call you.",
+    "cancel": "Cancel",
+    "review": "Review",
+    "fix_one": "Fix {count} field first",
+    "fix_other": "Fix {count} fields first",
+    "reviewTitle": "Check before sending",
+    "old": "Account in use",
+    "new": "New account",
+    "noOld": "None in this currency",
+    "back": "Back",
+    "send": "Send for our check",
+    "sending": "Sending…",
+    "sent": "Sent for our check: we call you on your registered number before any payment uses it.",
+    "problem": {
+      "ibanEmpty": "Type the IBAN.",
+      "ibanShape": "Two letters of the country, two check digits, then 11 to 30 letters or digits.",
+      "ibanLength": "An IBAN of {country} has {length} characters; this one has {typed}.",
+      "ibanDigits": "The check digits do not match: a character is mistyped.",
+      "holder": "Type the account holder.",
+      "bic": "A BIC has 8 or 11 letters and digits.",
+      "currency": "Three letters, e.g. EUR."
+    },
+    "failed": {
+      "clash": "A change of these details waits already, or it is the account in use.",
+      "invalid": "Something typed is not right: check the IBAN.",
+      "forbidden": "Only your admin changes the bank details.",
+      "wait": "Too many tries: wait a minute.",
+      "network": "It was not sent: check the connection and try again."
+    }
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}
