@@ -228,7 +228,7 @@ export const receiptView = output({
 export const recordReceiptContract = defineContract({
   body: input({
     purchaseOrderId: id(),
-    /** Where the goods go (a location of the order's site). Default the site's one goods-in dock. */
+    /** Where the goods go (a location of the order's site). Default the site's default receiving place (B-W2b-289), else its one goods-in dock. */
     locationId: id().optional(),
     supplierDdtNumber: code().nullish(),
     supplierDdtDate: businessDate().nullish(),

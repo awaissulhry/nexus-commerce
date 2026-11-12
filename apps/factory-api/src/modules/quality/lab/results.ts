@@ -9,7 +9,8 @@ import { addYears } from '../../../platform/files/rules'
 import { completeUpload, requestUpload, retainFilesInCommand } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { checklistOf, lotView, ruleFor, today } from './read'
-import { processLabResults, type LabResultRow } from './results-store'
+import { processLabResults, type LabCost, type LabResultRow } from './results-store'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { factsOf, lockLotStock, lotFor, officeOf, readLot, type LotRow } from './store'
 import { workOrdersOf } from './trace'
 
@@ -65,6 +66,20 @@ export interface RecordResultBody extends CrViResultInput {
   readonly version: number
   readonly test: LabTest
   readonly fileId: string
+  /** B-W2b-288 (FU2:03): the lab's price of this result (money.cost; the grain filter refuses it without the grain). */
+  readonly cost?: LabCost | null | undefined
+}
+
+/** B-W2b-288 (FU2:03): the largest lab price of one result, in minor units (one million). */
+export const LAB_COST_MAX = 100_000_000
+
+/** B-W2b-288 (FU2:03): the lab's price as typed: whole minor units from 0, an ISO 4217 currency. */
+function labCostProblems(cost: LabCost | null | undefined): { path: string; message: string }[] {
+  if (!cost) return []
+  const problems: { path: string; message: string }[] = []
+  if (!Number.isInteger(cost.cents) || cost.cents < 0 || cost.cents > LAB_COST_MAX) problems.push({ path: 'body/cost/cents', message: `The lab's price in cents, a whole number from 0 to ${LAB_COST_MAX}.` })
+  if (!/^[A-Z]{3}$/.test(cost.currency)) problems.push({ path: 'body/cost/currency', message: 'The currency as its three capital letters ("EUR").' })
+  return problems
 }
 
 const blank = (value: string | null | undefined): string | null => (value?.trim() ? value.trim() : null)
@@ -105,7 +120,9 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
   if (!lot.requiresCrViTest || facts.crViLimitMgKg === null) throw new InvalidStateError(`Lot ${lot.code} needs no chromium VI test: its material does not ask for one.`)
   const { rule } = await caller.withClient((client) => ruleFor(client, context.tenantId, lot.companyId))
   const checked = resultProblems(body, { limitMgKg: facts.crViLimitMgKg, rule, lotCode: lot.code, receivedDay: facts.receivedDay, today: today() })
-  if (checked.problems.length > 0) throw new ValidationError('The result is not valid.', checked.problems.map((problem) => ({ path: `body/${problem.path}`, message: problem.message })))
+  // B-W2b-288 (FU2:03): the lab's price, checked with the rest.
+  const costProblems = labCostProblems(body.cost)
+  if (checked.problems.length > 0 || costProblems.length > 0) throw new ValidationError('The result is not valid.', [...checked.problems.map((problem) => ({ path: `body/${problem.path}`, message: problem.message })), ...costProblems])
   const file = await reportFile(caller, lot, body, idempotencyKey)
 
   const { result } = await command(
@@ -168,6 +185,8 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
         note: blank(body.note),
         createdAt: toUtcIso(now),
         createdById: context.actorId,
+        // B-W2b-288 (FU2:03): the lab's price, typed with the result.
+        cost: body.cost ? { cents: body.cost.cents, currency: body.cost.currency } : null,
       }
       await processLabResults().record(tools, row)
       // The garments made from it: a register entry (Reg. 2016/425 art. 8(4)) when its stock went to work orders.
@@ -200,7 +219,8 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
       }
       const updated = (await readLot(tx, current.id))!
       return {
-        result: { ...row, words: verdict.words },
+        // B-W2b-288 (FU2:03): the price as the caller typed it (the grain filter keeps it for the cost grain only).
+        result: { ...row, cost: asMoney('cost', row.cost ?? null), words: verdict.words },
         effect: change.words,
         lot: await lotView(tx, updated),
         checklist: await checklistOf(tx, context.tenantId, updated, businessDate(now), context.actorId),

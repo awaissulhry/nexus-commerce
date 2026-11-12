@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useRef, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Download, MoreHorizontal, Search, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Download, Minus, MoreHorizontal, Search, XCircle } from 'lucide-react'
 import { Card, EmptyState, HoverCard, Menu, MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components'
 import { GateExplainer, type GateCheck } from '@nexus/ui/components/GateExplainer/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
@@ -101,7 +101,8 @@ function stateOf<V>(read: Read<V>, failedTitle: string, shape: 'tiles' | 'lines'
 /** The cell's state with its icon and word (never a colour alone): Ready ✓ · Missing 2 · Blocked ✕ · Expiring !. */
 export function CellMark({ cell }: { cell: Pick<Cell, 'state' | 'missing'> }) {
   const t = useT('compliance-status')
-  const Icon = cell.state === 'READY' ? CheckCircle2 : cell.state === 'BLOCKED' ? XCircle : cell.state === 'EXPIRING' ? Clock : AlertTriangle
+  // B-W2b-288 (FU2:02): Not sold there (—).
+  const Icon = cell.state === 'READY' ? CheckCircle2 : cell.state === 'BLOCKED' ? XCircle : cell.state === 'EXPIRING' ? Clock : cell.state === 'NOT_SOLD' ? Minus : AlertTriangle
   return (
     <Tag tone={CELL_TONE[cell.state]}>
       <Icon size={13} aria-hidden /> {cellWord(t, cell.state, cell.missing)}
@@ -301,10 +302,10 @@ export function MatrixPanel({ model, actions }: Props) {
       <section aria-labelledby="cs-matrix-title" className="fw-cs-panel" id="cs-matrix">
         <Head id="cs-matrix-title" title={t('section.matrix')} hint={t('matrix.hint')}>
           <span className="fw-cs-legend" aria-label={t('matrix.legend')}>
-            {(['READY', 'MISSING', 'BLOCKED', 'EXPIRING'] as const).map((cellState) => (
+            {/* B-W2b-288 (FU2:02): Not sold there is a state of its own. */}
+            {(['READY', 'MISSING', 'BLOCKED', 'EXPIRING', 'NOT_SOLD'] as const).map((cellState) => (
               <CellMark key={cellState} cell={{ state: cellState, missing: 2 }} />
             ))}
-            <span className="fw-cs-muted">{t('matrix.notSold')}</span>
           </span>
         </Head>
         {model.address.gap === 'crVi' ? <CrViNote model={model} /> : null}

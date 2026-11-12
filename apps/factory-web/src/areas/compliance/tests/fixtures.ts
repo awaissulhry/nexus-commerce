@@ -7,6 +7,8 @@ import { at, canFor, COMPANY_ID, day, inShell, NOW, PREFIX, SITE_ID, uid, type R
 import type { LabResult, LabSettings, LotCheck, LotChecklist, LotDetail, LotDocument } from './api'
 import { isFailedOnHold, isWaitingEvidence, tileCounts, viewQuery, viewRows, type LotsListModel, type LotView } from './model'
 import { LotsView } from './view/LotsView'
+// B-W2b-288 (FU2:03): the lab's price.
+import { labCostListCases } from './lab-cost/fixtures'
 
 /**
  * SCR-054 Tests & substances — made-up lots only ("Demo" materials, DEMO-L-… codes, invented values and laboratories).
@@ -284,6 +286,8 @@ export const designScreen = defineDesignScreen<LotsCase>({
     },
     { id: 'rule-strict', label: 'The rule at rest when a lab report is required (this company’s own rule)', model: listModel({ rule: ready(STRICT) }) },
     { id: 'shortcuts', label: 'The keys (?)', model: listModel({ dialog: { kind: 'shortcuts' } }) },
+    // B-W2b-288 (FU2:03): the Lab cost column (the cost grain only).
+    ...labCostListCases(listModel, LOTS),
   ],
 })
 

@@ -13,6 +13,8 @@ import { attachDocument, decideLot, downloadAddress, getLot, pickedFile, recordR
 import { blankDocument, blankResult, decimalText, RECORD_TABS, recordResultHeld, type DocumentDraft, type RecordDialog, type ResultDraft } from '../model'
 import { LabMessages } from '../view/parts'
 import { LotRecordView } from './view/LotRecordView'
+// B-W2b-288 (FU2:03): the lab's price of a result (the cost grain).
+import { holdsCostGrain, labCostBody } from '../lab-cost/lab-cost'
 
 /**
  * The lot record container (`/w/<company>/compliance/tests/<lotId>?tab=results|documents|release|activity`, SCR-054):
@@ -152,6 +154,8 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
           periodFrom: draft.periodFrom || null,
           periodTo: draft.periodTo || null,
           note: draft.note.trim() || null,
+          // B-W2b-288 (FU2:03): the lab's price, typed by a person with the cost grain.
+          cost: holdsCostGrain(session.permissions) ? labCostBody(draft.labCost) : null,
         },
         file,
       )
@@ -297,6 +301,8 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         answer,
         blocked,
         dockOpen,
+        // B-W2b-288 (FU2:03)
+        costGrain: holdsCostGrain(session.permissions),
       }}
       panels={panels}
       actions={{

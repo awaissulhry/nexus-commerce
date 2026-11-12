@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, read
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', 'Ddt', /* B-W2b-278 */ 'EvidencePack', /* B-W2b-135 */ 'FitnessJudgement', /* B-W2b-135 */ 'HealthVisit', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', /* B-W2b-171 */ 'MeasurementProfile', 'OpeningStock', 'Parcel', 'PayrollExport', /* B-W2b-224 */ 'PointOfMeasure', 'PrivacyDpia', 'PrivacyNotice', /* B-W2b-278 */ 'ProductionControlTest', /* B-W2b-165 */ 'QuoteVersion', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', 'Ddt', /* B-W2b-278 */ 'EvidencePack', /* B-W2b-135 */ 'FitnessJudgement', /* B-W2b-135 */ 'HealthVisit', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', /* B-W2b-171 */ 'MeasurementProfile', 'OpeningStock', 'Parcel', 'PayrollExport', /* B-W2b-224 */ 'PointOfMeasure', /* B-W2b-288 */ 'PpeTextApproval', 'PrivacyDpia', 'PrivacyNotice', /* B-W2b-278 */ 'ProductionControlTest', /* B-W2b-165 */ 'QuoteVersion', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -25,6 +25,8 @@ describe('record types whose files only their module writes (owned.ts)', () => {
       expect(ownerOf('EvidencePack', kind), `EvidencePack ${kind}`).not.toBeNull()
       expect(ownerOf('ProductionControlTest', kind), `ProductionControlTest ${kind}`).not.toBeNull()
     }
+    // B-W2b-288 (FU2:01): the PPE consultant's file of an approval, every kind.
+    expect(ownerOf('PpeTextApproval', 'DOCUMENT')).not.toBeNull()
     expect(ownerOf('TechnicalFile', 'ATTACHMENT')).toBeNull()
     // Not an inherited property of a plain object.
     expect(ownerOf('constructor', 'DOCUMENT')).toBeNull()

@@ -25,11 +25,17 @@ describe('the Workshop column of the locations import (B-W2b-25)', () => {
     expect(plan({ site: 'A1', code: 'A1-B1', kind: 'SUBCONTRACTOR', workshop: 'TERZ-01' }, record({ code: 'A1-B1', kind: 'BIN', workshop: null }))).toMatchObject({ action: 'ERROR', errors: [{ column: 'kind' }] })
   })
 
-  it('keeps a CUSTOMER location with its party unchanged, refuses another party, and makes none by import (B-W2b-277)', () => {
+  it('keeps a CUSTOMER location with its party unchanged, refuses another party (B-W2b-277); makes one with its party (B-W2b-289)', () => {
     const customer = record({ code: 'A1-CUST', name: 'At the customer', kind: 'CUSTOMER', workshop: 'CUST-01' })
     expect(plan({ site: 'A1', code: 'A1-CUST', name: 'At the customer', kind: 'CUSTOMER', workshop: 'CUST-01' }, customer)).toEqual({ action: 'UNCHANGED' })
     expect(plan({ site: 'A1', code: 'A1-CUST', workshop: 'CUST-02' }, customer)).toEqual({ action: 'ERROR', errors: [{ column: 'workshop', message: expect.stringContaining('its party never changes') }] })
-    expect(plan({ site: 'A1', code: 'A1-CUST', name: 'x', kind: 'CUSTOMER', workshop: 'CUST-01' })).toEqual({ action: 'ERROR', errors: [{ column: 'kind', message: expect.stringContaining('made on the Locations page') }] })
+    // B-W2b-289: a new one names its customer (the adapter checks the party), sits at the top, and stays a customer's place.
+    const row = { site: 'A1', code: 'A1-CUST', name: 'x', kind: 'CUSTOMER', workshop: 'CUST-01' }
+    expect(plan(row)).toEqual({ action: 'CREATE', after: row })
+    expect(plan({ site: 'A1', code: 'A1-CUST', name: 'x', kind: 'CUSTOMER' })).toEqual({ action: 'ERROR', errors: [{ column: 'workshop', message: expect.stringContaining('name it') }] })
+    expect(plan({ ...row, parent: 'A1-STORE' })).toEqual({ action: 'ERROR', errors: [{ column: 'parent', message: expect.stringContaining('top of the site') }] })
+    expect(plan({ site: 'A1', code: 'A1-CUST', kind: 'BIN' }, customer)).toEqual({ action: 'ERROR', errors: [{ column: 'kind', message: expect.stringContaining('stays one') }] })
+    expect(plan({ site: 'A1', code: 'A1-B1', kind: 'TRANSIT' }, record({ code: 'A1-B1', kind: 'BIN', workshop: null }))).toEqual({ action: 'ERROR', errors: [{ column: 'kind', message: expect.stringContaining('stays one') }] })
   })
 
   it('keeps the same workshop unchanged and renames the location', () => {
