@@ -39,6 +39,8 @@ import {
   type QuantityForm,
 } from './model'
 import { ReceiveView, type ReceiveAction, type ReceiveStage } from './view/ReceiveView'
+// B-W2b-300 (SCM-122): goods that came without a purchase order.
+import { FloorUnplanned } from './unplanned/Unplanned'
 
 /**
  * The live SCR-092 (`/floor/receive`): which delivery (a PO number scanned here or on Home, or a row of what the site
@@ -95,6 +97,8 @@ export function FloorReceive() {
   const [ddtMoreDays, setDdtMoreDays] = useState(false)
   const [ddtCamera, setDdtCamera] = useState(false)
   const [photoSend, setPhotoSend] = useState<'sending' | 'sent' | 'failed' | null>(null)
+  // B-W2b-300: goods without a PO, opened from the first step (their own screen, in this one's frame).
+  const [unplanned, setUnplanned] = useState(false)
   const started = useRef(false)
   // The post's key, kept while the body sent is the same (a retry of a lost answer is answered, never posted twice).
   const postKey = useRef<{ body: string; key: string } | null>(null)
@@ -555,6 +559,10 @@ export function FloorReceive() {
       case 'photoRetry':
         if (posted && ddtPhoto) void sendPhoto(posted.receipt.id, posted.receipt.number, ddtPhoto.blob)
         return
+      // B-W2b-300
+      case 'unplanned':
+        setProblem(null)
+        return setUnplanned(true)
     }
   }
 
@@ -562,7 +570,8 @@ export function FloorReceive() {
   // A refusal of the order itself (cancelled, received, closed …): the way on is the next delivery.
   const closedProblem = problem?.problem.kind === 'refused' && (problem.problem.code.startsWith('STATUS_') || problem.problem.code === 'NOT_RECEIVING')
   const onProblem = closedProblem ? next : () => onAction({ type: 'dismiss' })
-  useFloorKeys({
+  // B-W2b-300: goods without a PO take the keys while they are on screen.
+  useFloorKeys(unplanned ? {} : {
     enter: problem
       ? onProblem
       : leaveAsk
@@ -596,6 +605,20 @@ export function FloorReceive() {
   })
 
   if (!me) return null
+  // B-W2b-300: goods without a PO (back here when done or left).
+  if (unplanned)
+    return (
+      <FloorUnplanned
+        frame={frame}
+        onFrame={onFrame}
+        ddtCode={ddtCode}
+        onBack={() => {
+          setUnplanned(false)
+          setDdtCode(null)
+          void loadExpected()
+        }}
+      />
+    )
   return (
     <ReceiveView
       model={{
