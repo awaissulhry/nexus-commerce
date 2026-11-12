@@ -198,6 +198,8 @@ import { events as productMtm } from '../product-mtm/events'
 import { events as complianceClaims } from '../compliance-claims/events'
 // B-W2b-247: the colour library and the brands' branding sets (colour.changed, branding_set.changed).
 import { events as productColours } from '../product-colours/events'
+// B-W2b-289: locations in depth (blocks, bin label codes, default locations).
+import { events as inventoryLocationsDepth } from '../inventory-locations/events'
 // B-W2b-288: the PPE text approvals (a consultant's yes per template recorded or withdrawn; GATE-PPE-TEXTS).
 import { events as compliancePpeTexts } from '../compliance-ppe-texts/events'
 import type { EventDefinition } from './define'
@@ -465,6 +467,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...approvals,
   // B-W2b-332
   ...purchaseRequests,
+  // B-W2b-289
+  ...inventoryLocationsDepth,
   // B-W2b-288
   ...compliancePpeTexts] as const satisfies readonly EventDefinition[]
 
