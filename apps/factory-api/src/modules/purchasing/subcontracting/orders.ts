@@ -65,6 +65,7 @@ import { settleJobInCommand } from '../portal-jobs/tasks'
 
 // B-W2b-228 (PRD-108): the kit takes the BOM's lines for the workshop (./kit-lines.ts).
 import { kitLinesOf } from './kit-lines'
+import { NO_NEW_ORDER, type SupplierStatus } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
 
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
@@ -973,7 +974,8 @@ export async function removeKitLine(caller: CommandCaller, orderId: string, line
 export async function actFacts(tx: CommandTx, order: OrderRow) {
   const operations = await readOperations(tx, order.id)
   const kit = await readKitLines(tx, order.id)
-  const party = await tx.party.findUnique({ where: { id: order.partyId }, select: { status: true } })
+  // B-W2b-311 (SCM-008): a workshop on hold, blocked or inactive as a supplier gets no work either.
+  const party = await tx.party.findUnique({ where: { id: order.partyId }, select: { status: true, supplierStatus: true } })
   const location = await tx.location.findUnique({ where: { id: order.locationId }, select: { status: true } })
   const workOrder = await tx.workOrder.findUnique({ where: { id: order.workOrderId }, select: { status: true } })
   const codes = new Map((await tx.workOrderOperation.findMany({ where: { id: { in: operations.map((row) => row.workOrderOperationId) } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
@@ -985,7 +987,7 @@ export async function actFacts(tx: CommandTx, order: OrderRow) {
       expectedBackDate: dayOf(order.expectedBackDate),
       orderDate: dayOf(order.orderDate)!,
       currency: order.currency,
-      workshopActive: party?.status === 'ACTIVE',
+      workshopActive: party?.status === 'ACTIVE' && !NO_NEW_ORDER.includes(party.supplierStatus as SupplierStatus),
       locationActive: location?.status === 'ACTIVE',
       workOrderStatus: workOrder?.status ?? '',
       operations: operations.map((row) => ({ seq: row.seq, code: codes.get(row.workOrderOperationId), pieces: row.pieces, pricePerPiece: row.pricePerPiece.toString(), piecesSent: row.piecesSent })),

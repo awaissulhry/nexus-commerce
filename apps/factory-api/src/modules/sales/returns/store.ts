@@ -24,6 +24,7 @@ import {
   type ReturnPolicy,
   type ReturnStatus,
 } from '@nexus/factory-domain/sales/returns/rules'
+import { CREDIT_WITHOUT_RETURN_EFFECT } from '@nexus/factory-domain/sales/returns-depth/rules'
 import type { CommandTx } from '../../../core/command'
 import { reasonWords } from '../../../platform/reasons/service'
 import { sourceDdtsOf } from '../../shipping/ddt/sources-store'
@@ -73,6 +74,12 @@ export const RMA_COLUMNS = {
   channel: true,
   outcomeWanted: true,
   customerNote: true,
+  // B-W2b-341 (wave 43/44, B-W2b-291): the policy it was checked against, a consumer's withdrawal, the finish reason, the
+  // scan code its papers print.
+  policyId: true,
+  withdrawal: true,
+  finishReason: true,
+  scanCode: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -93,6 +100,8 @@ export const FLOOR_RMA_COLUMNS = {
   goodsDueBy: true,
   receivedAt: true,
   inspectedAt: true,
+  // B-W2b-341 (SAL-346): the code the dock scans.
+  scanCode: true,
   version: true,
 } as const satisfies Prisma.ReturnAuthorisationSelect
 export type FloorRmaRow = Prisma.ReturnAuthorisationGetPayload<{ select: typeof FLOOR_RMA_COLUMNS }>
@@ -126,13 +135,21 @@ export const FLOOR_LINE_COLUMNS = {
   decidedAt: true,
   decidedById: true,
   replacementLineId: true,
+  // B-W2b-341 (wave 43/44): the garment and lot of ours (SAL-336), the line it was split from (SAL-350), credited without
+  // the goods (SAL-342: nothing more is expected of it), the size it is exchanged for (SAL-351).
+  garmentSerial: true,
+  garmentBatch: true,
+  parentLineId: true,
+  creditWithoutReturn: true,
+  exchangeSize: true,
   version: true,
   createdAt: true,
   updatedAt: true,
 } as const satisfies Prisma.ReturnLineSelect
 export type FloorLineRow = Prisma.ReturnLineGetPayload<{ select: typeof FLOOR_LINE_COLUMNS }>
 
-export const LINE_COLUMNS = { ...FLOOR_LINE_COLUMNS, unitPrice: true, discountPct: true, creditAmount: true } as const satisfies Prisma.ReturnLineSelect
+// B-W2b-341 (SAL-343): the fee withheld from the credit and its rule (the dock never reads the fee).
+export const LINE_COLUMNS = { ...FLOOR_LINE_COLUMNS, unitPrice: true, discountPct: true, creditAmount: true, feeRuleId: true, feeAmount: true } as const satisfies Prisma.ReturnLineSelect
 export type LineRow = Prisma.ReturnLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
 export const RECEIPT_COLUMNS = {
@@ -403,8 +420,9 @@ export function lineView(line: LineRow, facts: Pick<RecordFacts, 'sold' | 'reaso
     decidedById: line.decidedById,
     creditAmount: price(line.creditAmount),
     followUp: decision ? followUpOf(decision.disposition, decision.creditAmount ?? 0) : null,
-    effect: decision ? effectWords(decision, place) : null,
-    effectWithAmount: price(decision ? effectWithAmount(decision, place, amountText) : null),
+    // B-W2b-341 (SAL-342): a line credited without the goods says so (the goods stay with the customer).
+    effect: decision ? (line.creditWithoutReturn ? CREDIT_WITHOUT_RETURN_EFFECT : effectWords(decision, place)) : null,
+    effectWithAmount: price(decision ? (line.creditWithoutReturn ? (amountText ? CREDIT_WITHOUT_RETURN_EFFECT.replace(/^A credit/, `Credit ${amountText}`) : CREDIT_WITHOUT_RETURN_EFFECT) : effectWithAmount(decision, place, amountText)) : null),
     stock: moves.map((move) => ({ moveId: move.id, locationId: move.locationId, locationCode: move.locationCode, quantity: move.quantity })),
     replacementLineId: line.replacementLineId,
     version: line.version,
@@ -481,7 +499,8 @@ export function returnView(facts: RecordFacts, now: Date) {
     }),
     actions: returnActions({
       status: rma.status as ReturnStatus,
-      lines: facts.lines.map((line) => ({ quantity: line.quantity, received: line.receivedQuantity, graded: line.grade !== null, disposition: w2aDispositionOf(line.disposition), goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null })),
+      // B-W2b-341 (SAL-342): a line credited without the goods expects no more pieces.
+      lines: facts.lines.map((line) => ({ quantity: line.creditWithoutReturn ? line.receivedQuantity : line.quantity, received: line.receivedQuantity, graded: line.grade !== null, disposition: w2aDispositionOf(line.disposition), goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null })),
       replacementOrder: rma.replacementOrderId !== null,
     }),
     // B-W2b-16: said in the close dialog before the click (the close answers the same warnings).

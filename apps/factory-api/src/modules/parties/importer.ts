@@ -10,6 +10,9 @@ import { ApiError } from '../../core/errors'
 import { authorizeTerms, checkTerms, termsOf, writeTermsInCommand } from '../../platform/imports/importers/parties-terms'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
 import type { ImportAdapter, ImportScope } from '../../platform/imports/registry'
+// W2b (B-W2b-311): a supplier's kinds, status, lead time and origin columns (load, authorize, write).
+import { authorizeSupplier, firstStatusOfRow, suppliersOf, writeSupplierInCommand } from '../purchasing/suppliers-depth/import-suppliers'
+import { assertSupplierRoleKept } from '../purchasing/suppliers-depth/parties-hooks'
 import {
   ADDRESS_COLUMNS,
   addressFieldsOf,
@@ -71,6 +74,8 @@ async function updateRow(tools: CommandTools, recordId: string, code: string, va
   const next = change.party
   const touched = { addresses: [] as string[], contacts: [] as string[] }
 
+  // W2b (B-W2b-311): a party with supplier kinds or a supplier status keeps a supplier role.
+  if (change.changed.includes('roles')) await assertSupplierRoleKept(tx, recordId, next.tradeName ?? next.legalName, current.roles, next.roles)
   if (change.changed.length > 0) {
     const changes = Object.fromEntries(change.changed.map((field) => [field, next[field]])) as Partial<PartyFields>
     // command() bumps only the record it guards (the import job): the party's version moves here.
@@ -155,12 +160,12 @@ export const partiesImportAdapter = Object.freeze({
     const grants = grantsFor(actor, PARTIES_MANAGE)
     if (job.companyId === null) {
       return grants.some((grant) => grant.companies === 'all' && grant.parties === 'all')
-        ? authorizeTerms(actor, job, columns)
+        ? [...authorizeTerms(actor, job, columns), ...authorizeSupplier(actor, job, columns)]
         : [{ path: 'companyId', message: 'A parties import for every company needs parties.manage over every company; import for one company instead.' }]
     }
     const companyId = job.companyId
     return grants.some((grant) => (grant.companies === 'all' || grant.companies.includes(companyId)) && grant.parties === 'all')
-      ? authorizeTerms(actor, job, columns)
+      ? [...authorizeTerms(actor, job, columns), ...authorizeSupplier(actor, job, columns)]
       : [{ path: 'companyId', message: "Importing parties needs parties.manage over every party of the import's company: a role limited to some customers or suppliers adds no new ones." }]
   },
 
@@ -174,6 +179,7 @@ export const partiesImportAdapter = Object.freeze({
     const addresses = await client.partyAddress.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: ADDRESS_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     const contacts = await client.partyContact.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     const terms = await termsOf(client, ids)
+    const suppliers = await suppliersOf(client, ids)
     const day = today()
     return parties.map((party) => {
       const inForce = identityAt(identities.filter((identity) => identity.partyId === party.id).map((identity) => ({ identity, validFrom: dateText(identity.validFrom) })), day)?.identity ?? null
@@ -189,6 +195,7 @@ export const partiesImportAdapter = Object.freeze({
           registered: registered ? addressFieldsOf(registered) : null,
           contacts: contacts.filter((contact) => contact.partyId === party.id).map(contactFieldsOf),
           terms: terms.get(party.id) ?? null,
+          supplier: suppliers.get(party.id) ?? null,
         }),
       }
     })
@@ -200,6 +207,7 @@ export const partiesImportAdapter = Object.freeze({
     if (row.action === 'UPDATE') {
       await updateRow(tools, row.recordId!, code, values, scope)
       await writeTermsInCommand(tools, row.recordId!, values, false)
+      await writeSupplierInCommand(tools, row.recordId!, values, false)
       return { recordId: row.recordId! }
     }
     const patch = partyPatchOfRow(values)
@@ -211,6 +219,7 @@ export const partiesImportAdapter = Object.freeze({
     const contact = contactOfRow(values, null)
     const problems = [...(identity && !identity.ok ? identity.issues : []), ...(address && !address.ok ? address.issues : []), ...(contact && !contact.ok ? contact.issues : [])]
     if (problems.length > 0) throw new ImportRowRefused(code, messages(problems))
+    const firstStatus = firstStatusOfRow(values, party.roles)
     const recordId = await insertParty(
       tools,
       {
@@ -220,10 +229,13 @@ export const partiesImportAdapter = Object.freeze({
         identity: identity?.ok ? { ...identity.identity, validFrom: dayOf(tools.now) } : null,
         addresses: address?.ok ? [{ ...address.address, isDefaultBillTo: address.address.kinds.includes('BILL_TO'), isDefaultShipTo: address.address.kinds.includes('SHIP_TO') }] : [],
         contacts: contact?.ok ? [contact.contact] : [],
+        // W2b (B-W2b-311): the Supplier status column names its first status (else its W1 status read as one).
+        ...(firstStatus ? { supplierStatus: firstStatus } : {}),
       },
       ACTION,
     )
     await writeTermsInCommand(tools, recordId, values, true)
+    await writeSupplierInCommand(tools, recordId, values, true)
     return { recordId }
   },
 } satisfies ImportAdapter)

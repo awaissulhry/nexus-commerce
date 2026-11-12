@@ -2,7 +2,10 @@ import type { FactoryClient, Prisma, StockMoveReason } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
+// B-W2b-314: the bridge's reasons (every reason of the ledger), and a posting day's where.
+import { BRIDGE_ORDER } from '@nexus/factory-domain/inventory/why/bridge'
+import { postingDayRange } from '../why/days'
 import { locationDelta, siteDelta } from '@nexus/factory-domain/inventory/ledger/moves'
 import { WRITE_OFF_COMMAND, writeOffGroupOf, writeOffOf } from '@nexus/factory-domain/inventory/ledger/write-off'
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
@@ -49,6 +52,7 @@ const ROW_SELECT = {
   createdAt: true,
   createdById: true,
   deviceId: true,
+  postingDate: true,
   site: { select: { code: true } },
   item: { select: { id: true, code: true, name: true, baseUom: true, tracking: true } },
   itemColour: { select: { id: true, code: true, name: true } },
@@ -143,6 +147,8 @@ function rowOf(move: MoveData, extras: Extras): LedgerRow {
     reason: move.reason,
     occurredAt: toUtcIso(move.occurredAt),
     createdAt: toUtcIso(move.createdAt),
+    postingDate: move.postingDate ? move.postingDate.toISOString().slice(0, 10) : null,
+    postingDay: move.postingDate ? move.postingDate.toISOString().slice(0, 10) : businessDate(move.occurredAt),
     item: move.item,
     colour: move.itemColour,
     lot: move.lot,
@@ -198,6 +204,10 @@ export interface LedgerQuery {
   readonly reversed?: boolean | undefined
   readonly from?: string | undefined
   readonly to?: string | undefined
+  /** B-W2b-314: the posting days from … to (included). */
+  readonly postedFrom?: string | undefined
+  readonly postedTo?: string | undefined
+  readonly backDated?: boolean | undefined
   /** Text or a scanned code (SCM-195). */
   readonly q?: string | undefined
   readonly writeOffs?: boolean | undefined
@@ -270,6 +280,9 @@ export async function readLedger(caller: CommandCaller, query: LedgerQuery) {
       query.from ? { occurredAt: { gte: parseInstant(query.from)! } } : {},
       query.to ? { occurredAt: { lt: parseInstant(query.to)! } } : {},
       query.writeOffs === true ? WRITE_OFFS : query.writeOffs === false ? { NOT: WRITE_OFFS } : {},
+      // B-W2b-314: by the day they count on in the books, and the moves dated apart.
+      query.postedFrom || query.postedTo ? postingDayRange(query.postedFrom ?? null, query.postedTo ?? null) : {},
+      query.backDated === true ? { postingDate: { not: null } } : query.backDated === false ? { postingDate: null } : {},
     ],
   }
   return caller.withClient(async (client) => {
@@ -282,7 +295,9 @@ export async function readLedger(caller: CommandCaller, query: LedgerQuery) {
     // One stock key (site and item at least) and no other narrowing: the running balance is meaningful. A `from` only
     // trims older rows (the newest row's balance is still the balance now); a `to` would cut newer ones, so it has none.
     const oneKey =
-      Boolean(query.siteId && query.itemId) && !query.reasons?.length && !query.createdById && !query.deviceId && !query.documentId && query.hasNote === undefined && query.reversed === undefined && !query.to && !query.q && query.writeOffs === undefined
+      Boolean(query.siteId && query.itemId) && !query.reasons?.length && !query.createdById && !query.deviceId && !query.documentId && query.hasNote === undefined && query.reversed === undefined && !query.to && !query.q && query.writeOffs === undefined &&
+      // B-W2b-314: a posting-day filter takes rows out of the posting order: no running balance.
+      !query.postedFrom && !query.postedTo && query.backDated === undefined
     const closing = oneKey ? fixed(await balanceOf(client, { AND: [scope, ...key] }, query.locationId ?? null)) : null
     return { moves: page.map((row) => rowOf(row, extras)), nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null, rowCount, closing }
   })
@@ -347,7 +362,10 @@ export interface ExplainQuery {
 }
 
 // PRODUCTION_RECEIPT (W2a wave 5, finished goods) too: without it the sum would leave a gap where there is none.
-const REASON_ORDER: readonly StockMoveReason[] = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'REMNANT', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT']
+// B-W2b-314: and every other reason of the ledger after them (customer and supplier returns, shipments, the two legs of a
+// transfer between sites): without them a figure they moved showed a gap that was not there.
+const W1_ORDER: readonly StockMoveReason[] = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'REMNANT', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT']
+const REASON_ORDER: readonly StockMoveReason[] = [...W1_ORDER, ...BRIDGE_ORDER.filter((reason) => !W1_ORDER.includes(reason))]
 
 /**
  * "Why is it 84.20 m²": the figure of one stock key (a site's stock, or one location's) as the sum of its moves by reason

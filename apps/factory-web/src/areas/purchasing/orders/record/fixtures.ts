@@ -238,6 +238,12 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'error', label: 'The read failed', model: recordCase('buyer', 'DRAFT', { order: { status: 'error', problem: 'problem.offline' } }) },
     { id: 'not-found', label: 'Not found (or another company)', model: recordCase('buyer', 'DRAFT', { order: { status: 'not_found' } }) },
     { id: 'no-permission', label: 'Sales: no purchasing.view', model: recordCase('sales', 'DRAFT', { order: { status: 'forbidden' } }) },
+    // B-W2b-347: a PO of type Sample (opened from Purchasing › Sourcing & claims › RFQs & sourcing, SCR-222).
+    {
+      id: 'w2b-347-sample-order',
+      label: 'A sample order: the Sample order tag, the style and sample round it buys for, not counted in production spend',
+      model: recordCase('buyer', 'DRAFT', {}, order('DRAFT', { sample: { style: { id: '0190f0e2-9203-7000-8000-000000000001', code: 'GIA-DEMO-01', name: 'Giacca Demo Touring' }, round: { id: '0190f0e2-9204-7000-8000-000000000001', number: 'SR-2026-0007', kind: 'PROTO', roundNo: 1, stage: 'REQUESTED' } } })),
+    },
   ],
 })
 

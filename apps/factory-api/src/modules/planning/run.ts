@@ -3,7 +3,8 @@ import { ConflictError, ForbiddenError, isDomainError, UnauthenticatedError } fr
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { detectExceptions } from '@nexus/factory-domain/planning/exceptions/detect'
-import { planRequirements } from '@nexus/factory-domain/planning/explode'
+// B-W2b-293 (MR1:01): the run on the multi-level explosion, its parts we make netted level by level.
+import { planLevelled } from '@nexus/factory-domain/planning/planned-orders/multilevel'
 import { peggingRowsOf } from '@nexus/factory-domain/planning/pegging/pegging'
 import { PLANNING_RUN } from '@nexus/factory-domain/planning/permissions'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandTools } from '../../core/command'
@@ -15,6 +16,7 @@ import { unitsOf, type SiteRow } from './store'
 import { fromBase, QUANTITY_SCALE, type Uom } from '@nexus/factory-domain/product/units/units'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { RUN_COLUMNS, runViewOf } from './views'
+import { planWork } from './planned-orders/pass'
 
 /**
  * Run the plan for a site (PLN-062; A2 SCR-055 "Run plan now"): ONE command reads the site's open orders, BOMs, work
@@ -86,7 +88,7 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
   // ---- the inputs, in this transaction -------------------------------------------------------------------------------
   const runDate = businessDate(now, site.timezone)
   const inputs = await readPlanInputs(tx, site, runDate, previous?.id ?? null)
-  const plan = planRequirements(inputs.input)
+  const plan = planLevelled(inputs.input, inputs.garments)
   const warnings = [...inputs.demand.unplaced, ...plan.warnings]
 
   // ---- the run's lines (a carried firm planned order with its firm columns), their pegging ----------------------------
@@ -181,6 +183,9 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
   })
   const exceptions = await refreshExceptions(tools, site, runId, conditions, (seq) => (seq === null ? null : (idOf.get(seq) ?? null)))
 
+  // ---- B-W2b-293: the make and subcontract pass (planned work orders and planned subcontract orders) ----------------------
+  const planned = await planWork(tools, site, runId, inputs, runDate)
+
   const short = plan.requirements.filter((line) => line.netQuantity !== '0.0000').length
   const carried = plan.netting.flatMap((entry) => (entry.carried ? [{ from: entry.carried.requirementId, to: idOf.get(entry.seq)! }] : []))
   tools.audit({
@@ -188,7 +193,19 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
     recordId: runId,
     companyId: site.companyId,
     siteId: site.id,
-    after: { status: 'DONE', trigger, orderLines: plan.orderLines, requirements: plan.requirements.length, short, warnings: warnings.length, superseded: older.map((run) => run.id), carried, exceptions },
+    after: {
+      status: 'DONE',
+      trigger,
+      orderLines: plan.orderLines,
+      requirements: plan.requirements.length,
+      short,
+      warnings: warnings.length,
+      superseded: older.map((run) => run.id),
+      carried,
+      exceptions,
+      // B-W2b-293: the planned work and subcontract orders the run wrote.
+      plannedWorkOrders: { added: planned.added, moved: planned.moved, removed: planned.removed, kept: planned.kept, sizeRunRule: planned.sizeRunRule },
+    },
   })
   tools.emit({
     type: 'planning.run_finished',
