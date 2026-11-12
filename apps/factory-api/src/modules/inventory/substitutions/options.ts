@@ -185,7 +185,7 @@ export async function substituteOptions(caller: CommandCaller, query: { readonly
         kind,
         alternate: alternate ? { id: alternate.id, priority: alternate.priority, allowedWhen: alternate.allowedWhen, certificateCheck: alternate.certificateCheck, qty: alternate.qty, note: alternate.note, colourId: alternate.itemColourId } : null,
         item: itemRef(item),
-        answer: answer.ruleAnswer,
+        answer: { ...answer.ruleAnswer, held: [...answer.ruleAnswer.held] },
         needsPerson: answer.needsPerson,
         refusal: answer.refusal,
         certificateRequired,
