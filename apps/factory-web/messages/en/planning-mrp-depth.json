@@ -1,0 +1,655 @@
+{
+  "view": {
+    "toMake": "To make (planned work and subcontract orders)"
+  },
+  "tile": {
+    "toMake": "To make, no work order",
+    "toMakeHint": "Planned work orders and subcontract orders not made real yet"
+  },
+  "retry": "Try again",
+  "cancel": "Cancel",
+  "close": "Close",
+  "clearSearch": "Clear the search",
+  "kind": {
+    "MAKE": "Make",
+    "SUBCONTRACT": "Subcontract"
+  },
+  "sizeGroup": "sizes {group}",
+  "revision": "revision {revision}",
+  "pieces_one": "{count} piece",
+  "pieces_other": "{count} pieces",
+  "sizes": {
+    "open": "Sizes of {label}: {sizes}. Open the size grid",
+    "title": "Sizes of {label}",
+    "caption": "Pieces by size — {label}",
+    "colour": "Colourway",
+    "total": "Total",
+    "cell": "{colour}, size {size}",
+    "notOffered": "– not offered",
+    "empty": "No sizes"
+  },
+  "col": {
+    "style": "Style and colourway",
+    "sizes": "Sizes",
+    "dates": "Start → due",
+    "where": "Line or workshop",
+    "orders": "For orders",
+    "state": "State",
+    "more": "More"
+  },
+  "protected": {
+    "tip": "You set this date; the next run keeps it. The plan says {plan}.",
+    "tipNoPlan": "You set this date; the next run keeps it.",
+    "hint": "You set it: the next run keeps it. The plan says {plan}.",
+    "hintNoPlan": "You set it: the next run keeps it.",
+    "reset": "Reset to plan"
+  },
+  "dates": {
+    "change": "Change the dates of {label}: starts {start}, due {due}",
+    "inTime": "In time for its orders",
+    "title": "Change the dates",
+    "body": "A date you change is kept by the next runs (it gets a dot); Reset to plan gives it back to the plan.",
+    "planHint": "From backward scheduling.",
+    "save": "Save the dates",
+    "same": "Change a date first.",
+    "pick": "Pick both dates.",
+    "past": "Nothing is planned before today.",
+    "order": "The start is after the due date."
+  },
+  "late": {
+    "planned_one": "Needed {need}: {count} day late",
+    "planned_other": "Needed {need}: {count} days late",
+    "material_one": "Material usable {date} at the earliest: {count} day late",
+    "material_other": "Material usable {date} at the earliest: {count} days late",
+    "materialTip": "{material} can be used on {date} at the earliest; the orders need it on {need}."
+  },
+  "where": {
+    "noWorkshop": "No workshop",
+    "steps": "steps {steps}",
+    "kit": "kit leaves {date}",
+    "noLine": "No line yet",
+    "inHouse_one": "{count} outside step made in-house",
+    "inHouse_other": "{count} outside steps made in-house",
+    "inHouseTip": "The workshop of these steps may not get work now, so they are made in-house: {steps}.",
+    "inHouseAll": "Made in-house"
+  },
+  "orders": {
+    "more_one": "+{count} more",
+    "more_other": "+{count} more",
+    "none": "No order line (stock)",
+    "lines_one": "{count} order line",
+    "lines_other": "{count} order lines"
+  },
+  "state": {
+    "firm": "Firm",
+    "protected_one": "{count} field kept",
+    "protected_other": "{count} fields kept",
+    "proposed": "Proposed",
+    "ready": "Can be made real"
+  },
+  "row": {
+    "menu": "More for {label}",
+    "convertMake": "Create the work order",
+    "convertSubcontract": "Create the subcontract order",
+    "dates": "Change the dates…",
+    "reset": "Reset {field} to plan",
+    "firm": "Make it firm (runs keep it)",
+    "unfirm": "Plan it again (not firm)"
+  },
+  "make": {
+    "title": "To make",
+    "hint": "Planned work orders and subcontract orders the run proposes.",
+    "counts": "{make} to make in-house · {subcontract} at workshops · {firm} firm",
+    "table": "Planned work orders and subcontract orders",
+    "count_one": "{count} planned order",
+    "count_other": "{count} planned orders",
+    "search": "Search style, colour, order, line or workshop",
+    "failed": "Couldn't load to make",
+    "noMatch": "No planned order matches the search",
+    "empty": {
+      "title": "No work orders to propose",
+      "body": "The plan of {date} found every order line covered by a work order or a subcontract order.",
+      "noRun": "No plan has been run for this site yet."
+    }
+  },
+  "bulk": {
+    "make_one": "Create {count} work order",
+    "make_other": "Create {count} work orders",
+    "subcontract_one": "Create {count} subcontract order",
+    "subcontract_other": "Create {count} subcontract orders",
+    "move_one": "Move {count} by days",
+    "move_other": "Move {count} by days"
+  },
+  "held": {
+    "converted": "It was made real already.",
+    "noDemand": "It makes no order line (stock): a work order is made from order lines.",
+    "noRevision": "Its style has no released revision to make it to.",
+    "other": "It cannot be made real now: open the style or the order to see why.",
+    "noRight": "Your role cannot make planned orders real or change them.",
+    "noConvert": "Your role cannot make planned orders real (planning.planned.convert).",
+    "noWorkOrders": "Making it real makes a work order: your role cannot (workorders.manage).",
+    "noSubcontract": "Making it real releases the work order and drafts the subcontract order: your role cannot (workorders.release, purchasing.subcontract.manage).",
+    "noMake": "None of the ticked rows is a planned work order that can be made real.",
+    "noSubcontractRow": "None of the ticked rows is a planned subcontract order that can be made real.",
+    "noneToMove": "None of the ticked rows can be moved.",
+    "tooMany": "Move at most 100 at a time.",
+    "firm": "It is firm: plan it again first to change its dates.",
+    "noFirm": "Your role cannot make planned orders firm (planning.firm).",
+    "noEdit": "Your role cannot change planned orders (planning.planned.edit).",
+    "noActions": "Your role cannot decide action messages (planning.actions.manage).",
+    "noneOpen": "None of the ticked messages is open.",
+    "notLatest": "A newer plan replaced these messages: read the page again.",
+    "decided": "Decided already.",
+    "busy": "Working on it…"
+  },
+  "notice": {
+    "firmed": "{label} is firm: the next runs keep it as it is.",
+    "unfirmed": "{label} is planned again by the next run.",
+    "datesSaved": "The dates of {label} are saved and kept by the next runs.",
+    "reset": "{field} is back to the plan.",
+    "resetNextRun": "{field} is given back to the plan: the next run writes it.",
+    "done_one": "{count} action message marked done.",
+    "done_other": "{count} action messages marked done.",
+    "ignored_one": "{count} action message ignored.",
+    "ignored_other": "{count} action messages ignored."
+  },
+  "problem": {
+    "read": "Couldn't read it. Try again in a moment.",
+    "noRead": "Your role cannot read this.",
+    "offline": "No answer from the server: check the connection.",
+    "gone": "It is not there any more: read the page again.",
+    "signedOut": "You were signed out: sign in again.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed it meanwhile: it was read again, check it and try again.",
+    "forbidden": "Your role cannot do this.",
+    "invalid": "The change was refused: check the values.",
+    "unknown": "No answer: it may or may not have been saved. Read the page again."
+  },
+  "field": {
+    "sizes": "Sizes",
+    "startDate": "Start date",
+    "dueDate": "Due date",
+    "lineId": "Line",
+    "partyId": "Workshop",
+    "operationSeqs": "Steps",
+    "kitDueAt": "Kit ship-out",
+    "styleRevisionId": "Revision",
+    "other": "Another field"
+  },
+  "convert": {
+    "title": {
+      "MAKE_one": "Create {count} work order",
+      "MAKE_other": "Create {count} work orders",
+      "SUBCONTRACT_one": "Create {count} subcontract order",
+      "SUBCONTRACT_other": "Create {count} subcontract orders"
+    },
+    "summary": {
+      "MAKE": "Each becomes a DRAFT work order with its sizes; nothing is released or sent.",
+      "SUBCONTRACT": "Each makes its work order, releases it and drafts the subcontract order at the workshop; nothing is sent to the workshop."
+    },
+    "save": {
+      "MAKE_one": "Create {count} work order",
+      "MAKE_other": "Create {count} work orders",
+      "SUBCONTRACT_one": "Create {count} subcontract order",
+      "SUBCONTRACT_other": "Create {count} subcontract orders"
+    },
+    "what": {
+      "MAKE": "Work order",
+      "SUBCONTRACT": "Subcontract order"
+    },
+    "now": "Planned: {sizes} · {start} → {due}",
+    "next": {
+      "MAKE": "Draft work order · revision {revision} · {pieces} pieces · due {due}",
+      "SUBCONTRACT": "At {workshop} · steps {steps} · kit leaves {kit}",
+      "unknown": "Made real"
+    },
+    "heldTitle_one": "{count} cannot be made real now",
+    "heldTitle_other": "{count} cannot be made real now",
+    "heldChecks_one": "{count} check stops it: open the style or the work order to see it.",
+    "heldChecks_other": "{count} checks stop it: open the style or the work order to see them.",
+    "noneReady": "None of these can be made real now.",
+    "metric": {
+      "ready": "Can be made",
+      "held": "Cannot now"
+    },
+    "done": {
+      "MAKE": "Work order {workOrder} made (draft)",
+      "SUBCONTRACT": "Work order {workOrder} released · subcontract order {order} drafted",
+      "notSent": "Not sent",
+      "verb": "made"
+    },
+    "error": {
+      "conflict": "Changed since it was read: not made",
+      "invalid_state": "Its state no longer allows it: not made",
+      "validation_failed": "A check refused it: not made",
+      "forbidden": "Not allowed for your role: not made",
+      "other": "Not made"
+    }
+  },
+  "shift": {
+    "title_one": "Move {count} planned order",
+    "title_other": "Move {count} planned orders",
+    "summary": "Start, due and the kit move together; every moved date is kept by the next runs.",
+    "by": "Move by (days)",
+    "hint": "A negative number brings them forward. Nothing moves before today.",
+    "days": "Type a whole number of days, not 0, at most 366.",
+    "refused": "The move was refused: check the days.",
+    "save_one": "Move {count} by {days} days",
+    "save_other": "Move {count} by {days} days",
+    "problem": "{label}: {fields} cannot move that far",
+    "moved": "Moved",
+    "verb": "moved",
+    "none": "none"
+  },
+  "decide": {
+    "titleDone_one": "Mark {count} action message done",
+    "titleDone_other": "Mark {count} action messages done",
+    "titleIgnore_one": "Ignore {count} action message",
+    "titleIgnore_other": "Ignore {count} action messages",
+    "saveDone_one": "Mark {count} done",
+    "saveDone_other": "Mark {count} done",
+    "saveIgnore_one": "Ignore {count}",
+    "saveIgnore_other": "Ignore {count}",
+    "bodyDone": "Done means you made the change on the order (a moved date, a new quantity, a cancelled line).",
+    "bodyIgnore": "Ignored messages are not raised again by the next runs for the same order and change.",
+    "note": "Note",
+    "noteHintDone": "Optional: what you did.",
+    "noteHintIgnore": "Optional: why it stays as it is.",
+    "tooLong": "The note is at most 2000 characters."
+  },
+  "action": {
+    "EXPEDITE": "Advance",
+    "DEFER": "Postpone",
+    "CANCEL": "Cancel",
+    "INCREASE": "Increase",
+    "DECREASE": "Decrease",
+    "NEW": "New"
+  },
+  "msg": {
+    "title": "Action messages on existing orders",
+    "hint": "What the latest plan asks you to change on orders that exist already.",
+    "table": "Action messages",
+    "explain": "The plan never changes an existing order by itself: change the order, then mark the message done.",
+    "count": "{open} open · {done} done · {ignored} ignored",
+    "noneOpen": "No open message.",
+    "show": "Show",
+    "showOpen": "Open",
+    "showAll": "All",
+    "failed": "Couldn't load the action messages",
+    "empty": {
+      "title": "No action message",
+      "body": "Every existing order fits the latest plan.",
+      "noRun": "No plan has been run for this site yet."
+    },
+    "col": {
+      "action": "Action",
+      "record": "Order",
+      "what": "What to do",
+      "status": "Decision"
+    },
+    "rec": {
+      "poLine": "{number}, line {line}",
+      "po": "{number}",
+      "workOrder": "{number}",
+      "subcontract": "{number}",
+      "planned": "{label}",
+      "firm": "Firm planned order of {material}"
+    },
+    "type": {
+      "PurchaseOrderLine": "Purchase order line",
+      "WorkOrder": "Work order",
+      "SubcontractOrder": "Subcontract order",
+      "PlannedWorkOrder": "Planned work order (protected)",
+      "MaterialRequirement": "Firm planned purchase"
+    },
+    "EXPEDITE": "Bring forward from {from} to {to}",
+    "DEFER": "Postpone from {from} to {to}",
+    "INCREASE": "Increase from {from} to {to} {unit}",
+    "DECREASE": "Decrease from {from} to {to} {unit}",
+    "CANCEL_qty": "Cancel {quantity} {unit}: nothing needs it",
+    "EXPEDITE_plain": "Bring it forward",
+    "DEFER_plain": "Postpone it",
+    "CANCEL_plain": "Cancel it: nothing needs it",
+    "INCREASE_plain": "Increase it",
+    "DECREASE_plain": "Decrease it",
+    "NEW_plain": "A new order",
+    "material": "Material {material}",
+    "openWhy": "{record}: open why this number",
+    "status": {
+      "OPEN": "Open",
+      "DONE": "Done",
+      "IGNORED": "Ignored"
+    },
+    "byAction": {
+      "EXPEDITE_one": "{count} to advance",
+      "EXPEDITE_other": "{count} to advance",
+      "DEFER_one": "{count} to postpone",
+      "DEFER_other": "{count} to postpone",
+      "CANCEL_one": "{count} to cancel",
+      "CANCEL_other": "{count} to cancel",
+      "INCREASE_one": "{count} to increase",
+      "INCREASE_other": "{count} to increase",
+      "DECREASE_one": "{count} to decrease",
+      "DECREASE_other": "{count} to decrease",
+      "NEW_one": "{count} new",
+      "NEW_other": "{count} new"
+    },
+    "bulk": {
+      "done_one": "Mark {count} done",
+      "done_other": "Mark {count} done",
+      "ignore_one": "Ignore {count}",
+      "ignore_other": "Ignore {count}"
+    },
+    "never": "Done and Ignore only record your decision: the order itself is changed on its own page.",
+    "notice_one": "{count} action message on an existing order waits for a decision.",
+    "notice_other": "{count} action messages on existing orders wait for a decision.",
+    "noticeShow": "Show"
+  },
+  "log": {
+    "column": "Inputs and warnings",
+    "open": "Inputs and warnings of the run of {time}",
+    "openShort": "Open",
+    "none": "—",
+    "back": "All runs",
+    "reading": "Reading the run log…",
+    "failed": "Couldn't load the run log",
+    "title": "The run of {time} ({trigger})",
+    "runDay": "Run day",
+    "runDayValue": "{day} ({zone})",
+    "explosionLabel": "Bills read",
+    "explosion": {
+      "MULTI_LEVEL_one": "Every level, {count} pass",
+      "MULTI_LEVEL_other": "Every level, {count} passes",
+      "ONE_LEVEL_one": "One level, {count} pass",
+      "ONE_LEVEL_other": "One level, {count} passes"
+    },
+    "sizeRun": "Size run",
+    "oneGrid": "One grid per colourway",
+    "sizeGroups_one": "{count} size group",
+    "sizeGroups_other": "{count} size groups",
+    "count": {
+      "orderLines": "Order lines",
+      "orderLinesPlanned": "Order lines planned",
+      "orders": "Orders",
+      "lateOrderLines": "Late order lines",
+      "undatedOrderLines": "Order lines with no date",
+      "madeToMeasure": "Made-to-measure units",
+      "notPlaced": "Not placed at a site",
+      "revisions": "Revisions",
+      "materials": "Materials",
+      "workOrders": "Work orders",
+      "workOrderCells": "Work order cells",
+      "scheduledWorkOrders": "Scheduled work orders",
+      "stockLines": "Stock lines",
+      "lots": "Lots",
+      "purchaseLines": "Purchase order lines",
+      "purchaseOrders": "Purchase orders",
+      "purchaseLinesForOneOrder": "Purchase lines for one order",
+      "reservations": "Reservations",
+      "firmPlannedOrders": "Firm planned purchases",
+      "orderSpecificPegs": "Kept for one order",
+      "itemParameters": "Item parameters",
+      "approvedSources": "Approved sources",
+      "plannedWorkOrdersFirm": "Firm planned work orders",
+      "plannedWorkOrdersProtected": "Protected planned work orders",
+      "plannedWorkOrdersPlain": "Plain planned work orders"
+    },
+    "everyCount": "Every count the run read",
+    "notRecorded": "This run is older than the run log: its inputs were not recorded.",
+    "warnings_one": "{count} warning",
+    "warnings_other": "{count} warnings",
+    "noWarnings": "No warning.",
+    "proposed": "What it proposed",
+    "proposedBuy_one": "{count} line to buy",
+    "proposedBuy_other": "{count} lines to buy",
+    "proposedMake_one": "{count} part to make",
+    "proposedMake_other": "{count} parts to make",
+    "proposedPlanned_one": "{count} planned work order",
+    "proposedPlanned_other": "{count} planned work orders",
+    "proposedSubcontract_one": "{count} planned subcontract order",
+    "proposedSubcontract_other": "{count} planned subcontract orders",
+    "messages": "Action messages: {open} open · {done} done · {ignored} ignored",
+    "linesTable": "Lines the run proposed",
+    "plannedTable": "Planned orders the run proposed",
+    "col": {
+      "action": "Action",
+      "material": "Material",
+      "short": "Short",
+      "need": "Needed",
+      "decision": "Decision",
+      "kind": "Kind",
+      "style": "Style",
+      "pieces": "Pieces",
+      "dates": "Dates",
+      "state": "State"
+    },
+    "decision": {
+      "OPEN": "Open",
+      "ORDERED": "Ordered",
+      "IGNORED": "Set aside"
+    },
+    "forOrder": "For {number} line {line} only",
+    "dates": "{start} → {due} (needed {need})",
+    "status": {
+      "PLANNED": "Planned",
+      "CONVERTED": "Made real"
+    }
+  },
+  "lot": {
+    "LOT_FOR_LOT": "Lot for lot",
+    "FIXED": "Fixed lot",
+    "MIN_MAX": "Min / max",
+    "PERIOD": "Period"
+  },
+  "profile": {
+    "menu": "Projected stock",
+    "noun": "material",
+    "title": "Projected stock — {material}",
+    "reading": "Reading…",
+    "notFound": "This material is not in the plan any more.",
+    "openMaterial": "Open material",
+    "asOf": "The plan computed now ({time}) at {site}, {weeks} weeks from this week.",
+    "firstShort": "Short from {week}: the orders need more than stock and receipts bring.",
+    "firstLow": "Below the safety stock from {week}.",
+    "covered": "Covered over the horizon.",
+    "onHand": "On hand (usable)",
+    "safety": "Safety stock",
+    "noSafety": "None",
+    "net": "Still short",
+    "uncovered": "To order after firm orders",
+    "allocation": "Scarce supply shared",
+    "allocationBy": {
+      "DATE": "By the day needed",
+      "PRIORITY": "By the backlog's rank"
+    },
+    "lotSizing": "Lot sizing",
+    "defaults": "Planned by its defaults",
+    "chartLabel": "Projected balance of {material} per week, with the safety stock",
+    "chartProjected": "Projected balance",
+    "chartSafety": "Safety stock",
+    "chartCaption": "The projected balance (on hand + receipts − demand, week by week) against the safety-stock line; below 0 is short.",
+    "table": "Projected stock per week",
+    "col": {
+      "week": "Week",
+      "demand": "Demand",
+      "receipts": "Receipts",
+      "planned": "Plan's orders",
+      "projected": "Projected",
+      "withPlan": "With the plan",
+      "atp": "Available to promise"
+    },
+    "past": "Before this week",
+    "later": "After the horizon",
+    "week": "{week} ({from} – {to})",
+    "short": "short",
+    "belowSafety": "below safety",
+    "cellOpen": "{what} in {week}: {quantity}. Open what makes it",
+    "cellTitle": "{what} — {week}",
+    "ref": {
+      "line": "line {line}",
+      "size": "size {size}",
+      "rank": "rank {rank}",
+      "firm": "Firm planned purchase",
+      "planned": "Plan's order {seq}"
+    },
+    "lotsTitle": "The plan's next orders",
+    "noLots": "The plan places no new order for this material.",
+    "lot": "{quantity} on {date} (covers {from} – {to})",
+    "moreLots_one": "and {count} more",
+    "moreLots_other": "and {count} more",
+    "earliest": "A new order placed today arrives {arrival} and can be used {usable} ({lead} days lead time, {delay} days to use).",
+    "earliestNoLead": "A new order placed today arrives {arrival} and can be used {usable} (no lead time on record).",
+    "delaysTitle_one": "{count} demand late for this material",
+    "delaysTitle_other": "{count} demands late for this material",
+    "noDelays": "No demand is late for this material.",
+    "delay_one": "line {line} needs it {need}: usable {earliest} at the earliest, {count} day late ({source})",
+    "delay_other": "line {line} needs it {need}: usable {earliest} at the earliest, {count} days late ({source})",
+    "moreDelays_one": "and {count} more",
+    "moreDelays_other": "and {count} more",
+    "source": {
+      "PLANNED": "a new order",
+      "FIRM": "a firm planned purchase",
+      "PURCHASE_ORDER": "an overdue purchase order"
+    }
+  },
+  "items": {
+    "col": {
+      "lotSizing": "Lot sizing",
+      "planLevel": "Plan by",
+      "scrapPct": "Scrap %",
+      "yieldPct": "Yield %",
+      "delayDays": "Delay days"
+    },
+    "field": {
+      "lotSizing": "Lot sizing",
+      "fixedLotQty": "Fixed lot",
+      "lotPeriodDays": "Period (days)",
+      "planLevel": "Plan by",
+      "scrapPct": "Scrap %",
+      "yieldPct": "Yield %",
+      "delayDays": "Days between arrival and use"
+    },
+    "cell": {
+      "change": "Change {field} of {item}: {value}"
+    },
+    "lot": {
+      "LOT_FOR_LOT": "Lot for lot",
+      "FIXED": "Fixed lot",
+      "MIN_MAX": "Min / max",
+      "PERIOD": "Period"
+    },
+    "lotCell": {
+      "FIXED": "Lots of {quantity} {unit}",
+      "PERIOD_one": "{count} day of need",
+      "PERIOD_other": "{count} days of need"
+    },
+    "lotHint": {
+      "LOT_FOR_LOT": "Each order brings exactly what is short.",
+      "FIXED": "Each order brings the fixed lot, as many lots as the need takes.",
+      "MIN_MAX": "Each order keeps the row's order limits: at least the minimum, in steps of the multiple, at most the maximum.",
+      "PERIOD": "One order brings the need of a number of days; the next period is the next order."
+    },
+    "inUnit": "In {unit}",
+    "periodHint": "1 to 366 days.",
+    "minMaxLimits": "This row's limits: at least {min}, in steps of {step}, at most {max} {unit}.",
+    "minMaxNone": "This row has no order limits yet: each order is exactly the need (as lot for lot).",
+    "lotDialog": {
+      "title": "Lot sizing — {item}",
+      "apply": "Save lot sizing"
+    },
+    "levelDialog": {
+      "title": "Plan by — {item}",
+      "apply": "Save"
+    },
+    "level": {
+      "SITE": "The site's size-run rule",
+      "STYLE": "Style",
+      "STYLE_COLOUR": "Style and colour",
+      "SKU": "Each size",
+      "perColour": "Per colour (material)"
+    },
+    "levelHint": {
+      "SITE": "Planned work orders follow the site's size-run rule (one grid, or its size groups).",
+      "STYLE": "One planned work order per colourway with its sizes in one grid (a planned work order makes one colourway).",
+      "STYLE_COLOUR": "The colourway's sizes in one grid, whatever the site's size groups.",
+      "SKU": "Each size is a planned work order of its own."
+    },
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "percent": "{value} %",
+    "held": {
+      "material": "A material is planned per colour: only a finished garment or a component is planned by style, colour or size.",
+      "items": "Your role cannot change item parameters (planning.items.manage).",
+      "strategy": "How a garment is planned needs planning.strategy.manage too (planner, production manager).",
+      "settings": "Your role cannot change the site's planning settings (planning.settings.manage).",
+      "same": "Nothing changes.",
+      "busy": "Saving…",
+      "loading": "Still reading the site's settings."
+    },
+    "problem": {
+      "fixedNeeded": "A fixed lot needs its quantity: how much each order brings.",
+      "fixedOnly": "A fixed lot belongs to fixed lot sizing.",
+      "fixedQty": "The fixed lot is a quantity above 0 with at most four decimals.",
+      "periodNeeded": "A period needs its days: the days of need one order brings.",
+      "periodOnly": "A period belongs to period lot sizing.",
+      "periodDays": "A period is {min} to {max} days.",
+      "planLevel": "Pick style, style and colour, each size, or the site's rule.",
+      "scrap": "Scrap is a percent from 0 to under 100, at most two decimals (5 or 2.5).",
+      "yield": "Yield is a percent above 0 and at most 100, at most two decimals (92 or 87.5).",
+      "delay": "The days between arrival and use are {min} to {max}.",
+      "lotSizing": "Pick how the orders are sized.",
+      "write": "It was not saved. Try again.",
+      "conflict": "Someone changed it meanwhile: it was read again, check it and try again.",
+      "unknown": "No answer: it may or may not have been saved. Read the page again."
+    },
+    "words": {
+      "lotFinished": "Kept for the finished garment: the plan sizes material orders only (a planned work order makes the ordered pieces).",
+      "FIXED": "Each order brings {quantity} {unit}, as many as the need takes.",
+      "PERIOD_one": "One order brings the need of {count} day.",
+      "PERIOD_other": "One order brings the need of {count} days.",
+      "MIN_MAX": "Each order is at least {min}, in steps of {step}, at most {max} {unit}; above the maximum the need is split.",
+      "MIN_MAX_none": "No order limits on this row: each order is exactly the need.",
+      "onlyOrders": "Read only while the item is planned from its orders.",
+      "level": {
+        "SKU": "Each size is a planned work order of its own.",
+        "STYLE_COLOUR": "The colourway's sizes are planned in one grid, whatever the site's size groups.",
+        "STYLE": "Planned as style and colour: a planned work order makes one colourway."
+      },
+      "levelComponent": "Kept for the component: a component is planned per colour as a part to make (planned work orders of components are not made yet).",
+      "scrapYield": "The need is multiplied by {factor}, on top of the bill's wastage.",
+      "scrapYieldFinished": "Every material of this size is multiplied by {factor}, on top of the bill's wastage.",
+      "delay_one": "{count} day between arrival and use: a supply can be used that many days after it arrives.",
+      "delay_other": "{count} days between arrival and use: a supply can be used that many days after it arrives."
+    },
+    "clears": "Switching clears: {fields}.",
+    "cleared": "Cleared because the lot sizing changed: {fields}.",
+    "sizeRun": {
+      "title": "Size run of planned work orders",
+      "oneGrid": "One grid per colourway: every size of an order's colourway in one planned work order.",
+      "groups_one": "{count} size group:",
+      "groups_other": "{count} size groups:",
+      "hint": "Used for a garment whose Plan by is the site's size-run rule.",
+      "change": "Change…",
+      "dialogTitle": "Size run of planned work orders",
+      "rule": "How a size run is split",
+      "ONE_GRID": "One grid",
+      "SIZE_GROUPS": "Size groups",
+      "hintONE_GRID": "Every size of a colourway in one planned work order.",
+      "hintSIZE_GROUPS": "A planned work order per group of sizes; a size in no group is a group of its own.",
+      "groupsField": "Groups (one per line)",
+      "groupsHint": "Sizes split by commas, for example: 44, 46, 48. 2 to 20 groups; a size in one group only.",
+      "clears": "One grid clears the size groups.",
+      "save": "Save",
+      "failed": "Couldn't read the site's size run.",
+      "savedOne": "Planned work orders are made in one grid per colourway.",
+      "savedGroups_one": "Planned work orders are split into {count} size group.",
+      "savedGroups_other": "Planned work orders are split into {count} size groups.",
+      "problem": {
+        "twice": "Size {size} is in two groups: a size is in one group only.",
+        "groups": "Make {min} to {max} groups.",
+        "codes": "A group lists {min} to {max} sizes of 1 to {code} characters, without spaces.",
+        "refused": "The size groups were refused: check them."
+      }
+    }
+  }
+}
