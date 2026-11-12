@@ -1,4 +1,6 @@
 import { Factory, FileText, FlaskConical, Inbox, ShoppingCart, Truck, Undo2 } from 'lucide-react'
+// B-W2b-350: the Reports section's icon.
+import { BarChart3 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -43,6 +45,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'purchasing-sourcing', label: 'shell:nav.purchasing.sourcing', href: '/purchasing/sourcing', icon: FlaskConical, permission: 'purchasing.view' },
           { id: 'purchasing-claims', label: 'shell:nav.purchasing.claims', href: '/purchasing/claims', icon: Undo2, permission: 'purchasing.view' },
         ],
+      },
+      // B-W2b-350: Reports › Purchasing reports (SCR-255; GET /purchasing/reports/spend and the expediting worklist).
+      {
+        id: 'purchasing-reports',
+        label: 'shell:nav.purchasing.reportsGroup',
+        items: [{ id: 'purchasing-reports', label: 'shell:nav.purchasing.reports', href: '/purchasing/reports', icon: BarChart3, permission: 'purchasing.reports.view' }],
       },
     ],
   },

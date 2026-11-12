@@ -37,6 +37,8 @@ import { newLineDraft, priceLines, type LineDraft, type NewLineInput, type Price
 import { makeScheduleInCommand } from './schedule'
 import { asDay, dayOf, hasOrderSeries, type Reader } from './store'
 import type { OrderView } from './views'
+// B-W2b-304 (SAL-237, SAL-244): the credit check of an order being made.
+import { planOrderCredit, recordOrderCredit, type OrderStep } from '../credit/check'
 
 /**
  * Manual order entry (B-W2a-30; SAL-202 "direct orders without a quote for repeat business"; the design's New order
@@ -283,7 +285,7 @@ export async function createManualOrder(caller: CommandCaller, body: ManualOrder
  * return): the plan (refused in words), the SALES_ORDER number, the CONFIRMED order and its lines, the deposit request
  * when one is asked, the payment schedule, the audit row and sales_order.created. The caller checked orders.manage.
  */
-export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null): Promise<{ orderId: string; number: string }> {
+export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null, creditStep: OrderStep | null = 'ORDER'): Promise<{ orderId: string; number: string }> {
   const { tx, now } = tools
   const today = businessDate(now)
   if (!(await hasOrderSeries(tx, body.companyId))) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
@@ -294,6 +296,10 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
   const actorId = actorIdOf(tools)
   const stamp = { createdAt: now, updatedAt: now, createdById: actorId }
   const depositAsked = plan.depositAmount !== null && plan.depositAmount > 0
+  // B-W2b-304: over the customer's credit limit where the company holds: the order waits as PENDING_APPROVAL for a yes
+  // (a replacement of returned goods is checked by nothing: creditStep null).
+  const credit = creditStep ? await planOrderCredit(tools, { step: creditStep, partyId: plan.party.row.id, companyId: body.companyId, grossAmount: plan.priced.grossAmount, currency: plan.currency }) : null
+  const status = credit?.status ?? 'CONFIRMED'
   await tx.salesOrder.create({
     data: {
       id,
@@ -302,7 +308,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       number: number.formatted,
       quoteVersionId: null,
       customerRef: plan.customerRef,
-      status: 'CONFIRMED',
+      status,
       orderDate: asDay(today),
       currency: plan.currency,
       language: plan.language,
@@ -392,6 +398,8 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     }
   }
   const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, currency: plan.currency, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
+  // B-W2b-304: the order's credit check (and on a hold the request for a yes, asked by the person making it).
+  await recordOrderCredit(tools, credit?.plan ?? null, id)
   tools.audit({
     action: 'orders.makeManual',
     recordType: 'SalesOrder',
@@ -400,7 +408,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     after: {
       number: number.formatted,
       partyId: plan.party.row.id,
-      status: 'CONFIRMED',
+      status,
       quoteVersionId: null,
       taxMode: plan.taxMode,
       currency: plan.currency,

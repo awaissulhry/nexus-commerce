@@ -5,11 +5,16 @@ import { AGEING_BUCKETS, addToAgeing, BUCKET_WORDS, daysBetween, emptyAgeing, fi
 import { RECEIVABLES_VIEW } from '@nexus/factory-domain/receivables/permissions'
 import type { CommandCaller } from '../../core/command'
 import { mayOn, officeContextOf, openInvoices, receivablesClock, today } from './store'
+// B-W2b-304: the credit limit used of each customer row (design "credit limit used (W2b)"), with the price grain.
+import { holds } from '@nexus/factory-domain/core/permissions'
+import { actorOf } from '../../core/context'
+import { creditUsedFor } from '../sales/credit/reading'
 
 /**
  * What customers owe (B-W2a-55; FIN-110; design finance.receivables "What customers owe": Open · Overdue · 0–30 · 31–60 ·
  * 61–90 · Over 90 days, each tile filters the table; "By customer": open, overdue, buckets, oldest due, last payment,
- * reminders sent, credit limit used (W2b)). GET /receivables/ageing (receivables.view; each row over its company AND its
+ * reminders sent, credit limit used (W2b; B-W2b-304: the share of the customer's limit with the company used, whole percent,
+ * with the price grain)). GET /receivables/ageing (receivables.view; each row over its company AND its
  * customer, can()): the open TD01/TD24 invoices as of a day (store.ts openInvoices: the same sums as payments' open items),
  * each instalment aged by its due date (factory-domain receivables/ledger), summed per company, customer and currency.
  * Amounts by the price grain (dropped without it); the counts stay. Read only, nothing stored. Many customers: one
@@ -72,6 +77,8 @@ export async function ageing(caller: CommandCaller, query: AgeingQuery) {
     const payments = pagePartyIds.length === 0 ? [] : await db.payment.groupBy({ by: ['companyId', 'partyId'], where: { status: 'RECEIVED', partyId: { in: pagePartyIds }, companyId: { in: pageCompanyIds }, receivedOn: { lte: new Date(`${asOf}T00:00:00.000Z`) } }, _max: { receivedOn: true } })
     const reminders = pagePartyIds.length === 0 ? [] : await db.paymentReminder.groupBy({ by: ['companyId', 'partyId', 'status'], where: { partyId: { in: pagePartyIds }, companyId: { in: pageCompanyIds } }, _count: { _all: true }, _max: { sentAt: true } })
     const of = <T extends { companyId: string; partyId: string }>(list: readonly T[], group: Group) => list.filter((entry) => entry.companyId === group.companyId && entry.partyId === group.partyId)
+    // B-W2b-304: the share of each row's credit limit used (open orders not invoiced + invoices not paid), price grain only.
+    const creditUsed = holds(actorOf(context), 'money.price') ? await creditUsedFor(db, page, receivablesClock().now()) : new Map<string, number>()
 
     return {
       asOf,
@@ -100,7 +107,7 @@ export async function ageing(caller: CommandCaller, query: AgeingQuery) {
           remindersSent: sent?._count._all ?? 0,
           lastReminderAt: sent?._max.sentAt ? toUtcIso(sent._max.sentAt) : null,
           remindersWaiting: own.filter((entry) => entry.status === 'PREPARED' || entry.status === 'APPROVED').reduce((sum, entry) => sum + entry._count._all, 0),
-          creditLimitUsed: null,
+          creditLimitUsed: creditUsed.get(`${group.companyId}|${group.partyId}|${group.currency}`) ?? null,
         }
       }),
       count: filtered.length,

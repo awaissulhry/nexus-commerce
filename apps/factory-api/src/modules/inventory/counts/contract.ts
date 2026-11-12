@@ -3,6 +3,8 @@ import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { COUNT_ITEM_KINDS, COUNT_LIMITS, COUNT_LINE_ORIGINS, COUNT_LIST_VIEWS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from '@nexus/factory-domain/inventory/counts/rules'
+// B-W2b-299: a count of an ABC class's materials.
+import { ABC_CLASSES } from '@nexus/factory-domain/inventory/counts-depth/schedules'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
@@ -65,6 +67,8 @@ export const countView = output({
   cancelReason: z.string().nullable(),
   /** Its lines, counted lines (`84 of 120`) and lines that differ. */
   lines: output({ all: z.number().int(), counted: z.number().int(), differing: z.number().int() }),
+  /** B-W2b-299 (SCM-226): the count freezes its lines' moves until each is counted. */
+  freezeMoves: z.boolean(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
@@ -101,6 +105,8 @@ export const countRecordView = countView.extend({
     /** Why the caller cannot approve, or null. */
     held: z.enum(['NOT_SUBMITTED', 'NO_RIGHT', 'OWN_VARIANCE']).nullable(),
     heldReason: z.string().nullable(),
+    /** B-W2b-299 (SCM-229): the yes asked in Approvals (kind COUNT_VARIANCE), when an approval rule asked one. */
+    request: output({ taskId: id(), status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN', 'STALE']) }).nullable(),
   }),
   actions: output({
     edit: action,
@@ -146,6 +152,10 @@ export const lineView = output({
   /** The difference at the unit cost, signed like it. */
   differenceAmount: money.cost(amountMinor().nullable()),
   movedSinceSnapshot: z.boolean(),
+  /** B-W2b-299 (SCM-226): the line holds its moves now (frozen, not counted or its asked recount not done, while COUNTING). */
+  frozen: z.boolean(),
+  /** B-W2b-299 (SCM-228): units scanned into it (both passes). */
+  scans: z.number().int(),
   version: z.number().int(),
 })
 export type LineView = z.infer<typeof lineView>
@@ -279,6 +289,10 @@ export const createCountContract = defineContract({
     note: z.string().trim().min(1).max(COUNT_LIMITS.note).optional(),
     /** Start counting at once (freeze the expected quantities in the same command). */
     start: z.boolean().optional(),
+    // B-W2b-299 (SCM-226): freeze the counted lines' moves until each is counted (chosen while DRAFT; fixed once it counts).
+    freeze: z.boolean().optional(),
+    // B-W2b-299 (SCM-227): only the materials of an ABC class (computed at the start, so a class count starts at once).
+    abcClass: z.enum(ABC_CLASSES).optional(),
   }),
   response: { 201: output({ count: countRecordView }) },
 })

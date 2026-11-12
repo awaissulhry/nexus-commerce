@@ -138,6 +138,8 @@ import { profilesNightlyCron, reevaluateHandlers } from './modules/compliance/ma
 import { gateHandlers } from './modules/planning/milestones/follow'
 // B-W2b-313: the lot lifecycle moved by its stock moves and quality decisions.
 import { lotLifecycleHandler } from './modules/inventory/lots-depth/lifecycle'
+// B-W2b-304: a payment checks the customer's orders held for credit again.
+import { creditHandlers } from './modules/sales/credit/handlers'
 // B-W2b-264: the claims' evidence check (daily 00:25 Europe/Rome; claim.evidence_expired once per claim and cause).
 import { claimEvidenceExpiryCron } from './modules/compliance/claims/expiry'
 // B-W2b-292: the warehouse task sources (a receipt, a released lot or hold, a hold that asks quarantine, a pick list; due counts).
@@ -230,6 +232,8 @@ const W2B_292_HANDLERS: readonly EventHandler[] = warehouseTaskHandlers()
 const W2B_294_HANDLERS: readonly EventHandler[] = [orderScheduleHandler()]
 // B-W2b-305: purchase_order.approved → the purchase order sent with its yes (held in words when it cannot go).
 const W2B_305_HANDLERS: readonly EventHandler[] = [approvedSendHandler()]
+// B-W2b-304
+const W2B_304_HANDLERS: readonly EventHandler[] = creditHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -298,7 +302,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_294_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_294_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

@@ -313,4 +313,8 @@ export const manifest = defineManifest({
   'POST /purchasing/orders/:purchaseOrderId/compliance-override/withdraw': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'GET /purchasing/compliance-overrides': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },
   'GET /purchasing/compliance-overrides/:purchaseOrderId': { audiences: ['office'], permission: 'purchasing.compliance.override', scope: 'record' },
+  // B-W2b-350 (./reports): purchasing reports, office only, read only: purchasing.reports.view over the screen's company with
+  // can() in the handler; the figures count only the orders the caller reaches with purchasing.view (scopeWhere), amounts the cost grain.
+  'GET /purchasing/reports/spend': { audiences: ['office'], permission: 'purchasing.reports.view', scope: 'record' },
+  'GET /purchasing/reports/spend/lines': { audiences: ['office'], permission: 'purchasing.reports.view', scope: 'record' },
 })

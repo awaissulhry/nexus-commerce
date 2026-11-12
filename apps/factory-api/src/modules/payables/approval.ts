@@ -18,6 +18,8 @@ import { followInCommand } from '../../platform/threads/followers'
 import { ensureThread, mentionProblems, writeMessage } from '../../platform/threads/threads'
 import { detailInCommand, RefusedError } from './invoices'
 import { rematchInCommand } from './matching'
+// B-W2b-299 (SCM-293): the receiver of the goods never approves their invoice nor accepts its differences.
+import { receiverRefusals } from './matching'
 import { sdiRuleRefusals } from './settings'
 import { invoiceInCommand, officeInvoice, officeOf, preparationOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
 import type { DetailView } from './views'
@@ -61,7 +63,7 @@ export async function approveInvoice(caller: CommandCaller, invoiceId: string, i
   const { result } = await command(caller, { name: 'payables.approve', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
     // B-W2b-21 (Z8:03): the payables settings' rule for what SDI delivered (LISTED approvers, not the buyer) after the four eyes.
-    const problems = [...approvalProblems(await approvalFacts(tools, invoice), context.actorId), ...(await sdiRuleRefusals(tools.tx, invoice, context.actorId))]
+    const problems = [...approvalProblems(await approvalFacts(tools, invoice), context.actorId), ...(await sdiRuleRefusals(tools.tx, invoice, context.actorId)), ...(await receiverRefusals(tools.tx, invoice, context.actorId, 'APPROVE'))]
     if (problems.length > 0) throw new RefusedError(problems)
     const note = input.note?.trim() || null
     await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { status: 'APPROVED', approvedAt: tools.now, approvedById: context.actorId, approvalNote: note }, select: { id: true } })
@@ -138,6 +140,9 @@ export async function acceptDifference(caller: CommandCaller, invoiceId: string,
     if (!match || match.invoiceId !== invoiceId) throw new NotFoundError('Match not found.')
     if (match.withinTolerance) throw new RefusedError([{ code: 'WITHIN_TOLERANCE', message: 'This line matches within the tolerance: there is nothing to accept.' }])
     if (match.acceptedAt !== null) throw new RefusedError([{ code: 'ACCEPTED', message: 'This difference was accepted already.' }])
+    // B-W2b-299 (SCM-293)
+    const received = await receiverRefusals(tools.tx, invoice, context.actorId, 'ACCEPT')
+    if (received.length > 0) throw new RefusedError(received)
     await tools.tx.supplierInvoiceMatch.update({ where: { id: matchId }, data: { acceptedAt: tools.now, acceptedById: context.actorId, acceptNote: input.note.trim(), version: { increment: 1 } }, select: { id: true } })
     // An accepted wait for goods (paying ahead of the delivery) turns WAITING_GOODS into DIFFERENCES.
     const outcome = await rematchInCommand(tools, invoiceId)
