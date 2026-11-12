@@ -1,0 +1,426 @@
+{
+  "wd": {
+    "why": {
+      "label": "Perché è questo numero?",
+      "open": "{quantity}: perché è questo numero?",
+      "title": "Perché sono {quantity} {unit}?",
+      "loading": "Sommo i movimenti…",
+      "formula": "Entrate + resi − prelievi − scarti ± rettifiche ± inventari ± trasferimenti.",
+      "tableLabel": "I movimenti per causale",
+      "col": {
+        "reason": "Causale",
+        "moves": "Movimenti",
+        "net": "Entrate − uscite"
+      },
+      "startOn": "Giacenza prima del {day}",
+      "sum": "Totale",
+      "addsUp": "Torna con {quantity} {unit} ✓",
+      "gap": "Non torna per {gap} {unit}: è un errore, ed è segnalato.",
+      "last_one": "L'ultimo movimento",
+      "last_other": "Gli ultimi {count} movimenti",
+      "backDated": "data contabile diversa",
+      "allMoves_one": "Apri il movimento",
+      "allMoves_other": "Apri tutti i {count} movimenti",
+      "key": "Perché è questo numero (la quantità della riga selezionata)",
+      "period": "Dal {from} al {to}",
+      "periodAll": "Tutti i movimenti fino al {to}",
+      "basisPosting": "Per il giorno in cui ogni movimento conta in contabilità.",
+      "basisEntry": "Per il giorno in cui ogni movimento è avvenuto.",
+      "now": "Giacenza attuale: {quantity} {unit}."
+    },
+    "bridge": {
+      "label": "Ponte del saldo: inizio, ogni causale, fine",
+      "start": "Inizio",
+      "startOn": "Giacenza prima del {day}",
+      "endOn": "Giacenza a fine {day}",
+      "mismatch": "I passi sommano {total}; la giacenza dice altro ({gap}): un errore, segnalato."
+    },
+    "transit": {
+      "col": "In transito",
+      "link": "Merce in viaggio verso un altro sito: apri i trasferimenti in transito",
+      "notHere": "In transito"
+    },
+    "low": {
+      "tile": "Sotto la scorta minima",
+      "tileCount_one": "{count} materiale",
+      "tileCount_other": "{count} materiali",
+      "tileHint": "sotto la scorta minima",
+      "tableLabel": "Materiali sotto la scorta minima",
+      "count_one": "{count} materiale sotto la scorta minima",
+      "count_other": "{count} materiali sotto la scorta minima",
+      "allColours": "Tutti i colori",
+      "col": {
+        "material": "Materiale",
+        "minimum": "Minimo",
+        "onHand": "Giacenza",
+        "onOrder": "Ordinato",
+        "reserved": "Impegnato",
+        "position": "Disponibilità",
+        "short": "Manca"
+      },
+      "basis": {
+        "MIN_MAX": "Scorta minima",
+        "REORDER_POINT": "Punto di riordino",
+        "SAFETY_STOCK": "Scorta di sicurezza"
+      },
+      "shortSub": "per il minimo",
+      "rowMenu": "Azioni per {code}",
+      "openItem": "Apri il materiale",
+      "showStock": "Mostra la sua giacenza",
+      "none": "Nessun materiale è sotto la scorta minima",
+      "noneBody": "Disponibilità = giacenza + ordinato − impegnato, rispetto al minimo che la pianificazione di ogni materiale stabilisce.",
+      "alertsOff": "Gli avvisi di scorta bassa sono spenti nelle regole di magazzino: nessuno viene avvisato quando un materiale scende sotto il minimo.",
+      "csv": {
+        "site": "Sito",
+        "material": "Materiale",
+        "materialName": "Nome materiale",
+        "colour": "Colore",
+        "minimum": "Minimo",
+        "onHand": "Giacenza",
+        "onOrder": "Ordinato",
+        "reserved": "Impegnato",
+        "position": "Disponibilità",
+        "short": "Manca",
+        "unit": "Unità"
+      }
+    },
+    "move": {
+      "row": "Sposta…",
+      "bulk_one": "Sposta {count}",
+      "bulk_other": "Sposta {count}",
+      "title_one": "Sposta {count} riga di giacenza",
+      "title_other": "Sposta {count} righe di giacenza",
+      "from": "Da {places}",
+      "what": "Cosa si sposta",
+      "andMore": "e altre {count}",
+      "to": "A",
+      "toHint": "Un'ubicazione dello stesso sito. Un'ubicazione bloccata non riceve nulla.",
+      "pick": "Scegli un'ubicazione",
+      "blockedSuffix": "bloccata",
+      "quantity": "Quantità ({unit})",
+      "quantityHint": "Tutta: {quantity} {unit}.",
+      "whole": "Ogni riga si sposta intera; la pelle si sposta pelle per pelle.",
+      "note": "Nota",
+      "noteHint": "Perché si sposta (facoltativo): il registro la conserva.",
+      "keys": "⌘↵ sposta · Esc annulla",
+      "do_one": "Sposta",
+      "do_other": "Sposta {count}",
+      "posting": "Sposto…",
+      "doneTitle_one": "{count} movimento registrato",
+      "doneTitle_other": "{count} movimenti registrati",
+      "done_one": "{count} spostamento verso {place} registrato.",
+      "done_other": "{count} spostamenti verso {place} registrati.",
+      "refusedTitle_one": "{count} non spostato",
+      "refusedTitle_other": "{count} non spostati",
+      "refusedLine": "{what}: {why}",
+      "held": {
+        "nothing": "Niente da spostare.",
+        "sites": "Sposta un sito alla volta: tra siti diversi si usa un trasferimento (Magazzino › Trasferimenti).",
+        "fromBlocked": "{code} è bloccata: non entra né esce nulla.",
+        "transit": "{code} è un'ubicazione di transito: solo il suo trasferimento muove quella merce.",
+        "pick": "Scegli dove va.",
+        "toBlocked": "{code} è bloccata: non riceve nulla.",
+        "same": "Si trova già lì.",
+        "quantity": "Scrivi quanto si sposta.",
+        "tooMuch": "Più di quanto c'è.",
+        "note": "La nota è di 500 caratteri al massimo.",
+        "pastDate": "La giacenza a una data passata non si modifica.",
+        "noRight": "Il tuo ruolo non può spostare giacenza.",
+        "pickRows": "Seleziona prima le righe da spostare."
+      },
+      "problem": {
+        "blocked": "L'ubicazione è bloccata (un inventario, un danno o una pulizia): non entra né esce nulla.",
+        "kind": "Quell'ubicazione non tiene questo tipo di materiale.",
+        "notEnough": "Quella giacenza non c'è più: rileggi i numeri.",
+        "changed": "Qualcuno l'ha cambiato nel frattempo. Controlla e riprova.",
+        "forbidden": "Il tuo ruolo non può spostare giacenza.",
+        "offline": "Nessuna connessione con il server. Riprova quando torna.",
+        "invalid": "Qualcosa non è stato accettato.",
+        "write": "Non è stato spostato. Riprova."
+      }
+    },
+    "adj": {
+      "approvalAbove": "Serve un'approvazione sopra {amount}",
+      "approvalHeld": "Serve un'approvazione sopra il valore fissato dalle regole di magazzino",
+      "approvers": "Chi approva: {names}. Fino a quel valore si registra subito; sopra, aspetta il loro sì.",
+      "approversUnknown": "Sopra quel valore aspetta un sì (Sistema › Approvazioni, automazioni e IA › Regole di approvazione)."
+    },
+    "posting": {
+      "label": "Data contabile",
+      "hint": "Il giorno in cui conta in contabilità. Vuoto: oggi.",
+      "checking": "Controllo il giorno…",
+      "checkFailed": "Non è stato possibile controllare il giorno. Riprova.",
+      "closed": "Quel mese è chiuso in contabilità: non entra nulla.",
+      "closedBody": "Dal {from} al {to}. È l'Amministrazione a riaprire un mese.",
+      "tooFar": "Più indietro di quanto le regole di magazzino permettono: il primo giorno possibile è il {earliest}.",
+      "notAllowed": "Quel giorno non si può usare.",
+      "ok": "Conta il {day} in contabilità.",
+      "lockReason": "Spiega perché va in un mese chiuso.",
+      "lockReasonLabel": "Perché va in un mese chiuso",
+      "lockReasonHint": "Il mese dal {from} al {to} è chiuso alla maggior parte delle modifiche: il motivo resta con il movimento.",
+      "byLabel": "Periodo per",
+      "byEntry": "Giorno in cui è avvenuto",
+      "byPosting": "Data contabile",
+      "datedLabel": "Data contabile",
+      "datedAny": "Qualsiasi data contabile",
+      "datedBack": "Solo con data diversa",
+      "datedSame": "Senza data diversa",
+      "countsOn": "Conta il",
+      "countsOnHint": "Data diversa dal giorno in cui è avvenuto.",
+      "countsOnShort": "Conta il {day}"
+    },
+    "waiting": {
+      "button": "In attesa di approvazione",
+      "buttonLabel_one": "{count} rettifica in attesa di approvazione",
+      "buttonLabel_other": "{count} rettifiche in attesa di approvazione",
+      "buttonFailed": "Non è stato possibile leggere le rettifiche in attesa di approvazione",
+      "title": "In attesa di approvazione",
+      "by": "In attesa di approvazione da {approver} dalle {since}",
+      "byUnknown": "In attesa di approvazione dalle {since}",
+      "what": "{material} in {place}: {from} → {to} {unit} quando sarà approvata. Fino ad allora non si registra nulla.",
+      "up": "In più {quantity} {unit}: {from} → {to}",
+      "down": "In meno {quantity} {unit}: {from} → {to}",
+      "open": "Apri la richiesta",
+      "more_one": "Ancora {count} in Approvazioni",
+      "more_other": "Ancora {count} in Approvazioni",
+      "note": "Le rettifiche che valgono più del valore delle regole di magazzino aspettano qui; chi approva decide in Home › Approvazioni."
+    },
+    "loc": {
+      "busy": "Un momento…",
+      "col": {
+        "defaults": "Predefinita per",
+        "label": "Etichetta"
+      },
+      "status": {
+        "ACTIVE": "Attiva",
+        "BLOCKED": "Bloccata",
+        "ARCHIVED": "Archiviata",
+        "byCount": "Inventario {number}",
+        "until": "{reason} · fino al {day}"
+      },
+      "reason": {
+        "COUNT": "Un inventario",
+        "DAMAGE": "Un danno",
+        "CLEAN_UP": "Pulizia",
+        "OTHER": "Altro"
+      },
+      "purpose": {
+        "RECEIVING": "Ricevimento",
+        "QUALITY": "Qualità",
+        "ISSUE": "Prelievo",
+        "RETURN": "Resi",
+        "PUT_AWAY": "Stoccaggio"
+      },
+      "purposeFor": "{purpose} ({kind})",
+      "purposeAll": "{purpose} (ogni materiale)",
+      "itemKind": {
+        "LEATHER": "pelle",
+        "TEXTILE": "tessuto",
+        "LINING": "fodera",
+        "MEMBRANE": "membrana",
+        "PADDING": "imbottitura",
+        "THREAD": "filo",
+        "TRIM": "accessori",
+        "HARDWARE": "minuteria",
+        "PROTECTOR": "protezioni",
+        "LABEL": "etichette",
+        "PACKAGING": "imballi",
+        "COMPONENT": "componenti",
+        "FINISHED": "capi finiti"
+      },
+      "holds": {
+        "ANY": "Tiene qualsiasi merce",
+        "MATERIALS": "Tiene solo materiali",
+        "FINISHED": "Tiene solo capi finiti"
+      },
+      "group": {
+        "STORE": "un luogo di stoccaggio",
+        "DOCK": "una banchina",
+        "LINE": "bordo linea",
+        "OUTSIDE": "fuori dal sito",
+        "TRANSIT": "tra due siti"
+      },
+      "kind": {
+        "atTop": "in cima all'albero",
+        "noInside": "non contiene altre ubicazioni",
+        "noLabel": "senza etichetta di ubicazione",
+        "transferOnly": "solo un trasferimento muove la sua merce",
+        "namesCustomer": "indica il suo cliente",
+        "namesWorkshop": "indica il suo terzista"
+      },
+      "menu": {
+        "block": "Blocca…",
+        "changeBlock": "Cambia il blocco…",
+        "unblock": "Sblocca",
+        "printLabel": "Stampa etichetta…"
+      },
+      "held": {
+        "noManage": "Il tuo ruolo non può modificare le ubicazioni.",
+        "archived": "Un'ubicazione archiviata non si blocca.",
+        "notBlockable": "Un'ubicazione fuori dal sito o in transito non si blocca: i suoi movimenti sono dei suoi ordini.",
+        "countBlock": "Qui è in corso l'inventario {number}: lo sblocca l'inventario quando il conteggio finisce.",
+        "notBlocked": "Non è bloccata."
+      },
+      "block": {
+        "title": "Blocca {code}",
+        "changeTitle": "Cambia il blocco di {code}",
+        "effect": "Mentre è bloccata non entra né esce nulla (i movimenti di un inventario passano).",
+        "reason": "Motivo",
+        "pickReason": "Scegli un motivo",
+        "note": "Nota",
+        "noteHint": "Cosa è successo (obbligatoria per Altro).",
+        "until": "Fino al",
+        "untilHint": "L'ultimo giorno del blocco. Vuoto: finché non si sblocca.",
+        "do": "Blocca",
+        "change": "Salva il blocco",
+        "held": {
+          "reason": "Scegli un motivo.",
+          "note": "Spiega il perché a parole (il motivo è Altro).",
+          "long": "La nota è di 500 caratteri al massimo.",
+          "past": "L'ultimo giorno non è prima di oggi."
+        }
+      },
+      "unblock": {
+        "title": "Sbloccare {code}?",
+        "now": "Ora è bloccata: {reason}.",
+        "effect": "I movimenti in entrata e in uscita passano di nuovo.",
+        "do": "Sblocca"
+      },
+      "done": {
+        "blocked": "{code} bloccata.",
+        "unblocked": "{code} sbloccata."
+      },
+      "problem": {
+        "changed": "Qualcuno ha cambiato questa ubicazione nel frattempo: è stata riletta. Controlla e riprova.",
+        "notNow": "Questa ubicazione non si può bloccare o sbloccare nel suo stato attuale.",
+        "forbidden": "Il tuo ruolo non può farlo.",
+        "gone": "Non esiste più, oppure è di un'altra azienda.",
+        "offline": "Nessuna connessione con il server. Riprova quando torna.",
+        "write": "Non è stato salvato. Riprova."
+      },
+      "new": {
+        "atTop": "Un'ubicazione presso un cliente o di transito sta in cima all'albero del sito: non scegliere un'ubicazione madre.",
+        "noInside": "Dentro {code} non ci sono altre ubicazioni.",
+        "customer": "Cliente",
+        "workshop": "Terzista",
+        "partyPick": "Scegli di chi è",
+        "partiesLoading": "Leggo…",
+        "partyNoRight": "Per indicare il cliente o il terzista serve l'accesso a clienti e fornitori.",
+        "noCustomers": "Non c'è un cliente o un marchio attivo da indicare.",
+        "noWorkshops": "Non c'è un terzista attivo da indicare."
+      },
+      "record": {
+        "blocked": "Bloccata: {reason}",
+        "countBlocked": "Bloccata mentre è in corso l'inventario {number}",
+        "openCount": "Apri l'inventario",
+        "until": "fino al {day}",
+        "untilUnblocked": "finché non si sblocca",
+        "since": "dal {day}",
+        "kindTitle": "Cosa tiene",
+        "defaultsTitle": "Predefinita per",
+        "noDefaults": "Nessuna operazione la usa come predefinita.",
+        "kindFixed": "Questo tipo resta tale: ne dipendono il suo cliente o terzista, o i suoi trasferimenti."
+      },
+      "tab": {
+        "labels": "Etichette"
+      },
+      "label": {
+        "none": "Ancora senza etichetta",
+        "noneKind": "Senza etichetta",
+        "noneBody": "Solo le ubicazioni nel reparto hanno un'etichetta: la sua lettura conferma uno stoccaggio, uno spostamento o un conteggio.",
+        "previewTitle": "L'etichetta di ubicazione",
+        "labelName": "Etichetta di ubicazione {code}",
+        "barcode": "Codice a barre {code}",
+        "invalid": "Questo codice non si stampa come codice a barre: {code}",
+        "print": "Stampa etichetta",
+        "reprint": "Ristampa",
+        "suggestedNote": "Non ha ancora un codice: la stampa le dà {code}.",
+        "ownNote": "La lettura di questa etichetta indica questa ubicazione.",
+        "codeTitle": "Il codice dell'etichetta",
+        "codeNow": "Codice sull'etichetta",
+        "placeCode": "Il codice dell'ubicazione",
+        "getsCode": "Avrà {code}",
+        "codeField": "Codice etichetta",
+        "codeHint": "Lettere, cifre e . _ : / - senza spazi; unico nell'azienda.",
+        "oldCode": "Le etichette già stampate con il vecchio codice non si leggeranno più: stampane di nuove.",
+        "saveCode": "Salva il codice",
+        "giveSuggested": "Dalle {code}",
+        "saved": "Il codice è salvato.",
+        "savedPrinted_one": "Il codice è salvato. {count} etichetta stampata con il vecchio codice non si legge più: stampane una nuova.",
+        "savedPrinted_other": "Il codice è salvato. {count} etichette stampate con il vecchio codice non si leggono più: stampane di nuove.",
+        "history": "Storico stampe",
+        "neverPrinted": "Mai stampata.",
+        "copies_one": "{count} copia",
+        "copies_other": "{count} copie",
+        "failedHint": "Non stampata: riprova da Stampa etichetta.",
+        "code": {
+          "missing": "Scrivi il codice.",
+          "shape": "Solo lettere, cifre e . _ : / - senza spazi (al massimo 64).",
+          "taken": "Un'altra ubicazione ha già questo codice.",
+          "same": "Ha già questo codice."
+        },
+        "refused": {
+          "archived": "Un'ubicazione archiviata non ha etichetta.",
+          "kind": "Un'ubicazione fuori dal sito o in transito non ha etichetta.",
+          "other": "Non stampata."
+        }
+      },
+      "job": {
+        "QUEUED": "In coda",
+        "SENT": "Inviata",
+        "PRINTED": "Stampata",
+        "FAILED": "Non stampata"
+      },
+      "print": {
+        "band": "Stampa etichette",
+        "bulk_one": "Stampa {count} etichetta",
+        "bulk_other": "Stampa {count} etichette",
+        "title_one": "Stampa {count} etichetta di ubicazione",
+        "title_other": "Stampa {count} etichette di ubicazione",
+        "site": "Sito {site}",
+        "printer": "Stampante",
+        "printerHint": "Una stampante di etichette di questo sito.",
+        "pdfHint": "Un PDF in una nuova scheda: si stampa con qualsiasi stampante (un'etichetta per pagina).",
+        "printersLoading": "Leggo le stampanti…",
+        "noPrinters": "Nessuna stampante di etichette in questo sito",
+        "pickPrinter": "Scegli una stampante di etichette",
+        "inBrowser": "PDF nel browser",
+        "copies": "Copie",
+        "copiesHint": "Di ogni etichetta, da 1 a 10.",
+        "language": "Lingua dell'etichetta",
+        "lang": {
+          "it": "Italiano",
+          "en": "Inglese"
+        },
+        "needCode_one": "{count} ubicazione non ha ancora un codice: prima riceve quello suggerito.",
+        "needCode_other": "{count} ubicazioni non hanno ancora un codice: prima ricevono quello suggerito.",
+        "leftOut_one": "{count} ubicazione resta fuori",
+        "leftOut_other": "{count} ubicazioni restano fuori",
+        "refusedLine": "{code}: {why}",
+        "do_one": "Stampa",
+        "do_other": "Stampa {count}",
+        "pdf_one": "Apri il PDF",
+        "pdf_other": "Apri il PDF di {count}",
+        "posting": "Invio…",
+        "doneTitle_one": "{count} etichetta inviata alla stampante",
+        "doneTitle_other": "{count} etichette inviate alla stampante",
+        "done_one": "{count} stampa in coda.",
+        "done_other": "{count} stampe in coda.",
+        "doneBody": "La scheda Etichette di ogni ubicazione mostra a che punto è la sua stampa.",
+        "refusedTitle_one": "{count} non stampata",
+        "refusedTitle_other": "{count} non stampate",
+        "noRightPdf": "Il tuo ruolo stampa le etichette solo come PDF (per una stampante di etichette serve il permesso di stampa).",
+        "held": {
+          "none": "Nessuna di queste ubicazioni ha un'etichetta.",
+          "tooMany": "Al massimo 200 etichette alla volta.",
+          "copies": "Da 1 a 10 copie.",
+          "noRight": "Il tuo ruolo non può mandare etichette a una stampante: scegli il PDF.",
+          "needCode_one": "{count} ubicazione non ha ancora un codice e il tuo ruolo non può darglielo: scegli ubicazioni con un codice, o il PDF.",
+          "needCode_other": "{count} ubicazioni non hanno ancora un codice e il tuo ruolo non può darglielo: scegli ubicazioni con un codice, o il PDF.",
+          "printer": "Scegli una stampante di etichette, o il PDF.",
+          "select": "Seleziona prima le ubicazioni da stampare."
+        }
+      }
+    }
+  }
+}

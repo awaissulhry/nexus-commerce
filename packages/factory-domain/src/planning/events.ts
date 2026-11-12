@@ -45,7 +45,8 @@ import { LOSS_DECISIONS } from './leather/loss'
  *                                    or dismissed with a reason, at a site
  */
 const live = { permission: 'planning.view', fields: ['runId', 'siteId'] } as const
-const SETTINGS_FIELDS = ['horizonWeeks', 'dayBucketWeeks', 'weekBucketWeeks', 'defaultEfficiencyPct', 'scheduledRunTime'] as const
+// B-W2b-318 (PLN-068): the size-run rule and groups join the fields a change names (a wider v1: older events stay valid).
+const SETTINGS_FIELDS = ['horizonWeeks', 'dayBucketWeeks', 'weekBucketWeeks', 'defaultEfficiencyPct', 'scheduledRunTime', 'sizeRunRule', 'sizeGroups'] as const
 
 export const events = [
   defineEvent({
@@ -87,7 +88,7 @@ export const events = [
   defineEvent({
     type: 'planning.settings_changed',
     context: 'planning',
-    description: "A site's planning settings changed: how far the plan looks ahead, its buckets, the default efficiency or the nightly run's time.",
+    description: "A site's planning settings changed: how far the plan looks ahead, its buckets, the default efficiency, the nightly run's time or how a size run is split.",
     payload: z.strictObject({
       siteId: z.uuid(),
       /** The site had no settings before (the defaults applied). */

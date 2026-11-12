@@ -45,6 +45,12 @@ export const manifest = defineManifest({
   'PATCH /planning/work-centres/:workCentreId/capacity': { audiences: ['office'], permission: 'planning.settings.manage', scope: 'record' },
   'GET /planning/capacity': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/capacity/cell': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  // B-W2b-318: the item's requirement profile (./item-profile), the calculated delays, scarce material by priority
+  // (./allocation-priority): read with planning.view over the site, from the plan computed now. The rules per item are
+  // written on the item-parameters routes (a plan level also asks planning.strategy.manage).
+  'GET /planning/item-profile': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/delays': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/allocation-priority': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   // B-W2a-22: MRP every day.
   'POST /planning/requirements/:requirementId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
   'POST /planning/requirements/:requirementId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
@@ -85,6 +91,14 @@ export const manifest = defineManifest({
   'PUT /planning/schedule/what-ifs/:scenarioId/moves': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
   'POST /planning/schedule/what-ifs/:scenarioId/apply': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
   'POST /planning/schedule/what-ifs/:scenarioId/discard': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  // B-W2b-329: the board's record (./schedule-log): the change log, day sheets and a published version read with
+  // planning.view; an undo asks planning.view here and the handler asks the change's own permission (a move's
+  // planning.schedule.manage, a pin's planning.schedule.pin).
+  'GET /planning/schedule/changes': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/changes/:changeId/undo': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/day-sheets': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/day-sheets/paper': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/versions/:versionId/board': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   // B-W2b-132: the leather and cut plan (./leather): read with planning.view; a style's cutting loss changed or its proposal
   // dismissed with planning.leather.manage at the site whose cuts it rests on.
   'GET /planning/leather/need': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
