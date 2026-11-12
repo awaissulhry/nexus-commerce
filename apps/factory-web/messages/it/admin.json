@@ -1883,6 +1883,7 @@
     "planning_leather_manage": "Cambiare la perdita di taglio di un modello dai suoi tagli",
     "planning_milestones_manage": "Gestire i gate di pre-produzione di un ordine di vendita e segnarli fatti",
     "planning_milestones_override": "Far partire il lavoro di un ordine prima di un gate, con un motivo (non il pianificatore del gate)",
+    "planning_planned_convert": "Rendere reali gli ordini di lavoro e gli ordini di conto lavoro pianificati dal piano (servono anche i permessi degli ordini di lavoro e del conto lavoro)",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
     "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",

@@ -343,6 +343,18 @@ export interface SampleWorkOrder {
   readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string }) => Promise<void>
 }
 
+/**
+ * B-W2b-293 (PLN-067): a work order made from a planned work order of the plan, by modules/planning/planned-orders through
+ * this same create (the lines, cells, site, revision, number and checks are W1's): the command is on the planned order (its
+ * version bump locks it, at the version the planner read), and `inCommand` (its CONVERTED write, audit row and event) runs
+ * in the same transaction once the work order is written.
+ */
+export interface PlannedWorkOrderSource {
+  readonly plannedWorkOrderId: string
+  readonly version: number
+  readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string; readonly pieces: number }) => Promise<void>
+}
+
 /** A revision of this style a work order may be made to: a DRAFT or the RELEASED one (an OBSOLETE one never). */
 async function revisionOf(db: Reader, styleId: string, revisionId: string, path: string): Promise<RevisionRow> {
   const revision = await db.styleRevision.findUnique({ where: { id: revisionId }, select: REVISION_COLUMNS })
@@ -358,7 +370,7 @@ async function revisionOf(db: Reader, styleId: string, revisionId: string, path:
  * the lines fix, else the style's released one. Due date: the earliest promise (or request) of its lines and orders;
  * priority: the highest.
  */
-export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder): Promise<{ workOrder: WorkOrderView }> {
+export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder, planned?: PlannedWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
@@ -404,7 +416,9 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
 
   const spec: CommandSpec = sample
     ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
-    : { name: 'workorders.create', idempotencyKey, input: body }
+    : planned // B-W2b-293
+      ? { name: 'workorders.createFromPlanned', idempotencyKey, input: { ...body, plannedWorkOrderId: planned.plannedWorkOrderId }, record: { type: 'PlannedWorkOrder', id: planned.plannedWorkOrderId, expectedVersion: planned.version } }
+      : { name: 'workorders.create', idempotencyKey, input: body }
   const { result } = await command(caller, spec, async (tools) => {
     const { tx } = tools
     await lockOrderLines(tx, context.tenantId, lineIds)
@@ -471,6 +485,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
     })
     createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
     if (sample) await sample.inCommand(tools, { id, number: number.formatted })
+    // B-W2b-293: the planned work order it was made from becomes CONVERTED in this transaction.
+    if (planned) await planned.inCommand(tools, { id, number: number.formatted, pieces })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })
   return result
