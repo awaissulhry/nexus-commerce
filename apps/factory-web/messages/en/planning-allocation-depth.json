@@ -198,7 +198,7 @@
       "less": "One less",
       "more": "One more",
       "orderWill": "A draft subcontract order is made for it when the work order is released.",
-      "orderBuyer": "No subcontract order is made by you: the buyer drafts it from Purchasing › Subcontracting.",
+      "orderBuyer": "No subcontract order is made by you: the buyer drafts it from Purchasing › Subcontract orders.",
       "inHouseLead": "The operation comes back to our lines; it is not on any subcontract order.",
       "inHouseLeadOrder": "Its draft subcontract order is cancelled (or the operation taken off it), never once the kit or pieces went out.",
       "reason": "Why it comes back in-house",
@@ -221,7 +221,7 @@
       "sentOutside": "Op {seq} {operation} sent outside to {workshop}.",
       "orderMade": "Draft subcontract order {order}: the kit leaves {date}, back {back}.",
       "noOrder": {
-        "PERMISSION": "No subcontract order yet: the buyer drafts it from Purchasing › Subcontracting.",
+        "PERMISSION": "No subcontract order yet: the buyer drafts it from Purchasing › Subcontract orders.",
         "NOT_RELEASED": "No subcontract order yet: it is made once the work order is released.",
         "OTHER": "No subcontract order yet."
       },
@@ -288,7 +288,7 @@
         "NOT_A_PART": "It is no longer a part of {order} at a workshop on this board.",
         "ORDERED": "{order}'s garments at this workshop are on a subcontract order already.",
         "NO_WORK": "{order} has no work left to send out.",
-        "PERMISSION": "Drafting it needs the subcontracting permission: the buyer makes it from Purchasing › Subcontracting.",
+        "PERMISSION": "Drafting it needs the subcontracting permission: the buyer makes it from Purchasing › Subcontract orders.",
         "NOT_RELEASED": "{order} is not released yet: its order is made once it is.",
         "OTHER": "The server did not make this order."
       },
