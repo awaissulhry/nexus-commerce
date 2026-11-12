@@ -1,0 +1,462 @@
+{
+  "al": {
+    "workshop": "Il laboratorio",
+    "kind": {
+      "ALL": "tutto il lavoro",
+      "CUTTING": "taglio",
+      "SEWING": "cucito",
+      "ASSEMBLY": "assemblaggio",
+      "FINISHING": "finitura",
+      "INSPECTION": "controllo",
+      "PACKING": "imballaggio",
+      "SUBCONTRACT": "lavorazione esterna"
+    },
+    "standing": {
+      "PENDING": "in valutazione, non ancora approvato",
+      "SUSPENDED": "sospeso",
+      "SUSPENDED_WHY": "sospeso: {reason}",
+      "REFUSED": "rifiutato",
+      "REFUSED_WHY": "rifiutato: {reason}",
+      "NONE": "ritirato",
+      "NO_COVER": "nessuna qualifica copre questo lavoro",
+      "NOT_YET": "approvato solo da un giorno successivo",
+      "EXPIRED": "l'approvazione è scaduta",
+      "EVIDENCE_EXPIRED": "un documento su cui si basa l'approvazione è scaduto",
+      "OTHER": "non approvato"
+    },
+    "hold": {
+      "NOT_A_WORKSHOP": "{workshop} non ha il ruolo di terzista.",
+      "NOT_ACTIVE": "{workshop} non è attivo.",
+      "SUPPLIER_STATUS": {
+        "ON_HOLD": "{workshop} è sospeso come fornitore: nessun nuovo ordine gli viene inviato.",
+        "BLOCKED": "{workshop} è bloccato come fornitore: nessun nuovo ordine gli viene inviato.",
+        "INACTIVE": "{workshop} è inattivo come fornitore: riapprovalo per mandargli lavoro.",
+        "OTHER": "Lo stato fornitore di {workshop} blocca i nuovi ordini."
+      },
+      "NO_LOCATION": "{workshop} non ha un'ubicazione di magazzino presso {site}: il kit non ha dove andare.",
+      "DURC_MISSING": "Nessun DURC valido in archivio (D.Lgs. 276/2003 art. 29): chiedilo al laboratorio.",
+      "DURC_EXPIRED": "Nessun DURC valido: è scaduto il {date}.",
+      "NOT_QUALIFIED": "Non approvato per {kind} (Op {seq} {operation}): {standing}.",
+      "NOT_QUALIFIED_ANY": "{workshop} non è approvato per questo lavoro."
+    },
+    "warn": {
+      "CONDITIONAL": "Approvato con condizioni per {kind} (Op {seq} {operation}): {conditions}.",
+      "CONDITIONAL_ANY": "Approvato con condizioni per questo lavoro.",
+      "DURC_EXPIRING": "Il suo DURC scade il {date}.",
+      "DURC_EXPIRING_ANY": "Il suo DURC scade a breve.",
+      "DURC_NOT_CHECKED": "I tipi di fornitore di {workshop} non sono impostati: il suo DURC non viene controllato.",
+      "OVER_CAPACITY": "{workshop} sarebbe al {pct}% della sua capacità mentre il lavoro è lì.",
+      "OVER_CAPACITY_ANY": "{workshop} supererebbe la sua capacità mentre il lavoro è lì.",
+      "NO_CAPACITY_SET": "{workshop} non ha una capacità settimanale impostata: il suo carico non è noto."
+    },
+    "held": {
+      "checking": "Verifica dei laboratori approvati per questo lavoro…",
+      "notChecked": "Non è stato possibile leggere se i laboratori sono approvati: nessun lavoro va a un laboratorio finché non è verificato.",
+      "notListed": "Non si sa ancora se {workshop} è approvato per {order}: la bacheca lo rilegge.",
+      "notOffered": "{workshop} non è proposto per questo lavoro.",
+      "noWork": "{order} non ha più lavoro da mandare fuori: non resta nulla da produrre, quindi resta sulle nostre linee."
+    },
+    "capacity": {
+      "head": "Prossime 4 settimane:",
+      "MINUTES": "{kind}: {booked} di {available} min prenotati ({pct}%).",
+      "PIECES": "{kind}: {booked} di {available} capi prenotati ({pct}%).",
+      "proposed": {
+        "MINUTES": "Altri {proposed} min proposti dal piano.",
+        "PIECES": "Altri {proposed} capi proposti dal piano."
+      },
+      "none": "{kind}: nessuna capacità settimanale impostata.",
+      "unknown": "{workshop} non ha una capacità settimanale impostata: il carico non è noto (—)."
+    },
+    "lane": {
+      "approved": "Approvato per {kinds}",
+      "approvedNone": "Non ancora approvato per alcun lavoro",
+      "durcNotChecked": "DURC non controllato",
+      "durcUntil": "DURC fino al {date}",
+      "durcValid": "DURC valido"
+    },
+    "mark": {
+      "oneOutside": "Op {seq} {kind} esterna",
+      "manyOutside_one": "{count} operazione esterna",
+      "manyOutside_other": "{count} operazioni esterne"
+    },
+    "card": {
+      "toWorkshop": "Verso un laboratorio: si apre prima la tempistica del kit, poi Assegna."
+    },
+    "dialog": {
+      "cancel": "Annulla",
+      "back": "Torna alla scheda",
+      "retry": "Riprova"
+    },
+    "error": {
+      "forbidden": "Non puoi vedere questo in questo sito.",
+      "offline": "Il server non ha risposto: non viene mostrato nulla per non mostrare nulla di sbagliato.",
+      "failed": "Non è stato possibile leggerlo. Riprova.",
+      "noSite": "Questa azienda non ha ancora un sito da pianificare."
+    },
+    "kit": {
+      "title": "Invia a {workshop}",
+      "subtitle_one": "{order} · {style} · {pieces} capo",
+      "subtitle_other": "{order} · {style} · {pieces} capi",
+      "allocate_one": "Assegna {pieces} capo",
+      "allocate_other": "Assegna {pieces} capi",
+      "done_one": "{pieces} capo assegnato a {workshop}.",
+      "done_other": "{pieces} capi assegnati a {workshop}.",
+      "reading": "Lettura della tempistica del kit…",
+      "errorTitle": "Impossibile caricare la tempistica del kit",
+      "heldTitle": "{workshop} non accetta questo lavoro",
+      "warnTitle": "Da sapere prima di assegnare (non blocca lo spostamento)",
+      "held": {
+        "readOnly": "Sola lettura: solo i pianificatori assegnano gli ordini di produzione.",
+        "offline": "Offline: non si può assegnare nulla finché la connessione non torna.",
+        "busy": "Salvataggio in corso: attendi la risposta.",
+        "reading": "Attendi la tempistica del kit.",
+        "noWork": "{order} non ha più lavoro da mandare fuori."
+      },
+      "start": "Inizio lavoro",
+      "startFrom": {
+        "GIVEN": "{date}",
+        "SCHEDULE": "{date} (l'ultimo inizio sicuro della bacheca)",
+        "TODAY": "{date} (oggi: la bacheca non ha ancora un inizio)"
+      },
+      "transport": "Trasporto",
+      "transportFrom": {
+        "WORKSHOP_one": "{days} giorno (il tempo di consegna del laboratorio)",
+        "WORKSHOP_other": "{days} giorni (il tempo di consegna del laboratorio)",
+        "DEFAULT_one": "{days} giorno (predefinito: il laboratorio non ha un tempo di consegna)",
+        "DEFAULT_other": "{days} giorni (predefinito: il laboratorio non ha un tempo di consegna)"
+      },
+      "ship": "Spedizione kit",
+      "shipValue": "{date} alle {time}",
+      "work": "Lavoro presso il laboratorio",
+      "workFrom": {
+        "CAPACITY_one": "{days} giorno lavorativo (dalla sua capacità settimanale)",
+        "CAPACITY_other": "{days} giorni lavorativi (dalla sua capacità settimanale)",
+        "ROUTING_one": "{days} giorno lavorativo (dalla fase del ciclo)",
+        "ROUTING_other": "{days} giorni lavorativi (dalla fase del ciclo)",
+        "DEFAULT_one": "{days} giorno lavorativo (nient'altro lo indica)",
+        "DEFAULT_other": "{days} giorni lavorativi (nient'altro lo indica)"
+      },
+      "back": "Rientro in fabbrica",
+      "backSkipped_one": "{date} (saltato {days} giorno di chiusura del laboratorio)",
+      "backSkipped_other": "{date} (saltati {days} giorni di chiusura del laboratorio)",
+      "onTime_one": "Spedisci il kit il {date}: {days} giorno di trasporto prima che il lavoro inizi presso {workshop} il {start}.",
+      "onTime_other": "Spedisci il kit il {date}: {days} giorni di trasporto prima che il lavoro inizi presso {workshop} il {start}.",
+      "late_one": "Il kit sarebbe dovuto partire il {date} per arrivare a {workshop} {days} giorno di trasporto prima dell'inizio del {start}: spediscilo oggi, o inizia più tardi.",
+      "late_other": "Il kit sarebbe dovuto partire il {date} per arrivare a {workshop} {days} giorni di trasporto prima dell'inizio del {start}: spediscilo oggi, o inizia più tardi.",
+      "listTitle": "Il kit (dalla distinta base)",
+      "listNone": "Nulla da inviare con questo lavoro: la distinta base non ha righe per esso.",
+      "col": {
+        "item": "Materiale",
+        "colour": "Colore",
+        "quantity": "Quantità"
+      },
+      "note": "Nota: {note}",
+      "laterTitle": "Cosa dipende dalla data di rientro",
+      "laterNone": "Nessuna operazione successiva attende questi capi.",
+      "laterOp": "Op {seq} {operation} · può iniziare {date}",
+      "laterOk": "al più tardi {date}",
+      "laterLate": "al più tardi {date}: troppo tardi",
+      "finishesLate": "Finisce in ritardo",
+      "lateOrder": "Con questa data di rientro l'ordine di produzione finirebbe dopo la sua scadenza.",
+      "howOrdered": "Assegna prenota il laboratorio sulla bacheca. L'ordine di lavorazione esterna si crea con Crea ordini di lavorazione esterna (o dal buyer); nulla arriva al reparto finché il piano non è pubblicato.",
+      "noWorkTitle": "Nessun lavoro da mandare fuori",
+      "noWork": "Di {order} non resta nulla da fare fuori (cucito, assemblaggio o finitura): resta sulle nostre linee."
+    },
+    "op": {
+      "title": "Operazioni: interne o esterne",
+      "reading": "Lettura delle operazioni…",
+      "errorTitle": "Impossibile caricare le operazioni",
+      "none": "Questo ordine di produzione non ha operazioni.",
+      "col": {
+        "operation": "Operazione",
+        "where": "Dove",
+        "switch": "Cambia"
+      },
+      "name": "Op {seq} {operation}",
+      "inHouse": "Interna",
+      "outside": "Esterna",
+      "atOrdered": "presso {workshop} · su un ordine di lavorazione esterna",
+      "atNoOrder": "presso {workshop} · nessun ordine di lavorazione esterna",
+      "ordered": "su un ordine di lavorazione esterna",
+      "noOrderYet": "nessun ordine di lavorazione esterna",
+      "toOutside": "Manda all'esterno…",
+      "toInHouse": "Riporta all'interno…",
+      "rule": "Un'operazione alla volta: un'operazione mandata all'esterno prenota il suo laboratorio, non le nostre linee; riportarla all'interno annulla o riduce il suo ordine in bozza, mai dopo che il kit o i pezzi sono partiti.",
+      "switchTitle": "Interna o esterna",
+      "outsideTitle": "Manda all'esterno Op {seq} {operation}",
+      "inHouseTitle": "Riporta all'interno Op {seq} {operation}",
+      "outsideLead": "Scegli un laboratorio approvato per {kind}. Un laboratorio non approvato mostra il motivo e non si può scegliere.",
+      "pick": "Laboratorio",
+      "noWorkshops": "Questo sito non ha ancora laboratori.",
+      "offered": "Approvato",
+      "notOffered": "Non proposto",
+      "routing": "Nel ciclo",
+      "noRemark": "Approvato per questa operazione; nulla da segnalare.",
+      "pieces": "Capi",
+      "piecesHint_one": "Da 1 a {pieces}.",
+      "piecesHint_other": "Da 1 a {pieces}.",
+      "less": "Uno in meno",
+      "more": "Uno in più",
+      "orderWill": "Quando l'ordine di produzione è rilasciato viene creato un ordine di lavorazione esterna in bozza.",
+      "orderBuyer": "Non sei tu a creare l'ordine di lavorazione esterna: lo crea il buyer da Acquisti › Lavorazioni esterne.",
+      "inHouseLead": "L'operazione torna alle nostre linee; non è su alcun ordine di lavorazione esterna.",
+      "inHouseLeadOrder": "Il suo ordine di lavorazione esterna in bozza viene annullato (o l'operazione tolta), mai dopo che il kit o i pezzi sono partiti.",
+      "reason": "Perché torna all'interno",
+      "reasonHint": "Almeno 3 caratteri; resta con la modifica.",
+      "when": "Come letto il {date}.",
+      "send": "Manda all'esterno",
+      "bringBack": "Riporta all'interno",
+      "held": {
+        "permission": "Cambiare un'operazione richiede il permesso di mandare lavoro all'esterno (pianificatori, responsabili di produzione, buyer).",
+        "offline": "Offline: non si può cambiare nulla finché la connessione non torna.",
+        "busy": "Salvataggio in corso: attendi la risposta.",
+        "reading": "Attendi i laboratori.",
+        "pick": "Scegli un laboratorio approvato.",
+        "notOffered": "Quel laboratorio non è proposto per questa operazione.",
+        "reason": "Indica perché torna all'interno (almeno 3 caratteri).",
+        "noWork": "Nessun lavoro rimasto su questa operazione.",
+        "pieces_one": "Indica capi interi, da 1 a {pieces}.",
+        "pieces_other": "Indica capi interi, da 1 a {pieces}."
+      },
+      "sentOutside": "Op {seq} {operation} mandata all'esterno a {workshop}.",
+      "orderMade": "Ordine di lavorazione esterna in bozza {order}: il kit parte {date}, rientro {back}.",
+      "noOrder": {
+        "PERMISSION": "Nessun ordine di lavorazione esterna: lo crea il buyer da Acquisti › Lavorazioni esterne.",
+        "NOT_RELEASED": "Nessun ordine di lavorazione esterna: si crea quando l'ordine di produzione è rilasciato.",
+        "OTHER": "Nessun ordine di lavorazione esterna per ora."
+      },
+      "backInHouse": "Op {seq} {operation} torna a essere fatta all'interno.",
+      "orderChange": {
+        "CANCELLED": "{order} è stato annullato.",
+        "OPERATION_REMOVED": "L'operazione è stata tolta da {order}."
+      },
+      "refusal": {
+        "CHANGED": "L'operazione è cambiata da quando è stata letta: è stata riletta.",
+        "HELD": "Quel laboratorio non è proposto per questa operazione.",
+        "ALREADY_OUTSIDE": "È già esterna: riportala all'interno prima di mandarla altrove.",
+        "ALREADY_IN_HOUSE": "È già fatta all'interno.",
+        "NO_WORK_LEFT": "Questa operazione non ha più lavoro.",
+        "NOT_SWITCHABLE": "L'ordine di produzione non è modificabile: le sue operazioni restano dove sono.",
+        "KIT_OUT": "Il kit o i pezzi sono presso il laboratorio: riprendili prima sull'ordine di lavorazione esterna.",
+        "ISSUED_WITH_OTHERS": "Il suo ordine di lavorazione esterna è emesso anche con altre operazioni: riaprilo per togliere questa.",
+        "NEEDS_SUBCONTRACT": "Questo modifica il suo ordine di lavorazione esterna: serve il permesso delle lavorazioni esterne (del buyer).",
+        "FORBIDDEN": "Non puoi mandare lavoro all'esterno in questo sito.",
+        "PIECES": "Indica capi interi, al massimo quelli dell'ordine di produzione.",
+        "ON_ORDERS_one": "Può uscire solo {more} altro capo di questa operazione: gli altri sono già su altri ordini di lavorazione esterna.",
+        "ON_ORDERS_other": "Possono uscire solo {more} altri capi di questa operazione: gli altri sono già su altri ordini di lavorazione esterna.",
+        "ON_ORDERS_NONE": "Tutti i capi di questa operazione sono già su un altro ordine di lavorazione esterna: annulla o riduci prima quell'ordine in Acquisti.",
+        "LOCATION": "Per l'ordine il laboratorio deve avere una sola ubicazione di magazzino attiva in questo stabilimento: archiviata, mancante o più di una.",
+        "REASON": "Indica perché torna all'interno (almeno 3 caratteri).",
+        "NOT_FOUND": "L'operazione non è più su questo ordine di produzione: è stato riletto.",
+        "OFFLINE": "Nessuna connessione al server: non è stato cambiato nulla.",
+        "FAILED": "Il server non l'ha cambiato. Riprova."
+      }
+    },
+    "orders": {
+      "button_one": "Crea ordini di lavorazione esterna ({count})",
+      "button_other": "Crea ordini di lavorazione esterna ({count})",
+      "held": {
+        "reading": "Attendi la bacheca.",
+        "offline": "Offline: nessun ordine si può creare finché la connessione non torna.",
+        "permission": "Creare qui gli ordini di lavorazione esterna richiede il permesso di mandare lavoro all'esterno.",
+        "subcontract": "Creare gli ordini di lavorazione esterna richiede il permesso delle lavorazioni esterne: li crea il buyer.",
+        "none": "Nessun ordine ancora assegnato a un terzista.",
+        "allOrdered": "Ogni parte presso un laboratorio è già sul suo ordine di lavorazione esterna."
+      },
+      "title_one": "Crea ordini di lavorazione esterna: {count} parte presso un laboratorio",
+      "title_other": "Crea ordini di lavorazione esterna: {count} parti presso laboratori",
+      "summary": "Ogni parte diventa un ordine di lavorazione esterna in bozza con il kit pianificato; nulla viene inviato al laboratorio finché l'ordine non è emesso.",
+      "save_one": "Crea {count} ordine in bozza",
+      "save_other": "Crea {count} ordini in bozza",
+      "verb": "in bozza",
+      "where": "{order} · {workshop}",
+      "op": "Op {seq} {operation}",
+      "what_one": "{operations} · {pieces} capo",
+      "what_other": "{operations} · {pieces} capi",
+      "whatNone": "Nessuna operazione indicata",
+      "now": "Nessun ordine di lavorazione esterna",
+      "next": "Ordine in bozza · il kit parte {date} · rientro {back}",
+      "nextLate": "Ordine in bozza · il kit è in ritardo (previsto {date}): parte oggi · rientro {back}",
+      "nextPlain": "Ordine in bozza",
+      "leftOut_one": "{count} parte è esclusa",
+      "leftOut_other": "{count} parti sono escluse",
+      "nonePass": "Nessuna parte può diventare un ordine ora: vedi il motivo qui sotto.",
+      "made": "{order} creato in bozza · il kit parte {date}",
+      "notice_one": "{count} ordine di lavorazione esterna creato in bozza.",
+      "notice_other": "{count} ordini di lavorazione esterna creati in bozza.",
+      "problem": {
+        "NOT_A_PART": "Non è più una parte di {order} presso un laboratorio su questa bacheca.",
+        "ORDERED": "I capi di {order} presso questo laboratorio sono già su un ordine di lavorazione esterna.",
+        "NO_WORK": "{order} non ha più lavoro da mandare all'esterno.",
+        "PERMISSION": "Crearlo richiede il permesso delle lavorazioni esterne: lo crea il buyer da Acquisti › Lavorazioni esterne.",
+        "NOT_RELEASED": "{order} non è ancora rilasciato: il suo ordine si crea quando lo sarà.",
+        "OTHER": "Il server non ha creato questo ordine."
+      },
+      "failed": {
+        "FAILED": "Non è stato possibile creare gli ordini. Riprova.",
+        "FORBIDDEN": "Non puoi creare ordini di lavorazione esterna in questo sito.",
+        "OFFLINE": "Nessuna connessione al server: non è stato creato nulla.",
+        "NOT_FOUND": "Il sito non c'è più: la bacheca è stata riletta."
+      }
+    },
+    "load": {
+      "minutes": "{booked} / {available} capi",
+      "over": "+{over} capi oltre",
+      "booked": "{booked} capi prenotati",
+      "sentence": "{label}: {booked} di {available} capi prenotati, {pct}%.",
+      "sentenceOver": "{label}: {booked} di {available} capi prenotati, {pct}%, {over} capi oltre la capacità.",
+      "sentenceNone": "{label}: nessuna capacità impostata, {booked} capi prenotati.",
+      "sentenceClosed": "{label}: chiuso, {booked} capi prenotati."
+    }
+  },
+  "cp": {
+    "kind": {
+      "LINE": "Linea",
+      "WORK_CENTRE": "Centro di lavoro",
+      "WORKSHOP": "Laboratorio"
+    },
+    "unit": {
+      "MINUTES": "min",
+      "PIECES": "capi"
+    },
+    "count_one": "{lanes} corsie · {workshops} righe laboratorio",
+    "count_other": "{lanes} corsie · {workshops} righe laboratorio",
+    "note": "Le righe dei laboratori contano la propria capacità settimanale (minuti di un tipo di lavoro, o capi); ciò che il piano propone lì è indicato a parte e non entra mai nella %.",
+    "row": {
+      "MINUTES": "{code} · Laboratorio · {kind}, minuti a settimana",
+      "PIECES": "{code} · Laboratorio · {kind}, capi a settimana",
+      "none": "{code} · Laboratorio · nessuna capacità settimanale"
+    },
+    "end": {
+      "MINUTES": "{perWeek} min a settimana",
+      "PIECES": "{perWeek} capi a settimana",
+      "none": "Nessuna capacità settimanale",
+      "noneFull": "Nessuna capacità settimanale impostata: il carico non è noto (—).",
+      "open": "senza fine",
+      "row": {
+        "MINUTES": "{perWeek} min a settimana per {kind}, {from} – {to}",
+        "PIECES": "{perWeek} capi a settimana per {kind}, {from} – {to}"
+      }
+    },
+    "proposed": {
+      "MINUTES": "+{proposed} min proposti dal piano",
+      "PIECES": "+{proposed} capi proposti dal piano"
+    },
+    "how": {
+      "trigger": "Come è fatta la capacità di {what}: {how}",
+      "title": "Come è fatta questa capacità · {what}",
+      "titleShort": "Come è fatta questa capacità",
+      "noCapacity": "{workshop} non ha una capacità settimanale per questo lavoro: il carico non è noto.",
+      "row": {
+        "MINUTES": "{perWeek} min a settimana per {kind}, {from} – {to}.",
+        "PIECES": "{perWeek} capi a settimana per {kind}, {from} – {to}."
+      },
+      "spread": "La capacità di una settimana è ripartita sui giorni feriali (lunedì–venerdì) in cui il laboratorio è aperto.",
+      "days_one": "{open} giorno feriale aperto, {closed} chiusi in questi giorni.",
+      "days_other": "{open} giorni feriali aperti, {closed} chiusi in questi giorni.",
+      "available": {
+        "MINUTES": "{available} min disponibili.",
+        "PIECES": "{available} capi disponibili."
+      },
+      "booked": {
+        "MINUTES": "{booked} min prenotati: ordini di lavorazione esterna e parti su Linee e terzisti.",
+        "PIECES": "{booked} capi prenotati: ordini di lavorazione esterna e parti su Linee e terzisti."
+      },
+      "proposed": {
+        "MINUTES": "Altri {proposed} min proposti dal piano (ordini esterni pianificati: non nella %).",
+        "PIECES": "Altri {proposed} capi proposti dal piano (ordini esterni pianificati: non nella %)."
+      }
+    },
+    "tile": {
+      "label": "Terzisti oltre la loro capacità",
+      "hint_one": "Questa settimana · {count} riga laboratorio senza capacità",
+      "hint_other": "Questa settimana · {count} righe laboratorio senza capacità",
+      "error": "Non noto: non è stato possibile leggere i laboratori"
+    },
+    "empty": {
+      "subs": "Nessun laboratorio è oltre la sua capacità questa settimana."
+    },
+    "subs": {
+      "errorTitle": "Impossibile caricare la capacità dei laboratori",
+      "errorBody": "Linee e centri di lavoro sono mostrati; le righe dei laboratori e il loro riquadro non sono disegnati, mai mostrati come vuoti."
+    },
+    "detail": {
+      "subtitle": "{kind} · {from} – {to}",
+      "days": "{from} – {to}",
+      "band": "Carico: {pct} — {band}.",
+      "kindOnly": "Questa riga conta solo {kind}.",
+      "noPerson": "Solo per ordine di produzione e laboratorio: nessuna persona, nessun importo."
+    },
+    "jobs": {
+      "label": "Il lavoro prenotato qui",
+      "none": "Nessun lavoro prenotato o proposto in questi giorni.",
+      "col": {
+        "what": "Cosa",
+        "workOrder": "Ordine di produzione",
+        "days": "Giorni",
+        "garments": "Capi",
+        "share": {
+          "MINUTES": "Min qui",
+          "PIECES": "Capi qui"
+        },
+        "pct": "Quota"
+      },
+      "kind": {
+        "ORDER": "Ordine di lavorazione esterna",
+        "ALLOCATION": "Parte su Linee e terzisti",
+        "PLANNED": "Ordine esterno pianificato"
+      },
+      "proposed": "proposto dal piano, non nella %",
+      "status": {
+        "DRAFT": "Bozza",
+        "ISSUED": "Emesso",
+        "AT_WORKSHOP": "Presso il laboratorio",
+        "PARTLY_RECEIVED": "Rientrato in parte",
+        "RECEIVED": "Rientrato",
+        "RELEASED": "Ordine di produzione rilasciato",
+        "IN_PROGRESS": "Ordine di produzione in corso",
+        "ON_HOLD": "Ordine di produzione sospeso",
+        "PLANNED": "Pianificato",
+        "OTHER": "Aperto"
+      }
+    },
+    "heat": {
+      "title": "Mappa di calore del carico",
+      "hint_one": "Corsie in verticale, {weeks} settimana in orizzontale ({from} – {to}): la % è scritta in ogni cella; il colore non è mai l'unico segnale.",
+      "hint_other": "Corsie in verticale, {weeks} settimane in orizzontale ({from} – {to}): la % è scritta in ogni cella; il colore non è mai l'unico segnale.",
+      "hintPlain": "Corsie in verticale, settimane in orizzontale: la % è scritta in ogni cella.",
+      "legend": "Cosa significano i colori",
+      "reading": "Lettura della mappa di calore…",
+      "axisLanes": "Corsie",
+      "axisWeeks": "Settimane",
+      "errorTitle": "Impossibile caricare la mappa di calore del carico",
+      "emptyTitle": "Nessuna corsia ancora in questo sito",
+      "emptyBody": "Linee, centri di lavoro e laboratori con una capacità compaiono qui, settimana per settimana.",
+      "label": "Mappa di calore del carico · {site}",
+      "subNone": "Laboratorio · nessuna capacità",
+      "sub": {
+        "MINUTES": "Laboratorio · {kind}, minuti",
+        "PIECES": "Laboratorio · {kind}, capi"
+      },
+      "week": "settimana {range}",
+      "cell": "{lane}, {week}: {pct} — {booked} di {available} {unit} prenotati ({band}). Apre gli ordini.",
+      "cellUnknown": "{lane}, {week}: — nulla di disponibile (chiuso, o nessuna capacità); {booked} {unit} prenotati. Apre gli ordini.",
+      "counts_one": "{cells} cella oltre il 100% in {lanes} corsie.",
+      "counts_other": "{cells} celle oltre il 100% in {lanes} corsie."
+    },
+    "band": {
+      "LOW": "sotto il 70%",
+      "MEDIUM": "dal 70% all'89%",
+      "HIGH": "dal 90% al 100%",
+      "OVER": "oltre la capacità",
+      "UNKNOWN": "non noto"
+    },
+    "legend": {
+      "LOW": "Sotto il 70%",
+      "MEDIUM": "Dal 70% all'89%",
+      "HIGH": "Dal 90% al 100%",
+      "OVER": "Oltre il 100% (grassetto, tratteggiato)",
+      "UNKNOWN": "Nulla di disponibile: chiuso, o nessuna capacità"
+    }
+  }
+}

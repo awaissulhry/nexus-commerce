@@ -6,6 +6,8 @@ import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, rolePermissions } from '../../../s
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
 import { SITES } from '../board/fixtures'
 import type { Capacity, CapacityCell, CapacityLane, CellOrders } from './api'
+import type { Heatmap, Subcontractors, WorkshopCellJobs, WorkshopLine } from './depth/api'
+import { heatCellKey, workshopCellKey } from './depth/model'
 import { cellKeyOf } from './model'
 import type { CapacityModel } from './view-model'
 import { CapacityView } from './view/CapacityView'
@@ -113,6 +115,103 @@ const ORDERS: CellOrders = {
   ],
 }
 
+// ---- B-W2b-338: workshops ("Laboratorio Beta", "Laboratorio Gamma") with their weekly capacity, and the heatmap ----
+
+function workshopLine(n: number, code: string, name: string, kind: string | null, unit: WorkshopLine['unit'], perWeek: number | null, booked: readonly number[], proposed: readonly number[] = []): WorkshopLine {
+  const cells = WEEKS.map((bucket, index) => {
+    const closed = bucket.key === '2026-W50' ? 1 : 0
+    const available = perWeek === null ? null : (perWeek / 5) * (5 - closed)
+    const used = booked[index] ?? 0
+    return { key: bucket.key, from: bucket.from, to: bucket.to, available: available === null ? null : one(available), booked: one(used), proposed: one(proposed[index] ?? 0), loadPct: available ? ((used / available) * 100).toFixed(1) : null, over: available !== null && used > available, openDays: 5 - closed, closedDays: closed }
+  })
+  const available = cells.reduce((sum, cell) => sum + Number(cell.available ?? 0), 0)
+  const bookedAll = cells.reduce((sum, cell) => sum + Number(cell.booked), 0)
+  return {
+    kind: 'WORKSHOP',
+    id: uid('5555', n),
+    code,
+    name,
+    location: { id: uid('7171', n), code: `SUB-${code}` },
+    workCentreKind: kind,
+    unit,
+    known: perWeek !== null,
+    capacity: perWeek === null ? [] : [{ id: uid('5656', n * 10 + (kind ? 1 : 2)), perWeek, validFrom: '2026-11-01', validTo: kind ? null : '2026-12-23' }],
+    cells,
+    overall: { available: perWeek === null ? null : one(available), booked: one(bookedAll), proposed: one(proposed.reduce((sum, value) => sum + value, 0)), loadPct: perWeek === null || available === 0 ? null : ((bookedAll / available) * 100).toFixed(1), over: cells.some((cell) => cell.over) },
+  }
+}
+
+const WORKSHOP_LINES: WorkshopLine[] = [
+  workshopLine(1, 'LAB-B', 'Laboratorio Beta', 'SEWING', 'MINUTES', 2400, [2690, 1800, 900, 0, 0], [0, 772, 772, 0, 0]),
+  workshopLine(1, 'LAB-B', 'Laboratorio Beta', null, 'PIECES', 60, [40, 30, 20, 0, 0]),
+  workshopLine(2, 'LAB-G', 'Laboratorio Gamma', null, null, null, [0, 120, 0, 0, 0]),
+]
+
+export const SUBCONTRACTORS: Subcontractors = {
+  site: CAPACITY.site,
+  from: CAPACITY.from,
+  to: CAPACITY.to,
+  bucket: 'WEEK',
+  today: TODAY,
+  asOf: CAPACITY.asOf,
+  buckets: WEEKS,
+  lanes: WORKSHOP_LINES,
+  tiles: { subcontractorsOverThisWeek: 1, workshopsWithoutCapacity: 1 },
+}
+
+const BETA_W47 = workshopCellKey(WORKSHOP_LINES[0]!, '2026-W47')
+const JOBS: WorkshopCellJobs = {
+  workshop: { id: uid('5555', 1), code: 'LAB-B', name: 'Laboratorio Beta' },
+  workCentreKind: 'SEWING',
+  unit: 'MINUTES',
+  from: WEEKS[0]!.from,
+  to: WEEKS[0]!.to,
+  available: '2400.0',
+  booked: '2690.0',
+  proposed: '0.0',
+  loadPct: '112.1',
+  jobs: [
+    { kind: 'ORDER', id: uid('5151', 1), number: 'SC-2026-0004', status: 'ISSUED', proposed: false, workOrder: { id: uid('9999', 221), number: 'WO-DEMO-0221' }, style: 'MOD-001', from: '2026-11-16', to: '2026-11-27', garments: 60, share: '1890.0', sharePct: '70.3' },
+    { kind: 'ALLOCATION', id: uid('9999', 222), number: null, status: 'RELEASED', proposed: false, workOrder: { id: uid('9999', 222), number: 'WO-DEMO-0222' }, style: 'MOD-002', from: '2026-11-18', to: '2026-11-25', garments: 20, share: '800.0', sharePct: '29.7' },
+  ],
+}
+
+const band = (pct: number | null): Heatmap['lanes'][number]['cells'][number]['band'] => (pct === null ? 'UNKNOWN' : pct > 100 ? 'OVER' : pct >= 90 ? 'HIGH' : pct >= 70 ? 'MEDIUM' : 'LOW')
+const HEAT_WEEKS = [...WEEKS, { key: '2026-W52', kind: 'WEEK', from: plus(TODAY, 35), to: plus(TODAY, 41) }, { key: '2026-W53', kind: 'WEEK', from: plus(TODAY, 42), to: plus(TODAY, 48) }, { key: '2027-W01', kind: 'WEEK', from: plus(TODAY, 49), to: plus(TODAY, 55) }]
+const heatLane = (lane: { kind: 'LINE' | 'WORK_CENTRE' | 'WORKSHOP'; id: string; code: string; name: string; workCentreKind: string | null; unit: 'MINUTES' | 'PIECES' | null }, pcts: readonly (number | null)[]): Heatmap['lanes'][number] => ({
+  ...lane,
+  cells: HEAT_WEEKS.map((week, index) => {
+    const at = pcts[index]
+    const pct: number | null = at === undefined ? 0 : at
+    const available = pct === null ? null : '10000.0'
+    return { key: week.key, from: week.from, to: week.to, loadPct: pct === null ? null : pct.toFixed(1), band: band(pct), text: pct === null ? '—' : `${Math.round(pct)}%`, available, booked: pct === null ? '120.0' : one(pct * 100), over: pct !== null && pct > 100 }
+  }),
+})
+
+const ours = (lane: CapacityLane) => ({ kind: lane.kind, id: lane.id, code: lane.code, name: lane.name, workCentreKind: lane.workCentreKind, unit: 'MINUTES' as const })
+
+export const HEATMAP: Heatmap = {
+  site: CAPACITY.site,
+  from: TODAY,
+  to: HEAT_WEEKS[7]!.to,
+  today: TODAY,
+  asOf: CAPACITY.asOf,
+  weeks: HEAT_WEEKS.map((week) => ({ key: week.key, from: week.from, to: week.to })),
+  lanes: [
+    heatLane(ours(LANES[0]!), [79.4, 69.4, 45.3, 14.9, 0, 0, 0, 0]),
+    heatLane(ours(LANES[1]!), [113.6, 99.6, 72.4, 34.6, 9.9, 0, 0, 0]),
+    heatLane(ours(LANES[2]!), [77.0, 60.7, 38.5, 13.3, 0, 0, 0, 0]),
+    heatLane(ours(LANES[3]!), [91.7, 79.6, 64.8, 28.2, 10.2, 0, 0, 0]),
+    heatLane({ kind: 'WORKSHOP', id: uid('5555', 1), code: 'LAB-B', name: 'Laboratorio Beta', workCentreKind: 'SEWING', unit: 'MINUTES' }, [112.1, 75.0, 37.5, 0, 0, 0, 0, 0]),
+    heatLane({ kind: 'WORKSHOP', id: uid('5555', 1), code: 'LAB-B', name: 'Laboratorio Beta', workCentreKind: null, unit: 'PIECES' }, [66.7, 50.0, 33.3, 0, 0, 0, 0, 0]),
+    heatLane({ kind: 'WORKSHOP', id: uid('5555', 2), code: 'LAB-G', name: 'Laboratorio Gamma', workCentreKind: null, unit: null }, [null, null, null, null, null, null, null, null]),
+  ],
+  counts: { cellsOver: 2, lanesOver: 2 },
+}
+
+const HEAT_BETA = heatCellKey(HEATMAP.lanes[4]!, '2026-W47')
+const HEAT_L2 = heatCellKey(HEATMAP.lanes[1]!, '2026-W47')
+
 export interface CapacityCase {
   model: CapacityModel
   permissions: readonly string[]
@@ -135,7 +234,7 @@ function CapacityDesign({ model }: { model: CapacityCase }) {
 }
 
 const PLANNER = rolePermissions('planner')
-const CONTROLS = { site: SITE.id, from: null, to: null, bucket: 'WEEK' as const, tile: null, cell: null }
+const CONTROLS = { site: SITE.id, from: null, to: null, bucket: 'WEEK' as const, tile: null, cell: null, heat: null }
 
 function make(over: Partial<CapacityModel> = {}, permissions: readonly string[] = PLANNER): CapacityCase {
   return {
@@ -147,6 +246,10 @@ function make(over: Partial<CapacityModel> = {}, permissions: readonly string[] 
       siteId: SITE.id,
       capacity: { status: 'ready', value: CAPACITY },
       cell: null,
+      subcontractors: { status: 'ready', value: SUBCONTRACTORS },
+      heatmap: { status: 'ready', value: HEATMAP },
+      workshopCell: null,
+      heatCell: null,
       live: 'live',
       updates: 0,
       dialog: null,
@@ -177,7 +280,15 @@ export const designScreen = defineDesignScreen<CapacityCase>({
   title: 'Capacity & load',
   view: CapacityDesign,
   cases: [
-    { id: 'weeks', label: 'Load against capacity, the next five weeks by week (planner)', model: make(), note: 'Linea 2 is over this week: the bar says the minutes over, never colour alone. Week 50 has the 8 Dec holiday. The bar opens the orders; ⓘ says how the capacity is made.' },
+    { id: 'weeks', label: 'Load against capacity, the next five weeks by week (planner)', model: make(), note: 'Linea 2 is over this week: the bar says the minutes over, never colour alone. Week 50 has the 8 Dec holiday. The bar opens the orders; ⓘ says how the capacity is made. Below the lanes, the workshops with their weekly minutes or garments (W2b): Beta’s sewing is over this week, the plan proposes more in weeks 48–49 (said apart, never in the %), Gamma has no capacity set (—). Then the Load heatmap.' },
+    { id: 'tile-subs', label: 'Tile pressed: subcontractors over their capacity', model: make({ controls: { ...CONTROLS, tile: 'subs' } }), note: 'The table shows the workshop lines over this week.' },
+    { id: 'workshop-cell', label: 'A workshop cell: Laboratorio Beta · sewing · week 47', model: make({ controls: { ...CONTROLS, cell: BETA_W47 }, workshopCell: { key: BETA_W47, jobs: { status: 'ready', value: JOBS } } }), note: 'How its capacity is made (2,400 min a week for sewing, shared over the open weekdays), then the work behind it: a subcontract order and a part on Lines & subcontractors.' },
+    { id: 'workshop-cell-loading', label: 'A workshop cell: reading', model: make({ controls: { ...CONTROLS, cell: BETA_W47 }, workshopCell: { key: BETA_W47, jobs: { status: 'loading' } } }) },
+    { id: 'heat-cell', label: 'Heatmap: a workshop cell opens the same DetailModal', model: make({ controls: { ...CONTROLS, heat: HEAT_BETA }, heatCell: { key: HEAT_BETA, detail: { status: 'ready', value: { kind: 'workshop', jobs: JOBS } } } }) },
+    { id: 'heat-cell-lane', label: 'Heatmap: a line’s cell (Linea 2 · week 47)', model: make({ controls: { ...CONTROLS, heat: HEAT_L2 }, heatCell: { key: HEAT_L2, detail: { status: 'ready', value: { kind: 'lane', orders: ORDERS } } } }) },
+    { id: 'heat-loading', label: 'Heatmap: reading (the axes named)', model: make({ heatmap: { status: 'loading' } }) },
+    { id: 'heat-error', label: 'Heatmap could not be read', model: make({ heatmap: { status: 'error', problem: 'error.offline' } }), note: 'A failed read is never drawn as an empty heatmap.' },
+    { id: 'subs-error', label: 'The workshops could not be read: our lanes stay, the tile says —', model: make({ subcontractors: { status: 'error', problem: 'error.failed' } }) },
     { id: 'days', label: 'Bucket Day: the weekend has no shift', model: make({ capacity: { status: 'ready', value: DAYS }, controls: { ...CONTROLS, bucket: 'DAY' } }) },
     { id: 'tile-over', label: 'Tile pressed: lanes over 100% this week', model: make({ controls: { ...CONTROLS, tile: 'over' } }) },
     { id: 'tile-most', label: 'Tile pressed: the most loaded lane', model: make({ controls: { ...CONTROLS, tile: 'most' } }) },
