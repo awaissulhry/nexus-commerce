@@ -179,9 +179,9 @@ describe('every design case draws in both languages with no key left on screen',
 })
 
 describe('Admin › Approvals, automation & AI', () => {
-  it('only Reminders & timers is built: the other lists never open; keys 1–5 switch only to a built one', () => {
-    expect([viewOf(null), viewOf('approvals'), viewOf('ai'), viewOf('timers')]).toEqual(['timers', 'timers', 'timers', 'timers'])
-    expect([viewOfKey('1'), viewOfKey('2'), viewOfKey('5'), viewOfKey('9')]).toEqual([null, 'timers', null, null])
+  it('Reminders & timers and (B-W2b-307) Approval rules are built: the other lists never open; keys 1–5 switch only to a built one', () => {
+    expect([viewOf(null), viewOf('approvals'), viewOf('ai'), viewOf('timers')]).toEqual(['timers', 'approvals', 'timers', 'timers'])
+    expect([viewOfKey('1'), viewOfKey('2'), viewOfKey('5'), viewOfKey('9')]).toEqual(['approvals', 'timers', null, null])
     expect(automationAddress({ view: 'timers', rule: 'new' })).toBe('?rule=new')
   })
 
