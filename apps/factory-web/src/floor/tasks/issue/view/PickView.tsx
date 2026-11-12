@@ -13,6 +13,12 @@ import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStri
 import { coveredCount, hideChoices, hideProgress, ISSUE_REFUSAL_WORDS, lineName, num, otherShadeHides, SCREEN_REFUSALS, shadeOfLine, undoStock, type PadBounds, type PickLine, type PickList, type PickWorkOrderRow } from '../model'
 import { returnRows } from '../returns'
 import { returnStep, type PickReturnModel, type ReturnAction } from './ReturnStep'
+// B-W2b-310: the pick list by bin and kit staging (SCR-384, SCR-385).
+import { useDsWords } from '../../../../lib/i18n/ds-parts'
+import { kitStep, type KitAction, type KitStepModel } from '../kit/view/KitStep'
+import { KIT_REFUSALS } from '../kit/model'
+import { WALK_REFUSALS, type PickedLast } from '../picklist/model'
+import { BinWalk, PickedLine, type BinWalkModel } from '../picklist/view/BinWalk'
 import '../issue.css'
 
 /**
@@ -31,6 +37,11 @@ import '../issue.css'
  * · 96.2 of 110 ft²") and the shade lot the work order is cut from; the hides to take next follow, the order's own shade lot
  * first, each with the running area if it is taken. The scan is still the action; a hide of another shade lot is refused
  * in words (the office may let it through). A remnant's own tag (RM-…) is scanned like its hide's.
+ *
+ * W2b (B-W2b-310; SCM-212, SCM-213): the pick list by bin — the work order's stops in the order of the site's bins, the scan of
+ * what is taken at a stop issues it from that place (online first, else kept on the tablet: a stop's issue may queue), an approved
+ * substitute's stop issues the substitute — and Kit staging (the kit's place by its label's scan, the lines with their ticks,
+ * "Kit complete"): ../picklist, ../kit.
  */
 
 export interface PickPad {
@@ -39,18 +50,22 @@ export interface PickPad {
   readonly value: number | null
   readonly bounds: PadBounds
   readonly uom: string
+  /** B-W2b-310: the stop of the pick list by bin it takes from (its key), else none. */
+  readonly stop?: string | null
 }
 
 export type PickLast =
   | { readonly kind: 'issued'; readonly code: string; readonly quantity: number; readonly uom: string; readonly workOrder: string }
   | { readonly kind: 'undone'; readonly code: string; readonly quantity: number; readonly uom: string }
+  // B-W2b-310: a stop of the pick list by bin taken, with its two ticks.
+  | PickedLast
 
 export interface PickViewModel {
   frame: FrameModel
   online: boolean
   /** The worker notice holds scans. */
   held?: boolean
-  stage: 'choose' | 'list' | 'return' | 'noPermission'
+  stage: 'choose' | 'list' | 'return' | /* B-W2b-310 */ 'kit' | 'noPermission'
   /** choose: the site's work orders to pick for; null while they are read. */
   workOrders?: readonly PickWorkOrderRow[] | null
   /** What is on screen is this tablet's copy (no network): when it was read. */
@@ -68,6 +83,10 @@ export interface PickViewModel {
   timeZone?: string
   /** B-W2a-75: the Return unused step. */
   ret?: PickReturnModel | null
+  /** B-W2b-310: the pick list by bin of the work order (null: not read). */
+  walk?: BinWalkModel | null
+  /** B-W2b-310: Kit staging. */
+  kit?: KitStepModel | null
 }
 
 export type PickAction =
@@ -83,6 +102,9 @@ export type PickAction =
   | { type: 'retry' }
   | { type: 'returnOpen' }
   | ReturnAction
+  // B-W2b-310
+  | { type: 'kitOpen' }
+  | KitAction
 
 export interface PickViewProps {
   model: PickViewModel
@@ -91,7 +113,7 @@ export interface PickViewProps {
   camera?: CameraScanner
 }
 
-const KNOWN = new Set<string>([...ISSUE_REFUSAL_WORDS, ...SCREEN_REFUSALS])
+const KNOWN = new Set<string>([...ISSUE_REFUSAL_WORDS, ...SCREEN_REFUSALS, /* B-W2b-310 */ ...WALK_REFUSALS, ...KIT_REFUSALS])
 
 /** A unit's short name (`unit.FT2` → "ft²"), else its code. */
 export function unitWord(t: Translate, uom: string): string {
@@ -110,6 +132,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
   const shared = useT('floor-tasks')
   const floor = useT('floor')
   const locale = useLocale()
+  const ds = useDsWords()
   const send = (action: PickAction) => onAction?.(action)
   const place = { locale, timeZone: model.timeZone }
   const amount = (value: number, uom: string) => `${formatNumber(value, locale, { maximumFractionDigits: 2 })} ${unitWord(t, uom)}`
@@ -130,6 +153,9 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
     body = <ProblemState problem={problem} code={code} words={(refusal) => refusalWords(t, refusal)} />
     const scanAnother: FloorAction = { label: shared('action.scanAnother'), icon: <ScanLine />, onPress: () => send({ type: 'dismiss' }) }
     actions = problem.kind === 'unavailable' || problem.kind === 'offline' ? [scanAnother, { label: shared('action.retry'), icon: <Undo2 />, onPress: () => send({ type: 'retry' }) }] : [scanAnother]
+  } else if (model.stage === 'kit' && model.kit) {
+    // B-W2b-310: Kit staging.
+    ;({ body, actions } = kitStep({ model: model.kit, online: model.online, held: Boolean(model.held), t, shared, floor, locale, ds, time: (value) => formatTime(value, place), send, camera }))
   } else if (model.stage === 'return' && model.ret) {
     ;({ body, actions } = returnStep({ ret: model.ret, online: model.online, locale, t, shared, floor, send, words: (code) => refusalWords(t, code), camera }))
   } else if (model.stage === 'choose') {
@@ -193,12 +219,16 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
       const undo = undoStock(list)
       const pad = model.pad
       const padLine = pad ? list.lines.find((line) => line.key === pad.lineKey) ?? null : null
+      // B-W2b-310: a stop's pad may take another material (an approved substitute), not a line of the list.
+      const padShown = Boolean(pad && (padLine || pad.stop))
       const issuing = Boolean(model.busy)
-      const scanHeld = !model.online || !list.workOrder.issuable || Boolean(model.held)
+      // B-W2b-310: with the pick list by bin on this tablet, a stop's scan is kept offline (it may queue).
+      const walk = model.walk ?? null
+      const scanHeld = (!model.online && !walk) || !list.workOrder.issuable || Boolean(model.held)
       const offlineHeld = model.online ? null : t('offline.short')
-      if (pad && padLine) {
+      if (pad && padShown) {
         const words = { emptyLabel: t('pad.empty'), rangeLabel: (min: number | undefined, max: number | undefined) => t('pad.range', { min: formatNumber(min ?? 0, locale), max: formatNumber(max ?? 0, locale) }) }
-        const held = pad.bounds.covered ? t('pad.covered') : (offlineHeld ?? (issuing ? t('busy', { code: pad.code }) : qtyHeldReason(pad.value, pad.bounds, words)))
+        const held = pad.bounds.covered ? t('pad.covered') : ((pad.stop ? null : offlineHeld) ?? (issuing ? t('busy', { code: pad.code }) : qtyHeldReason(pad.value, pad.bounds, words)))
         actions = [
           { label: t('action.cancel'), icon: <X />, onPress: () => send({ type: 'cancelPad' }) },
           {
@@ -212,12 +242,14 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
         const returnable = returnRows(list).length
         actions = [
           { label: t('return.open'), icon: <PackageMinus />, onPress: () => send({ type: 'returnOpen' }), heldReason: offlineHeld ?? (returnable === 0 ? t('return.nothing') : null) },
+          // B-W2b-310: Kit staging (its place and the "kit complete" check).
+          { label: t('kit.open'), icon: <PackageCheck />, onPress: () => send({ type: 'kitOpen' }), heldReason: walk ? null : t('kit.noWalk') },
           { label: t('action.done'), icon: <Check />, onPress: () => send({ type: 'done' }) },
         ]
       }
       body = (
         <div className="fw-floor-stack">
-          {!model.online ? <HeldLine text={t('offline.held')} /> : null}
+          {!model.online ? <HeldLine text={walk ? t('walk.offline') : t('offline.held')} /> : null}
           {model.asOf ? <p className="fw-floor-muted">{shared('asOf', { time: formatTime(model.asOf, place) })}</p> : null}
           <TaskCard
             icon={<ClipboardList />}
@@ -240,6 +272,8 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
               </TaskLine>
               <Ticks state="recorded" />
             </div>
+          ) : model.last?.kind === 'picked' ? (
+            <PickedLine last={model.last} t={t} amount={(value, uom) => amount(num(value), uom)} />
           ) : model.last?.kind === 'undone' ? (
             <TaskLine tone="info" icon={<Undo2 />}>
               {t('last.undone', { code: model.last.code, quantity: amount(model.last.quantity, model.last.uom) })}
@@ -253,7 +287,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
               undoHeld={offlineHeld ?? (model.busy === 'undo' ? t('busyUndo') : null)}
             />
           ) : null}
-          {pad && padLine ? (
+          {pad && padShown ? (
             <section className="fw-pick-pad" aria-labelledby="fw-pick-pad-title">
               <h2 id="fw-pick-pad-title" className="fw-floor-section-title">
                 <span className="fw-floor-inline-icon" aria-hidden="true">
@@ -261,7 +295,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
                 </span>
                 {t('pad.title', { code: pad.code })}
               </h2>
-              <p className="fw-floor-muted">{lineName(padLine)}</p>
+              {padLine ? <p className="fw-floor-muted">{lineName(padLine)}</p> : null}
               {pad.bounds.covered ? (
                 <TaskLine tone="warning" icon={<CircleAlert />}>
                   {t('pad.covered')}
@@ -286,7 +320,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
                   backLabel={t('pad.back')}
                   emptyLabel={t('pad.empty')}
                   rangeLabel={(min, max) => t('pad.range', { min: formatNumber(min ?? 0, locale), max: formatNumber(max ?? 0, locale) })}
-                  message={num(padLine.toIssue) > pad.bounds.max ? t('pad.onHandOnly', { quantity: amount(pad.bounds.max, pad.uom) }) : undefined}
+                  message={pad.stop ? t('walk.padHere', { quantity: amount(pad.bounds.max, pad.uom) }) : padLine && num(padLine.toIssue) > pad.bounds.max ? t('pad.onHandOnly', { quantity: amount(pad.bounds.max, pad.uom) }) : undefined}
                   messageTone="info"
                   autoFocus
                 />
@@ -295,7 +329,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
           ) : (
             <ScanInput
               label={t('list.scan.label')}
-              hint={model.held ? floor('tile.held.notice') : !model.online ? t('offline.short') : !list.workOrder.issuable ? t('list.notOpenShort') : issuing ? t('busy', { code: model.busy ?? '' }) : t('list.scan.hint')}
+              hint={model.held ? floor('tile.held.notice') : !model.online ? (walk ? t('walk.offlineScan') : t('offline.short')) : !list.workOrder.issuable ? t('list.notOpenShort') : issuing ? t('busy', { code: model.busy ?? '' }) : t('list.scan.hint')}
               scannedLabel={(code) => floor('scan.read', { code })}
               keyboardLabel={floor('scan.type')}
               disabled={scanHeld || issuing}
@@ -303,6 +337,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
               onScan={(code) => send({ type: 'scan', code })}
             />
           )}
+          {walk && !pad ? <BinWalk model={walk} t={t} shared={shared} amount={(value, uom) => amount(num(value), uom)} /> : null}
           {!pad ? <ChooseHides list={list} t={t} amount={amount} figure={(value) => formatNumber(value, locale, { maximumFractionDigits: 2 })} /> : null}
           <section className="fw-floor-stack" aria-labelledby="fw-pick-need">
             <h2 id="fw-pick-need" className="fw-floor-subtitle">

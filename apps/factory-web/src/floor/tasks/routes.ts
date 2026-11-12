@@ -16,7 +16,7 @@ import type { ScanRead } from '../scan/scan-model'
 /** B-W2b-F17: what the line's receipt takes (Fabric cutting's page and its trolley step): the person's own permissions. */
 export const TROLLEY_RECEIPT_PERMISSIONS = ['floor.work', 'production.cut', 'production.trolleys'] as const
 
-export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine' | /* B-W2a-76 */ 'returnsin' | 'kits' | /* B-W2b-67 */ 'clock' | /* B-W2b-70 */ 'help' | 'lineview' | /* B-W2b-68 */ 'myday' | /* B-W2b-137 */ 'incident' | /* B-W2b-145 */ 'training' | /* B-W2b-105 */ 'inline' | /* B-W2b-121 */ 'fabriccut' | /* B-W2b-115 */ 'incoming' | /* B-W2b-232 */ 'instructions' | /* B-W2b-308 */ 'move'>
+export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine' | /* B-W2a-76 */ 'returnsin' | 'kits' | /* B-W2b-67 */ 'clock' | /* B-W2b-70 */ 'help' | 'lineview' | /* B-W2b-68 */ 'myday' | /* B-W2b-137 */ 'incident' | /* B-W2b-145 */ 'training' | /* B-W2b-105 */ 'inline' | /* B-W2b-121 */ 'fabriccut' | /* B-W2b-115 */ 'incoming' | /* B-W2b-232 */ 'instructions' | /* B-W2b-308 */ 'move' | /* B-W2b-310 */ 'count'>
 
 export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   // SCR-089 (B-W2a-74): My work, the station's queue.
@@ -55,6 +55,8 @@ export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   instructions: '/floor/instructions',
   // SCR-177 (B-W2b-308): Move & put away.
   move: '/floor/move',
+  // SCR-178 (B-W2b-310): Count.
+  count: '/floor/count',
 }
 
 /** The task a tile opens, or null (Scan anything has its own page; the rest are later steps). */
@@ -63,7 +65,7 @@ export function taskOfTile(key: TileKey): TaskKey | null {
 }
 
 /** The catalogues the floor app loads (the frame's and each task's). */
-export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits', /* B-W2b-66 */ 'line-board', /* B-W2b-70 */ 'floor-help', 'floor-lineview', /* B-W2b-67 */ 'floor-clock', /* B-W2b-68 */ 'floor-myday', /* B-W2b-137 */ 'floor-incident', /* B-W2b-145 */ 'floor-training', /* B-W2b-105 */ 'floor-inline', /* B-W2b-109 */ 'floor-final-plan', 'floor-myinspections', /* B-W2b-121 */ 'floor-fabriccut', /* B-W2b-115 */ 'floor-incoming', /* B-W2b-232 */ 'floor-instructions', /* B-W2b-259 */ 'floor-labels-depth', /* B-W2b-308 */ 'floor-move'] as const
+export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits', /* B-W2b-66 */ 'line-board', /* B-W2b-70 */ 'floor-help', 'floor-lineview', /* B-W2b-67 */ 'floor-clock', /* B-W2b-68 */ 'floor-myday', /* B-W2b-137 */ 'floor-incident', /* B-W2b-145 */ 'floor-training', /* B-W2b-105 */ 'floor-inline', /* B-W2b-109 */ 'floor-final-plan', 'floor-myinspections', /* B-W2b-121 */ 'floor-fabriccut', /* B-W2b-115 */ 'floor-incoming', /* B-W2b-232 */ 'floor-instructions', /* B-W2b-259 */ 'floor-labels-depth', /* B-W2b-308 */ 'floor-move', /* B-W2b-310 */ 'floor-count', /* B-W2b-300 */ 'warehouse-receiving-depth'] as const
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),

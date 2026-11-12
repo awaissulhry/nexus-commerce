@@ -1,0 +1,577 @@
+{
+  "tab": {
+    "schedule": "Piano di consegna",
+    "later": "Una consegna è confermata più tardi del necessario"
+  },
+  "held": {
+    "waitingForYes": "Aspetta un sì: ritira la richiesta per cambiarlo."
+  },
+  "refused": {
+    "changed": "Qualcuno ha cambiato l’ordine nel frattempo: è stato riletto. Controlla e riprova."
+  },
+  "tile": {
+    "confirmedLate": "Confermate più tardi del necessario",
+    "atLeast": "almeno {count}"
+  },
+  "view": {
+    "confirmedLate": "Confermate più tardi del necessario"
+  },
+  "list": {
+    "resendLink": "Rimanda il link",
+    "worklistFailed": "Non è stato possibile leggere cosa bloccano gli ordini ({problem}): la colonna mostra “—”."
+  },
+  "later": {
+    "days_one": "{count} giorno dopo il necessario",
+    "days_other": "{count} giorni dopo il necessario"
+  },
+  "lines": {
+    "deliveries_one": "{count} consegna",
+    "deliveries_other": "{count} consegne"
+  },
+  "blocks": {
+    "col": "Per ordini",
+    "colList": "Cosa blocca",
+    "failed": "Non letto",
+    "none": "Nessun ordine lo aspetta",
+    "stock": "Per scorta",
+    "more": "+{count}",
+    "late_one": "{count} ordine in ritardo di {days} giorni se arriva come confermato",
+    "late_other": "{count} ordini in ritardo, fino a {days} giorni, se arriva come confermato",
+    "inTime_one": "{count} ordine, in tempo",
+    "inTime_other": "{count} ordini, in tempo",
+    "nothingAtRisk": "Niente a rischio",
+    "atRisk": "A rischio: {what}, fino a {days} giorni di ritardo",
+    "sales_one": "{count} ordine cliente",
+    "sales_other": "{count} ordini cliente",
+    "work_one": "{count} ordine di lavoro",
+    "work_other": "{count} ordini di lavoro"
+  },
+  "schedule": {
+    "hintDraft": "Dividi una riga in consegne, ognuna con il suo giorno e la sua quantità (⋯ sulla riga). Il fornitore le vede sull’ordine.",
+    "hintSent": "I giorni chiesti restano come inviati; i giorni del fornitore sono tenuti a parte. Registra il giorno del fornitore con ⋯.",
+    "tableLabel": "Consegne",
+    "count_one": "{count} consegna",
+    "count_other": "{count} consegne",
+    "noLines": "Ancora nessuna riga: aggiungi un materiale in Righe.",
+    "empty": "Una consegna per riga.",
+    "loading": "Lettura delle consegne…",
+    "failed": "Impossibile caricare le consegne",
+    "line": "Riga {seq} · {item}",
+    "ended": "Annullata o chiusa con saldo",
+    "one": "Una consegna",
+    "nOfM": "{n} di {m}",
+    "closedDay": "Il fornitore è chiuso quel giorno",
+    "menu": "Riga {seq}, consegna {n}: azioni",
+    "split": "Dividi in consegne…",
+    "change": "Cambia le consegne…",
+    "clear": "Torna a una consegna…",
+    "laterBanner_one": "{count} consegna è confermata da {supplier} più tardi del necessario",
+    "laterBanner_other": "{count} consegne sono confermate da {supplier} più tardi del necessario",
+    "laterHint": "La pianificazione conta il giorno del fornitore. Sollecita il fornitore (⋯ in alto) o guarda cosa blocca in Righe.",
+    "col": {
+      "line": "Riga",
+      "delivery": "Consegna",
+      "asked": "Giorno chiesto",
+      "theirs": "Giorno del fornitore",
+      "quantity": "Quantità",
+      "note": "Nota"
+    },
+    "state": {
+      "DRAFT": "Non ancora inviata",
+      "ASKED": "Non ancora confermata",
+      "CONFIRMED": "Come chiesto",
+      "LATER": "Più tardi del necessario"
+    },
+    "held": {
+      "two": "Un piano ha due consegne o più (una consegna è la riga stessa).",
+      "many": "Al massimo {count} consegne per riga.",
+      "quantity": "Consegna {n}: una quantità sopra 0, al massimo quattro decimali.",
+      "day": "Consegna {n}: scegli un giorno.",
+      "past": "Consegna {n}: il giorno è passato; chiedi oggi o dopo.",
+      "sameDay": "Consegna {n}: due consegne nello stesso giorno, uniscile.",
+      "note": "Consegna {n}: la nota è troppo lunga.",
+      "sum": "Le consegne fanno {total}; la riga è {quantity}.",
+      "ended": "La riga è annullata o chiusa con saldo: le sue consegne non cambiano più.",
+      "sent": "L’ordine è stato inviato: i giorni chiesti cambiano solo con una nuova revisione (Modifica)."
+    },
+    "refused": {
+      "day": "Il giorno di una consegna è stato rifiutato: è passato o coincide con un’altra.",
+      "sum": "Le consegne sono state rifiutate: insieme devono fare la quantità della riga."
+    }
+  },
+  "scheduleDialog": {
+    "title": "Consegne della riga {seq} · {item}",
+    "subtitle": "La riga è {quantity} {unit}",
+    "firstIsNeed": "Il giorno della prima consegna diventa la data di fabbisogno della riga.",
+    "supplierSees": "Il fornitore vede ogni consegna sull’ordine e ne conferma il giorno.",
+    "rowsLabel": "Consegne",
+    "quantity": "Quantità {n}",
+    "day": "Giorno {n}",
+    "note": "Nota {n}",
+    "remove": "Togli la consegna {n}",
+    "add": "Aggiungi una consegna",
+    "even": "Dividi in {count} parti uguali, a una settimana",
+    "sum": "Insieme {total} di {quantity} {unit}",
+    "sumUnknown": "Una quantità non è ancora un numero.",
+    "save_one": "Salva {count} consegna",
+    "save_other": "Salva {count} consegne"
+  },
+  "clear": {
+    "title": "Tornare a una consegna per la riga {seq}?",
+    "body_one": "La {count} consegna viene tolta; la riga è una consegna il {date}.",
+    "body_other": "Le {count} consegne vengono tolte; la riga è una consegna il {date}.",
+    "confirm": "Torna a una consegna"
+  },
+  "date": {
+    "first": "Registra il giorno del fornitore…",
+    "move": "Il fornitore sposta il giorno…",
+    "titleFirst": "Il giorno del fornitore per la riga {seq}, consegna {n}",
+    "titleMove": "Sposta il giorno del fornitore della riga {seq}, consegna {n}",
+    "asked": "Chiesta per il {date} a {supplier}",
+    "firstHint": "Il giorno che il fornitore indica. Il giorno chiesto ({date}) resta come inviato.",
+    "moveHint": "Il giorno del fornitore è il {date}. Uno spostamento tiene chi l’ha detto, quando e perché.",
+    "day": "Il giorno del fornitore",
+    "later_one": "{count} giorno dopo il chiesto",
+    "later_other": "{count} giorni dopo il chiesto",
+    "source": "Chi lo sposta",
+    "sourceOf": {
+      "SUPPLIER": "L’ha detto il fornitore",
+      "BUYER": "Concordato con il fornitore"
+    },
+    "contact": "Chi presso il fornitore",
+    "contactHint": "Un nome, come l’hanno dato (facoltativo).",
+    "reason": "Perché",
+    "reasonHint": "Resta con lo spostamento; lo leggono la pianificazione e il buyer.",
+    "saveFirst": "Registra il giorno",
+    "saveMove": "Sposta il giorno",
+    "held": {
+      "day": "Scegli un giorno.",
+      "same": "È il giorno che è già.",
+      "reason": "Di’ perché il giorno si sposta.",
+      "reasonLong": "Il motivo è troppo lungo (al massimo 2000 caratteri).",
+      "contactLong": "Il nome è troppo lungo (al massimo 200 caratteri).",
+      "notSent": "L’ordine non è ancora inviato: il fornitore non ha un giorno da dare.",
+      "closed": "L’ordine non prende più un nuovo giorno (ricevuto, chiuso o annullato)."
+    }
+  },
+  "calendar": {
+    "title": "Consegne per giorno",
+    "label": "Consegne di {number}",
+    "open": "Fornitore aperto",
+    "closed": "Fornitore chiuso",
+    "asked": "Una consegna chiesta",
+    "confirmed": "Una consegna confermata",
+    "later": "Confermata più tardi del necessario",
+    "clash": "Una consegna in un giorno di chiusura",
+    "deliveries_one": "{count} consegna",
+    "deliveries_other": "{count} consegne",
+    "closedFor": "il fornitore è chiuso ({name})",
+    "nothing": "nessuna consegna quel giorno",
+    "noClosures": "{supplier} non ha chiusure registrate: ogni giorno appare aperto.",
+    "noClosuresRight": "Le chiusure del fornitore richiedono parties.view: il calendario mostra solo le consegne.",
+    "closuresFailed": "Non è stato possibile leggere le chiusure del fornitore ({problem}): il calendario mostra solo le consegne."
+  },
+  "history": {
+    "title": "Giorni spostati",
+    "empty": "Nessun giorno è stato spostato.",
+    "line": "Riga {seq}",
+    "delivery": "Riga {seq}, consegna {n}",
+    "fromTo": "{from} → {to}",
+    "supplier": "Il fornitore",
+    "supplierName": "Il fornitore ({name})",
+    "agreed": "Concordato con il fornitore",
+    "follows": "La riga segue la sua prima consegna: {reason}",
+    "col": {
+      "what": "Cosa",
+      "move": "Giorno",
+      "who": "Chi",
+      "why": "Perché"
+    }
+  },
+  "rate": {
+    "title": "Cambio all’ordine di {number}",
+    "label": "1 {company} = quanti {order}",
+    "hint": "Un numero semplice, al massimo otto decimali (1.085).",
+    "frozen": "Il valore dell’ordine nella valuta dell’azienda è calcolato a questo cambio e bloccato all’invio.",
+    "accountant": "Il commercialista conferma se il valore in euro è al cambio dell’ordine o della fattura: il cambio all’ordine è quello predefinito.",
+    "save": "Salva il cambio",
+    "held": {
+      "empty": "Scrivi il cambio.",
+      "bad": "Un cambio è un numero semplice sopra 0 con al massimo otto decimali.",
+      "sameCurrency": "L’ordine è nella valuta dell’azienda: non prende un cambio.",
+      "sent": "L’ordine è stato inviato: il suo cambio è bloccato."
+    }
+  },
+  "totals": {
+    "netIn": "Totale netto ({currency})",
+    "noLines": "Ancora nessuna riga.",
+    "rateLabel": "Cambio all’ordine",
+    "rate": "1 {company} = {rate} {order}",
+    "rateHint": "Scritto sull’ordine; bloccato all’invio.",
+    "noRate": "Nessun cambio all’ordine",
+    "noRateDraft": "Ancora nessun cambio: l’invio lo chiede",
+    "companyHint": "Al cambio all’ordine, come inviato.",
+    "companyHintDraft": "Al cambio all’ordine; bloccato all’invio.",
+    "setRate": "Imposta il cambio",
+    "changeRate": "Cambia il cambio",
+    "depthFailed": "Non è stato possibile leggere il cambio: i totali mostrano solo la valuta dell’ordine."
+  },
+  "kind": {
+    "rolls": {
+      "full_one": "{count} rotolo × {length} m × {width} cm",
+      "full_other": "{count} rotoli × {length} m × {width} cm",
+      "length_one": "{count} rotolo × {length} m",
+      "length_other": "{count} rotoli × {length} m",
+      "count_one": "{count} rotolo",
+      "count_other": "{count} rotoli",
+      "notQuantity": "i rotoli non fanno più la quantità",
+      "otherWidth": "un’altra altezza rispetto ai {width} cm del materiale"
+    },
+    "certificate": "Certificato {number} ({standard})",
+    "certificateState": {
+      "HOLDS": "valido",
+      "NOT_VALID": "non più valido",
+      "OTHER_SUPPLIER": "lo copre da un altro fornitore",
+      "NOT_COVERING": "non copre questo materiale"
+    },
+    "certificateEndsEarly": "scade il {date}, prima che serva",
+    "noCertificate": "Nessun certificato indicato",
+    "noCertificateKnown": "Nessun certificato del registro lo copre",
+    "variant": "Variante {code}",
+    "variantNotUsable": "La variante {code} non si può più usare",
+    "held": {
+      "count": "Rotoli: un numero intero da 1 a 9999.",
+      "length": "Lunghezza: metri sopra 0 (due decimali).",
+      "width": "Altezza: centimetri sopra 0 (due decimali).",
+      "sent": "L’ordine è stato inviato: le righe cambiano solo con una nuova revisione."
+    },
+    "refused": {
+      "rolls": "I rotoli sono stati rifiutati: controlla numero, lunghezza e altezza.",
+      "certificate": "Quel certificato oggi non vale per questo fornitore e materiale.",
+      "variant": "Quella variante non si può usare su questa riga (archiviata, o di un altro colore)."
+    }
+  },
+  "kindDialog": {
+    "open": "Rotoli, certificato e variante…",
+    "title": "Riga {seq} · {item}",
+    "rolls": "Rotoli",
+    "byRolls": "Comprato a rotoli",
+    "count": "Rotoli",
+    "length": "Lunghezza di un rotolo (m)",
+    "width": "Altezza (cm)",
+    "widthHint": "Il materiale è alto {width} cm.",
+    "rollsHint": "La quantità segue i rotoli quando la sua unità lo permette (rotoli, metri, metri quadri).",
+    "certificate": "Certificato (EN 1621) con cui il fornitore consegna",
+    "certificateHint": "Certificati del registro validi oggi; viene ricontrollato al ricevimento.",
+    "noChoices": "Oggi nessun certificato del registro copre questa protezione da questo fornitore.",
+    "noCertificate": "Nessuno",
+    "certificateNow": "{number} ({standard}) — indicato ora",
+    "choiceThis": "{number} ({standard}) · questo fornitore · fino al {date}",
+    "choiceAny": "{number} ({standard}) · ogni fornitore · fino al {date}",
+    "variant": "Variante",
+    "variantApart": "Ogni lotto tiene la sua variante separata a magazzino.",
+    "variantOneBalance": "Il materiale non è tracciato a lotti: le sue varianti hanno un’unica giacenza.",
+    "noVariant": "Nessuna variante",
+    "size": "taglia {size}",
+    "save": "Salva"
+  },
+  "mark": {
+    "lineHeld": "Bloccata",
+    "many": "{count} documenti bloccano l’invio di questo ordine",
+    "failed": "Non è stato possibile leggere il controllo dei documenti ({problem}): l’invio lo ricontrolla.",
+    "notChecked_one": "{count} riga non è stata controllata per i documenti: i tipi del fornitore non sono impostati (Fornitori › il fornitore).",
+    "notChecked_other": "{count} righe non sono state controllate per i documenti: i tipi del fornitore non sono impostati (Fornitori › il fornitore).",
+    "CR_VI_TEST_REPORT": {
+      "MET": "Il rapporto di prova sul cromo VI per {items} è valido.",
+      "EXPIRING": "Il rapporto di prova sul cromo VI per {items} scade il {date}.",
+      "EXPIRES_BEFORE_NEED": "Il rapporto di prova sul cromo VI per {items} scade il {date}, prima che serva la riga {lines}.",
+      "EXPIRED": "Il rapporto di prova sul cromo VI per {items} è scaduto il {date}: questo ordine non può essere inviato.",
+      "MISSING": "Non c’è un rapporto di prova sul cromo VI per {items}: questo ordine non può essere inviato."
+    },
+    "PPE_CERTIFICATE": {
+      "MET": "Un certificato valido copre {items}.",
+      "EXPIRING": "Il certificato per {items} scade il {date}.",
+      "EXPIRES_BEFORE_NEED": "Il certificato per {items} scade il {date}, prima che serva la riga {lines}.",
+      "EXPIRED": "Il certificato per {items} è scaduto il {date}: questo ordine non può essere inviato.",
+      "MISSING": "Nessun certificato valido del registro copre {items}: questo ordine non può essere inviato."
+    },
+    "RULE": {
+      "MET": "I documenti richiesti dall’azienda ci sono.",
+      "EXPIRING": "Un documento richiesto dall’azienda scade il {date}.",
+      "EXPIRES_BEFORE_NEED": "Un documento richiesto dall’azienda scade il {date}, prima che serva la riga {lines}.",
+      "EXPIRED": "Un documento che l’azienda chiede prima dell’invio è scaduto il {date}: questo ordine non può essere inviato.",
+      "MISSING": "Manca un documento che l’azienda chiede prima dell’invio: questo ordine non può essere inviato."
+    }
+  },
+  "law": {
+    "CR_VI_TEST_REPORT": "La pelle con cromo VI pari o oltre 3 mg/kg non può essere immessa sul mercato UE.",
+    "PPE_CERTIFICATE": "Una protezione si immette sul mercato solo con un certificato UE del tipo valido."
+  },
+  "request": {
+    "waiting": "Hai chiesto di inviarlo senza il documento: aspetta il sì di una seconda persona.",
+    "waitingBy": "{name} ha chiesto di inviarlo senza il documento: aspetta il sì di una seconda persona.",
+    "waitingStale": "Una richiesta di invio senza il documento aspetta, ma ciò che blocca l’ordine è cambiato: chiedi di nuovo.",
+    "approved": "{name} ha detto sì: si può inviare senza il documento.",
+    "approvedStale": "{name} ha detto sì, ma ciò che blocca l’ordine è cambiato da allora: chiedi di nuovo.",
+    "rejected": "{name} ha detto no: non si invia senza il documento.",
+    "withdrawn": "La richiesta di invio senza il documento è stata ritirata.",
+    "reason": "Perché: {reason}",
+    "words": "Le sue parole: {words}"
+  },
+  "override": {
+    "open": "Invia senza un documento valido…",
+    "withdraw": "Ritira la richiesta",
+    "title": "Inviare senza un documento valido?",
+    "subtitle": "{number} a {supplier}",
+    "whatHolds": "Cosa blocca l’ordine",
+    "col": {
+      "document": "Documento",
+      "lines": "Righe",
+      "why": "Perché conta"
+    },
+    "lines": "Riga {lines}: {items}",
+    "why": {
+      "CR_VI_TEST_REPORT": "Senza una prova valida la pelle può contenere cromo VI: i capi fatti con essa non si possono vendere.",
+      "PPE_CERTIFICATE": "Senza un certificato valido la protezione non può entrare in un capo certificato.",
+      "RULE": "L’azienda chiede questo documento prima dell’invio di un ordine."
+    },
+    "reason": "Perché parte senza il documento",
+    "reasonHint": "Almeno {min} caratteri; la seconda persona lo legge.",
+    "second": "Una seconda persona deve dire sì (un controllo qualità, con un codice dell’autenticatore) prima dell’invio.",
+    "never": "Nessuno dice sì alla propria richiesta, il titolare compreso.",
+    "covers": "Il sì copre esattamente ciò che blocca l’ordine ora: se cambia, chiedi di nuovo.",
+    "ask": "Chiedi l’approvazione",
+    "held": {
+      "notDraft": "All’invio si blocca solo una bozza.",
+      "nothing": "Nessun documento blocca questo ordine.",
+      "waiting": "Una richiesta aspetta già il suo sì.",
+      "approved": "Il sì c’è: invia l’ordine.",
+      "other": "La richiesta non si può fare ora.",
+      "reason": "Di’ perché, in {count} caratteri o più.",
+      "reasonLong": "Al massimo {count} caratteri."
+    }
+  },
+  "decide": {
+    "open": "Decidi…",
+    "title": "Inviare {number} senza il documento?",
+    "asked": "{name} chiede: {reason}",
+    "choice": "La tua decisione",
+    "yes": "Sì, può partire senza il documento",
+    "no": "No",
+    "wordsYes": "Le tue parole (facoltative)",
+    "wordsNo": "Perché no (lo legge chi ha chiesto)",
+    "yesHint": "Un sì chiede il codice dell’autenticatore e copre esattamente ciò che blocca l’ordine ora.",
+    "noHint": "L’ordine resta bloccato finché il documento non è valido.",
+    "approve": "Di’ sì",
+    "reject": "Di’ no",
+    "held": {
+      "none": "Nessuna richiesta aspetta una decisione.",
+      "own": "L’hai chiesto tu: decide una seconda persona (il titolare compreso).",
+      "noRight": "Per decidere serve purchasing.compliance.override.",
+      "stale": "Ciò che blocca l’ordine è cambiato dalla richiesta: va chiesto di nuovo.",
+      "other": "Non si può decidere ora.",
+      "words": "Di’ perché no."
+    }
+  },
+  "stepUp": {
+    "title": "Il codice dell’autenticatore",
+    "decide": "Il tuo codice dice sì: questo ordine può essere inviato senza il documento.",
+    "confirm": "Conferma",
+    "problem": {
+      "failed": "Non è stato possibile controllare il codice. Riprova.",
+      "wrong": "Il codice non è giusto. Prova il prossimo.",
+      "locked": "Troppi codici sbagliati: aspetta qualche minuto.",
+      "noAuthenticator": "Imposta prima un autenticatore (Il mio profilo).",
+      "tooMany": "Troppi tentativi: aspetta un minuto."
+    }
+  },
+  "withdraw": {
+    "overrideTitle": "Ritirare la richiesta?",
+    "overrideBody": "L’ordine resta bloccato all’invio finché il documento non è valido o chiedi di nuovo.",
+    "approvalTitle": "Ritirare la richiesta di un sì?",
+    "approvalBody": "L’ordine torna bozza: cambialo, poi invialo (la regola chiede di nuovo).",
+    "note": "Una nota (facoltativa)",
+    "confirm": "Ritira"
+  },
+  "approval": {
+    "waiting": "Aspetta un sì da {approver}: non è stato inviato niente.",
+    "waitingDue": "Aspetta un sì da {approver} entro il {due}: non è stato inviato niente.",
+    "waitingHint": "Tutto sull’ordine è bloccato mentre aspetta; ritira la richiesta per cambiarlo.",
+    "approvedSending": "{name} ha detto sì: viene inviato.",
+    "approvedDraft": "{name} ha detto sì così com’è: Invia lo invia senza chiedere di nuovo.",
+    "sentWithYes": "Inviato con il sì di {name}.",
+    "rejected": "{name} ha detto no: l’ordine torna bozza.",
+    "rejectReason": "Perché: {reason}",
+    "comment": "Le sue parole: {comment}",
+    "withdrawn": "La richiesta di un sì è stata ritirata.",
+    "stale": "La richiesta di un sì non vale più: l’ordine è cambiato dopo la richiesta.",
+    "open": "Apri in Approvazioni",
+    "withdraw": "Ritira la richiesta",
+    "asked": "Chiesto un sì a {approver}: non parte niente finché non arriva.",
+    "waitingFor": "aspetta un sì da {approver} (niente inviato)",
+    "waitingAsked": "aspetta un sì (niente inviato)",
+    "wouldAsk": "Invia chiede prima un sì a {approver}; parte quando dice sì.",
+    "wouldAskYou": "Invia chiede prima un sì; la regola indica te, quindi decide una seconda persona.",
+    "rule": "Regola: {rule}",
+    "held": {
+      "notWaiting": "Nessuna richiesta aspetta un sì."
+    }
+  },
+  "chase": {
+    "open": "Sollecita il fornitore…",
+    "title": "Sollecita {supplier}",
+    "subtitle": "{number}: le righe in ritardo o non confermate",
+    "reading": "Lettura di cosa è in ritardo…",
+    "failed": "Impossibile leggere cosa sollecitare",
+    "nothing": "Niente è in ritardo o aspetta una conferma",
+    "nothingHint": "Ogni riga aperta è confermata e in tempo.",
+    "linesLabel": "Righe da sollecitare",
+    "col": {
+      "take": "Sollecita",
+      "line": "Riga",
+      "asked": "Chiesta",
+      "theirs": "Giorno del fornitore",
+      "why": "Perché"
+    },
+    "take": "Sollecita la riga {seq}",
+    "lineSeq": "Riga {seq}",
+    "notConfirmed": "Non confermata",
+    "daysLate_one": "{count} giorno di ritardo",
+    "daysLate_other": "{count} giorni di ritardo",
+    "to": "A {name} ({email}), in {language}.",
+    "noEmail": "nessuna e-mail",
+    "noContact": "Nessun contatto riceve gli ordini: aggiungine uno sul fornitore.",
+    "mailLabel": "La mail come la legge il fornitore",
+    "message": "Il tuo messaggio (facoltativo)",
+    "messageHint": "Parte con la mail; non si inviano prezzi né link.",
+    "send": "Invia il sollecito",
+    "done": "Sollecito inviato a {to} alle {time}",
+    "doneHint": "È nella conversazione dell’ordine; il fornitore risponde lì o dal suo link.",
+    "refused": {
+      "changed": "L’ordine è cambiato nel frattempo: ciò che va sollecitato è stato riletto."
+    },
+    "held": {
+      "done": "Inviato.",
+      "offline": "Offline: il sollecito aspetta la rete.",
+      "notSent": "L’ordine non è ancora inviato: non c’è niente da sollecitare.",
+      "closed": "L’ordine è ricevuto, chiuso o annullato.",
+      "reading": "Lettura di cosa è in ritardo…",
+      "nothing": "Niente da sollecitare.",
+      "noContact": "Nessun contatto con e-mail riceve gli ordini.",
+      "other": "Non si può sollecitare ora.",
+      "noLine": "Spunta una riga da sollecitare.",
+      "long": "Al massimo {count} caratteri."
+    }
+  },
+  "reason": {
+    "LATE": "In ritardo",
+    "NOT_CONFIRMED": "Non confermata",
+    "CONFIRMED_LATE": "Confermata più tardi del necessario"
+  },
+  "language": {
+    "it": "italiano",
+    "en": "inglese"
+  },
+  "duplicate": {
+    "open": "Duplica…",
+    "reorderLine": "Riordina questa riga…",
+    "reorderN_one": "Riordina {count} riga",
+    "reorderN_other": "Riordina {count} righe",
+    "title": "Duplica {number}",
+    "titleReorder": "Riordina da {number}",
+    "subtitle": "Una nuova bozza a {supplier}",
+    "lines": "Righe da copiare",
+    "needDate": "Data di fabbisogno per tutte le righe",
+    "needDateHint": "Vuota: ogni riga il suo vecchio giorno se ancora oltre il tempo di consegna del fornitore, altrimenti il primo arrivo possibile.",
+    "copies": "Lo stesso fornitore, sito, contatto, valuta, Incoterms, termini di pagamento e nota per il fornitore.",
+    "prices": "I prezzi dalla fonte approvata del fornitore di oggi quando c’è, altrimenti quelli della vecchia riga.",
+    "notCopied": "Non copiati: la nota interna, i piani di consegna, rotoli, certificati e varianti, il modello di un ordine campione.",
+    "confirm_one": "Crea la bozza con {count} riga",
+    "confirm_other": "Crea la bozza con {count} righe",
+    "held": {
+      "noLine": "Scegli una riga da copiare.",
+      "past": "La data di fabbisogno è passata: scegli oggi o dopo."
+    },
+    "refused": {
+      "lines": "Una riga non si può copiare (annullata, o il materiale o il colore è archiviato)."
+    }
+  },
+  "late": {
+    "tableLabel": "Righe confermate più tardi del necessario",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "failed": "Impossibile caricare le righe confermate più tardi del necessario",
+    "empty": "Nessuna riga è confermata più tardi del necessario",
+    "emptyBody": "Ogni giorno confermato è quello chiesto o prima.",
+    "openSchedule": "Apri il piano di consegna",
+    "rowMenu": "{number} riga {seq}: azioni",
+    "col": {
+      "order": "Ordine · fornitore",
+      "line": "Riga",
+      "asked": "Chiesta",
+      "theirs": "Giorno del fornitore",
+      "open": "Ancora da arrivare"
+    },
+    "csv": {
+      "order": "Ordine",
+      "supplier": "Fornitore",
+      "line": "Riga",
+      "material": "Materiale",
+      "asked": "Chiesta",
+      "theirs": "Giorno del fornitore",
+      "later": "Giorni dopo",
+      "atRisk": "A rischio"
+    },
+    "next": "prossima: consegna {n}",
+    "onSchedule": "Vedi il piano di consegna"
+  },
+  "tolerance": {
+    "title": "Ricevuto rispetto all’ordine",
+    "of": "{received} di {expected} {unit}",
+    "none": "Esattamente come ordinato",
+    "both": "± {pct} %",
+    "overUnder": "+{over} % / −{under} %",
+    "nothing": "Ancora niente",
+    "ended": "Annullata o chiusa con saldo",
+    "depthFailed": "Non è stato possibile leggere le tolleranze: è mostrata la tolleranza della riga.",
+    "col": {
+      "received": "Ricevuto",
+      "difference": "Differenza",
+      "tolerance": "Tolleranza",
+      "state": "Stato"
+    },
+    "source": {
+      "LINE": "Della riga",
+      "RULE": "Una tolleranza di consegna",
+      "NONE": "Nessuna tolleranza"
+    },
+    "kind": {
+      "EXACT": "Come previsto",
+      "WITHIN_TOLERANCE": "Entro la tolleranza",
+      "OVER": "Oltre la tolleranza",
+      "SHORT": "In meno"
+    }
+  },
+  "send": {
+    "passDocuments": "I documenti sono validi",
+    "fixSchedule": "Correggi nel piano di consegna",
+    "fixRate": "Imposta il cambio",
+    "fixLines": "Correggi in Righe"
+  },
+  "notice": {
+    "scheduled_one": "Salvata: {count} consegna.",
+    "scheduled_other": "Salvate: {count} consegne.",
+    "cleared": "La riga è di nuovo una consegna.",
+    "dateFirst": "Il giorno del fornitore è registrato.",
+    "dateMoved": "Il giorno è spostato; chi, quando e perché restano.",
+    "rate": "Il cambio all’ordine è salvato.",
+    "kind": "Riga {seq} salvata.",
+    "overrideAsked": "Richiesto: una seconda persona decide se parte senza il documento.",
+    "overrideApproved": "Hai detto sì: si può inviare senza il documento.",
+    "overrideRejected": "Hai detto no: resta bloccato.",
+    "overrideWithdrawn": "La richiesta è stata ritirata.",
+    "approvalWithdrawn": "La richiesta è stata ritirata: l’ordine torna bozza.",
+    "chased": "Sollecito inviato a {to}.",
+    "copied": "Una copia di {number}: controlla le righe, poi inviala."
+  }
+}

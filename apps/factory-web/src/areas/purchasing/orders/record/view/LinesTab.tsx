@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, CheckCircle2, MoreHorizontal, Pencil, Plus, Scissors, Trash2, XCircle } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, Copy, Layers, MoreHorizontal, Pencil, Plus, Scissors, Split, Trash2, XCircle } from 'lucide-react'
 import { Card, KeyValue, Menu, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Tag } from '@nexus/ui/primitives'
@@ -15,6 +15,9 @@ import { addedInDraft, cancelLineHeld, closeShortHeld } from '../../daily-model'
 import { RevisionDraftBanner } from './ChangesSections'
 import { useSay } from './DailyDialogs'
 import { detailsOf } from './OrderRecordView'
+// B-W2b-333: the lines in depth — kinds, what each line blocks if late, the held compliance mark, the totals per currency.
+import { allChecks, DEPTH, kindDraftOf, kindEditHeld, kindFields, kindPhrases, scheduleDraftOf, scheduleEditHeld } from '../../depth/model'
+import { BlocksWords, HeldMarks, KindWords, LaterWords, lineHeld, SendApprovalNote, TotalsCard } from '../../depth/view/LinesDepth'
 
 /**
  * Lines (SCR-059): what we buy, on the list frame — material and colour with the supplier's own codes, the quantity in the
@@ -27,7 +30,9 @@ import { detailsOf } from './OrderRecordView'
 export function LinesTab({ order, model, actions }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('buying')
   const td = useT('purchasing-orders')
+  const tw = useT(DEPTH)
   const say = useSay()
+  const depth = model.depth ?? null
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const draft = order.status === 'DRAFT'
@@ -37,7 +42,9 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
   const cancelHeldOf = (line: PoLine) => cancelLineHeld(order, line, added, model.can)
   const closeHeldOf = (line: PoLine) => closeShortHeld(order, line, model.can)
   const ending = !draft && model.can.poManage && ['SENT', 'DECLINED', 'CONFIRMED', 'PARTLY_RECEIVED'].includes(order.status)
-  const selectable = editable || ending
+  // B-W2b-333: lines picked to reorder (Duplicate with these lines) on any order a buyer may copy.
+  const reorder = !!depth && model.can.poManage
+  const selectable = editable || ending || reorder
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const rowsKey = order.lines.map((line) => line.id).join(',')
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
@@ -71,6 +78,12 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
             )}
           </span>
           <span className="fw-by-cell-sub">
+            {/* B-W2b-333: the held compliance mark, first on the line's second row (never cut by the name's ellipsis). */}
+            {depth && lineHeld(depth, data.id, order.status) && (
+              <>
+                <Tag tone="danger">{tw('mark.lineHeld')}</Tag>{' '}
+              </>
+            )}
             {[data.colour ? `${data.colour.code} ${data.colour.name}` : null, data.supplierArticleCode ? t('po.line.theirCode', { code: [data.supplierArticleCode, data.supplierColourCode].filter(Boolean).join(' / ') }) : null].filter(Boolean).join(' · ') || t(`kind.${data.item.kind}`)}
           </span>
         </span>
@@ -90,7 +103,16 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
     const SpecsCell = ({ data }: ICellRendererParams<PoLine>) => {
       if (!data) return null
       const specs = leatherSpecs(data)
-      return specs.length === 0 ? <span className="fw-by-cell-sub">—</span> : <span className="fw-by-ellipsis">{specs.map((spec) => t(spec.key, spec.params)).join(' · ')}</span>
+      const kind = depth?.kinds.value?.lines.find((line) => line.id === data.id)
+      const own = specs.length === 0 ? null : <span className="fw-by-ellipsis">{specs.map((spec) => t(spec.key, spec.params)).join(' · ')}</span>
+      // B-W2b-333: fabric and trim by rolls, a protector's certificate, the variant (B-W2b-328).
+      if (!own && (!kind || kindPhrases(kind).length === 0)) return <span className="fw-by-cell-sub">—</span>
+      return (
+        <span className="fw-by-cell">
+          {own}
+          <KindWords line={kind} />
+        </span>
+      )
     }
     const NeedCell = ({ data }: ICellRendererParams<PoLine>) =>
       data ? (
@@ -103,6 +125,7 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
                 ? t('po.line.notSent')
                 : t('po.line.notConfirmed')}
           </span>
+          {depth && <LaterWords model={depth} lineId={data.id} />}
         </span>
       ) : null
     const ReceivedCell = ({ data }: ICellRendererParams<PoLine>) => {
@@ -132,13 +155,22 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
           <Tag tone="info">{t('po.line.fromPlan')}</Tag>
         ) : null
       ) : null
+    const BlocksCell = ({ data }: ICellRendererParams<PoLine>) => (data && depth ? <BlocksWords model={depth} line={data} prefix={model.prefix} /> : null)
     const MoreCell = ({ data }: ICellRendererParams<PoLine>) => {
-      if (!data || (!editable && !ending)) return null
+      if (!data || (!editable && !ending && !reorder)) return null
       // A draft of revision 2+ cancels the lines an earlier revision sent; a sent order cancels or closes its open lines short.
       const cancel = !data.ended && (ending || (editable && order.revision > 1 && !added.has(data.id))) ? cancelHeldOf(data) : undefined
       const close = ending && order.status === 'PARTLY_RECEIVED' && !data.ended ? closeHeldOf(data) : undefined
+      // B-W2b-333: a draft line's rolls, certificate or variant and its deliveries; reorder one line.
+      const kind = depth?.kinds.value?.lines.find((line) => line.id === data.id)
+      const kindOpen = depth && kind && depth.kinds.value && kindEditHeld(depth.kinds.value, kind, depth.can) === null && (kindFields(kind).rolls || kindFields(kind).certificate || kindFields(kind).variant)
+      const depthLine = depth?.depth.value?.lines.find((line) => line.id === data.id)
+      const splitOpen = depth && depthLine && scheduleEditHeld(order.status, depthLine, depth.can) === null
       const items = [
         ...(editable && !data.ended ? [{ id: 'edit', label: t('po.line.edit'), icon: <Pencil size={14} aria-hidden />, onSelect: () => actions?.onEditLine?.(data.id) }] : []),
+        ...(kindOpen && kind ? [{ id: 'kind', label: tw('kindDialog.open'), icon: <Layers size={14} aria-hidden />, onSelect: () => actions?.depth?.onDialog?.({ kind: 'lineKind', draft: kindDraftOf(kind) }) }] : []),
+        ...(splitOpen && depthLine ? [{ id: 'split', label: tw(depthLine.deliveries.length > 0 ? 'schedule.change' : 'schedule.split'), icon: <Split size={14} aria-hidden />, onSelect: () => actions?.depth?.onDialog?.({ kind: 'schedule', lineId: data.id, rows: scheduleDraftOf(depthLine) }) }] : []),
+        ...(reorder && data.ended?.kind !== 'CANCELLED' ? [{ id: 'reorder', label: tw('duplicate.reorderLine'), icon: <Copy size={14} aria-hidden />, onSelect: () => actions?.depth?.onDialog?.({ kind: 'duplicate', draft: { lineIds: [data.id], needDate: '' } }) }] : []),
         ...(cancel === null ? [{ id: 'cancelLine', label: td('line.cancel'), icon: <Ban size={14} aria-hidden />, tone: 'danger' as const, onSelect: () => actions?.daily?.onEndLines?.('CANCEL_LINES', [data.id]) }] : []),
         ...(close === null ? [{ id: 'closeShort', label: td('line.closeShort'), icon: <Scissors size={14} aria-hidden />, onSelect: () => actions?.daily?.onEndLines?.('CLOSE_SHORT', [data.id]) }] : []),
         ...(editable && !data.ended ? [{ id: 'remove', label: t('po.line.remove'), icon: <Trash2 size={14} aria-hidden />, tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'removeLines', lineIds: [data.id] }) }] : []),
@@ -154,12 +186,16 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
       { colId: 'need', headerName: t('po.col.needConfirmed'), minWidth: 180, flex: 1.2, cellRenderer: NeedCell },
       ...(order.status !== 'DRAFT' ? [{ colId: 'received', headerName: t('po.col.received'), minWidth: 170, flex: 1.1, cellRenderer: ReceivedCell } satisfies ColDef<PoLine>] : []),
       ...(model.can.cost ? [{ colId: 'net', headerName: t('po.col.net'), minWidth: 140, flex: 0.9, type: 'rightAligned', cellRenderer: PriceCell } satisfies ColDef<PoLine>] : []),
+      // B-W2b-333 (design rec lines "For orders (W2b: what it blocks if late)"): the work and customer orders it supplies.
+      ...(depth ? [{ colId: 'blocks', headerName: tw('blocks.col'), minWidth: 180, flex: 1.1, cellRenderer: BlocksCell } satisfies ColDef<PoLine>] : []),
       { colId: 'plan', headerName: t('po.col.plan'), minWidth: 124, flex: 0.6, cellRenderer: PlanCell },
       ...(selectable ? [{ colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell } satisfies ColDef<PoLine>] : []),
     ]
-  }, [t, td, locale, order.status, order.currency, order.revision, model.can.cost, editable, ending, added])
+    // B-W2b-333: the depth parts' reads (state; the model object around them is new each render).
+  }, [t, td, tw, locale, order.status, order.currency, order.revision, model.can.cost, model.prefix, editable, ending, reorder, added, depth?.kinds.value, depth?.demand.value, depth?.compliance.value, depth?.depth.value, depth?.can])
 
-  const checks = order.send?.checks ?? []
+  // B-W2b-333: the record's own checks and the compliance gate's (the order's `send` leaves the gate out).
+  const checks = order.status === 'DRAFT' ? allChecks(order.send?.checks ?? [], depth?.compliance.value ?? null) : (order.send?.checks ?? [])
   const blocking = checks.filter((check) => check.severity === 'BLOCKS')
   const warnings = checks.filter((check) => check.severity === 'WARNING')
   const details = detailsOf(order)
@@ -167,6 +203,12 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
   const picked = order.lines.filter((line) => selected.includes(line.id))
   const cancelPicked = picked.filter((line) => cancelHeldOf(line) === null)
   const bulkCancelHeld = picked.length === 0 ? null : cancelPicked.length < picked.length ? say(cancelHeldOf(picked.find((line) => cancelHeldOf(line) !== null)!)) : null
+  const reorderPicked = picked.filter((line) => line.ended?.kind !== 'CANCELLED')
+  const bulkReorder = reorder && (
+    <Button size="sm" heldReason={reorderPicked.length === 0 ? tw('duplicate.held.noLine') : null} aria-label={tw('duplicate.reorderN', { count: reorderPicked.length })} onClick={() => actions?.depth?.onDialog?.({ kind: 'duplicate', draft: { lineIds: reorderPicked.map((line) => line.id), needDate: '' } })}>
+      <Copy size={13} aria-hidden /> <SelectionLabel>{tw('duplicate.reorderN', { count: reorderPicked.length })}</SelectionLabel>
+    </Button>
+  )
   const bulkCancel = (ending || (editable && order.revision > 1)) && (
     <Button size="sm" tone="danger" heldReason={bulkCancelHeld} aria-label={td('line.cancelN', { count: picked.length })} onClick={() => actions?.daily?.onEndLines?.('CANCEL_LINES', picked.map((line) => line.id))}>
       <Ban size={13} aria-hidden /> <SelectionLabel>{td('line.cancelN', { count: picked.length })}</SelectionLabel>
@@ -176,6 +218,7 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
   return (
     <div className="fw-by-stack">
       <RevisionDraftBanner order={order} model={model} />
+      {depth && <HeldMarks order={order} model={depth} actions={actions?.depth} />}
       <div className="fw-by-stack">
         {editable && (
           <div className="fw-by-head">
@@ -198,6 +241,7 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
                   onChange: setSelected,
                   actions: (
                     <>
+                      {bulkReorder}
                       {bulkCancel}
                       {editable && (
                         <Button size="sm" tone="danger" aria-label={t('po.lines.remove', { count: selected.length })} onClick={() => actions?.onDialog?.({ kind: 'removeLines', lineIds: [...selected] })}>
@@ -224,6 +268,7 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
           <Card padded>
             <div className="fw-by-stack">
               <h3 className="fw-by-h3">{t('po.lines.checksTitle')}</h3>
+              {depth && <SendApprovalNote model={depth} />}
               {checks.length === 0 ? (
                 <p className="fw-by-check">
                   <CheckCircle2 size={16} className="fw-by-ico is-ok" aria-hidden /> {t('po.lines.ready')}
@@ -266,21 +311,8 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
             />
           </div>
         </Card>
-        {model.can.cost && (
-          <Card padded>
-            <div className="fw-by-stack">
-              <h3 className="fw-by-h3">{t('po.totals.title')}</h3>
-              <KeyValue
-                dense
-                labelCase="sentence"
-                items={[
-                  { label: t('po.totals.net'), value: <span className="fw-by-num">{money(order.netAmount ?? null, order.currency, locale)}</span>, hint: t('po.totals.netHint') },
-                  { label: t('po.totals.lines'), value: String(order.lines.length) },
-                ]}
-              />
-            </div>
-          </Card>
-        )}
+        {/* B-W2b-333: the net per currency; another currency with its rate at order (the cost grain only). */}
+        {model.can.cost && <TotalsCard order={order} model={depth} actions={actions?.depth} />}
       </div>
     </div>
   )

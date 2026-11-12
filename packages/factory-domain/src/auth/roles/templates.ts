@@ -55,6 +55,8 @@ import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions
 import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-312: scheduling in depth (the planner and the production manager pin the board).
 import { PLANNING_SCHEDULE_DEPTH_ADDS } from '../../planning/schedule-depth/permissions'
+// B-W2b-321: work to subcontractors.
+import { PLANNING_SUBCONTRACT_ADDS } from '../../planning/subcontract-capacity/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -106,6 +108,8 @@ import { INVENTORY_LOTS_DEPTH_ADDS } from '../../inventory/lots-depth/permission
 import { INVENTORY_REPORTS_ADDS } from '../../inventory/reports/permissions'
 // B-W2b-350: purchasing reports (the buyer, planner, production manager, finance and the warehouse read them).
 import { PURCHASING_REPORTS_ADDS } from '../../purchasing/reports/permissions'
+// B-W2b-300: goods without a PO (the buyer and the warehouse name the order or send them back).
+import { INVENTORY_UNPLANNED_ADDS } from '../../inventory/unplanned/permissions'
 // B-W2b-260: recall, withdrawal and authority (the quality inspector drafts them and speaks for the company outward).
 import { RECALL_ADDS } from '../../compliance/recall/permissions'
 // B-W2b-258: the user information builder (quality generates the leaflet drafts and checks a translation).
@@ -967,6 +971,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
   // B-W2b-301
   ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
+  // B-W2b-321
+  ...(audience === 'office' ? (PLANNING_SUBCONTRACT_ADDS[key] ?? []) : []),
   // B-W2b-312
   ...(audience === 'office' ? (PLANNING_SCHEDULE_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-311
@@ -991,7 +997,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-304
   ...(audience === 'office' ? (SALES_CREDIT_ADDS[key] ?? []) : []),
   // B-W2b-306
-  ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PLANNING_ACTIONS_ADDS[key] ?? []) : []),
+  // B-W2b-300
+  ...(audience === 'office' ? (INVENTORY_UNPLANNED_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
