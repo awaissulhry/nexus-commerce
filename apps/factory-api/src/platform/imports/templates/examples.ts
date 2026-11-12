@@ -18,10 +18,17 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   'parties.parties': [
     { code: 'CLI-001', legalName: 'Moto Esempio S.r.l.', kind: 'ORGANISATION', roles: 'cliente', country: 'IT', currency: 'EUR', language: 'it', addressLine1: 'Via dei Tigli 4', postalCode: '40100', city: 'Bologna', province: 'BO', contactName: 'Ufficio acquisti', contactEmail: 'acquisti@moto-esempio.example' },
     { code: 'FOR-001', legalName: 'Conceria Esempio S.p.A.', kind: 'ORGANISATION', roles: 'fornitore', country: 'IT', currency: 'EUR', language: 'it', city: 'Santa Croce sull\'Arno', province: 'PI', contactEmail: 'ordini@conceria-esempio.example' },
+    // W2b (B-W2b-311): a supplier's kinds, status, lead time and origin.
+    { code: 'FOR-002', legalName: 'Laboratorio Esempio S.n.c.', kind: 'ORGANISATION', roles: 'fornitore; terzista', country: 'IT', currency: 'EUR', language: 'it', supplierKinds: 'conceria; terzista', supplierStatus: 'approvato', leadTimeDays: '21', originCountry: 'IT', originRegion: 'Toscana', hideOriginCountries: 'IT; ES', tannages: 'vegetale' },
   ],
   'product.materials': [
     { code: 'LEA-100', name: 'Bovine full grain 1.2 mm', kind: 'LEATHER', sourcing: 'BUY', tracking: 'HIDE', baseUom: 'M2', grade: 'A', thicknessMinMm: '1.1', thicknessMaxMm: '1.3', standardCost: '18.50' },
     { code: 'THR-40', name: 'Polyester thread 40', kind: 'THREAD', sourcing: 'BUY', tracking: 'NONE', baseUom: 'CONE', standardCost: '3.20' },
+  ],
+  // W2b (B-W2b-311): a supplier's price list (approved sources).
+  'purchasing.supplierPrices': [
+    { supplier: 'FOR-001', material: 'LEA-100', colour: '*', supplierArticleCode: 'VACCHETTA-12', purchaseUom: 'M2', unitPrice: '18.50', currency: 'EUR', minOrderQty: '50', orderMultiple: '5', leadTimeDays: '21', preference: 'principale' },
+    { supplier: 'FOR-001', material: 'THR-40', colour: 'BLK', supplierColourCode: 'NERO 900', unitPrice: '3.10', minOrderQty: '12', preference: 'riserva' },
   ],
   'inventory.locations': [
     { site: 'A1', code: 'MAG-01', name: 'Leather store', kind: 'WAREHOUSE' },

@@ -10,6 +10,9 @@ import { refreshOf, type OpenException } from '@nexus/factory-domain/planning/ex
 import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
 import { sourceFor, sourceRules } from '@nexus/factory-domain/purchasing/sources/sources'
+// B-W2b-311 (SCM-012): the supplier's closed days in a buy's lead time.
+import { arrivalDate, leadTimeWindow } from '@nexus/factory-domain/calendars/suppliers'
+import { supplierCalendarsFor } from '../../../platform/calendars/service'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import type { CommandTools } from '../../../core/command'
 import { capacityAnswer, capacityWorld } from '../capacity/service'
@@ -35,6 +38,23 @@ export interface RefreshCounts {
 const labelOf = (inputs: PlanInputs, itemId: string, itemColourId: string | null, colours: ReadonlyMap<string, string>): string => {
   const item = inputs.items.find((entry) => entry.id === itemId)
   return [item?.code ?? 'A material', itemColourId ? colours.get(itemColourId) : null].filter(Boolean).join(' ')
+}
+
+/**
+ * B-W2b-311 (SCM-012): a buy ordered on the run date arrives after its supplier's closed days (platform/calendars, the
+ * supplier's calendar): each BUY requirement with a supplier and a lead time gets its earliest arrival.
+ */
+async function withSupplierArrivals(tx: CommandTools['tx'], plan: PlanResult, materials: DetectMaterial[], runDate: BusinessDate): Promise<DetectMaterial[]> {
+  const supplierOf = (index: number): string | null => (plan.requirements[index]!.action === 'BUY' ? (plan.requirements[index]!.supplierId ?? null) : null)
+  const supplierIds = [...new Set(materials.flatMap((material, index) => (material.leadTimeDays !== null && supplierOf(index) ? [supplierOf(index)!] : [])))]
+  if (supplierIds.length === 0) return materials
+  const longest = Math.min(400, Math.max(0, ...materials.map((material) => material.leadTimeDays ?? 0)))
+  const calendars = await supplierCalendarsFor(tx, supplierIds, leadTimeWindow(runDate, longest, 'forward'))
+  return materials.map((material, index) => {
+    const supplierId = supplierOf(index)
+    if (!supplierId || material.leadTimeDays === null || material.leadTimeDays > 400) return material
+    return { ...material, earliestArrival: arrivalDate(calendars.get(supplierId)?.calendar ?? null, runDate, material.leadTimeDays).date }
+  })
 }
 
 /** What detection reads of each requirement of the plan, and of materials with a safety stock and no demand. */
@@ -107,7 +127,7 @@ export async function detectInputs(tools: Pick<CommandTools, 'tx'>, site: SiteRo
       overloads.push({ laneKind: lane.kind, laneId: lane.id, laneCode: lane.code, bucketKey: cell.key, from: cell.from, to: cell.to, loadPct: cell.loadPct ?? '—', availableMinutes: cell.availableMinutes, bookedMinutes: cell.bookedMinutes })
     }
   }
-  return { materials, safetyOnly, overloads }
+  return { materials: await withSupplierArrivals(tx, plan, materials, runDate), safetyOnly, overloads }
 }
 
 /** Refreshes the site's exception list with what the run found (inside the run's command). */
