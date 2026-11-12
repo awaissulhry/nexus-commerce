@@ -218,7 +218,7 @@ async function walkOfOne(db: Reader, context: StockContext, header: PickHeader, 
   const kit = (await readKits(db, [header.id])).get(header.id)!
   return {
     workOrder: { id: header.id, number: header.number, status: header.status, siteId: header.siteId, companyId: header.companyId, dueDate: sheet.workOrder.dueDate, style: sheet.workOrder.style, issuable: sheet.workOrder.issuable },
-    kit: { location: kit.location, checkedAt: kit.checkedAt },
+    kit: { location: kit.location, checkedAt: kit.checkedAt, /* B-W2b-310 */ version: kit.version },
     task: task ? { id: task.id, status: task.status, version: task.version } : null,
     lines,
     stops,

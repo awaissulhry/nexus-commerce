@@ -25,7 +25,8 @@ describe('the warehouse task inbox', () => {
       ['PUT_AWAY', 'move'],
       ['PICK', 'pick'],
       ['MOVE', 'move'],
-      ['COUNT', null],
+      // B-W2b-310: Count on the task's place.
+      ['COUNT', 'count'],
       ['QUARANTINE', 'move'],
     ])
     expect(doneHeld({ kind: 'QUARANTINE' })).toBe('scanPlace')

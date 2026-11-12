@@ -7,6 +7,9 @@ import type { DocumentSendModel } from '../../_shared/document-send/model'
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { OrderDocuments, OrderReceipt, OrderReminders, OrderRevisions, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SendCard, SendCheck, SendCheckAnswer, SendOutcome, SupplierAnswer, SupplierView } from './api'
 import type { DailyDialog, SendExtra } from './daily-model'
+// B-W2b-333: purchase orders in depth on screen (the depth parts of the studio).
+import { DOCUMENT_CODES, depthFixOf, type ChaseActions, type ChaseModel, type DepthCan, type OrderDepthActions, type OrderDepthModel, type WorklistPart } from './depth/model'
+import type { OrderApproval, WorklistRow } from './depth/api'
 
 /**
  * Purchase orders (SCR-058) and the PO studio (SCR-059) — the screens' rules, pure: the saved views (the tiles are
@@ -32,7 +35,8 @@ export const STATUS_TONE: Readonly<Record<PoStatus, Tone>> = Object.freeze({
 // ---- the list ---------------------------------------------------------------------------------------------------------------
 
 // B-W2a-69: Rows ▾ Expected this week · Late (the API's `?due=`) and Past the confirm-by (`?pastConfirmBy=true`).
-export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'pastConfirmBy', 'proposed', 'confirmed', 'dueThisWeek', 'deliveryLate', 'partly', 'received', 'declined', 'cancelled'] as const
+// B-W2b-333: Confirmed later than needed (the tile's saved view: the expediting worklist's lines, reason CONFIRMED_LATE).
+export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'pastConfirmBy', 'proposed', 'confirmed', 'dueThisWeek', 'deliveryLate', 'confirmedLate', 'partly', 'received', 'declined', 'cancelled'] as const
 export type OrderView = (typeof ORDER_VIEWS)[number]
 
 const VIEW_STATUS: Readonly<Partial<Record<OrderView, PoStatus>>> = Object.freeze({
@@ -103,7 +107,8 @@ export function confirmationPhrase(row: Pick<OrderRow, 'status' | 'sentAt' | 'co
 // ---- the record -------------------------------------------------------------------------------------------------------------
 
 // B-W2a-81: Invoices (the supplier invoices with a line on this order, Finance's; design order lines, answer, receipts, invoices).
-export const RECORD_TABS = ['lines', 'answer', 'receipts', 'invoices', 'documents', 'activity'] as const
+// B-W2b-333: Delivery schedule (design rec tab `schedule`, W2b) after Lines.
+export const RECORD_TABS = ['lines', 'schedule', 'answer', 'receipts', 'invoices', 'documents', 'activity'] as const
 export type OrderTab = (typeof RECORD_TABS)[number]
 export const tabOf = (value: string | null | undefined): OrderTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as OrderTab) : 'lines')
 
@@ -132,14 +137,20 @@ export function journeyIndex(status: PoStatus): number {
 
 export type NextStep = { kind: 'send' | 'review' | 'newLink' | 'receive' | null; held: Phrase | null }
 
-/** The band's primary by state, held with its reason. */
-export function nextStep(order: PurchaseOrder, can: Pick<BuyingCan, 'poSend' | 'receive'>): NextStep {
+/**
+ * The band's primary by state, held with its reason. B-W2b-333: `depth` adds the checks the record's own `send` leaves out
+ * (the compliance gate's) and the send's approval: an order waiting for its yes is held until it comes (its yes sends it).
+ */
+export function nextStep(order: PurchaseOrder, can: Pick<BuyingCan, 'poSend' | 'receive'>, depth?: { checks?: readonly SendCheck[]; approval?: OrderApproval['state'] | null }): NextStep {
   switch (order.status) {
     case 'DRAFT': {
       if (!can.poSend) return { kind: 'send', held: phrase('held.noSend') }
-      const blocking = order.send?.checks.find((check) => check.severity === 'BLOCKS')
+      const blocking = (depth?.checks ?? order.send?.checks ?? []).find((check) => check.severity === 'BLOCKS')
       return { kind: 'send', held: blocking ? phrase(`po.check.${blocking.code}`) : null }
     }
+    case 'PENDING_APPROVAL':
+      if (!can.poSend) return { kind: 'send', held: phrase('held.noSend') }
+      return { kind: 'send', held: depth?.approval === 'APPROVED' ? null : phrase('purchasing-orders-depth:held.waitingForYes') }
     case 'CHANGES_PROPOSED':
       return { kind: 'review', held: can.poSend ? null : phrase('held.noSend') }
     case 'SENT':
@@ -192,10 +203,13 @@ export function leatherSpecs(line: PoLine): Phrase[] {
 }
 
 /** The send checks as the shared send dialog's items: each in words, with its Fix link to the tab that fixes it. */
-export function sendItems(checks: readonly SendCheck[], words: (key: string) => string, recordHref: string): DocumentSendModel['checks'] {
+export function sendItems(checks: readonly SendCheck[], words: (key: string) => string, recordHref: string, depthWords?: (key: string) => string): DocumentSendModel['checks'] {
   const fixOf = (code: SendCheck['code']): { label: string; href: string } | null => {
     if (['NO_LINES', 'LINE_NOT_PRICED', 'NEED_DATE_PAST', 'BELOW_MINIMUM', 'NOT_A_MULTIPLE', 'LATE_FOR_LEAD_TIME'].includes(code)) return { label: words('po.fix.lines'), href: `${recordHref}?tab=lines` }
     if (['REQUESTED_DATE_PAST', 'NO_CONTACT', 'CONTACT_NOT_ORDERS', 'NO_CONTACT_EMAIL'].includes(code)) return { label: words('po.fix.details'), href: `${recordHref}?tab=lines&edit=details` }
+    // B-W2b-333: the depth checks are fixed on the Delivery schedule, the totals' rate, or the Lines (kinds, documents).
+    const depth = depthWords ? depthFixOf(code, recordHref) : null
+    if (depth && depthWords) return { label: depthWords(depth.tab === 'schedule' ? 'send.fixSchedule' : code === 'NO_RATE_AT_ORDER' ? 'send.fixRate' : 'send.fixLines'), href: depth.href }
     return null
   }
   const items = checks.map((check, index) => ({ id: `${check.code}-${index}`, state: check.severity === 'BLOCKS' ? ('blocks' as const) : ('warning' as const), label: words(`po.check.${check.code}`), fix: fixOf(check.code) }))
@@ -206,7 +220,9 @@ export function sendItems(checks: readonly SendCheck[], words: (key: string) => 
     if (item.id === 'pass-linesPriced') return !failedCodes.has('LINE_NOT_PRICED') && !failedCodes.has('NO_LINES')
     return !failedCodes.has('NEED_DATE_PAST') && !failedCodes.has('REQUESTED_DATE_PAST')
   })
-  return { status: 'ready', items: [...items, ...shownPasses] }
+  // B-W2b-333 (design pop:send "documents valid (W2b gate)"): passes unless the gate (or a protector's certificate) holds it.
+  const documents = depthWords && ![...failedCodes].some((code) => DOCUMENT_CODES.has(code)) ? [{ id: 'pass-documents', state: 'passes' as const, label: depthWords('send.passDocuments'), fix: null }] : []
+  return { status: 'ready', items: [...items, ...shownPasses, ...documents] }
 }
 
 /** What the send dialog shows while its checks are read (send-check), failed, or there. */
@@ -226,6 +242,8 @@ export function sendModelOf(
     timeZone: string
     /** The PDF as it would leave (the preview route, with the cost grain), its new-tab address, or why it is not shown. */
     preview: { src: DocumentSendModel['preview']['src']; openHref: string | null; problem: string | null }
+    /** B-W2b-333: this step's words (the documents check, the depth checks' Fix links). */
+    depthWords?: (key: string) => string
   },
   t: (key: string, params?: Readonly<Record<string, string | number>>) => string,
 ): DocumentSendModel {
@@ -240,7 +258,7 @@ export function sendModelOf(
     freezeNote: t('po.send.freeze', { number: order.documentNumber }),
     recipientCan: [t('po.send.can.confirm'), t('po.send.can.propose'), t('po.send.can.decline'), t('po.send.can.noAccount')],
     fields: input.fields,
-    checks: ready ? sendItems(ready.checks, t, input.recordHref) : check.status === 'error' ? { status: 'error', problem: check.problem } : { status: 'loading' },
+    checks: ready ? sendItems(ready.checks, t, input.recordHref, input.depthWords) : check.status === 'error' ? { status: 'error', problem: check.problem } : { status: 'loading' },
     preview: { ...input.preview, fileName: `${order.documentNumber}.pdf` },
     sending: input.sending,
     problem: input.problem,
@@ -282,6 +300,13 @@ export interface OrdersListModel {
   newOrder: NewOrderModel | null
   /** B-W2a-69: Send n (one card per supplier) while it is open. */
   sendMany?: SendManyModel | null
+  /** B-W2b-333: the expediting worklist's lines at risk ("What it blocks", the Confirmed later than needed tile). */
+  worklist?: WorklistPart | null
+  /** B-W2b-333: the Confirmed later than needed view's lines. */
+  confirmedLate?: { rows: WorklistRow[] | null; more: boolean; problem: string | null } | null
+  /** B-W2b-333: the chase dialog while it is open, and the rights it needs. */
+  chase?: ChaseModel | null
+  depthCan?: DepthCan
   /** Design cases. */
   selected?: readonly string[]
   focusRow?: number
@@ -302,6 +327,9 @@ export interface OrdersListActions {
   onDismissNotice?: () => void
   /** B-W2a-69: Send n — open with these orders, or close (null). */
   onSendMany?: (orderIds: string[] | null) => void
+  /** B-W2b-333: chase a sent order (row verb), the Confirmed later than needed view's own. */
+  chase?: Omit<ChaseActions, 'onOpen'> & { onOpen?: (order: { orderId: string; number: string; supplier: string }) => void }
+  late?: { onMore?: () => void; onRetry?: () => void; onExport?: (rows: WorklistRow[]) => void }
   sendMany?: {
     onConfirmBy?: (orderId: string, confirmBy: string) => void
     onMessage?: (message: string) => void
@@ -401,6 +429,8 @@ export interface OrderRecordModel {
   dialog: OrderDialog | null
   dialogProblem: Phrase | null
   panelsPreview?: RecordPanelsViewModel
+  /** B-W2b-333: the depth parts (schedule, kinds, compliance, demand, approval, chase); absent in older design cases. */
+  depth?: OrderDepthModel | null
   /** Design cases. */
   selected?: readonly string[]
   timeZone?: string
@@ -451,4 +481,6 @@ export interface OrderRecordActions {
     onRemind?: () => void
     onOpenRevision?: (fileId: string) => void
   }
+  /** B-W2b-333: the depth parts' actions. */
+  depth?: OrderDepthActions
 }

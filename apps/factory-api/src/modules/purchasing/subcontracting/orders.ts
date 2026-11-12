@@ -439,7 +439,8 @@ async function locationFor(db: Reader, siteId: string, partyId: string, location
 }
 
 /** The work order's planned materials for the cells sent, per material and colour (a HIDE-tracked leather goes cut, as bundles). */
-async function kitPlanOf(db: Reader, workOrderId: string, operations: readonly { readonly pieces: number; readonly sizes: readonly SizePieces[]; readonly workOrderOperationId: string }[], cells: WorkOrderFacts['cells']) {
+// B-W2b-321: exported for the kit-timing popover's kit list (planning/subcontract-capacity/kit-timing.ts).
+export async function kitPlanOf(db: Reader, workOrderId: string, operations: readonly { readonly pieces: number; readonly sizes: readonly SizePieces[]; readonly workOrderOperationId: string }[], cells: WorkOrderFacts['cells']) {
   // Per cell, the most pieces any operation sends out (a garment travels once for all the order's operations).
   const share = new Map<string, number>()
   for (const operation of operations) {

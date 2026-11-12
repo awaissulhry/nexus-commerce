@@ -20,6 +20,14 @@ import { DailyDialogs, SendExtraFields, useSay } from './DailyDialogs'
 import { DocumentsTab, ReceiptsTab } from './ReceiptsDocsTabs'
 import { LinesTab } from './LinesTab'
 import { OrderDialogs } from './OrderDialogs'
+// B-W2b-333: purchase orders in depth on screen — the Delivery schedule tab, the send's approval, chase, duplicate.
+import { allChecks, chaseVerbHeld, copyableLines, DEPTH, duplicateHeld } from '../../depth/model'
+import { ApprovalBanner, SendApprovalNote } from '../../depth/view/LinesDepth'
+import { ScheduleTab } from '../../depth/view/ScheduleTab'
+import { DepthDialogs } from '../../depth/view/DepthDialogs'
+import { ChaseDialog } from '../../depth/view/ChaseDialog'
+import { useDepthSay } from '../../depth/view/words'
+import '../../depth/depth.css'
 import '../../../../_shared/buying/buying.css'
 
 const JOURNEY = ['drafted', 'sent', 'confirmed', 'receiving', 'received'] as const
@@ -44,7 +52,7 @@ export type { OrderRecordActions, OrderRecordModel } from '../../model'
  */
 export function OrderRecordView({ model, actions, panels, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; /** B-W2a-81: the Invoices tab (Finance's; absent without payables.view: no tab). */ invoices?: ReactNode }) {
   return (
-    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists', 'records', 'send']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'calendar-kit', 'lists', 'records', 'send']}>
       <OrderRecord model={model} actions={actions} panels={panels} invoices={invoices} />
     </WithMessages>
   )
@@ -106,8 +114,13 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const recordHref = `${model.prefix}/purchasing/orders/${order.id}`
-  const step = nextStep(order, model.can)
-  const stepHeld = step.held ? t(step.held.key, step.held.params) : model.busy ? t('held.busy') : null
+  const depth = model.depth ?? null
+  const tw = useT(DEPTH)
+  const sayDepth = useDepthSay()
+  // B-W2b-333: the gate's checks count too (the record's own `send` leaves them out); an order waiting for its yes holds Send.
+  const checksNow = order.status === 'DRAFT' ? allChecks(order.send?.checks ?? [], depth?.compliance.value ?? null) : (order.send?.checks ?? [])
+  const step = nextStep(order, model.can, { checks: checksNow, approval: depth?.approval.value?.state ?? null })
+  const stepHeld = step.held ? (step.held.key.startsWith(`${DEPTH}:`) ? sayDepth(step.held) : t(step.held.key, step.held.params)) : model.busy ? t('held.busy') : null
   const cancelReason = cancelHeld(order, model.can)
 
   const openStep = () => {
@@ -136,24 +149,27 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const blocking = order.status === 'DRAFT' ? (order.send?.checks.filter((check) => check.severity === 'BLOCKS').length ?? 0) : 0
+  const blocking = order.status === 'DRAFT' ? checksNow.filter((check) => check.severity === 'BLOCKS').length : 0
+  const laterDeliveries = (depth?.depth.value?.lines ?? []).some((line) => line.confirmedLaterBy > 0 || line.deliveries.some((delivery) => delivery.confirmedLaterBy > 0))
   const tabCount = (tab: OrderTab): number | null => {
     if (tab === 'lines') return order.lines.length
     if (tab === 'receipts') return model.receipts?.value?.length ?? null
     if (tab === 'documents') return model.documents.value?.documents.length ?? null
     return null
   }
-  const dotted = (tab: OrderTab) => (tab === 'lines' && blocking > 0) || (tab === 'answer' && order.status === 'CHANGES_PROPOSED')
-  const tabs: TabItem[] = RECORD_TABS.filter((tab) => (tab !== 'receipts' || model.receipts !== null) && (tab !== 'invoices' || (invoices !== undefined && invoices !== null))).map((tab) => ({
+  const dotted = (tab: OrderTab) => (tab === 'lines' && blocking > 0) || (tab === 'answer' && order.status === 'CHANGES_PROPOSED') || (tab === 'schedule' && laterDeliveries)
+  const tabWords = (tab: OrderTab) => (tab === 'schedule' ? tw('tab.schedule') : t(`po.tab.${tab}`))
+  const dotWords = (tab: OrderTab) => (tab === 'lines' ? t('po.tab.checksOpen', { count: blocking }) : tab === 'schedule' ? tw('tab.later') : t('po.tab.waitsForYou'))
+  const tabs: TabItem[] = RECORD_TABS.filter((tab) => (tab !== 'receipts' || model.receipts !== null) && (tab !== 'invoices' || (invoices !== undefined && invoices !== null)) && (tab !== 'schedule' || depth !== null)).map((tab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label: dotted(tab) ? (
       <span className="fw-by-tablabel">
-        {t(`po.tab.${tab}`)}
-        <span className="fw-by-dot" aria-label={t(tab === 'lines' ? 'po.tab.checksOpen' : 'po.tab.waitsForYou', { count: blocking })} role="img" />
+        {tabWords(tab)}
+        <span className="fw-by-dot" aria-label={dotWords(tab)} role="img" />
       </span>
     ) : (
-      t(`po.tab.${tab}`)
+      tabWords(tab)
     ),
     count: tabCount(tab),
   }))
@@ -183,6 +199,9 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
     ...(change === null ? [{ id: 'change', label: td('change.open', { revision: order.revision + 1 }), onSelect: () => actions?.onDialog?.({ kind: 'change', note: '' }) }] : []),
     ...(confirmByHeld(order, model.can) === null ? [{ id: 'confirmBy', label: td('confirmBy.move'), onSelect: () => actions?.onDialog?.({ kind: 'confirmBy', confirmBy: order.confirmBy ?? '' }) }] : []),
     ...(remindHeld(order, model.can) === null ? [{ id: 'remind', label: td('remind.open'), onSelect: () => actions?.onDialog?.({ kind: 'remind', message: '' }) }] : []),
+    // B-W2b-333: Chase the supplier (a sent order's late or unconfirmed lines) and Duplicate (a new draft from its lines).
+    ...(depth && chaseVerbHeld(order.status, depth.can) === null ? [{ id: 'chase', label: tw('chase.open'), onSelect: () => actions?.depth?.chase?.onOpen?.() }] : []),
+    ...(depth && duplicateHeld(depth.can) === null && copyableLines(order).length > 0 ? [{ id: 'duplicate', label: tw('duplicate.open'), onSelect: () => actions?.depth?.onDialog?.({ kind: 'duplicate', draft: { lineIds: copyableLines(order).map((line) => line.id), needDate: '' } }) }] : []),
     { id: 'copy', label: t('po.record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(order.number).catch(() => undefined) },
     ...(cancelReason === null ? [{ id: 'cancel', label: t('po.record.cancel'), tone: 'danger' as const, onSelect: () => actions?.daily?.onCancelOrder?.() }] : []),
   ]
@@ -283,6 +302,8 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
         />
       )}
       {!model.can.poManage && !model.can.poSend && <Banner tone="info" title={t('po.record.readOnly')} />}
+      {/* B-W2b-333: the send's approval (waiting for a yes, approved, refused) — B-W2b-305's API. */}
+      {depth && <ApprovalBanner order={order} model={depth} actions={actions?.depth} prefix={model.prefix} />}
       {/* Sent: read-only; Change starts the next revision (B-W2a-69; design Lines "Sent: read-only; 'Change' starts revision 2"). */}
       {['SENT', 'CONFIRMED', 'DECLINED', 'PARTLY_RECEIVED', 'RECEIVED'].includes(order.status) && order.lines.length > 0 && model.tab === 'lines' && (
         <Banner
@@ -303,6 +324,7 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
       <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>
         <div className="fw-by-main">
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
+          {model.tab === 'schedule' && depth && <ScheduleTab order={order} model={depth} actions={actions?.depth} />}
           {model.tab === 'answer' && <AnswerTab order={order} model={model} actions={actions} />}
           {model.tab === 'receipts' && <ReceiptsTab order={order} model={model} actions={actions} />}
           {model.tab === 'invoices' && invoices}
@@ -318,12 +340,21 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
 
       <OrderDialogs order={order} model={model} actions={actions} />
       <DailyDialogs order={order} model={model} actions={actions} />
+      {depth && <DepthDialogs order={order} model={depth} actions={actions?.depth} />}
+      {depth?.chase && <ChaseDialog model={depth.chase} status={order.status} can={depth.can} offline={model.live === 'offline'} actions={actions?.depth?.chase} />}
       {model.send && model.dialog?.kind === 'send' && (
         <DocumentSendView
           open
           model={model.send}
           actions={{ onField: actions?.onSend?.onField, onSend: actions?.onSend?.onSend, onClose: () => actions?.onDialog?.(null), onRetryChecks: actions?.onSend?.onRetryChecks, onNewLink: actions?.onSend?.onNewLink }}
-          extra={model.send.result ? null : <SendExtraFields order={order} model={model} actions={actions} defaultConfirmBy={model.sendFacts?.confirmBy ?? null} changes={model.sendFacts?.changes ?? null} />}
+          extra={
+            model.send.result ? null : (
+              <>
+                <SendApprovalNote model={depth} />
+                <SendExtraFields order={order} model={model} actions={actions} defaultConfirmBy={model.sendFacts?.confirmBy ?? null} changes={model.sendFacts?.changes ?? null} />
+              </>
+            )
+          }
         />
       )}
     </div>

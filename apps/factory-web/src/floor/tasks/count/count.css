@@ -1,0 +1,64 @@
+/*
+ * SCR-178 Count (B-W2b-310): layout only, inside the DS FloorFrame and the floor tasks' shared parts (../shared/view/tasks.css).
+ * Sizes read the floor tier's `--nds-density-*` tokens; colours are semantic `--nds-*` roles; no raw colour. The one-job screen
+ * stays centred in the frame (the Owner's width rule allows it for the floor).
+ */
+
+.fw-count {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* The units scanned in the bin: the big numeral under the bin's card (design floor.count "the count as a big numeral"). */
+.fw-count-numeral {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  line-height: 1;
+}
+.fw-count-numeral-value {
+  font-size: max(56px, calc(var(--nds-density-font-body) * 3));
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-count-numeral-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The last unit's line and its two ticks side by side; the ticks drop under it on a narrow frame. */
+.fw-count-last {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.fw-count-last > .fw-floor-notice {
+  flex: 1 1 22em;
+  min-width: 0;
+}
+
+/* A unit without a label: its heading and the pad, centred under it. */
+.fw-count-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-count-pad > .nds-floor-qty {
+  align-self: center;
+  width: 100%;
+  max-width: 760px;
+}

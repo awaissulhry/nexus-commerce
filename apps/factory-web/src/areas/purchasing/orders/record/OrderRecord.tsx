@@ -31,6 +31,7 @@ import {
   getDocuments,
   getOrder,
   getSupplierView,
+  isWaitingSend,
   previewBytes,
   previewHref,
   receiptsOf,
@@ -53,6 +54,9 @@ import { isDailyDialog, type SendExtra } from '../daily-model'
 import { detailsOf, OrderRecordView } from './view/OrderRecordView'
 // B-W2a-81: the Invoices tab is Finance's (areas/finance/payables/po-tab).
 import { PoInvoices } from '../../../finance/payables/po-tab/PoInvoices'
+// B-W2b-333: purchase orders in depth on screen (the depth parts read and written beside the order).
+import { copyableLines, DEPTH } from '../depth/model'
+import { DEPTH_PREFIX, useOrderDepth } from '../depth/use-order-depth'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -65,7 +69,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
-    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists', 'records', 'send']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'calendar-kit', 'lists', 'records', 'send']}>
       <RecordContainer orderId={orderId} />
     </WithMessages>
   )
@@ -176,17 +180,34 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   // Live: this order's events (and receipts against it) read it again; a dialog open → "changed · Reload".
   const reread = useCoalesced(() => void load(), 700)
+  // B-W2b-333: a depth dialog (or the chase) open keeps what it read: the page says it changed, as for its own dialogs.
+  const depthOpen = useRef(false)
   const live = useLive(
     (change) => {
       const mine = change.fields.purchaseOrderId === orderId
       if (!mine || !(change.type.startsWith('purchase_order.') || change.type.startsWith('inventory.receipt_'))) return
-      if (dialogRef.current && dialogRef.current.kind !== 'supplierView') setChanged({ at: new Date().toISOString() })
+      if ((dialogRef.current && dialogRef.current.kind !== 'supplierView') || depthOpen.current) setChanged({ at: new Date().toISOString() })
       else reread()
     },
     () => void load(),
   )
 
   const version = () => current.current?.version ?? 1
+
+  // B-W2b-333: the depth parts follow the order's version (every write moves it) and read it again after their own writes.
+  const depthPart = useOrderDepth({
+    api,
+    orderId,
+    order: order.status === 'ready' ? order.value : null,
+    permissions: session.permissions,
+    prefix,
+    tab,
+    today,
+    onChanged: () => void load(),
+    onNotice: (words) => setNotice({ tone: 'success', words }),
+  })
+  const sayDepth = useT(DEPTH)
+  depthOpen.current = depthPart.model.dialog !== null || depthPart.model.chase !== null
 
   /** One write; the order it answers replaces the page's, then the parts are read again. */
   const write = useCallback(
@@ -255,6 +276,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
         sendKey.current ?? newIdempotencyKey(),
       )
       setValue(answer.order)
+      // B-W2b-333: 202 — a switched-on approval rule asked a yes first; nothing was sent (the record's banner names who decides).
+      if (isWaitingSend(answer)) {
+        setDialog(null)
+        setNotice({ tone: 'info', words: phrase(`${DEPTH_PREFIX}approval.asked`, { approver: answer.approval.approver?.name ?? '' }) })
+        depthPart.reload()
+        loadParts()
+        return
+      }
       setSendResult({ delivery: answer.delivery, to: answer.sent.to, at: answer.sent.sentAt, linkUntil: answer.sent.link.expiresAt })
       loadParts()
     } catch (error) {
@@ -270,7 +299,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     } finally {
       setSending(false)
     }
-  }, [api, orderId, sending, check, fields, sendExtra, setValue, loadParts, load, t, td])
+  }, [api, orderId, sending, check, fields, sendExtra, setValue, loadParts, load, t, td, depthPart])
 
   const recordHref = `${prefix}/purchasing/orders/${orderId}`
   const sendModel: DocumentSendModel | null =
@@ -287,6 +316,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
             recordHref,
             timeZone: TIME_ZONE,
             preview: { src: preview.src, problem: preview.problem, openHref: can.cost && check.status === 'ready' ? previewHref(orderId, check.value.language) : null },
+            depthWords: (key) => sayDepth(key),
           },
           t,
         )
@@ -565,7 +595,17 @@ function RecordContainer({ orderId }: { orderId: string }) {
   useEffect(() => {
     if (params?.get('edit') === 'details' && order.status === 'ready' && !dialog) setDialog({ kind: 'details', draft: detailsOf(order.value) })
     if (params?.get('cancel') === '1' && order.status === 'ready' && !dialog) openCancel()
-  }, [params, order.status])
+    // B-W2b-333: the list's row verbs (Resend link, Duplicate, Chase) and a send check's Fix link (the rate at order).
+    if (params?.get('newLink') === '1' && order.status === 'ready' && !dialog && order.value.status === 'SENT') setDialog({ kind: 'newLink', message: '' })
+    if (params?.get('duplicate') === '1' && order.status === 'ready' && !depthPart.model.dialog) depthPart.actions.onDialog?.({ kind: 'duplicate', draft: { lineIds: copyableLines(order.value).map((line) => line.id), needDate: '' } })
+    if (params?.get('chase') === '1' && order.status === 'ready' && !depthPart.model.chase) depthPart.actions.chase?.onOpen?.()
+    if (params?.get('edit') === 'rate' && order.status === 'ready' && !depthPart.model.dialog && depthPart.model.depth.value?.currency.takesRate) depthPart.actions.onDialog?.({ kind: 'rate', rate: depthPart.model.depth.value.currency.rateAtOrder ?? '' })
+    const copiedFrom = params?.get('copiedFrom')
+    if (copiedFrom && order.status === 'ready') {
+      setNotice({ tone: 'success', words: phrase(`${DEPTH_PREFIX}notice.copied`, { number: copiedFrom }) })
+      router.replace(`${recordHref}?tab=${tab}`)
+    }
+  }, [params, order.status, depthPart.model.depth.value?.currency.takesRate])
 
   const model: OrderRecordModel = {
     prefix,
@@ -591,6 +631,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     dialogProblem,
     timeZone: TIME_ZONE,
     today,
+    depth: depthPart.model,
   }
 
   const panels =
@@ -611,7 +652,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
           setDialogProblem(null)
           if (next?.kind === 'send') openSend()
           else setDialog(next)
-          if (next === null && (params?.get('edit') || params?.get('cancel'))) router.replace(`${recordHref}?tab=${tab}`)
+          if (next === null && (params?.get('edit') || params?.get('cancel') || params?.get('newLink'))) router.replace(`${recordHref}?tab=${tab}`)
           if (next && isDailyDialog(next) && (!dialog || dialog.kind !== next.kind)) dailyKey.current = newIdempotencyKey()
           if (next?.kind === 'review' && !answer.value) loadParts()
         },
@@ -632,6 +673,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
           onMaterialQuery: searchMaterials,
           onMaterial: (id) => void pickMaterial(id),
           onSave: () => void saveLine(),
+        },
+        depth: {
+          ...depthPart.actions,
+          // The list's address terms are dropped once the dialog they opened closes.
+          onDialog: (next) => {
+            depthPart.actions.onDialog?.(next)
+            if (next === null && (params?.get('duplicate') || params?.get('edit') === 'rate')) router.replace(`${recordHref}?tab=${tab}`)
+          },
+          chase: {
+            ...depthPart.actions.chase,
+            onClose: () => {
+              depthPart.actions.chase?.onClose?.()
+              if (params?.get('chase')) router.replace(`${recordHref}?tab=${tab}`)
+            },
+          },
         },
         onRemoveLines: () => void removeLines(),
         onEditLine: (lineId) => void editLineDialog(lineId),
