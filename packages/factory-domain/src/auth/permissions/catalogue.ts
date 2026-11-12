@@ -200,6 +200,8 @@ import { SALES_INQUIRIES_DEFINITIONS, SALES_INQUIRIES_PERMISSIONS } from '../../
 import { INVENTORY_RULES_DEFINITIONS, INVENTORY_RULES_PERMISSIONS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (planning.planned.convert).
 import { PLANNING_PLANNED_DEFINITIONS, PLANNING_PLANNED_PERMISSIONS } from '../../planning/planned-orders/permissions'
+// B-W2b-301: promise dates (planning.promise.view, planning.promise.manage).
+import { PLANNING_PROMISE_DEFINITIONS, PLANNING_PROMISE_PERMISSIONS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (purchasing.suppliers.status).
 import { SUPPLIERS_DEPTH_DEFINITIONS, SUPPLIERS_DEPTH_PERMISSIONS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (inventory.tasks.manage: tasks by hand, handed out, changed, cancelled).
@@ -211,6 +213,8 @@ import { INVENTORY_REPORTS_DEFINITIONS, INVENTORY_REPORTS_PERMISSIONS } from '..
 // B-W2b-315: supplier bank details with change control (purchasing.bank.*, portal.supplierBank.*), qualification and the PO's compliance gate.
 import { BANK_DEFINITIONS, BANK_PERMISSIONS, PORTAL_BANK_DEFINITIONS, PORTAL_BANK_PERMISSIONS } from '../../purchasing/bank/permissions'
 import { QUALIFICATION_DEFINITIONS, QUALIFICATION_PERMISSIONS } from '../../purchasing/qualification/permissions'
+// B-W2b-319: the production strategy per item (planning.strategy.manage); the one demand view reads with planning.view.
+import { PLANNING_STRATEGY_DEFINITIONS, PLANNING_STRATEGY_PERMISSIONS } from '../../planning/strategy/permissions'
 // B-W2b-299: counts in depth (inventory.counts.scan: count by scanning every unit, shared with the floor).
 import { INVENTORY_COUNTS_DEPTH_DEFINITIONS, INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS, INVENTORY_COUNTS_DEPTH_PERMISSIONS } from '../../inventory/counts-depth/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
@@ -925,6 +929,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_RULES_DEFINITIONS,
   // B-W2b-293: planned work and subcontract orders (area `planning`, declared above).
   PLANNING_PLANNED_DEFINITIONS,
+  PLANNING_PROMISE_DEFINITIONS,
   // B-W2b-311: suppliers in depth (area `purchasing`, declared above).
   SUPPLIERS_DEPTH_DEFINITIONS,
   // B-W2b-292: the warehouse task inbox (area `inventory`).
@@ -937,6 +942,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   BANK_DEFINITIONS,
   PORTAL_BANK_DEFINITIONS,
   QUALIFICATION_DEFINITIONS,
+  // B-W2b-319: the production strategy per item (area `planning`, declared above).
+  PLANNING_STRATEGY_DEFINITIONS,
   // B-W2b-299: counts in depth (area `inventory`).
   INVENTORY_COUNTS_DEPTH_DEFINITIONS,
 ])
@@ -1229,6 +1236,8 @@ for (const name of LABEL_ARTWORK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of COMPLIANCE_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-263: Time & action.
 for (const name of PLANNING_MILESTONES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-319: the production strategy per item.
+for (const name of PLANNING_STRATEGY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-248: made-to-measure rules.
 for (const name of PRODUCT_MTM_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-264: sourcing & claims.
@@ -1255,6 +1264,7 @@ for (const name of SALES_INQUIRIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of INVENTORY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-293: planned work and subcontract orders.
 for (const name of PLANNING_PLANNED_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PLANNING_PROMISE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-311: suppliers in depth.
 for (const name of SUPPLIERS_DEPTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-292: the warehouse task inbox.

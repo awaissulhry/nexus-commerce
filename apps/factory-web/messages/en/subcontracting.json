@@ -129,8 +129,7 @@
     "workshop": "At workshops",
     "due": "Due back this week",
     "late": "Late",
-    "balance": "Balance open",
-    "balanceLater": "The material balance per order comes with a later step: its count is not known yet."
+    "balance": "Balance open"
   },
   "view": {
     "open": "Open orders",
@@ -138,6 +137,7 @@
     "workshop": "At workshops",
     "due": "Due back this week",
     "late": "Late",
+    "balance": "Balance open",
     "drafts": "Drafts",
     "back": "Back, to close",
     "closed": "Closed",
@@ -233,7 +233,6 @@
     "workshopValue": "{workshop}: {lines} · {value}",
     "workshopLines": "{workshop}: {lines}",
     "noValue": "not valued",
-    "daysOutLater": "Days out (ageing) come with a later step.",
     "empty": "None of our material is at a workshop",
     "emptyBody": "Material goes to a workshop with a subcontract order’s kit, on its DDT for work on our behalf.",
     "noMatch": "No stock line matches the search.",

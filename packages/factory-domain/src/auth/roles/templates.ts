@@ -51,6 +51,8 @@ import { SALES_INQUIRIES_ADDS } from '../../sales/inquiries/permissions'
 import { INVENTORY_RULES_ADDS } from '../../inventory/posting/permissions'
 // B-W2b-293: planned work and subcontract orders made real (the planner and the production manager).
 import { PLANNING_PLANNED_ADDS } from '../../planning/planned-orders/permissions'
+// B-W2b-301
+import { PLANNING_PROMISE_ADDS } from '../../planning/promise/permissions'
 // B-W2b-311: suppliers in depth (the buyer and quality set a supplier's status).
 import { SUPPLIERS_DEPTH_ADDS } from '../../purchasing/suppliers-depth/permissions'
 // B-W2b-292: the warehouse task inbox (the warehouse hands out the floor's tasks).
@@ -87,6 +89,8 @@ import { DECLARATIONS_ADDS } from '../../compliance/declarations/permissions'
 import { SALES_SAMPLE_DECISIONS_ADDS } from '../../sales/sample-decisions/permissions'
 // B-W2b-263: Time & action (pre-production gates).
 import { PLANNING_MILESTONES_ADDS } from '../../planning/milestones/permissions'
+// B-W2b-319: the production strategy per item.
+import { PLANNING_STRATEGY_ADDS } from '../../planning/strategy/permissions'
 // B-W2b-247: the colour library and the brands' branding sets.
 import { PRODUCT_COLOURS_ADDS } from '../../product/colours/permissions'
 import { PRODUCT_BRANDING_ADDS } from '../../product/branding-sets/permissions'
@@ -951,6 +955,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INVENTORY_RULES_ADDS[key] ?? []) : []),
   // B-W2b-293
   ...(audience === 'office' ? (PLANNING_PLANNED_ADDS[key] ?? []) : []),
+  // B-W2b-301
+  ...(audience === 'office' ? (PLANNING_PROMISE_ADDS[key] ?? []) : []),
   // B-W2b-311
   ...(audience === 'office' ? (SUPPLIERS_DEPTH_ADDS[key] ?? []) : []),
   // B-W2b-292
@@ -962,6 +968,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-315
   ...(audience === 'office' ? (BANK_ADDS[key] ?? []) : []),
   ...(audience === 'office' ? (QUALIFICATION_ADDS[key] ?? []) : []),
+  // B-W2b-319
+  ...(audience === 'office' ? (PLANNING_STRATEGY_ADDS[key] ?? []) : []),
   // B-W2b-299
   ...((audience === 'office' ? INVENTORY_COUNTS_DEPTH_ADDS : INVENTORY_COUNTS_DEPTH_FLOOR_ADDS)[key] ?? [])]
 /**

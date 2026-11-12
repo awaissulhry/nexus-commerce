@@ -1,0 +1,403 @@
+{
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi"
+  },
+  "held": {
+    "busy": "In corso…",
+    "permission": "Serve {permission}: chiedi a un amministratore."
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vederlo o farlo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un’altra società.",
+    "write": "Non è stato registrato. Riprova.",
+    "changed": "Qualcuno ha modificato l’ordine nel frattempo, o il suo stato non lo consente più: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova."
+  },
+  "tab": {
+    "balance": "Saldo materiale",
+    "cost": "Costo"
+  },
+  "tile": {
+    "balanceFailed": "Impossibile leggere i saldi aperti: il conteggio non è noto."
+  },
+  "grid": {
+    "balance": "Saldo aperto",
+    "allBack": "tutti i capi rientrati"
+  },
+  "terms": {
+    "title": "Contratto scritto",
+    "lawPlain": "Il contratto di subfornitura si stipula in forma scritta, a pena di nullità: le condizioni firmate indicano la lavorazione, il prezzo, i tempi di consegna e i termini di pagamento.",
+    "loading": "Lettura del contratto scritto…",
+    "slow": "Ancora in lettura del contratto scritto…",
+    "failed": "Impossibile caricare il contratto scritto",
+    "covered": "Revisione {revision}: {title}",
+    "signed": "Firmato il {date}",
+    "valid": "copre dal {from} al {until}",
+    "validOpen": "copre dal {from}, senza scadenza",
+    "superseded": "Sostituito poi",
+    "supersededBody": "Una revisione successiva lo ha sostituito; copre comunque la data di questo ordine.",
+    "terminated": "Cessato poi",
+    "ending_one": "Scade tra {count} giorno",
+    "ending_other": "Scade tra {count} giorni",
+    "download": "Scarica il contratto firmato",
+    "fileGone": "Il file firmato non c’è più.",
+    "held": {
+      "noFile": "Nessun file firmato è conservato con questa revisione.",
+      "notReady": "Il file firmato non è ancora disponibile (in controllo)."
+    },
+    "none": {
+      "base": "Nessun contratto scritto firmato con {workshop} copre il {date}.",
+      "draft": "La revisione {revision} è scritta e attende la firma.",
+      "none": "Con questo terzista non è ancora scritto alcun contratto.",
+      "otherDays": "I contratti firmati coprono altri giorni: per questi serve una nuova revisione."
+    }
+  },
+  "balance": {
+    "intro": "Il nostro materiale resta nostro mentre è presso il terzista. Il saldo mostra cosa è rientrato nei capi, cosa è rientrato non usato e cosa è ancora fuori.",
+    "loading": "Lettura del saldo materiale…",
+    "slow": "Ancora in lettura del saldo materiale…",
+    "failed": "Impossibile caricare il saldo materiale",
+    "empty": {
+      "title": "Ancora nulla inviato",
+      "body": "Il saldo parte dal kit: quando il materiale va al terzista, ogni materiale inviato ha qui la sua riga."
+    },
+    "openAfterBack_one": "Tutti i capi sono rientrati e su {count} riga c’è ancora materiale fuori: registralo come usato, reso o scartato (una perdita).",
+    "openAfterBack_other": "Tutti i capi sono rientrati e su {count} righe c’è ancora materiale fuori: registralo come usato, reso o scartato (una perdita).",
+    "line": "Riga {line}",
+    "lineLabel": "Riga {line}, {code}",
+    "lot": "lotto {code}",
+    "hide": "pelle {code}",
+    "sentOn": "inviato il {date}",
+    "bridge": "Il saldo della riga {line}",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "rung": {
+      "sent": "Inviato",
+      "used": "Nei capi (usato)",
+      "returned": "Reso non usato",
+      "scrapped": "Scartato dal terzista",
+      "open": "Ancora aperto"
+    },
+    "flagsLabel": "Da controllare",
+    "flagName": {
+      "SHORT_AT_WORKSHOP": "Mancante all’arrivo",
+      "NOT_DECLARED": "Non dichiarato",
+      "RETURN_NOT_BACK": "Reso non rientrato",
+      "BACK_NOT_DECLARED": "Rientrato, non dichiarato",
+      "OPEN_AFTER_BACK": "Aperto dopo il rientro"
+    },
+    "flag": {
+      "SHORT_AT_WORKSHOP": "Il terzista ha contato {checked} {uom} dei {sent} inviati: {short} mancanti all’arrivo.",
+      "NOT_DECLARED": "La merce è rientrata, ma il terzista non ha ancora dichiarato quanto ha usato di questo materiale.",
+      "RETURN_NOT_BACK": "Dichiarati resi {returned} {uom}; finora ne sono rientrati {back} nelle nostre ubicazioni.",
+      "BACK_NOT_DECLARED": "Sono rientrati {back} {uom} nelle nostre ubicazioni; il terzista ne ha dichiarati resi {returned}.",
+      "OPEN_AFTER_BACK": "Tutti i capi sono rientrati e {open} {uom} sono ancora fuori: registrali come usati, resi o scartati (una perdita)."
+    },
+    "fact": {
+      "checked": "Contato dal terzista",
+      "notChecked": "non contato",
+      "announced": "Rientro annunciato",
+      "back": "Rientrato da noi",
+      "daysOut": "Fuori da",
+      "nothingOut": "nulla fuori"
+    },
+    "kind": {
+      "DECLARED": "Dichiarato",
+      "ADJUSTMENT": "Rettifica"
+    },
+    "rows": {
+      "label": "Registrazioni della riga {line}",
+      "none": "Ancora nulla registrato: la dichiarazione del terzista arriva con il rientro.",
+      "what": "Cosa",
+      "with": "Con",
+      "why": "Perché",
+      "booked": "Registrato da",
+      "reported": "comunicato il {date}",
+      "receipt": "Rientro {seq}",
+      "system": "Il sistema"
+    },
+    "held": {
+      "nothingSent": "Ancora nulla inviato: il saldo parte dal kit.",
+      "nothingOpen": "Nulla è aperto: tutto il materiale inviato è dichiarato.",
+      "notDeclared": "Il terzista non ha ancora dichiarato questo materiale: registra prima la sua dichiarazione.",
+      "server": "Lo stato dell’ordine ora non lo consente: rileggilo.",
+      "reasonLong": "Al massimo 2000 caratteri."
+    },
+    "declare": {
+      "open": "Registra la dichiarazione del terzista",
+      "title": "La dichiarazione del terzista per {number}",
+      "intro": "Cosa dice il terzista del materiale che gli abbiamo inviato: usato nei capi, reso non usato, scartato da lui. Precompilato con quanto suggerisce il rientro: controllalo con i documenti del terzista.",
+      "receipt": "Con il rientro",
+      "receiptHint": "Il rientro con cui è arrivata la dichiarazione.",
+      "noReceipt": "Nessun rientro",
+      "receiptOption": "Rientro {seq} del {date}",
+      "lineOpen": "Aperto {open} dei {sent} inviati.",
+      "returnedHint": "Rientrato da noi: {back}.",
+      "fieldOf": "{what}, riga {line}",
+      "note": "Nota",
+      "noteHint": "Facoltativa; resta con ogni riga che registra.",
+      "question_one": "Registrare la dichiarazione per {count} riga?",
+      "question_other": "Registrare la dichiarazione per {count} righe?",
+      "confirm": "Registra la dichiarazione",
+      "nothingMoves": "Ancora nulla si muove: scrivi almeno una quantità.",
+      "costFollows": "Il costo del materiale di {workOrder} segue i movimenti.",
+      "held": {
+        "number": "Riga {line}: ogni quantità è un numero da 0 in su, al massimo 4 decimali.",
+        "open": "Riga {line}: sono ancora aperti solo {open} {uom}.",
+        "nothing": "Dichiara almeno una quantità sopra 0."
+      }
+    },
+    "adjust": {
+      "open": "Registra consumo in più o in meno",
+      "title": "Consumo in più o in meno, riga {line} {code}",
+      "intro": "Cosa comunica il terzista dopo il rientro: usato, reso o scartato in più o in meno di quanto dichiarato. Ogni rettifica dice perché.",
+      "change": {
+        "used": "Variazione dell’usato",
+        "returned": "Variazione del reso",
+        "scrapped": "Variazione dello scarto"
+      },
+      "changeHint": "+ in più, − in meno; vuoto: nessuna variazione.",
+      "reason": "Perché",
+      "reasonHint": "Cosa ha comunicato il terzista, a parole.",
+      "question": "Registrare la rettifica sulla riga {line}?",
+      "confirm": "Registra la rettifica",
+      "review": "La riga prima e dopo",
+      "lossHint": "Quanto è ancora aperto quando tutti i capi sono rientrati è una perdita: registralo come usato o scartato.",
+      "held": {
+        "number": "Ogni variazione è un numero (+ o −), al massimo 4 decimali.",
+        "nothing": "Varia almeno una quantità (in su o in giù).",
+        "belowZero": "{what} andrebbe sotto 0 (è {now} {uom}).",
+        "moreThanSent": "Usato, reso e scartato supererebbero i {sent} {uom} inviati.",
+        "reason": "Di’ perché: le parole del terzista."
+      }
+    },
+    "move": {
+      "issue": "Riga {line} {item}: {quantity} {uom} usati, prelevati dall’ubicazione del terzista per {workOrder}.",
+      "giveBack": "Riga {line} {item}: {quantity} {uom} usati in meno, da {workOrder} tornano all’ubicazione del terzista.",
+      "scrap": "Riga {line} {item}: {quantity} {uom} scartati, eliminati presso l’ubicazione del terzista.",
+      "unscrap": "Riga {line} {item}: {quantity} {uom} scartati in meno, lo scarto annullato presso l’ubicazione del terzista.",
+      "returned": "Riga {line} {item}: {quantity} {uom} resi non usati — nessun movimento qui (lo ha fatto il rientro)."
+    },
+    "refused": {
+      "period": "Il giorno della comunicazione cade in un periodo contabile chiuso: chiedi al commercialista.",
+      "reportedAt": "Il giorno della comunicazione non è accettato: non dopo adesso, non prima dell’invio dell’ordine.",
+      "receipt": "Quel rientro non è di questo ordine.",
+      "notDeclared": "Il terzista non ha ancora dichiarato questo materiale: registra prima la sua dichiarazione.",
+      "reason": "Di’ perché, al massimo 2000 caratteri.",
+      "belowZero": "Una quantità andrebbe sotto 0: rileggi la riga.",
+      "open": "Più di quanto è ancora aperto: rileggi la riga."
+    },
+    "booked_one": "Registrato: il magazzino segue con {count} movimento.",
+    "booked_other": "Registrato: il magazzino segue con {count} movimenti.",
+    "bookedWaiting_one": "Registrato: il magazzino segue con {count} movimento; il costo dell’ordine di produzione attende (altra valuta).",
+    "bookedWaiting_other": "Registrato: il magazzino segue con {count} movimenti; il costo dell’ordine di produzione attende (altra valuta)."
+  },
+  "cost": {
+    "intro": "Il compenso per i capi più materiale e trasporto, imputati a {workOrder}.",
+    "loading": "Lettura del costo…",
+    "slow": "Ancora in lettura del costo…",
+    "failed": "Impossibile caricare il costo sull’ordine di produzione",
+    "noGrain": "Prezzi e importi richiedono il permesso sui costi (money.cost): sono mostrati i capi, non quanto costano.",
+    "empty": {
+      "title": "Ancora nessun costo",
+      "body": "Si registra al rientro della merce: il compenso di ogni capo rientrato buono va sull’ordine di produzione."
+    },
+    "bridge": "Costo sull’ordine di produzione",
+    "rung": {
+      "earnedFee": "Compenso per i capi rientrati buoni",
+      "feeAtWorkshopPrice": "Compenso al prezzo del terzista",
+      "transport": "Trasporto",
+      "material": "Materiale fornito dal terzista",
+      "other": "Altri addebiti",
+      "orderCost": "Costo dell’ordine → {workOrder}"
+    },
+    "earnedLine_one": "Riga {line} {code}: {count} capo rientrato buono × {fee} = {amount}",
+    "earnedLine_other": "Riga {line} {code}: {count} capi rientrati buoni × {fee} = {amount}",
+    "ledger": {
+      "holds_one": "Il costo di {workOrder} contiene {amount} di questo ordine ({count} registrazione).",
+      "holds_other": "Il costo di {workOrder} contiene {amount} di questo ordine ({count} registrazioni).",
+      "currency": "L’ordine {order} è in {currency}; {workOrder} tiene il costo in {woCurrency} (nessun cambio): per ora lì non si registra nulla."
+    },
+    "op": {
+      "title": "Per lavorazione",
+      "operation": "Lavorazione",
+      "line": "Riga {line}",
+      "fee": "Compenso a capo",
+      "backGood": "Rientrati buoni",
+      "waiting": "In attesa di collaudo",
+      "byFee": "Pagati al prezzo del terzista",
+      "earned": "Compenso maturato",
+      "waitingHint": "I capi in attesa del collaudo in entrata maturano il compenso quando lo superano."
+    },
+    "entries": "Addebiti registrati",
+    "entriesNone": "Nessun addebito registrato: il compenso maturato si registra da solo al rientro della merce.",
+    "entry": {
+      "when": "Quando",
+      "what": "Cosa",
+      "price": "Prezzo",
+      "amount": "Importo",
+      "receipt": "Con",
+      "onWorkOrder": "Sull’ordine di produzione",
+      "why": "Perché",
+      "actions": "Azioni",
+      "posted": "Registrato",
+      "waiting": "In attesa",
+      "takenBack": "stornato",
+      "receiptSeq": "Rientro {seq}",
+      "reversal": "Storno: {kind}",
+      "fee_one": "Compenso, riga {line}: {count} capo",
+      "fee_other": "Compenso, riga {line}: {count} capi",
+      "one": "{kind}",
+      "many": "{kind} × {quantity}"
+    },
+    "kind": {
+      "FEE": "Compenso al prezzo del terzista",
+      "TRANSPORT": "Trasporto",
+      "MATERIAL": "Materiale",
+      "OTHER": "Altro addebito"
+    },
+    "held": {
+      "draft": "L’ordine è una bozza: la lavorazione non costa nulla finché non viene inviato.",
+      "cancelled": "L’ordine è annullato: la lavorazione non costa nulla.",
+      "server": "Lo stato dell’ordine ora non lo consente: rileggilo.",
+      "isReversal": "Questa registrazione ne storna un’altra: registra di nuovo il costo.",
+      "takenBack": "Questa registrazione è già stata stornata."
+    },
+    "book": {
+      "open": "Registra un addebito",
+      "title": "Registra un addebito su {number}",
+      "kind": "Cosa",
+      "kindHint": {
+        "FEE": "Il compenso dei capi rientrati buoni al prezzo del terzista (la sua fattura, un prezzo concordato): quei capi escono dal compenso maturato, così ogni capo si paga una volta.",
+        "TRANSPORT": "Trasporto verso il terzista o dal terzista.",
+        "MATERIAL": "Materiale fornito e addebitato dal terzista.",
+        "OTHER": "Altro: di’ a cosa si riferisce."
+      },
+      "operation": "Lavorazione",
+      "pickOperation": "Scegli la riga",
+      "operationOption_one": "Riga {line} {code}: {count} capo da registrare",
+      "operationOption_other": "Riga {line} {code}: {count} capi da registrare",
+      "pieces": "Capi",
+      "quantity": "Quantità",
+      "price": "Prezzo unitario ({currency})",
+      "receipt": "Con il rientro",
+      "noReceipt": "Nessun rientro",
+      "receiptOption": "Rientro {seq} del {date}",
+      "what": "A cosa si riferisce",
+      "reason": "Nota",
+      "question": "Registrare {kind} su {workOrder}?",
+      "confirm": "Registra l’addebito",
+      "onWorkOrder": "{quantity} × {price} = {amount} sul costo di {workOrder}.",
+      "feeOnce_one": "{count} capo della riga {line} esce dal compenso maturato: si paga una volta.",
+      "feeOnce_other": "{count} capi della riga {line} escono dal compenso maturato: ognuno si paga una volta.",
+      "held": {
+        "operation": "Scegli la riga i cui capi il compenso paga.",
+        "pieces": "Un compenso paga capi interi: 1 o più.",
+        "bookable_one": "La riga {line} ha {count} capo rientrato buono senza compenso registrato.",
+        "bookable_other": "La riga {line} ha {count} capi rientrati buoni senza compenso registrato.",
+        "quantity": "Una quantità sopra 0, al massimo 4 decimali.",
+        "price": "Un prezzo da 0 in su, al massimo 6 decimali.",
+        "what": "Di’ a cosa si riferisce l’addebito."
+      }
+    },
+    "reverse": {
+      "open": "Storna",
+      "openOf": "Storna: {what}",
+      "title": "Storna un addebito",
+      "reason": "Perché",
+      "question": "Stornare {what}?",
+      "confirm": "Storna",
+      "minus": "{amount} sul costo di {workOrder}.",
+      "itsAmount": "Il suo importo viene tolto",
+      "once": "Una registrazione si storna una volta, per intero; se poi è dovuta, registra di nuovo il costo.",
+      "held": {
+        "reason": "Di’ perché la storni."
+      }
+    },
+    "refused": {
+      "entry": "Questa registrazione non si può stornare (già stornata, o ne storna un’altra).",
+      "operation": "Solo un compenso indica una riga: scegli la riga per un compenso, nessuna per altri addebiti.",
+      "bookable": "Più capi di quelli rientrati buoni senza compenso: rileggi la riga.",
+      "reason": "Di’ perché, al massimo 2000 caratteri.",
+      "occurredAt": "Il costo è sostenuto adesso o prima, non dopo.",
+      "receipt": "Quel rientro non è di questo ordine."
+    },
+    "invoice": {
+      "title": "Le fatture del terzista",
+      "number": "Fattura",
+      "line": "Riga",
+      "description": "Descrizione",
+      "net": "Imponibile",
+      "match": "Abbinamento",
+      "none": "Nessuna fattura del terzista indica ancora questo ordine.",
+      "hint": "L’abbinamento si fa in Finanza › Fatture fornitori.",
+      "matchStatus": {
+        "PENDING": "Non ancora abbinata",
+        "MATCHED": "Abbinata",
+        "DIFFERENCES": "Differenze",
+        "NO_PO": "Senza riga d’ordine",
+        "WAITING_GOODS": "Attende la merce",
+        "OTHER": "Altro"
+      }
+    },
+    "done": {
+      "booked": "Registrato: {kind} sul costo dell’ordine di produzione.",
+      "reversed": "Stornato: il costo dell’ordine di produzione segue.",
+      "waiting": "Registrato sull’ordine; il costo dell’ordine di produzione attende (altra valuta)."
+    }
+  },
+  "ageing": {
+    "longOut": "Fuori da molto",
+    "since": "dal {date}",
+    "workshop": "il più vecchio fuori da {days}",
+    "workshopLong": "il più vecchio fuori da {days}, {count} fuori da molto",
+    "failed": "Impossibile leggere i giorni fuori",
+    "truncated": "I giorni fuori sono letti solo dai movimenti più recenti: filtra per terzista per vederli tutti.",
+    "how": "I giorni fuori contano dalla parte più vecchia ancora fuori (primo entrato, primo uscito); oltre {days} giorni una riga è fuori da molto."
+  },
+  "balanceView": {
+    "intro": "Tutti i capi di queste lavorazioni sono rientrati, ma materiale del kit che abbiamo inviato è ancora fuori: registralo nel Saldo materiale dell’ordine.",
+    "tableLabel": "Lavorazioni rientrate con materiale ancora aperto",
+    "count_one": "{count} lavorazione",
+    "count_other": "{count} lavorazioni",
+    "search": "Cerca ordine, terzista o ordine di produzione",
+    "export_one": "Esporta {count} lavorazione (CSV)",
+    "export_other": "Esporta {count} lavorazioni (CSV)",
+    "failed": "Impossibile caricare i saldi aperti",
+    "empty": {
+      "title": "Nessun saldo aperto",
+      "body": "Ogni lavorazione rientrata ha il materiale dichiarato: nulla di quanto inviato è senza riscontro."
+    },
+    "lines": "{open} di {sent}",
+    "since": "dal {date}",
+    "col": {
+      "open": "Ancora aperto",
+      "lines": "Righe aperte",
+      "oldest": "Fuori dal",
+      "daysOut": "Giorni fuori"
+    }
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}
