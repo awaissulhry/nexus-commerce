@@ -480,6 +480,27 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   OUTBOUND message on the Party thread; the task done). Events `supplier_questionnaire.*` (factory-domain
   `supplier-questionnaire/events.ts`). PG tests: `questionnaire/questionnaire.pg.vitest.test.ts`.
 
+## Purchase orders in depth (`src/modules/purchasing/po-depth/`, B-W2b-296; SCM-052, SCM-061, SCM-065, SCM-066, SCM-088, SCM-147)
+- Its routes and manifest lines are in purchasing's routes.ts / manifest.ts (one block each: a folder with a routes file is not
+  looked into by the autoloader).
+- Rules in factory-domain `purchasing/po-depth/` (schedule, dates, currency, ship-to, tolerances; send-check codes in `codes.ts`,
+  listed by `purchasing/orders` SEND_CHECK_CODES). Office routes (purchasing.view / .manage; one command on the order, its version):
+  `GET /purchasing/orders/:id/depth` (deliveries, the supplier's days and their history, rate + value (money.cost), ship-to, each
+  line's receipt tolerance), `PUT|DELETE …/lines/:lineId/deliveries` (a DRAFT line split by day, Σ = the line, the line's need
+  date = the first day), `POST …/lines/:lineId/supplier-date` (a delivery's first day; else a move with its PoDateChange row; a
+  scheduled line's own day follows its earliest delivery with a row of its own), `PUT …/rate` (DRAFT in another currency;
+  `value.ts refreshCompanyValue` keeps companyNetAmount current from orders.ts refreshTotal), `PUT …/ship-to`.
+- Hooks other files call (`hooks.ts`, no command imports): lines.ts (remove deliveries first; a scheduled line's quantity, unit and
+  need date are refused alone), revisions/change.ts (deliveries lose the supplier's days), confirm/answer.ts, portal-orders/answer.ts,
+  confirm/decide.ts (a line confirmed as asked confirms its deliveries), inventory/receipts/record.ts (`receiptPlaceOf`: a ship-to
+  order lands on the workshop's place; the floor is refused). views.ts readFacts/checksOf add the depth facts and checks; send.ts
+  prints the ship-to address and the deliveries.
+- Delivery tolerances: `GET|POST /purchasing/tolerances`, `PATCH …/:id`, `POST …/:id/archive|reactivate`
+  (purchasing.tolerances.manage over the company; every company's: a role over every company). Read at every receipt by
+  `purchasing/receiving.ts receiptTolerancesOf` (record.ts, receiving/progress.ts, receipts/reverse.ts): the line's own area
+  tolerance, else the most specific ACTIVE rule; beyond it BLOCK refuses and APPROVAL refuses too (no receipt approval kind).
+  Events purchase_order.dates_confirmed | date_changed, delivery_tolerance.changed. PG: `po-depth/po-depth.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or

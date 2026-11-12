@@ -10,6 +10,7 @@ import { officeContextOf, officeOrder, type OrderRow } from '../store'
 import type { OrderDetail } from '../views'
 import { keptForAudit, pricesOf, readState, stateOf } from './state'
 import { closeConfirmTasks } from '../portal-orders/tasks'
+import { clearDeliveryConfirmations } from '../po-depth/hooks'
 
 /**
  * Change: the next revision of a sent purchase order (B-W2a-52; SCM-058; design purchasing.orders record › Lines "Sent:
@@ -80,6 +81,8 @@ export async function startRevisionInCommand(
       version: { increment: 1 },
     },
   })
+  // B-W2b-296: the deliveries lose the supplier's days with the lines (the next send refuses an earlier revision's).
+  await clearDeliveryConfirmations(tools, current.id)
   // B-W2b-174: the supplier's request to confirm the revision it held is withdrawn (the next send asks again).
   await closeConfirmTasks(tools, current.id, 'CANCELLED')
   return { revision, from, revokedLinkIds, kept }

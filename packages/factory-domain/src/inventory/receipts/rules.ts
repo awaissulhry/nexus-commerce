@@ -91,6 +91,8 @@ export interface LineDifference {
   /** after − expected: + over, − short. */
   readonly difference: string
   readonly tolerancePct: string
+  /** B-W2b-296 (SCM-061): the tolerance under, when it differs from the one over (a delivery tolerance: +10 % / −5 %). */
+  readonly underPct: string
   /** The most the line may bring without a reason (expected + tolerance). */
   readonly upTo: string
   readonly kind: Difference
@@ -98,14 +100,18 @@ export interface LineDifference {
   readonly complete: boolean
 }
 
-/** One order line after a receipt: received before + now against what it expects, with its tolerance either way. */
-export function lineDifference(facts: { readonly expected: DecimalInput; readonly receivedBefore: DecimalInput; readonly receiving: DecimalInput; readonly tolerancePct?: DecimalInput | null }): LineDifference {
+/**
+ * One order line after a receipt: received before + now against what it expects, with its tolerance either way. B-W2b-296
+ * (SCM-061): `underPct`, when given, is the tolerance under (a delivery tolerance's); else the one over serves both ways.
+ */
+export function lineDifference(facts: { readonly expected: DecimalInput; readonly receivedBefore: DecimalInput; readonly receiving: DecimalInput; readonly tolerancePct?: DecimalInput | null; readonly underPct?: DecimalInput | null | undefined }): LineDifference {
   const expected = new Dec(facts.expected)
   const before = new Dec(facts.receivedBefore)
   const after = before.plus(facts.receiving)
   const tolerance = toleranceOf(facts.tolerancePct)
+  const under = facts.underPct === undefined || facts.underPct === null ? tolerance : Dec.min(HUNDRED, toleranceOf(facts.underPct))
   const upTo = expected.times(HUNDRED.plus(tolerance)).dividedBy(HUNDRED)
-  const atLeast = expected.times(HUNDRED.minus(tolerance)).dividedBy(HUNDRED)
+  const atLeast = expected.times(HUNDRED.minus(under)).dividedBy(HUNDRED)
   const kind: Difference = after.equals(expected) ? 'EXACT' : after.greaterThan(upTo) ? 'OVER' : after.lessThan(atLeast) ? 'SHORT' : 'WITHIN_TOLERANCE'
   const open = Dec.max(ZERO, expected.minus(after))
   return {
@@ -116,6 +122,7 @@ export function lineDifference(facts: { readonly expected: DecimalInput; readonl
     open: kind === 'SHORT' ? quantityText(open) : quantityText(ZERO),
     difference: quantityText(after.minus(expected)),
     tolerancePct: tolerance.toString(),
+    underPct: under.toString(),
     upTo: quantityText(upTo.toDecimalPlaces(QUANTITY_SCALE, Dec.ROUND_DOWN)),
     kind,
     complete: kind !== 'SHORT',
@@ -125,7 +132,13 @@ export function lineDifference(facts: { readonly expected: DecimalInput; readonl
 /** The words of a line's difference, for the receipt's notes (and the refusal of an over-delivery without a reason). */
 export function differenceWords(label: string, line: LineDifference, baseUom: Uom): string {
   const u = unitText(baseUom)
-  const tolerance = new Dec(line.tolerancePct).isZero() ? 'no tolerance' : `tolerance ${line.tolerancePct}%`
+  // B-W2b-296: a tolerance that differs over and under says both (+10% / −5%).
+  const tolerance =
+    line.underPct !== undefined && !new Dec(line.underPct).equals(new Dec(line.tolerancePct))
+      ? `tolerance +${line.tolerancePct}% / −${line.underPct}%`
+      : new Dec(line.tolerancePct).isZero()
+        ? 'no tolerance'
+        : `tolerance ${line.tolerancePct}%`
   switch (line.kind) {
     case 'EXACT':
       return `${label}: ${plain(line.after)} ${u} received, as expected.`
@@ -145,12 +158,12 @@ export function differenceWords(label: string, line: LineDifference, baseUom: Uo
  */
 export function orderStatusAfter(
   order: { readonly status: PurchaseOrderStatus; readonly confirmed: boolean },
-  lines: readonly { readonly expected: DecimalInput; readonly received: DecimalInput; readonly tolerancePct?: DecimalInput | null; readonly ended?: boolean | undefined }[],
+  lines: readonly { readonly expected: DecimalInput; readonly received: DecimalInput; readonly tolerancePct?: DecimalInput | null; readonly underPct?: DecimalInput | null | undefined; readonly ended?: boolean | undefined }[],
 ): PurchaseOrderStatus {
   if (!['SENT', 'CONFIRMED', 'PARTLY_RECEIVED', 'RECEIVED'].includes(order.status)) return order.status
   const anything = lines.some((line) => new Dec(line.received).greaterThan(0))
   if (!anything) return order.confirmed ? 'CONFIRMED' : 'SENT'
-  const complete = lines.every((line) => line.ended === true || lineDifference({ expected: line.expected, receivedBefore: line.received, receiving: '0', tolerancePct: line.tolerancePct ?? null }).complete)
+  const complete = lines.every((line) => line.ended === true || lineDifference({ expected: line.expected, receivedBefore: line.received, receiving: '0', tolerancePct: line.tolerancePct ?? null, underPct: line.underPct ?? null }).complete)
   return complete ? 'RECEIVED' : 'PARTLY_RECEIVED'
 }
 

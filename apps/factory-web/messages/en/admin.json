@@ -1764,6 +1764,7 @@
     "purchasing_claims_manage": "Prepare, send, answer and close supplier claims",
     "purchasing_claims_return": "Send the goods of a return back to the supplier with the return DDT",
     "purchasing_reminders_switch": "Switch a company’s automatic purchase order confirmation reminders to suppliers on or off (step-up)",
+    "purchasing_tolerances_manage": "Keep the delivery tolerances: how far over or under the ordered quantity a receipt may be, and what happens beyond",
     "invoices_view": "See invoices and credit notes",
     "invoices_manage": "Prepare draft invoices",
     "invoices_issue": "Issue an invoice (it can never change again)",

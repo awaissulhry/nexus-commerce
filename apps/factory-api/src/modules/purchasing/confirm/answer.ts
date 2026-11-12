@@ -10,6 +10,7 @@ import { answerFacts, buyerNameOf, confirmLinkOf, linkView } from './read'
 import { recordProposal } from './proposal'
 import { confirmationFileOf } from './upload'
 import { closeConfirmTasks } from '../portal-orders/tasks'
+import { confirmScheduleAsAsked } from '../po-depth/hooks'
 
 /**
  * The supplier's answer through its PO_CONFIRM link (B-W1-31; SCM-085, SCM-086; design links.po; PLAN §4.7 08-buy).
@@ -64,6 +65,8 @@ async function writeConfirmation(tools: CommandTools, facts: Facts, plan: Answer
       data: { confirmedQuantity: line.quantity, confirmedDate: line.date === null ? null : dayValue(line.date), version: { increment: 1 } },
     })
   }
+  // B-W2b-296: a line confirmed as asked confirms its deliveries, each on its own day.
+  await confirmScheduleAsAsked(tools, facts.order.id, plan.lines.map((line) => line.lineId))
   await tx.purchaseOrder.update({
     where: { id: facts.order.id },
     data: { status: 'CONFIRMED', confirmedAt: now, confirmedVia: 'LINK', confirmLinkId: linkId, confirmedByName: use.typedName, supplierRef: plan.supplierRef, confirmNote: plan.note },
