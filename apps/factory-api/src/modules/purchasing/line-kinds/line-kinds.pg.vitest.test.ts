@@ -22,7 +22,7 @@ import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenan
  * and size variants of one material) on the local stack: a throwaway PostgreSQL 17 database from the migrations
  * (row-level security and the …_buying_depth_w2b_guards triggers are real), the real app with the real office sign-in (a
  * buyer with two-factor, who also keeps the materials), and a second app with test sessions (a warehouse manager who posts
- * receipts, a planner who only reads orders, a reader of materials without the styles). The factory-db seeds up to
+ * receipts, a planner who only reads orders, a reader of materials without the styles, a keeper of lots who splits them). The factory-db seeds up to
  * production, the numbering and the PPE register (SEED-CERT-0002 covers the seeded protector from any supplier). Every
  * name, number and price is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/purchasing/line-kinds`.
  */
@@ -41,6 +41,7 @@ const leather = seedId('product:item:leather')
 const protector = seedId('product:item:protector')
 const lining = seedId('product:item:lining')
 const liningGRY = seedId('product:item-colour:lining:GRY')
+const leatherBLK = seedId('product:item-colour:leather:BLK')
 const protectorCertificate = seedId('compliance:certificate:PRO-300')
 const jacketCertificate = seedId('compliance:certificate:JKT-01')
 const FAKE_VAT = '12345670009'
@@ -63,6 +64,7 @@ const SESSIONS: Record<string, () => SessionContext> = {
   manager: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['inventory.receive', 'inventory.stock.view', 'money.cost', 'files.read', 'files.upload'])] }),
   planner: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['purchasing.view'])] }),
   materials: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['product.materials.view'])] }),
+  lots: () => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(['inventory.stock.view', 'inventory.lots.manage', 'parties.view', 'files.read'])] }),
 }
 const wall = async (session: string, method: Method, url: string, payload?: unknown, status = 200): Promise<Json> => {
   const answer = await walls.inject({ method, url, headers: { 'x-test-session': session, 'idempotency-key': key('wall') }, ...(payload === undefined ? {} : { payload: payload as object }) })
@@ -252,5 +254,44 @@ describe('a purchase order by kind (SCM-076, SCM-077, SCM-186)', () => {
     expect(medium).toMatchObject({ openOrderLines: 0, lots: 2 })
     const archived = (await as('PATCH', `/product/materials/${protector}/variants/${medium.id}`, { version: medium.version, status: 'ARCHIVED' })).variants
     expect(archived.find((variant: Json) => variant.code === 'SEED-PRO-300-M').status).toBe('ARCHIVED')
+  })
+})
+
+describe('a lot split into shade groups keeps its variant (B-W2b-313 lots in depth, SCM-186)', () => {
+  it('splits a hide lot received on a variant line: every child carries the variant; an archived variant is restored first', async () => {
+    // Leather in size 50 (the variant made above): ordered, sent, received hide by hide.
+    let order = (await as('POST', '/purchasing/orders', { companyId: companyA, siteId: siteA1, partyId: P2 }, 201)).order
+    order = (await as('POST', `${orderUrl(order.id)}/lines`, { version: order.version, itemId: leather, itemColourId: leatherBLK, quantity: '150', uom: 'FT2', needDate: addDays(today(), 30), unitPrice: '4.200000' }, 201)).order
+    let view = await kinds(order.id)
+    view = (await as('PUT', `${orderUrl(order.id)}/lines/${view.lines[0].id}/kind`, { version: view.version, variantCode: 'SEED-LEA-100-50' })).kinds
+    expect(view.lines[0].variant).toMatchObject({ code: 'SEED-LEA-100-50', problem: null })
+    const sent = await as('POST', `${orderUrl(order.id)}/send`, { version: view.version })
+    expect(sent.order.status).toBe('SENT')
+    const hides = [1, 2, 3].map((n) => ({ supplierCode: `LK-H${n}`, area: '50', areaUom: 'FT2' }))
+    const receipt = (await wall('manager', 'POST', '/inventory/receipts', { purchaseOrderId: order.id, supplierDdtNumber: 'DDT-LK-3', supplierDdtDate: today(), lines: [{ purchaseOrderLineId: view.lines[0].id, lots: [{ dyeBatch: 'LK-B1', hides }] }] }, 201)).receipt
+    const [parent] = await admin<{ id: string; variantCode: string }>(`SELECT l.id, l."variantCode" FROM "Lot" l JOIN "GoodsReceiptLine" r ON r.id = l."receiptLineId" WHERE r."receiptId" = $1`, [receipt.id])
+    expect(parent!.variantCode).toBe('SEED-LEA-100-50')
+
+    const dialog = await wall('lots', 'GET', `/inventory/lots/${parent!.id}/split`)
+    expect(dialog.refusal).toBeNull()
+    const hideIds = dialog.hides.map((hide: Json) => hide.id)
+    expect(hideIds).toHaveLength(3)
+    const split = await wall('lots', 'POST', `/inventory/lots/${parent!.id}/split`, { version: dialog.parent.version, groups: [{ label: 'Lighter', hideIds: hideIds.slice(0, 2) }, { label: 'Darker', hideIds: hideIds.slice(2) }] }, 201)
+    expect(split.lots.filter((lot: Json) => lot.made)).toHaveLength(2)
+    const children = await admin<{ code: string; variantCode: string; shade: string }>(`SELECT code, "variantCode", shade FROM "Lot" WHERE "parentLotId" = $1 ORDER BY code`, [parent!.id])
+    expect(children.map((child) => [child.shade, child.variantCode])).toEqual([
+      ['Lighter', 'SEED-LEA-100-50'],
+      ['Darker', 'SEED-LEA-100-50'],
+    ])
+
+    // Received in full, the order is closed to new goods: the variant may be archived. A new child lot of it then waits for
+    // the variant to be restored (words, never a 500).
+    const variant = (await as('GET', `/product/materials/${leather}/variants`)).variants.find((row: Json) => row.code === 'SEED-LEA-100-50')
+    expect(variant.openOrderLines).toBe(0)
+    await as('PATCH', `/product/materials/${leather}/variants/${variant.id}`, { version: variant.version, status: 'ARCHIVED' })
+    const again = await wall('lots', 'GET', `/inventory/lots/${parent!.id}/split`)
+    const one = again.hides.find((hide: Json) => hide.refusal === null)
+    const refused = await wall('lots', 'POST', `/inventory/lots/${parent!.id}/split`, { version: again.parent.version, groups: [{ label: 'Sorted again', hideIds: [one.id] }] }, 409)
+    expect(refused.error.message).toMatch(/is of variant SEED-LEA-100-50, which is archived: restore the variant/)
   })
 })
