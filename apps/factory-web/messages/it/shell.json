@@ -210,7 +210,8 @@
       "locations": "Ubicazioni",
       "inTheWarehouse": "In magazzino",
       "picking": "Prelievi e kit",
-      "counts": "Inventari"
+      "counts": "Inventari",
+      "transfers": "Trasferimenti"
     },
     "frame": {
       "topBar": "Barra superiore"

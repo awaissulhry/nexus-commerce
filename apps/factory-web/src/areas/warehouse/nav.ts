@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, PackageCheck, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
+import { ArrowLeftRight, Boxes, ClipboardCheck, ClipboardList, Layers, MapPin, PackageCheck, Route, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -47,6 +47,8 @@ export const officeArea: OfficeAreaNav = {
           // B-W2a-58: SCR-237 Picking & kits, what the floor must pick and whether it is there (inventory.stock.view).
           { id: 'warehouse-picking', label: 'shell:nav.warehouse.picking', href: '/warehouse/picking', icon: ClipboardList, permission: 'inventory.stock.view' },
           { id: 'warehouse-counts', label: 'shell:nav.warehouse.counts', href: '/warehouse/counts', icon: ClipboardCheck, permission: 'inventory.counts.view' },
+          // B-W2b-326: SCR-360 transfers between sites and the goods in transit (inventory.stock.view: who sees the stock).
+          { id: 'warehouse-transfers', label: 'shell:nav.warehouse.transfers', href: '/warehouse/transfers', icon: Route, permission: 'inventory.stock.view' },
         ],
       },
       {

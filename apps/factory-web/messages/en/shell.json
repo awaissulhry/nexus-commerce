@@ -210,7 +210,8 @@
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
       "picking": "Picking & kits",
-      "counts": "Counts"
+      "counts": "Counts",
+      "transfers": "Transfers"
     },
     "frame": {
       "topBar": "Top bar"
