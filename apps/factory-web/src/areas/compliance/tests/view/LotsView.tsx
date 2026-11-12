@@ -17,6 +17,9 @@ import { LEGAL_LIMIT, LOT_TILES, LOT_VIEWS, mgKg, type ListDialog, type LotsList
 import { PickLotDialog, RuleDialog } from './dialogs'
 import type { LotsDepth } from '../substances/frame/views' // B-W2b-267
 import { CrViMark, LabMessages, LabStepUp, LotStatusPill, ShortcutsDialog, useListWords } from './parts'
+// B-W2b-288 (FU2:03): the Lab cost column (the cost grain only).
+import { LAB_COST_NAMESPACE, listHasLabCost } from '../lab-cost/lab-cost'
+import { labCostColumn } from '../lab-cost/view/LabCostField'
 
 export interface LotsListActions {
   onQuery?: (query: string) => void
@@ -69,6 +72,9 @@ function Lots({ model, actions, depth }: { model: LotsListModel; actions?: LotsL
   const open = (next: ListDialog | null) => actions?.onDialog?.(next)
   const testHeld = can.lotsTest ? null : t('held.test')
   const lists = useListWords()
+  // B-W2b-288 (FU2:03): the column shows when the API sent the lab prices (it drops them without the cost grain).
+  const w = useT(LAB_COST_NAMESPACE)
+  const showCost = listHasLabCost(rows)
 
   // c: Record test result (the frame's keys are / j k x ↵ ?; the same rule skips fields, menus and dialogs).
   useEffect(() => {
@@ -137,12 +143,14 @@ function Lots({ model, actions, depth }: { model: LotsListModel; actions?: LotsL
       column('crVi', t('list.col.crVi'), CrViCell, { flex: 1.6, minWidth: 190 }),
       { colId: 'evidence', headerName: t('list.col.evidence'), sortable: false, flex: 1.1, minWidth: 140, valueGetter: (params) => (params.data?.crVi.evidence ? t(`evidence.${params.data.crVi.evidence}`) : '—') },
       { colId: 'tested', headerName: t('list.col.tested'), sortable: false, flex: 0.8, minWidth: 110, valueGetter: (params) => (params.data?.crVi.testedOn ? formatDate(params.data.crVi.testedOn, { locale }) : '—') },
+      // B-W2b-288 (FU2:03)
+      ...(showCost ? [labCostColumn<Lot>(w('labCost.column'), locale)] : []),
       column('status', t('list.col.status'), StatusCell, { flex: 1, minWidth: 130 }),
       column('hold', t('list.col.hold'), HoldCell, { flex: 1.4, minWidth: 160 }),
       { ...column('actions', t('list.col.actions'), ActionsCell, { width: 72, minWidth: 72 }), suppressHeaderMenuButton: true },
     ]
     // The cells close over the words and the rights: a change of language or rights rebuilds them.
-  }, [t, locale, model.prefix, can.lotsTest, can.lotsRelease, can.lotsReject])
+  }, [t, locale, model.prefix, can.lotsTest, can.lotsRelease, can.lotsReject, /* B-W2b-288 */ showCost, w])
 
   if (!can.lotsView) return <NoAccess title={t('noAccess.title')} body={t('noAccess.body')} />
 

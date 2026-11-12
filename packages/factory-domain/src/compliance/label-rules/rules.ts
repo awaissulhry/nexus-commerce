@@ -194,7 +194,17 @@ export interface LabelRuleFacts {
    * stay drafts and do not print; the step that records the yes per template sets it.
    */
   readonly ppeTextsApproved: boolean
+  /**
+   * B-W2b-288 (FU2:01): the languages live PPE text approvals (LABEL_WARNING) of this label template's code and revision cover
+   * for its company (Compliance › Rules & markets › Templates); null: not read (the floor has no grant on the approvals:
+   * the warnings then wait, as before). A warning's texts are approved where every language asked is covered.
+   */
+  readonly ppeTextLanguages?: readonly string[] | null | undefined
 }
+
+/** B-W2b-288 (FU2:01): the label's warnings in these languages are approved (GATE-PPE-TEXTS passed for each of them). */
+export const ppeTextsApprovedFor = (facts: Pick<LabelRuleFacts, 'ppeTextsApproved' | 'ppeTextLanguages'>, languages: readonly string[]): boolean =>
+  facts.ppeTextsApproved || (languages.length > 0 && facts.ppeTextLanguages != null && languages.every((language) => facts.ppeTextLanguages!.includes(language)))
 
 // ---- helpers ------------------------------------------------------------------------------------------------------------------
 
@@ -317,10 +327,15 @@ export function classWarnings(facts: LabelRuleFacts, market: RuleMarket | null):
     }
   }
   const words = asked.map((reason) => WARNING_WORDS[reason]).join('; ')
-  if (findings.length === 0 && !facts.ppeTextsApproved) {
+  if (findings.length === 0 && !ppeTextsApprovedFor(facts, languages)) {
+    // B-W2b-288 (FU2:01): the yes is recorded per template and language (Compliance › Rules & markets › Templates).
+    const waiting = facts.ppeTextLanguages ? languages.filter((language) => !facts.ppeTextLanguages!.includes(language)) : languages
     findings.push({
       path: 'gate/GATE-PPE-TEXTS',
-      message: `The texts of ${words} are ready in ${languages.join(', ')}; they print once a PPE consultant has said yes to this label's texts (GATE-PPE-TEXTS). Until then the label does not carry them.`,
+      message:
+        waiting.length < languages.length
+          ? `The texts of ${words} are approved by a PPE consultant in ${languages.filter((language) => !waiting.includes(language)).join(', ')}, not yet in ${waiting.join(', ')} (GATE-PPE-TEXTS: record the yes for label ${template.code} revision ${template.revision} in Compliance › Rules & markets › Templates). Until then the label does not carry them.`
+          : `The texts of ${words} are ready in ${languages.join(', ')}; they print once a PPE consultant has said yes to this label's texts (GATE-PPE-TEXTS). Until then the label does not carry them.`,
       severity: 'WAITING',
     })
   }
@@ -465,7 +480,7 @@ export function labelMarking(facts: LabelRuleFacts, market: RuleMarket | null, s
     qr: facts.qr.qr ? { ...facts.qr.qr, target: template.qrTarget, origin: facts.qr.origin, live: facts.qr.live } : null,
     warnings: asked.map((reason) => {
       const key = WARNING_PHRASE_KEYS[reason]
-      return { reason, key, texts: languages.map((language) => ({ language, text: facts.texts.get(key)?.get(language) ?? null })), draft: !facts.ppeTextsApproved }
+      return { reason, key, texts: languages.map((language) => ({ language, text: facts.texts.get(key)?.get(language) ?? null })), draft: !ppeTextsApprovedFor(facts, languages) }
     }),
     glove: level ? { level, text: gloveLevelText(level), granted: certificate ? certificateGloveLevel(certificate.levels) : null } : null,
     gpsr: { typed: template.gpsrContact, expected: sender, suggested: suggestedContact(sender) },

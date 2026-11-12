@@ -8,6 +8,8 @@ import { databaseLockWords, LOCKED_ISSUE } from '@nexus/factory-domain/product/v
 import { databaseWarehouseRefusal } from '@nexus/factory-domain/inventory/warehouse/refusals'
 // B-W2b-279 (W2b-5 schema wave 37/44): a contact or party write that reached the database's party rules is a 409 in words.
 import { databasePartyRefusal } from '@nexus/factory-domain/parties/refusals'
+// B-W2b-332: a draft line that a request to buy was converted into is not removed (the database keeps it): a 409 in words.
+import { askedLineRefusal } from '@nexus/factory-domain/purchasing/ask-to-buy/ask-to-buy'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
 
@@ -193,6 +195,9 @@ export function mapError(error: unknown): MappedError {
   if (lockedRevision) return lockedRevision
   const warehouse = warehouseRefusal(error)
   if (warehouse) return warehouse
+  // B-W2b-332
+  const askedLine = askedLineRefusal(error)
+  if (askedLine) return { status: STATUS_OF.conflict, code: 'conflict', message: askedLine.message, issues: [askedLine], unexpected: false }
   if (isBusyDatabaseError(error)) {
     return { status: STATUS_OF.not_ready, code: 'not_ready', message: BUSY_MESSAGE, unexpected: false, retryAfterSeconds: BUSY_RETRY_AFTER_SECONDS }
   }

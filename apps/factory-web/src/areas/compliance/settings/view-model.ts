@@ -6,6 +6,8 @@ import type { RegulationKind, RegulationStatus } from '@nexus/factory-domain/com
 import type { StepUpState } from '../../quality/_shared/hooks'
 import type { LiveState } from '../../quality/_shared/model'
 import type { Change, CrViMaterial, CrViSettings, EntriesAnswer, EntryRecord, GateMatrix, LanguagesAnswer, MarketsAnswer, OperatorsAnswer, PartyChoice, PhraseRecord, PhrasesAnswer, Requirement, StyleChoice } from './api'
+// B-W2b-288 (FU2:01): the Templates tab's state and actions.
+import type { TemplatesActions, TemplatesState } from './ppe-texts/use-ppe-texts'
 import type {
   AssessDraft,
   ChangeDraft,
@@ -306,6 +308,8 @@ export interface RulesMarketsModel {
   readonly markets?: MarketsState
   readonly phrases?: PhrasesState
   readonly operators?: OperatorsState
+  /** B-W2b-288 (FU2:01): Templates (the PPE consultant's yes per template). */
+  readonly templates?: TemplatesState
 }
 
 export interface RulesMarketsActions {
@@ -320,6 +324,8 @@ export interface RulesMarketsActions {
   markets?: MarketsActions
   phrases?: PhrasesActions
   operators?: OperatorsActions
+  /** B-W2b-288 (FU2:01). */
+  templates?: TemplatesActions
 }
 
 export type { SettingsTab, RegulationKind, RegulationStatus, PhraseKind, OperatorRole }

@@ -77,6 +77,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   EvidencePack: { route: 'POST /compliance/techfiles/:fileId/packs (the pack\'s PDF and ZIP are made by the API, never uploaded)' },
   // B-W2b-278 (FU4:02): a production-control test's lab report, kept ten years with the recorded result (QHS-110); every kind.
   ProductionControlTest: { route: 'POST /compliance/production-tests/:testId/report, then POST …/report/:fileId/complete' },
+  // B-W2b-288 (FU2:01): the PPE consultant's file of a PPE text approval (modules/compliance/ppe-texts): every kind; the
+  // approval rests on it (GATE-PPE-TEXTS), announced before the approval is recorded with its id.
+  PpeTextApproval: { route: 'POST /compliance/ppe-texts/evidence, then POST /compliance/ppe-texts' },
 })
 
 /**

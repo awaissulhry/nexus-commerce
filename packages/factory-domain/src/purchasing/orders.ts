@@ -4,6 +4,7 @@ import { fitsDecimal, QUANTITY, toMinorUnits, UNIT_PRICE, type CurrencyCode, typ
 import { isBusinessDate, type BusinessDate } from '../core/time'
 import { addDays, hidesFor } from '../planning/buy'
 import type { PartyRole, PartyStatus } from '../parties/rules'
+import { DEPTH_SEND_CHECK_CODES } from './po-depth/codes'
 import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
 
 /**
@@ -193,6 +194,8 @@ export const SEND_CHECK_CODES = [
   'BELOW_MINIMUM',
   'NOT_A_MULTIPLE',
   'LATE_FOR_LEAD_TIME',
+  // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/codes.ts).
+  ...DEPTH_SEND_CHECK_CODES,
 ] as const
 export type SendCheckCode = (typeof SEND_CHECK_CODES)[number]
 export type CheckSeverity = 'BLOCKS' | 'WARNING'

@@ -31,6 +31,8 @@ import { officeReturn } from './access'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockReturn, recordOf, touchReturn } from './rma'
 import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLines, soldFactsOf, type LineRow, type Reader, type ReturnView, type RmaRow, type SoldFacts } from './store'
+// B-W2b-289 (SCM-179): the site's default quality place for finished garments when none is named.
+import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
 /**
  * The decision (B-W2a-43; SAL-341 "Disposition decides the outcome"; design rma.inspection "Each line inspected and
@@ -119,7 +121,8 @@ async function placeFor(db: Reader, siteId: string, outcome: GoodsOutcome, toLoc
   }
   if (outcome === 'QUARANTINE') {
     const places = await db.location.findMany({ where: { siteId, kind: 'QUARANTINE', status: 'ACTIVE' }, select: { id: true, code: true } })
-    const place = toLocationId ? places.find((entry) => entry.id === toLocationId) : places.length === 1 ? places[0] : undefined
+    const preset = toLocationId ? null : await defaultPlaceFor(db, { siteId, purpose: 'QUALITY', itemKinds: ['FINISHED'] })
+    const place = toLocationId ? places.find((entry) => entry.id === toLocationId) : (places.find((entry) => entry.id === preset?.id) ?? (places.length === 1 ? places[0] : undefined))
     if (!place) return { place: null, problems: [{ path: `${at}/toLocationId`, message: places.length === 0 ? 'The site has no quarantine place: add one in the warehouse, or decide another outcome.' : 'Pick a quarantine place of the site.' }] }
     return { place, problems: [] }
   }

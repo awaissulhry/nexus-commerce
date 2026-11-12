@@ -2,6 +2,8 @@ import { FIELD_ID, isApprovalTaskKind, type ApprovalTaskKind } from '@nexus/fact
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import type { ApprovalKindDefinition } from './kind'
 import { PURCHASE_ORDER_KIND } from './purchase-order'
+// B-W2b-332: a request to buy from someone in the office.
+import { PURCHASE_REQUEST_KIND } from './purchase-request'
 // B-W2b-341: a return line credited without the goods coming back.
 import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
 
@@ -12,10 +14,13 @@ import { CREDIT_WITHOUT_RETURN_KIND } from './credit-without-return'
  * may be written but not tested. Checked at load: one file per kind, a declared permission, fact keys of the database's shape.
  *
  *   PURCHASE_ORDER   a purchase order before it is sent (B-W2b-282 the reference kind; B-W2b-305 sends it on the yes)
+ *   PURCHASE_REQUEST a request to buy from someone in the office, before the buyer sees it (B-W2b-332)
  *   CREDIT_WITHOUT_RETURN  a return line credited without the goods coming back (B-W2b-341; the credit written on the yes)
  */
 const KINDS: readonly ApprovalKindDefinition[] = Object.freeze([
   PURCHASE_ORDER_KIND,
+  // B-W2b-332
+  PURCHASE_REQUEST_KIND,
   // B-W2b-341
   CREDIT_WITHOUT_RETURN_KIND,
 ])
