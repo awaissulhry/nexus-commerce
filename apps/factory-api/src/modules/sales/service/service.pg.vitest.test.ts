@@ -240,23 +240,23 @@ describe("a business customer's case: a batch, a return for a remake or a credit
 
   it('opens a return for a remake and one for a credit, each linked; the garment line is refused without a shipment of the serial', async () => {
     const returnable = await ok(browsers.desk, `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`)
-    // Two pieces that may come back: one line with two left, or two lines.
-    const open = returnable.lines.filter((entry: Json) => entry.left > 0 && entry.salesOrderLineId)
-    expect(open.length).toBeGreaterThan(0)
-    const first = open[0]
-    const second = first.left >= 2 ? first : open[1]
-    expect(second).toBeDefined()
+    // The seeds leave P1 one shipped piece that may come back (SEED-RMA-0002 takes the other): the remake takes it, the remake's
+    // return is cancelled on its own record (W2a's route), and the credit takes the same piece again.
+    const piece = returnable.lines.find((entry: Json) => entry.left > 0 && entry.salesOrderLineId)
+    expect(piece).toBeDefined()
     const reason = await one<{ code: string }>(`SELECT code FROM "ReasonCode" WHERE "tenantId" = $1 AND list = 'RETURN' AND active ORDER BY code LIMIT 1`, [T])
     // REFUSED: no lines and no garment of ours that left on a shipment.
     expect((await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'RETURN', reasonCode: reason.code }), 400)).error.issues).toEqual([{ path: 'body/lines', message: 'The case names no garment of ours: name the lines that come back.' }])
     const lineOf = (entry: Json) => [{ salesOrderLineId: entry.salesOrderLineId, size: entry.size, quantity: 1, reasonCode: reason.code }]
-    expect((await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'REMAKE', lines: lineOf(first) }), 400)).error.issues.map((issue: Json) => issue.path)).toContain('body/fit')
-    const remade = await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'REMAKE', lines: lineOf(first), fit: 'The sleeves are 2 cm too short for the rider.' }), 201)
+    expect((await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'REMAKE', lines: lineOf(piece) }), 400)).error.issues.map((issue: Json) => issue.path)).toContain('body/fit')
+    const remade = await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'REMAKE', lines: lineOf(piece), fit: 'The sleeves are 2 cm too short for the rider.' }), 201)
     businessCase = remade.case
     expect(remade.next).toContain('remake is asked')
     expect(await one(`SELECT status::text, "partyId", "contactId" FROM "ReturnAuthorisation" WHERE id = $1`, [remade.return.id])).toEqual({ status: 'AUTHORISED', partyId: P1, contactId: buyerContact })
     expect((await events('return.remake_asked')).find((payload) => payload.returnId === remade.return.id)).toMatchObject({ via: 'OFFICE' })
-    const credited = await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'CREDIT', lines: lineOf(second) }), 201)
+    const rma = await one<{ version: number }>(`SELECT version FROM "ReturnAuthorisation" WHERE id = $1`, [remade.return.id])
+    await done(await post(browsers.desk, `/sales/returns/${remade.return.id}/cancel`, { version: rma.version, reason: 'The customer asked for a credit instead.' }))
+    const credited = await done(await post(browsers.desk, `/sales/service/cases/${businessCase.id}/return`, { version: businessCase.version, purpose: 'CREDIT', lines: lineOf(piece) }), 201)
     businessCase = credited.case
     expect(credited.next).toContain('Credit without return')
     expect(businessCase.links.map((link: Json) => [link.recordType, link.note])).toEqual([
