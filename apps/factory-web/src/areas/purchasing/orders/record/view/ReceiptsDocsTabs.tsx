@@ -14,6 +14,7 @@ import type { OrderReceipt, PurchaseOrder } from '../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../model'
 import { CloseShortCard } from './ChangesSections'
 import { PartState } from './OrderRecordView'
+import { ReceiptTolerance } from '../../depth/view/ReceiptTolerance'
 
 const RECEIVING = ['SENT', 'CONFIRMED', 'PARTLY_RECEIVED']
 
@@ -86,6 +87,8 @@ export function ReceiptsTab({ order, model, actions }: { order: PurchaseOrder; m
         count={t('rc.count', { count: receipts.value.length })}
         state={receipts.value.length === 0 ? <EmptyState title={t('po.receipts.empty')} description={canTake ? t('po.receipts.emptyBody') : undefined} action={receive ?? undefined} /> : undefined}
       />
+      {/* B-W2b-333 (SCM-061): each line received against its tolerance, over or under. */}
+      <ReceiptTolerance order={order} model={model.depth ?? null} />
       {/* B-W2a-69: Close short a line — the rest will not come; planning releases it. */}
       <CloseShortCard order={order} model={model} actions={actions} />
     </div>
