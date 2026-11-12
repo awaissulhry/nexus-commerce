@@ -261,6 +261,8 @@ describe('the floor', () => {
     )
     // Not vacuous: purchase prices and stock values are such columns.
     expect(walled.map(({ model, column }) => `${model.name}.${column}`).sort()).toEqual([
+      // W2b-5 (B-W2b-285): the value of a foreign-currency order in the company's currency.
+      'PurchaseOrder.companyNetAmount',
       'PurchaseOrder.netAmount',
       'PurchaseOrderLine.netAmount',
       'PurchaseOrderLine.unitPrice',
@@ -365,11 +367,15 @@ describe('the partner wall', () => {
       }
     }
     expect(hidden.sort()).toEqual([
+      // W2b-5 (B-W2b-285): the approval task it waits for, the rate at order and the value in the company's currency.
+      'PurchaseOrder.approvalTaskId',
+      'PurchaseOrder.companyNetAmount',
       'PurchaseOrder.createdById',
       'PurchaseOrder.internalNote',
       'PurchaseOrder.netAmount',
       'PurchaseOrder.proposalDecidedById',
       'PurchaseOrder.proposalDecisionNote',
+      'PurchaseOrder.rateAtOrder',
       'PurchaseOrder.sentById',
       'PurchaseOrderLine.cancelledById',
       'PurchaseOrderLine.closedShortById',

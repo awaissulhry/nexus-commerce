@@ -25,6 +25,13 @@ describe('the Workshop column of the locations import (B-W2b-25)', () => {
     expect(plan({ site: 'A1', code: 'A1-B1', kind: 'SUBCONTRACTOR', workshop: 'TERZ-01' }, record({ code: 'A1-B1', kind: 'BIN', workshop: null }))).toMatchObject({ action: 'ERROR', errors: [{ column: 'kind' }] })
   })
 
+  it('keeps a CUSTOMER location with its party unchanged, refuses another party, and makes none by import (B-W2b-277)', () => {
+    const customer = record({ code: 'A1-CUST', name: 'At the customer', kind: 'CUSTOMER', workshop: 'CUST-01' })
+    expect(plan({ site: 'A1', code: 'A1-CUST', name: 'At the customer', kind: 'CUSTOMER', workshop: 'CUST-01' }, customer)).toEqual({ action: 'UNCHANGED' })
+    expect(plan({ site: 'A1', code: 'A1-CUST', workshop: 'CUST-02' }, customer)).toEqual({ action: 'ERROR', errors: [{ column: 'workshop', message: expect.stringContaining('its party never changes') }] })
+    expect(plan({ site: 'A1', code: 'A1-CUST', name: 'x', kind: 'CUSTOMER', workshop: 'CUST-01' })).toEqual({ action: 'ERROR', errors: [{ column: 'kind', message: expect.stringContaining('made on the Locations page') }] })
+  })
+
   it('keeps the same workshop unchanged and renames the location', () => {
     expect(plan({ site: 'A1', code: 'A1-TERZ', workshop: 'TERZ-01', name: 'Renamed' }, record({}))).toEqual({ action: 'UPDATE', before: { name: 'At the workshop' }, after: { name: 'Renamed' } })
     expect(plan({ site: 'A1', code: 'A1-TERZ', workshop: 'TERZ-01' }, record({}))).toEqual({ action: 'UNCHANGED' })

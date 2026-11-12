@@ -91,6 +91,9 @@ import { usePatternFiles } from './files-w2b/use-pattern-files'
 // B-W2b-237: the depth (lifecycle, type, names per language, private label, completeness, where-used, GTINs).
 import { useStyleDepth } from './overview/use-style-depth'
 import { depthSlots } from './overview/slots'
+// B-W2b-283 (FU1:01): the markets the style is sold in, on the Overview.
+import { useStyleMarkets } from './overview/markets/use-style-markets'
+import { MarketsCard } from './overview/markets/view/MarketsCard'
 // B-W2b-245: Versions & changes (the tab, Compare revisions) and the Release modal on B-W2b-231's gate.
 import { useVersions } from '../versions/use-versions'
 import { versionsCan } from '../versions/model'
@@ -656,11 +659,17 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
 
   // B-W2b-237: read while the Overview (or, for GTINs, Colourways & sizes) shows; writes through the one queue above.
   const depth = useStyleDepth({ api, style: value, prefix, tab, permissions: session.permissions, gateKey: `${versionKey ?? ''}:${bom.status === 'ready' ? bom.value.revision.version : ''}`, write: run, reloadStyle: () => void loadStyle() })
+  // B-W2b-283 (FU1:01): read while the Overview shows; saved through the one queue above.
+  const markets = useStyleMarkets({ api, style: value, tab, permissions: session.permissions, write: run, reloadStyle: () => void loadStyle() })
 
   return (
     <StyleRecordView
       model={model}
-      depth={depth.model && (tab === 'overview' || tab === 'variants') ? depthSlots(depth.model, depth.actions, value?.skus ?? []) : undefined /* B-W2b-237 */}
+      depth={
+        depth.model && (tab === 'overview' || tab === 'variants')
+          ? { ...depthSlots(depth.model, depth.actions, value?.skus ?? []), markets: markets.model ? <MarketsCard model={markets.model} actions={markets.actions} /> : null /* B-W2b-283 */ }
+          : undefined /* B-W2b-237 */
+      }
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       techPack={value && tab === 'techpack' ? <TechPackTab style={value} revisionId={revisionId} prefix={prefix} /> : null}
       actions={{

@@ -167,7 +167,7 @@ export const ROUND: RoundView = {
   certificate: null,
   cancelledAt: null,
   cancelReason: null,
-  workOrdersList: [{ id: uid('5601', 1), number: 'WO-DEMO-0042', status: 'COMPLETED', site: { id: uid('5701', 1), code: 'DEMO-PLANT' }, pieces: 3, dueDate: '2026-11-08', releasedAt: at(3, 8), startedAt: at(4, 7), completedAt: at(6, 15) }],
+  workOrdersList: [{ id: uid('5601', 1), number: 'WO-DEMO-0042', status: 'COMPLETED', site: { id: uid('5701', 1), code: 'DEMO-PLANT' }, pieces: 3, dueDate: '2026-11-08', releasedAt: at(3, 8), startedAt: at(4, 7), completedAt: at(6, 15), withoutOrderLine: false }],
   workOrdersHeld: 0,
   shipmentsList: [
     {
@@ -339,13 +339,44 @@ export const FIT_NO_SPEC: FitView = { ...FIT, spec: null, points: [], outside: [
 
 // ---- Make sample work order ------------------------------------------------------------------------------------------------
 
+/** B-W2b-284: the trousers' colourways the round's "any colourway" sizes are made in without an order line. */
+const NAVY = uid('5301', 3)
+const OLIVE = uid('5301', 4)
+const WITHOUT_LINE: WorkOrderOptions['withoutLine'] = {
+  allowed: true,
+  refusal: null,
+  cells: [{ colourwayId: null, colourwayCode: null, size: 'M', quantity: 1 }],
+  colourways: [
+    { id: NAVY, code: 'NVY', name: 'Navy' },
+    { id: OLIVE, code: 'OLV', name: 'Olive' },
+  ],
+}
+
 export const WO_OPTIONS: WorkOrderOptions = {
   round: { id: REQUESTED_ROUND.id, number: REQUESTED_ROUND.number, stage: 'REQUESTED', version: 3, revision: REQUESTED_ROUND.revision, partyId: null },
   lines: [
     { id: uid('7101', 1), orderId: uid('7201', 1), orderNumber: 'SO-DEMO-0012', seq: 10, partyId: SHOP.id, colourwayId: BLACK, colourwayCode: 'BLK', styleRevisionId: null, siteId: uid('5701', 1), open: [{ size: 'M', ordered: 20, onWorkOrders: 5, open: 15 }], proposed: [{ size: 'M', quantity: 1 }] },
   ],
   sites: [{ id: uid('5701', 1), code: 'DEMO-PLANT', name: 'Demo plant' }],
+  withoutLine: WITHOUT_LINE,
   blockers: [],
   warnings: ['Draft revision'],
 }
-export const WO_OPTIONS_NONE: WorkOrderOptions = { ...WO_OPTIONS, lines: [], blockers: ['No line'], warnings: [] }
+/** A charged customer round with no confirmed order line: neither way is open (the refusal said). */
+export const WO_OPTIONS_NONE: WorkOrderOptions = {
+  ...WO_OPTIONS,
+  round: { ...WO_OPTIONS.round, partyId: BRAND.id },
+  lines: [],
+  withoutLine: { ...WITHOUT_LINE, allowed: false, refusal: { code: 'ORDER_LINE_NEEDED', message: 'Charged to its customer.' }, cells: [{ colourwayId: BLACK, colourwayCode: 'BLK', size: '52', quantity: 2 }], colourways: [] },
+  blockers: ['No line'],
+  warnings: [],
+}
+/** B-W2b-284: the internal proto round with no order line of its style: made without one, from its own sizes. */
+export const WO_OPTIONS_INTERNAL: WorkOrderOptions = { ...WO_OPTIONS, lines: [] }
+/** B-W2b-284: the internal proto round after its sample work order was made without an order line. */
+export const MADE_WITHOUT_LINE_ROUND: RoundView = {
+  ...REQUESTED_ROUND,
+  stage: 'IN_MAKING',
+  workOrders: 1,
+  workOrdersList: [{ id: uid('5601', 3), number: 'WO-DEMO-0044', status: 'DRAFT', site: { id: uid('5701', 1), code: 'DEMO-PLANT' }, pieces: 1, dueDate: '2026-11-12', releasedAt: null, startedAt: null, completedAt: null, withoutOrderLine: true }],
+}

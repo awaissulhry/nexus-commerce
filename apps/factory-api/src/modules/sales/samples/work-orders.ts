@@ -1,16 +1,28 @@
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can } from '@nexus/factory-domain/core/permissions'
+import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { ORDER_STATUSES_FOR_WORK_ORDERS, openSizes } from '@nexus/factory-domain/production/work-orders/cells'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { WorkOrderBody } from '@nexus/factory-domain/sales/samples/contracts'
 import { SALES_SAMPLES_MANAGE } from '@nexus/factory-domain/sales/samples/permissions'
-import { cellsForLines, cellsOf, lineRefusal, revisionRefusal, roundLabel, workOrderRefusal, type SampleKind, type SampleStage } from '@nexus/factory-domain/sales/samples/rules'
+import {
+  cellsForLines,
+  cellsOf,
+  cellsWithoutLine,
+  lineRefusal,
+  revisionRefusal,
+  roundLabel,
+  withoutLineRefusal,
+  workOrderRefusal,
+  type SampleKind,
+  type SampleStage,
+} from '@nexus/factory-domain/sales/samples/rules'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { hasSeries, readOrderLines } from '../../production/work-orders/store'
-import { createWorkOrder } from '../../production/work-orders/work-orders'
+import { hasSeries, readOrderLines, type Reader } from '../../production/work-orders/store'
+import { createSampleWorkOrder, createWorkOrder, type SampleWorkOrder } from '../../production/work-orders/work-orders'
 import { readRound } from './rounds'
-import { databaseRefusal, dayOrNull, officeRound, readRoundRow, refuse } from './store'
+import { databaseRefusal, dayOrNull, officeRound, readRoundRow, refuse, type RoundData } from './store'
 
 /**
  * The sample work order (B-W2b-246; MES-018 "Sample and prototype work orders"; design products.samples › Sample "What was
@@ -24,12 +36,27 @@ import { databaseRefusal, dayOrNull, officeRound, readRoundRow, refuse } from '.
  *                                                            what each would take, the plants, what stops it, in words
  *   POST /sales/samples/rounds/:roundId/work-orders          sales.samples.manage + workorders.manage at the making site
  *
- * A work order cell names a sales order line (WorkOrderSize.salesOrderLineId is NOT NULL, W1): a round is made on the order
- * that charges its samples (a SIZE_GRID line of the style). An internal or uncharged round has no such line: a schema need of
- * B-W2b-212, named in the notes.
+ * A round is made on the order that charges its samples (a SIZE_GRID line of the style), or, B-W2b-284 (W2b-5 wave 34: a
+ * SAMPLE work order's cell may name no order line), without one: an internal or uncharged proto, fit or salesman round
+ * (`withoutLineRefusal`) makes its work order from its own cells, each a colourway and size of the style (a cell of "any
+ * colourway" takes the colourway asked, else the style's only active one). Such a work order ships on no order's shipment,
+ * is invoiced on no order and comes back on no return (shipping, invoicing and returns refuse it in words).
  */
 
 const LINE_LIMIT = 100
+
+/** The round's style as the work order without an order line needs it: its code, size range and active colourways. */
+async function styleFacts(db: Reader, round: Pick<RoundData, 'styleId'>) {
+  const style = await db.style.findUniqueOrThrow({ where: { id: round.styleId }, select: { id: true, code: true, sizes: true } })
+  const colourways = await db.colourway.findMany({ where: { styleId: style.id, status: 'ACTIVE' }, select: { id: true, code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }] })
+  return { style, colourways }
+}
+
+const chargedOf = (round: Pick<RoundData, 'chargeAmountMinor'>): boolean => round.chargeAmountMinor !== null
+
+/** B-W2b-284: why this round's work order cannot be made without an order line (null: it can). */
+const noLineRefusalOf = (round: RoundData) =>
+  withoutLineRefusal({ number: round.number, stage: round.stage as SampleStage, kind: round.kind as SampleKind, charged: chargedOf(round) })
 
 /** GET /sales/samples/rounds/:roundId/work-order-options */
 export async function workOrderOptions(caller: CommandCaller, roundId: string) {
@@ -55,7 +82,13 @@ export async function workOrderOptions(caller: CommandCaller, roundId: string) {
       })
     ).map((line) => line.id)
     const lines = [...(await readOrderLines(db, ids)).values()].filter((line) => can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId }))
-    if (lines.length === 0) {
+    // B-W2b-284: an internal or uncharged proto, fit or salesman round may be made without an order line.
+    const noLine = noLineRefusalOf(round)
+    const { colourways } = await styleFacts(db, round)
+    const named = [...new Set(cellsOf(round.cells).flatMap((cell) => (cell.colourwayId ? [cell.colourwayId] : [])))]
+    const colourwayOf = new Map((named.length === 0 ? [] : await db.colourway.findMany({ where: { id: { in: named } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
+    const only = colourways.length === 1 ? colourways[0]! : null
+    if (lines.length === 0 && noLine !== null) {
       blockers.push(
         round.partyId
           ? "The round's customer has no confirmed order line of this style to make the samples on: a work order cell names the order that charges the samples (add a line for them to an order)."
@@ -80,6 +113,17 @@ export async function workOrderOptions(caller: CommandCaller, roundId: string) {
         proposed: cellsForLines(cells, [{ id: line.id, colourwayId: line.colourwayId, orderNumber: line.orderNumber, seq: line.seq }], 'lines').lines[0]!.sizes,
       })),
       sites: sites.filter((site) => can(actorOf(context), WORKORDERS_MANAGE, { companyId: round.companyId, siteId: site.id })),
+      withoutLine: {
+        allowed: noLine === null,
+        refusal: noLine,
+        cells: cells.map((cell) => ({
+          colourwayId: cell.colourwayId ?? only?.id ?? null,
+          colourwayCode: cell.colourwayId ? (colourwayOf.get(cell.colourwayId) ?? null) : (only?.code ?? null),
+          size: cell.size,
+          quantity: cell.quantity,
+        })),
+        colourways,
+      },
       blockers,
       warnings,
     }
@@ -93,6 +137,31 @@ export async function makeWorkOrder(caller: CommandCaller, roundId: string, body
   if (!can(actorOf(context), WORKORDERS_MANAGE, { companyId: round.companyId })) {
     throw new ForbiddenError('Making a sample work order also needs workorders.manage (the production office).')
   }
+  const label = `Sample round ${round.number} · ${roundLabel(round.kind as SampleKind, round.roundNo)}`
+  const note = body.note === undefined || body.note === null || body.note.trim() === '' ? label : body.note
+  const due = body.dueDate ? { dueDate: body.dueDate } : round.dueDate ? { dueDate: dayOrNull(round.dueDate)! } : {}
+  // The round's own writes in the work order's command: REQUESTED → IN_MAKING, its audit row and event.
+  const sample = (revisionId: string): SampleWorkOrder => ({
+    roundId: round.id,
+    revisionId,
+    version: body.version ?? round.version,
+    inCommand: async (tools: CommandTools, made) => {
+      const { tx } = tools
+      const row = (await readRoundRow(tx, round.id))!
+      refuse(workOrderRefusal({ number: row.number, stage: row.stage as SampleStage }))
+      const stage = row.stage === 'REQUESTED' ? 'IN_MAKING' : row.stage
+      if (stage !== row.stage) await tx.sampleRound.update({ where: { id: row.id }, data: { stage }, select: { id: true } })
+      tools.audit({ action: 'sales.samples.makeWorkOrder', recordType: 'SampleRound', recordId: row.id, companyId: row.companyId, before: { stage: row.stage }, after: { stage, workOrderId: made.id, workOrderNumber: made.number } })
+      tools.emit({
+        type: 'sample_round.changed',
+        subject: row.id,
+        companyId: row.companyId,
+        payload: { sampleRoundId: row.id, number: row.number, styleId: row.styleId, stage, previousStage: row.stage, change: 'WORK_ORDER', workOrderId: made.id },
+      })
+    },
+  })
+  if (!body.lines) return makeWithoutLine(caller, round, body, idempotencyKey, { note, due, sample })
+  if (body.colourwayId !== undefined) throw new ValidationError('A colourway is named only for a work order without an order line.', [{ path: 'body/colourwayId', message: "Leave it out: each order line makes its own colourway." }])
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
   body.lines.forEach((line, index) => {
@@ -110,12 +179,13 @@ export async function makeWorkOrder(caller: CommandCaller, roundId: string, body
     refuse(lineRefusal(round, line))
   }
   // Each line's sizes: as named, else the round's cells of its colourway (W1 checks them against what is open on the line).
-  const auto = body.lines.map((line, index) => ({ line, index })).filter(({ line }) => !line.sizes)
+  const asked = body.lines
+  const auto = asked.map((line, index) => ({ line, index })).filter(({ line }) => !line.sizes)
   let planned = new Map<string, { size: string; quantity: number }[]>()
   if (auto.length > 0) {
     const plan = cellsForLines(
       cellsOf(round.cells),
-      body.lines.map((line) => {
+      asked.map((line) => {
         const row = lines.get(line.salesOrderLineId)!
         return { id: row.id, colourwayId: row.colourwayId, orderNumber: row.orderNumber, seq: row.seq }
       }),
@@ -126,33 +196,44 @@ export async function makeWorkOrder(caller: CommandCaller, roundId: string, body
     if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : "The round's cells do not fit these order lines.", problems)
     planned = new Map(plan.lines.map((line) => [line.salesOrderLineId, line.sizes]))
   }
-  const label = `Sample round ${round.number} · ${roundLabel(round.kind as SampleKind, round.roundNo)}`
   const input = {
     ...(body.siteId ? { siteId: body.siteId } : {}),
     styleRevisionId: round.revisionId,
-    ...(body.dueDate ? { dueDate: body.dueDate } : round.dueDate ? { dueDate: dayOrNull(round.dueDate)! } : {}),
+    ...due,
     ...(body.priority !== undefined ? { priority: body.priority } : {}),
-    note: body.note === undefined || body.note === null || body.note.trim() === '' ? label : body.note,
-    lines: body.lines.map((line) => ({ salesOrderLineId: line.salesOrderLineId, sizes: line.sizes ?? planned.get(line.salesOrderLineId)! })),
+    note,
+    lines: asked.map((line) => ({ salesOrderLineId: line.salesOrderLineId, sizes: line.sizes ?? planned.get(line.salesOrderLineId)! })),
   }
-  const { workOrder } = await createWorkOrder(caller, input, idempotencyKey, {
-    roundId: round.id,
-    revisionId: round.revisionId,
-    version: body.version ?? round.version,
-    inCommand: async (tools: CommandTools, made) => {
-      const { tx } = tools
-      const row = (await readRoundRow(tx, round.id))!
-      refuse(workOrderRefusal({ number: row.number, stage: row.stage as SampleStage }))
-      const stage = row.stage === 'REQUESTED' ? 'IN_MAKING' : row.stage
-      if (stage !== row.stage) await tx.sampleRound.update({ where: { id: row.id }, data: { stage }, select: { id: true } })
-      tools.audit({ action: 'sales.samples.makeWorkOrder', recordType: 'SampleRound', recordId: row.id, companyId: row.companyId, before: { stage: row.stage }, after: { stage, workOrderId: made.id, workOrderNumber: made.number } })
-      tools.emit({
-        type: 'sample_round.changed',
-        subject: row.id,
-        companyId: row.companyId,
-        payload: { sampleRoundId: row.id, number: row.number, styleId: row.styleId, stage, previousStage: row.stage, change: 'WORK_ORDER', workOrderId: made.id },
-      })
-    },
-  }).catch(databaseRefusal)
+  const { workOrder } = await createWorkOrder(caller, input, idempotencyKey, sample(round.revisionId)).catch(databaseRefusal)
+  return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, round: await readRound(caller, round.id) }
+}
+
+/**
+ * B-W2b-284: the sample work order of an internal or uncharged proto, fit or salesman round, made without an order line from the
+ * round's own cells (W1's createSampleWorkOrder: its cells name no order line and no party).
+ */
+async function makeWithoutLine(
+  caller: CommandCaller,
+  round: RoundData,
+  body: WorkOrderBody,
+  idempotencyKey: string | undefined,
+  made: { note: string; due: { dueDate?: BusinessDate }; sample: (revisionId: string) => SampleWorkOrder },
+) {
+  refuse(noLineRefusalOf(round))
+  const { revision, style, colourways } = await caller.withClient(async (db) => ({
+    revision: await db.styleRevision.findUniqueOrThrow({ where: { id: round.revisionId }, select: { id: true, revision: true, status: true } }),
+    ...(await styleFacts(db, round)),
+  }))
+  refuse(revisionRefusal(revision))
+  const plan = cellsWithoutLine(cellsOf(round.cells), { code: style.code, sizes: style.sizes, colourwayIds: colourways.map((row) => row.id) }, body.colourwayId ?? null, 'body')
+  if (plan.problems.length > 0) throw new ValidationError(plan.problems.length === 1 ? plan.problems[0]!.message : "The round's cells cannot be made like this.", plan.problems)
+  const input = {
+    ...(body.siteId ? { siteId: body.siteId } : {}),
+    ...made.due,
+    ...(body.priority !== undefined ? { priority: body.priority } : {}),
+    note: made.note,
+    cells: plan.cells,
+  }
+  const { workOrder } = await createSampleWorkOrder(caller, input, idempotencyKey, { ...made.sample(round.revisionId), styleId: round.styleId, companyId: round.companyId }).catch(databaseRefusal)
   return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, round: await readRound(caller, round.id) }
 }

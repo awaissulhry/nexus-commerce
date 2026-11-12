@@ -275,3 +275,71 @@ describe('cancelling a round', () => {
     expect(renumbered).toMatchObject({ roundNo: 3, stage: 'UNDER_REVIEW' })
   })
 })
+
+describe('B-W2b-284: the sample work order of an internal or uncharged round, without an order line', () => {
+  let proto = ''
+  let made = ''
+
+  it("offers it for an internal proto round: the round's own cells, a colourway to pick for the cells of any colourway", async () => {
+    const { round: asked } = await ok('manager', 'POST', '/sales/samples/rounds', { styleId: jacket2, companyId: companyA, kind: 'PROTO', cells: [{ colourwayId: black2, size: '52', quantity: 1 }, { size: '50', quantity: 2 }] }, 201)
+    proto = asked.id
+    const options = await ok('manager', 'GET', `/sales/samples/rounds/${proto}/work-order-options`)
+    expect(options.withoutLine).toMatchObject({
+      allowed: true,
+      refusal: null,
+      cells: [
+        { colourwayId: black2, colourwayCode: 'BLK', size: '52', quantity: 1 },
+        { colourwayId: null, colourwayCode: null, size: '50', quantity: 2 },
+      ],
+    })
+    expect(options.withoutLine.colourways.map((row: Json) => row.code)).toEqual(expect.arrayContaining(['BLK', 'RED']))
+    expect(options.blockers).toEqual([])
+    // The cells of any colourway need one: SEED-JKT-02 has several.
+    const error = await no('manager', 'POST', `/sales/samples/rounds/${proto}/work-orders`, {}, 400)
+    expect(error.issues.map((issue: Json) => issue.path)).toEqual(['body/colourwayId'])
+    expect(refusal(await no('manager', 'POST', `/sales/samples/rounds/${proto}/work-orders`, { lines: [{ salesOrderLineId: sampleLine }], colourwayId: red2 }, 400))).toBe('body/colourwayId')
+  })
+
+  it('makes it with cells that name no order line and no party; W1 reads it, keeps its cells the round\'s, and no order counts it', async () => {
+    const answer = await ok('manager', 'POST', `/sales/samples/rounds/${proto}/work-orders`, { colourwayId: red2 }, 201)
+    made = answer.workOrder.id
+    expect(answer.round).toMatchObject({ stage: 'IN_MAKING', workOrders: 1 })
+    expect(answer.round.workOrdersList).toEqual([expect.objectContaining({ id: made, pieces: 3, withoutOrderLine: true })])
+    const cells = await admin('SELECT "colourwayId", size, quantity, "salesOrderLineId", "partyId" FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY size', [made])
+    expect(cells).toEqual([
+      { colourwayId: red2, size: '50', quantity: 2, salesOrderLineId: null, partyId: null },
+      { colourwayId: black2, size: '52', quantity: 1, salesOrderLineId: null, partyId: null },
+    ])
+    expect(await one('SELECT kind::text AS kind, "sampleRoundId" FROM "WorkOrder" WHERE id = $1', [made])).toEqual({ kind: 'SAMPLE', sampleRoundId: proto })
+    expect(await one('SELECT payload FROM "OutboxEvent" WHERE type = \'workorder.created\' AND subject = $1', [made])).toMatchObject({ payload: { salesOrderIds: [], cells: 2, pieces: 3 } })
+    // W1's record reads it (B-W2b-275 left a 500 here): no order, cells of no line.
+    const { workOrder: record } = await ok('manager', 'GET', `/production/work-orders/${made}`)
+    expect(record).toMatchObject({ kind: 'SAMPLE', orders: [], pieces: 3, sampleRound: { id: proto, kind: 'PROTO' } })
+    expect(record.cells.map((cell: Json) => [cell.colourwayCode, cell.size, cell.salesOrderLineId, cell.salesOrderId, cell.lineSeq])).toEqual([
+      ['BLK', '52', null, null, null],
+      ['RED', '50', null, null, null],
+    ])
+    expect((await ok('manager', 'GET', '/production/work-orders?kind=SAMPLE')).workOrders.map((row: Json) => row.id)).toContain(made)
+    // Its cells are the round's: W1's cells edit is refused in words, as its split.
+    expect((await no('manager', 'PUT', `/production/work-orders/${made}/cells`, { version: record.version, cells: [{ salesOrderLineId: sampleLine, size: '52', quantity: 1 }] }, 409)).message).toContain('for no order line')
+    expect((await no('manager', 'POST', `/production/work-orders/${made}/split`, { version: record.version, cells: [{ cellId: record.cells[0].id, quantity: 1 }] }, 409)).message).toContain('sample round')
+    // It takes nothing of an order's line: the order line still has its sizes open.
+    const options = await ok('manager', 'GET', `/sales/samples/rounds/${proto}/work-order-options`)
+    expect(options.lines.find((line: Json) => line.id === sampleLine)?.open.find((size: Json) => size.size === '50')).toMatchObject({ onWorkOrders: 0 })
+    const release = await ok('manager', 'GET', `/production/work-orders/${made}/release-check`)
+    expect(release.releasable).toBe(false)
+  })
+
+  it('is refused in words for a charged round and for a pre-production, CE test or brand sample: they are made on an order line', async () => {
+    const { round: charged } = await ok('manager', 'POST', '/sales/samples/rounds', { styleId: jacket2, companyId: companyA, kind: 'FIT', partyId: P1, cells: [{ colourwayId: black2, size: '52', quantity: 1 }], chargeAmountMinor: 3000, chargeCurrency: 'EUR' }, 201)
+    expect((await ok('manager', 'GET', `/sales/samples/rounds/${charged.id}/work-order-options`)).withoutLine).toMatchObject({ allowed: false, refusal: { code: 'ORDER_LINE_NEEDED' } })
+    const words = await no('manager', 'POST', `/sales/samples/rounds/${charged.id}/work-orders`, {}, 409)
+    expect(refusal(words)).toBe('refusal/ORDER_LINE_NEEDED')
+    expect(words.message).toContain('charged to its customer')
+    const pre = await no('manager', 'POST', `/sales/samples/rounds/${round}/work-orders`, {}, 409)
+    expect(pre.message).toContain('A pre-production sample is made on the order line it belongs to')
+    // An uncharged brand fit round may (the factory develops it for the brand, no order yet).
+    const { round: free } = await ok('manager', 'POST', '/sales/samples/rounds', { styleId: jacket2, companyId: companyA, kind: 'FIT', partyId: P1, cells: [{ colourwayId: black2, size: '54', quantity: 1 }] }, 201)
+    expect((await ok('manager', 'GET', `/sales/samples/rounds/${free.id}/work-order-options`)).withoutLine).toMatchObject({ allowed: true })
+  })
+})

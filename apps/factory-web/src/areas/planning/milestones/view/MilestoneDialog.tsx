@@ -5,7 +5,7 @@ import { Banner, KeyValue } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { Modal } from '../../../../lib/i18n/ds-parts'
-import { dayText, heldOf, lateWords, milestoneName, rowsOf, stateTone, stateWords, type MilestoneRow, type Words } from '../model'
+import { dayText, heldOf, lateWords, milestoneName, rowsOf, stateTone, stateWords, workOrdersWords, type MilestoneRow, type Words } from '../model'
 import type { MilestonesActions, MilestonesModel } from '../view-model'
 
 /**
@@ -48,7 +48,11 @@ export function MilestoneDialog({ model, actions, words }: { model: MilestonesMo
             ? [{ label: t('dialog.startedBefore'), value: t('dialog.startedBy', { name: gate.startedBefore.by?.name ?? '—', when: formatDateTime(gate.startedBefore.at, place) }), hint: gate.startedBefore.reason }]
             : []),
         ]
-      : [{ label: t('dialog.comesFrom'), value: t(`dialog.follows.${row.kind}`) }]),
+      : [
+          { label: t('dialog.comesFrom'), value: t(`dialog.follows.${row.kind}`) },
+          // B-W2b-284: production start follows the production work orders; a sample or a repair is shown apart, never counted.
+          ...(row.kind === 'START' && row.order.workOrders.byKind.length > 0 ? [{ label: t('dialog.workOrders'), value: workOrdersWords(row.order.workOrders.byKind, t) }] : []),
+        ]),
   ]
   const passHeld = gate ? heldOf(gate.actions.pass, t) : null
   const startHeld = gate ? heldOf(gate.actions.startBefore, t) : null

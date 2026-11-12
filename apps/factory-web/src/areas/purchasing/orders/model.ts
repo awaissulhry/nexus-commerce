@@ -17,6 +17,8 @@ import type { DailyDialog, SendExtra } from './daily-model'
 
 export const STATUS_TONE: Readonly<Record<PoStatus, Tone>> = Object.freeze({
   DRAFT: 'neutral',
+  // W2b-5 (B-W2b-285): waiting for a yes before it is sent; B-W2b-305 moves orders there and draws it.
+  PENDING_APPROVAL: 'warning',
   SENT: 'info',
   CHANGES_PROPOSED: 'warning',
   CONFIRMED: 'success',
@@ -109,6 +111,8 @@ export const tabOf = (value: string | null | undefined): OrderTab => ((RECORD_TA
 export function journeyIndex(status: PoStatus): number {
   switch (status) {
     case 'DRAFT':
+    // W2b-5 (B-W2b-285): not sent yet while the yes is awaited.
+    case 'PENDING_APPROVAL':
       return 0
     case 'SENT':
     case 'CHANGES_PROPOSED':

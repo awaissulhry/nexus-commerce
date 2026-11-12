@@ -44,6 +44,11 @@ model PlanningSettings {
   defaultEfficiencyPct Decimal  @default(100) @db.Decimal(5, 2)
   /// The nightly planning run of the site (B-W2a-22): its time, HH:MM in the site's timezone; null: runs on demand only.
   scheduledRunTime     String?
+  /// W2b-5 (schema wave 41/44, B-W2b-286; PLN-068): how a run splits a size run into planned work orders: ONE_GRID (W1),
+  /// or SIZE_GROUPS by `sizeGroups`: the groups of size codes, [["44", "46", "48"], ["50", "52", "54"]]: 2 to 20 groups of
+  /// 1 to 50 codes, a code in one group only; empty exactly for ONE_GRID.
+  sizeRunRule          SizeRunRule @default(ONE_GRID)
+  sizeGroups           Json        @default("[]")
   version              Int      @default(1)
   createdAt            DateTime @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -95,6 +100,26 @@ model ItemPlanning {
   minOrderQty        Decimal?            @db.Decimal(18, 4)
   orderMultiple      Decimal?            @db.Decimal(18, 4)
   maxOrderQty        Decimal?            @db.Decimal(18, 4)
+  /// W2b-5 (schema wave 41/44, B-W2b-286; read by B-W2b-318, -319, -293): how the ORDERS method sizes each order (PLN-006;
+  /// read with ORDERS only): FIXED exactly with fixedLotQty (above 0), PERIOD exactly with lotPeriodDays (1 to 366), MIN_MAX
+  /// by minOrderQty and maxOrderQty (the limits it has).
+  lotSizing          ItemLotSizing       @default(LOT_FOR_LOT)
+  fixedLotQty        Decimal?            @db.Decimal(18, 4)
+  lotPeriodDays      Int?
+  /// W2b-5 (PLN-008, PLN-061): a FINISHED or COMPONENT item's plan level (null: SKU) and production strategy (null:
+  /// MAKE_TO_ORDER).
+  planLevel          ItemPlanLevel?
+  strategy           ProductionStrategy?
+  /// W2b-5 (PLN-081): scrap on top of the BOM's wastage, percent of the need added (0 to under 100), and the yield, percent
+  /// of the input that comes out good (above 0 to 100); null: none.
+  scrapPct           Decimal?            @db.Decimal(5, 2)
+  yieldPct           Decimal?            @db.Decimal(5, 2)
+  /// W2b-5 (PLN-079): a phantom (a COMPONENT made and used at once, never stocked: its parts pass through to the parent's
+  /// need).
+  phantom            Boolean             @default(false)
+  /// W2b-5 (PLN-082): calendar days the plan adds between the supply's arrival and its use (incoming inspection, put-away),
+  /// 0 to 366; the calculated delay is the lead time plus these days, moved past the closures; null: none.
+  delayDays          Int?
   note               String?
   version            Int                 @default(1)
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)

@@ -28,6 +28,8 @@ export interface StyleDepthSlots {
   matrixNotice: ReactNode
   /** What a matrix cell says beside its state mark. */
   cell: (sku: Pick<SkuView, 'sku' | 'gtin' | 'status'> | null) => ReactNode
+  /** B-W2b-283 (FU1:01): Overview, the identity column after the depth's cards: the markets the style is sold in. */
+  markets?: ReactNode
 }
 
 export function depthSlots(model: StyleDepthModel, actions: StyleDepthActions | undefined, skus: readonly SkuView[]): StyleDepthSlots {

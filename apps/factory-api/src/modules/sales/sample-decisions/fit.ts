@@ -1,3 +1,4 @@
+import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -8,6 +9,7 @@ import {
   fitRefusal,
   measuredProblems,
   noSpecRefusal,
+  notASpecPointRefusal,
   outsideWords,
   passOf,
   plain,
@@ -38,16 +40,24 @@ import { namesOf, refuse, stale } from './store'
  *   PATCH  /sales/samples/comments/:commentId        its words while the round is open; resolved at any time
  *   DELETE /sales/samples/comments/:commentId        while the round is open
  *
- * SampleMeasurement / SampleComment.pointOfMeasureId has NO foreign key in the schema (B-W2b-212): this module checks that the
- * point is one of the round's pinned revision's spec (its id, code, name and unit are taken from the library). Photos of a
- * comment are files of record type SampleComment (the generic POST /files with the round's company).
+ * B-W2b-284: SampleMeasurement / SampleComment.pointOfMeasureId are foreign keys to the library's PointOfMeasure (W2b-5 wave
+ * 34; Restrict): the points are read through the keys (the spec value's, the measurement's, the comment's), never looked up by
+ * this module on their own, and a point is accepted only as one of the round's pinned revision's spec (its code, name and unit
+ * frozen from that point). Photos of a comment are files of record type SampleComment (the generic POST /files with the
+ * round's company).
  */
 
-const SPEC_VALUE = { pointOfMeasureId: true, size: true, seq: true, nominal: true, toleranceMinus: true, tolerancePlus: true } as const
-const MEASUREMENT = { id: true, seq: true, pointOfMeasureId: true, pomCode: true, pomName: true, size: true, nominal: true, toleranceMinus: true, tolerancePlus: true, uom: true, measured: true, measuredAt: true, pass: true, note: true, version: true } as const
+/** The library point a spec value, measurement or comment names (through its foreign key, B-W2b-284). */
+const POINT = { select: { id: true, code: true, name: true, uom: true } } as const
+const SPEC_VALUE = { pointOfMeasureId: true, size: true, seq: true, nominal: true, toleranceMinus: true, tolerancePlus: true, pointOfMeasure: POINT } as const
+const MEASUREMENT = { id: true, seq: true, pointOfMeasureId: true, pomCode: true, pomName: true, size: true, nominal: true, toleranceMinus: true, tolerancePlus: true, uom: true, measured: true, measuredAt: true, pass: true, note: true, version: true, pointOfMeasure: POINT } as const
 const COMMENT = { id: true, roundId: true, pointOfMeasureId: true, pomCode: true, bodyArea: true, text: true, resolved: true, resolvedAt: true, resolvedById: true, version: true, createdAt: true, createdById: true } as const
 
-type SpecValueRow = { pointOfMeasureId: string; size: string; seq: number; nominal: { toString(): string }; toleranceMinus: { toString(): string }; tolerancePlus: { toString(): string } }
+type PointRow = Prisma.PointOfMeasureGetPayload<typeof POINT>
+type SpecValueRow = { pointOfMeasureId: string; size: string; seq: number; nominal: { toString(): string }; toleranceMinus: { toString(): string }; tolerancePlus: { toString(): string }; pointOfMeasure: PointRow }
+
+/** The spec's points by id (each read through its spec values' foreign key). */
+const specPointsOf = (values: readonly SpecValueRow[]): Map<string, PointRow> => new Map(values.map((value) => [value.pointOfMeasureId, value.pointOfMeasure]))
 
 /** The revision's live spec (DRAFT or APPROVED, not archived), its values and their points. */
 async function liveSpecOf(db: Reader, revisionId: string) {
@@ -65,6 +75,16 @@ async function sizesOf(db: Reader, round: Pick<RoundData, 'styleId' | 'cells'>, 
 }
 
 const at = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
+
+/**
+ * The words for a point the spec has no value for in this size (B-W2b-284): a point of the spec in another size, a library
+ * point outside the spec (its code read for the words only), or an id that is no point at all.
+ */
+async function offSpecRefusal(db: Reader, pointOfMeasureId: string, inSpec: PointRow | null, size: string, revision: number) {
+  if (inSpec) return pointRefusal(inSpec.code, size, revision)
+  const named = isUuid(pointOfMeasureId) ? await db.pointOfMeasure.findUnique({ where: { id: pointOfMeasureId }, select: { code: true } }) : null
+  return named ? pointRefusal(named.code, size, revision) : notASpecPointRefusal(revision)
+}
 
 async function commentViewsOf(db: Reader, rows: readonly { id: string; pointOfMeasureId: string | null; pomCode: string | null; bodyArea: string | null; text: string; resolved: boolean; resolvedAt: Date | null; resolvedById: string | null; version: number; createdAt: Date; createdById: string | null }[]): Promise<CommentView[]> {
   if (rows.length === 0) return []
@@ -95,8 +115,9 @@ async function fitViewOf(db: Reader, context: OfficeContext, round: RoundData): 
     db.sampleMeasurement.findMany({ where: { roundId: round.id }, select: MEASUREMENT, orderBy: [{ seq: 'asc' }, { pomCode: 'asc' }, { size: 'asc' }] }),
     db.sampleComment.findMany({ where: { roundId: round.id }, select: COMMENT, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
   ])
-  const pointIds = [...new Set([...values.map((value) => value.pointOfMeasureId), ...measurements.flatMap((row) => (row.pointOfMeasureId ? [row.pointOfMeasureId] : []))])]
-  const points = new Map((pointIds.length === 0 ? [] : await db.pointOfMeasure.findMany({ where: { id: { in: pointIds } }, select: { id: true, code: true, name: true, uom: true } })).map((row) => [row.id, row]))
+  // B-W2b-284: the points come through the foreign keys (the spec's values, the measurements made against points it no longer has).
+  const points = specPointsOf(values)
+  for (const row of measurements) if (row.pointOfMeasure && !points.has(row.pointOfMeasure.id)) points.set(row.pointOfMeasure.id, row.pointOfMeasure)
   const sizes = await sizesOf(db, round, measurements.map((row) => row.size))
   const measurementView = (row: (typeof measurements)[number]) => ({
     id: row.id,
@@ -211,14 +232,15 @@ export async function saveFit(caller: CommandCaller, roundId: string, body: FitS
     refuse(fitRefusal({ number: row.number, stage: row.stage as SampleStage }))
     const { spec, values } = await liveSpecOf(tx, row.revisionId)
     if (!spec) refuse(noSpecRefusal(revision))
-    const points = new Map((await tx.pointOfMeasure.findMany({ where: { id: { in: [...new Set(body.cells.map((cell) => cell.pointOfMeasureId))] } }, select: { id: true, code: true, name: true, uom: true } })).map((point) => [point.id, point]))
+    // B-W2b-284: a point is one of the spec's (read through its values' foreign key); no library look-up of its own.
+    const points = specPointsOf(values)
     const before: unknown[] = []
     const after: unknown[] = []
-    for (const [index, cell] of body.cells.entries()) {
-      const point = points.get(cell.pointOfMeasureId)
-      if (!point) throw new ValidationError('No such point of measure.', [{ path: `body/cells/${index}/pointOfMeasureId`, message: 'No such point of measure.' }])
-      const value = values.find((each) => each.pointOfMeasureId === point.id && each.size === cell.size)
-      if (!value) refuse(pointRefusal(point.code, cell.size, revision))
+    for (const cell of body.cells) {
+      const point = points.get(cell.pointOfMeasureId) ?? null
+      const value = values.find((each) => each.pointOfMeasureId === cell.pointOfMeasureId && each.size === cell.size)
+      if (!point || !value) refuse(await offSpecRefusal(tx, cell.pointOfMeasureId, point, cell.size, revision))
+      if (!point) continue
       const existing = await tx.sampleMeasurement.findFirst({ where: { roundId, size: cell.size, OR: [{ pointOfMeasureId: point.id }, { pomCode: point.code }] }, select: MEASUREMENT })
       if (existing && cell.version === undefined) throw stale(`${point.code} ${cell.size}`, existing.version)
       if (existing && cell.version !== existing.version) throw new StaleVersionError('SampleMeasurement', existing.id, existing.version, cell.version!)
@@ -311,15 +333,16 @@ export async function addComment(caller: CommandCaller, roundId: string, body: C
   refuse(fitRefusal({ number: seen.number, stage: seen.stage as SampleStage }))
   let point: { id: string; code: string } | null = null
   if (body.pointOfMeasureId) {
+    const asked = body.pointOfMeasureId
     point = await caller.withClient(async (db) => {
-      const found = await db.pointOfMeasure.findUnique({ where: { id: body.pointOfMeasureId }, select: { id: true, code: true } })
-      if (!found) throw new ValidationError('No such point of measure.', [{ path: 'body/pointOfMeasureId', message: 'No such point of measure.' }])
-      const { values } = await liveSpecOf(db, seen.revisionId)
-      if (!values.some((value) => value.pointOfMeasureId === found.id)) {
-        const revision = await db.styleRevision.findUniqueOrThrow({ where: { id: seen.revisionId }, select: { revision: true } })
-        refuse(specPointRefusal(found.code, revision.revision))
+      // B-W2b-284: one of the spec's points (through its values' foreign key); no library look-up of its own.
+      const found = specPointsOf((await liveSpecOf(db, seen.revisionId)).values).get(asked)
+      if (!found) {
+        const revision = (await db.styleRevision.findUniqueOrThrow({ where: { id: seen.revisionId }, select: { revision: true } })).revision
+        const named = isUuid(asked) ? await db.pointOfMeasure.findUnique({ where: { id: asked }, select: { code: true } }) : null
+        refuse(named ? specPointRefusal(named.code, revision) : notASpecPointRefusal(revision))
       }
-      return found
+      return found!
     })
   }
   const id = newId()

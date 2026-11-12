@@ -156,7 +156,8 @@ export const defectWords = (defects: readonly FinalDefect[], code: string): stri
 
 /** What the inspector types for a point: the value; a profile point its tolerance too; a size-chart or typed point its nominal too. */
 export function pointAsks(point: Pick<ChartPoint, 'source' | 'nominal' | 'tolerance'>): { readonly nominal: boolean; readonly tolerance: boolean } {
-  if (point.source === 'PLAN') return { nominal: false, tolerance: false }
+  // B-W2b-283 (FU1:05): the approved spec gives both, per size (the API refuses anything else typed).
+  if (point.source === 'PLAN' || point.source === 'SPEC') return { nominal: false, tolerance: false }
   return { nominal: point.nominal === null, tolerance: point.tolerance === null }
 }
 
@@ -185,12 +186,31 @@ export function measureDraft(point: ChartPoint, sampleSize: number, sizes: reado
   return { pointCode: point.pointCode, unit: nextUnit(point, sampleSize, size), size, value: null, nominal: null, tolerance: null, field: asks.nominal ? 'nominal' : asks.tolerance ? 'tolerance' : 'value' }
 }
 
-/** Nominal and tolerance the value is judged against: the point's, else what the inspector typed. */
-export function specOf(point: Pick<ChartPoint, 'nominal' | 'tolerance'>, draft: Pick<MeasureDraft, 'nominal' | 'tolerance'>): { readonly nominal: number | null; readonly tolerance: number | null } {
+/**
+ * Nominal and tolerance the value is judged against: the point's, else what the inspector typed. B-W2b-283 (FU1:05): a spec
+ * point's cell of the size measured, its band (nominal − minus … nominal + plus) as its centre ± half for the meter and the
+ * verdict (the same band; the database judges the band itself).
+ */
+export function specOf(point: Pick<ChartPoint, 'nominal' | 'tolerance'> & Partial<Pick<ChartPoint, 'source' | 'bySize'>>, draft: Pick<MeasureDraft, 'nominal' | 'tolerance'> & Partial<Pick<MeasureDraft, 'size'>>): { readonly nominal: number | null; readonly tolerance: number | null } {
+  if (point.source === 'SPEC') {
+    const cell = point.bySize?.find((entry) => entry.size === draft.size)
+    if (!cell) return { nominal: null, tolerance: null }
+    const minus = Number(cell.toleranceMinus ?? cell.tolerance)
+    const plus = Number(cell.tolerancePlus ?? cell.tolerance)
+    return { nominal: Number(cell.nominal) + (plus - minus) / 2, tolerance: (plus + minus) / 2 }
+  }
   return { nominal: point.nominal !== null ? Number(point.nominal) : draft.nominal, tolerance: point.tolerance !== null ? Number(point.tolerance) : draft.tolerance }
 }
 
 const decimal = (value: number): string => String(Math.round(value * 1000) / 1000)
+
+/** B-W2b-283 (FU1:05): a value's band (nominal − minus … nominal + plus) as one centre ± half, to say it with one tolerance. */
+export function valueBand(value: { readonly nominal: string; readonly tolerance: string; readonly toleranceMinus?: string | null | undefined; readonly tolerancePlus?: string | null | undefined }): { readonly nominal: number; readonly tolerance: number } {
+  if (value.toleranceMinus == null || value.tolerancePlus == null) return { nominal: Number(value.nominal), tolerance: Number(value.tolerance) }
+  const minus = Number(value.toleranceMinus)
+  const plus = Number(value.tolerancePlus)
+  return { nominal: Number(value.nominal) + (plus - minus) / 2, tolerance: (plus + minus) / 2 }
+}
 
 /** In or out by the numbers (= factory-domain measurementPass; the database writes the same), or null while a number is missing. */
 export function measureVerdict(point: ChartPoint, draft: MeasureDraft): 'PASS' | 'FAIL' | null {

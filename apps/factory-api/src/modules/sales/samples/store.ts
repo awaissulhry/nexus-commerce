@@ -253,12 +253,15 @@ export async function roundViewOf(db: Reader, context: OfficeContext, round: Rou
     db.sampleSwatch.count({ where: { roundId: round.id } }),
   ])
   const seen = workOrders.filter((workOrder) => can(actorOf(context), WORKORDERS_VIEW, { companyId: workOrder.companyId, siteId: workOrder.siteId }))
-  const [sites, cells] = await Promise.all([
+  const [sites, cells, lineless] = await Promise.all([
     seen.length === 0 ? Promise.resolve([]) : db.site.findMany({ where: { id: { in: ids(seen.map((workOrder) => workOrder.siteId)) } }, select: { id: true, code: true } }),
     seen.length === 0 ? Promise.resolve([]) : db.workOrderSize.groupBy({ by: ['workOrderId'], where: { workOrderId: { in: seen.map((workOrder) => workOrder.id) } }, _sum: { quantity: true } }),
+    // B-W2b-284: the work orders made for no order line (an internal or uncharged round's).
+    seen.length === 0 ? Promise.resolve([]) : db.workOrderSize.groupBy({ by: ['workOrderId'], where: { workOrderId: { in: seen.map((workOrder) => workOrder.id) }, salesOrderLineId: null }, _count: { _all: true } }),
   ])
   const siteOf = byId(sites)
   const piecesOfWorkOrder = new Map(cells.map((cell) => [cell.workOrderId, cell._sum.quantity ?? 0]))
+  const withoutOrderLine = new Set(lineless.map((row) => row.workOrderId))
   const manage = may(context, SALES_SAMPLES_MANAGE, round)
   const facts = { number: round.number, stage: round.stage as SampleStage }
   const revisionNo = row!.revision.revision
@@ -287,6 +290,7 @@ export async function roundViewOf(db: Reader, context: OfficeContext, round: Rou
       releasedAt: at(workOrder.releasedAt),
       startedAt: at(workOrder.startedAt),
       completedAt: at(workOrder.completedAt),
+      withoutOrderLine: withoutOrderLine.has(workOrder.id),
     })),
     workOrdersHeld: workOrders.length - seen.length,
     shipmentsList: await shipmentViewsOf(db, shipments),

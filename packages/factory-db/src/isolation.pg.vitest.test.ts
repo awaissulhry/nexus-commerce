@@ -7,6 +7,7 @@ import { seed as seedAndon } from '../seed/andon'
 import { seed as seedApprovals } from '../seed/approvals'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
 import { seed as seedCapa } from '../seed/capa'
 import { seed as seedChanges } from '../seed/changes'
@@ -43,6 +44,7 @@ import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
+import { seed as seedPlanningDepth } from '../seed/planning-depth'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
@@ -66,6 +68,9 @@ import { seed as seedRecall } from '../seed/recall'
 import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSalesIntake } from '../seed/sales-intake'
+import { seed as seedSalesPricing } from '../seed/sales-pricing'
+import { seed as seedSalesOrdersDepth } from '../seed/sales-orders-depth'
 import { seed as seedSamples } from '../seed/samples'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
@@ -83,6 +88,7 @@ import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedWarehouseDepth } from '../seed/warehouse-depth'
 import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -380,6 +386,40 @@ beforeAll(async () => {
   // state and their history; the first rule (off), request (PENDING) and line (its REQUESTED) are the plain ones a copy may repeat.
   await seedApprovals({ db: factory, namespace: 'iso-a' })
   await seedApprovals({ db: factory, namespace: 'iso-b' })
+  // The warehouse in depth schema of W2b-5 (wave 36/44): places, defaults, transfers, schedules, a count that freezes moves with
+  // its scans, the warehouse rules, the task inbox, substitutes and goods without a PO at A1 (and B1's default); their first
+  // rows (an inactive default, a DRAFT transfer and its line, an OPEN task, a WAITING substitute, an ADDED line of a COUNTING
+  // count and its COUNT scan) are the plain ones a copy may repeat.
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-a' })
+  await seedWarehouseDepth({ db: factory, namespace: 'iso-b' })
+  // The sales intake and customers schema of W2b-5 (wave 37/44): seasons, inquiries and their lines, customer requirements,
+  // holds and terms per company, a rider under a team, the contacts' lawful basis and an erased contact; their first rows (an
+  // OPEN season, a NEW office inquiry and its line, a requirement in force, a RELEASED hold, ENDED terms) are the plain ones a
+  // copy may repeat.
+  await seedSalesIntake({ db: factory, namespace: 'iso-a' })
+  await seedSalesIntake({ db: factory, namespace: 'iso-b' })
+  // The quotes, pricing and configuration schema of W2b-5 (wave 38/44): templates, delivery schedules and chosen options of a
+  // DRAFT quote and a CONFIRMED order for P1 (the partner reads them), breaks and surcharges of a DRAFT price list version,
+  // minimums, size curves; their first rows (a delivery bringing at most half of each size, a default option) are the plain
+  // ones a copy may repeat.
+  await seedSalesPricing({ db: factory, namespace: 'iso-a' })
+  await seedSalesPricing({ db: factory, namespace: 'iso-b' })
+  // The orders, credit and changes schema of W2b-5 (wave 39/44): freeze rules, credit checks with an override, customers'
+  // materials, an order waiting for a yes, a priced amendment, customer-owned stock; the first freeze rule (off), check (a PASS)
+  // and material (of the waiting order) are the plain ones a copy may repeat.
+  await seedSalesOrdersDepth({ db: factory, namespace: 'iso-a' })
+  await seedSalesOrdersDepth({ db: factory, namespace: 'iso-b' })
+  // Buying and subcontracting in depth (W2b-5 schema wave 40/44): variants, tolerances, two purchase orders with their delivery
+  // schedules (P1's), a re-dated delivery, requests to buy, a workshop's cost; with partnerScope a SENT kit line of P1's job and
+  // its material balance. Their first rows (a DRAFT order's delivery, the newest change of its date, an OPEN request, an
+  // adjustment that moves 0.1 from used to scrapped, a fee) are the ones a copy may repeat.
+  await seedBuyingDepth({ db: factory, namespace: 'iso-a' }, { partnerScope: true })
+  await seedBuyingDepth({ db: factory, namespace: 'iso-b' }, { partnerScope: true })
+  // The planning depth schema of W2b-5 (wave 41/44): planned work and subcontract orders, action messages, promises, the
+  // board's changes and pins, what-ifs, a workshop's capacity; their first rows (a PLANNED order with a protected due date, an
+  // OPEN message, a re-promise, a move, a DRAFT what-if, an open capacity) are the plain ones a copy may repeat.
+  await seedPlanningDepth({ db: factory, namespace: 'iso-a' })
+  await seedPlanningDepth({ db: factory, namespace: 'iso-b' })
   // The suppliers schema of W2b-5 (wave 42/44): P2's kinds, status and origin, its bank accounts (never changed in place), its
   // qualifications and written terms; the first account (PROPOSED in the portal), qualification (PENDING) and agreement (DRAFT)
   // are the plain ones a copy may repeat; with partnerScope, P1's PROPOSED account (the row a partner session inserts).
@@ -451,8 +491,12 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
     'CostingSettings',
+    'CountSchedule',
+    'CreditCheck',
     'CrewMember',
     'CrewSession',
+    'CustomerMaterial',
+    'CustomerRequirement',
     'CutConsumption',
     'CutIssue',
     'CutIssueLine',
@@ -464,7 +508,9 @@ it('covers every classified table and every runtime role', () => {
     'CutTicket',
     'Ddt',
     'DdtCancellation',
+    'DefaultLocation',
     'DefectCode',
+    'DeliveryTolerance',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -526,6 +572,8 @@ it('covers every classified table and every runtime role', () => {
     'IncomingHideResult',
     'IncomingInspection',
     'IncomingRollResult',
+    'Inquiry',
+    'InquiryLine',
     'Inspection',
     'InspectionAmendment',
     'InspectionCheckResult',
@@ -540,6 +588,7 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationAccount',
     'IntegrationCall',
     'InterestReferenceRate',
+    'InventorySettings',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -547,6 +596,7 @@ it('covers every classified table and every runtime role', () => {
     'ItemColour',
     'ItemGradeRule',
     'ItemPlanning',
+    'ItemVariant',
     'LabResult',
     'LabelArtworkVersion',
     'LabelTemplate',
@@ -582,6 +632,7 @@ it('covers every classified table and every runtime role', () => {
     'MarketProfile',
     'MaterialComplianceProfile',
     'MaterialRequirement',
+    'MaterialSubstitution',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementRule',
@@ -590,6 +641,8 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'MoqRule',
+    'MrpActionMessage',
     'NcrConcession',
     'NcrContainmentAction',
     'NcrCostLine',
@@ -619,6 +672,7 @@ it('covers every classified table and every runtime role', () => {
     'OptionValue',
     'OrderChangeRequest',
     'OrderChangeRequestLine',
+    'OrderFreezeRule',
     'OrderGate',
     'OrgArea',
     'OutboxEvent',
@@ -632,7 +686,9 @@ it('covers every classified table and every runtime role', () => {
     'Party',
     'PartyAddress',
     'PartyChangeRequest',
+    'PartyCompanyTerms',
     'PartyContact',
+    'PartyHold',
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
@@ -658,11 +714,13 @@ it('covers every classified table and every runtime role', () => {
     'PieceRateTable',
     'PieceRateVersion',
     'PlanVersion',
+    'PlannedWorkOrder',
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PoDateChange',
     'PointOfMeasure',
     'PortalOrderRequest',
     'PortalOrderRequestLine',
@@ -676,6 +734,7 @@ it('covers every classified table and every runtime role', () => {
     'PpeTextApproval',
     'Prepack',
     'PrepackLine',
+    'PriceBreak',
     'PriceList',
     'PriceListEntry',
     'PriceListVersion',
@@ -691,12 +750,15 @@ it('covers every classified table and every runtime role', () => {
     'ProductTypeProfile',
     'ProductionControlTest',
     'ProductionSettings',
+    'PromiseRecord',
     'ProtectedView',
     'ProtectorPlacement',
     'PurchaseOrder',
     'PurchaseOrderLine',
+    'PurchaseOrderLineDelivery',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchaseRequest',
     'PurchasingSettings',
     'QualityAlertRule',
     'QualityHold',
@@ -708,7 +770,11 @@ it('covers every classified table and every runtime role', () => {
     'QuoteAcceptance',
     'QuoteApproval',
     'QuoteLine',
+    'QuoteLineDelivery',
+    'QuoteLineOption',
     'QuoteLineSize',
+    'QuoteTemplate',
+    'QuoteTemplateLine',
     'QuoteVersion',
     'RateAcknowledgement',
     'RatePublication',
@@ -756,6 +822,8 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrder',
     'SalesOrderAmendment',
     'SalesOrderLine',
+    'SalesOrderLineDelivery',
+    'SalesOrderLineOption',
     'SalesOrderLineSize',
     'SalesOrderMilestone',
     'SalesSettings',
@@ -767,6 +835,7 @@ it('covers every classified table and every runtime role', () => {
     'SavedView',
     'ScanCorrectionRequest',
     'ScanPatternFinding',
+    'ScheduleChange',
     'ScheduleSlot',
     'ScrapApproval',
     'ScrapReason',
@@ -774,6 +843,7 @@ it('covers every classified table and every runtime role', () => {
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
+    'Season',
     'SecondaryProcess',
     'SecretValue',
     'Session',
@@ -788,7 +858,9 @@ it('covers every classified table and every runtime role', () => {
     'ShippingSettings',
     'Site',
     'Size',
+    'SizeCurve',
     'SizeScale',
+    'SizeSurcharge',
     'Skill',
     'StaffNoticeAck',
     'StandardChange',
@@ -796,6 +868,7 @@ it('covers every classified table and every runtime role', () => {
     'Station',
     'StockCount',
     'StockCountLine',
+    'StockCountScan',
     'StockMove',
     'StockValuation',
     'StoredFile',
@@ -807,6 +880,8 @@ it('covers every classified table and every runtime role', () => {
     'StyleText',
     'SubcontractAgreement',
     'SubcontractBundle',
+    'SubcontractConsumption',
+    'SubcontractCostEntry',
     'SubcontractKitLine',
     'SubcontractOperation',
     'SubcontractOrder',
@@ -814,6 +889,7 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractReceipt',
     'SubcontractReceiptLine',
     'SubcontractReturnNotice',
+    'SubcontractorCapacity',
     'SubstanceRule',
     'SupplierBankAccount',
     'SupplierClaim',
@@ -847,10 +923,14 @@ it('covers every classified table and every runtime role', () => {
     'TrainingRecord',
     'TrainingRequirement',
     'TrainingSession',
+    'TransferLine',
+    'TransferOrder',
     'TypeChangeReview',
     'User',
     'Variant',
     'ViesCheck',
+    'WarehouseTask',
+    'WhatIfScenario',
     'WorkCalendar',
     'WorkCentre',
     'WorkCentreCapacity',

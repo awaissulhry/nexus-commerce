@@ -23,6 +23,8 @@ import { command, type CommandCaller, type CommandTx } from '../../../core/comma
 import { actorOf } from '../../../core/context'
 import { requireEditRule } from '../lifecycle/edit-rule'
 import { assertMayWrite, contextOf, isUniqueViolation, readStyle } from '../styles/store'
+// B-W2b-283 (FU1:04): who changed the type last ("Changed by" without audit.read).
+import { changedByOf, updatedByOf } from '../settings/changed-by'
 
 /**
  * Product types (B-W2b-221; PRD-008; design products.settings psettings.types; factory-db ProductTypeProfile; rules in
@@ -68,6 +70,8 @@ const TYPE_SELECT = {
   status: true,
   version: true,
   updatedAt: true,
+  // B-W2b-283 (FU1:04).
+  updatedById: true,
 } as const satisfies Prisma.ProductTypeProfileSelect
 type Row = Prisma.ProductTypeProfileGetPayload<{ select: typeof TYPE_SELECT }>
 
@@ -115,6 +119,8 @@ async function typeViewOf(db: Reader, row: Row): Promise<TypeView> {
     status: row.status,
     version: row.version,
     updatedAt: toUtcIso(row.updatedAt),
+    // B-W2b-283 (FU1:04): the person who changed it last (null: nobody recorded since the column came).
+    changedBy: await changedByOf(db, row.updatedById),
     own: {
       requiredAttributes: [...row.requiredAttributes],
       defaultSizeScaleId: row.defaultSizeScaleId,
@@ -262,7 +268,7 @@ export async function createType(caller: CommandCaller, body: CreateTypeBody, id
     if (problems.length > 0) throw invalid(problems)
     const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
     await tx.productTypeProfile.create({
-      data: { ...draft, requiredAttributes: [...draft.requiredAttributes], nameI18n: body.nameI18n ?? undefined, createdAt: now, updatedAt: now, createdById },
+      data: { ...draft, requiredAttributes: [...draft.requiredAttributes], nameI18n: body.nameI18n ?? undefined, createdAt: now, updatedAt: now, createdById, updatedById: updatedByOf(tools) /* B-W2b-283 */ },
       select: { id: true },
     })
     tools.audit({ action: 'product.types.create', recordType: 'ProductTypeProfile', recordId: id, companyId, after: { ...draft, nameI18n: body.nameI18n ?? null } })
@@ -323,7 +329,7 @@ export async function updateType(caller: CommandCaller, typeId: string, body: Up
       if (problems.length > 0) throw invalid(problems)
       const data = Object.fromEntries(changed.map((field) => [field, field === 'nameI18n' ? (next.nameI18n ?? undefined) : next[field as keyof typeof next]]))
       if (changed.includes('nameI18n') && next.nameI18n === null) await tx.$executeRaw`UPDATE "ProductTypeProfile" SET "nameI18n" = NULL WHERE "id" = ${typeId}::uuid`
-      await tx.productTypeProfile.update({ where: { id: typeId }, data: data as Prisma.ProductTypeProfileUncheckedUpdateInput, select: { id: true } })
+      await tx.productTypeProfile.update({ where: { id: typeId }, data: { ...(data as Prisma.ProductTypeProfileUncheckedUpdateInput), updatedById: updatedByOf(tools) /* B-W2b-283 */ }, select: { id: true } })
       tools.audit({
         action: 'product.types.update',
         recordType: 'ProductTypeProfile',
@@ -359,7 +365,7 @@ export async function moveType(caller: CommandCaller, typeId: string, direction:
         const parent = await tx.productTypeProfile.findUnique({ where: { id: row.parentId }, select: { code: true, status: true } })
         if (parent?.status === 'ARCHIVED') throw new InvalidStateError(`Its parent type ${parent.code} is archived: restore it first.`)
       }
-      await tx.productTypeProfile.update({ where: { id: typeId }, data: { status: to }, select: { id: true } })
+      await tx.productTypeProfile.update({ where: { id: typeId }, data: { status: to, updatedById: updatedByOf(tools) /* B-W2b-283 */ }, select: { id: true } })
       tools.audit({ action: `product.types.${direction}`, recordType: 'ProductTypeProfile', recordId: typeId, companyId: row.companyId, before: { status: row.status }, after: { status: to }, ...(body.reason ? { reason: body.reason } : {}) })
       tools.emit({ type: 'product_type.changed', subject: typeId, companyId: row.companyId, payload: { productTypeId: typeId, code: row.code, change: direction === 'archive' ? 'ARCHIVED' : 'RESTORED' } })
       return typeViewOf(tx, await tx.productTypeProfile.findUniqueOrThrow({ where: { id: typeId }, select: TYPE_SELECT }))

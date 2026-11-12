@@ -386,6 +386,9 @@ export async function unvaluedMovesIn(db: Reader, companyId: string, period: Per
       companyId,
       occurredAt: { gte: from, lte: to },
       valuations: { none: {} },
+      // W2b-5 (B-W2b-281): customer-owned stock (Lot.ownerPartyId) is never valued (the database refuses it): its moves wait
+      // for no value.
+      NOT: { lot: { ownerPartyId: { not: null } } },
       OR: [
         { fromLocationId: null, NOT: { toLocationId: null } },
         { toLocationId: null, NOT: { fromLocationId: null } },

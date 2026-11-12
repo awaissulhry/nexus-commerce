@@ -174,6 +174,7 @@ const STATUS_NAMES: Readonly<Record<SalesOrderStatus, Words>> = Object.freeze({
   SHIPPED: { it: 'spedito', en: 'shipped' },
   CLOSED: { it: 'chiuso', en: 'closed' },
   CANCELLED: { it: 'annullato', en: 'cancelled' },
+  PENDING_APPROVAL: { it: 'in attesa di approvazione', en: 'waiting for a yes' },
 })
 
 const verdict = (code: VerdictCode, words: Words, day: BusinessDate | null = null): Verdict => Object.freeze({ possible: code === 'FREE', code, day, words: Object.freeze({ ...words }) })

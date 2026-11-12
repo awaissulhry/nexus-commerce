@@ -16,7 +16,8 @@ import { Dec, parseDecimal, ZERO, type Decimal, type DecimalInput } from '../../
 // W2a wave 5 (factory-db inventory.prisma): PRODUCTION_RECEIPT, finished garments of a work order into finished-goods stock.
 // W2b (B-W2b-01): goods back from a customer, goods back to a supplier, garments leaving with a shipment (factory-db StockMoveReason).
 // W2b-2 (wave 12/16): an offcut back from a work order as tagged stock, RETURN's twin.
-export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT', 'REMNANT'] as const
+// W2b-5 (wave 36/44, B-W2b-277): a transfer's goods leave the sending site's transit place and enter the receiving site.
+export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT', 'REMNANT', 'TRANSFER_OUT', 'TRANSFER_IN'] as const
 export type StockMoveReason = (typeof STOCK_MOVE_REASONS)[number]
 
 export const ITEM_TRACKINGS = ['NONE', 'LOT', 'HIDE', 'SERIAL'] as const
@@ -43,6 +44,9 @@ export const REASON_SIDES = Object.freeze({
   SHIPMENT: 'OUT',
   // W2b-2 (wave 12/16): an offcut enters, as a RETURN does.
   REMNANT: 'IN',
+  // W2b-5 (wave 36/44): a transfer's goods leave the sending site (off its transit place) and enter the receiving site.
+  TRANSFER_OUT: 'OUT',
+  TRANSFER_IN: 'IN',
 } as const satisfies Record<StockMoveReason, 'IN' | 'OUT' | 'INSIDE' | 'ONE_SIDE'>)
 
 /** The reasons that say why (SCM-192: an adjustment, a count difference, a scrap); a reversal says why too. */

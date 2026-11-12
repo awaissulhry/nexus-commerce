@@ -206,7 +206,7 @@
     "startedBy": "{name}, {when}",
     "comesFrom": "Viene da",
     "follows": {
-      "START": "La prima barra degli ordini di lavoro dell'ordine sul tabellone di pianificazione (obiettivo) e il primo ordine di lavoro iniziato (effettiva).",
+      "START": "La prima barra degli ordini di lavoro di produzione dell'ordine sul tabellone di pianificazione (obiettivo) e il primo di loro iniziato (effettiva); un ordine di lavoro campione o di riparazione non conta mai.",
       "SHIP": "La data promessa dell'ordine (obiettivo) e la prima spedizione partita (effettiva)."
     },
     "openOrder": "Apri l'ordine",
@@ -219,7 +219,8 @@
     "holdsNone": "Finché aspetta, il tabellone di pianificazione tratterrà gli ordini di lavoro di {order}.",
     "holdsHow": "Segnalo fatto quando è vero, o fai partire il lavoro prima con un motivo (qualcuno diverso dal suo pianificatore).",
     "opened": "Superato: gli ordini di lavoro di {order} si possono pianificare.",
-    "openedEarly": "Partito prima del gate: gli ordini di lavoro di {order} si possono pianificare; il gate aspetta ancora di essere superato."
+    "openedEarly": "Partito prima del gate: gli ordini di lavoro di {order} si possono pianificare; il gate aspetta ancora di essere superato.",
+    "workOrders": "Ordini di lavoro"
   },
   "decision": {
     "APPROVED": "Approvato",
@@ -364,5 +365,18 @@
     "retry": "Riprova",
     "clearFilters": "Togli i filtri",
     "cancel": "Annulla"
+  },
+  "workOrders": {
+    "kind": {
+      "SIZE_GRID_one": "{count} di produzione",
+      "SIZE_GRID_other": "{count} di produzione",
+      "MADE_TO_MEASURE_one": "{count} su misura",
+      "MADE_TO_MEASURE_other": "{count} su misura",
+      "SAMPLE_one": "{count} campione",
+      "SAMPLE_other": "{count} campioni",
+      "REPAIR_one": "{count} riparazione",
+      "REPAIR_other": "{count} riparazioni"
+    },
+    "kindNotStarted": "{kind} ({count} non iniziati)"
   }
 }

@@ -10,7 +10,9 @@ import type { Issue } from '../../core/errors'
 
 // W2a wave 3 (factory-db inventory.prisma): SUBCONTRACTOR, our stock at an outside workshop; the location names its party.
 // W2a wave 5: FINISHED_GOODS, finished garments ready to ship (a production receipt puts them there or inside one).
-export const LOCATION_KINDS = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING', 'SUBCONTRACTOR', 'FINISHED_GOODS'] as const
+// W2b-5 (wave 36/44, B-W2b-277; SCM-177): CUSTOMER (our stock at a customer's, naming its party), TRANSIT (a transfer's goods
+// between two sites; only a transfer moves it), PICK_FACE and BULK. What each may hold is B-W2b-289's.
+export const LOCATION_KINDS = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING', 'SUBCONTRACTOR', 'FINISHED_GOODS', 'CUSTOMER', 'TRANSIT', 'PICK_FACE', 'BULK'] as const
 export type LocationKind = (typeof LOCATION_KINDS)[number]
 
 export const LOCATION_STATUSES = ['ACTIVE', 'ARCHIVED'] as const

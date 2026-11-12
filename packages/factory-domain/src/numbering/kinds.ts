@@ -74,6 +74,10 @@ export const NUMBER_KINDS = [
   // document kinds.
   'RECALL',
   'AUTHORITY_REQUEST',
+  // W2b-5 wave 36/44 (factory-db numbering.prisma): a transfer between sites (TRF-…), an office document kind.
+  'TRANSFER',
+  // W2b-5 wave 37/44 (factory-db numbering.prisma): an inquiry or RFQ (INQ-…), an office document kind.
+  'INQUIRY',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -239,6 +243,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   EVIDENCE_PACK: 'EP',
   RECALL: 'RCL',
   AUTHORITY_REQUEST: 'AR',
+  TRANSFER: 'TRF',
+  INQUIRY: 'INQ',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

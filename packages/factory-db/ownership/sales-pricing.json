@@ -1,0 +1,89 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sales-pricing.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b-5, schema wave 38/44 (B-W2b-280): quotes, pricing and configuration in depth. The office (factory_runtime) reads and writes through apps/factory-api's modules/sales, always with command(): quote templates and their lines (B-W2b-294), the delivery schedule and the chosen options of a quote line while its version is DRAFT and of an order line while the order is CONFIRMED, IN_PRODUCTION or READY (B-W2b-294, B-W2b-340), quantity breaks and size surcharges of a DRAFT price list version or a style, minimum order quantities (B-W2b-325) and size curves (B-W2b-302); the …_sales_pricing_w2b_guards triggers hold the states for every login. A portal or one-off link session (factory_partner_runtime) reads only its OWN party's delivery schedules and chosen options (its own documents, with their prices: a surcharge is @grain price), never who in the office wrote them; it writes nothing here. The floor reads nothing here: a work order's cell carries the chosen option values (production.prisma WorkOrderSize.optionValueIds). No cost, margin or personal data. Templates are archived (status ARCHIVED), never deleted (quotes name them); the line parts go with their line (ON DELETE CASCADE), breaks and version surcharges with their entry or version. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "QuoteTemplate": {
+      "about": "The office keeps the quote templates of each company and the tenant-wide ones (lines, validity, terms, acceptance mode, deposit, delivery terms) and archives them; a new quote reads one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "QuoteTemplateLine": {
+      "about": "The office adds, orders, changes and removes the lines of a template (a style as a size grid, or a fee). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "QuoteLineDelivery": {
+      "about": "The office writes the delivery schedule of a DRAFT version's lines (and removes deliveries; removed with the line). A portal or link session reads its own party's schedules.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SalesOrderLineDelivery": {
+      "about": "The office copies a quote line's schedule to the order line when the order is made, and changes it while the order is CONFIRMED, IN_PRODUCTION or READY (removed with the line). A portal or link session reads its own party's schedules.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "QuoteLineOption": {
+      "about": "The office writes the options chosen on a DRAFT version's lines with their frozen surcharge (@grain price), and removes them (removed with the line). A portal or link session reads its own party's, prices included.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SalesOrderLineOption": {
+      "about": "The office copies a quote line's options to the order line when the order is made, or chooses them on the order while it is CONFIRMED, IN_PRODUCTION or READY (removed with the line). A portal or link session reads its own party's, prices included.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "PriceBreak": {
+      "about": "The office types the quantity breaks of a DRAFT price list version (one entry's unit price, or a discount on every entry) and removes them; activating the version fixes them. Quotes read them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SizeSurcharge": {
+      "about": "The office types the size surcharges of a DRAFT price list version (fixed with it) or of a style (kept at any time), and removes them. Quotes read them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MoqRule": {
+      "about": "The office keeps the minimum order quantities (per style, kind of garment or material; block, warn or surcharge), archives and removes them. Quotes and orders read them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SizeCurve": {
+      "about": "The office keeps the saved size curves (percent per size of a scale, totalling 100), archives and removes them; Fill by curve reads them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
