@@ -308,7 +308,8 @@ function literalKeys(): string[] {
     // B-W2a-69: purchasing/suppliers/sources speaks its own catalogue (purchasing-sources), checked by its own test.
     // B-W2b-180: the Portal access tab (sales/customers/portal, purchasing/suppliers/portal) speaks `portal-access` (its own test).
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`)))
+    // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`)))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
   return [...keys].sort()
 }

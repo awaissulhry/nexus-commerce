@@ -20,6 +20,7 @@ import {
 } from '@nexus/factory-domain/sales/repairs/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { officeRepair } from './access'
+import { estimateHoldInCommand } from '../repairs-depth/hold'
 import { blank, garmentAudit, planGarment, recordOf, refuse } from './create'
 import { asDay, dayOrNull, liveDdtOf, readRepair, REPAIR_COLUMNS, workOrderOf, type RepairRow, type RepairView } from './store'
 
@@ -154,6 +155,9 @@ export async function moveRepair(caller: CommandCaller, repairId: string, body: 
     const workOrder = await workOrderOf(tools.tx, repair)
     const problems = stageMoveProblems(body.to, { number: repair.number, stage: from, workOrder: workOrder.live })
     if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+    // B-W2b-342 (SAL-387): approved and in repair wait for the customer's answer to the newest estimate.
+    const held = await estimateHoldInCommand(tools.tx, repair, body.to)
+    if (held) throw new InvalidStateError(held)
     const note = noteOf(body.note, noteNeeded(from, body.to))
     const data: Prisma.RepairOrderUncheckedUpdateInput = body.to === 'REPAIRED' ? { repairedAt: tools.now } : from === 'REPAIRED' ? { repairedAt: null } : {}
     await moveStageInCommand(tools, repair, body.to, {
@@ -199,6 +203,8 @@ export interface HeaderBody {
   readonly size?: string | null | undefined
   readonly ownerId?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-342: the work the customer asks for. */
+  readonly workWanted?: string | null | undefined
   readonly inboundDdtNumber?: string | null | undefined
   readonly inboundDdtDate?: BusinessDate | null | undefined
 }
@@ -245,6 +251,19 @@ export async function changeRepair(caller: CommandCaller, repairId: string, body
       if (tooLong(body.internalNote, REPAIR_LIMITS.internalNote)) problems.push({ path: 'body/internalNote', message: `At most ${REPAIR_LIMITS.internalNote} characters.` })
       else set('internalNote', blank(body.internalNote))
     }
+    // B-W2b-342: the work wanted (its own column; the domain's limit).
+    if (body.workWanted !== undefined) {
+      const workWanted = blank(body.workWanted)
+      if (tooLong(workWanted, REPAIR_LIMITS.problem)) problems.push({ path: 'body/workWanted', message: `At most ${REPAIR_LIMITS.problem} characters.` })
+      else {
+        const current = (await tx.repairOrder.findUniqueOrThrow({ where: { id: repair.id }, select: { workWanted: true } })).workWanted
+        if (workWanted !== current) {
+          ;(data as Record<string, unknown>).workWanted = workWanted
+          before.workWanted = current
+          after.workWanted = workWanted
+        }
+      }
+    }
     if (body.ownerId !== undefined) {
       if (body.ownerId !== null) {
         const owner = isUuid(body.ownerId) ? await tx.user.findUnique({ where: { id: body.ownerId }, select: { status: true } }) : null
@@ -277,6 +296,8 @@ export async function changeRepair(caller: CommandCaller, repairId: string, body
           if (open) problems.push({ path: 'body/serial', message: `Repair ${open.number} is open for serial ${garment.serial}: one repair at a time per garment.` })
         }
         set('serial', garment.serial)
+        // B-W2b-342 (SAL-391): the garment of ours the serial names follows it.
+        if (garment.serial !== repair.serial) (data as Record<string, unknown>).garmentSerial = garment.garment?.serial ?? null
         set('styleId', garment.styleId)
         set('colourwayId', garment.colourwayId)
         set('size', garment.size)
