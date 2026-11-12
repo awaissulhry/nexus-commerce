@@ -108,6 +108,13 @@ import * as jobContracts from './portal-jobs/contract'
 import * as jobLink from './portal-jobs/link'
 import * as jobOffice from './portal-jobs/office'
 import * as jobPortal from './portal-jobs/portal'
+// B-W2b-331: subcontracting in depth (./subcontract-depth): written terms, the material balance, bundles, cost, days out.
+import * as depthContracts from './subcontract-depth/contract'
+import * as depthTerms from './subcontract-depth/terms'
+import * as depthBalance from './subcontract-depth/balance'
+import * as depthBundles from './subcontract-depth/bundles'
+import * as depthCost from './subcontract-depth/cost'
+import * as depthAgeing from './subcontract-depth/ageing'
 import { appClock as jobClock } from '../../platform/portal/tasks/clock'
 // B-W2a-44: supplier claims and returns to the supplier (./claims).
 import * as claims from './claims/claims'
@@ -384,6 +391,33 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/link/job/accept', { schema: jobContracts.linkAcceptContract, config: jobLimited }, async (request) => jobLink.acceptByLink(request, request.body, request.query.language))
   app.post('/link/job/move-date', { schema: jobContracts.linkMoveDateContract, config: jobLimited }, async (request) => jobLink.moveDateByLink(request, request.body, request.query.language))
   app.post('/link/job/decline', { schema: jobContracts.linkDeclineContract, config: jobLimited }, async (request) => jobLink.declineByLink(request, request.body, request.query.language))
+
+  // B-W2b-331 (SCM-049, SCM-143, SCM-144, SCM-145, SCM-146, SCM-150): subcontracting in depth.
+  app.get('/purchasing/subcontracting/agreements', { schema: depthContracts.listAgreementsContract }, async (request) => depthTerms.listAgreements(request, request.query))
+  app.get('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.getAgreementContract }, async (request) => depthTerms.getAgreement(request, request.params.agreementId))
+  app.post('/purchasing/subcontracting/agreements', { schema: depthContracts.createAgreementContract }, async (request, reply) => reply.code(201).send(await depthTerms.createAgreement(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.updateAgreementContract }, async (request) => depthTerms.updateAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/purchasing/subcontracting/agreements/:agreementId', { schema: depthContracts.deleteAgreementContract }, async (request) => depthTerms.deleteAgreement(request, request.params.agreementId, request.query, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/agreements/:agreementId/sign', { schema: depthContracts.signAgreementContract }, async (request) => depthTerms.signAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/agreements/:agreementId/terminate', { schema: depthContracts.terminateAgreementContract }, async (request) => depthTerms.terminateAgreement(request, request.params.agreementId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/terms', { schema: depthContracts.orderTermsContract }, async (request) => depthTerms.orderTerms(request, request.params.subcontractOrderId))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/balance', { schema: depthContracts.orderBalanceContract }, async (request) => depthBalance.orderBalance(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/balance/declare', { schema: depthContracts.declareBalanceContract }, async (request, reply) =>
+    reply.code(201).send(await depthBalance.declareBalance(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/balance/adjust', { schema: depthContracts.adjustBalanceContract }, async (request, reply) =>
+    reply.code(201).send(await depthBalance.adjustBalance(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/bundles', { schema: depthContracts.orderBundlesContract }, async (request) => depthBundles.orderBundles(request, request.params.subcontractOrderId))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId/cost', { schema: depthContracts.orderCostContract }, async (request) => depthCost.orderCost(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/costs', { schema: depthContracts.bookCostContract }, async (request, reply) =>
+    reply.code(201).send(await depthCost.bookCost(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/costs/:entryId/reverse', { schema: depthContracts.reverseCostContract }, async (request, reply) =>
+    reply.code(201).send(await depthCost.reverseCost(request, request.params.subcontractOrderId, request.params.entryId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.get('/purchasing/subcontracting/ageing', { schema: depthContracts.ageingContract }, async (request) => depthAgeing.subcontractorAgeing(request, request.query))
+  app.get('/purchasing/subcontracting/balances', { schema: depthContracts.balancesContract }, async (request) => depthAgeing.openBalances(request, request.query))
 
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier.
   app.get('/purchasing/claims', { schema: listClaimsContract }, async (request) => claims.listClaims(request, request.query))
