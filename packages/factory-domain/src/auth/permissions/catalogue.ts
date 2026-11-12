@@ -183,6 +183,9 @@ import { PRODUCT_COLOURS_DEFINITIONS, PRODUCT_COLOURS_PERMISSIONS } from '../../
 import { PRODUCT_BRANDING_DEFINITIONS, PRODUCT_BRANDING_PERMISSIONS } from '../../product/branding-sets/permissions'
 // B-W2b-282: one approval engine (approvals.view | request | decide | rules.manage).
 import { APPROVALS_DEFINITIONS, APPROVALS_PERMISSIONS } from '../../approvals/permissions'
+// B-W2b-290: customers in depth (parties.hold; parties.privacy, parties.erase; area `parties`).
+import { PARTIES_HOLD_DEFINITIONS, PARTIES_HOLD_PERMISSIONS } from '../../parties/holds/permissions'
+import { PARTIES_PRIVACY_DEFINITIONS, PARTIES_PRIVACY_PERMISSIONS } from '../../parties/contact-privacy/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
@@ -878,6 +881,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_BRANDING_DEFINITIONS,
   // B-W2b-282: one approval engine.
   APPROVALS_DEFINITIONS,
+  // B-W2b-290: customers in depth (area `parties`, declared above).
+  PARTIES_HOLD_DEFINITIONS,
+  PARTIES_PRIVACY_DEFINITIONS,
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1176,6 +1182,8 @@ for (const name of PORTAL_SAMPLES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)
 for (const name of [...PRODUCT_COLOURS_PERMISSIONS, ...PRODUCT_BRANDING_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-282: one approval engine.
 for (const name of APPROVALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-290: customers in depth.
+for (const name of [...PARTIES_HOLD_PERMISSIONS, ...PARTIES_PRIVACY_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

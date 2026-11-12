@@ -500,6 +500,9 @@ export const QUOTE_ISSUE_CODES = [
   'NO_SHIP_TO',
   'NO_CONTACT_EMAIL',
   'NO_PROMISE_DATE',
+  // B-W2b-290 (SAL-023): the customer's account is on hold for the quote's company: a WARNING (the quote goes on; new
+  // orders and shipments wait until the hold is released). Added by the quote's reader (modules/parties/holds).
+  'ACCOUNT_ON_HOLD',
 ] as const
 export type QuoteIssueCode = (typeof QUOTE_ISSUE_CODES)[number]
 

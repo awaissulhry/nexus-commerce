@@ -6,6 +6,7 @@ import { markMoney } from '@nexus/factory-domain/money/marked'
 import { orderFromVersion, type AcceptedLine } from '@nexus/factory-domain/sales/orders/orders'
 import type { CommandTools } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
+import { orderWaitFor, type OrderWait as PartyOrderWait } from '../../parties/holds/stops'
 import { makeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, hasOrderSeries } from './store'
 
@@ -26,7 +27,8 @@ import { asDay, dayOrNull, hasOrderSeries } from './store'
  *              before-shipping step with its day gets its own deposit request (B-W2a-F2: an advance, TD02 when paid)
  */
 
-export type OrderWait = 'NO_SALES_ORDER_SERIES'
+// B-W2b-290 (SAL-023, SAL-013): the customer on hold for the company, or its PO number missing where its terms require one.
+export type OrderWait = 'NO_SALES_ORDER_SERIES' | PartyOrderWait
 
 export interface MadeOrder {
   readonly order: { readonly id: string; readonly number: string } | null
@@ -52,7 +54,7 @@ async function linkDeposits(tools: CommandTools, order: { id: string; companyId:
   return linked
 }
 
-export async function makeOrderInCommand(tools: CommandTools, versionId: string): Promise<MadeOrder> {
+export async function makeOrderInCommand(tools: CommandTools, versionId: string, customerRef?: string | null): Promise<MadeOrder> {
   const { tx, now } = tools
   const existing = await tx.salesOrder.findFirst({ where: { quoteVersionId: versionId }, select: { id: true, number: true, companyId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
   if (existing) return { order: { id: existing.id, number: existing.number }, created: false, waits: null, linkedDepositRequestIds: await linkDeposits(tools, existing, versionId) }
@@ -85,6 +87,11 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
   if (version.status !== 'ACCEPTED') throw new InvalidStateError(`The quote version is ${version.status}; an order is made only from an ACCEPTED version.`)
   const quote = await tx.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, companyId: true, customerRef: true } })
   if (!(await hasOrderSeries(tx, quote.companyId))) return { order: null, created: false, waits: 'NO_SALES_ORDER_SERIES', linkedDepositRequestIds: [] }
+  // B-W2b-290: the office may give the customer's PO number when it makes the order (POST /sales/orders); a hold in force or a
+  // PO number its terms require and nobody gave: no order yet (the acceptance stays; the office makes it later).
+  const poNumber = (customerRef ?? '').trim() === '' ? quote.customerRef : customerRef!.trim()
+  const partyWait = await orderWaitFor(tx, { partyId: version.partyId, companyId: quote.companyId }, poNumber)
+  if (partyWait) return { order: null, created: false, waits: partyWait, linkedDepositRequestIds: [] }
 
   const acceptance = await tx.quoteAcceptance.findFirst({ where: { versionId }, select: { acceptedAt: true }, orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }] })
   const acceptedOn = businessDate(acceptance?.acceptedAt ?? now)
@@ -154,7 +161,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
       vatAmount: version.vatAmount,
       grossAmount: version.grossAmount,
       costAmount: version.costAmount,
-      customerRef: quote.customerRef,
+      customerRef: poNumber,
       acceptedOn,
     },
     lines,

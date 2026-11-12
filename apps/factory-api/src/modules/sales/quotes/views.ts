@@ -18,6 +18,7 @@ import { taxable, type VatTreatment } from '@nexus/factory-domain/tax/vat-treatm
 import { gateRequestFor } from '../../compliance/certificates/gate'
 import { snapshotMissing } from './pricing'
 import { quoteRulesFor } from './rules'
+import { holdQuoteIssues } from '../../parties/holds/stops'
 import {
   APPROVAL_COLUMNS,
   dateTimeText,
@@ -143,6 +144,8 @@ export async function readFacts(db: Reader, quote: QuoteRow, now: Date, options:
     })),
     rules: priced.rules,
   })
+  // B-W2b-290 (SAL-023): the customer on hold for the quote's company: a warning (the quote goes on).
+  issues.push(...(await holdQuoteIssues(db, { partyId: quote.partyId, companyId: quote.companyId })))
   // B-W2a-19: the price list version the quote keeps, and the customer's minimum order against the net total.
   const kept = version.priceListVersionId ? await db.priceListVersion.findUnique({ where: { id: version.priceListVersionId }, select: { id: true, revision: true, list: { select: { id: true, code: true, name: true } } } }) : null
   const priceList = kept ? { listId: kept.list.id, code: kept.list.code, name: kept.list.name, versionId: kept.id, revision: kept.revision } : null

@@ -4,6 +4,7 @@ import { priceBasisOf } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { PartyTaxMode } from '@nexus/factory-domain/parties/tax'
 import type { CommandTools } from '../../../core/command'
 import { priceChainOf, type PriceChain } from '../pricelists/store'
+import { priceListFor } from '../../parties/company-terms/in-force'
 import { treatmentFor, type QuoteParty, type QuoteRow, type Reader, type VersionRow } from './store'
 
 /**
@@ -20,8 +21,10 @@ export interface QuoteListPrice extends ListPrice {
 }
 
 /** The chain of a quote version (its company, currency, customer's list, kept version), read today. */
-export function chainForQuote(db: Reader, quote: Pick<QuoteRow, 'companyId'>, version: Pick<VersionRow, 'currency' | 'priceListVersionId'>, party: QuoteParty, now: Date, styleIds?: readonly string[]): Promise<PriceChain> {
-  return priceChainOf(db, { companyId: quote.companyId, currency: version.currency, partyListId: party.row.priceListId, pinnedVersionId: version.priceListVersionId, day: businessDate(now), styleIds })
+export async function chainForQuote(db: Reader, quote: Pick<QuoteRow, 'companyId'>, version: Pick<VersionRow, 'currency' | 'priceListVersionId'>, party: QuoteParty, now: Date, styleIds?: readonly string[]): Promise<PriceChain> {
+  // B-W2b-290 (SAL-028): the customer's list with this company (its terms there), else its own.
+  const partyListId = await priceListFor(db, party.row, quote.companyId)
+  return priceChainOf(db, { companyId: quote.companyId, currency: version.currency, partyListId, pinnedVersionId: version.priceListVersionId, day: businessDate(now), styleIds })
 }
 
 /** The VAT rate a GROSS (consumer) quote's list price takes: the customer's standard treatment, when taxable. */

@@ -5,7 +5,7 @@ import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { DAILY_ORDER_ACTIONS } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
-import { DEPOSIT_KINDS, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
+import { DEPOSIT_KINDS, MAX_TEXT, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -251,7 +251,8 @@ export const boardContract = defineContract({
 export const getOrderContract = defineContract({ params: orderParams, response: { 200: one } })
 
 export const makeOrderContract = defineContract({
-  body: input({ quoteVersionId: id() }),
+  // B-W2b-290 (SAL-013): the customer's PO number, when its terms with the company require one and the quote had none.
+  body: input({ quoteVersionId: id(), customerRef: z.string().trim().max(MAX_TEXT.customerRef).nullish() }),
   response: { 200: output({ created: z.boolean(), order: orderView }), 201: output({ created: z.boolean(), order: orderView }) },
 })
 
