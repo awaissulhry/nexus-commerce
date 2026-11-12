@@ -6,6 +6,9 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { archiveProblems, locationProblems, locationTree, normalizeLocationCode, wouldCycle, type LocationKind } from '@nexus/factory-domain/inventory/locations/rules'
 import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { kindChangeProblems, workshopLocationProblems } from '@nexus/factory-domain/purchasing/subcontracting/rules'
+// B-W2b-289 (SCM-177, SCM-181): the kinds' rules (a customer's place and its party, where a kind sits, a retype), the block.
+import { customerPlaceProblems, placementProblems, retypeProblems } from '@nexus/factory-domain/inventory/locations-depth/kinds'
+import { blockViewOf } from '../locations-depth/places'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, officeContextOf, postedBy, siteFor, stockContextOf, type SiteRow } from '../ledger/access'
@@ -44,6 +47,13 @@ export const LOCATION_SELECT = {
   version: true,
   createdAt: true,
   updatedAt: true,
+  // B-W2b-289: its bin label code and its block (SCM-178, SCM-181).
+  labelCode: true,
+  blockedAt: true,
+  blockedById: true,
+  blockReason: true,
+  blockNote: true,
+  blockedUntil: true,
 } as const satisfies Prisma.LocationSelect
 export type LocationRow = Prisma.LocationGetPayload<{ select: typeof LOCATION_SELECT }>
 
@@ -65,6 +75,8 @@ function viewOf(row: LocationRow & { depth: number; path: readonly string[] }): 
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
+    labelCode: row.labelCode,
+    block: blockViewOf(row),
   }
 }
 
@@ -114,10 +126,17 @@ const atBody = (issues: readonly Issue[]): Issue[] => issues.map((issue) => ({ p
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
 const taken = (site: SiteRow, code: string) => new ConflictError(`Site ${site.code} already has a location ${code}.`)
 
-/** The parent a location goes inside: an active location of the same site, not itself or one of its own. */
-async function checkParent(client: Pick<CommandTx, 'location'>, site: SiteRow, parentId: string | null, locationId: string | null): Promise<void> {
-  if (parentId === null) return
-  const siteLocations = await client.location.findMany({ where: { siteId: site.id }, select: { id: true, parentId: true, code: true, status: true } })
+/**
+ * The parent a location goes inside: an active location of the same site, not itself or one of its own. B-W2b-289
+ * (SCM-177): a customer's or transit place sits at the top; nothing sits inside an outside or transit place or a pick face.
+ */
+async function checkParent(client: Pick<CommandTx, 'location'>, site: SiteRow, parentId: string | null, locationId: string | null, kind: LocationKind): Promise<void> {
+  const top = placementProblems(kind, null)
+  if (parentId === null) {
+    if (top.length > 0) throw new ValidationError(top[0]!.message, [{ path: 'body/parentId', message: top[0]!.message }])
+    return
+  }
+  const siteLocations = await client.location.findMany({ where: { siteId: site.id }, select: { id: true, parentId: true, code: true, status: true, kind: true } })
   const parent = siteLocations.find((location) => location.id === parentId)
   const problem = !parent
     ? 'Not a location of this site.'
@@ -125,7 +144,7 @@ async function checkParent(client: Pick<CommandTx, 'location'>, site: SiteRow, p
       ? `Location ${parent.code} is archived; nothing goes inside it.`
       : locationId && wouldCycle(locationId, parentId, siteLocations)
         ? 'A location does not sit inside itself or one of its own.'
-        : null
+        : (placementProblems(kind, parent)[0]?.message ?? null)
   if (problem) throw new ValidationError('The parent is not valid.', [{ path: 'body/parentId', message: problem }])
 }
 
@@ -146,6 +165,13 @@ export interface CreateInput {
  */
 async function checkWorkshop(client: Pick<CommandTx, 'party' | 'location'>, site: SiteRow, kind: LocationKind, partyId: string | null): Promise<void> {
   const party = partyId && isUuid(partyId) ? await client.party.findUnique({ where: { id: partyId }, select: { roles: true, status: true, companyId: true } }) : null
+  // B-W2b-289 (SCM-177; the lead's 277 follow-up): a CUSTOMER place is our stock at one customer or brand of the company,
+  // named when it is made (the database checks the roles too, and that the party never changes).
+  if (kind === 'CUSTOMER') {
+    const problems = customerPlaceProblems(partyId, party, site.companyId)
+    if (problems.length > 0) throw new ValidationError(problems[0]!.message, atBody(problems))
+    return
+  }
   const problems = workshopLocationProblems(kind, partyId, party, site.companyId)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, atBody(problems))
   if (kind !== 'SUBCONTRACTOR' || partyId === null) return
@@ -164,7 +190,7 @@ export async function createLocation(caller: CommandCaller, input: CreateInput, 
   const parentId = input.parentId ?? null
   try {
     const { result } = await command(caller, { name: 'inventory.locations.create', idempotencyKey, input }, async ({ tx, audit, emit, now }) => {
-      await checkParent(tx, site, parentId, null)
+      await checkParent(tx, site, parentId, null, input.kind)
       await checkWorkshop(tx, site, input.kind, input.partyId ?? null)
       if (await tx.location.findFirst({ where: { siteId: site.id, code }, select: { id: true } })) throw taken(site, code)
       const id = newId()
@@ -207,6 +233,12 @@ export async function updateLocation(caller: CommandCaller, locationId: string, 
     caller,
     { name: 'inventory.locations.update', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
     async ({ tx, audit, emit }) => {
+      // B-W2b-289 (SCM-177): an outside or transit place stays one, a place with others inside does not become a pick face,
+      // a place inside another does not become one that sits at the top.
+      if (input.kind !== undefined && input.kind !== before.kind) {
+        const retype = retypeProblems(before.kind, input.kind, { hasParent: before.parentId !== null, children: await tx.location.count({ where: { parentId: locationId, status: 'ACTIVE' } }) })
+        if (retype.length > 0) throw new ValidationError(retype[0]!.message, atBody(retype))
+      }
       const row = await tx.location.update({ where: { id: locationId }, data: { name, kind: input.kind ?? before.kind }, select: LOCATION_SELECT })
       audit({ recordType: 'Location', recordId: locationId, companyId: site.companyId, siteId: site.id, before: audited(before), after: audited(row) })
       locationChanged(emit, row, 'EDITED')
@@ -224,7 +256,7 @@ export async function moveLocation(caller: CommandCaller, locationId: string, in
     caller,
     { name: 'inventory.locations.move', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
     async ({ tx, audit, emit }) => {
-      await checkParent(tx, site, input.parentId, locationId)
+      await checkParent(tx, site, input.parentId, locationId, before.kind)
       const row = await tx.location.update({ where: { id: locationId }, data: { parentId: input.parentId }, select: LOCATION_SELECT })
       audit({ recordType: 'Location', recordId: locationId, companyId: site.companyId, siteId: site.id, before: { parentId: before.parentId }, after: { parentId: row.parentId } })
       locationChanged(emit, row, 'MOVED')

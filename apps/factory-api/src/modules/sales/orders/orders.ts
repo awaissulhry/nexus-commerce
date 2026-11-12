@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -12,6 +12,7 @@ import { serverClock } from '../../../core/time'
 import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
 import { assertMay, officeContextOf } from './access'
 import { makeOrderInCommand } from './make'
+import { orderWaitWords } from '../../parties/holds/stops'
 import { officeOrder, recordAfter } from './moves'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
@@ -180,7 +181,7 @@ export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilter
  * active SALES_ORDER series then): 201 with the new order, 200 with the one that exists. The version's row is locked
  * first, as the acceptance's own step does, so the two never make two orders.
  */
-export async function makeOrder(caller: CommandCaller, body: { readonly quoteVersionId: string }, idempotencyKey?: string): Promise<{ created: boolean; order: OrderView }> {
+export async function makeOrder(caller: CommandCaller, body: { readonly quoteVersionId: string; readonly customerRef?: string | null | undefined }, idempotencyKey?: string): Promise<{ created: boolean; order: OrderView }> {
   const context = officeContextOf(caller)
   const scope = isUuid(body.quoteVersionId)
     ? await caller.withClient(async (client) => {
@@ -192,7 +193,12 @@ export async function makeOrder(caller: CommandCaller, body: { readonly quoteVer
   const { result } = await command(caller, { name: 'orders.make', idempotencyKey, input: body }, async (tools) => {
     const locked = await tools.tx.$queryRaw<{ id: string }[]>`SELECT id FROM "QuoteVersion" WHERE id = ${body.quoteVersionId}::uuid FOR UPDATE`
     if (locked.length === 0) throw new NotFoundError('Quote version not found.')
-    const made = await makeOrderInCommand(tools, body.quoteVersionId)
+    const made = await makeOrderInCommand(tools, body.quoteVersionId, body.customerRef)
+    // B-W2b-290: the customer on hold for the company (409), or its PO number missing where its terms require one (400).
+    if (!made.order && made.waits !== null && made.waits !== 'NO_SALES_ORDER_SERIES') {
+      const words = await orderWaitWords(tools.tx, { partyId: scope!.partyId, companyId: scope!.companyId }, made.waits, body.customerRef)
+      throw made.waits === 'ACCOUNT_ON_HOLD' ? new DomainError('conflict', words, [{ path: 'party/hold', message: 'The customer is on hold for this company.' }]) : new ValidationError(words, [{ path: 'body/customerRef', message: words }])
+    }
     if (!made.order) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
     if (!made.created) tools.audit({ action: 'orders.make', recordType: 'SalesOrder', recordId: made.order.id, companyId: scope!.companyId, after: { existing: true, linkedDepositRequestIds: made.linkedDepositRequestIds } })
     return { created: made.created, orderId: made.order.id }

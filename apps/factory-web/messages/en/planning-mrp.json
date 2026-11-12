@@ -59,7 +59,10 @@
       "buyLabel": "Buy {material} for {workOrder}: a draft PO from the plan",
       "EXPEDITE": "Expedite {number}",
       "expediteLabel": "Expedite {number} for {workOrder}: open the PO and remind the supplier",
-      "MOVE_FIRM": "Move the firm order"
+      "MOVE_FIRM": "Move the firm order",
+      "ASK": "Ask to buy",
+      "askLabel": "Ask to buy {material} for {workOrder}",
+      "asked": "Asked already: it waits for the buyers"
     },
     "col": {
       "workOrder": "Work order",

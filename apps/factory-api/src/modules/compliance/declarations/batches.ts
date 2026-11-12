@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { BATCH_NUMBER_MAX, keptUntil, recordRefusal, recordsToMake, versionsByBatch } from '@nexus/factory-domain/compliance/declarations/batches'
+import { BATCH_NUMBER_MAX, keptUntil, madeWhileInForce, recordRefusal, recordsToMake, versionsByBatch } from '@nexus/factory-domain/compliance/declarations/batches'
 import { DECLARATIONS_RECORD, DECLARATIONS_VIEW } from '@nexus/factory-domain/compliance/declarations/permissions'
 import { NOTE_MAX } from '@nexus/factory-domain/compliance/declarations/rules'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
@@ -30,6 +30,10 @@ import { unrecordedPairs } from './read'
  *
  * The shipment compliance pack (pack.ts) records the same in its command. Writing needs W1's compliance.declarations.manage
  * (the signed documents are W1's) over the batch's company.
+ *
+ * B-W2b-288 (FU2:04; the batch guard B-W2b-275 redefined): a batch made while an older DoC was in force keeps that DoC when it
+ * ships late. A SUPERSEDED document is recorded with a work order's batch made to its revision, or with a batch recorded with
+ * it before (factory-domain `madeWhileInForce`); what travelled with a late shipment of such a batch is recorded too.
  */
 
 const RECORD_SELECT = {
@@ -162,20 +166,25 @@ export async function recordBatch(caller: CommandCaller, body: RecordBody, idemp
     const shipment = body.shipmentId && isUuid(body.shipmentId) ? await db.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, companyId: true } }) : null
     if (body.shipmentId && (!shipment || !mayRead(context, shipment.companyId))) throw new NotFoundError('There is no such shipment.')
     const carries = shipment && order ? (await db.shipmentLine.count({ where: { shipmentId: shipment.id, workOrderId: order.id } })) > 0 : null
+    // B-W2b-288 (FU2:04): this batch recorded with this document before (while it was in force).
+    const batchAsked = order?.batchNumber ?? body.batchNumber?.trim() ?? null
+    const recordedBefore = batchAsked ? (await db.complianceDocumentBatch.count({ where: { documentId: document.id, batchNumber: batchAsked } })) > 0 : false
     const companyId = order?.companyId ?? document.companyId ?? body.companyId ?? shipment?.companyId ?? null
     if (!companyId) throw new ValidationError('The record is not valid.', [{ path: 'body/companyId', message: 'This document is every company\'s: say which company made the batch.' }])
     if (!mayRead(context, companyId)) throw new ValidationError('The record is not valid.', [{ path: 'body/companyId', message: 'Not a company you reach.' }])
-    return { document, order, frozen, shipment, carries, companyId }
+    return { document, order, frozen, shipment, carries, companyId, recordedBefore }
   })
-  const { document, order, frozen, shipment, carries, companyId } = prepared
+  const { document, order, frozen, shipment, carries, companyId, recordedBefore } = prepared
   assertMayWriteDocument(context, DECLARATIONS_RECORD, companyId)
   const refusal = recordRefusal({
     document: { styleId: document.styleId, kind: document.kind, revision: document.revision, status: document.status, language: document.language },
     workOrder: order ? { styleId: order.styleId, batchNumber: order.batchNumber, frozenRevision: frozen?.revision ?? null, number: order.number } : null,
     batchNumber: body.batchNumber?.trim() ?? null,
     shipment: shipment ? { number: shipment.number, status: shipment.status, carriesWorkOrder: carries } : null,
+    recordedBefore,
   })
-  if (refusal) throw refused(refusal.code === 'NOT_ISSUED' || refusal.code === 'NOT_RELEASED' || refusal.code === 'SHIPMENT_CANCELLED' ? 'invalid_state' : 'conflict', refusal)
+  // B-W2b-288 (FU2:04): NOT_IN_FORCE — a superseded document and a batch made after it was replaced.
+  if (refusal) throw refused(refusal.code === 'NOT_ISSUED' || refusal.code === 'NOT_IN_FORCE' || refusal.code === 'NOT_RELEASED' || refusal.code === 'SHIPMENT_CANCELLED' ? 'invalid_state' : 'conflict', refusal)
   const batchNumber = order ? order.batchNumber! : body.batchNumber!.trim()
   const { result } = await declarationsCommand(
     caller,
@@ -210,7 +219,11 @@ export interface Travelled {
   readonly skipped: { readonly batchNumber: string; readonly documentId: string; readonly message: string }[]
 }
 
-/** The records a shipment still needs (shipping's travelling documents × its batches); a document no longer ISSUED is skipped. */
+/**
+ * The records a shipment still needs (shipping's travelling documents × its batches). B-W2b-288 (FU2:04): a SUPERSEDED document
+ * travels with a batch made while it was in force (shipping picks the document of the revision the work order froze), so a
+ * late shipment of an older batch is recorded with it; a document withdrawn (or a draft) is skipped.
+ */
 export async function travelledRecords(db: Reader, shipment: ShipmentHeader): Promise<Travelled> {
   const { documents } = await readDocuments(db, shipment)
   const travelling = documents.documents.filter((document) => (document.kind === 'DECLARATION_OF_CONFORMITY' || document.kind === 'USER_INFORMATION') && document.documentId !== null && document.style !== null && document.style.revision !== null)
@@ -219,7 +232,7 @@ export async function travelledRecords(db: Reader, shipment: ShipmentHeader): Pr
   const orders = await db.workOrder.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.workOrderId))] } }, select: { id: true, siteId: true, companyId: true, styleId: true, batchNumber: true, styleRevisionId: true } })
   const revisions = new Map((await db.styleRevision.findMany({ where: { id: { in: orders.map((order) => order.styleRevisionId).filter((id): id is string => id !== null) } }, select: { id: true, revision: true } })).map((row) => [row.id, row.revision]))
   const recorded = await db.complianceDocumentBatch.findMany({ where: { shipmentId: shipment.id }, select: { documentId: true, batchNumber: true } })
-  const issued = rows.filter((row) => row.status === 'ISSUED')
+  const kept = rows.filter((row) => row.status === 'ISSUED' || row.status === 'SUPERSEDED')
   const make = recordsToMake({
     shipmentId: shipment.id,
     batches: orders.map((order) => ({ workOrderId: order.id, batchNumber: order.batchNumber, styleId: order.styleId, frozenRevision: order.styleRevisionId ? (revisions.get(order.styleRevisionId) ?? null) : null })),
@@ -231,11 +244,12 @@ export async function travelledRecords(db: Reader, shipment: ShipmentHeader): Pr
   const skipped: Travelled['skipped'] = []
   for (const entry of make) {
     const document = rows.find((row) => row.id === entry.documentId)!
-    if (!issued.includes(document)) {
-      skipped.push({ batchNumber: entry.batchNumber, documentId: entry.documentId, message: `The document of batch ${entry.batchNumber} is ${document.status}: the database records a batch only with an issued document.` })
+    const order = orderOf.get(entry.workOrderId)!
+    const frozenRevision = order.styleRevisionId ? (revisions.get(order.styleRevisionId) ?? null) : null
+    if (!kept.includes(document) || !madeWhileInForce({ document: { styleId: document.styleId, kind: '', revision: document.revision, status: document.status, language: '' }, workOrder: { styleId: order.styleId, batchNumber: order.batchNumber, frozenRevision, number: '' } })) {
+      skipped.push({ batchNumber: entry.batchNumber, documentId: entry.documentId, message: `The document of batch ${entry.batchNumber} is ${document.status}: the database records a batch only with an issued document, or a superseded one for a batch made while it was in force.` })
       continue
     }
-    const order = orderOf.get(entry.workOrderId)!
     toMake.push({ companyId: order.companyId, styleId: order.styleId, documentId: entry.documentId, siteId: order.siteId, workOrderId: order.id, batchNumber: entry.batchNumber, shipmentId: shipment.id, note: null })
   }
   return { toMake, skipped }

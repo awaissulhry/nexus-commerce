@@ -6,6 +6,8 @@ import type { BusinessDate } from '../../core/time'
  * signed DoC or leaflet: generated ones are never issued before GATE-PPE-TEXTS), batch and shipment (or the batch as made,
  * without a shipment), written once, kept until at least ten years after it was recorded.
  *
+ * B-W2b-288 (FU2:04): a SUPERSEDED document is recorded too, for a batch made while it was in force (`madeWhileInForce`).
+ *
  * A work order's batch takes the document of the revision the work order froze — exactly, so the public DoC page (which
  * reads the frozen revision) and the customer documents (the copies on the shipment) always name the same revision as the
  * record. A batch number typed (made before Nexus, or by a workshop) may name any issued revision of the style.
@@ -20,12 +22,36 @@ export interface RecordFacts {
   readonly batchNumber: string | null
   /** The shipment, when one is named: whether it carries the work order's garments (null: no work order to check). */
   readonly shipment: { readonly number: string; readonly status: string; readonly carriesWorkOrder: boolean | null } | null
+  /**
+   * B-W2b-288 (FU2:04): this batch number is recorded with this document already (recorded while it was in force). Left out:
+   * not known (false).
+   */
+  readonly recordedBefore?: boolean | undefined
+}
+
+/**
+ * B-W2b-288 (FU2:04; the redefined batch guard of B-W2b-275): a batch made while an older document was in force keeps that
+ * document when it ships late. A SUPERSEDED document goes with a batch made while it was in force: a work order's batch made
+ * to the document's revision (the revision it froze), or a batch recorded with this document before (a batch number typed has
+ * no other trace of when it was made). Any other batch goes with the declaration in force.
+ */
+export function madeWhileInForce(facts: Pick<RecordFacts, 'document' | 'workOrder' | 'recordedBefore'>): boolean {
+  if (facts.document.status === 'ISSUED') return true
+  if (facts.document.status !== 'SUPERSEDED') return false
+  return facts.recordedBefore === true || (facts.workOrder !== null && facts.workOrder.frozenRevision === facts.document.revision)
 }
 
 /** Why a batch record is refused, in words (null: fine). */
 export function recordRefusal(facts: RecordFacts): { code: string; message: string } | null {
   const { document, workOrder } = facts
-  if (document.status !== 'ISSUED') {
+  // B-W2b-288 (FU2:04): a SUPERSEDED document keeps the batches made while it was in force (a late shipment of an older batch).
+  if (document.status === 'SUPERSEDED' && !madeWhileInForce(facts)) {
+    return {
+      code: 'NOT_IN_FORCE',
+      message: `This document was superseded: only a batch made while it was in force ships with it (a work order made to its revision ${document.revision}, or a batch recorded with it before). Record this batch with the declaration in force.`,
+    }
+  }
+  if (document.status !== 'ISSUED' && document.status !== 'SUPERSEDED') {
     return { code: 'NOT_ISSUED', message: `This document is ${document.status}: a batch is recorded only with an issued (signed) document, the one in force.` }
   }
   if (workOrder && facts.batchNumber !== null) return { code: 'BOTH', message: 'Name the work order or type a batch number, not both.' }

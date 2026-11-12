@@ -21,9 +21,10 @@ export type PayloadKind = (typeof PAYLOAD_KINDS)[number]
  * Labels a module lays out itself (queueModuleLabel), beside factory-domain/labels' scan labels (HIDE, LOT, BUNDLE,
  * CARTON): GARMENT, the PPE garment label (B-W1-19 test labels, B-W1-44 at the final operation); MACHINE, a machine's QR tag
  * (B-W2b-136, factory-domain plant/machines/tag.ts); CUT_TICKET and PLY, a cut ticket and a run of ply stickers (B-W2b-112,
- * factory-domain production/cutorders tickets.ts and plies.ts).
+ * factory-domain production/cutorders tickets.ts and plies.ts); LOCATION, a bin label whose code is the location's label code
+ * (B-W2b-289, factory-domain inventory/locations-depth labels.ts).
  */
-export const MODULE_LABEL_KINDS = ['GARMENT', 'MACHINE', 'CUT_TICKET', 'PLY'] as const
+export const MODULE_LABEL_KINDS = ['GARMENT', 'MACHINE', 'CUT_TICKET', 'PLY', 'LOCATION'] as const
 export type ModuleLabelKind = (typeof MODULE_LABEL_KINDS)[number]
 
 /** Hand-overs to the relay before a job is FAILED (the handler's tries, with exponential backoff between them). */
