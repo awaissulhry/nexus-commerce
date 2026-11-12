@@ -213,4 +213,3 @@ export async function undoChange(caller: CommandCaller, changeId: string, body: 
     return { undo: undo!, undone: undone!, slot: slot && slot.planKind === 'WORKING' ? storedSlotView(slot, names) : null, planVersion: result.planVersion, over: result.over.map((day) => ({ ...day })), replayed }
   })
 }
-

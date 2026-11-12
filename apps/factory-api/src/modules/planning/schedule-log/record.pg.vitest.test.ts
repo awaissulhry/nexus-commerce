@@ -332,4 +332,3 @@ describe('day sheets per line, the board as a sheet, a published version to read
     expect(ofVersion.rows).toHaveLength(read.slots.length)
   })
 })
-
